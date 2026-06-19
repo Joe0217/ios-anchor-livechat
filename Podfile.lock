@@ -1,4 +1,5 @@
 PODS:
+  - AgoraRtm_OC_Special/RtmKit (2.2.6.3)
   - AgoraVideo_Special_iOS (4.5.2.9.BASIC)
   - NIMSDK_LITE (10.10.0):
     - NIMSDK_LITE/NOS (= 10.10.0)
@@ -8,20 +9,23 @@ PODS:
   - YXArtemis_XCFramework (1.1.6)
 
 DEPENDENCIES:
+  - AgoraRtm_OC_Special/RtmKit (~> 2.2.6)
   - AgoraVideo_Special_iOS (= 4.5.2.9.BASIC)
   - NIMSDK_LITE (~> 10.10.0)
 
 SPEC REPOS:
   trunk:
+    - AgoraRtm_OC_Special
     - AgoraVideo_Special_iOS
     - NIMSDK_LITE
     - YXArtemis_XCFramework
 
 SPEC CHECKSUMS:
+  AgoraRtm_OC_Special: b6f238909ab1166d287a723018b934e691221471
   AgoraVideo_Special_iOS: 46096d4dcb2b39e0a2dd3961825518b50c96ff73
   NIMSDK_LITE: 44550282d52550ee7be31ca25341f44b905b917d
   YXArtemis_XCFramework: d9a8b9439d7a6c757ed00ada53a6d2dd9b13f9c7
 
-PODFILE CHECKSUM: f7372e17b4d428776f36aeb2fbaa9364c9d9dd93
+PODFILE CHECKSUM: a806c50358523c97b912c38d7d1468266f919268
 
 COCOAPODS: 1.16.2

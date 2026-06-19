@@ -1,0 +1,511 @@
+import Foundation
+import SwiftUI
+import Combine
+
+/// 1v1 通话单层状态机（合并 H5 CallStateType + callGameStatus，采纳安卓 SDK 风格）。
+///
+/// 责任：
+/// - 维护 `state` 和 `current`，把"按钮点击 / RTM 信令 / 计时器"统一收敛
+/// - 主/被叫两条主流程的串行编排
+/// - RTC 建链交给 AgoraManager；信令交给 CallSignaling；接口交给 CallService
+///
+/// 信令协议与 H5 声网 CallAPI `ICallMessage` 严格对齐：
+/// 主叫端 `callOut` 生成 callId（UUID），整轮通话共享；被叫端从 `CallMessage.callId` 读出存下来，
+/// 后续 accept/reject/hangup 时都要把同一个 callId 带回去。channelId 在主叫端来自 createCall，
+/// 在被叫端来自 `CallMessage.fromRoomId`（主叫 RTC channel）。
+@MainActor
+final class CallStore: ObservableObject {
+    static let shared = CallStore()
+
+    // MARK: - 对外状态
+
+    @Published private(set) var state: CallState = .idle
+    @Published private(set) var current: CurrentCallInfo = CurrentCallInfo()
+    @Published private(set) var lastError: String = ""
+    @Published private(set) var isSignalingReady: Bool = false
+
+    /// RTC 管理器（CallView 用它做远端渲染 + push 美颜后的帧）
+    let agora = AgoraManager()
+
+    // MARK: - 内部
+
+    private var signaling: CallSignaling?
+    private var myUserId: Int = 0
+    private var callOutTimeoutTask: Task<Void, Never>?
+    /// ended → idle 的延迟切换 task。被 stop()/新 callOut 触发时必须 cancel，否则会异步把
+    /// 已经被新通话覆盖的 state 重置回 .idle。
+    private var endedToIdleTask: Task<Void, Never>?
+    private var cancellables = Set<AnyCancellable>()
+    /// callRate 上报开关（C 范围默认关，避免与后端联调相互干扰）
+    private var callRateEnabled = false
+
+    private init() {
+        // 远端用户加入 RTC channel 时 → state 切 .connected（声网 didJoinedOfUid 触发）
+        // 远端用户离开 → 兜底切 ended（一般已被 RTM hangup 提前处理，这里只防消息丢失）
+        agora.$remoteUid
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] uid in
+                guard let self else { return }
+                Task { @MainActor in await self.handleRemoteRtcChange(uid: uid) }
+            }
+            .store(in: &cancellables)
+    }
+
+    /// 远端 RTC 状态变化 → state 升级 / 兜底挂断。
+    ///
+    /// ⚠️ 关键设计：必须 state == .connecting 才升级到 .connected，**不能从 .calling 直接升**。
+    /// 原因：用户端实现是"收到 VideoCall 立即 RTC join（占位/订阅模式，等用户点接听后才推流）"，
+    /// 如果在 .calling 时看到远端 join 就切 .connected，会出现"对端没接听但主播 UI 已是 FaceTime"
+    /// 的灵异现象。.connecting 必须由对端 Accept 信令显式触发（handleRemoteAccept）。
+    private func handleRemoteRtcChange(uid: UInt) async {
+        if uid != 0 {
+            guard state == .connecting else {
+                print("📍 [CallStore] 远端 uid=\(uid) 加入但本端 state=\(state.rawValue)，等待 Accept 信令")
+                return
+            }
+            current.callConnectTime = Date().timeIntervalSince1970 * 1000
+            state = .connected
+            print("✅ [CallStore] 远端 uid=\(uid) 加入 + 已收 Accept → state=connected")
+        } else {
+            // 远端离开：仅在通话中兜底（一般已被对端 hangup 信令提前处理）
+            guard state == .connected else { return }
+            print("⚠️ [CallStore] 远端离开 RTC（兜底挂断）")
+            await endLocally(reason: .remoteHangUp, rateCategory: nil, rateType: .caller, abnormal: 0)
+        }
+    }
+
+    // MARK: - 生命周期
+
+    /// 登录后由 RootView 调用：拉 rtmToken，初始化 RTM client。
+    /// 重复调用安全。失败时设置 lastError、isSignalingReady=false，业务层可重试。
+    func start(myUserId: Int) async {
+        if isSignalingReady { return }
+        self.myUserId = myUserId
+        do {
+            let tokenRes = try await LiveService.getAgoraRtmToken()
+            guard let rtm = tokenRes.rtmToken, !rtm.isEmpty else {
+                lastError = "RTM token 为空"
+                return
+            }
+            let s = CallSignaling(myUserId: myUserId)
+            s.delegate = self
+            try await s.login(token: rtm, refreshToken: { [weak self] in
+                guard self != nil else { return nil }
+                return try? await LiveService.getAgoraRtmToken().rtmToken
+            })
+            signaling = s
+            isSignalingReady = true
+            lastError = ""
+            print("✅ [CallStore] start 成功 uid=\(myUserId)")
+        } catch let e as APIError {
+            lastError = "CallStore.start 失败: \(e.message)(\(e.code))"
+            print("❌ [CallStore] \(lastError)")
+        } catch {
+            lastError = "CallStore.start 异常: \(error.localizedDescription)"
+            print("❌ [CallStore] \(lastError)")
+        }
+    }
+
+    /// 登出时清理 RTM + RTC + 状态。
+    func stop() {
+        cancelCallOutTimeout()
+        endedToIdleTask?.cancel()
+        endedToIdleTask = nil
+        if state != .idle { agora.leave() }
+        signaling?.logout()
+        signaling = nil
+        isSignalingReady = false
+        myUserId = 0
+        state = .idle
+        current = CurrentCallInfo()
+    }
+
+    // MARK: - 主叫：拨号
+    //
+    // 严格对齐 H5 主播端 useCallApi.handleCallOutFunc + callApi.call：
+    //   1) await apiCreateCall(beCallUserId, callType) → 拿后端真 channelId + 对方资料
+    //      （fromRoomId 必须是后端真实 channelId，否则用户端 apiJoinCall 查不到 → 浮层闪一下消失）
+    //   2) 端侧 UUID 生成 callId
+    //   3) _autoCancelCall(true) 启动 30s 超时
+    //   4) _rtcJoinAndPublish() —— 不 await，与 publish 并发
+    //   5) await _publishMessage({action=videoCall, fromRoomId=后端channelId})
+    //
+    // 1111 错误 "current status unable to make a call" 不是"主播角色被禁"，是 WSHeartbeat
+    // 上报的 onlineStatus 错误。后端要求 CALL_END(10001) 才放行 createCall；FOREGROUND(10002)
+    // 被拒。已在 WSHeartbeat 调整为 .callEnd。
+    func callOut(remoteUserId: String) async {
+        guard state == .idle, let signaling else {
+            print("⚠️ [CallStore] callOut 跳过 state=\(state) signaling=\(signaling != nil)")
+            return
+        }
+        guard let remoteUid = Int(remoteUserId), remoteUid > 0 else {
+            lastError = "对方 userId 非法"
+            return
+        }
+
+        // 1) 调 createCall 拿后端真 channelId + 对方资料
+        let res: CreateCallResult
+        do {
+            res = try await CallService.createCall(beCallUserId: remoteUid)
+        } catch let e as APIError {
+            lastError = e.message
+            print("❌ [CallStore] createCall 失败 code=\(e.code) msg=\(e.message)")
+            return
+        } catch {
+            lastError = error.localizedDescription
+            return
+        }
+        guard let channelId = res.channelId, !channelId.isEmpty else {
+            lastError = "createCall 返回空 channelId"
+            return
+        }
+
+        // 2) 初始化 currentCallInfo（含 createCall 返回的对方资料）
+        var info = CurrentCallInfo()
+        info.frontGameType = .direct
+        info.inOrOut = .out
+        info.channelId = channelId                   // 后端真 channelId = fromRoomId
+        info.callId = UUID().uuidString              // 端侧 UUID（H5 _callMessage.setCallId 等价）
+        info.remoteUserId = remoteUid
+        info.remoteYxAccid = res.yxAccid ?? ""
+        info.remoteNickname = res.nickname ?? ""
+        info.remoteIcon = res.icon ?? ""
+        info.remoteAge = res.age ?? 0
+        info.remoteCountryCode = res.countryCode ?? ""
+        info.remoteVideoPrice = res.videoPrice ?? 0
+        info.callStartTime = Date().timeIntervalSince1970 * 1000
+        current = info
+        state = .calling
+
+        // 3) 启动 30s 超时（H5 _autoCancelCall(true)）
+        startCallOutTimeout()
+
+        // 4) 主叫立刻 join 自己一侧 RTC（H5 _rtcJoinAndPublish 不 await）
+        let channelToJoin = info.channelId
+        Task { @MainActor [weak self] in
+            await self?.joinRtc(channel: channelToJoin, rateType: .caller)
+        }
+
+        // 5) 发 RTM VideoCall（H5 await _publishMessage）
+        let ok = await signaling.publish(buildMessage(action: .videoCall))
+        if !ok {
+            lastError = "发送呼叫失败"
+            await endLocally(reason: .beginCallError, rateCategory: .canceled, rateType: .caller, abnormal: 1)
+            return
+        }
+    }
+
+    // MARK: - 主叫：取消（未接通前用户主动撤回）
+
+    func cancel() async {
+        guard state == .calling, current.inOrOut == .out else { return }
+        cancelCallOutTimeout()
+        if let signaling {
+            _ = await signaling.publish(buildMessage(action: .cancel))
+        }
+        await endLocally(reason: .localHangUp, rateCategory: .canceled, rateType: .caller, abnormal: 0)
+    }
+
+    // MARK: - 被叫：接受 / 拒绝
+
+    /// 被叫接受通话。
+    func accept(auto: Bool = false) async {
+        guard state == .calling, current.inOrOut == .in, let signaling else { return }
+        let info = current
+
+        // 1) 通知主叫 —— 必须成功才能前进
+        //    ⚠️ publish 失败时**不切 .connecting**：否则主叫永远收不到 Accept、30s 后发
+        //    Cancel，本端此时是 .connecting，handleRemoteCancel 守卫 `state == .calling`
+        //    会丢 Cancel → 卡死 .connecting。
+        let ok = await signaling.publish(buildMessage(action: .accept))
+        guard ok else {
+            lastError = "发送接听失败"
+            await endLocally(reason: .beginCallError, rateCategory: nil, rateType: .callee, abnormal: 1)
+            return
+        }
+        state = .connecting
+
+        // 2) 拿 rtcToken + join 频道
+        await joinRtc(channel: info.channelId, rateType: .callee)
+
+        // 3) 主叫端可能已经在频道里（主叫 callOut 时先 join），如此 didJoinedOfUid
+        //    在状态切到 .connecting 之前就触发过、不会再触发，这里手动补一次升级。
+        if agora.remoteUid != 0, state == .connecting {
+            current.callConnectTime = Date().timeIntervalSince1970 * 1000
+            state = .connected
+            print("✅ [CallStore] accept 后远端已在频道 → state=connected")
+        }
+
+        // 4) 接通率上报（被叫 answered）
+        await reportRate(category: .answered, type: .callee, answerTime: info.sinceStartDuration, abnormal: 0)
+    }
+
+    /// 被叫拒绝通话。
+    func reject() async {
+        guard state == .calling, current.inOrOut == .in, let signaling else { return }
+        _ = await signaling.publish(buildMessage(action: .reject))
+        await endLocally(reason: .localHangUp, rateCategory: .rejected, rateType: .callee, abnormal: 0)
+    }
+
+    // MARK: - 接通后：挂断
+
+    /// 通话中本地挂断。
+    func hangup() async {
+        guard state == .connecting || state == .connected else { return }
+        if let signaling {
+            _ = await signaling.publish(buildMessage(action: .hangup))
+        }
+        await endLocally(reason: .localHangUp, rateCategory: nil, rateType: .caller, abnormal: 0)
+    }
+
+    // MARK: - 内部：构造 CallMessage
+
+    /// 严格对齐 H5 callApi/core/callApi.ts 各 action 的 publish payload：
+    /// - VideoCall: 带 fromRoomId（被叫据此 join 同频道）
+    /// - Cancel:    带 cancelCallByInternal=0（External，用户主动取消）
+    /// - Reject:    带 rejectReason + rejectByInternal=0（External）
+    /// - Accept / Hangup: 不带额外字段
+    /// callId / fromUserId / remoteUserId 是所有 action 通用必填，由 CryptoJS encode 自动塞，
+    /// 这里对齐到 Swift Codable init 显式传。
+    private func buildMessage(action: CallAction, rejectReason: String? = nil) -> CallMessage {
+        switch action {
+        case .videoCall, .audioCall:
+            return CallMessage(action: action,
+                               fromUserId: myUserId,
+                               remoteUserId: current.remoteUserId,
+                               callId: current.callId,
+                               fromRoomId: current.channelId)
+        case .cancel:
+            return CallMessage(action: action,
+                               fromUserId: myUserId,
+                               remoteUserId: current.remoteUserId,
+                               callId: current.callId,
+                               cancelCallByInternal: 0)
+        case .reject:
+            return CallMessage(action: action,
+                               fromUserId: myUserId,
+                               remoteUserId: current.remoteUserId,
+                               callId: current.callId,
+                               rejectReason: rejectReason,
+                               rejectByInternal: 0)
+        case .accept, .hangup:
+            return CallMessage(action: action,
+                               fromUserId: myUserId,
+                               remoteUserId: current.remoteUserId,
+                               callId: current.callId)
+        }
+    }
+
+    // MARK: - 内部：RTC 建链
+    //
+    // 本端 join channel 完成后 state 不切 .connected——必须等远端 didJoinedOfUid 回调
+    // （即对方真正 join 同一 channel）才算接通；状态升级在 handleRemoteRtcChange 里做。
+    //
+    // ⚠️ joinRtc 内有 `await getAgoraRtmToken`（网络），期间对端可能 Hangup → endLocally 先跑、
+    // state=.ended、agora 已 leave。如果 token 拿回后无脑 agora.join，会创建一个游离的 RTC 通道
+    // 没有清理路径。所以拿到 token 后必须再次校验 state 仍处于"应当继续 join"的阶段。
+    private func joinRtc(channel: String, rateType: CallRateType) async {
+        let stateBeforeAwait = state
+        do {
+            let tokenRes = try await LiveService.getAgoraRtmToken()
+            guard let rtcToken = tokenRes.rtcToken, !rtcToken.isEmpty else {
+                lastError = "获取 rtcToken 失败"
+                await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, abnormal: 1)
+                return
+            }
+            // 关键守卫：state 必须仍在拨号/接通过程中。.calling 适用于主叫端 callOut 后立刻 join 的
+            // 路径；.connecting 适用于主/被叫 Accept 后的路径。其它（.ended/.failed/.idle）都
+            // 表示通话已中止，幽灵 join 必须被阻断。
+            guard state == .calling || state == .connecting else {
+                print("📍 [CallStore] joinRtc 拿到 token 后 state 已是 \(state.rawValue)（之前=\(stateBeforeAwait.rawValue)）→ 放弃 join")
+                return
+            }
+            agora.join(channelId: channel, token: rtcToken, uid: UInt(myUserId), profile: .communication)
+        } catch let e as APIError {
+            lastError = "rtcToken: \(e.message)"
+            await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, abnormal: 1)
+        } catch {
+            lastError = "rtcToken: \(error.localizedDescription)"
+            await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, abnormal: 1)
+        }
+    }
+
+    // MARK: - 内部：统一收尾
+
+    private func endLocally(reason: CallOverReason,
+                            rateCategory: CallRateCategory?,
+                            rateType: CallRateType,
+                            abnormal: Int) async {
+        cancelCallOutTimeout()
+        let info = current
+        current.hangupReason = reason
+        if state != .idle { agora.leave() }
+        // ⚠️ 主播端**不调** `/callOver`（后端无此路由 → 404；该接口是用户端独有的，后端按
+        // 用户端 callOver 触发结算）。本端只做 RTC leave + 状态复位 + callRate（可选）。
+        if !info.channelId.isEmpty, let cat = rateCategory {
+            await reportRate(category: cat, type: rateType,
+                             answerTime: info.connectedDuration > 0 ? info.connectedDuration : info.sinceStartDuration,
+                             abnormal: abnormal)
+        }
+        state = .ended
+        scheduleEndedToIdle()
+    }
+
+    /// ended → idle 的延迟 500ms 切换（让 UI 有时间播完"已挂断"提示）。
+    /// 使用可取消的 Task：stop() / 新 callOut 触发时必须 cancel，否则会异步把已被新通话
+    /// 占用的 state 错误复位回 idle。
+    private func scheduleEndedToIdle() {
+        endedToIdleTask?.cancel()
+        endedToIdleTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard let self, !Task.isCancelled, self.state == .ended else { return }
+            self.state = .idle
+            self.current = CurrentCallInfo()
+        }
+    }
+
+    private func reportRate(category: CallRateCategory, type: CallRateType,
+                            answerTime: Int, abnormal: Int) async {
+        guard callRateEnabled, !current.channelId.isEmpty else { return }
+        await CallService.callRate(
+            channelId: current.channelId,
+            callType: type, category: category,
+            answerTime: answerTime, userType: .anchor, abnormal: abnormal
+        )
+    }
+
+    // MARK: - 内部：主叫超时
+
+    private func startCallOutTimeout() {
+        cancelCallOutTimeout()
+        callOutTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(CallTuning.callOutTimeoutSeconds * 1_000_000_000))
+            guard let self, !Task.isCancelled else { return }
+            guard self.state == .calling, self.current.inOrOut == .out else { return }
+            print("⏰ [CallStore] 主叫 30s 超时无应答 → 自动取消")
+            if let signaling = self.signaling {
+                _ = await signaling.publish(self.buildMessage(action: .cancel))
+            }
+            await self.endLocally(reason: .userConcurrentCancel, rateCategory: .timeout, rateType: .caller, abnormal: 0)
+        }
+    }
+
+    private func cancelCallOutTimeout() {
+        callOutTimeoutTask?.cancel()
+        callOutTimeoutTask = nil
+    }
+}
+
+// MARK: - CallSignalingDelegate（处理对端 RTM 信令）
+
+extension CallStore: CallSignalingDelegate {
+    func signaling(_ signaling: CallSignaling, didReceive message: CallMessage, from publisher: String) {
+        guard let action = message.action else {
+            print("⚠️ [CallStore] 未知 action=\(message.messageAction) from=\(publisher)")
+            return
+        }
+        Task { @MainActor in await self.handleRemote(action: action, message: message) }
+    }
+
+    func signalingDidDetectSameUidLogin(_ signaling: CallSignaling) {
+        print("🚨 [CallStore] 同 UID 登录 — 主流程交给 SessionStore.logout")
+        Task { @MainActor in SessionStore.shared.logout() }
+    }
+
+    private func handleRemote(action: CallAction, message msg: CallMessage) async {
+        switch action {
+        case .videoCall:   await handleIncomingVideoCall(msg)
+        case .audioCall:   print("⚠️ [CallStore] 收到 audioCall（C 不接入）from=\(msg.fromUserId)")
+        case .cancel:      await handleRemoteCancel(msg)
+        case .accept:      await handleRemoteAccept(msg)
+        case .reject:      await handleRemoteReject(msg)
+        case .hangup:      await handleRemoteHangup(msg)
+        }
+    }
+
+    private func handleIncomingVideoCall(_ msg: CallMessage) async {
+        // 校验是发给本端的
+        guard msg.remoteUserId == myUserId else {
+            print("⚠️ [CallStore] 来电 remoteUserId(\(msg.remoteUserId)) 与本端(\(myUserId)) 不符，忽略")
+            return
+        }
+        guard state == .idle else {
+            print("⚠️ [CallStore] 收到来电但本端非 idle（state=\(state)）→ 自动忙线拒绝")
+            if let signaling {
+                // H5 callApi.ts:813 _autoReject 用 rejectByInternal=Internal(1) + reason="busy"，
+                // 不带 fromRoomId（Reject payload 与 H5 严格对齐）。
+                let busy = CallMessage(action: .reject,
+                                       fromUserId: myUserId,
+                                       remoteUserId: msg.fromUserId,
+                                       callId: msg.callId,
+                                       rejectReason: "busy",
+                                       rejectByInternal: 1)
+                _ = await signaling.publish(busy)
+            }
+            return
+        }
+
+        // VideoCall 必须带 fromRoomId（被叫据此 join），缺则视为非法消息丢弃
+        guard let fromRoomId = msg.fromRoomId, !fromRoomId.isEmpty else {
+            print("⚠️ [CallStore] VideoCall 缺 fromRoomId from=\(msg.fromUserId) 丢弃")
+            return
+        }
+
+        var info = CurrentCallInfo()
+        info.frontGameType = .direct
+        info.inOrOut = .in
+        info.channelId = fromRoomId              // ⚠️ 被叫端 channelId 来自 fromRoomId
+        info.callId = msg.callId                 // ⚠️ 整轮通话沿用主叫生成的 callId
+        info.remoteUserId = msg.fromUserId
+        info.callStartTime = Date().timeIntervalSince1970 * 1000
+        current = info
+        state = .calling
+
+        // 3s 超时拉对方资料（失败仅影响 UI 展示，不影响接通能力）
+        Task { @MainActor in
+            do {
+                let r = try await CallService.joinCall(channelId: fromRoomId)
+                guard self.state == .calling, self.current.inOrOut == .in,
+                      self.current.channelId == fromRoomId else { return }
+                self.current.remoteYxAccid = r.yxAccid ?? self.current.remoteYxAccid
+                self.current.remoteNickname = r.nickname ?? self.current.remoteNickname
+                self.current.remoteIcon = r.icon ?? self.current.remoteIcon
+                self.current.remoteAge = r.age ?? self.current.remoteAge
+                self.current.remoteCountryCode = r.countryCode ?? self.current.remoteCountryCode
+                self.current.remoteVideoPrice = r.videoPrice ?? self.current.remoteVideoPrice
+            } catch {
+                print("⚠️ [CallStore] joinCall 拉对方资料失败/超时 channel=\(fromRoomId) err=\(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func handleRemoteCancel(_ msg: CallMessage) async {
+        guard state == .calling, current.callId == msg.callId else { return }
+        // H5 CALL_OVER_REASON_NUMBER 没有"远端取消"独立码，沿用 2 (remoteHangUp) 是历史选择。
+        await endLocally(reason: .remoteHangUp, rateCategory: .canceled, rateType: .callee, abnormal: 0)
+    }
+
+    private func handleRemoteAccept(_ msg: CallMessage) async {
+        guard state == .calling, current.inOrOut == .out, current.callId == msg.callId else { return }
+        cancelCallOutTimeout()
+        state = .connecting
+        await joinRtc(channel: current.channelId, rateType: .caller)
+        // 主叫 callOut 时已 RTC join，若远端已先到（didJoinedOfUid 在 .calling 被门控），手动补升级
+        if agora.remoteUid != 0, state == .connecting {
+            current.callConnectTime = Date().timeIntervalSince1970 * 1000
+            state = .connected
+            print("✅ [CallStore] 主叫收 Accept 后远端已在频道 → state=connected")
+        }
+    }
+
+    private func handleRemoteReject(_ msg: CallMessage) async {
+        guard state == .calling, current.inOrOut == .out, current.callId == msg.callId else { return }
+        lastError = "对方已拒绝"
+        await endLocally(reason: .remoteHangUp, rateCategory: .rejected, rateType: .caller, abnormal: 0)
+    }
+
+    private func handleRemoteHangup(_ msg: CallMessage) async {
+        guard state == .connecting || state == .connected, current.callId == msg.callId else { return }
+        await endLocally(reason: .remoteHangUp, rateCategory: nil, rateType: .caller, abnormal: 0)
+    }
+}

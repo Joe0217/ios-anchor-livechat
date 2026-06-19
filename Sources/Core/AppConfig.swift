@@ -6,6 +6,8 @@ enum AppConfig {
     static let apiBaseURL = "https://anchor.cphub.link"
     /// 背包商城基址（/sapi 路由）
     static let sapiBaseURL = "https://vvi.cphub.link"
+    /// 在线态心跳 WebSocket 基址（dev，对应 H5 src/config/index.js socketUrl）
+    static let socketBaseURL = "wss://api.seain.site"
 
     static let appId = "20735424"
     static let ocpApimKey = "9ec52f6d03cd4d5985a6a2c8bb1ce5ee"

@@ -65,20 +65,71 @@ enum CryptoUtil {
         buffer.removeSubrange(numBytesCrypted..<buffer.count)
         return buffer
     }
+
+    // MARK: - AES-128-ECB（Hex 输出）—— 专给 WebSocket 握手用
+    //
+    // ⚠️ 与主接口的 CBC+Base64 完全是两套不同的 AES：
+    //   H5 src/utils/index.js:361 encryptAes(data):
+    //     key='9976kk4322578894'（不是主接口的 9986…）
+    //     mode=ECB（不是 CBC，故无 IV）
+    //     输出 encrypted.ciphertext.toString() = 小写 Hex（不是 Base64）
+    // 注：H5 那里写了 `iv: srcs` 看似传了 IV，但 CryptoJS ECB 模式会**忽略**该参数，实际行为等价于
+    // "无 IV"。本端 CCCrypt 传 nil IV 与 H5 ECB 实际行为完全等价。
+    // 接入点：仅 WSHeartbeat 握手时的 ciphertext query 参数用。
+    static let wsAesKey = "9976kk4322578894"
+
+    static func aesEncryptECBToHex(_ plain: String, key: String = wsAesKey) -> String? {
+        guard let input = plain.data(using: .utf8) else { return nil }
+        let keyData = Data(key.utf8)
+        guard keyData.count == kCCKeySizeAES128 else { return nil }
+
+        let bufferSize = input.count + kCCBlockSizeAES128
+        var buffer = Data(count: bufferSize)
+        var numBytesCrypted = 0
+
+        let status = buffer.withUnsafeMutableBytes { bufferPtr in
+            input.withUnsafeBytes { dataPtr in
+                keyData.withUnsafeBytes { keyPtr in
+                    CCCrypt(CCOperation(kCCEncrypt),
+                            CCAlgorithm(kCCAlgorithmAES),
+                            CCOptions(kCCOptionECBMode | kCCOptionPKCS7Padding),
+                            keyPtr.baseAddress, keyData.count,
+                            nil,  // ECB 不用 IV
+                            dataPtr.baseAddress, input.count,
+                            bufferPtr.baseAddress, bufferSize,
+                            &numBytesCrypted)
+                }
+            }
+        }
+        guard status == kCCSuccess else { return nil }
+        buffer.removeSubrange(numBytesCrypted..<buffer.count)
+        return buffer.map { String(format: "%02x", $0) }.joined()
+    }
 }
 
 extension Data {
-    /// 十六进制字符串 → Data
+    /// 十六进制字符串 → Data。
+    /// 按 UTF-8 字节切而非 `[Character]`：Character 可能是多字节字位簇，含非 ASCII 时
+    /// `chars[i...i+1]` 会越界 / 取错字符。hex 只含 ASCII，按字节切既安全又快。
     init?(hexString: String) {
-        let chars = Array(hexString)
-        guard chars.count % 2 == 0 else { return nil }
-        var data = Data(capacity: chars.count / 2)
-        var i = 0
-        while i < chars.count {
-            guard let byte = UInt8(String(chars[i...i+1]), radix: 16) else { return nil }
-            data.append(byte)
-            i += 2
+        let bytes = Array(hexString.utf8)
+        guard bytes.count % 2 == 0 else { return nil }
+        var data = Data(capacity: bytes.count / 2)
+        for i in stride(from: 0, to: bytes.count, by: 2) {
+            let hi = Self.hexNibble(bytes[i])
+            let lo = Self.hexNibble(bytes[i + 1])
+            guard hi >= 0, lo >= 0 else { return nil }
+            data.append(UInt8(hi << 4 | lo))
         }
         self = data
+    }
+
+    private static func hexNibble(_ b: UInt8) -> Int {
+        switch b {
+        case 0x30...0x39: return Int(b - 0x30)               // 0–9
+        case 0x41...0x46: return Int(b - 0x41) + 10          // A–F
+        case 0x61...0x66: return Int(b - 0x61) + 10          // a–f
+        default: return -1
+        }
     }
 }
