@@ -1,0 +1,57 @@
+name: Hily
+options:
+  bundleIdPrefix: com.anchor
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    # 真机签名：个人免费团队（joe0217@sohu.com）。8J6JP98FM3 是证书 OU 里的真实 Team ID
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: 8J6JP98FM3
+    TARGETED_DEVICE_FAMILY: "1" # 仅 iPhone
+    ENABLE_BITCODE: NO
+targets:
+  Hily:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+      - Vendor/FaceUnity/FUManager.h
+      - Vendor/FaceUnity/FUManager.m
+      - Vendor/FaceUnity/FUBeautyRenderer.swift
+      - path: Vendor/FaceUnity/bundles/face_beautification.bundle
+        buildPhase: resources
+      - path: Vendor/FaceUnity/bundles/ai_face_processor.bundle
+        buildPhase: resources
+    dependencies:
+      - framework: Vendor/FaceUnity/FURenderKit.framework
+        embed: true
+        codeSign: true
+    settings:
+      base:
+        # 相芯授权证书 authpack 绑定的就是这个包名，给相芯时必须原样一致
+        PRODUCT_BUNDLE_IDENTIFIER: com.anchor.livechat
+        GENERATE_INFOPLIST_FILE: NO
+        # 相芯美颜：OC 桥接头 + authpack.h/FUManager.h 所在目录
+        SWIFT_OBJC_BRIDGING_HEADER: Vendor/FaceUnity/Hily-Bridging-Header.h
+        HEADER_SEARCH_PATHS: $(SRCROOT)/Vendor/FaceUnity
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: Hily
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "1"
+        # 摄像头权限说明（美颜实时预览必需）
+        NSCameraUsageDescription: 用于实时美颜预览，需要访问摄像头
+        # 麦克风权限（声网通话音频必需）
+        NSMicrophoneUsageDescription: 用于实时音视频通话，需要访问麦克风
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIStatusBarHidden: true
+        UIViewControllerBasedStatusBarAppearance: false

@@ -1,0 +1,17 @@
+# Xcode / 由 xcodegen 生成，不入库
+*.xcodeproj
+*.xcworkspace
+xcuserdata/
+DerivedData/
+build/
+.DS_Store
+
+# 相芯 SDK 与证书（商业授权，禁止入库）
+Vendor/FaceUnity/FURenderKit.framework/
+Vendor/FaceUnity/authpack.h
+Vendor/FaceUnity/bundles/
+Vendor/FaceUnity/_ref/
+
+# CocoaPods / SPM 缓存（可由 pod install / xcodegen 再生，Podfile.lock 已锁版本，不入库）
+Pods/
+.spm/
