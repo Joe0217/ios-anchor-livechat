@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="zh-CN" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>anchor-livechat-h5 主播端 · 功能全景图（iOS 重建确认）</title>
+<style>
+  /* ===== 主题变量（呼应项目设计系统 --lc-*） ===== */
+  :root {
+    --lc-primary-1: #FF9438;   /* 橙 */
+    --lc-primary-2: #FF0090;   /* 粉 */
+    --lc-primary-3: #FE00DE;   /* 紫 */
+    --lc-gradient: linear-gradient(90deg, #FF9438 0%, #FF0090 50%, #FE00DE 100%);
+    --lc-bg-page: #170D34;     /* 页面背景深紫 */
+    --lc-bg-page-2: #1d1142;
+    --lc-card: #2B213E;        /* 卡片背景 */
+    --lc-card-2: #241a36;
+    --lc-card-hover: #352a4c;
+    --lc-text: #ffffff;
+    --lc-text-opt: rgba(255,255,255,.5);
+    --lc-grey-100: #c9c3d6;
+    --lc-grey-200: #8a82a0;
+    --lc-grey-300: #5c5470;
+    --lc-success: #17DC74;
+    --lc-danger: #FC4A46;
+    --lc-online: #10F496;
+    --lc-warn: #E8A200;
+    --lc-border: rgba(255,255,255,.08);
+    --lc-revenue: #FFD15C;     /* 营收高亮 */
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: radial-gradient(1200px 800px at 80% -10%, #2a1656 0%, var(--lc-bg-page) 55%);
+    color: var(--lc-text);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: 60px;
+  }
+  a { color: var(--lc-primary-1); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ===== 顶部固定栏 ===== */
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(23,13,52,.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--lc-border);
+    padding: 12px 24px;
+  }
+  .topbar-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; max-width: 1320px; margin: 0 auto; }
+  .topbar-title { font-size: 18px; font-weight: 700; white-space: nowrap; }
+  .topbar-title .accent {
+    background: var(--lc-gradient); -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .search-box { position: relative; flex: 1; min-width: 200px; max-width: 420px; }
+  .search-box input {
+    width: 100%; padding: 9px 14px 9px 36px;
+    background: var(--lc-card); border: 1px solid var(--lc-border); border-radius: 22px;
+    color: var(--lc-text); font-size: 14px; outline: none;
+  }
+  .search-box input:focus { border-color: var(--lc-primary-2); }
+  .search-box::before { content: "🔍"; position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 13px; opacity: .6; }
+  .btn {
+    padding: 8px 16px; border-radius: 20px; border: 1px solid var(--lc-border);
+    background: var(--lc-card); color: var(--lc-text); font-size: 13px; cursor: pointer;
+    white-space: nowrap; transition: all .15s;
+  }
+  .btn:hover { background: var(--lc-card-hover); }
+  .btn-primary { background: var(--lc-gradient); border: none; font-weight: 600; }
+
+  /* 进度条 */
+  .progress-wrap { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 220px; }
+  .progress-track { flex: 1; height: 8px; background: var(--lc-card); border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; width: 0; background: var(--lc-gradient); border-radius: 4px; transition: width .35s ease; }
+  .progress-label { font-size: 13px; color: var(--lc-grey-100); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .progress-label b { color: var(--lc-online); }
+
+  /* ===== 容器 ===== */
+  .container { max-width: 1320px; margin: 0 auto; padding: 24px; }
+
+  /* 概览区 */
+  .hero { margin-bottom: 24px; }
+  .hero .subtitle { color: var(--lc-grey-100); font-size: 14px; margin-top: 6px; max-width: 880px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-top: 20px; }
+  .stat-card {
+    background: var(--lc-card); border: 1px solid var(--lc-border); border-radius: 14px; padding: 16px 18px;
+    position: relative; overflow: hidden;
+  }
+  .stat-card::after { content: ""; position: absolute; inset-inline-end: -20px; top: -20px; width: 60px; height: 60px; border-radius: 50%; background: var(--lc-gradient); opacity: .12; }
+  .stat-card .num { font-size: 30px; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .stat-card .num.gradient { background: var(--lc-gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .stat-card .lbl { color: var(--lc-grey-100); font-size: 13px; margin-top: 2px; }
+  .stat-card.confirm .num { color: var(--lc-online); }
+
+  /* 图例 */
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 18px; padding: 12px 16px; background: var(--lc-card-2); border-radius: 12px; font-size: 12.5px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; color: var(--lc-grey-100); }
+
+  /* 标签 */
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; vertical-align: middle; white-space: nowrap; }
+  .tag-legacy { background: rgba(140,130,160,.18); color: var(--lc-grey-200); border: 1px solid rgba(140,130,160,.3); }
+  .tag-skip { background: rgba(252,74,70,.12); color: #ff8b88; border: 1px solid rgba(252,74,70,.3); }
+  .tag-revenue { background: rgba(255,209,92,.14); color: var(--lc-revenue); border: 1px solid rgba(255,209,92,.35); }
+  .tag-risk { background: rgba(254,0,222,.12); color: #ff7be8; border: 1px solid rgba(254,0,222,.3); }
+
+  /* ===== 模块分区 ===== */
+  .module { background: var(--lc-card); border: 1px solid var(--lc-border); border-radius: 16px; margin-bottom: 16px; overflow: hidden; }
+  .module-head {
+    display: flex; align-items: center; gap: 14px; padding: 16px 20px; cursor: pointer; user-select: none;
+    background: linear-gradient(90deg, rgba(255,148,56,.06), rgba(254,0,222,.04));
+    border-bottom: 1px solid transparent; transition: background .15s;
+  }
+  .module-head:hover { background: linear-gradient(90deg, rgba(255,148,56,.1), rgba(254,0,222,.08)); }
+  .module.open .module-head { border-bottom-color: var(--lc-border); }
+  .module-icon { font-size: 26px; line-height: 1; }
+  .module-no {
+    width: 30px; height: 30px; border-radius: 8px; background: var(--lc-gradient);
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; flex: none;
+  }
+  .module-titles { flex: 1; min-width: 0; }
+  .module-name { font-size: 16px; font-weight: 700; }
+  .module-meta { font-size: 12px; color: var(--lc-grey-100); margin-top: 2px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .stars { color: var(--lc-primary-1); letter-spacing: 1px; }
+  .module-count-badge { background: var(--lc-card-2); padding: 1px 9px; border-radius: 10px; font-variant-numeric: tabular-nums; }
+  .module-confirm { color: var(--lc-online); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .chevron { font-size: 14px; color: var(--lc-grey-200); transition: transform .2s; flex: none; }
+  .module.open .chevron { transform: rotate(90deg); }
+
+  .module-body { display: none; padding: 8px 20px 20px; }
+  .module.open .module-body { display: block; }
+
+  /* 二级分组 */
+  .group { margin-top: 16px; }
+  .group-title {
+    font-size: 13px; font-weight: 700; color: var(--lc-primary-1); text-transform: uppercase; letter-spacing: .5px;
+    padding: 6px 0 8px; border-bottom: 1px dashed var(--lc-border); margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .group-title .gcount { color: var(--lc-grey-200); font-weight: 500; font-size: 11px; }
+
+  /* 功能点条目 */
+  .feat {
+    display: flex; align-items: flex-start; gap: 11px; padding: 9px 10px; border-radius: 10px;
+    transition: background .12s;
+  }
+  .feat:hover { background: var(--lc-card-2); }
+  .feat.checked { background: rgba(23,220,116,.06); }
+  .feat input[type=checkbox] {
+    appearance: none; -webkit-appearance: none; width: 19px; height: 19px; flex: none; margin-top: 2px;
+    border: 2px solid var(--lc-grey-300); border-radius: 5px; cursor: pointer; position: relative; transition: all .12s;
+  }
+  .feat input[type=checkbox]:checked { background: var(--lc-online); border-color: var(--lc-online); }
+  .feat input[type=checkbox]:checked::after {
+    content: "✓"; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 900; color: var(--lc-bg-page);
+  }
+  .feat-body { flex: 1; min-width: 0; }
+  .feat-name { font-size: 14px; font-weight: 600; color: var(--lc-text); }
+  .feat.checked .feat-name { color: var(--lc-grey-100); text-decoration: line-through; text-decoration-color: rgba(23,220,116,.5); }
+  .feat-desc { font-size: 12.5px; color: var(--lc-grey-100); margin-top: 1px; }
+  .feat-tags { display: inline-flex; gap: 5px; margin-inline-start: 6px; }
+
+  /* 命中高亮 */
+  .feat.hit { background: rgba(255,148,56,.1); box-shadow: inset 3px 0 0 var(--lc-primary-1); }
+  mark { background: rgba(255,148,56,.45); color: #fff; border-radius: 3px; padding: 0 2px; }
+  .feat.dim { display: none; }
+  .group.dim, .module.dim { display: none; }
+
+  /* ===== 底部区 ===== */
+  .footer-section { margin-top: 40px; }
+  .footer-section h2 {
+    font-size: 18px; margin-bottom: 14px; display: flex; align-items: center; gap: 8px;
+  }
+  .footer-section h2::before { content: ""; width: 4px; height: 18px; background: var(--lc-gradient); border-radius: 2px; }
+  table { width: 100%; border-collapse: collapse; background: var(--lc-card); border-radius: 12px; overflow: hidden; font-size: 13px; }
+  th, td { text-align: start; padding: 10px 14px; border-bottom: 1px solid var(--lc-border); vertical-align: top; }
+  th { background: var(--lc-card-2); color: var(--lc-primary-1); font-weight: 700; }
+  tr:last-child td { border-bottom: none; }
+  td code { background: rgba(0,0,0,.25); padding: 1px 6px; border-radius: 5px; font-size: 12px; color: var(--lc-grey-100); }
+
+  .order-list { counter-reset: step; }
+  .order-step {
+    background: var(--lc-card); border: 1px solid var(--lc-border); border-radius: 12px; padding: 14px 18px 14px 56px;
+    position: relative; margin-bottom: 10px;
+  }
+  .order-step::before {
+    counter-increment: step; content: counter(step); position: absolute; inset-inline-start: 16px; top: 14px;
+    width: 28px; height: 28px; border-radius: 50%; background: var(--lc-gradient);
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px;
+  }
+  .order-step .phase { font-weight: 700; font-size: 14px; }
+  .order-step .detail { font-size: 12.5px; color: var(--lc-grey-100); margin-top: 3px; }
+
+  .doc-links { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+  .doc-link {
+    display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--lc-card);
+    border: 1px solid var(--lc-border); border-radius: 12px; transition: all .15s;
+  }
+  .doc-link:hover { background: var(--lc-card-hover); border-color: var(--lc-primary-2); text-decoration: none; }
+  .doc-link .di { font-size: 20px; }
+  .doc-link .dt { font-size: 13.5px; font-weight: 600; color: var(--lc-text); }
+  .doc-link .ds { font-size: 11px; color: var(--lc-grey-200); }
+
+  .note { font-size: 12px; color: var(--lc-grey-200); margin-top: 8px; }
+
+  /* 浮动回到顶部 + 重置 */
+  .fab-wrap { position: fixed; inset-inline-end: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 60; }
+  .fab {
+    width: 46px; height: 46px; border-radius: 50%; border: none; cursor: pointer; font-size: 18px;
+    background: var(--lc-card); color: var(--lc-text); border: 1px solid var(--lc-border);
+    box-shadow: 0 4px 16px rgba(0,0,0,.4);
+  }
+  .fab:hover { background: var(--lc-card-hover); }
+
+  /* 响应式 */
+  @media (max-width: 640px) {
+    .container { padding: 16px; }
+    .topbar { padding: 10px 14px; }
+    .topbar-title { font-size: 15px; }
+    .progress-wrap { order: 3; width: 100%; }
+    .stat-card .num { font-size: 24px; }
+    .module-head { padding: 14px; gap: 10px; }
+    .module-meta { gap: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== 顶部固定栏 ===== -->
+<header class="topbar">
+  <div class="topbar-row">
+    <div class="topbar-title"><span class="accent">主播端</span> 功能全景图</div>
+    <div class="search-box">
+      <input id="searchInput" type="text" placeholder="搜索功能点（实时过滤，自动展开命中模块）" autocomplete="off">
+    </div>
+    <div class="progress-wrap">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-label">已确认 <b id="confirmedCount">0</b>/<span id="totalCount">0</span></div>
+    </div>
+    <button class="btn" id="toggleAllBtn">全部折叠</button>
+    <button class="btn" id="resetBtn">重置勾选</button>
+  </div>
+</header>
+
+<div class="container">
+  <!-- ===== 概览 ===== -->
+  <section class="hero">
+    <h1 style="font-size:26px;font-weight:800;">anchor-livechat-h5 · iOS 原生重建功能确认清单</h1>
+    <p class="subtitle">
+      H5 移动端<strong>主播端</strong>应用（webview 内嵌运行），核心业务：1对1 视频通话、直播、PK、美颜、礼物收益、IM 消息、数据统计。
+      本图供产品负责人<strong>逐项确认</strong>原生重建范围。勾选状态自动保存在本地浏览器，刷新不丢失。
+    </p>
+
+    <div class="stat-grid">
+      <div class="stat-card"><div class="num gradient">9</div><div class="lbl">业务模块</div></div>
+      <div class="stat-card"><div class="num" id="statTotal">0</div><div class="lbl">功能点总数</div></div>
+      <div class="stat-card"><div class="num" id="statGroups">0</div><div class="lbl">二级功能分组</div></div>
+      <div class="stat-card"><div class="num" id="statLegacy" style="color:var(--lc-grey-200)">0</div><div class="lbl">遗留 / 可不移植</div></div>
+      <div class="stat-card"><div class="num" id="statRevenue" style="color:var(--lc-revenue)">0</div><div class="lbl">核心营收链路</div></div>
+      <div class="stat-card confirm"><div class="num" id="statConfirmed">0</div><div class="lbl">已确认</div></div>
+    </div>
+
+    <div class="legend">
+      <span class="legend-item"><input type="checkbox" checked disabled style="width:16px;height:16px;accent-color:var(--lc-online)"> 可勾选「已确认」</span>
+      <span class="legend-item"><span class="tag tag-revenue">营收</span> 核心营收链路（通话/直播/礼物/收益）</span>
+      <span class="legend-item"><span class="tag tag-legacy">遗留</span> 已废弃/半废弃代码</span>
+      <span class="legend-item"><span class="tag tag-skip">可不移植</span> 重建无需实现</span>
+      <span class="legend-item"><span class="tag tag-risk">风险</span> 时序敏感/易踩坑，重点关注</span>
+      <span class="legend-item"><span class="stars">★★★★★</span> 模块重建复杂度</span>
+    </div>
+  </section>
+
+  <!-- ===== 模块容器（JS 渲染） ===== -->
+  <main id="modulesRoot"></main>
+
+  <!-- ===== 底部：技术栈映射 ===== -->
+  <section class="footer-section">
+    <h2>技术栈 → iOS 原生映射</h2>
+    <table>
+      <thead><tr><th style="width:30%">H5 技术</th><th style="width:25%">作用</th><th>iOS 原生替代</th></tr></thead>
+      <tbody id="techMapBody"></tbody>
+    </table>
+  </section>
+
+  <!-- ===== 底部：建议重建顺序 ===== -->
+  <section class="footer-section">
+    <h2>建议重建顺序（依赖驱动）</h2>
+    <div class="order-list" id="orderList"></div>
+    <p class="note">通话(01) 与 直播(02) 共用同一 callApi 实例与美颜实例，切换连续性是核心难点，建议两模块同期设计。</p>
+  </section>
+
+  <!-- ===== 底部：详档链接 ===== -->
+  <section class="footer-section">
+    <h2>分模块详档（点击查看完整梳理）</h2>
+    <div class="doc-links" id="docLinks"></div>
+    <p class="note">每份详档统一 8 节结构：模块概述 / 页面入口 / 功能点清单 / 业务逻辑规则 / 数据与接口 / 依赖SDK / 边界异常 / iOS重建注意事项。</p>
+  </section>
+</div>
+
+<div class="fab-wrap">
+  <button class="fab" id="topFab" title="回到顶部">↑</button>
+</div>
+
+<script>
+/* =======================================================================
+   功能点数据：从 9 份模块详档第三节「功能点清单」提取
+   每条 { id, name, desc, tags?:['revenue'|'legacy'|'skip'|'risk'] }
+   id 全局唯一，用作 localStorage key
+   ======================================================================= */
+const DATA = {
+  meta: {
+    techMap: [
+      ["agora-rtc-sdk-ng / agora-rtm", "音视频 / 通话信令", "Agora Native SDK（RTC + RTM/Signaling），joinChannelEx 多频道(PK)"],
+      ["nim-web-sdk-ng", "IM 聊天/系统消息/聊天室", "云信 NIM iOS SDK"],
+      ["NamaSDK(相芯) + mediapipe + face-api.js", "美颜 / 人脸检测 / 活体", "相芯 NamaSDK iOS 原生（CVPixelBuffer 直通）；活体可用原生人脸框架"],
+      ["svgaplayerweb / yyeva", "礼物动画(SVGA / MP4 透明)", "SVGAPlayer-iOS + YYEVA iOS / MP4 alpha 播放器"],
+      ["ali-oss + STS", "图片/视频上传", "AliyunOSSiOS SDK + STS Federation"],
+      ["airwallex-payment-elements", "支付", "原生 IAP / Airwallex iOS SDK（多为遗留代码，优先级低）"],
+      ["crypto-js (AES)", "请求加解密", "CryptoKit / CommonCrypto（注意密文编码歧义：上行 Base64、下行 Hex）"],
+      ["vue-i18n + RTL", "多语言(英/阿/土)", "Localizable.strings + 语义化布局（阿语 RTL，用 leading/trailing）"],
+      ["ThinkingData(数数) 埋点", "行为埋点", "ThinkingData iOS SDK"],
+      ["Pinia + 持久化", "状态管理", "原生状态层 + UserDefaults/Keychain"],
+      ["postcss-mobile-forever", "375 基准适配", "Auto Layout（无需移植）"]
+    ],
+    order: [
+      ["阶段一 · 基建（无业务）", "鉴权/请求加解密 → IM(NIM)登录 → Agora 初始化 → 美颜管线 → 埋点 → 路由权限/i18n"],
+      ["阶段二 · 核心营收链路（主播赖以工作）", "通话(01) 依赖 IM信令+RTC+美颜+礼物；直播+PK(02) 依赖 RTC多频道+聊天室+礼物+美颜；礼物动画(05) 被 01/02 依赖"],
+      ["阶段三 · 收益与留存", "钱包/提现(06) → 数据统计(07) → 任务/引导(07)"],
+      ["阶段四 · 社交与外围", "社交圈子/排行(08) → 个人中心/设置(09) → 邀请(06)"]
+    ],
+    docs: [
+      ["01", "🎥", "通话 Call", "modules/01-通话call.md"],
+      ["02", "📡", "直播 + PK", "modules/02-直播live与PK.md"],
+      ["03", "✨", "美颜 + 音视频底层", "modules/03-美颜与音视频底层.md"],
+      ["04", "💬", "IM 消息与会话", "modules/04-IM消息与会话.md"],
+      ["05", "🎁", "礼物与虚拟道具", "modules/05-礼物与虚拟道具.md"],
+      ["06", "💰", "钱包/支付/邀请", "modules/06-钱包支付与邀请.md"],
+      ["07", "📊", "任务/引导/数据统计", "modules/07-任务引导与数据统计.md"],
+      ["08", "👥", "社交/圈子/排行", "modules/08-社交圈子与排行.md"],
+      ["09", "🔐", "账号/设置/基建", "modules/09-账号设置与基建.md"]
+    ]
+  },
+  modules: [
+    /* ========== 01 通话 ========== */
+    {
+      no: "01", icon: "🎥", name: "通话（Call）", stars: 5, doc: "modules/01-通话call.md",
+      groups: [
+        { title: "拨出（主叫）", feats: [
+          { id: "c1-1", name: "点击拨打开本地相机麦克风", desc: "openLocalCameraAndeMic('callOut') 先开美颜相机", tags: ["revenue"] },
+          { id: "c1-2", name: "创建通话 createCall", desc: "拿 channelId/yxAccid/videoPrice/资料，忙线离线提示", tags: ["revenue"] },
+          { id: "c1-3", name: "prepareForCall + call 发起呼叫", desc: "准备失败重试1次，再失败当本地取消", tags: ["revenue", "risk"] },
+          { id: "c1-4", name: "待接听界面 30s 倒计时", desc: "超时走 callOff('autoend') 拨出态取消" },
+          { id: "c1-5", name: "等待中可拒接", desc: "点拒接按钮 callOutCancel" }
+        ]},
+        { title: "被叫（来电）", feats: [
+          { id: "c2-1", name: "RTM 收 VideoCall 来电", desc: "_receiveVideoCall 进入 calling 状态", tags: ["revenue"] },
+          { id: "c2-2", name: "拉对端资料 + 进场座驾动画", desc: "joinCall(3s超时) + 系统来电铃声 + NIM回发ONLINE" },
+          { id: "c2-3", name: "接听 / 拒接", desc: "answerCall→accept；callInCancel→reject", tags: ["revenue"] },
+          { id: "c2-4", name: "直播私call/匹配自动接听", desc: "直播中或匹配中来电先暂停直播再自动接听", tags: ["risk"] }
+        ]},
+        { title: "通话中", feats: [
+          { id: "c3-1", name: "远端视频全屏 + 本地美颜画中画", desc: "点屏幕切换清屏(isShowAll)", tags: ["revenue"] },
+          { id: "c3-2", name: "公屏弹幕 + 发消息", desc: "本地发文本(NIM attachType -1，带翻译/气泡)" },
+          { id: "c3-3", name: "收远端文本（翻译入队）", desc: "attachType -1，translateText 翻译后展示" },
+          { id: "c3-4", name: "收远端礼物动画", desc: "attachType 4，触发 svga/mp4 或漂浮图片", tags: ["revenue"] },
+          { id: "c3-5", name: "索要礼物 askFor（15s冷却）", desc: "主播唯一礼物主动行为，被拒(16)Toast", tags: ["revenue"] },
+          { id: "c3-6", name: "收入条实时显示", desc: "通话收入(15累加)+礼物收入(18累加)", tags: ["revenue"] },
+          { id: "c3-7", name: "切前后置摄像头 / 静音", desc: "switchCamera / toggleAudioMute" },
+          { id: "c3-8", name: "反馈弹窗", desc: "c-feedbackPopup 通话评价" },
+          { id: "c3-9", name: "远端视频画中画", desc: "g-remote-pip：locked/unlocked/close" }
+        ]},
+        { title: "通话异常自检（topBar）", feats: [
+          { id: "c4-1", name: "每10s 检测远端在线/连接", desc: "失败弹「用户离线」「网络不稳定不计费」", tags: ["risk"] },
+          { id: "c4-2", name: "收入异常自检", desc: "通话>120s 且收入为0 弹收入异常" },
+          { id: "c4-3", name: "异常弹窗 End/Continue", desc: "确认即 handleCallOff('end')" }
+        ]},
+        { title: "挂断 / 结束", feats: [
+          { id: "c5-1", name: "本地挂断", desc: "finishAndUpdateCall + NIM HANG_UP(3) + callApi.hangup", tags: ["revenue"] },
+          { id: "c5-2", name: "远端挂断处理", desc: "RTC user-left 或 RTM Hangup → 回 prepared" },
+          { id: "c5-3", name: "结束上报埋点", desc: "g-faceTime 卸载上报 h_videocall_fns" }
+        ]},
+        { title: "充值等待蒙层（计费暂停）", feats: [
+          { id: "c6-1", name: "余额不足锁定计时", desc: "NIM -6 锁画中画+暂停计时+60s倒计时", tags: ["revenue", "risk"] },
+          { id: "c6-2", name: "兜底续时 5s", desc: "倒计时再续5s兜底，超时自动挂断", tags: ["risk"] },
+          { id: "c6-3", name: "充值成功补偿 + 钻石奖励", desc: "NIM 90/PAY_SUCCESS 补偿暂停时长+弹钻石奖励", tags: ["revenue", "risk"] },
+          { id: "c6-4", name: "直播私call 5分钟横幅", desc: "约300s 后每分钟收益=通话价" }
+        ]},
+        { title: "假人 / 机器人通话（独立链路）", feats: [
+          { id: "c7-1", name: "假人来电受理（严格条件）", desc: "NIM 133：一级页/非忙/匹配结束/美颜就绪/距上通>10s", tags: ["legacy"] },
+          { id: "c7-2", name: "接听播放预录视频 + 云录屏开播", desc: "callStatus=2 播 fileUrl + beginLiveOpenByFakeUserCall" },
+          { id: "c7-3", name: "自动/手动挂断", desc: "duration≥autoHangupTime 自动；手动需≥10s" },
+          { id: "c7-4", name: "结束奖励弹窗", desc: "NIM 132 → endCallPopup 达标显钻石奖励" }
+        ]},
+        { title: "通话记录页 & 匹配", feats: [
+          { id: "c8-1", name: "通话记录列表", desc: "Records/Following/Followers/Friends 多Tab" },
+          { id: "c8-2", name: "记录详情", desc: "时长/类型/在线状态/价格" },
+          { id: "c8-3", name: "匹配通话 / 匹配池", desc: "getStartMatch/matchList/匹配机器人/开关" },
+          { id: "c8-4", name: "音频通话", desc: "AudioCall(10) 仅枚举，接收方法为空 TODO", tags: ["skip"] },
+          { id: "c8-5", name: "接通率/计费节点上报 callRate", desc: "主播端不扣费，仅上报 category/callType/abnormal", tags: ["revenue", "risk"] }
+        ]}
+      ]
+    },
+    /* ========== 02 直播 + PK ========== */
+    {
+      no: "02", icon: "📡", name: "直播 + PK", stars: 5, doc: "modules/02-直播live与PK.md",
+      groups: [
+        { title: "开播设置页", feats: [
+          { id: "l1-1", name: "直播简介（必填≤200字）", desc: "liveDescribe" },
+          { id: "l1-2", name: "直播封面上传（必填单图≤2MB）", desc: "backgroundImgUrl" },
+          { id: "l1-3", name: "私call免费5分钟礼物设置", desc: "选礼物则 privateCallOpen=1，受价格区间限制", tags: ["revenue"] },
+          { id: "l1-4", name: "愿望单 wishlist", desc: "多选礼物+数量，本地缓存进度需另拉" },
+          { id: "l1-5", name: "美颜设置跳转", desc: "跳转时 unDestroy=true 不触发下播" },
+          { id: "l1-6", name: "开播校验 + 流程", desc: "简介/封面非空、≥60s冷却、IM在线，开美颜→心跳→推流", tags: ["revenue", "risk"] }
+        ]},
+        { title: "直播间主界面（主态）", feats: [
+          { id: "l2-1", name: "顶部信息栏", desc: "头像/热度/计时/在线人数/Top2贡献者/周榜/任务图标" },
+          { id: "l2-2", name: "互动轮盘开关 + 首次引导", desc: "Turn on Wheel 气泡 + 3卡片引导" },
+          { id: "l2-3", name: "公屏弹幕（最近50条头插裁尾）", desc: "MessageScroller" },
+          { id: "l2-4", name: "礼物飘窗 / 礼物展示区", desc: "PK时隐藏礼物区", tags: ["revenue"] },
+          { id: "l2-5", name: "底部操作栏", desc: "发送/PK入口/消息(红点)/礼物/设置" },
+          { id: "l2-6", name: "公屏「回复@用户」浮层", desc: "点击公屏气泡触发" },
+          { id: "l2-7", name: "私call 开关", desc: "选了礼物且状态允许时显示，PK中自动关", tags: ["revenue"] },
+          { id: "l2-8", name: "网络质量指示 + 弱网提示", desc: "连续极差≥10次提示" },
+          { id: "l2-9", name: "钻石盲盒主播感知层", desc: "DiamondGiftHost" }
+        ]},
+        { title: "客态直播间", feats: [
+          { id: "l3-1", name: "进入他人直播间观看", desc: "订阅房主视频流 #remoteVideoContent" },
+          { id: "l3-2", name: "客态 PK 对战观看", desc: "AudiencePkBattleView" },
+          { id: "l3-3", name: "快速开播 CGoLive", desc: "客态房间右下角引流开播" },
+          { id: "l3-4", name: "退出直播间", desc: "leaveLiveRoom + 重置客态PK + history.back" }
+        ]},
+        { title: "PK 玩法", feats: [
+          { id: "l4-1", name: "随机匹配", desc: "QUICK 15s + RETRY 300s 两阶段轮询，超时弹失败", tags: ["revenue", "risk"] },
+          { id: "l4-2", name: "指定邀请（上限5）", desc: "搜索主播/推荐列表，可并发邀请", tags: ["revenue"] },
+          { id: "l4-3", name: "接受邀请总开关", desc: "queryInviteSwitch/updateInviteSwitch" },
+          { id: "l4-4", name: "时长设置", desc: "180/300/600/900秒，pkDurationPicker" },
+          { id: "l4-5", name: "PK 记录 + 规则弹窗", desc: "首次强制10s，localStorage标记" },
+          { id: "l4-6", name: "收到邀请弹窗 60s 倒计时", desc: "接受/拒绝/超时自动" },
+          { id: "l4-7", name: "PK 对战界面（左右分屏）", desc: "进度条/双方PK值/贡献榜Top3/准备5s/最后5s/结果动画", tags: ["revenue"] },
+          { id: "l4-8", name: "实时计分（attachType 98）", desc: "myPkValue/opponentPkValue + 双方Top3", tags: ["revenue", "risk"] },
+          { id: "l4-9", name: "惩罚阶段 120s", desc: "结果win/lose/draw + 贡献榜公屏富文本", tags: ["risk"] },
+          { id: "l4-10", name: "中断/断开确认弹窗", desc: "PK中点按钮中断确认；惩罚断开确认" },
+          { id: "l4-11", name: "静音对手", desc: "mutePkRoom + 广播观众 attachType -8" },
+          { id: "l4-12", name: "重连状态同步", desc: "getPkStatus 对齐服务器，惩罚倒计时异常重置", tags: ["risk"] }
+        ]},
+        { title: "心跳 / 状态机 / 强制下播", feats: [
+          { id: "l5-1", name: "6s 心跳保活（callState）", desc: "0直播/1通话/2匹配/3PK，是状态权威源", tags: ["risk"] },
+          { id: "l5-2", name: "心跳返回码强制下播", desc: "1992/1006封禁→3；连续失败>6→4", tags: ["risk"] },
+          { id: "l5-3", name: "网络质量强制下播", desc: "连续极差30次(约60s)→5；PK期暂停监控", tags: ["risk"] },
+          { id: "l5-4", name: "合规警告(61不下播)/封禁(62下播)", desc: "云信系统通知，61仅警告" },
+          { id: "l5-5", name: "相机错误强制下播(99)", desc: "g-beautyCamera cameraError" }
+        ]},
+        { title: "下播结算 / 直播数据", feats: [
+          { id: "l6-1", name: "下播结算页", desc: "时长/Viewers/Followers/Gifters/Diamonds/TopGifters/转私call列表", tags: ["revenue"] },
+          { id: "l6-2", name: "直播转私call 列表", desc: "含通话时长、关注按钮" },
+          { id: "l6-3", name: "直播数据页（周/月）", desc: "总收入/直播钻石/私call钻石/时长/钱袋子领取", tags: ["revenue"] },
+          { id: "l6-4", name: "直播规则说明页", desc: "/liveRule" }
+        ]},
+        { title: "聊天室消息分发", feats: [
+          { id: "l7-1", name: "加入云信聊天室", desc: "logined 拉历史/礼物进度/观众/收入/愿望单/公告" },
+          { id: "l7-2", name: "公屏聊天 text", desc: "ext含userId/replyNick/气泡/VIP/等级" },
+          { id: "l7-3", name: "进退房 / 禁言通知", desc: "memberEnter+1/memberExit下播/gagMember" },
+          { id: "l7-4", name: "30s 观众人数同步校正", desc: "syncAudienceNum" },
+          { id: "l7-5", name: "活动中奖广播 / 猜拳 / 公告", desc: "attachType 140/144/195" }
+        ]}
+      ]
+    },
+    /* ========== 03 美颜 + 音视频底层 ========== */
+    {
+      no: "03", icon: "✨", name: "美颜 + 音视频底层", stars: 5, doc: "modules/03-美颜与音视频底层.md",
+      groups: [
+        { title: "美肤参数（face_beautification）", feats: [
+          { id: "b1-1", name: "磨皮（特殊：blur_type=2先设）", desc: "reflexType3，0~100→0~6，初值55", tags: ["risk"] },
+          { id: "b1-2", name: "美白 / 红润 / 清晰 / 锐化", desc: "color_level_mode2 / red_level / clarity / sharpen" },
+          { id: "b1-3", name: "五官立体 / 亮眼 / 美牙", desc: "face_threed / eye_bright / tooth_whiten" },
+          { id: "b1-4", name: "去黑眼圈 / 去法令纹", desc: "空fuKey走panelData，mode2 备选" }
+        ]},
+        { title: "美型参数", feats: [
+          { id: "b2-1", name: "V脸 / 窄脸 / 短脸 / 小脸", desc: "cheek_v / cheek_narrow / cheek_short / cheek_small" },
+          { id: "b2-2", name: "瘦颧骨 / 瘦下颌骨", desc: "intensity_cheekbones / intensity_lower_jaw" },
+          { id: "b2-3", name: "大眼 / 圆眼 / 瘦鼻", desc: "eye_enlarging_mode3 / intensity_eye_circle / intensity_nose_mode2" },
+          { id: "b2-4", name: "下巴 / 额头（双向 -50~50）", desc: "intensity_chin/forehead mode2，reflexType2", tags: ["risk"] }
+        ]},
+        { title: "滤镜 / 贴纸", feats: [
+          { id: "b3-1", name: "11款滤镜", desc: "自然/质感灰/蜜桃/白亮/粉嫩/冷暖色调/个性/小清新/黑白，filter_name+filter_level两步设参" },
+          { id: "b3-2", name: "贴纸（CDN按需下载）", desc: "时尚C位/口罩/胡子/圣诞等，同时只渲一个" }
+        ]},
+        { title: "美颜引擎与人脸检测", feats: [
+          { id: "b4-1", name: "AI 人脸检测", desc: "每帧 fuFaceProcessorGetNumResults，状态变化才回调" },
+          { id: "b4-2", name: "未检测到人脸15s弹窗", desc: "checkNoFace且未匹配时" },
+          { id: "b4-3", name: "画中画(PIP)缩小", desc: "通话时缩为102×156，RTL靠左" },
+          { id: "b4-4", name: "前置镜像", desc: "flipHorizontal水平翻转" },
+          { id: "b4-5", name: "性能统计 FPS/RTT/分辨率", desc: "FPSMonitor 每1s统计" },
+          { id: "b4-6", name: "数值映射 reflexMap（必须1:1复刻）", desc: "type1/2/3 三种 UI值↔相芯原始值映射", tags: ["risk"] }
+        ]},
+        { title: "采集→美颜→推流管线", feats: [
+          { id: "b5-1", name: "美颜采集桥接管线", desc: "MediaStreamTrackProcessor+canvas captureStream+createCustomVideoTrack（iOS用pushExternalVideoFrame）", tags: ["risk"] },
+          { id: "b5-2", name: "三种渲染管线", desc: "AgoraRenderPipe推流/NamaRenderPipe预览/ImageVideoRenderPipe上传" },
+          { id: "b5-3", name: "Worker离屏 / 主线程降级", desc: "高端走Worker，Safari/低端走主线程" }
+        ]},
+        { title: "设备分档与降级", feats: [
+          { id: "b6-1", name: "低端机判定", desc: "老内核/iOS≤15.6/核数≤4/内存≤4G" },
+          { id: "b6-2", name: "三档 HIGH/MID/LOW", desc: "scale/fps/bitrate 三档参数表", tags: ["risk"] },
+          { id: "b6-3", name: "Agora 编码档位", desc: "统一960×540，fps24/24/15，bitrate1500/1000/800" },
+          { id: "b6-4", name: "canvas偶数对齐", desc: "round(*scale/2)*2 避免H264软编绿边" },
+          { id: "b6-5", name: "WASM SIMD降级", desc: "SIMD失败降级低版本WASM" }
+        ]},
+        { title: "性能优化与初始化", feats: [
+          { id: "b7-1", name: "码率封顶 + motion模式", desc: "弱网自动降码率保流畅" },
+          { id: "b7-2", name: "单人脸 fuSetMaxFaces(1)", desc: "主播自拍固定1脸" },
+          { id: "b7-3", name: "生产关闭SDK日志", desc: "消除高频字符串拼接GC" },
+          { id: "b7-4", name: "首次初始化后释放采集", desc: "美颜值就绪后销毁采集轨道" },
+          { id: "b7-5", name: "贴纸预加载 + 国际化菜单", desc: "基础bundle后预加载贴纸；en/ar翻译" }
+        ]},
+        { title: "Agora client 与录制", feats: [
+          { id: "b8-1", name: "三类 Agora client", desc: "通话rtc / 直播host(实际H264) / 观众audience" },
+          { id: "b8-2", name: "Agora日志上传/preload", desc: "setLogLevel/enableLogUpload/preload" },
+          { id: "b8-3", name: "视频录制", desc: "vedioRecorder/useRecord 废弃Demo，无生产功能", tags: ["skip"] }
+        ]}
+      ]
+    },
+    /* ========== 04 IM 消息与会话 ========== */
+    {
+      no: "04", icon: "💬", name: "IM 消息与会话", stars: 4, doc: "modules/04-IM消息与会话.md",
+      groups: [
+        { title: "NIM 初始化与接收", feats: [
+          { id: "m1-1", name: "NIM 初始化/登录/重连/事件绑定", desc: "initNim，connect前先off再on防重复", tags: ["risk"] },
+          { id: "m1-2", name: "在线消息接收 onMsg", desc: "单条实时处理完整链路" },
+          { id: "m1-3", name: "离线/漫游批量构建", desc: "2s节流批处理+去重，同会话追加合并", tags: ["risk"] },
+          { id: "m1-4", name: "系统消息分发 onSysMsg", desc: "按 attachType 30+ 分支" },
+          { id: "m1-5", name: "离线系统消息同步", desc: "onSyncSysMsgs 仅累加关注数" }
+        ]},
+        { title: "发送 / 回执 / 历史", feats: [
+          { id: "m2-1", name: "发送文本/图片/视频/音频/文件", desc: "sendTextMsg/sendImageMsg等" },
+          { id: "m2-2", name: "自定义系统消息发送", desc: "sendImMsg → sendCustomSysMsg" },
+          { id: "m2-3", name: "重发失败消息", desc: "resendMsg；No_connected/7101被拒处理" },
+          { id: "m2-4", name: "已读回执", desc: "setReadMsg/sendMsgReceipt/onReadMsg，过滤tip类" },
+          { id: "m2-5", name: "按需拉云端历史（三态）", desc: "loaded/empty/unavailable" }
+        ]},
+        { title: "会话列表与未读", feats: [
+          { id: "m3-1", name: "会话列表构建/合并/排序", desc: "mergeArrays去重+智能合并，updateTime倒序" },
+          { id: "m3-2", name: "会话未读数管理", desc: "resetSessionUnreadCount，最大200会话" },
+          { id: "m3-3", name: "置顶会话 + 裂变到期", desc: "pinMsgObj/pinMsgList，自动取消" },
+          { id: "m3-4", name: "底栏未读角标", desc: "flame+stranger，>99显示99+" }
+        ]},
+        { title: "Flame/Stranger 会话分类", feats: [
+          { id: "m4-1", name: "云端ext标记分类（唯一可信源）", desc: "received/sended/receivedGift/called，与安卓字段一致", tags: ["risk"] },
+          { id: "m4-2", name: "已标记缓存优化", desc: "模块级Set只增不减，减少query/update" },
+          { id: "m4-3", name: "三Tab Flame/Prime/Stranger", desc: "Prime后端过滤" }
+        ]},
+        { title: "付费消息 / 私密消息", feats: [
+          { id: "m5-1", name: "付费消息体系", desc: "msgType free/pay 进度累加" },
+          { id: "m5-2", name: "回复积分结算 + 宝箱", desc: "settleReplyPoints + im_anchor_reply埋点", tags: ["revenue"] },
+          { id: "m5-3", name: "私密图片/视频消息", desc: "privateMsg + lockStatus锁定态校验，先查锁态再渲染" }
+        ]},
+        { title: "状态订阅 / 画像 / 群发", feats: [
+          { id: "m6-1", name: "在线状态订阅（LRU 100）", desc: "subscribeEvent 30天，超限淘汰最旧" },
+          { id: "m6-2", name: "主播名片与画像", desc: "userProfiles/conversationProfiles 关注/活跃大R" },
+          { id: "m6-3", name: "群发消息", desc: "batchSendMsgToUser，剩余次数限制" },
+          { id: "m6-4", name: "客服消息本地缓存", desc: "adminChatCache 30天/100条，不入会话列表" }
+        ]},
+        { title: "特殊消息处理", feats: [
+          { id: "m7-1", name: "裂变消息(103/104)", desc: "weakTxtType 已充值/未充值置顶" },
+          { id: "m7-2", name: "USDT 支付状态消息", desc: "usdtPayStatus/usdtOrderNo" },
+          { id: "m7-3", name: "审核通过(58)勿登出", desc: "先置reviewPassedDialogShowing跳过自动登出", tags: ["risk"] },
+          { id: "m7-4", name: "假用户来电/结束(133/132)", desc: "handleFakeUserCall" },
+          { id: "m7-5", name: "通知聊天室活动中奖广播(140)", desc: "独立NIM ChatRoom实例，仅直播态解析" },
+          { id: "m7-6", name: "充值成功通知(35)", desc: "构造custom消息入站内信会话" }
+        ]}
+      ]
+    },
+    /* ========== 05 礼物与虚拟道具 ========== */
+    {
+      no: "05", icon: "🎁", name: "礼物与虚拟道具", stars: 4, doc: "modules/05-礼物与虚拟道具.md",
+      groups: [
+        { title: "普通礼物", feats: [
+          { id: "g1-1", name: "三场景收礼", desc: "1v1通话(4/-1)、直播间(50 LIVE)、P2P私信(SEND_GIFT)", tags: ["revenue"] },
+          { id: "g1-2", name: "SVGA + MP4 动画串行播放", desc: "统一入队，非动画走飘浮小图", tags: ["revenue"] },
+          { id: "g1-3", name: "PK期价格降序重排队列", desc: "限长15，保护正在播放项", tags: ["risk"] },
+          { id: "g1-4", name: "收益展示（被动累加）", desc: "通话每分钟(15)/礼物(18)/直播收入实时刷新", tags: ["revenue"] },
+          { id: "g1-5", name: "礼物任务/愿望单进度", desc: "收礼后更新liveTaskList/wishlist" },
+          { id: "g1-6", name: "幸运礼物中奖公屏/全服公告", desc: "totalReward/rewardPool.fullWinningStyle" },
+          { id: "g1-7", name: "主播索要礼物 askFor", desc: "仅call场景，被拒(16)toast", tags: ["revenue"] }
+        ]},
+        { title: "钻石福袋（纯感知层）", feats: [
+          { id: "g2-1", name: "三态机 预热/开抢/结算", desc: "WARMING/OPEN/SETTLED", tags: ["risk"] },
+          { id: "g2-2", name: "同房多福袋FIFO队列", desc: "activeList按giftId升序，挂件队列角标" },
+          { id: "g2-3", name: "倒计时前端自算", desc: "1s时钟，预热结束即按OPEN展示" },
+          { id: "g2-4", name: "结算公屏4变体", desc: "TopShare/退回/静默" },
+          { id: "g2-5", name: "中奖名单弹窗", desc: "金额降序，Top Share标" },
+          { id: "g2-6", name: "IM乱序兜底 + 因果守卫", desc: "pendingHigherStates缓存高阶状态，HTTP/IM三重守卫", tags: ["risk"] },
+          { id: "g2-7", name: "主播限制：不可发不可抢", desc: "挂件点击只弹规则", tags: ["legacy"] }
+        ]},
+        { title: "虚拟道具（背包+商城）", feats: [
+          { id: "g3-1", name: "道具列表（背包商城合一）", desc: "座驾/头像框/聊天气泡/资料卡边框，分页" },
+          { id: "g3-2", name: "穿戴/卸下", desc: "ops type1/2，本地同步mineInfo装扮字段" },
+          { id: "g3-3", name: "预览（静态图/SVGA/MP4）", desc: "按资源格式选播放器" },
+          { id: "g3-4", name: "进场动画 + 进场飘屏", desc: "座驾/进场道具触发直播间(80)/通话(83)", tags: ["revenue"] },
+          { id: "g3-5", name: "特效开关 + 计数提示", desc: "effectEnabled，播放计数>10提示" },
+          { id: "g3-6", name: "活跃大R进场金色飘屏", desc: "无道具也可触发，按昵称匹配保留" },
+          { id: "g3-7", name: "进场头像道具", desc: "type3 已注释关闭", tags: ["legacy"] }
+        ]},
+        { title: "数据/接口说明", feats: [
+          { id: "g4-1", name: "礼物列表v3按场景拉取", desc: "getNewGiftListV3 按searchValue(CALL等)" },
+          { id: "g4-2", name: "sendGift 打赏接口", desc: "主播端基本不用（主播只收不送）", tags: ["legacy"] },
+          { id: "g4-3", name: "gifts.js 硬编码mock", desc: "Rose占位，无真实接口意义", tags: ["legacy", "skip"] },
+          { id: "g4-4", name: "二级API独立鉴权(exchangeToken)", desc: "bag&shop 换独立token" },
+          { id: "g4-5", name: "html2canvas", desc: "本模块未实际使用", tags: ["skip"] }
+        ]}
+      ]
+    },
+    /* ========== 06 钱包/支付/邀请 ========== */
+    {
+      no: "06", icon: "💰", name: "钱包 / 支付 / 邀请", stars: 3, doc: "modules/06-钱包支付与邀请.md",
+      groups: [
+        { title: "钱包 / 收益", feats: [
+          { id: "w1-1", name: "钻石余额 + 折美元", desc: "myBalance / myBalanceDiv", tags: ["revenue"] },
+          { id: "w1-2", name: "今日收益", desc: "totalsIncome" },
+          { id: "w1-3", name: "收益明细分来源分页", desc: "call/gift/task/invite/message/interaction/others", tags: ["revenue"] }
+        ]},
+        { title: "提现（强风控流程）", feats: [
+          { id: "w2-1", name: "可提现钻石 + 汇率展示", desc: "diamondRate个钻石=1$，零头退回", tags: ["revenue"] },
+          { id: "w2-2", name: "收款方式管理", desc: "USDT/Digifinex/Epay 列表/新增/删除" },
+          { id: "w2-3", name: "提现量输入 + 校验", desc: "钳制上限，≥200钻石且≥1$", tags: ["risk"] },
+          { id: "w2-4", name: "费用试算 + 渠道下限校验", desc: "到账/手续费，Digifinex$20/Epay$50" },
+          { id: "w2-5", name: "人脸活体检测（条件触发）", desc: "三动作摇头/点头/正脸+OSS截图+后端比对", tags: ["risk"] },
+          { id: "w2-6", name: "交易密码（首设/校验）", desc: "6位数字" },
+          { id: "w2-7", name: "提现申请 + 记录状态机", desc: "审核中/已提现/审核失败", tags: ["revenue"] },
+          { id: "w2-8", name: "客服 WhatsApp（硬编码）", desc: "忘记密码复制客服号", tags: ["risk"] }
+        ]},
+        { title: "邀请返佣（平级双线）", feats: [
+          { id: "w3-1", name: "双维度返佣（用户/主播）", desc: "各独立邀请码/链接/比例" },
+          { id: "w3-2", name: "返佣比例展示", desc: "invite_user/anchor_award 配置下发" },
+          { id: "w3-3", name: "邀请码 + 链接 + 海报分享", desc: "复制分享" },
+          { id: "w3-4", name: "跑马灯返佣播报", desc: "他人获得返佣滚动" },
+          { id: "w3-5", name: "统计 + 绑定列表 + 排行", desc: "累计人数/返佣，分页绑定列表，总返佣排行" },
+          { id: "w3-6", name: "收益明细下钻", desc: "被邀请人→单条奖励记录" },
+          { id: "w3-7", name: "我的看板（主播被邀请数据）", desc: "今日/上周/上月榜+单主播多维详情" }
+        ]},
+        { title: "充值 / 支付（遗留为主）", feats: [
+          { id: "w4-1", name: "支付渠道分发", desc: "H5外链/Airwallex/PayPal/原生IAP", tags: ["legacy"] },
+          { id: "w4-2", name: "USDT 充值", desc: "recharge内被return短路，未启用", tags: ["legacy", "skip"] },
+          { id: "w4-3", name: "充值列表/汇率接口", desc: "store调用action已整体注释", tags: ["legacy", "skip"] },
+          { id: "w4-4", name: "Airwallex 集成", desc: "dropIn/HPP两种模式，主面向用户", tags: ["legacy"] },
+          { id: "w4-5", name: "discount.js 打折主播", desc: "整体注释废弃", tags: ["legacy", "skip"] },
+          { id: "w4-6", name: "facCompare 静态人脸比对", desc: "MediaPipe残留，不在主流程", tags: ["legacy", "skip"] }
+        ]}
+      ]
+    },
+    /* ========== 07 任务/引导/数据统计 ========== */
+    {
+      no: "07", icon: "📊", name: "任务 / 引导 / 数据统计", stars: 3, doc: "modules/07-任务引导与数据统计.md",
+      groups: [
+        { title: "任务中心（新旧双轨灰度）", feats: [
+          { id: "t1-1", name: "Rank Progress 收益/积分入口", desc: "奖杯→/rank，奖牌→/pointsRank" },
+          { id: "t1-2", name: "Daily/Weekly 双Tab", desc: "下拉刷新，倒计时条(北京时间)", tags: ["risk"] },
+          { id: "t1-3", name: "新版Daily模块分组阶梯任务", desc: "可折叠，多档进度+单档/一键领取" },
+          { id: "t1-4", name: "领取成功弹窗 + 红点逻辑", desc: "tierStatus≠2显红点，grant_pending降级toast" },
+          { id: "t1-5", name: "活跃大R任务", desc: "Weekly顶部，进度条+钻石奖励" },
+          { id: "t1-6", name: "旧版fallback + 骨架屏", desc: "新接口不可用回退平铺列表", tags: ["risk"] }
+        ]},
+        { title: "活动型新主播任务（newBie）", feats: [
+          { id: "t2-1", name: "领奖/周榜两Tab + 活动倒计时", desc: "countdownTimestamp" },
+          { id: "t2-2", name: "紫/红两任务组 + 宝箱", desc: "满进度开箱，钻石/头像框/座驾奖励" },
+          { id: "t2-3", name: "任务项状态与跳转", desc: "Go/Done/End，房间内外行为不同" },
+          { id: "t2-4", name: "规则/奖励记录/活动结束弹窗", desc: "按日期去重每天弹一次" },
+          { id: "t2-5", name: "开播权限校验", desc: "taskType5-10先checkLiveBroadcastPermission" }
+        ]},
+        { title: "平台级新手任务 + driver引导", feats: [
+          { id: "t3-1", name: "新手任务横条 + 倒计时", desc: "进度条节点，到期隐藏入口" },
+          { id: "t3-2", name: "driver.js 三步高亮引导", desc: "首进/work，通话中暂停恢复" },
+          { id: "t3-3", name: "奖励异步IM领取(135)", desc: "attachType135推送后才能领取", tags: ["risk"] },
+          { id: "t3-4", name: "右下浮标 c-newbieTask", desc: "倒计时，文案图4s切换" }
+        ]},
+        { title: "数据统计 / 直播数据", feats: [
+          { id: "t4-1", name: "不喜欢率卡 + 抵扣", desc: "Likes/Dislikes/Rate，用积分抵扣dislike" },
+          { id: "t4-2", name: "等级周数据表", desc: "本/上周答复率/平均时长/通话数" },
+          { id: "t4-3", name: "当前等级权益", desc: "已拥有勾/未拥有叉" },
+          { id: "t4-4", name: "直播数据看板（周/月5维度）", desc: "总时长/收入(直播+私call)，钱袋子领取", tags: ["revenue"] }
+        ]},
+        { title: "工作台（/work）", feats: [
+          { id: "t5-1", name: "周等级徽章 + 提示文案", desc: "SS/S/A/B/NEW/C/D 7档配色" },
+          { id: "t5-2", name: "三指标卡", desc: "在线时长/平均通话时长/好评率(字段语义需核对)", tags: ["risk"] },
+          { id: "t5-3", name: "今日收入6项", desc: "总/通话/礼物/任务/邀请/托管", tags: ["revenue"] },
+          { id: "t5-4", name: "工具宫格 + 后端可见性", desc: "Hi/GoLive/Match/Task/Beauty等，newBie/bigR后端过滤" },
+          { id: "t5-5", name: "在线/离线切换", desc: "下线二次确认弹窗" }
+        ]},
+        { title: "埋点系统", feats: [
+          { id: "t6-1", name: "ThinkingData(数数)埋点封装", desc: "reportShuShuCustomEvent + 动态超级属性" },
+          { id: "t6-2", name: "关键事件清单", desc: "app_open/h_task_*/anchor_event/c_log" },
+          { id: "t6-3", name: "签到接口", desc: "已定义但本主播端未接入", tags: ["skip"] },
+          { id: "t6-4", name: "WorkingGuide iframe手册", desc: "纯Google Docs内嵌，无业务", tags: ["skip"] },
+          { id: "t6-5", name: "template.js 空壳store", desc: "脚手架遗留，可忽略", tags: ["legacy", "skip"] }
+        ]}
+      ]
+    },
+    /* ========== 08 社交/圈子/排行 ========== */
+    {
+      no: "08", icon: "👥", name: "社交 / 圈子 / 排行", stars: 3, doc: "modules/08-社交圈子与排行.md",
+      groups: [
+        { title: "朋友圈 / 动态", feats: [
+          { id: "s1-1", name: "三Tab信息流", desc: "官方/好友/我的，officalType1/2/3" },
+          { id: "s1-2", name: "虚拟滚动 + 无限分页", desc: "DynamicScroller + IntersectionObserver" },
+          { id: "s1-3", name: "发布动态（图文only）", desc: "≤500字、1~9图，不支持视频" },
+          { id: "s1-4", name: "点赞（乐观更新）", desc: "optionType1/0" },
+          { id: "s1-5", name: "评论 + 懒加载（近7天）", desc: "进视口提前600px才拉取" },
+          { id: "s1-6", name: "删除（仅我的Tab）", desc: "二次确认，本地filter移除" },
+          { id: "s1-7", name: "翻译 + 图片/视频预览", desc: "CTranslate，按扩展名替换video标签" },
+          { id: "s1-8", name: "circleCache 详情缓存", desc: "半废弃，iOS做标准详情页即可", tags: ["legacy"] }
+        ]},
+        { title: "关注 / 粉丝", feats: [
+          { id: "s2-1", name: "三类型列表", desc: "Following/Followers/Friends，虚拟列表分页" },
+          { id: "s2-2", name: "列表项展示", desc: "头像/昵称/等级/VIP/国家/年龄+通话私聊按钮" },
+          { id: "s2-3", name: "关注/取关", desc: "CFollowButton，成功更新upsNum" },
+          { id: "s2-4", name: "进入用户主页", desc: "setUserInfo + push /userProfile" }
+        ]},
+        { title: "排行榜（五类）", feats: [
+          { id: "s3-1", name: "魅力榜 / 财富榜", desc: "ANCHOR/USER _DAY/WEEK/MON" },
+          { id: "s3-2", name: "CP情侣榜（UI最复杂）", desc: "双头像+神秘用户+奖励道具弹窗" },
+          { id: "s3-3", name: "积分榜（仅周榜重置）", desc: "integralAmount + myIntegral" },
+          { id: "s3-4", name: "游戏任务榜", desc: "day/week，预计奖励钻石" },
+          { id: "s3-5", name: "Big-R 大R贡献榜", desc: "本/上周，汇总钻石+单大R明细", tags: ["revenue"] },
+          { id: "s3-6", name: "Top3特殊展示 + 我的排名", desc: "未上榜99+，名片卡/规则弹窗" },
+          { id: "s3-7", name: "曝光/离开埋点", desc: "h_rank_view/leave 含停留时长" }
+        ]},
+        { title: "用户资料", feats: [
+          { id: "s4-1", name: "他人主页", desc: "三色光环/礼物墙/点赞收藏/接通率+关注私聊举报拉黑" },
+          { id: "s4-2", name: "本人资料编辑（diff模式）", desc: "头像/昵称/简介/图9/视频6/来电视频/问候语" },
+          { id: "s4-3", name: "审核态处理", desc: "vaild 1有效/2审核中/3被拒，被拒进删除列表" },
+          { id: "s4-4", name: "OSS上传链路（共用）", desc: "STS凭证→压缩→时间戳put→10s超时" }
+        ]},
+        { title: "转盘（归属直播玩法）", feats: [
+          { id: "s5-1", name: "转盘配置管理", desc: "查询/新增/改状态/预设文案", tags: ["legacy"] }
+        ]}
+      ]
+    },
+    /* ========== 09 账号/设置/基建 ========== */
+    {
+      no: "09", icon: "🔐", name: "账号 / 设置 / 基建", stars: 4, doc: "modules/09-账号设置与基建.md",
+      groups: [
+        { title: "登录注册", feats: [
+          { id: "a1-1", name: "邮箱+密码登录（兜底）", desc: "密码两次MD5大写，浏览器/未注入态", tags: ["risk"] },
+          { id: "a1-2", name: "注册流程（两步）", desc: "基础资料(≥6图)→上传介绍视频→提交" },
+          { id: "a1-3", name: "重新注册（过审被拒重提）", desc: "reSubmitView" },
+          { id: "a1-4", name: "忘记密码（WhatsApp客服）", desc: "弹窗可复制" },
+          { id: "a1-5", name: "退出登录", desc: "WebView通知原生close，否则reload" },
+          { id: "a1-6", name: "Apple/Google/FB登录", desc: "API已定义但H5 UI未接入，原生应补齐", tags: ["skip"] },
+          { id: "a1-7", name: "测试登录（仅dev）", desc: "连点logo 3次用userId登录", tags: ["skip"] }
+        ]},
+        { title: "首页", feats: [
+          { id: "a2-1", name: "等级驱动顶部tab顺序", desc: "S级Live/List/Match/Circle，A级及以下不同" },
+          { id: "a2-2", name: "顶部tab swiper横滑", desc: "Live/List/Match/Circle联动" },
+          { id: "a2-3", name: "List子tab online/prime", desc: "两个子列表" },
+          { id: "a2-4", name: "排行入口/快捷按钮/折扣池", desc: "GBoosting，列表曝光埋点" }
+        ]},
+        { title: "个人中心 / 设置", feats: [
+          { id: "a3-1", name: "个人信息卡片", desc: "头像/昵称/ID/年龄/国家/等级/单价/签名" },
+          { id: "a3-2", name: "关注粉丝好友数跳转", desc: "/communication" },
+          { id: "a3-3", name: "相册/礼物墙/朋友圈Tab", desc: "" },
+          { id: "a3-4", name: "私密付费消息设置", desc: "私密照片视频+绑定解锁礼物" },
+          { id: "a3-5", name: "黑名单查看与移除", desc: "" },
+          { id: "a3-6", name: "意见反馈", desc: "类型+文本+邮箱+图片" },
+          { id: "a3-7", name: "语言切换", desc: "Auto/English/عربي，强刷生效" },
+          { id: "a3-8", name: "清除缓存 + 版本号", desc: "写cacheVersion后强刷" },
+          { id: "a3-9", name: "协议外链", desc: "用户协议/隐私政策 window.open" }
+        ]},
+        { title: "鉴权基建（重建第一硬骨头）", feats: [
+          { id: "a4-1", name: "登录态原生注入(openParams)", desc: "AES加密{token,timestamp,loginUuid}", tags: ["risk"] },
+          { id: "a4-2", name: "全链路AES加解密", desc: "AES-128-CBC，上行Base64/下行Hex，主接口与bagshop不同密钥", tags: ["risk"] },
+          { id: "a4-3", name: "双token体系", desc: "主token + bagshop auth_token(401自动续)", tags: ["risk"] },
+          { id: "a4-4", name: "鉴权头/设备信息头注入", desc: "loginToken/anchorToken/appid/网关key/deviceInfo", tags: ["risk"] },
+          { id: "a4-5", name: "换号清缓存", desc: "openParams token变更全量清缓存" },
+          { id: "a4-6", name: "业务错误码处理", desc: "1004挤下线/1005未登录/1080余额不足等" },
+          { id: "a4-7", name: "权限分流(userType)", desc: "2主播全功能/9代理/其他受限页", tags: ["risk"] }
+        ]},
+        { title: "JSBridge / 原生交互", feats: [
+          { id: "a5-1", name: "支付桥 Pay/rechargePay", desc: "iOS messageHandlers必须实现" },
+          { id: "a5-2", name: "关闭WebView桥(退登)", desc: "Flutter close，iOS需补" },
+          { id: "a5-3", name: "容器判定", desc: "flutter_inappwebview/getPlatformType" }
+        ]},
+        { title: "基建（i18n/路由/监控/SW）", feats: [
+          { id: "a6-1", name: "自动路由 + 集中权限拦截", desc: "无beforeEach守卫，全在App.vue checkLogin" },
+          { id: "a6-2", name: "i18n三语言 + RTL", desc: "en内置，ar/tr动态加载，阿语整体镜像", tags: ["risk"] },
+          { id: "a6-3", name: "直播网络质量监控", desc: "声网等级0-6，强制断播" },
+          { id: "a6-4", name: "全局错误捕获上报", desc: "errorHandler+window.error+unhandledrejection" },
+          { id: "a6-5", name: "版本强刷 + Service Worker", desc: "cacheVersion比对，PWA更新提示" },
+          { id: "a6-6", name: "活跃度检测自动离线", desc: "无操作超时置离线+弹窗恢复", tags: ["risk"] },
+          { id: "a6-7", name: "前后台切换处理", desc: "visibilitychange重连NIM/上报app_start/end" },
+          { id: "a6-8", name: "后管配置驱动", desc: "getConfigByKey 大量行为开关" }
+        ]}
+      ]
+    }
+  ]
+};
+
+/* =======================================================================
+   渲染与交互
+   ======================================================================= */
+const STORAGE_PREFIX = 'iosRebuildPanorama:'; // localStorage key 前缀
+const root = document.getElementById('modulesRoot');
+
+// 统计 & 状态收集
+let allFeatIds = [];
+let totalFeats = 0, totalGroups = 0, totalLegacy = 0, totalRevenue = 0;
+
+const TAG_META = {
+  revenue: { cls: 'tag-revenue', label: '营收' },
+  legacy:  { cls: 'tag-legacy',  label: '遗留' },
+  skip:    { cls: 'tag-skip',    label: '可不移植' },
+  risk:    { cls: 'tag-risk',    label: '风险' }
+};
+
+// 读取勾选态
+function isChecked(id) {
+  return localStorage.getItem(STORAGE_PREFIX + id) === '1';
+}
+function setChecked(id, val) {
+  if (val) localStorage.setItem(STORAGE_PREFIX + id, '1');
+  else localStorage.removeItem(STORAGE_PREFIX + id);
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+}
+
+function tagHtml(tags) {
+  if (!tags || !tags.length) return '';
+  return '<span class="feat-tags">' + tags.map(t => {
+    const m = TAG_META[t]; if (!m) return '';
+    return `<span class="tag ${m.cls}">${m.label}</span>`;
+  }).join('') + '</span>';
+}
+
+// 构建 DOM
+DATA.modules.forEach(mod => {
+  let modFeatCount = 0;
+  mod.groups.forEach(g => { modFeatCount += g.feats.length; });
+  totalGroups += mod.groups.length;
+
+  const modEl = document.createElement('section');
+  modEl.className = 'module open';
+  modEl.dataset.no = mod.no;
+
+  // 模块头
+  const head = document.createElement('div');
+  head.className = 'module-head';
+  head.innerHTML = `
+    <div class="module-no">${mod.no}</div>
+    <div class="module-icon">${mod.icon}</div>
+    <div class="module-titles">
+      <div class="module-name">${escapeHtml(mod.name)}</div>
+      <div class="module-meta">
+        <span class="stars">${'★'.repeat(mod.stars)}${'☆'.repeat(5-mod.stars)}</span>
+        <span class="module-count-badge">${modFeatCount} 个功能点</span>
+        <span class="module-confirm" data-mod-confirm="${mod.no}">本模块已确认 0/${modFeatCount}</span>
+      </div>
+    </div>
+    <a href="${mod.doc}" class="btn" style="padding:5px 12px" onclick="event.stopPropagation()">详档 →</a>
+    <span class="chevron">▶</span>
+  `;
+  head.addEventListener('click', () => modEl.classList.toggle('open'));
+  modEl.appendChild(head);
+
+  // 模块体
+  const body = document.createElement('div');
+  body.className = 'module-body';
+
+  mod.groups.forEach(g => {
+    const groupEl = document.createElement('div');
+    groupEl.className = 'group';
+
+    const gt = document.createElement('div');
+    gt.className = 'group-title';
+    gt.innerHTML = `${escapeHtml(g.title)} <span class="gcount">(${g.feats.length})</span>`;
+    groupEl.appendChild(gt);
+
+    g.feats.forEach(f => {
+      allFeatIds.push(f.id);
+      totalFeats++;
+      if (f.tags) {
+        if (f.tags.includes('legacy') || f.tags.includes('skip')) totalLegacy++;
+        if (f.tags.includes('revenue')) totalRevenue++;
+      }
+
+      const featEl = document.createElement('label');
+      featEl.className = 'feat';
+      featEl.dataset.id = f.id;
+      // 用于搜索的纯文本
+      featEl.dataset.search = (f.name + ' ' + (f.desc || '')).toLowerCase();
+
+      const checked = isChecked(f.id);
+      if (checked) featEl.classList.add('checked');
+
+      featEl.innerHTML = `
+        <input type="checkbox" ${checked ? 'checked' : ''} data-id="${f.id}">
+        <div class="feat-body">
+          <div class="feat-name">${escapeHtml(f.name)}${tagHtml(f.tags)}</div>
+          ${f.desc ? `<div class="feat-desc">${escapeHtml(f.desc)}</div>` : ''}
+        </div>
+      `;
+      groupEl.appendChild(featEl);
+    });
+
+    body.appendChild(groupEl);
+  });
+
+  modEl.appendChild(body);
+  root.appendChild(modEl);
+});
+
+// 填充静态统计
+document.getElementById('statTotal').textContent = totalFeats;
+document.getElementById('totalCount').textContent = totalFeats;
+document.getElementById('statGroups').textContent = totalGroups;
+document.getElementById('statLegacy').textContent = totalLegacy;
+document.getElementById('statRevenue').textContent = totalRevenue;
+
+// ===== 勾选事件 + 进度更新 =====
+function updateProgress() {
+  let confirmed = 0;
+  // 全局
+  allFeatIds.forEach(id => { if (isChecked(id)) confirmed++; });
+  document.getElementById('confirmedCount').textContent = confirmed;
+  document.getElementById('statConfirmed').textContent = confirmed;
+  const pct = totalFeats ? (confirmed / totalFeats * 100) : 0;
+  document.getElementById('progressFill').style.width = pct.toFixed(1) + '%';
+
+  // 各模块
+  DATA.modules.forEach(mod => {
+    let c = 0, total = 0;
+    mod.groups.forEach(g => g.feats.forEach(f => { total++; if (isChecked(f.id)) c++; }));
+    const el = document.querySelector(`[data-mod-confirm="${mod.no}"]`);
+    if (el) {
+      el.textContent = `本模块已确认 ${c}/${total}`;
+      el.style.color = (c === total && total > 0) ? 'var(--lc-success)' : 'var(--lc-online)';
+    }
+  });
+}
+
+root.addEventListener('change', e => {
+  if (e.target.matches('input[type=checkbox]')) {
+    const id = e.target.dataset.id;
+    setChecked(id, e.target.checked);
+    const featEl = e.target.closest('.feat');
+    featEl.classList.toggle('checked', e.target.checked);
+    updateProgress();
+  }
+});
+
+// ===== 全部展开/折叠 =====
+const toggleAllBtn = document.getElementById('toggleAllBtn');
+let allOpen = true;
+toggleAllBtn.addEventListener('click', () => {
+  allOpen = !allOpen;
+  document.querySelectorAll('.module').forEach(m => m.classList.toggle('open', allOpen));
+  toggleAllBtn.textContent = allOpen ? '全部折叠' : '全部展开';
+});
+
+// ===== 重置勾选 =====
+document.getElementById('resetBtn').addEventListener('click', () => {
+  if (!confirm('确定清空所有「已确认」勾选状态？此操作不可撤销。')) return;
+  allFeatIds.forEach(id => setChecked(id, false));
+  document.querySelectorAll('input[type=checkbox][data-id]').forEach(cb => {
+    cb.checked = false;
+    cb.closest('.feat').classList.remove('checked');
+  });
+  updateProgress();
+});
+
+// ===== 搜索过滤（实时高亮 + 自动展开命中模块） =====
+const searchInput = document.getElementById('searchInput');
+let searchTimer = null;
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => doSearch(searchInput.value.trim().toLowerCase()), 120);
+});
+
+function clearHighlights(featEl) {
+  const name = featEl.querySelector('.feat-name');
+  const desc = featEl.querySelector('.feat-desc');
+  [name, desc].forEach(node => {
+    if (node && node.querySelector('mark')) {
+      node.innerHTML = node.innerHTML.replace(/<mark>(.*?)<\/mark>/gi, '$1');
+    }
+  });
+}
+
+function highlight(featEl, kw) {
+  const re = new RegExp('(' + kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+  // 仅高亮 feat-name 文本节点与 feat-desc（避开标签 HTML），简单处理：对文本子节点替换
+  ['.feat-name', '.feat-desc'].forEach(sel => {
+    const node = featEl.querySelector(sel);
+    if (!node) return;
+    // 仅对直接文本内容做高亮，保留 feat-tags 子元素
+    node.childNodes.forEach(child => {
+      if (child.nodeType === Node.TEXT_NODE && re.test(child.textContent)) {
+        const span = document.createElement('span');
+        span.innerHTML = child.textContent.replace(re, '<mark>$1</mark>');
+        node.replaceChild(span, child);
+      }
+    });
+  });
+}
+
+function doSearch(kw) {
+  const modules = document.querySelectorAll('.module');
+
+  // 先清理之前的高亮
+  document.querySelectorAll('.feat').forEach(f => {
+    f.classList.remove('hit', 'dim');
+    // 还原高亮（移除 mark 与临时 span 包裹）
+    f.querySelectorAll('mark').forEach(m => {
+      const parent = m.parentNode;
+      parent.replaceChild(document.createTextNode(m.textContent), m);
+      parent.normalize();
+    });
+  });
+
+  if (!kw) {
+    // 清空搜索：还原全部显示与展开
+    modules.forEach(m => { m.classList.remove('dim'); });
+    document.querySelectorAll('.group').forEach(g => g.classList.remove('dim'));
+    return;
+  }
+
+  modules.forEach(mod => {
+    let modHasHit = false;
+    mod.querySelectorAll('.group').forEach(group => {
+      let groupHasHit = false;
+      group.querySelectorAll('.feat').forEach(featEl => {
+        const text = featEl.dataset.search || '';
+        if (text.includes(kw)) {
+          featEl.classList.remove('dim');
+          featEl.classList.add('hit');
+          highlight(featEl, kw);
+          groupHasHit = true; modHasHit = true;
+        } else {
+          featEl.classList.add('dim');
+          featEl.classList.remove('hit');
+        }
+      });
+      group.classList.toggle('dim', !groupHasHit);
+    });
+    mod.classList.toggle('dim', !modHasHit);
+    if (modHasHit) mod.classList.add('open'); // 命中模块自动展开
+  });
+}
+
+// ===== 底部表格渲染 =====
+const techBody = document.getElementById('techMapBody');
+DATA.meta.techMap.forEach(([h5, role, ios]) => {
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td><code>${escapeHtml(h5)}</code></td><td>${escapeHtml(role)}</td><td>${escapeHtml(ios)}</td>`;
+  techBody.appendChild(tr);
+});
+
+const orderList = document.getElementById('orderList');
+DATA.meta.order.forEach(([phase, detail]) => {
+  const div = document.createElement('div');
+  div.className = 'order-step';
+  div.innerHTML = `<div class="phase">${escapeHtml(phase)}</div><div class="detail">${escapeHtml(detail)}</div>`;
+  orderList.appendChild(div);
+});
+
+const docLinks = document.getElementById('docLinks');
+DATA.meta.docs.forEach(([no, icon, name, path]) => {
+  const a = document.createElement('a');
+  a.className = 'doc-link';
+  a.href = path;
+  a.innerHTML = `<span class="di">${icon}</span><div><div class="dt">${no} · ${escapeHtml(name)}</div><div class="ds">${escapeHtml(path)}</div></div>`;
+  docLinks.appendChild(a);
+});
+
+// ===== 回到顶部 =====
+document.getElementById('topFab').addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+// 初始进度
+updateProgress();
+</script>
+</body>
+</html>
