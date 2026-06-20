@@ -19,9 +19,10 @@ import UIKit
 final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
     static let shared = WSHeartbeat()
 
-    /// LIVE_STATUS_NUMBER 子集（C 范围只用 4 个）
+    /// LIVE_STATUS_NUMBER 子集（D 起扩到 5 个）
     enum OnlineStatus: Int {
         case offline    = 2
+        case calling    = 10000     // 通话中（D 新增；对齐 H5 getOnlineStatus checkOnCall 分支）
         case callEnd    = 10001     // 通话结束 / 空闲在线（主状态 1）
         case foreground = 10002     // 前台（主状态 1）
         case background = 10003     // 后台（主状态 2）
@@ -37,6 +38,11 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
     private var disposed = true
     private let interval: TimeInterval = 5
     private let reconnectDelay: TimeInterval = 5
+
+    /// 当前应发的"在线态"状态。startPing/前后台切换/重连握手首包统一读取此值，
+    /// 由 `notifyCallStateChanged(callState:)` 改写，让通话状态变化能影响周期心跳值。
+    /// 默认 `.callEnd`（空闲在线）。
+    private var currentStatus: OnlineStatus = .callEnd
 
     private override init() {
         super.init()
@@ -86,10 +92,11 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
         task = t
         t.resume()
         startReceiveLoop()
-        // ⚠️ 首包发 .callEnd 不发 .foreground：H5 getOnlineStatus 空闲态返回 CALL_END(10001)，
+        // ⚠️ 首包发 currentStatus 不发 .foreground：H5 getOnlineStatus 空闲态返回 CALL_END(10001)，
         // 后端按此判定"可拨打"。FOREGROUND(10002) 是"刚回到前台"的瞬时状态，长期上报后端会
         // 拒绝 createCall（1111 "current status unable to make a call"）。
-        sendStatus(.callEnd)
+        // 通话期重连握手时 currentStatus 已是 .calling，确保 D 联动不中断。
+        sendStatus(currentStatus)
         startPing()
         connected = true
     }
@@ -184,7 +191,8 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
             while !Task.isCancelled, let self, !self.disposed {
                 try? await Task.sleep(nanoseconds: UInt64(self.interval * 1_000_000_000))
                 if Task.isCancelled || self.disposed { break }
-                self.sendStatus(.callEnd)  // 空闲态心跳 = CALL_END(对齐 H5 getOnlineStatus 空闲分支)
+                // 读 currentStatus：通话期保持 .calling，空闲期保持 .callEnd，对齐 H5 getOnlineStatus
+                self.sendStatus(self.currentStatus)
             }
         }
     }
@@ -215,7 +223,7 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
         if task == nil {
             connect()  // connect() 内会 startPing
         } else {
-            sendStatus(.callEnd)
+            sendStatus(currentStatus)  // 通话期 currentStatus=.calling，空闲期=.callEnd
             startPing()  // 后台时已 cancelPing，回前台必须重启
         }
     }
@@ -223,6 +231,19 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
     @objc private func onBackground() {
         guard !disposed else { return }
         cancelPing()
-        sendStatus(.background)
+        sendStatus(.background)  // 后台一次性补 BACKGROUND，不修改 currentStatus
+    }
+
+    // MARK: - D 联动入口（LiveStore.pauseForCall / resumeCall 调用）
+
+    /// 通话状态切换通知。callState=1 时切 .calling 立即上报；callState=0 时切回 .callEnd。
+    /// 对齐 H5 `getOnlineStatus`：`checkOnCall ? CALLING : CALL_END`。
+    /// waitingReturnLive 期间应继续保持 .calling（LiveStore.resumeCall 内倒计时结束才调本方法切回）。
+    func notifyCallStateChanged(callState: Int) {
+        let next: OnlineStatus = (callState == 1) ? .calling : .callEnd
+        guard currentStatus != next else { return }
+        currentStatus = next
+        sendStatus(next)
+        print("📡 [WS] notifyCallStateChanged callState=\(callState) → onlineStatus=\(next.rawValue)")
     }
 }

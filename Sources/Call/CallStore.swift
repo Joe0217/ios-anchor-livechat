@@ -37,7 +37,8 @@ final class CallStore: ObservableObject {
     private var endedToIdleTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
     /// callRate 上报开关（C 范围默认关，避免与后端联调相互干扰）
-    private var callRateEnabled = false
+    // D 里程碑：callRate 上报开启（C 验证通过 + 后端契约确认 callRate 接口已上线）
+    private var callRateEnabled = true
 
     private init() {
         // 远端用户加入 RTC channel 时 → state 切 .connected（声网 didJoinedOfUid 触发）
