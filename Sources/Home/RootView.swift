@@ -9,7 +9,7 @@ struct RootView: View {
     var body: some View {
         ZStack {
             if session.isLoggedIn {
-                HomeView()
+                MainTabView()
             } else {
                 LoginView()
             }

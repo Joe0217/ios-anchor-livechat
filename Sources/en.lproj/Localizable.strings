@@ -1,0 +1,75 @@
+/* Hily 主播端本地化 stub（en 默认值）
+
+   B 里程碑 spec §13 i18n 声明：B 阶段用 en 默认值占位；ar/tr 翻译由 J 里程碑收尾。
+   key 命名约定：模块.场景（lowerCamelCase 拼接）
+*/
+
+// MARK: - 强制下播原因（forceEnd reason UI 文案）
+"forceEnd.disconnected"      = "Connection lost";
+"forceEnd.banned"            = "Account violation, live ended";
+"forceEnd.cameraFailure"     = "Camera capture failed";
+"forceEnd.noPermission"      = "Permission check failed";
+"forceEnd.weakNetwork"       = "Network too weak";
+
+// MARK: - 美颜降级
+"beauty.unavailable"         = "Beauty unavailable";
+
+// MARK: - 网络弱网降级（v5 分层）
+"network.warning"            = "Network unstable, switched to low frame rate";
+
+// MARK: - 开播前置校验
+"prepare.titleEmpty"         = "Please enter a live title";
+"prepare.coverEmpty"         = "Please set a live cover";
+"prepare.cooldown"           = "Please wait 60s after last live ended";
+"prepare.imOffline"          = "Chat service offline, please retry";
+
+// MARK: - 公屏
+"im.chatroom.reconnecting"   = "Chatroom reconnecting...";
+"im.chatroom.reconnected"    = "Chatroom reconnected";
+"im.userJoined"              = "A user joined the live room";
+"im.sendGiftAction"          = "sent";
+"im.complianceWarningDefault" = "Your live content has received a warning";
+"im.anonymous"               = "Anonymous";
+
+// MARK: - Work 工作台（设计稿还原）
+"work.weeklyLevel"           = "Weekly Level";
+"work.detail"                = "Detail";
+"work.scorePrefix"           = "Score: ";
+"work.needMoreFormat"        = "(Need %d more to level up)";
+
+"work.callsToday"            = "Calls Today";
+"work.positiveRating"        = "Positive Rating";
+"work.weeklyRevenue"         = "Weekly Revenue";
+
+"work.todaysIncome"          = "Today's Income";
+"work.withdrawal"            = "Withdrawal";
+"work.callIncomes"           = "Call Incomes";
+"work.giftIncomes"           = "Gift Incomes";
+"work.taskIncomes"           = "Task Incomes";
+"work.inviteIncomes"         = "Invite Incomes";
+"work.managedIncomes"        = "Managed Incomes";
+"work.totalIncomes"          = "Total Incomes";
+
+"work.tools"                 = "Tools";
+"work.online"                = "Online";
+"work.online.on"             = "On";
+"work.online.off"            = "Off";
+
+// 工具图标标签
+"work.tool.hi"               = "Hi";
+"work.tool.goLive"           = "Go Live";
+"work.tool.match"            = "Match";
+"work.tool.task"             = "Task";
+"work.tool.beauty"           = "Beauty";
+"work.tool.points"           = "Points";
+"work.tool.giftMessage"      = "Gift Message";
+"work.tool.profileUpdate"    = "Profile Update";
+"work.tool.invite"           = "Invite";
+"work.tool.workingGuide"     = "Working Guide";
+"work.tool.backpack"         = "Backpack";
+
+// 底部 tab 标签
+"tab.home"                   = "Home";
+"tab.messages"               = "Messages";
+"tab.work"                   = "Work";
+"tab.profile"                = "Profile";
