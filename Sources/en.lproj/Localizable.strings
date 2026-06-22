@@ -73,3 +73,14 @@
 "tab.messages"               = "Messages";
 "tab.work"                   = "Work";
 "tab.profile"                = "Profile";
+
+// MARK: - Live 页（设计稿还原）
+"live.subTab.live"           = "Live";
+"live.subTab.list"           = "List";
+"live.subTab.match"          = "Match";
+"live.subTab.cysle"          = "Cysle";
+"live.subTab.comingSoon"     = "Coming Soon";
+"live.viewers"               = "viewers";
+"live.rankBadge"             = "Leaderboard";
+"live.refresh"               = "Refresh";
+"live.onlineDot"             = "Online";

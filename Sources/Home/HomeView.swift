@@ -1,97 +1,42 @@
 import SwiftUI
 
-/// 首页：调试功能入口。后续新增的原生功能 demo 都从这里进入。
+/// 首页：直播流广场（Live 设计稿还原）。
+///
+/// 顶部子 tab Live/List/Match/Cysle 切换由 LiveTabView 自管理。
+/// 右下角悬浮按钮触发 POC 调试台，方便真机自测；上线前删除。
 struct HomeView: View {
-    @EnvironmentObject private var session: SessionStore
-    @ObservedObject private var callStore = CallStore.shared
-    @State private var dialUserId: String = ""
-    @State private var showDialAlert = false
+    @State private var showPOC = false
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section("调试功能") {
-                    NavigationLink {
-                        CallPOCView().navigationBarTitleDisplayMode(.inline)
-                    } label: {
-                        Label("美颜 + 单端入频道 POC", systemImage: "video.fill")
-                    }
-                    NavigationLink {
-                        LivePrepareView()
-                    } label: {
-                        Label("直播开播 Demo", systemImage: "dot.radiowaves.left.and.right")
-                    }
-                }
-
-                callSection
-
-                Section("账号") {
-                    if let name = session.user?.nickname, !name.isEmpty {
-                        Label(name, systemImage: "person.crop.circle")
-                    }
-                    if let uid = session.user?.userId {
-                        LabeledContent("userId", value: "\(uid)")
-                    }
-                    Button(role: .destructive) {
-                        session.logout()
-                    } label: {
-                        Label("退出登录", systemImage: "rectangle.portrait.and.arrow.right")
-                    }
-                }
-            }
-            .navigationTitle("Anchor POC 调试台")
+        ZStack(alignment: .bottomTrailing) {
+            LiveTabView()
+            pocFloatingButton
+                .padding(.trailing, 16)
+                .padding(.bottom, 16)
         }
-        .alert("通话异常", isPresented: $showDialAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(callStore.lastError)
-        }
-        .onChange(of: callStore.lastError) { newValue in
-            showDialAlert = !newValue.isEmpty && callStore.state == .idle
+        .sheet(isPresented: $showPOC) {
+            POCDebugView()
         }
     }
 
-    private var callSection: some View {
-        Section {
-            // 信令状态
-            HStack {
-                Image(systemName: callStore.isSignalingReady ? "antenna.radiowaves.left.and.right" : "antenna.radiowaves.left.and.right.slash")
-                    .foregroundStyle(callStore.isSignalingReady ? .green : .orange)
-                Text(callStore.isSignalingReady ? "RTM 信令已就绪" : "RTM 信令未就绪")
-                Spacer()
-                Text(callStore.state.rawValue)
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-
-            // 拨号入口
-            HStack {
-                TextField("对方 userId", text: $dialUserId)
-                    .keyboardType(.numberPad)
-                    .textContentType(.username)
-                Button {
-                    Task { await dial() }
-                } label: {
-                    Label("拨打", systemImage: "phone.fill.arrow.up.right")
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!canDial)
-            }
-        } header: {
-            Text("1v1 通话")
-        } footer: {
-            Text("两台真机各登录一个主播账号，分别在对端输入彼此 userId 即可对拨。")
+    /// 临时悬浮入口：仅供开发期访问 POC，与 Live 内容明显区分（不进 Theme，避免污染设计系统）。
+    private var pocFloatingButton: some View {
+        Button {
+            showPOC = true
+        } label: {
+            Image(systemName: "wrench.and.screwdriver.fill")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 44, height: 44)
+                .background(
+                    Circle().fill(Color.black.opacity(0.55))
+                )
+                .overlay(
+                    Circle().strokeBorder(Color.white.opacity(0.3), lineWidth: 1)
+                )
         }
-    }
-
-    private var canDial: Bool {
-        callStore.isSignalingReady &&
-        callStore.state == .idle &&
-        !dialUserId.trimmingCharacters(in: .whitespaces).isEmpty
-    }
-
-    private func dial() async {
-        let target = dialUserId.trimmingCharacters(in: .whitespaces)
-        guard !target.isEmpty else { return }
-        await callStore.callOut(remoteUserId: target)
+        .buttonStyle(.plain)
+        // 临时调试入口的中文 a11y label：上线前整个按钮会删除，无需进 L10n
+        .accessibilityLabel("POC 调试台")
     }
 }

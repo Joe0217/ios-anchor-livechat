@@ -29,6 +29,38 @@ enum Theme {
         static let tabInactiveLabel = Color(hex: 0x6E6483)
         /// 激活 tab（Work）
         static let tabActive        = Color(hex: 0xFFE600)
+
+        // MARK: Live 页（设计稿还原）
+        /// Live 页顶部紫色亮区
+        static let liveTopPurple        = Color(hex: 0x3D1862)
+        /// Live 页中段深紫
+        static let liveMidPurple        = Color(hex: 0x1F0938)
+        /// Live 页底部近黑紫（与 screenBackground 相接）
+        static let liveBottomDark       = Color(hex: 0x0B0010)
+        /// 顶部子 tab 选中文字（橙金）
+        static let liveSubTabSelected   = Color(hex: 0xFFB800)
+        /// 顶部子 tab 未选中文字
+        static let liveSubTabUnselected = Color.white
+        /// 在线绿点
+        static let liveOnlineDot        = Color(hex: 0x3DFF7A)
+        /// 礼物通知条主紫
+        static let liveNoticeBarPurple  = Color(hex: 0x4A2275)
+        /// 礼物通知条强调粉
+        static let liveNoticeBarPink    = Color(hex: 0xA03A8C)
+        /// 礼物通知条玫红描边
+        static let liveNoticeBarBorder  = Color(hex: 0xFF4D8F)
+        /// 礼物通知条"Emma" 用户名绿
+        static let liveNoticeUserGreen  = Color(hex: 0x3DFFA0)
+        /// 礼物通知条数字金
+        static let liveNoticeNumber     = Color(hex: 0xFFD700)
+        /// 圣诞 banner 紫描边
+        static let liveBannerBorder     = Color(hex: 0xA03AFF)
+        /// 圣诞 banner 底色
+        static let liveBannerFill       = Color(hex: 0x2A0E47)
+        /// 直播卡片头像名称白
+        static let liveCardName         = Color.white
+        /// 观看人数徽章橙
+        static let liveViewerBadge      = Color(hex: 0xFF6B00)
     }
 
     // MARK: - 间距
@@ -49,6 +81,22 @@ enum Theme {
         static let toolRowSpacing: CGFloat = 22
         /// 底部 tab 栏可见高度（图标+标签，不含 home indicator 安全区）
         static let tabBarHeight: CGFloat   = 52
+
+        // MARK: Live 页（设计稿还原）
+        /// Live 页内容左右边距
+        static let liveScreenMargin: CGFloat   = 12
+        /// 顶部子 tab 横向间距
+        static let liveSubTabGap: CGFloat      = 16
+        /// 顶部右侧操作按钮间距
+        static let liveTopActionGap: CGFloat   = 10
+        /// 礼物通知条高度
+        static let liveNoticeBarHeight: CGFloat = 44
+        /// 圣诞 banner 高度
+        static let liveBannerHeight: CGFloat   = 96
+        /// 直播卡片宽高比（宽/高，SwiftUI aspectRatio 语义）。3:4 竖向卡片
+        static let liveCardWidthOverHeight: CGFloat = 3.0 / 4.0
+        /// 直播卡片网格间距
+        static let liveCardGap: CGFloat        = 8
     }
 
     // MARK: - 圆角
@@ -56,6 +104,16 @@ enum Theme {
         static let statCard: CGFloat = 12
         static let bigCard: CGFloat  = 16
         static let toolTile: CGFloat = 14
+
+        // MARK: Live 页（设计稿还原）
+        /// 礼物通知条胶囊
+        static let liveNoticeBar: CGFloat = 22
+        /// 圣诞活动 banner
+        static let liveBanner: CGFloat    = 14
+        /// 直播卡片
+        static let liveCard: CGFloat      = 16
+        /// 观看人数徽章
+        static let liveViewerBadge: CGFloat = 6
     }
 
     // MARK: - 字号
@@ -78,6 +136,20 @@ enum Theme {
         static let toolLabel = Font.system(size: 13, weight: .regular)
         /// 底部 tab 标签
         static let tabLabel  = Font.system(size: 11, weight: .medium)
+
+        // MARK: Live 页（设计稿还原）
+        /// 顶部子 tab 字号（4 个 tab + 右侧 3 按钮挤在 375pt 宽度，18pt heavy 是不换行的安全档）
+        static let liveSubTab    = Font.system(size: 18, weight: .heavy)
+        /// 礼物通知条用户名/正文
+        static let liveNotice    = Font.system(size: 13, weight: .semibold)
+        /// 礼物通知条金币数字
+        static let liveNoticeNum = Font.system(size: 13, weight: .heavy)
+        /// 直播卡片头像名称
+        static let liveCardName  = Font.system(size: 14, weight: .semibold)
+        /// 直播卡片观看人数徽章
+        static let liveViewerBadge = Font.system(size: 12, weight: .bold)
+        /// 排行榜徽章 +100K
+        static let liveRankNum   = Font.system(size: 11, weight: .heavy)
     }
 
     // MARK: - 渐变与段位光谱
@@ -107,13 +179,46 @@ enum Theme {
             endPoint: .trailing
         )
 
-        /// 头像描边环（金黄→粉，角向）
+        /// 头像描边环（金黄→粉,角向）
         static let avatarRing = AngularGradient(
             colors: [
                 Color(hex: 0xFFD60A), Color(hex: 0xFF6B9D),
                 Color(hex: 0xC026D3), Color(hex: 0xFFD60A),
             ],
             center: .center
+        )
+
+        // MARK: Live 页（设计稿还原）
+        /// Live 页整页背景：顶部紫→中段深紫→底部近黑（与切图"背景填图"作底配合）
+        static let livePageBackground = LinearGradient(
+            colors: [Palette.liveTopPurple, Palette.liveMidPurple, Palette.liveBottomDark],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+
+        /// 顶部子 tab "Live" 选中字渐变（橙→金）
+        static let liveSubTabText = LinearGradient(
+            colors: [Color(hex: 0xFF7A00), Color(hex: 0xFFB800)],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+
+        /// 礼物通知条横向渐变背景（紫→品红→紫）
+        static let liveNoticeBar = LinearGradient(
+            colors: [
+                Color(hex: 0x4A2275, opacity: 0.85),
+                Color(hex: 0xA03A8C, opacity: 0.95),
+                Color(hex: 0x4A2275, opacity: 0.85),
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+
+        /// 观看人数徽章渐变（橙→红）
+        static let liveViewerBadge = LinearGradient(
+            colors: [Color(hex: 0xFFB800), Color(hex: 0xFF4D00)],
+            startPoint: .top,
+            endPoint: .bottom
         )
     }
 }

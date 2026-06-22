@@ -74,4 +74,19 @@ enum L10n {
     static let tabMessages        = NSLocalizedString("tab.messages", comment: "消息")
     static let tabWork            = NSLocalizedString("tab.work", comment: "工作台")
     static let tabProfile         = NSLocalizedString("tab.profile", comment: "我的")
+
+    // MARK: - Live 页（设计稿还原）
+    /// 顶部子 tab 名称
+    static let liveSubTabLive       = NSLocalizedString("live.subTab.live", comment: "Live")
+    static let liveSubTabList       = NSLocalizedString("live.subTab.list", comment: "List")
+    static let liveSubTabMatch      = NSLocalizedString("live.subTab.match", comment: "Match")
+    static let liveSubTabCysle      = NSLocalizedString("live.subTab.cysle", comment: "Cysle")
+    /// 占位子 tab 提示
+    static let liveSubTabComingSoon = NSLocalizedString("live.subTab.comingSoon", comment: "占位文案：敬请期待")
+    /// 观看人数后缀（a11y）
+    static let liveViewers          = NSLocalizedString("live.viewers", comment: "观看人数 a11y 后缀")
+    /// 顶部右侧按钮 a11y
+    static let liveRankBadge        = NSLocalizedString("live.rankBadge", comment: "排行榜按钮 a11y")
+    static let liveRefresh          = NSLocalizedString("live.refresh", comment: "刷新按钮 a11y")
+    static let liveOnlineDot        = NSLocalizedString("live.onlineDot", comment: "在线状态 a11y")
 }

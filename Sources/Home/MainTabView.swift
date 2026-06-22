@@ -4,7 +4,7 @@ import SwiftUI
 /// 故用自定义 tab 栏 + safeAreaInset，使内容自动避让，不被遮挡。
 /// Home tab 暂挂现有调试菜单（保留真机测试入口），Messages/Profile 为占位。
 struct MainTabView: View {
-    @State private var selection: MainTab = .work
+    @State private var selection: MainTab = .home
 
     var body: some View {
         ZStack {
