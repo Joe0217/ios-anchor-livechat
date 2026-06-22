@@ -55,6 +55,7 @@ enum L10n {
     static let workOnline         = NSLocalizedString("work.online", comment: "在线")
     static let workOnlineOn       = NSLocalizedString("work.online.on", comment: "在线开关-开")
     static let workOnlineOff      = NSLocalizedString("work.online.off", comment: "在线开关-关")
+    static let workOffline        = NSLocalizedString("work.offline", comment: "离线（开关关态文字）")
 
     // 工具图标标签
     static let toolHi             = NSLocalizedString("work.tool.hi", comment: "打招呼")
@@ -102,4 +103,27 @@ enum L10n {
     static let liveListActionLive    = NSLocalizedString("liveList.action.live", comment: "直播按钮 a11y")
     static let liveListActionMatch   = NSLocalizedString("liveList.action.match", comment: "匹配按钮 a11y")
     static let liveListActionOffline = NSLocalizedString("liveList.action.offline", comment: "下线开关 a11y")
+
+    // MARK: - Profile 个人页（设计稿还原）
+    /// 顶部按钮 a11y
+    static let profileSettings        = NSLocalizedString("profile.settings", comment: "设置按钮 a11y")
+    static let profileEditName        = NSLocalizedString("profile.editName", comment: "编辑昵称按钮 a11y")
+    /// ID 前缀
+    static let profileIdPrefix        = NSLocalizedString("profile.idPrefix", comment: "ID 前缀")
+    /// stats caption
+    static let profileFollowing       = NSLocalizedString("profile.following", comment: "关注数 caption")
+    static let profileFollowers       = NSLocalizedString("profile.followers", comment: "粉丝数 caption")
+    static let profileFriends         = NSLocalizedString("profile.friends", comment: "朋友数 caption")
+    /// 内容 tab
+    static let profileTabAlbum        = NSLocalizedString("profile.tab.album", comment: "Album tab")
+    static let profileTabGifts        = NSLocalizedString("profile.tab.gifts", comment: "Gifts tab")
+    static let profileTabMoment       = NSLocalizedString("profile.tab.moment", comment: "Moment tab")
+    /// section 标题格式
+    static let profilePhotosFormat    = NSLocalizedString("profile.photos.format", comment: "Photos (%d/%d)")
+    static let profileVideosFormat    = NSLocalizedString("profile.videos.format", comment: "Videos (%d/%d)")
+    /// 网格 cell a11y
+    static let profilePhotoCellA11y   = NSLocalizedString("profile.cell.photo", comment: "相册 cell a11y")
+    static let profileVideoCellA11y   = NSLocalizedString("profile.cell.video", comment: "视频 cell a11y")
+    /// 空 tab 占位文案
+    static let profileEmptyPlaceholder = NSLocalizedString("profile.emptyPlaceholder", comment: "tab 暂无内容占位")
 }

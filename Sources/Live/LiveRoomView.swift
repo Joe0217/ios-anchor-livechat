@@ -14,6 +14,10 @@ struct LiveRoomView: View {
     @StateObject private var camera = CameraManager()
     @StateObject private var agora = AgoraManager()
     @StateObject private var nim = NIMChatroomManager()
+    /// D 里程碑：监听 CallStore 状态，直播态收到私 call 时用 CallView overlay 覆盖直播画面。
+    /// 对齐 H5 g-faceTime 全局浮层模式。RootView 的 ZStack 浮层在 sheet 内不可见，必须在
+    /// LiveRoomView 内自己 overlay。
+    @ObservedObject private var callStore = CallStore.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
@@ -91,6 +95,10 @@ struct LiveRoomView: View {
                           token: user.imToken ?? "")
             }
             store.attachLiving(roomInfo: roomInfo)
+            // D 里程碑：注入 LiveStore 给 CallStore + 挂 observer（直播态期间直播私 call 接听 +
+            // 通话挂断后 resumeCall 回直播的协议入口）。weak 引用，LiveRoomView 销毁时自动清理。
+            CallStore.shared.liveStore = store
+            CallStore.shared.observer = store
         }
         .onDisappear {
             // v5.3.3 真根因修复：SwiftUI 在 ScenePhase=.background 时也会触发 onDisappear（snapshot 用），
@@ -108,6 +116,16 @@ struct LiveRoomView: View {
         .onChange(of: store.state) { newState in
             if newState == .ended { dismiss() }
         }
+        // D 里程碑：直播态 → 通话态切换时让出/恢复相机硬件（避免双 CameraManager 实例同时
+        // 占用 AVCaptureSession 冲突）。callState=1 时 stop，callState=0（resumeCall 倒计时归 0）
+        // 时 start 恢复直播预览。
+        .onChange(of: store.callState) { newCallState in
+            if newCallState == 1 {
+                camera.stop()
+            } else if newCallState == 0 {
+                if authorized { camera.start() }
+            }
+        }
         .onReceive(beauty.objectWillChange) { _ in
             DispatchQueue.main.async { camera.renderer.updateParameters(beauty) }
         }
@@ -115,6 +133,15 @@ struct LiveRoomView: View {
             guard agora.state == .joined else { return }
             elapsed += 1
         }
+        // D 里程碑：直播态期间收到私 call → CallView 顶层 overlay 覆盖直播画面。
+        // 对齐 H5 g-faceTime 浮层模式。state != .idle 时显示（含 .calling/.connecting/.connected/.ended 过渡态）。
+        .overlay {
+            if callStore.state != .idle {
+                CallView(store: callStore)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: callStore.state)
     }
 
     // MARK: - 顶部主播信息栏

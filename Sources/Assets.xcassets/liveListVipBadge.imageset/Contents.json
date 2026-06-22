@@ -1,0 +1,8 @@
+{
+  "images":[
+    {"idiom":"universal","filename":"liveListVipBadge.png","scale":"1x"},
+    {"idiom":"universal","filename":"liveListVipBadge@2x.png","scale":"2x"},
+    {"idiom":"universal","filename":"liveListVipBadge@3x.png","scale":"3x"}
+  ],
+  "info":{"author":"xcode","version":1}
+}

@@ -5,6 +5,8 @@ import SwiftUI
 /// 数据全部占位，点击无真实业务响应，后续 PR 再接入。
 struct LiveTabView: View {
     @StateObject private var viewModel = LiveTabViewModel()
+    /// List 子页 VM 在父级持有，避免 .list 分支被销毁时丢失 segment / scroll 状态
+    @StateObject private var listViewModel = LiveListViewModel()
 
     var body: some View {
         // 用 .background modifier 而非 ZStack 装载背景：
@@ -20,6 +22,7 @@ struct LiveTabView: View {
 
     /// 整页背景：底层径向晕染切图 + 上方渐变叠层增加层次感。
     /// 仅顶部扩展到状态栏，**不**扩到底部，避免覆盖 MainTabView 的 TabBar。
+    /// 4 个子 tab 共用同一张顶部背景图，避免切换时背景闪烁。
     private var backgroundLayer: some View {
         ZStack {
             Theme.Palette.liveBottomDark
@@ -45,7 +48,9 @@ struct LiveTabView: View {
             switch viewModel.selectedSubTab {
             case .live:
                 liveStream
-            case .list, .match, .cysle:
+            case .list:
+                LiveListView(viewModel: listViewModel)
+            case .match, .cysle:
                 placeholderTab
             }
         }

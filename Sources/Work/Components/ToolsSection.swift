@@ -52,18 +52,10 @@ struct ToolsSection: View {
             Image("toolsMatchGrey")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 38, height: 38)
+                .frame(width: 36, height: 36)
                 .accessibilityHidden(true)
-            // 在线开关：切图仅 ON 态，点击切换在线状态（视觉沿用切图）
-            Button(action: vm.toggleOnline) {
-                Image("onlineToggle")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: 30)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L10n.workOnline)
-            .accessibilityValue(vm.isOnline ? L10n.workOnlineOn : L10n.workOnlineOff)
+            // 在线开关：纯代码绘制，支持开/关两态
+            OnlineToggleView(isOn: $vm.isOnline)
         }
     }
 

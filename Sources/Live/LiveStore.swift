@@ -56,6 +56,11 @@ final class LiveStore: ObservableObject {
     private lazy var heartbeat: HeartbeatController = HeartbeatController(store: self)
     private lazy var monitor: NetworkQualityMonitor = NetworkQualityMonitor(store: self)
 
+    /// D 里程碑新增：直播 RTC 实例的 weak 引用，wire 时由 LiveRoomView 注入。
+    /// 用途：pauseForCall 内调 agora?.leave() 离开直播频道；resumeCall 内调 agora?.join() 回直播。
+    /// weak：LiveStore 不强持有，LiveRoomView 销毁时自动清理。
+    private weak var agora: AgoraManager?
+
     /// D 里程碑跨会话过渡占位（B 会话临时加，B build 不被 D 阻塞）。
     /// D-spec 最终采用 **weak ref 对齐 AgoraManager.liveStore 模式**（见 `CallStore.swift:50-52` 注释），
     /// `CallStore.swift:L435/L437` 的 `LiveStore.shared.*` 引用是 D-spec 早期草案，**待 D 会话清理**。
@@ -98,7 +103,10 @@ extension LiveStore {
     /// - agora.liveStore = self（token 续期失败回调）
     /// - agora.networkMonitor = monitor（networkQuality 转发）
     /// - monitor.agora / monitor.camera（v5.1 降级时同时切 agora 编码档位 + camera 推帧节流）
+    /// - **D 里程碑新增**：`self.agora = agora` 让 LiveStore 能在 pauseForCall/resumeCall 内
+    ///   主动 leave/join 直播 RTC 频道（不强持有，LiveRoomView 销毁时自动清理）
     func wire(_ agora: AgoraManager, camera: CameraManager? = nil) {
+        self.agora = agora
         agora.liveStore = self
         agora.networkMonitor = monitor
         monitor.agora = agora
@@ -227,10 +235,32 @@ extension LiveStore {
         networkDebugInfo = info
     }
 
-    /// D 里程碑跨会话过渡 stub（B 会话临时；待 D 会话清理 CallStore.swift L435/L437）。
-    /// 真实实现见 D-spec §X（D 会话权限）。
+    /// 直播态下收到 RTM VideoCall → 暂停直播 → 委托 CallStore 自动接听。
+    /// 对齐 H5 useCallApi.callInEnter 中 "if (isLiving) await livingEnd(false)" 路径。
+    /// 详见 `docs/plan/D-直播转私call状态机-spec-202606201400.md` §3.2。
     func pauseForCall(msg: CallMessage) async {
-        logger.warning("LiveStore.pauseForCall called via shared stub (CallStore L437 过渡代码), no-op")
+        guard state == .living, callState == 0 else {
+            logger.warning("pauseForCall 跳过 state=\(String(describing: self.state)) callState=\(self.callState)")
+            return
+        }
+        logger.info("pauseForCall: 暂停直播 → 接听 from=\(msg.fromUserId)")
+
+        // 1) 停心跳 + 网络监控（B 已落地的 stop/start；stop 内自动重置 failureCount=0）
+        heartbeat.stop()
+        monitor.stop()
+
+        // 2) RTC leave 直播频道（保留 roomId/agoraChannelId/rtcToken 字段以备 resumeCall 回 join）
+        //    agora 是 weak 引用，nil 时静默跳过（防御性）。
+        agora?.leave()
+
+        // 3) 切换状态标志
+        callState = 1
+
+        // 4) 在线态联动（D-M0 已落地的 WSHeartbeat 接口；通话期 onlineStatus=CALLING(10000)）
+        WSHeartbeat.shared.notifyCallStateChanged(callState: 1)
+
+        // 5) 委托 CallStore 自动接听（D-M1 已落地）
+        await CallStore.shared.acceptIncomingFromLive(msg: msg)
     }
 }
 
@@ -290,17 +320,82 @@ extension LiveStore {
     }
 }
 
-// MARK: - D 里程碑：通话挂断回直播 stub（M2 完整实现）
+// MARK: - D 里程碑：通话挂断回直播完整实现（M2）
 
 extension LiveStore {
     /// 通话挂断后由 CallStoreObserver 回调触发，启动 15s 倒计时回直播。
-    /// **M2 T3 填充完整实现**：
-    ///   1) isWaitingReturnLive=true + returnLiveCountdown=15
-    ///   2) 15s 倒计时（每秒 -1，可取消）
-    ///   3) rejoinLiveChannel() 用保留的 channelId+rtcToken 重 join
-    ///   4) heartbeat.start() / monitor.start() / callState=0 / WSHeartbeat.notifyCallStateChanged(0)
+    /// 对齐 H5 liveSetting/components/liveRoom.vue:218-227（returnLiveCountdown=15 + setInterval 1s）。
+    /// 详见 `docs/plan/D-直播转私call状态机-spec-202606201400.md` §3.3。
     func resumeCall() async {
-        // TODO(M2-T3)：完整实现 spec §3.3
-        logger.warning("LiveStore.resumeCall called (M1 stub; M2 will implement)")
+        guard callState == 1 else { return }
+        guard !isWaitingReturnLive else { return }  // 防重复触发（CallStoreObserver 多次回调时幂等）
+
+        logger.info("resumeCall: 启动 15s 倒计时回直播")
+        isWaitingReturnLive = true
+        returnLiveCountdown = 15
+
+        // 取消可能的旧倒计时 task（防御性）
+        returnLiveTask?.cancel()
+        returnLiveTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            // 15s 倒计时（每秒 -1，UI 显示用；可被 cancel）
+            for _ in 0..<15 {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                if Task.isCancelled { return }
+                if self.returnLiveCountdown > 0 { self.returnLiveCountdown -= 1 }
+            }
+
+            // 倒计时归 0：rejoin 直播频道 + 恢复心跳/监控
+            await self.rejoinLiveChannel()
+            self.heartbeat.start()   // start 内会先 stop 再启动，failureCount 重置为 0
+            self.monitor.start()
+            self.callState = 0
+            self.isWaitingReturnLive = false
+            WSHeartbeat.shared.notifyCallStateChanged(callState: 0)
+            self.logger.info("已恢复直播 channelId=\(self.agoraChannelId ?? "-")")
+        }
+    }
+
+    /// 用保留的 channelId + rtcToken 重新 join 直播 RTC 频道。
+    /// rtcToken 长时通话可能过期（H5 24h），无 token 或失败时主动续期。
+    private func rejoinLiveChannel() async {
+        guard let channelId = agoraChannelId,
+              let uid = SessionStore.shared.user?.userId else {
+            logger.warning("rejoinLiveChannel: 缺 channelId(\(self.agoraChannelId ?? "nil")) 或 uid")
+            return
+        }
+
+        // 优先用保留的 token，无效时主动续
+        var token = rtcToken ?? ""
+        if token.isEmpty {
+            do {
+                let tokenRes = try await LiveService.getAgoraRtmToken()
+                token = tokenRes.rtcToken ?? ""
+            } catch {
+                logger.error("rejoinLiveChannel: 续 rtcToken 失败 err=\(String(describing: error))")
+                return
+            }
+        }
+        guard !token.isEmpty else {
+            logger.warning("rejoinLiveChannel: token 空")
+            return
+        }
+
+        // RTC join（对齐 attachLiving 内的直播 profile）
+        agora?.join(channelId: channelId, token: token, uid: UInt(uid), profile: .liveBroadcasting)
+        logger.info("rejoinLiveChannel: 已请求 join channelId=\(channelId)")
+    }
+}
+
+// MARK: - D 里程碑：CallStoreObserver（监听通话结束触发 resumeCall）
+
+extension LiveStore: CallStoreObserver {
+    /// 仅关心"通话态 → 结束态"的转换；只在直播私 call（callState=1）期间触发 resumeCall。
+    func callStore(_ store: CallStore, stateDidChange newState: CallState, previous: CallState) {
+        let wasInCall = (previous == .calling || previous == .connecting || previous == .connected)
+        let nowEnded = (newState == .ended || newState == .idle)
+        guard wasInCall, nowEnded, callState == 1 else { return }
+        logger.info("CallStore 通话结束 (\(String(describing: previous)) → \(String(describing: newState))) → 启动 resumeCall")
+        Task { await resumeCall() }
     }
 }

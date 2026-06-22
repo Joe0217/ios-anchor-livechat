@@ -14,12 +14,14 @@ struct WeeklyLevelHeader: View {
 
             scoreLine
 
-            HStack(alignment: .center, spacing: 10) {
-                rainbowBar
+            // 彩虹条与段位栏同宽：共用左侧 VStack，Detail 置于其右
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 10) {
+                    rainbowBar
+                    tierRow
+                }
                 OutlineChevronPill(title: L10n.workDetail)
             }
-
-            tierRow
         }
     }
 
@@ -43,10 +45,10 @@ struct WeeklyLevelHeader: View {
     private var levelBadge: some View {
         HStack(spacing: 6) {
             Text(L10n.workWeeklyLevel)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(.white)
             Text(vm.weeklyLevel)
-                .font(.system(size: 16, weight: .heavy))
+                .font(.system(size: 16, weight: .medium))
                 .foregroundStyle(Theme.Palette.accentYellow)
         }
         .padding(.horizontal, 16)
@@ -60,7 +62,7 @@ struct WeeklyLevelHeader: View {
         // "Score:" 与括号说明为次要灰，主分数高亮白 —— 拆两段本地化避免整句硬编码。
         // 用 Text 插值组合而非 `+` 拼接；片段着色用 foregroundColor（iOS 16 下唯一返回 Text 的变体）。
         let prefix = Text(L10n.workScorePrefix).foregroundColor(Theme.Palette.textSecondary)
-        let score = Text("\(vm.score)").foregroundColor(.white).bold()
+        let score = Text("\(vm.score)").foregroundColor(.white).fontWeight(.medium)
         let need = Text(String(format: L10n.workNeedMoreFormat, vm.scoreToNextLevel))
             .foregroundColor(Theme.Palette.textSecondary)
         return Text("\(prefix)\(score) \(need)")

@@ -23,7 +23,7 @@ struct MainTabView: View {
         case .home:     HomeView()
         case .messages: PlaceholderTab(title: L10n.tabMessages)
         case .work:     WorkView()
-        case .profile:  PlaceholderTab(title: L10n.tabProfile)
+        case .profile:  ProfileView()
         }
     }
 
@@ -46,7 +46,7 @@ struct MainTabView: View {
 
     private func tabItem(_ tab: MainTab, isSelected: Bool) -> some View {
         VStack(spacing: 4) {
-            Image(tab.icon)
+            Image(isSelected ? tab.activeIcon : tab.icon)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 26, height: 26)
@@ -66,12 +66,23 @@ struct MainTabView: View {
 enum MainTab: CaseIterable {
     case home, messages, work, profile
 
+    /// 未选中态切图（浅紫静态色调）
     var icon: String {
         switch self {
         case .home:     return "tabHome"
         case .messages: return "tabMessages"
         case .work:     return "tabWork"
         case .profile:  return "tabProfile"
+        }
+    }
+
+    /// 选中态切图（橙红渐变彩色）
+    var activeIcon: String {
+        switch self {
+        case .home:     return "tabHomeActive"
+        case .messages: return "tabMessagesActive"
+        case .work:     return "tabWorkActive"
+        case .profile:  return "tabProfileActive"
         }
     }
 

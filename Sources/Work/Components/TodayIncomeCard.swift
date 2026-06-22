@@ -36,12 +36,12 @@ struct TodayIncomeCard: View {
                 ForEach(items.indices, id: \.self) { i in
                     VStack(alignment: .leading, spacing: 6) {
                         Text(items[i].number)
-                            .font(Theme.Typography.income)
+                            .font(.system(size: 18, weight: .medium))
                             .foregroundStyle(.white)
                             .lineLimit(1)
                             .minimumScaleFactor(0.6)
                         Text(items[i].caption)
-                            .font(Theme.Typography.caption)
+                            .font(.system(size: 12, weight: .regular))
                             .foregroundStyle(Theme.Palette.textSecondary)
                             .lineLimit(1)
                     }

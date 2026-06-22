@@ -54,6 +54,7 @@
 "work.online"                = "Online";
 "work.online.on"             = "On";
 "work.online.off"            = "Off";
+"work.offline"               = "Offline";
 
 // 工具图标标签
 "work.tool.hi"               = "Hi";
@@ -94,3 +95,19 @@
 "liveList.action.live"       = "Live";
 "liveList.action.match"      = "Match";
 "liveList.action.offline"    = "Offline";
+
+// MARK: - Profile 个人页（设计稿还原）
+"profile.settings"           = "Settings";
+"profile.editName"           = "Edit name";
+"profile.idPrefix"           = "ID:";
+"profile.following"          = "Following";
+"profile.followers"          = "Followers";
+"profile.friends"            = "Friends";
+"profile.tab.album"          = "Album";
+"profile.tab.gifts"          = "Gifts";
+"profile.tab.moment"         = "Moment";
+"profile.photos.format"      = "Photos (%d/%d)";
+"profile.videos.format"      = "Videos (%d/%d)";
+"profile.cell.photo"         = "Photo";
+"profile.cell.video"         = "Video";
+"profile.emptyPlaceholder"   = "Nothing here yet";

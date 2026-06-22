@@ -34,9 +34,8 @@ private struct StatCard: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 26, height: 26)
+                .padding(.bottom, 4)   // 图标↔数值固定间距 = 6(VStack) + 4 = 10
                 .accessibilityHidden(true)
-
-            Spacer(minLength: 6)
 
             Text(number)
                 .font(Theme.Typography.bigStat)

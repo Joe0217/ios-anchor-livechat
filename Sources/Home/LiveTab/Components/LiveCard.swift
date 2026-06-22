@@ -3,8 +3,8 @@ import SwiftUI
 /// 单张直播卡片：
 /// - 占位渐变背景（无真实主播自拍素材，用 Theme 配色块占位）
 /// - 左下小头像 + 主播昵称
-/// - 右上「观看人数」徽章
-/// - （可选）右下 "Live" 徽章
+/// - 右下「观看人数」橘色文字 + 眼睛图标（无背景胶囊）
+/// - （可选）右下角贴 "Live" 徽章 → 替代该卡的观看人数
 struct LiveCard: View {
     let card: LiveAnchorCard
 
@@ -46,37 +46,32 @@ struct LiveCard: View {
     }
 
     private var overlayContent: some View {
-        VStack {
-            HStack {
-                Spacer()
-                viewerBadge
-            }
+        VStack(spacing: 0) {
             Spacer()
             HStack(alignment: .bottom) {
                 anchorTag
                 Spacer()
+                // 带 Live 徽章的卡片右下角是 Live 标，不再显示观看人数文字
+                if !card.showLiveBadge {
+                    viewerCountInline
+                }
             }
         }
         .padding(8)
     }
 
-    /// 右上观看人数徽章：橙红渐变胶囊 + 眼睛切图 + 数字
-    private var viewerBadge: some View {
-        HStack(spacing: 4) {
+    /// 右下角观看人数：橘色文字 + 眼睛图标（无背景胶囊），12pt medium
+    private var viewerCountInline: some View {
+        HStack(spacing: 3) {
             Image("liveViewerCount")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 14, height: 14)
+                .frame(width: 12, height: 12)
+                .accessibilityHidden(true)
             Text(card.viewerCount)
-                .font(Theme.Typography.liveViewerBadge)
-                .foregroundStyle(.white)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.Palette.liveViewerBadge)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.Radius.liveViewerBadge, style: .continuous)
-                .fill(Theme.Gradients.liveViewerBadge)
-        )
     }
 
     /// 左下小头像 + 昵称

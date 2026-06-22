@@ -9,6 +9,35 @@ enum Theme {
 
     // MARK: - 配色
     enum Palette {
+        // MARK: 品牌主题色（单一来源，改主题改这里；下方场景色引用这些）
+        /// 通用黄 / SS 级
+        static let brandYellow = Color(hex: 0xFFE600)
+        /// 通用橘 / S 级
+        static let brandOrange = Color(hex: 0xFD8965)
+        /// A 级
+        static let brandPinkA  = Color(hex: 0xFB4DA6)
+        /// 通用深粉 / B 级
+        static let brandPink   = Color(hex: 0xFB0FEB)
+        /// 通用紫 / New 级
+        static let brandPurple = Color(hex: 0xBC53F5)
+        /// C 级
+        static let brandBlue   = Color(hex: 0x7CA2F5)
+        /// D 级
+        static let brandCyan   = Color(hex: 0x32F1EA)
+
+        /// 通用次级白色文字 / 首页顶部 tab 未选中（白 60%）
+        static let textSecondaryWhite = Color.white.opacity(0.6)
+        /// 底部 tab bar 未选中文案
+        static let tabBarInactive     = Color(hex: 0xAA9FC2)
+
+        /// 在线状态
+        static let statusOnline  = Color(hex: 0x10F496)
+        /// 忙碌状态
+        static let statusBusy    = Color(hex: 0xFF9E6A)
+        /// 不在线状态
+        static let statusOffline = Color(hex: 0x726B86)
+
+        // MARK: 基础场景色
         /// 页面背景：近黑带极淡紫，纯色非渐变
         static let screenBackground = Color(hex: 0x0B0010)
         /// 卡片 / 面板悬浮表面
@@ -20,15 +49,17 @@ enum Theme {
         /// 次要文本（caption / 说明）
         static let textSecondary    = Color(hex: 0x95909E)
         /// 强调黄（通话数 / 周收益 / 激活 tab）
-        static let accentYellow     = Color(hex: 0xFFE600)
+        static let accentYellow     = brandYellow
         /// 强调绿（好评率）
         static let accentGreen      = Color(hex: 0x08FF77)
         /// 描边胶囊（Detail / Withdrawal）边框与文字
         static let outlinePill      = Color(hex: 0x95909E)
-        /// 未激活 tab 文字
-        static let tabInactiveLabel = Color(hex: 0x6E6483)
+        /// 未激活 tab 文字（底部 tab bar）
+        static let tabInactiveLabel = tabBarInactive
         /// 激活 tab（Work）
-        static let tabActive        = Color(hex: 0xFFE600)
+        static let tabActive        = brandYellow
+        /// 在线开关「关」态底色（灰紫）
+        static let onlineToggleOff  = Color(hex: 0x463C5C)
 
         // MARK: Live 页（设计稿还原）
         /// Live 页顶部紫色亮区
@@ -39,10 +70,10 @@ enum Theme {
         static let liveBottomDark       = Color(hex: 0x0B0010)
         /// 顶部子 tab 选中文字（橙金）
         static let liveSubTabSelected   = Color(hex: 0xFFB800)
-        /// 顶部子 tab 未选中文字
-        static let liveSubTabUnselected = Color.white
+        /// 顶部子 tab 未选中文字（白 60%）
+        static let liveSubTabUnselected = textSecondaryWhite
         /// 在线绿点
-        static let liveOnlineDot        = Color(hex: 0x3DFF7A)
+        static let liveOnlineDot        = statusOnline
         /// 礼物通知条主紫
         static let liveNoticeBarPurple  = Color(hex: 0x4A2275)
         /// 礼物通知条强调粉
@@ -61,22 +92,82 @@ enum Theme {
         static let liveCardName         = Color.white
         /// 观看人数徽章橙
         static let liveViewerBadge      = Color(hex: 0xFF6B00)
+
+        // MARK: List 子页（设计稿还原）
+        /// Online/Prime 切换器容器底色
+        static let liveListSwitcherTrack    = Color(hex: 0x1A0F2E)
+        /// Online/Prime 选中胶囊渐变起点
+        static let liveListSwitcherOnA      = Color(hex: 0x6C2BCB)
+        /// Online/Prime 选中胶囊渐变终点
+        static let liveListSwitcherOnB      = Color(hex: 0xFF3D6E)
+        /// 选中态文字（黄）
+        static let liveListSwitcherSelected = Color(hex: 0xFFE600)
+        /// 未选中文字
+        static let liveListSwitcherUnselected = Color.white.opacity(0.85)
+        /// Invite banner 渐变起点（紫）
+        static let liveListInviteBgA        = Color(hex: 0x6722A5)
+        /// Invite banner 渐变终点（粉）
+        static let liveListInviteBgB        = Color(hex: 0xC04CE1)
+        /// Invite banner 标题黄
+        static let liveListInviteTitle      = Color(hex: 0xFFE066)
+        /// Invite banner 副标题
+        static let liveListInviteSubtitle   = Color.white.opacity(0.85)
+        /// 用户卡片背景
+        static let liveListCardFill         = Color(hex: 0x14082A, opacity: 0.85)
+        /// 用户卡片描边
+        static let liveListCardBorder       = Color.white.opacity(0.06)
+        /// 用户卡片名称白
+        static let liveListUserName         = Color.white
+        /// 用户卡片次要描述粉
+        static let liveListUserMeta         = Color(hex: 0xC9A0B8)
+        /// 用户卡片地点文字
+        static let liveListLocationText     = Color(hex: 0xC9A0B8)
+        /// 头像在线小圆点（与 Live 页同款）
+        static let liveListOnlineDot        = statusOnline
+
+        // MARK: Profile 页（设计稿还原）
+        /// 整页底色（顶部背景图下方继续到底部 tab 之间的近黑紫）
+        static let profileBackground   = Color(hex: 0x0B0010)
+        /// 名字白
+        static let profileName         = Color.white
+        /// ID 浅紫灰
+        static let profileIdText       = Color(hex: 0xC8B6E0, opacity: 0.7)
+        /// 年龄 / 位置 meta 文字
+        static let profileMetaText     = Color.white.opacity(0.85)
+        /// SS 段位粉红
+        static let profileTier         = Color(hex: 0xFF3D7F)
+        /// 800/min 白
+        static let profileRate         = Color.white
+        /// stats 分隔细线
+        static let profileStatDivider  = Color.white.opacity(0.18)
+        /// stats caption 灰
+        static let profileStatCaption  = Color(hex: 0xC8B6E0, opacity: 0.8)
+        /// 描述正文白
+        static let profileDesc         = Color.white
+        /// Tab 选中黄
+        static let profileTabActive    = Color(hex: 0xFFE600)
+        /// Tab 未选中灰
+        static let profileTabInactive  = Color(hex: 0x95909E)
+        /// section 标题白
+        static let profileSection      = Color.white
+        /// 网格 cell 占位（无图时）
+        static let profileGridPlaceholder = Color(hex: 0x2B213E)
     }
 
     // MARK: - 间距
     enum Metric {
         /// 屏幕左右安全边距
         static let screenMargin: CGFloat   = 12
-        /// 主区块间垂直间距
-        static let sectionSpacing: CGFloat = 16
+        /// 主区块间垂直间距（卡片之间的外边距）
+        static let sectionSpacing: CGFloat = 10
         /// 卡片内边距
-        static let cardPadding: CGFloat    = 14
+        static let cardPadding: CGFloat    = 10
         /// 三张 stat 卡之间水平间距
         static let statCardGap: CGFloat    = 10
         /// stat 卡内：数字与 caption 间距
         static let statNumberToCaption: CGFloat = 6
         /// 工具图标 tile 边长
-        static let toolTile: CGFloat       = 56
+        static let toolTile: CGFloat       = 36
         /// 工具网格行间距
         static let toolRowSpacing: CGFloat = 22
         /// 底部 tab 栏可见高度（图标+标签，不含 home indicator 安全区）
@@ -86,7 +177,7 @@ enum Theme {
         /// Live 页内容左右边距
         static let liveScreenMargin: CGFloat   = 12
         /// 顶部子 tab 横向间距
-        static let liveSubTabGap: CGFloat      = 16
+        static let liveSubTabGap: CGFloat      = 24
         /// 顶部右侧操作按钮间距
         static let liveTopActionGap: CGFloat   = 10
         /// 礼物通知条高度
@@ -97,6 +188,41 @@ enum Theme {
         static let liveCardWidthOverHeight: CGFloat = 3.0 / 4.0
         /// 直播卡片网格间距
         static let liveCardGap: CGFloat        = 8
+
+        // MARK: List 子页（设计稿还原）
+        /// Online/Prime 切换器高度
+        static let liveListSwitcherHeight: CGFloat = 38
+        /// Invite banner 高度
+        static let liveListInviteHeight: CGFloat   = 100
+        /// 用户卡片高度
+        static let liveListCardHeight: CGFloat     = 80
+        /// 用户卡片头像尺寸
+        static let liveListAvatarSize: CGFloat     = 56
+        /// 用户卡片右侧动作按钮尺寸
+        static let liveListActionSize: CGFloat     = 48
+        /// 用户卡片之间垂直间距
+        static let liveListCardGap: CGFloat        = 10
+
+        // MARK: Profile 页（设计稿还原）
+        /// 顶部紫色背景图层覆盖高度（约等于 Header 实际内容高度；
+        /// 实际 Header 由内容自适应，背景渐变到底色平滑过渡）
+        static let profileHeaderHeight: CGFloat = 220
+        /// 头像外环直径
+        static let profileAvatarSize: CGFloat   = 72
+        /// 头像内图直径（与外环间距 4pt 单边）
+        static let profileAvatarInner: CGFloat  = 64
+        /// 头像描边环宽度
+        static let profileAvatarRing: CGFloat   = 3
+        /// 描述文本左右内边距
+        static let profileDescPadding: CGFloat  = 16
+        /// Album/Gifts/Moment tab 间水平间距
+        static let profileTabGap: CGFloat       = 24
+        /// Photos / Videos 网格列数
+        static let profileGridColumns: Int      = 3
+        /// 网格 cell 间距（横纵相同）
+        static let profileGridGap: CGFloat      = 6
+        /// 网格 section 上下间距
+        static let profileGridSectionGap: CGFloat = 18
     }
 
     // MARK: - 圆角
@@ -114,16 +240,26 @@ enum Theme {
         static let liveCard: CGFloat      = 16
         /// 观看人数徽章
         static let liveViewerBadge: CGFloat = 6
+        /// Online/Prime 切换器容器
+        static let liveListSwitcher: CGFloat = 19
+        /// Invite banner
+        static let liveListInvite: CGFloat   = 16
+        /// 用户卡片
+        static let liveListCard: CGFloat     = 14
+
+        // MARK: Profile 页（设计稿还原）
+        /// 网格 cell 圆角
+        static let profileGridCell: CGFloat = 10
     }
 
     // MARK: - 字号
     enum Typography {
         /// stat 卡大数字（128 / 98% / 999999）
-        static let bigStat   = Font.system(size: 26, weight: .bold)
+        static let bigStat   = Font.system(size: 26, weight: .medium)
         /// 收益网格数字（222 / 1280 …）
-        static let income    = Font.system(size: 22, weight: .semibold)
+        static let income    = Font.system(size: 22, weight: .medium)
         /// 卡片 / 区块标题（Today's Income / Tools）
-        static let sectionTitle = Font.system(size: 18, weight: .semibold)
+        static let sectionTitle = Font.system(size: 15, weight: .medium)
         /// caption / 说明文字
         static let caption   = Font.system(size: 13, weight: .regular)
         /// 描边胶囊文字
@@ -131,15 +267,17 @@ enum Theme {
         /// 分数行
         static let score     = Font.system(size: 14, weight: .regular)
         /// 段位标签（D C NEW B A S SS）
-        static let tier      = Font.system(size: 12, weight: .bold)
+        static let tier      = Font.system(size: 12, weight: .medium)
         /// 工具图标标签
         static let toolLabel = Font.system(size: 13, weight: .regular)
         /// 底部 tab 标签
         static let tabLabel  = Font.system(size: 11, weight: .medium)
 
         // MARK: Live 页（设计稿还原）
-        /// 顶部子 tab 字号（4 个 tab + 右侧 3 按钮挤在 375pt 宽度，18pt heavy 是不换行的安全档）
-        static let liveSubTab    = Font.system(size: 18, weight: .heavy)
+        /// 顶部子 tab 选中态字号 18pt medium
+        static let liveSubTabActive   = Font.system(size: 18, weight: .medium)
+        /// 顶部子 tab 未选中态字号 16pt medium
+        static let liveSubTabInactive = Font.system(size: 16, weight: .medium)
         /// 礼物通知条用户名/正文
         static let liveNotice    = Font.system(size: 13, weight: .semibold)
         /// 礼物通知条金币数字
@@ -150,19 +288,55 @@ enum Theme {
         static let liveViewerBadge = Font.system(size: 12, weight: .bold)
         /// 排行榜徽章 +100K
         static let liveRankNum   = Font.system(size: 11, weight: .heavy)
+
+        // MARK: List 子页
+        /// Online/Prime 切换器文字
+        static let liveListSwitcher = Font.system(size: 15, weight: .heavy)
+        /// Invite banner 标题
+        static let liveListInviteTitle    = Font.system(size: 22, weight: .heavy)
+        /// Invite banner 副标题
+        static let liveListInviteSubtitle = Font.system(size: 12, weight: .regular)
+        /// 用户卡片昵称
+        static let liveListUserName = Font.system(size: 16, weight: .semibold)
+        /// 用户卡片次要描述（等级 / VIP / 地点）
+        static let liveListMeta     = Font.system(size: 12, weight: .regular)
+
+        // MARK: Profile 页（设计稿还原）
+        /// 名字大字
+        static let profileName     = Font.system(size: 20, weight: .medium)
+        /// ID 灰色小字
+        static let profileId       = Font.system(size: 10, weight: .regular)
+        /// 年龄 / 国旗行
+        static let profileMeta     = Font.system(size: 12, weight: .regular)
+        /// SS 段位标签（大粉红）
+        static let profileTier     = Font.system(size: 18, weight: .medium)
+        /// 800/min 单价
+        static let profileRate     = Font.system(size: 11, weight: .regular)
+        /// stats 数字
+        static let profileStatNum  = Font.system(size: 18, weight: .medium)
+        /// stats caption
+        static let profileStatCap  = Font.system(size: 11, weight: .regular)
+        /// 描述正文（Starry Guide）
+        static let profileDesc     = Font.system(size: 13, weight: .regular)
+        /// Tab 选中
+        static let profileTabActive   = Font.system(size: 16, weight: .medium)
+        /// Tab 未选中
+        static let profileTabInactive = Font.system(size: 15, weight: .regular)
+        /// section 标题（Photos (6/9)）
+        static let profileSection  = Font.system(size: 14, weight: .medium)
     }
 
     // MARK: - 渐变与段位光谱
     enum Gradients {
         /// 段位光谱色（D→SS），既用于彩虹进度条也用于段位标签着色
         static let tierSpectrum: [Color] = [
-            Color(hex: 0x00E0FF), // D  青
-            Color(hex: 0x3B82F6), // C  蓝
-            Color(hex: 0x8B5CF6), // NEW 紫
-            Color(hex: 0xD946EF), // B  品红
-            Color(hex: 0xFF3D7F), // A  粉红
-            Color(hex: 0xFF8A3D), // S  橙
-            Color(hex: 0xFFE600), // SS 黄
+            Palette.brandCyan,   // D  青
+            Palette.brandBlue,   // C  蓝
+            Palette.brandPurple, // NEW 紫
+            Palette.brandPink,   // B  深粉
+            Palette.brandPinkA,  // A  粉
+            Palette.brandOrange, // S  橘
+            Palette.brandYellow, // SS 黄
         ]
 
         /// 彩虹进度条
@@ -186,6 +360,13 @@ enum Theme {
                 Color(hex: 0xC026D3), Color(hex: 0xFFD60A),
             ],
             center: .center
+        )
+
+        /// 在线开关「开」态胶囊（紫→品红→粉，横向）
+        static let onlineToggleOn = LinearGradient(
+            colors: [Color(hex: 0x9B1FC4), Color(hex: 0xD81E9E), Color(hex: 0xFF2E7E)],
+            startPoint: .leading,
+            endPoint: .trailing
         )
 
         // MARK: Live 页（设计稿还原）
@@ -219,6 +400,21 @@ enum Theme {
             colors: [Color(hex: 0xFFB800), Color(hex: 0xFF4D00)],
             startPoint: .top,
             endPoint: .bottom
+        )
+
+        // MARK: List 子页
+        /// Online/Prime 选中胶囊（紫→粉）
+        static let liveListSwitcherSelected = LinearGradient(
+            colors: [Palette.liveListSwitcherOnA, Palette.liveListSwitcherOnB],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+
+        /// Invite friends banner 横向渐变（紫→粉）
+        static let liveListInviteBanner = LinearGradient(
+            colors: [Palette.liveListInviteBgA, Palette.liveListInviteBgB],
+            startPoint: .leading,
+            endPoint: .trailing
         )
     }
 }
