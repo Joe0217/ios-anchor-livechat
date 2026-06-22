@@ -54,10 +54,10 @@ docs/plan/                    # 接入技术文档、开发计划、功能审查
 - **鉴权头**：token 放 `loginToken`+`anchorToken`（值相同），`appid: 20735424`，`Ocp-Apim-Subscription-Key: 9ec52f6d03cd4d5985a6a2c8bb1ce5ee`，外加 deviceId 等。无请求签名
 - **dev 域名**：`https://anchor.cphub.link`（/api）。登录 `/api/login/v4/login`，密码=两次大写 MD5：`MD5(MD5(pwd+appId))`
 - **开播 token 来源**：主播加入声网的 rtcToken 来自 `/api/index/getAgoraRtmToken`（绑 uid、与 channel 无关），**不是** beginLiveRoom 返回的；频道用 beginLiveRoom/getMyLiveRoom 的 `agoraChannelId`。声网 dev AppID `4af61c7a92f447d3a582308b5817dbd2`。import 仍是 `AgoraRtcKit`
-- **心跳 6s**（H5 源码 `setInterval(keepLiving, 6000)`，"10秒"是过时注释）。`callState`：0直播/1通话/2匹配/3PK，阶段一恒为 0
-- **强制下播 5 原因**：`'3'`系统强制(心跳 code 1992/1006 封禁)、`'4'`断连(连续心跳失败 >6 次)、`'5'`网络差(连续 ≥30 次质量≥5；≥10 次上报埋点)、`'99'`相机错误、正常结束
+- **心跳 6s**（H5 源码 `setInterval(keepLiving, 6000)`，"10秒"是过时注释）。⚠️ **iOS 实现取 10s / 失败 >3 次**（对齐安卓，详见 `B-LiveStore状态机-spec-*.md` §3）。`callState`：0直播/1通话/2匹配/3PK，阶段一恒为 0
+- **强制下播 5 原因（H5 历史字符串编码）**：`'3'`系统强制(心跳 code 1992/1006 封禁)、`'4'`断连(连续心跳失败 >6 次)、`'5'`网络差(连续 ≥30 次质量≥5；≥10 次上报埋点)、`'99'`相机错误、正常结束。⚠️ **iOS 实现按路线图 §三 B 升级为数字编码 4/2/5/6/7**（对齐安卓；阈值 10s/>3）。⚠️ **弱网阈值 v5 反悔为分层 10/30（"连续"语义，中间任一次质量 ≤4 即清零重计）**：连续 10 次（≈20s）降帧率 30→15fps + toast；连续 30 次（≈60s）才 forceEnd endType=7；降级期连续 5 次质量好恢复 normal。详见 `docs/plan/B-LiveStore状态机-spec-*.md` §11 + §4.5
 - **token 策略**：存 Keychain（非 UserDefaults）；主 token + bagshop `auth_token`（用 `loginUuid` 换、401 自动续）。双 token 拼接是给 webview 传参的，**原生不需要**
-- **公屏**：走 IM 登录 + 聊天室普通模式（复用 IM 长连接，非独立模式）；自定义消息 `attachType` 是**数字编码**（如 50/61/63）
+- **公屏**：走 IM 登录 + 聊天室普通模式（复用 IM 长连接，非独立模式）；自定义消息 `attachType` 是**数字编码**。⚠️ **常见误区**：50 在双端均无证据（B 不识别）、61=**合规警告**（不下播，仅 toast）、62=封禁下播、63=**进折扣池 BoostingExposure**、44=强制下播——**非礼物**；礼物真编号是 `'SEND_GIFT'`(字符串) + 数字 1/4/15/18（见 `B-spec-H5安卓代码二次校验-*.md` §1.1）
 - **签名**：免费个人团队，真实 Team ID `8J6JP98FM3`（证书 OU；括号里 L624PPWDN5 是证书 ID，非 Team ID）
 
 ## 已知坑
@@ -70,6 +70,14 @@ docs/plan/                    # 接入技术文档、开发计划、功能审查
 - 全局只放跨页面共享状态（登录态/路由）；直播状态收敛进 `LiveStore`
 - 大型 SDK 能力延迟初始化（美颜资源、声网引擎按需创建），不阻塞启动
 - 错误处理：禁止空 `catch`；SDK 错误区分网络/业务，网络错误触发重连（详见 `.claude/rules/error-handling.md`）
+- **AVCaptureSession 后台中断**（v5.2 已知坑）：`wasInterrupted(reason=1/4)` 是后台切换/iPad 多任务正常行为，**禁止**进 20s `forceEnd(.cameraFailure)` 路径（会导致用户切后台 20s+ 自动下播）；CameraManager 已过滤；回前台监听 `UIApplication.willEnterForegroundNotification` 主动 `session.startRunning()` 恢复推流
+- **AVCaptureSession.startRunning 在 isInterrupted 状态 silently fail**（v5.3 已知坑）：`willEnterForeground` 时 session 还处于 interrupted，调 `startRunning()` 不报错也不生效；必须在 `AVCaptureSessionInterruptionEnded` 通知里 startRunning 才有效——CameraManager.handleInterruptionEnded 已补；willEnterForeground 作防御兜底
+- **MTKView 切后台后画面卡住**（v5.3 已知坑）：MTKView 在 `didEnterBackground` 时 CADisplayLink 暂停 + `currentDrawable` 释放；回前台立即 `setNeedsDisplay()` 时 drawable 仍 nil 导致 `draw(_:)` 空跑，画面持续显示最后一帧；MetalPreviewView 已加 `releaseDrawables()` + 延迟 300ms `setNeedsDisplay` 恢复
+- **CIImage / CVPixelBuffer 跨线程 ARC 不安全**（v5.3.1 已知坑）：相机帧回调在 background queue（captureOutput），UI 渲染在 main queue；引用类型字段 `currentImage: CIImage?` 在两 queue 写读不是原子，可读到撕裂指针 EXC_BAD_ACCESS——所有引用类型字段（含 closure）必须**单一 queue 读写**；预览管线一律 main queue 串行
+- **@StateObject CameraManager 延迟 deinit 致摄像头灯不熄**（v5.3.1 已知坑）：SwiftUI 持有 @StateObject 引用，view dismiss 后 deinit 不立即调用；observer 仍响应 willEnterForeground 自动重启已离开 session——必须在 onDisappear 显式调 `camera.tearDown()` 同步 removeObserver + 清闭包 + stop session
+- **声网 SDK 在 app 后台时持续发 networkQuality 回调，回前台后 backlog 一次性串行触发 forceEnd**（v5.3.2 已知坑）：声网 SDK 用自己线程，回调 dispatch 到 `@MainActor` 时 main 在后台挂起 → backlog 排队 → 回前台瞬间一次性执行 30+ 次 `report()` → `consecutiveBadCount` 飞速到 30 → 误下播 endType=7。`NetworkQualityMonitor` + `HeartbeatController` 必须监听 `UIApplication.didEnterBackground/willEnterForeground`，**后台静默 + 回前台 5s 冷却丢弃 backlog**
+- **SwiftUI 在 ScenePhase=.background 时也会触发 view 的 onDisappear**（v5.3.3 真根因坑）：iOS 14+ SwiftUI 在 UIScene 切到 background 时对当前 view 调度 onDisappear（资源释放/snapshot 用），**禁止**在 onDisappear 直接 `camera.tearDown()`（清空 `camera.onFrame=nil`）；回前台 SwiftUI 走 `updateUIView` 不走 `makeUIView`，onFrame 永远不会重新赋值——画面卡 + 推流断 + 60s 后弱网误下播。修复必须双保险：(1) `CameraPreview.updateUIView` 内 `if camera.onFrame == nil { rebind }` 兜底；(2) `LiveRoomView.onDisappear` 加 `guard scenePhase != .background, store.state == .ended else { return }` 阻止切后台时误清
+- **iOS 限制：app 后台无法访问相机**（产品共识，v5.3.4/v5.3.5 已还原暂不处理）：业界主流直播 App 切后台一律视频暂停 + 音频继续——iOS 隐私硬性限制相机后台采集，无 API 绕开；画中画（PiP）适合显示**远端视频**，不适合**采集本端相机**。后台保持推流方案（`Info.plist UIBackgroundModes: audio` + `AVAudioSession` 后台音频 / `CameraManager` 1Hz `lastFrame` relay 占位帧）暂未启用，留 H/J 里程碑评估
 - 调试 `print` 收敛为统一日志（`os.Logger`），生产不留裸 `print`
 - **国际化（en/ar/tr）**：布局用语义化方向 `leading`/`trailing` 而非 `left`/`right`（阿拉伯语 RTL 自动镜像）；字符串走 `Localizable.strings`，禁止硬编码中文/英文
 - **时区**：任务重置/倒计时等业务用 `Asia/Shanghai`（UTC+8）固定时区，**不用设备本地时区**（H5 行为）

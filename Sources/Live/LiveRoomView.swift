@@ -1,22 +1,26 @@
 import SwiftUI
 
-/// 直播间（对应 H5 liveRoom）：用 beginLiveRoom 返回的真实频道/token 推流 + 真实心跳 + 真实下播。
-/// 公屏 / 在线人数 / 礼物等依赖云信聊天室的部分仍为占位（云信为后续阶段）。
+/// 直播间（对应 H5 liveRoom）：声网推流 + LiveStore 接管心跳/下播状态机 + 云信公屏。
+///
+/// M1：LiveStore 接管心跳（10s）与 forceEnd/endLive；
+/// M2：注入相机错误回调 / 美颜降级通知 / 权限拒绝 alert / 网络监控转发（store.wire(agora)）；
+/// M3：公屏/在线人数迁移到 LiveStore。
 struct LiveRoomView: View {
     let roomInfo: LiveRoomInfo
     let title: String
     @ObservedObject var beauty: BeautyParameters
 
+    @StateObject private var store = LiveStore()
     @StateObject private var camera = CameraManager()
     @StateObject private var agora = AgoraManager()
     @StateObject private var nim = NIMChatroomManager()
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var authorized = false
     @State private var showBeauty = false
     @State private var elapsed = 0
 
-    /// 1s 节拍：累计直播时长，并每 6s 调一次 liveHeartBeatV2 维持直播态
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -27,6 +31,20 @@ struct LiveRoomView: View {
             }
             VStack(spacing: 12) {
                 topBar
+                debugNetworkPanel    // v5.1 调试面板（弱网计数实时显示）
+                if !store.beautyAvailable {
+                    Text(L10n.beautyUnavailableHint)
+                        .font(.caption2)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(.black.opacity(0.5), in: Capsule())
+                }
+                if let netToast = store.networkWarningToast {
+                    networkBanner(netToast)
+                }
+                if let toast = store.warningToast {
+                    warningBanner(toast)
+                }
                 publicScreen
                 Spacer()
                 bottomBar
@@ -36,28 +54,59 @@ struct LiveRoomView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showBeauty) { beautyPanel }
+        .alert("相机权限未开启", isPresented: $store.permissionDeniedAlert) {
+            Button("确定") { dismiss() }
+        } message: {
+            Text("请到 设置 → Hily → 相机 中允许访问")
+        }
         .onAppear {
             camera.renderer.updateParameters(beauty)
+            // M2：相机错误转发到 store
+            camera.onError = { error in
+                Task { @MainActor in store.onCameraError(error) }
+            }
+            // M2：美颜降级通知（CameraManager init 时已确定）
+            if camera.isBeautyFallback {
+                store.markBeautyUnavailable()
+            }
+            // M2：声网双向 wire（token 续期 + networkQuality 转发）
+            // v5.1：同时注入 camera 让 monitor degrade 时节流推帧
+            store.wire(agora, camera: camera)
+
             CameraManager.requestAccess { ok in
                 authorized = ok
-                if ok { camera.start() }
+                if ok {
+                    camera.start()
+                } else {
+                    store.onCameraError(.permissionDenied)
+                }
             }
-            // 用 beginLiveRoom 返回的真实凭证加入声网（主播推流）
             agora.join(channelId: roomInfo.agoraChannelId ?? "",
                        token: roomInfo.rtcToken ?? "",
                        uid: UInt(roomInfo.userId ?? 0))
-            // 加入云信聊天室（公屏/在线人数）
             if let yx = roomInfo.yxRoomId, let user = SessionStore.shared.user {
                 nim.enter(roomId: "\(yx)",
                           nickname: user.nickname ?? "主播",
                           account: user.yxAccid ?? "",
                           token: user.imToken ?? "")
             }
+            store.attachLiving(roomInfo: roomInfo)
         }
         .onDisappear {
+            // v5.3.3 真根因修复：SwiftUI 在 ScenePhase=.background 时也会触发 onDisappear（snapshot 用），
+            // 若此时 tearDown camera/agora/nim，则切后台→回前台后 onFrame 永久断开（CameraPreview.updateUIView
+            // 虽已兜底重绑，但仍以"真正 dismiss 才清理"为正路径）。
+            // 真正 dismiss 的标志：scenePhase != .background（不是切后台）+ store.state == .ended（forceEnd/endLive 完成）。
+            guard scenePhase != .background, store.state == .ended else {
+                return
+            }
+            camera.tearDown()
             agora.leave()
             nim.leave()
             camera.stop()
+        }
+        .onChange(of: store.state) { newState in
+            if newState == .ended { dismiss() }
         }
         .onReceive(beauty.objectWillChange) { _ in
             DispatchQueue.main.async { camera.renderer.updateParameters(beauty) }
@@ -65,10 +114,6 @@ struct LiveRoomView: View {
         .onReceive(ticker) { _ in
             guard agora.state == .joined else { return }
             elapsed += 1
-            // 每 6s 真实心跳（对应 H5 liveHeartBeatV2），不维持后端会判掉线下播
-            if elapsed % 6 == 0, let roomId = roomInfo.id {
-                Task { try? await LiveService.heartbeat(roomId: roomId) }
-            }
         }
     }
 
@@ -91,7 +136,6 @@ struct LiveRoomView: View {
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
             .background(.black.opacity(0.4), in: Capsule())
-            // 在线人数（云信聊天室）
             HStack(spacing: 4) {
                 Image(systemName: "person.2.fill").font(.caption2)
                 Text("\(nim.onlineCount)").font(.caption)
@@ -102,7 +146,64 @@ struct LiveRoomView: View {
         }
     }
 
-    // MARK: - 公屏消息（占位）
+    // MARK: - 合规警告条幅（NIM attachType=61 触发，3s 自动消失）
+
+    private func warningBanner(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(.orange.opacity(0.9), in: RoundedRectangle(cornerRadius: 10))
+            .frame(maxWidth: .infinity, alignment: .center)
+            .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
+    // MARK: - 网络监控调试面板（v5.1，弱网计数实时显示）
+
+    private var debugNetworkPanel: some View {
+        let info = store.networkDebugInfo
+        let statusColor: Color = {
+            switch info.status {
+            case "normal":   return .green
+            case "degraded": return .orange
+            case "ended":    return .red
+            default:         return .gray
+            }
+        }()
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Circle().fill(statusColor).frame(width: 8, height: 8)
+                Text("net.\(info.status) bad=\(info.bad)/10→30 good=\(info.good)/5")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.white)
+            }
+            Text("tx=\(info.lastTx) rx=\(info.lastRx) worst=\(info.lastWorst) total=\(info.total)")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.85))
+            Text("agora.fps=\(info.agoraFps) cam.fps=\(info.cameraFps)")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.85))
+        }
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - 网络弱网降级条幅（NetworkQualityMonitor 触发，恢复时自动消失）
+
+    private func networkBanner(_ text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "wifi.exclamationmark").font(.caption)
+            Text(text).font(.caption)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(.blue.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
+        .frame(maxWidth: .infinity, alignment: .center)
+        .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
+    // MARK: - 公屏消息
 
     private var publicScreen: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -122,8 +223,11 @@ struct LiveRoomView: View {
     private var bottomBar: some View {
         HStack(spacing: 16) {
             Button { showBeauty = true } label: { toolButton("美颜", system: "wand.and.stars") }
+                .disabled(!store.beautyAvailable)
             Spacer()
-            Button { endLive() } label: {
+            Button {
+                Task { await store.endLive() }
+            } label: {
                 Text("结束直播").font(.headline).foregroundStyle(.white)
                     .padding(.horizontal, 22).padding(.vertical, 12)
                     .background(Color.red, in: Capsule())
@@ -171,13 +275,5 @@ struct LiveRoomView: View {
 
     private var timeString: String {
         String(format: "%02d:%02d", elapsed / 60, elapsed % 60)
-    }
-
-    /// 对应 H5 handleLiveEnd：离开声网 + 调 endLiveRoom 真下播 + 返回
-    private func endLive() {
-        Task { try? await LiveService.endLiveRoom() }
-        agora.leave()
-        camera.stop()
-        dismiss()
     }
 }

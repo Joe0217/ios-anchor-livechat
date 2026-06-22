@@ -84,3 +84,13 @@
 "live.rankBadge"             = "Leaderboard";
 "live.refresh"               = "Refresh";
 "live.onlineDot"             = "Online";
+
+// MARK: - List 子页（设计稿还原）
+"liveList.segment.online"    = "Online";
+"liveList.segment.prime"     = "Prime";
+"liveList.invite.title"      = "Invite friends";
+"liveList.invite.subtitle"   = "Invite users and get diamonds";
+"liveList.action.chat"       = "Chat";
+"liveList.action.live"       = "Live";
+"liveList.action.match"      = "Match";
+"liveList.action.offline"    = "Offline";

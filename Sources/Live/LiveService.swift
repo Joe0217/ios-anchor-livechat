@@ -1,4 +1,15 @@
 import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveService")
+
+/// 心跳错误（B 里程碑 spec §3.3）。
+enum HeartbeatError: Error, Equatable {
+    case banned                                  // 1992 / 1006
+    case noPermission                            // 2001
+    case invalidPayload                          // 上行 body NSNull 守卫失败
+    case unknown(code: String, message: String)  // 其它业务码
+}
 
 /// getAgoraRtmToken 响应（join 用的声网 token）。
 struct AgoraRtmTokenResult: Codable {
@@ -13,7 +24,7 @@ struct LiveRoomInfo: Codable {
     let agoraChannelId: String?
     let rtcToken: String?
     let userId: Int?           // 主播 uid（与 rtcToken 绑定）
-    let yxRoomId: Int?         // 云信聊天室 ID（后续阶段用）
+    let yxRoomId: Int?         // 云信聊天室 ID
     let hotScore: Int?
 }
 
@@ -26,7 +37,6 @@ enum LiveService {
     }
 
     /// 开播建房。对齐 H5：把 getMyLiveRoom 的配置整体回传，并附礼物/愿望单字段。
-    /// 返回 beginLiveRoom 的原始响应（与 getMyLiveRoom 合并后才有完整频道/token）。
     static func beginLiveRoomRaw(settings: [String: Any], liveDescribe: String) async throws -> [String: Any] {
         var body = settings
         if !liveDescribe.isEmpty { body["liveDescribe"] = liveDescribe }
@@ -38,27 +48,24 @@ enum LiveService {
         return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
     }
 
-    /// 声网 token 接口（与 H5 myCallStore.rtcToken 同源）。
+    /// 声网 token 接口（与 H5 myCallStore.rtcToken 同源；绑 uid、与 channel 无关）。
     static func getAgoraRtmToken() async throws -> AgoraRtmTokenResult {
         let data = try await APIClient.shared.post("/api/index/getAgoraRtmToken", body: [:])
         return try JSONDecoder().decode(AgoraRtmTokenResult.self, from: data)
     }
 
-    /// 完整开播：getMyLiveRoom(拿频道/配置) + beginLiveRoom(建房) + getAgoraRtmToken(拿 join token)。
-    /// 对齐 H5：频道来自 agoraChannelId，token 来自 getAgoraRtmToken，uid 为 userId。
+    /// 完整开播：getMyLiveRoom + beginLiveRoom + getAgoraRtmToken。
+    /// 频道来自 agoraChannelId，token 来自 getAgoraRtmToken（绑 uid），uid 为 userId。
     static func startLive(liveDescribe: String) async throws -> LiveRoomInfo {
         let settings = try await getMyLiveRoomRaw()
         guard let cover = settings["backgroundImgUrl"] as? String, !cover.isEmpty else {
             throw APIError(code: "-1", message: "账号还没有直播封面，请先在主端设置封面后再试")
         }
         let beginRes = try await beginLiveRoomRaw(settings: settings, liveDescribe: liveDescribe)
-        // 合并 getMyLiveRoom + beginLiveRoom（频道/roomId/uid 在这里）
         var merged = settings
         for (k, v) in beginRes { merged[k] = v }
-        // join token 来自 getAgoraRtmToken（与 H5 一致）
         let tokenRes = try await getAgoraRtmToken()
-        print("🔧 [Live] channel=\(merged["agoraChannelId"] ?? "nil") id=\(merged["id"] ?? "nil") userId=\(merged["userId"] ?? "nil") rtcToken=\((tokenRes.rtcToken)?.prefix(12) ?? "nil")")
-        // 手动取字段，避免后端字段类型（浮点/字符串）与严格解码不匹配导致整体失败
+        logger.info("startLive channel=\(merged["agoraChannelId"] as? String ?? "nil") id=\(merged["id"] as? String ?? "nil") tokenLen=\(tokenRes.rtcToken?.count ?? 0)")
         return LiveRoomInfo(
             id: intValue(merged["id"]),
             agoraChannelId: merged["agoraChannelId"] as? String,
@@ -69,7 +76,6 @@ enum LiveService {
         )
     }
 
-    /// 从 Int / NSNumber(含浮点) / 字符串 中稳健取整数
     private static func intValue(_ v: Any?) -> Int? {
         if let i = v as? Int { return i }
         if let n = v as? NSNumber { return n.intValue }
@@ -77,33 +83,44 @@ enum LiveService {
         return nil
     }
 
-    /// 直播心跳（每 6s）。callState=0 直播中。
-    static func heartbeat(roomId: Int) async throws {
-        _ = try await APIClient.shared.post("/api/agora/liveHeartBeatV2",
-                                            body: ["roomId": roomId, "callState": 0])
+    /// 直播心跳（B 里程碑 spec §3.3）：10s 间隔由 HeartbeatController 驱动。
+    /// 必须读 response code 并按 1992/2001 分流；禁止 try? 静默吞错。
+    static func heartbeat(roomId: Int, callState: Int) async throws {
+        let body: [String: Any] = ["roomId": roomId, "callState": callState]
+        // CLAUDE.md NSNull 守卫：避免 NSNull 触发 OC 异常崩溃
+        guard JSONSerialization.isValidJSONObject(body) else {
+            throw HeartbeatError.invalidPayload
+        }
+        do {
+            _ = try await APIClient.shared.post("/api/agora/liveHeartBeatV2", body: body)
+        } catch let api as APIError {
+            switch api.code {
+            case "1992", "1006": throw HeartbeatError.banned
+            case "2001":         throw HeartbeatError.noPermission
+            default:             throw HeartbeatError.unknown(code: api.code, message: api.message)
+            }
+        }
     }
 
-    /// 下播（正常关闭无需 body）。
-    static func endLiveRoom() async throws {
-        _ = try await APIClient.shared.post("/api/agora/live/endLiveRoom")
+    /// 下播（B 里程碑 spec §10.2）：endType 数字编码 1/2/4/5/6/7（覆盖 H5 字符串编码）。
+    static func endLiveRoom(endType: Int) async throws {
+        _ = try await APIClient.shared.post("/api/agora/live/endLiveRoom", body: ["endType": endType])
     }
 
-    /// 获取云信聊天室服务器地址（独立模式 enter 需要）。
-    /// 对齐 H5 useCallApi.joinChatRoom：getChatRoomAddress({ searchValue: roomId }) 的 result 直接就是地址数组。
+    /// 获取云信聊天室服务器地址（独立模式 enter 需要；当前未用）。
     static func getChatRoomAddress(roomId: String) async throws -> [String] {
         let data = try await APIClient.shared.post("/api/agora/live/getChatRoomAddress",
                                                    body: ["searchValue": roomId])
-        // result 直接是字符串数组（H5 直接赋值）；兼容包在 addrs/chatroomAddresses/addresses 的情况
         if let arr = try? JSONDecoder().decode([String].self, from: data) {
-            print("🟣 [Chatroom] getChatRoomAddress(\(roomId)) → \(arr.count) 个地址: \(arr)")
+            logger.info("getChatRoomAddress(\(roomId)) → \(arr.count) addrs")
             return arr
         }
         if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
             let a = (obj["addrs"] as? [String]) ?? (obj["chatroomAddresses"] as? [String]) ?? (obj["addresses"] as? [String]) ?? []
-            print("🟣 [Chatroom] getChatRoomAddress(\(roomId)) → 对象内 \(a.count) 个地址: \(a) | 原始keys=\(Array(obj.keys))")
+            logger.info("getChatRoomAddress(\(roomId)) → object \(a.count) addrs, keys=\(Array(obj.keys))")
             return a
         }
-        print("🔴 [Chatroom] getChatRoomAddress(\(roomId)) → 无法解析地址, data=\(String(data: data, encoding: .utf8) ?? "<二进制>")")
+        logger.error("getChatRoomAddress(\(roomId)) → unparseable")
         return []
     }
 }

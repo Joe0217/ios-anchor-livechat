@@ -1,18 +1,29 @@
 import AgoraRtcKit
 import CoreVideo
 import UIKit
+import os
 
-/// 声网 RTC 管理：引擎初始化、加入/离开频道、推送外部视频帧（相机/美颜后的画面）、远端渲染。
+private let logger = Logger(subsystem: "com.anchor.livechat", category: "Agora")
+
+/// 声网 RTC 管理（B 里程碑 spec §7）：引擎初始化 / 加入/离开频道 / 外部视频帧推送 / 远端渲染。
 ///
-/// 视频走"自定义视频源"：本地相机帧经美颜后通过 pushExternalVideoFrame 推给声网编码，
-/// 本地预览仍用我们自己的 Metal 视图（声网官方说明：推外部帧时 setupLocalVideo 不生效）。
-/// 音频用声网自采集麦克风。
+/// M2 接入项：
+/// - `networkQuality` 回调转发 NetworkQualityMonitor.report
+/// - `tokenPrivilegeWillExpire` 真正续期（拉新 token → renewToken）
+/// - 109/110 error code 同链路；续期失败 → store.forceEnd(.disconnected)
 final class AgoraManager: NSObject, ObservableObject {
     enum State: String {
         case idle = "未加入"
         case joining = "加入中…"
         case joined = "已加入频道"
         case failed = "加入失败"
+    }
+
+    /// 视频编码档位（B 里程碑 spec §4 v5 弱网降级用）。
+    /// `normal` = 720×1280 / 30fps；`low` = 720×1280 / 15fps（仅降帧率，保留分辨率避免 reset 抖动）
+    enum EncoderQuality {
+        case normal
+        case low
     }
 
     @Published var state: State = .idle
@@ -22,15 +33,26 @@ final class AgoraManager: NSObject, ObservableObject {
     /// 远端画面渲染目标（交给声网 setupRemoteVideo）
     let remoteView = UIView()
 
+    /// LiveStore 引用（M2 注入；token 续期失败时触发 forceEnd）
+    weak var liveStore: LiveStore?
+    /// 网络监控（M2 注入；networkQuality 回调转发）
+    weak var networkMonitor: NetworkQualityMonitor?
+
     private var engine: AgoraRtcEngineKit?
-    /// setExternalVideoSource 对应的默认外部视频轨 id
     private let externalTrackId: UInt = 0
+
+    /// token 续期失败次数（spec §7.2：两次失败 → forceEnd）
+    private var renewFailureCount = 0
+    /// 续期进行中标志（v5 review 阻塞 #2：防止 109/110 短时间多次回调并发续期）
+    private var isRenewing = false
+
+    /// 当前视频编码档位（弱网降级 / 恢复时切换）
+    private(set) var currentQuality: EncoderQuality = .normal
 
     var isActive: Bool { state == .joined || state == .joining }
 
     // MARK: - 加入
 
-    /// 直播传 .liveBroadcasting（主播推流）；1v1 通话传 .communication（双方平等）。
     func join(channelId: String,
               token: String,
               uid: UInt,
@@ -46,7 +68,6 @@ final class AgoraManager: NSObject, ObservableObject {
         kit.enableVideo()
         kit.enableAudio()
 
-        // 启用外部视频源（我们推相机/美颜帧）
         kit.setExternalVideoSource(true, useTexture: true, sourceType: .videoFrame)
         kit.setVideoEncoderConfiguration(
             AgoraVideoEncoderConfiguration(
@@ -61,20 +82,20 @@ final class AgoraManager: NSObject, ObservableObject {
 
         let option = AgoraRtcChannelMediaOptions()
         option.clientRoleType = .broadcaster
-        option.publishCustomVideoTrack = true   // 推外部视频帧
-        option.publishMicrophoneTrack = true    // 麦克风（声网自采集）
+        option.publishCustomVideoTrack = true
+        option.publishMicrophoneTrack = true
         option.autoSubscribeAudio = true
         option.autoSubscribeVideo = true
 
         state = .joining
         message = ""
-        print("🟡 [Agora] joinChannel channel=\(channelId) uid=\(uid)")
+        logger.info("joinChannel channel=\(channelId) uid=\(uid)")
         let ret = kit.joinChannel(byToken: token,
                                   channelId: channelId,
                                   uid: uid,
                                   mediaOptions: option)
-        print("🟡 [Agora] joinChannel 返回 ret=\(ret)")
         if ret != 0 {
+            logger.error("joinChannel failed ret=\(ret)")
             state = .failed
             message = "joinChannel 调用失败: \(ret)"
         }
@@ -82,13 +103,12 @@ final class AgoraManager: NSObject, ObservableObject {
 
     // MARK: - 推帧
 
-    /// 由相机帧回调调用（已经过美颜处理）。注意：当前帧为前置镜像，远端看到的是镜像画面（POC 暂不处理）。
     func pushFrame(_ pixelBuffer: CVPixelBuffer) {
         guard let engine = engine, state == .joined else { return }
         let frame = AgoraVideoFrame()
-        frame.format = AgoraVideoFormat.cvPixelBGRA.rawValue  // 相机输出 BGRA
+        frame.format = AgoraVideoFormat.cvPixelBGRA.rawValue
         frame.textureBuf = pixelBuffer
-        frame.rotation = 0  // 相机已设为竖屏
+        frame.rotation = 0
         engine.pushExternalVideoFrame(frame, videoTrackId: externalTrackId)
     }
 
@@ -108,6 +128,79 @@ final class AgoraManager: NSObject, ObservableObject {
         state = .idle
         remoteUid = 0
         message = ""
+        renewFailureCount = 0
+        currentQuality = .normal
+    }
+
+    // MARK: - 编码档位切换（B 里程碑 spec §4 v5 弱网降级）
+
+    /// 由 NetworkQualityMonitor 调用：弱网累计 ≥10 次 → .low；恢复 ≥5 次 → .normal。
+    /// 已是目标档位时跳过；engine 未 join 时跳过。
+    func applyEncoderQuality(_ q: EncoderQuality) {
+        guard let engine, currentQuality != q else { return }
+        let fps = (q == .normal) ? AgoraVideoFrameRate.fps30.rawValue : AgoraVideoFrameRate.fps15.rawValue
+        // v5.1：low 模式同时降码率到 600kbps（弱网下 Standard 自适应不够激进，画面会卡）
+        let bitrate = (q == .normal) ? AgoraVideoBitrateStandard : 600
+        let config = AgoraVideoEncoderConfiguration(
+            size: CGSize(width: 720, height: 1280),
+            frameRate: fps,
+            bitrate: bitrate,
+            orientationMode: .fixedPortrait,
+            mirrorMode: .disabled
+        )
+        engine.setVideoEncoderConfiguration(config)
+        currentQuality = q
+        logger.info("encoder quality → \(q == .normal ? "normal/30fps/auto" : "low/15fps/600kbps")")
+    }
+
+    // MARK: - token 续期（spec §7）
+
+    /// 拉新 rtcToken → engine.renewToken；失败 ≥2 次触发 forceEnd(.disconnected)
+    /// v5 review 修复：
+    /// - 阻塞 #2：isRenewing 守卫防 109/110 短时间多次回调并发续期（后到达的成功会覆盖新 token）
+    /// - 阻塞 #3：成功后清 message + 把 .failed 态扳回 .joined
+    /// **v5.3.3 修复**：后台时不续期，避免后台 109/110 backlog + URLSession 后台 timeout 累计 renewFailureCount→forceEnd
+    /// `willEnterForeground` 时 SDK 通常会重新发 tokenPrivilegeWillExpire 或 109，自然触发续期
+    private func renewToken() {
+        guard UIApplication.shared.applicationState != .background else {
+            logger.info("skip token renew in background")
+            return
+        }
+        guard !isRenewing else {
+            logger.info("renewToken already in flight, skip")
+            return
+        }
+        isRenewing = true
+        Task { [weak self] in
+            guard let self else { return }
+            defer { Task { @MainActor in self.isRenewing = false } }
+            do {
+                let res = try await LiveService.getAgoraRtmToken()
+                guard let newToken = res.rtcToken, !newToken.isEmpty else {
+                    throw NSError(domain: "Agora", code: -1,
+                                  userInfo: [NSLocalizedDescriptionKey: "rtcToken empty"])
+                }
+                self.engine?.renewToken(newToken)
+                await MainActor.run {
+                    self.renewFailureCount = 0
+                    self.message = ""
+                    if self.state == .failed { self.state = .joined }
+                    logger.info("Agora token renewed")
+                }
+            } catch {
+                await MainActor.run {
+                    self.renewFailureCount += 1
+                    let count = self.renewFailureCount
+                    logger.error("Agora token renew failed (\(count)/2): \(String(describing: error))")
+                    if count >= 2 {
+                        Task { [weak self] in
+                            await self?.liveStore?.forceEnd(reason: .disconnected,
+                                                            subSource: "agora_token_renew_failed")
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -115,7 +208,7 @@ final class AgoraManager: NSObject, ObservableObject {
 
 extension AgoraManager: AgoraRtcEngineDelegate {
     func rtcEngine(_ engine: AgoraRtcEngineKit, didJoinChannel channel: String, withUid uid: UInt, elapsed: Int) {
-        print("🟢 [Agora] 本地加入成功 channel=\(channel) uid=\(uid) elapsed=\(elapsed)ms")
+        logger.info("local joined channel=\(channel) uid=\(uid) elapsed=\(elapsed)ms")
         DispatchQueue.main.async {
             self.state = .joined
             self.message = "本地已加入 uid=\(uid)"
@@ -123,7 +216,7 @@ extension AgoraManager: AgoraRtcEngineDelegate {
     }
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didJoinedOfUid uid: UInt, elapsed: Int) {
-        print("🟢 [Agora] 远端用户加入 uid=\(uid)")
+        logger.info("remote joined uid=\(uid)")
         DispatchQueue.main.async {
             self.remoteUid = uid
             let canvas = AgoraRtcVideoCanvas()
@@ -146,17 +239,32 @@ extension AgoraManager: AgoraRtcEngineDelegate {
     }
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didOccurError errorCode: AgoraErrorCode) {
-        // 110 = token 无效；109 = token 过期
-        print("🔴 [Agora] 错误码 \(errorCode.rawValue)（110=token无效, 109=token过期）")
+        logger.error("RTC error code \(errorCode.rawValue)")
         DispatchQueue.main.async {
             self.message = "RTC 错误码: \(errorCode.rawValue)"
             if self.state == .joining { self.state = .failed }
+            // 109/110 走续期链路（spec §7.2）
+            if errorCode.rawValue == 109 || errorCode.rawValue == 110 {
+                self.renewToken()
+            }
         }
     }
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, tokenPrivilegeWillExpire token: String) {
+        logger.info("tokenPrivilegeWillExpire → renew")
         DispatchQueue.main.async {
-            self.message = "token 即将过期，请更新 AgoraConfig.token"
+            self.renewToken()
+        }
+    }
+
+    /// 网络质量回调转发到 NetworkQualityMonitor（spec §4.1）
+    func rtcEngine(_ engine: AgoraRtcEngineKit,
+                   networkQuality uid: UInt,
+                   txQuality: AgoraNetworkQuality,
+                   rxQuality: AgoraNetworkQuality) {
+        guard uid == 0 else { return }  // 0 表示本地
+        Task { @MainActor [weak self] in
+            self?.networkMonitor?.report(tx: txQuality, rx: rxQuality)
         }
     }
 }

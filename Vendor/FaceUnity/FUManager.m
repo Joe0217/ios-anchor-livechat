@@ -20,24 +20,37 @@
 }
 
 - (void)setup {
-    if (self.didSetup) return;
+    [self setupSync];
+}
+
+- (BOOL)setupSync {
+    if (self.didSetup) return self.beauty != nil;
     self.didSetup = YES;
 
-    // 1) 鉴权 + 初始化
-    FUSetupConfig *config = [[FUSetupConfig alloc] init];
-    config.authPack = FUAuthPackMake((void *)g_auth_package, (int)sizeof(g_auth_package));
-    [FURenderKit setupWithSetupConfig:config];
+    @try {
+        // 1) 鉴权 + 初始化
+        FUSetupConfig *config = [[FUSetupConfig alloc] init];
+        config.authPack = FUAuthPackMake((void *)g_auth_package, (int)sizeof(g_auth_package));
+        [FURenderKit setupWithSetupConfig:config];
 
-    // 2) 加载人脸 AI 模型
-    NSString *aiFacePath = [[NSBundle mainBundle] pathForResource:@"ai_face_processor" ofType:@"bundle"];
-    [FUAIKit loadAIModeWithAIType:FUAITYPE_FACEPROCESSOR dataPath:aiFacePath];
-    [FUAIKit shareKit].maxTrackFaces = 1;
+        // 2) 加载人脸 AI 模型
+        NSString *aiFacePath = [[NSBundle mainBundle] pathForResource:@"ai_face_processor" ofType:@"bundle"];
+        if (!aiFacePath) return NO;
+        [FUAIKit loadAIModeWithAIType:FUAITYPE_FACEPROCESSOR dataPath:aiFacePath];
+        [FUAIKit shareKit].maxTrackFaces = 1;
 
-    // 3) 美颜模块
-    NSString *beautyPath = [[NSBundle mainBundle] pathForResource:@"face_beautification" ofType:@"bundle"];
-    FUBeauty *beauty = [[FUBeauty alloc] initWithPath:beautyPath name:@"FUBeauty"];
-    [FURenderKit shareRenderKit].beauty = beauty;
-    self.beauty = beauty;
+        // 3) 美颜模块
+        NSString *beautyPath = [[NSBundle mainBundle] pathForResource:@"face_beautification" ofType:@"bundle"];
+        if (!beautyPath) return NO;
+        FUBeauty *beauty = [[FUBeauty alloc] initWithPath:beautyPath name:@"FUBeauty"];
+        if (!beauty) return NO;
+        [FURenderKit shareRenderKit].beauty = beauty;
+        self.beauty = beauty;
+        return YES;
+    } @catch (NSException *exception) {
+        NSLog(@"[FUManager] setupSync exception: %@", exception);
+        return NO;
+    }
 }
 
 - (CVPixelBufferRef)renderPixelBuffer:(CVPixelBufferRef)pixelBuffer {

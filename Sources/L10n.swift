@@ -89,4 +89,17 @@ enum L10n {
     static let liveRankBadge        = NSLocalizedString("live.rankBadge", comment: "排行榜按钮 a11y")
     static let liveRefresh          = NSLocalizedString("live.refresh", comment: "刷新按钮 a11y")
     static let liveOnlineDot        = NSLocalizedString("live.onlineDot", comment: "在线状态 a11y")
+
+    // MARK: - List 子页（设计稿还原）
+    /// 顶部 Online/Prime 分段
+    static let liveListSegmentOnline = NSLocalizedString("liveList.segment.online", comment: "Online 分段")
+    static let liveListSegmentPrime  = NSLocalizedString("liveList.segment.prime", comment: "Prime 分段")
+    /// Invite friends banner
+    static let liveListInviteTitle    = NSLocalizedString("liveList.invite.title", comment: "邀请好友标题")
+    static let liveListInviteSubtitle = NSLocalizedString("liveList.invite.subtitle", comment: "邀请好友副标题")
+    /// 卡片右侧动作按钮 a11y
+    static let liveListActionChat    = NSLocalizedString("liveList.action.chat", comment: "聊天按钮 a11y")
+    static let liveListActionLive    = NSLocalizedString("liveList.action.live", comment: "直播按钮 a11y")
+    static let liveListActionMatch   = NSLocalizedString("liveList.action.match", comment: "匹配按钮 a11y")
+    static let liveListActionOffline = NSLocalizedString("liveList.action.offline", comment: "下线开关 a11y")
 }
