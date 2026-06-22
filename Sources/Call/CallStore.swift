@@ -3,6 +3,15 @@ import SwiftUI
 import Combine
 import Network
 
+// MARK: - D 里程碑：CallStore 状态变化观察者协议
+//
+// 设计目的：CallStore.state 变化通知外部（如 LiveStore），实现单向回调，CallStore 不引用 LiveStore 类型。
+// 典型实现：LiveStore conform 此协议，监听 connected/connecting → ended 后启动 resumeCall 15s 倒计时。
+@MainActor
+protocol CallStoreObserver: AnyObject {
+    func callStore(_ store: CallStore, stateDidChange newState: CallState, previous: CallState)
+}
+
 /// 1v1 通话单层状态机（合并 H5 CallStateType + callGameStatus，采纳安卓 SDK 风格）。
 ///
 /// 责任：
@@ -20,7 +29,14 @@ final class CallStore: ObservableObject {
 
     // MARK: - 对外状态
 
-    @Published private(set) var state: CallState = .idle
+    @Published private(set) var state: CallState = .idle {
+        // D 里程碑：state 变化通知 observer（LiveStore 监听 connected/connecting → ended 触发 resumeCall）。
+        // didSet 在 @Published publish 之后调用，满足 SwiftUI 渲染先于业务回调的顺序。
+        didSet {
+            guard oldValue != state else { return }
+            observer?.callStore(self, stateDidChange: state, previous: oldValue)
+        }
+    }
     @Published private(set) var current: CurrentCallInfo = CurrentCallInfo()
     @Published private(set) var lastError: String = ""
     /// RTM client 是否已 login（永真直到 stop）。语义：login 已建立 → 信令通道存在。
@@ -59,6 +75,15 @@ final class CallStore: ObservableObject {
     /// callRate 上报开关（C 范围默认关，避免与后端联调相互干扰）
     // D 里程碑：callRate 上报开启（C 验证通过 + 后端契约确认 callRate 接口已上线）
     private var callRateEnabled = true
+
+    /// D 里程碑：LiveStore weak 引用（对齐 AgoraManager.liveStore 模式）。
+    /// 注入时机：LiveRoomView.onAppear 或 RootView 直播态分支；解绑：LiveRoomView 销毁。
+    /// 用途：handleIncomingVideoCall 内判定 .living 时委托 LiveStore.pauseForCall 走直播私 call 流程。
+    weak var liveStore: LiveStore?
+
+    /// D 里程碑：状态变化观察者（CallStoreObserver 协议 T4）。
+    /// LiveStore 在 RootView/LiveRoomView 注入时挂载，监听 connected/connecting → ended/idle 触发 resumeCall。
+    weak var observer: CallStoreObserver?
 
     private init() {
         // 远端用户加入 RTC channel 时 → state 切 .connected（声网 didJoinedOfUid 触发）
@@ -329,6 +354,71 @@ final class CallStore: ObservableObject {
 
     // MARK: - 被叫：接受 / 拒绝
 
+    /// D 里程碑：直播态私 call 自动接听入口。
+    /// 由 LiveStore.pauseForCall 调用，不弹浮层、无 UI 确认；frontGameType 写入 .live 标记本通通话来源。
+    ///
+    /// 与 `accept()` 的差异：
+    /// - 不依赖现有 `state == .calling`（直接从 .idle 起步）
+    /// - 跳过弹浮层等候用户操作的 calling 中间态视觉环节
+    /// - 显式标记 `frontGameType = .live`，CallView UI 据此显示"直播私 call"标识 + "挂断回直播"
+    func acceptIncomingFromLive(msg: CallMessage) async {
+        guard state == .idle, let signaling else {
+            print("⚠️ [CallStore] acceptIncomingFromLive 跳过 state=\(state) signaling=\(signaling != nil)")
+            return
+        }
+        guard let fromRoomId = msg.fromRoomId, !fromRoomId.isEmpty else {
+            print("⚠️ [CallStore] acceptIncomingFromLive 缺 fromRoomId")
+            return
+        }
+
+        // 1) 初始化 currentCallInfo（被叫 in / frontGameType=.live）
+        var info = CurrentCallInfo()
+        info.frontGameType = .live
+        info.inOrOut = .in
+        info.channelId = fromRoomId
+        info.callId = msg.callId
+        info.remoteUserId = msg.fromUserId
+        info.callStartTime = Date().timeIntervalSince1970 * 1000
+        current = info
+        state = .calling
+
+        // 2) 立刻发 Accept（publish 失败必须收尾，避免主叫永等不到 Accept）
+        let ok = await signaling.publish(buildMessage(action: .accept))
+        guard ok else {
+            lastError = "私 call 发送接听失败"
+            await endLocally(reason: .beginCallError, rateCategory: nil, rateType: .callee, abnormal: 1)
+            return
+        }
+        state = .connecting
+
+        // 3) join RTC 通话频道
+        await joinRtc(channel: fromRoomId, rateType: .callee)
+
+        // 4) 主叫端可能已在频道（callOut 时先 join），若 didJoinedOfUid 在切到 .connecting 前已触发，
+        //    handleRemoteRtcChange 不会再回调，此处手动补一次升级。
+        if agora.remoteUid != 0, state == .connecting {
+            current.callConnectTime = Date().timeIntervalSince1970 * 1000
+            state = .connected
+            print("✅ [CallStore] 直播私 call 接听后远端已在频道 → state=connected")
+        }
+
+        // 5) 异步拉对方资料（C 范围 joinCall 接口；失败仅影响 UI，不影响接通能力）
+        Task { @MainActor in
+            do {
+                let r = try await CallService.joinCall(channelId: fromRoomId)
+                guard self.state != .idle, self.current.callId == msg.callId else { return }
+                self.current.remoteYxAccid = r.yxAccid ?? self.current.remoteYxAccid
+                self.current.remoteNickname = r.nickname ?? self.current.remoteNickname
+                self.current.remoteIcon = r.icon ?? self.current.remoteIcon
+                self.current.remoteAge = r.age ?? self.current.remoteAge
+                self.current.remoteCountryCode = r.countryCode ?? self.current.remoteCountryCode
+                self.current.remoteVideoPrice = r.videoPrice ?? self.current.remoteVideoPrice
+            } catch {
+                print("⚠️ [CallStore] LIVE joinCall 拉对方资料失败 channel=\(fromRoomId) err=\(error.localizedDescription)")
+            }
+        }
+    }
+
     /// 被叫接受通话。
     func accept(auto: Bool = false) async {
         guard state == .calling, current.inOrOut == .in, let signaling else { return }
@@ -548,6 +638,14 @@ extension CallStore: CallSignalingDelegate {
         // 校验是发给本端的
         guard msg.remoteUserId == myUserId else {
             print("⚠️ [CallStore] 来电 remoteUserId(\(msg.remoteUserId)) 与本端(\(myUserId)) 不符，忽略")
+            return
+        }
+        // D 里程碑：直播态优先走"直播私 call 自动接听"分支（不弹浮层、无 UI 确认）
+        // 协议保证：用户端在直播间内发起的拨打都视为直播私 call，无需在 RTM 协议层区分类型
+        // weak liveStore 由 LiveRoomView/RootView 在直播态注入（对齐 AgoraManager.liveStore 模式）
+        if let ls = liveStore, ls.state == .living, ls.callState == 0 {
+            print("📞 [CallStore] 直播态收到私 call → 委托 LiveStore.pauseForCall")
+            await ls.pauseForCall(msg: msg)
             return
         }
         guard state == .idle else {
