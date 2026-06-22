@@ -18,8 +18,10 @@ enum RtmConnState: String {
 ///
 /// 注意：本类**不弹窗、不挂电话**。业务层（CallStore）自行根据 state 决定 UI 表现。
 @MainActor
-final class RtmReconnect {
-    private(set) var state: RtmConnState = .idle
+final class RtmReconnect: ObservableObject {
+    /// RTM 真实连接状态，跟 SDK connectionChangedToState 实时联动。
+    /// 业务层通过 CallSignaling.rtmStatePublisher 订阅，驱动 UI"重连中/断连"指示。
+    @Published private(set) var state: RtmConnState = .idle
     private(set) var failedCount = 0
 
     // 由 CallSignaling 注入，避免循环引用
@@ -95,8 +97,10 @@ final class RtmReconnect {
         case .connecting:
             state = .connecting
         case .disconnected:
-            // 主动 leaveChannel 也会进 disconnected，但 reason==leaveChannel 时不要重连
-            if reason == .changedLeaveChannel { return }
+            // 主动 leaveChannel / logout 进 disconnected 时不要重连。
+            // .changedLogout 防御性过滤：dispose 守卫一般已挡住后续回调，但万一回调时序早于
+            // dispose 标志置位（例如 client.logout(nil) 内部立即派发），避免无意义 reconnect 调度。
+            if reason == .changedLeaveChannel || reason == .changedLogout { return }
             scheduleReconnect(reason: "disconnected_reason\(reason.rawValue)")
         case .failed:
             handleFailed(reason: reason)
@@ -142,8 +146,11 @@ final class RtmReconnect {
         // token 类失败：先续 token 再重连
         if reason == .changedTokenExpired || reason == .changedInvalidToken {
             Task { @MainActor [weak self] in
-                _ = await self?.refreshToken?()
-                self?.scheduleReconnect(reason: "token_failed_\(reason.rawValue)")
+                // dispose 后避免无意义的 token 续期网络请求（handleFailed 触发的瞬间 disposed 一定 false，
+                // 但 Task body 异步跑起来时可能已 dispose）
+                guard let self, !self.disposed else { return }
+                _ = await self.refreshToken?()
+                self.scheduleReconnect(reason: "token_failed_\(reason.rawValue)")
             }
             return
         }
@@ -181,6 +188,10 @@ final class RtmReconnect {
             scheduleReconnect(reason: "\(reason)_empty_token")
             return
         }
+        // TODO(理论防御): 如果 Agora SDK 在 destroy 期间 / 边界 case 下未调用 login completion，
+        // continuation 会永挂导致 retryTask 内存泄漏 + state 卡 .reconnecting。当前依赖 SDK 文档
+        // "completion 必调"保证。如未来真机出现卡 .reconnecting 不流转的现象，考虑用双 task race +
+        // continuation box 状态机加 10s 超时。
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             client.login(token) { [weak self] _, err in
                 guard let self else { cont.resume(); return }
@@ -234,6 +245,25 @@ final class RtmReconnect {
 
     private func cancelRetry()   { retryTask?.cancel();   retryTask = nil }
     private func cancelRenewal() { renewalTask?.cancel(); renewalTask = nil }
+
+    // MARK: - 网络恢复立即重连
+
+    /// 网络恢复 / 外部环境变好时调用。对齐 H5 useRtmReconnect.js 的 'online' 事件处理。
+    /// 仅在 .disconnected（慢重试 5s 节奏中段）时跳过 schedule 立即触发；.reconnecting
+    /// （快重试 1s/2s/4s 中）让原节奏自然收敛，避免与正在 sleep 的 retryTask 双跑 login。
+    ///
+    /// guard 同步执行：函数本身已在 @MainActor，无需 Task hop；避免 hop 之间 state 再次变化
+    /// （如 .disconnected → .reconnecting）导致进入了 Task 体却条件已失效。仅在真要 runReconnectOnce
+    /// 时才 Task 提供 async 上下文。
+    func forceImmediateReconnect(reason: String) {
+        guard !disposed, client != nil, state == .disconnected else { return }
+        print("📶 [RTM] network 触发立即重连 reason=\(reason)")
+        cancelRetry()
+        failedCount = 0
+        Task { @MainActor [weak self] in
+            await self?.runReconnectOnce(reason: reason)
+        }
+    }
 
     // MARK: - 前台恢复
 

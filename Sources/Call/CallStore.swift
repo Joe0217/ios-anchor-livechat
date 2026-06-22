@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import Network
 
 /// 1v1 通话单层状态机（合并 H5 CallStateType + callGameStatus，采纳安卓 SDK 风格）。
 ///
@@ -22,7 +23,12 @@ final class CallStore: ObservableObject {
     @Published private(set) var state: CallState = .idle
     @Published private(set) var current: CurrentCallInfo = CurrentCallInfo()
     @Published private(set) var lastError: String = ""
+    /// RTM client 是否已 login（永真直到 stop）。语义：login 已建立 → 信令通道存在。
+    /// **注意**：不等于"RTM 连接当前可用"——断网/重连中时仍为 true。UI 用 `rtmConnectionState` 判定实时连接态。
     @Published private(set) var isSignalingReady: Bool = false
+    /// RTM 实时连接状态（镜像 RtmReconnect.state，由 SDK connectionChangedToState 驱动）。
+    /// HomeView 用此字段显示"已就绪/重连中/断连"。
+    @Published private(set) var rtmConnectionState: RtmConnState = .idle
 
     /// RTC 管理器（CallView 用它做远端渲染 + push 美颜后的帧）
     let agora = AgoraManager()
@@ -36,6 +42,20 @@ final class CallStore: ObservableObject {
     /// 已经被新通话覆盖的 state 重置回 .idle。
     private var endedToIdleTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
+    /// RTM 状态订阅句柄。CallStore 是单例 stop/start 可反复调用，订阅必须独立管理避免累积。
+    private var rtmStateCancellable: AnyCancellable?
+    /// 网络可达性监听器。冷启动无网→有网时自动 retry start。
+    private var nwMonitor: NWPathMonitor?
+    /// start 失败的 5s 兜底重试 task（即便无网络变化事件也能爬出来）。
+    private var startRetryTask: Task<Void, Never>?
+    /// 网络是否可达（NWPathMonitor 回调更新；用于避开"无网时还做 5s 重试"的浪费）。
+    /// 初值 false：保守假设——冷启动时 NWPathMonitor 还未首次回调，按"无网"判定走 10s 兜底
+    /// 节奏，等首次回调后再切换。避免 start 失败首次重试用 5s 触发又一次浪费。
+    private var isNetworkAvailable: Bool = false
+    /// start 防重入标志。start 是 async 含多个 await 点（getAgoraRtmToken / login）；
+    /// NWPathMonitor、startRetryTask、RootView 都会触发 start，必须串行化避免双 CallSignaling
+    /// 实例 + 双 RTM client 泄漏。
+    private var isStarting: Bool = false
     /// callRate 上报开关（C 范围默认关，避免与后端联调相互干扰）
     // D 里程碑：callRate 上报开启（C 验证通过 + 后端契约确认 callRate 接口已上线）
     private var callRateEnabled = true
@@ -78,14 +98,27 @@ final class CallStore: ObservableObject {
     // MARK: - 生命周期
 
     /// 登录后由 RootView 调用：拉 rtmToken，初始化 RTM client。
-    /// 重复调用安全。失败时设置 lastError、isSignalingReady=false，业务层可重试。
+    /// 重复调用安全（已就绪直接 return）。
+    /// **失败兜底**：① NWPathMonitor 监听网络恢复立刻 retry ② 5s 定时兜底 retry（即便无网络事件）。
     func start(myUserId: Int) async {
         if isSignalingReady { return }
+        // 防重入：start 有 2 个 await 点（getAgoraRtmToken / login），NWPathMonitor 与
+        // startRetryTask 任一进入会引发"双 CallSignaling 实例 + 双 RTM client"泄漏。
+        if isStarting {
+            print("⚠️ [CallStore] start 已在进行中，跳过 uid=\(myUserId)")
+            return
+        }
+        isStarting = true
+        defer { isStarting = false }
+
         self.myUserId = myUserId
+        // 首次进入 start 时启动网络监听（一次性，stop 才销毁）
+        if nwMonitor == nil { startNetworkMonitor() }
         do {
             let tokenRes = try await LiveService.getAgoraRtmToken()
             guard let rtm = tokenRes.rtmToken, !rtm.isEmpty else {
                 lastError = "RTM token 为空"
+                scheduleStartRetry(myUserId: myUserId, reason: "empty_token")
                 return
             }
             let s = CallSignaling(myUserId: myUserId)
@@ -97,25 +130,112 @@ final class CallStore: ObservableObject {
             signaling = s
             isSignalingReady = true
             lastError = ""
+            cancelStartRetry()  // 成功后取消兜底 retry
+            // 订阅 RTM 实时连接状态：login 成功后 reconnect.bind 已设 .connected，
+            // 后续 SDK connectionChangedToState 回调驱动 .reconnecting/.disconnected/.connected 变化。
+            rtmStateCancellable = s.rtmStatePublisher
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] new in
+                    guard let self else { return }
+                    if self.rtmConnectionState != new {
+                        print("📡 [CallStore] rtmConnectionState \(self.rtmConnectionState.rawValue) → \(new.rawValue)")
+                    }
+                    self.rtmConnectionState = new
+                }
             print("✅ [CallStore] start 成功 uid=\(myUserId)")
         } catch let e as APIError {
             lastError = "CallStore.start 失败: \(e.message)(\(e.code))"
             print("❌ [CallStore] \(lastError)")
+            scheduleStartRetry(myUserId: myUserId, reason: "api_\(e.code)")
         } catch {
             lastError = "CallStore.start 异常: \(error.localizedDescription)"
             print("❌ [CallStore] \(lastError)")
+            scheduleStartRetry(myUserId: myUserId, reason: "exception")
         }
+    }
+
+    // MARK: - start 失败兜底重试
+
+    /// 调度 5s 后再 try start。若期间网络恢复（NWPathMonitor 触发），会被 cancel 由网络回调立刻 retry。
+    private func scheduleStartRetry(myUserId: Int, reason: String) {
+        cancelStartRetry()
+        let delay: TimeInterval = isNetworkAvailable ? 5 : 10  // 无网络时等长一点，省电
+        print("🔄 [CallStore] scheduleStartRetry reason=\(reason) delay=\(delay)s (net=\(isNetworkAvailable))")
+        startRetryTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            if Task.isCancelled { return }
+            guard let self, !self.isSignalingReady, self.myUserId == myUserId else { return }
+            await self.start(myUserId: myUserId)
+        }
+    }
+
+    private func cancelStartRetry() {
+        startRetryTask?.cancel()
+        startRetryTask = nil
+    }
+
+    // MARK: - 网络可达性监听（NWPathMonitor）
+
+    /// 监听网络可达性，从 unsatisfied → satisfied 时若 RTM 未就绪则立即 retry start。
+    /// 解决"冷启动无网 → 用户开网后 RTM 永远停在 idle"的死锁。
+    private func startNetworkMonitor() {
+        let m = NWPathMonitor()
+        // NWPathMonitor.start 后会立即首次回调当前实际网络状态。初值 isNetworkAvailable=false
+        // 与"网络恢复"边沿（was=false → satisfied=true）匹配，会触发一次不必要的 retry 调度
+        // （isStarting 守卫挡住但产生噪音日志）。用 firstCallback flag 跳过首次仅同步初值。
+        var isFirstCallback = true
+        m.pathUpdateHandler = { [weak self] path in
+            let satisfied = (path.status == .satisfied)
+            let firstShot = isFirstCallback
+            isFirstCallback = false
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let was = self.isNetworkAvailable
+                self.isNetworkAvailable = satisfied
+                if firstShot {
+                    print("📶 [CallStore] NWPathMonitor 首次回调 satisfied=\(satisfied)（仅同步初值）")
+                    return
+                }
+                if !was && satisfied {
+                    if !self.isSignalingReady, self.myUserId != 0 {
+                        // 冷启动失败 → 立即 retry start（已 login 之前的路径）
+                        print("📶 [CallStore] 网络恢复 → 立即 retry start uid=\(self.myUserId)")
+                        self.cancelStartRetry()
+                        await self.start(myUserId: self.myUserId)
+                    } else if self.isSignalingReady, let s = self.signaling {
+                        // 已 login → 通知 RtmReconnect 立即重连（消除慢重试 5s tick 等待）
+                        print("📶 [CallStore] 网络恢复 → 通知 RTM 立即重连")
+                        s.notifyNetworkResumed(reason: "network_resume")
+                    } else {
+                        print("📶 [CallStore] 网络恢复（未登录，忽略）")
+                    }
+                } else if was && !satisfied {
+                    print("📶 [CallStore] 网络断开 status=\(path.status)")
+                }
+            }
+        }
+        // Apple 文档推荐用专用 queue 避免回调被其他全局任务阻塞。qos 选 .userInitiated：
+        // 网络变化是用户感知事件，闭包应尽快被调度（vs .utility 偏后台）。
+        m.start(queue: DispatchQueue(label: "com.anchor.livechat.nwpath", qos: .userInitiated))
+        nwMonitor = m
+        print("📶 [CallStore] NWPathMonitor 已启动")
     }
 
     /// 登出时清理 RTM + RTC + 状态。
     func stop() {
         cancelCallOutTimeout()
+        cancelStartRetry()
+        nwMonitor?.cancel()
+        nwMonitor = nil
         endedToIdleTask?.cancel()
         endedToIdleTask = nil
+        rtmStateCancellable?.cancel()
+        rtmStateCancellable = nil
         if state != .idle { agora.leave() }
         signaling?.logout()
         signaling = nil
         isSignalingReady = false
+        rtmConnectionState = .idle
         myUserId = 0
         state = .idle
         current = CurrentCallInfo()

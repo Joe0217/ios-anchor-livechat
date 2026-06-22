@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import AgoraRtmKit
 
 /// RTM 信令收发回调（由 CallStore 实现）
@@ -34,6 +35,12 @@ final class CallSignaling: NSObject {
     }
 
     var isLoggedIn: Bool { client != nil }
+
+    /// RTM 实时连接状态 publisher（CallStore 订阅 → 镜像到 UI 层）。
+    /// 转发 RtmReconnect.$state；状态变化时机：SDK connectionChangedToState 回调。
+    var rtmStatePublisher: AnyPublisher<RtmConnState, Never> {
+        reconnect.$state.eraseToAnyPublisher()
+    }
 
     // MARK: - 登录 / 登出
 
@@ -89,6 +96,13 @@ final class CallSignaling: NSObject {
         }
         reconnect.dispose()
         client = nil
+    }
+
+    /// 网络恢复事件转发给 RtmReconnect（CallStore.startNetworkMonitor 检测到 satisfied 时调用）。
+    /// 仅 client 已 login 时有效；内部仅在 RTM 状态为 .disconnected 时真正触发立即重连。
+    func notifyNetworkResumed(reason: String) {
+        guard client != nil else { return }
+        reconnect.forceImmediateReconnect(reason: reason)
     }
 
     // MARK: - 发消息
