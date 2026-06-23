@@ -29,11 +29,36 @@ final class CameraManager: NSObject, ObservableObject {
     /// 美颜是否降级（init 时确定，供 LiveRoomView 注入 store 后通知）
     let isBeautyFallback: Bool
 
-    /// 每帧（已处理）回调，用于预览渲染
-    var onFrame: ((CVPixelBuffer) -> Void)?
+    /// v5.8：多订阅者模型替代 v5.7 单闭包 onFrame。
+    ///
+    /// 历史：v5.3.3~v5.6 用 `var onFrame: ((CVPixelBuffer) -> Void)?` 单闭包后绑覆盖前绑，
+    /// 直播私 call 场景里 PIP CameraPreview 后挂载会把 LiveRoomView 本体的 sink 覆写掉；
+    /// v5.7 试图用 "updateUIView 每次强制重绑" 修复，但 SwiftUI 在 `.overlay { ... }` 内 view
+    /// 消失时**不会**触发 ZStack 兄弟节点（本体 CameraPreview）的 updateUIView，本体永远拿不到
+    /// 重绑机会，挂断后本端画面卡死 + 观众端断流。
+    ///
+    /// v5.8：字典存所有订阅者，每个 CameraPreview 持有独立 key（Coordinator 的 ObjectIdentifier），
+    /// PIP dismantle 仅注销 PIP 自己那一格，本体 sink 始终留在字典里。
+    /// 锁保护：subscribe/unsubscribe 在 main queue，captureOutput 在 videoQueue 读，必须 NSLock。
+    private let subscribersLock = NSLock()
+    private var subscribers: [ObjectIdentifier: (CVPixelBuffer) -> Void] = [:]
 
     /// 相机错误回调（LiveRoomView 注入；转发到 LiveStore.onCameraError）
     var onError: ((CameraError) -> Void)?
+
+    /// 订阅每帧（已处理）回调。key 必须在 unsubscribe 时一致；CameraPreview 用 ObjectIdentifier(Coordinator)。
+    func subscribe(_ key: ObjectIdentifier, sink: @escaping (CVPixelBuffer) -> Void) {
+        subscribersLock.lock()
+        subscribers[key] = sink
+        subscribersLock.unlock()
+    }
+
+    /// 注销订阅。CameraPreview 在 dismantleUIView 时调用，确保 PIP 销毁后字典自动收敛。
+    func unsubscribe(_ key: ObjectIdentifier) {
+        subscribersLock.lock()
+        subscribers.removeValue(forKey: key)
+        subscribersLock.unlock()
+    }
 
     /// 推送给 onFrame 的目标帧率（v5.1 弱网降级用）。
     /// 相机仍以 30fps 采集，但当 targetFPS=15 时按时间间隔丢弃一半帧，避免帧堆积导致画面卡顿。
@@ -217,12 +242,14 @@ final class CameraManager: NSObject, ObservableObject {
     /// v5.3.1 review #5 阻塞修复：CameraManager observer 跨 dismiss 仍响应导致摄像头灯亮。
     /// LiveRoomView.onDisappear 显式调用本方法，同步：
     /// 1. 移除 NotificationCenter observer（避免 willEnterForeground 重启已离开的 session）
-    /// 2. 清空 onFrame / onError 闭包（避免被 capture 帧 mutate 已销毁的 store）
+    /// 2. 清空所有订阅者 + onError 闭包（避免被 capture 帧 mutate 已销毁的 store）
     /// 3. 同步 stop session（确保摄像头灯熄灭）
     func tearDown() {
-        logger.info("CameraManager tearDown: removing observers, clearing closures, stopping session")
+        logger.info("CameraManager tearDown: removing observers, clearing subscribers, stopping session")
         NotificationCenter.default.removeObserver(self)
-        onFrame = nil
+        subscribersLock.lock()
+        subscribers.removeAll()
+        subscribersLock.unlock()
         onError = nil
         sessionQueue.async { [weak self] in
             guard let self, self.session.isRunning else { return }
@@ -244,6 +271,12 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         if now - lastPushedAt < interval { return }
         lastPushedAt = now
         let processed = renderer.process(pixelBuffer)
-        onFrame?(processed)
+        // v5.8：锁内拷贝 sink snapshot，锁外分发；避免长时间持锁阻塞 main queue 的 subscribe/unsubscribe。
+        subscribersLock.lock()
+        let sinks = Array(subscribers.values)
+        subscribersLock.unlock()
+        for sink in sinks {
+            sink(processed)
+        }
     }
 }

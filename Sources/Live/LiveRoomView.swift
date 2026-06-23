@@ -58,10 +58,10 @@ struct LiveRoomView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showBeauty) { beautyPanel }
-        .alert("相机权限未开启", isPresented: $store.permissionDeniedAlert) {
-            Button("确定") { dismiss() }
+        .alert(L10n.liveRoomPermissionAlertTitle, isPresented: $store.permissionDeniedAlert) {
+            Button(L10n.liveRoomPermissionAlertOK) { dismiss() }
         } message: {
-            Text("请到 设置 → Hily → 相机 中允许访问")
+            Text(L10n.liveRoomPermissionAlertMessage)
         }
         .onAppear {
             camera.renderer.updateParameters(beauty)
@@ -90,7 +90,7 @@ struct LiveRoomView: View {
                        uid: UInt(roomInfo.userId ?? 0))
             if let yx = roomInfo.yxRoomId, let user = SessionStore.shared.user {
                 nim.enter(roomId: "\(yx)",
-                          nickname: user.nickname ?? "主播",
+                          nickname: user.nickname ?? L10n.liveRoomAnchorDefault,
                           account: user.yxAccid ?? "",
                           token: user.imToken ?? "")
             }
@@ -109,23 +109,18 @@ struct LiveRoomView: View {
                 return
             }
             camera.tearDown()
-            agora.leave()
+            // D 里程碑修复（v5.4）：agora.leave 改 async，onDisappear 不是 async 上下文，
+            // 包 Task 让出；nim.leave 与 camera.stop 同步走，不依赖 agora 完成。
+            Task { await agora.leave() }
             nim.leave()
             camera.stop()
         }
         .onChange(of: store.state) { newState in
             if newState == .ended { dismiss() }
         }
-        // D 里程碑：直播态 → 通话态切换时让出/恢复相机硬件（避免双 CameraManager 实例同时
-        // 占用 AVCaptureSession 冲突）。callState=1 时 stop，callState=0（resumeCall 倒计时归 0）
-        // 时 start 恢复直播预览。
-        .onChange(of: store.callState) { newCallState in
-            if newCallState == 1 {
-                camera.stop()
-            } else if newCallState == 0 {
-                if authorized { camera.start() }
-            }
-        }
+        // v5.8：本体 CameraPreview 的帧 sink 由 CameraManager.subscribers 字典持有，
+        // 与 PIP CameraPreview 的 sink 独立共存；PIP 在 dismantleUIView 时精准注销自己那一格，
+        // 本体不再依赖任何 SwiftUI re-eval 时机。详见 Sources/Camera/CameraPreview.swift v5.8 注释。
         .onReceive(beauty.objectWillChange) { _ in
             DispatchQueue.main.async { camera.renderer.updateParameters(beauty) }
         }
@@ -137,11 +132,44 @@ struct LiveRoomView: View {
         // 对齐 H5 g-faceTime 浮层模式。state != .idle 时显示（含 .calling/.connecting/.connected/.ended 过渡态）。
         .overlay {
             if callStore.state != .idle {
-                CallView(store: callStore)
+                // D 里程碑修复（v5.4）：注入直播侧 camera/beauty 复用同一路采集，
+                // 避免 CallFaceTimeView 自启第二个 CameraManager 实例抢占摄像头 →
+                // reason=3 → 20s watcher → forceEnd endType=5 误下播；同时保留主播美颜参数。
+                CallView(store: callStore, liveCamera: camera, liveBeauty: beauty)
                     .transition(.opacity)
             }
         }
+        // D 里程碑：通话挂断后 15s 倒计时覆盖层（对齐 H5 liveRoom.vue:218-227 waitingReturnLive）。
+        // CallView overlay 在 callStore.state→.ended/.idle 后消失，本覆盖层接力显示倒计时直到 rejoinLive。
+        .overlay {
+            if store.isWaitingReturnLive {
+                returnLiveCountdownOverlay.transition(.opacity)
+            }
+        }
         .animation(.easeInOut(duration: 0.2), value: callStore.state)
+        .animation(.easeInOut(duration: 0.2), value: store.isWaitingReturnLive)
+    }
+
+    // MARK: - D 里程碑：挂断后回直播倒计时覆盖层
+
+    /// v5.6 修订（用户反馈"返回直播后画面卡住"）：
+    /// 原全屏黑色 70% 遮罩会盖住本端 CameraPreview，体感等同"画面冻结 15s"。
+    /// 改为顶部胶囊提示条：本端摄像头持续可见（CameraManager 一直采集 + render），
+    /// 业务上 15s 仍不推流（liveAgora.state=.idle → pushFrame guard 拦截），观众端断流窗口不变。
+    private var returnLiveCountdownOverlay: some View {
+        VStack {
+            HStack(spacing: 8) {
+                Image(systemName: "dot.radiowaves.left.and.right").font(.caption)
+                Text(L10n.liveRoomCallEndedTitle).font(.caption).bold()
+                Text(String(format: L10n.liveRoomReturnCountdownFormat, store.returnLiveCountdown))
+                    .font(.caption).monospacedDigit()
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14).padding(.vertical, 8)
+            .background(.pink.opacity(0.85), in: Capsule())
+            .padding(.top, 80)
+            Spacer()
+        }
     }
 
     // MARK: - 顶部主播信息栏
@@ -158,7 +186,9 @@ struct LiveRoomView: View {
             Spacer()
             HStack(spacing: 6) {
                 Circle().fill(.red).frame(width: 8, height: 8)
-                Text(agora.state == .joined ? "直播中 \(timeString)" : "连接中…")
+                Text(agora.state == .joined
+                     ? String(format: L10n.liveRoomStatusLiveFormat, timeString)
+                     : L10n.liveRoomStatusConnecting)
                     .font(.caption).foregroundStyle(.white)
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
@@ -249,13 +279,13 @@ struct LiveRoomView: View {
 
     private var bottomBar: some View {
         HStack(spacing: 16) {
-            Button { showBeauty = true } label: { toolButton("美颜", system: "wand.and.stars") }
+            Button { showBeauty = true } label: { toolButton(L10n.liveRoomToolBeauty, system: "wand.and.stars") }
                 .disabled(!store.beautyAvailable)
             Spacer()
             Button {
                 Task { await store.endLive() }
             } label: {
-                Text("结束直播").font(.headline).foregroundStyle(.white)
+                Text(L10n.liveRoomEndLive).font(.headline).foregroundStyle(.white)
                     .padding(.horizontal, 22).padding(.vertical, 12)
                     .background(Color.red, in: Capsule())
             }
@@ -276,12 +306,12 @@ struct LiveRoomView: View {
 
     private var beautyPanel: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("美颜").font(.headline)
-            Toggle("美颜开关", isOn: $beauty.enabled).tint(.pink)
-            sheetSlider("磨皮", value: $beauty.blur)
-            sheetSlider("美白", value: $beauty.whiten)
-            sheetSlider("大眼", value: $beauty.eyeEnlarge)
-            sheetSlider("瘦脸", value: $beauty.faceThin)
+            Text(L10n.liveRoomBeautyPanelTitle).font(.headline)
+            Toggle(L10n.livePrepareBeautyToggle, isOn: $beauty.enabled).tint(.pink)
+            sheetSlider(L10n.livePrepareSliderBlur, value: $beauty.blur)
+            sheetSlider(L10n.livePrepareSliderWhiten, value: $beauty.whiten)
+            sheetSlider(L10n.livePrepareSliderEyeEnlarge, value: $beauty.eyeEnlarge)
+            sheetSlider(L10n.livePrepareSliderFaceThin, value: $beauty.faceThin)
             Spacer()
         }
         .padding()
