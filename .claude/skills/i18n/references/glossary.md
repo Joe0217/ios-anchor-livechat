@@ -5,18 +5,38 @@
 2. 业务术语跨语言一致（避免同义词漂移：直播 ≠ 视频流 ≠ 在线广播）
 3. 保留 H5 历史拼写（含已知 typo）
 
-## 一、品牌词 / 专有名词（**永远保留原样，不翻译**）
+## 一、保留原样（不翻译）
+
+### 1.1 产品名（只有一个）
 
 | 词 | 说明 |
 |---|---|
 | `Hily` | App 显示名，bundle ID `com.anchor.livechat` 绑定 |
-| `FaceUnity` | 美颜 SDK 品牌名 |
-| `Agora` / `声网` | RTC SDK 品牌名（中文 strings 中也不翻成"声网"） |
-| `NIM` / `云信` | IM SDK 品牌名 |
-| `Prime` | 高级用户分段名（liveList.segment.prime） |
-| `Cysle` | ⚠️ **H5 原始拼写错误**（应为 Cycle/Circle，但 H5 写错且已上线，保留以避免数据/埋点断裂） |
-| `dev · anchor.cphub.link` | 环境提示，保留原文 |
-| 占位符：`%@` `%d` `%1$@` `%2$@` 等 | C 风格 format specifier，**位置和数量必须保留** |
+
+### 1.2 SDK 厂商名（按行业惯例保留英文）
+
+仅在 POC 调试 banner / 开发者可见位置出现，不是品牌词概念，是 SDK 产品名标识：
+
+| 词 | 出现位置 |
+|---|---|
+| `FaceUnity` | `call.beautyBannerPassthrough` / `call.beautyBannerActive`（POC banner，上线前删除） |
+| `Agora` | 仅代码注释/技术文档，不在 UI 文案 |
+| `NIM` | 仅代码注释/技术文档，不在 UI 文案 |
+
+### 1.3 技术字面量
+
+| 词 | 说明 |
+|---|---|
+| `dev · anchor.cphub.link` | URL，不可翻译 |
+| 占位符 `%@` `%d` `%1$@` `%2$@` 等 | C 风格 format specifier，位置和数量必须保留 |
+
+### 1.4 已知拼写改正
+
+下列 i18n key **名称保持不变**（避免 enum/L10n 大改），仅 value 由错改正：
+
+| key | 旧 value（错） | 新 value（正确） | 说明 |
+|---|---|---|---|
+| `live.subTab.cysle` | `Cysle` | `Cycle` | 设计还原阶段拼写错误（验证过 H5 文档无 cysle 出处，无埋点依赖） |
 
 ## 二、业务术语三语言对照表
 
@@ -55,6 +75,8 @@
 | 关注 / 粉丝 / 朋友 | Following / Followers / Friends | متابَع / متابعون / أصدقاء | Takip / Takipçi / Arkadaşlar |
 | 邀请 | Invite | دعوة | Davet |
 | 背包（道具） | Backpack | الحقيبة | Çanta |
+| 高级用户分段（liveList.segment.prime） | Premium | مميز | Premium |
+| 子 tab Cycle（直播首页） | Cycle | دورة | Döngü |
 
 ## 三、错误码与系统消息
 
@@ -89,6 +111,4 @@
 
 | key | 值 | 原因 |
 |---|---|---|
-| `auth.envHint` | `dev · anchor.cphub.link` | 环境标识，不翻译 |
-| `live.subTab.cysle` | `Cysle` | H5 历史拼写 |
-| `liveList.segment.prime` | `Prime` | 产品分段品牌词 |
+| `auth.envHint` | `dev · anchor.cphub.link` | 环境标识 URL |

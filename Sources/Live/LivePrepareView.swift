@@ -11,7 +11,7 @@ struct LivePrepareView: View {
     @State private var roomInfo: LiveRoomInfo?
     @State private var goLive = false
 
-    private var displayTitle: String { title.isEmpty ? "Live" : title }
+    private var displayTitle: String { title.isEmpty ? L10n.livePrepareDefaultTitle : title }
 
     var body: some View {
         ZStack {
@@ -25,7 +25,7 @@ struct LivePrepareView: View {
             }
             .padding()
         }
-        .navigationTitle("开播 Demo")
+        .navigationTitle(L10n.livePrepareNavTitle)
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $goLive) {
             if let roomInfo {
@@ -50,17 +50,17 @@ struct LivePrepareView: View {
 
     private var settingsPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("开播准备").font(.headline).foregroundStyle(.white)
+            Text(L10n.livePreparePanelTitle).font(.headline).foregroundStyle(.white)
 
             TextField("", text: $title,
-                      prompt: Text("直播标题（留空用账号默认简介）").foregroundColor(.white.opacity(0.5)))
+                      prompt: Text(L10n.livePrepareTitlePlaceholder).foregroundColor(.white.opacity(0.5)))
                 .foregroundStyle(.white)
                 .padding(10)
                 .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
 
-            Toggle("美颜开关", isOn: $params.enabled).tint(.pink).foregroundStyle(.white)
-            slider("磨皮", value: $params.blur)
-            slider("美白", value: $params.whiten)
+            Toggle(L10n.livePrepareBeautyToggle, isOn: $params.enabled).tint(.pink).foregroundStyle(.white)
+            slider(L10n.livePrepareSliderBlur, value: $params.blur)
+            slider(L10n.livePrepareSliderWhiten, value: $params.whiten)
 
             if !errorMsg.isEmpty {
                 Text(errorMsg).font(.footnote).foregroundStyle(.red)
@@ -71,7 +71,7 @@ struct LivePrepareView: View {
             } label: {
                 HStack(spacing: 8) {
                     if isStarting { ProgressView().tint(.white) }
-                    Text(isStarting ? "开播中…" : "开始直播")
+                    Text(isStarting ? L10n.livePrepareStarting : L10n.livePrepareStart)
                         .font(.headline).foregroundStyle(.white)
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 12)
@@ -93,7 +93,7 @@ struct LivePrepareView: View {
                 let info = try await LiveService.startLive(liveDescribe: displayTitle)
                 guard let ch = info.agoraChannelId, !ch.isEmpty,
                       let tk = info.rtcToken, !tk.isEmpty else {
-                    errorMsg = "开播失败：响应里没有频道/token（看控制台 🔧 日志）"
+                    errorMsg = L10n.livePrepareErrorNoChannel
                     isStarting = false
                     return
                 }
@@ -101,10 +101,10 @@ struct LivePrepareView: View {
                 isStarting = false
                 goLive = true
             } catch let e as APIError {
-                errorMsg = "开播失败：\(e.message)（\(e.code)）"
+                errorMsg = String(format: L10n.livePrepareErrorPrefix, e.message, e.code)
                 isStarting = false
             } catch {
-                errorMsg = "开播失败：\(error.localizedDescription)"
+                errorMsg = String(format: L10n.livePrepareErrorGeneric, error.localizedDescription)
                 isStarting = false
             }
         }

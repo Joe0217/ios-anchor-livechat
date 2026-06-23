@@ -22,6 +22,7 @@ LANG=en_US.UTF-8 pod install      # 2. 涉及 Pod 变更时；生成/更新 Hily
 open Hily.xcworkspace             # 3. 必须用 workspace，否则云信找不到模块
 ```
 - 改了 `project.yml` 的依赖/源文件后必须重新 `xcodegen generate`，再 `pod install`
+- ⚠️ **xcodegen generate 后必须跟 pod install**：xcodegen 重写 .xcodeproj 会**清掉** `pod install` 加进去的 `[CP] Copy XCFrameworks` script phase + Embed Frameworks phase；漏跑 pod install 直接 build 会得 `No such module 'AgoraRtcKit'` + 真机 `dyld: Library not loaded`，命令行 build 可能因 DerivedData stale 缓存侥幸过、但 Xcode Clean Build 后立刻暴露
 - 真机运行：Signing 选个人 Apple ID（免费团队）；美颜/相机必须真机（模拟器无摄像头）
 
 ## 不可触碰的约束
