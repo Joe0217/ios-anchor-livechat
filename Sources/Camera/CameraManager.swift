@@ -7,7 +7,7 @@ import os
 
 private let logger = Logger(subsystem: "com.anchor.livechat", category: "Camera")
 
-/// 相机采集管线：前置摄像头 → BGRA 帧 → 美颜处理器 → onFrame 回调给预览（B 里程碑 spec §5）。
+/// 相机采集管线：前置摄像头 → BGRA 帧 → 美颜处理器 → subscribers 字典分发给每个 CameraPreview（v5.8）。
 ///
 /// onError callback：监听 RuntimeError / WasInterrupted / InterruptionEnded 三类系统通知；
 /// 权限拒绝立即冒到 onError，其它错误由 LiveStore 持有 20s watcher 累计。
@@ -60,7 +60,7 @@ final class CameraManager: NSObject, ObservableObject {
         subscribersLock.unlock()
     }
 
-    /// 推送给 onFrame 的目标帧率（v5.1 弱网降级用）。
+    /// 推送给订阅者 sink 的目标帧率（v5.1 弱网降级用）。
     /// 相机仍以 30fps 采集，但当 targetFPS=15 时按时间间隔丢弃一半帧，避免帧堆积导致画面卡顿。
     /// nonisolated 字段，captureOutput 在 videoQueue 读取，Int 写读为原子操作。
     var targetFPS: Int = 30

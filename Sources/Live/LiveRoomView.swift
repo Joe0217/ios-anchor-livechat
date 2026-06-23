@@ -102,8 +102,8 @@ struct LiveRoomView: View {
         }
         .onDisappear {
             // v5.3.3 真根因修复：SwiftUI 在 ScenePhase=.background 时也会触发 onDisappear（snapshot 用），
-            // 若此时 tearDown camera/agora/nim，则切后台→回前台后 onFrame 永久断开（CameraPreview.updateUIView
-            // 虽已兜底重绑，但仍以"真正 dismiss 才清理"为正路径）。
+            // 若此时 tearDown camera/agora/nim，则切后台→回前台后帧分发永久断开（v5.8 已用 subscribers
+            // 字典让每个 CameraPreview 独立注销，仍以"真正 dismiss 才清理"为正路径）。
             // 真正 dismiss 的标志：scenePhase != .background（不是切后台）+ store.state == .ended（forceEnd/endLive 完成）。
             guard scenePhase != .background, store.state == .ended else {
                 return
