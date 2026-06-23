@@ -26,6 +26,30 @@
 	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>HilyAESIV</key>
+	<string>$(HILY_AES_IV)</string>
+	<key>HilyAESKey</key>
+	<string>$(HILY_AES_KEY)</string>
+	<key>HilyAPIHost</key>
+	<string>$(HILY_API_HOST)</string>
+	<key>HilyAgoraAppID</key>
+	<string>$(HILY_AGORA_APP_ID)</string>
+	<key>HilyAppID</key>
+	<string>$(HILY_APP_ID)</string>
+	<key>HilyAppVersion</key>
+	<string>$(HILY_APP_VERSION)</string>
+	<key>HilyNIMAppKey</key>
+	<string>$(HILY_NIM_APP_KEY)</string>
+	<key>HilyOcpApimKey</key>
+	<string>$(HILY_OCP_APIM_KEY)</string>
+	<key>HilySAPIHost</key>
+	<string>$(HILY_SAPI_HOST)</string>
+	<key>HilySocketHost</key>
+	<string>$(HILY_SOCKET_HOST)</string>
+	<key>HilyWSAESKey</key>
+	<string>$(HILY_WS_AES_KEY)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>Used for real-time beauty preview and live streaming</string>
 	<key>NSMicrophoneUsageDescription</key>
@@ -35,9 +59,9 @@
 	<key>UIStatusBarHidden</key>
 	<true/>
 	<key>UISupportedInterfaceOrientations</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-	</array>
+		<array>
+			<string>UIInterfaceOrientationPortrait</string>
+		</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
 </dict>

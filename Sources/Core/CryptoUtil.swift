@@ -76,9 +76,9 @@ enum CryptoUtil {
     // 注：H5 那里写了 `iv: srcs` 看似传了 IV，但 CryptoJS ECB 模式会**忽略**该参数，实际行为等价于
     // "无 IV"。本端 CCCrypt 传 nil IV 与 H5 ECB 实际行为完全等价。
     // 接入点：仅 WSHeartbeat 握手时的 ciphertext query 参数用。
-    static let wsAesKey = "9976kk4322578894"
+    // 密钥由 xcconfig 注入到 Info.plist，AppConfig.wsAesKey 兜底回 dev 默认值。
 
-    static func aesEncryptECBToHex(_ plain: String, key: String = wsAesKey) -> String? {
+    static func aesEncryptECBToHex(_ plain: String, key: String = AppConfig.wsAesKey) -> String? {
         guard let input = plain.data(using: .utf8) else { return nil }
         let keyData = Data(key.utf8)
         guard keyData.count == kCCKeySizeAES128 else { return nil }

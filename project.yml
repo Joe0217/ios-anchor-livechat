@@ -22,6 +22,9 @@ targets:
     platform: iOS
     sources:
       - Sources
+      # iOS 17+ 提审：声明使用到的必备 API（UserDefaults）+ 采集数据类别
+      - path: Sources/PrivacyInfo.xcprivacy
+        buildPhase: resources
       - Vendor/FaceUnity/FUManager.h
       - Vendor/FaceUnity/FUManager.m
       - Vendor/FaceUnity/FUBeautyRenderer.swift
@@ -33,6 +36,10 @@ targets:
       - framework: Vendor/FaceUnity/FURenderKit.framework
         embed: true
         codeSign: true
+    # 多环境密钥：Debug/Release 当前都绑 dev；prod 上线时新建 Config-Prod.xcconfig 并改 Release
+    configFiles:
+      Debug: Config/Config-Dev.xcconfig
+      Release: Config/Config-Dev.xcconfig
     settings:
       base:
         # 相芯授权证书 authpack 绑定的就是这个包名，给相芯时必须原样一致
@@ -47,6 +54,8 @@ targets:
         CFBundleDisplayName: Hily
         CFBundleShortVersionString: "1.0.0"
         CFBundleVersion: "1"
+        # 提审：本 app 仅使用 iOS 内置加密（HTTPS/系统 API），无自研专有加密 → 走加密豁免（5D992）
+        ITSAppUsesNonExemptEncryption: false
         # i18n：en 为默认/开发语言；ar/tr 让 RTL 镜像与文案长度差异在各模块开发期即暴露（J 里程碑收尾真正翻译）
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations:
@@ -62,3 +71,64 @@ targets:
           - UIInterfaceOrientationPortrait
         UIStatusBarHidden: true
         UIViewControllerBasedStatusBarAppearance: false
+        # —— 多环境密钥占位（值由 Config/Config-*.xcconfig 注入）——
+        # 注：xcodegen 字面写入 plist；Xcode build 期做 $(VAR) → xcconfig 值替换。
+        #     AppConfig 内置 fallback：若 xcconfig 未绑、字面保留 "$(...)"，回 dev 默认值。
+        HilyAPIHost: $(HILY_API_HOST)
+        HilySAPIHost: $(HILY_SAPI_HOST)
+        HilySocketHost: $(HILY_SOCKET_HOST)
+        HilyAppID: $(HILY_APP_ID)
+        HilyOcpApimKey: $(HILY_OCP_APIM_KEY)
+        HilyAppVersion: $(HILY_APP_VERSION)
+        HilyNIMAppKey: $(HILY_NIM_APP_KEY)
+        HilyAESKey: $(HILY_AES_KEY)
+        HilyAESIV: $(HILY_AES_IV)
+        HilyWSAESKey: $(HILY_WS_AES_KEY)
+        HilyAgoraAppID: $(HILY_AGORA_APP_ID)
+
+  # ─────────────────────────────────────────────
+  # 单测 target：logic test bundle，不依赖 Hily app target、不链 FURenderKit / 声网 / 云信，
+  # 模拟器/真机都可跑。Sources 只列出待测的纯 Swift 文件（独立编译一份，避开 SDK 牵连）。
+  # ─────────────────────────────────────────────
+  HilyTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/HilyTests
+      # 把待测纯 Swift 文件作为 test target 自己的源码编译（独立 module，零 SDK 依赖）
+      - path: Sources/Core/CryptoUtil.swift
+      - path: Sources/Core/AppConfig.swift
+      - path: Sources/Core/AppLogger.swift
+      - path: Sources/Core/KeychainStore.swift
+      - path: Sources/Networking/APIClient.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.anchor.livechat.tests
+        GENERATE_INFOPLIST_FILE: YES
+        # logic test bundle：无宿主 app，xcodebuild test 直接在模拟器跑
+        CODE_SIGNING_ALLOWED: NO
+schemes:
+  # Hily app scheme：日常开发/真机调试用。
+  # ⚠️ test action 故意不带 HilyTests——一旦 build action 拉 Hily.app，模拟器会链接 FURenderKit(arm64 device-only) 失败。
+  Hily:
+    build:
+      targets:
+        Hily: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+  # 单测专用 scheme：build action 只编 HilyTests，不碰 Hily.app/FURenderKit，模拟器/真机皆可跑。
+  # 跑法：xcodebuild test -workspace Hily.xcworkspace -scheme HilyTests -destination 'platform=iOS Simulator,name=iPhone 16 Pro'
+  HilyTests:
+    build:
+      targets:
+        HilyTests: all
+    test:
+      config: Debug
+      targets:
+        - HilyTests

@@ -1,0 +1,43 @@
+// CocoaPods 集成：base config 由本文件占用，必须显式 #include Pods xcconfig 否则
+// frameworks/xcfilelist 路径丢失（xcodegen 重生项目时此 include 必须保留）。
+// 工程仅 dev 调试构建，Debug+Release 都借 debug 版 Pods xcconfig，足够编译过。
+#include? "../Pods/Target Support Files/Pods-Hily/Pods-Hily.debug.xcconfig"
+
+// Dev 环境构建配置（dev 与 test 共用一套密钥）
+//
+// 用法：project.yml configFiles 段绑定到 Debug/Release configuration。
+//      Xcode build 把 $(HILY_*) 替换进 Info.plist；运行时 AppConfig 从 plist 读取。
+//      AppConfig 内置 fallback：若 plist 仍为 "$(VAR)"（未替换）或缺失，回 dev 默认值。
+//
+// Prod 上线步骤：
+//   1. cp Config/Config-Dev.xcconfig Config/Config-Prod.xcconfig
+//   2. 替换 host/AES key/IV/ocpApimKey/NIM appKey/Agora appId 为 prod 真实值
+//   3. project.yml configFiles.Release 改为 Config/Config-Prod.xcconfig
+//   4. xcodegen generate
+//   Config-Prod.xcconfig 已在 .gitignore，不入库。
+//
+// 注意：xcconfig 的 "//" 是注释符。URL 完整带 scheme 会被截断（"https://" 之后全被吞）。
+//       故此处只存 host，scheme 由 Swift 代码拼接（详见 AppConfig.apiBaseURL）。
+
+// API 域名（仅 host）
+HILY_API_HOST = anchor.cphub.link
+HILY_SAPI_HOST = vvi.cphub.link
+HILY_SOCKET_HOST = api.seain.site
+
+// 主接口鉴权与业务版本
+HILY_APP_ID = 20735424
+HILY_OCP_APIM_KEY = 9ec52f6d03cd4d5985a6a2c8bb1ce5ee
+HILY_APP_VERSION = 2.2.0
+
+// 云信 NIM
+HILY_NIM_APP_KEY = 124f689baed25c488e1330bc42e528af
+
+// 主接口请求体 AES-128-CBC
+HILY_AES_KEY = 9986sdff5s4f1123
+HILY_AES_IV = 9986sdff5s4y456a
+
+// WebSocket 握手 AES-128-ECB（与主接口的 CBC 是两套不同算法/密钥）
+HILY_WS_AES_KEY = 9976kk4322578894
+
+// 声网 Agora
+HILY_AGORA_APP_ID = 4af61c7a92f447d3a582308b5817dbd2

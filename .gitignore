@@ -15,3 +15,6 @@ Vendor/FaceUnity/_ref/
 # CocoaPods / SPM 缓存（可由 pod install / xcodegen 再生，Podfile.lock 已锁版本，不入库）
 Pods/
 .spm/
+
+# 多环境密钥：dev 入库（Config-Dev.xcconfig），prod 不入库
+Config/Config-Prod.xcconfig

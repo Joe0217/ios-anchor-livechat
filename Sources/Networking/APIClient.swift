@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import os
 
 /// 业务错误（非 0000）。
 struct APIError: Error, LocalizedError {
@@ -11,7 +12,13 @@ struct APIError: Error, LocalizedError {
 /// 与 H5 对齐的 HTTP 客户端：公共头 + 请求体 AES(Base64) 加密 + 响应 result(Hex) 解密 + 错误码处理。
 final class APIClient {
     static let shared = APIClient()
-    private let session = URLSession(configuration: .default)
+    private let session: URLSession
+
+    /// 默认 init：生产 / 真机走 default config 即可。
+    /// 单测从这里注入 ephemeral + URLProtocol mock 的 session，对 envelope 解码/错误码分流做断言。
+    init(session: URLSession = URLSession(configuration: .default)) {
+        self.session = session
+    }
 
     /// POST 请求。body 会被 JSON 序列化 → AES → Base64 作为原始 body 发送。
     /// 返回解密后的 result JSON 数据（供 Codable 解码）；非 0000 抛 APIError。
@@ -34,12 +41,19 @@ final class APIClient {
             req.httpBody = Data(encrypted.utf8)
         }
 
-        // 诊断日志：确认 token/appid 是否进了请求头
+        // 诊断日志：DEBUG 包裹 + token/响应体走 .private，避免 Release 经 USB Console 泄露
+        #if DEBUG
         let tk = headers["loginToken"] ?? ""
-        print("➡️ [API] POST \(path) | loginToken=\(tk.isEmpty ? "❌空" : "len\(tk.count) 前8位=\(tk.prefix(8))…") | appid=\(headers["appid"] ?? "❌无")")
+        let tkInfo = tk.isEmpty ? "empty" : "len=\(tk.count)"
+        AppLogger.net.debug("POST \(path, privacy: .public) loginToken=\(tkInfo, privacy: .private) appid=\(headers["appid"] ?? "-", privacy: .public)")
+        #endif
 
         let (data, _) = try await session.data(for: req)
-        print("⬅️ [API] \(path) | 原始响应=\(String(data: data, encoding: .utf8)?.prefix(300) ?? "<非文本>")")
+
+        #if DEBUG
+        let respPreview = String(data: data, encoding: .utf8)?.prefix(300) ?? "<binary>"
+        AppLogger.net.debug("RESP \(path, privacy: .public) body=\(String(respPreview), privacy: .private)")
+        #endif
 
         guard let env = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw APIError(code: "-1", message: "响应解析失败")
@@ -100,15 +114,30 @@ enum DeviceInfo {
     }
 }
 
-/// 登录 token 的轻量持久化（UserDefaults），供 APIClient 非主线程取用、自动附带到请求头。
+/// 登录 token 的持久化（Keychain，v2 起），供 APIClient 非主线程取用、自动附带到请求头。
 /// 由 SessionStore 在登录/登出时写入。
+/// v1（UserDefaults）→ v2（Keychain）一次性迁移：getter 命中旧键时自动搬迁后清空。
 enum AuthToken {
-    private static let key = "auth.token.v1"
+    private static let key = "auth.token.v2"
+    private static let legacyKey = "auth.token.v1"
+
     static var value: String? {
-        get { UserDefaults.standard.string(forKey: key) }
+        get {
+            if let v = KeychainStore.getString(for: key) { return v }
+            // 一次性迁移：旧 UserDefaults 残留 → Keychain，迁完清旧
+            if let legacy = UserDefaults.standard.string(forKey: legacyKey), !legacy.isEmpty {
+                KeychainStore.setString(legacy, for: key)
+                UserDefaults.standard.removeObject(forKey: legacyKey)
+                return legacy
+            }
+            return nil
+        }
         set {
-            if let v = newValue { UserDefaults.standard.set(v, forKey: key) }
-            else { UserDefaults.standard.removeObject(forKey: key) }
+            if let v = newValue, !v.isEmpty {
+                KeychainStore.setString(v, for: key)
+            } else {
+                KeychainStore.remove(for: key)
+            }
         }
     }
 }
