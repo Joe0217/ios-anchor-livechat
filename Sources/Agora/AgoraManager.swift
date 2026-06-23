@@ -46,6 +46,13 @@ final class AgoraManager: NSObject, ObservableObject {
     /// 续期进行中标志（v5 review 阻塞 #2：防止 109/110 短时间多次回调并发续期）
     private var isRenewing = false
 
+    /// D 里程碑修复（v5.4 直播私 call 卡死根因）：
+    /// `leave()` 用 CheckedContinuation 桥接 `engine.leaveChannel` 异步回调，
+    /// 等 SDK 真正 `didLeaveChannelWith` 后再返回，避免后续 `sharedEngine(with:)` 拿到
+    /// 半离开/正在销毁的 singleton（导致主播 join 通话 channel 实际未生效）。
+    /// 500ms 兜底防 SDK 漏调；所有读写均在 MainActor 上串行，无竞态。
+    private var leaveContinuation: CheckedContinuation<Void, Never>?
+
     /// 当前视频编码档位（弱网降级 / 恢复时切换）
     private(set) var currentQuality: EncoderQuality = .normal
 
@@ -63,6 +70,10 @@ final class AgoraManager: NSObject, ObservableObject {
         config.appId = AgoraConfig.appId
         config.channelProfile = profile
         let kit = AgoraRtcEngineKit.sharedEngine(with: config, delegate: self)
+        // D 里程碑修复（v5.4）：sharedEngine 复用 singleton 时忽略新 config，
+        // delegate / channelProfile 仍保留首次创建的值；直播 ↔ 通话 profile 切换必须显式重设。
+        kit.delegate = self
+        kit.setChannelProfile(profile)
         engine = kit
 
         kit.enableVideo()
@@ -114,22 +125,54 @@ final class AgoraManager: NSObject, ObservableObject {
 
     // MARK: - 离开
 
-    func leave() {
+    /// D 里程碑修复（v5.4）：改 async，等 `didLeaveChannelWith` 回调到达再返回。
+    /// 不再调用 `AgoraRtcEngineKit.destroy()`（销毁全进程 SDK 单例会导致紧接的 join 拿到半销毁实例
+    /// → 主播未真正加入通话 channel → 用户端 didJoinedOfUid 永不触发）。
+    /// 对齐 H5 `callApi.destory(false)` 仅 leave channel、不销毁 rtcClient。
+    /// 500ms 兜底防 SDK 漏调回调。
+    @MainActor
+    func leave() async {
         guard let engine = engine else { return }
         let option = AgoraRtcChannelMediaOptions()
         option.publishCustomVideoTrack = false
         option.publishMicrophoneTrack = false
         engine.updateChannel(with: option)
-        engine.leaveChannel(nil)
+
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            // 已有 leave 在等待 → 直接 resume，避免重复 leaveChannel 调用
+            if leaveContinuation != nil {
+                cont.resume()
+                return
+            }
+            leaveContinuation = cont
+            engine.leaveChannel(nil)
+            // 500ms 兜底：SDK 极小概率漏调 didLeaveChannelWith，避免永久挂起
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                guard let self else { return }
+                if let c = self.leaveContinuation {
+                    self.leaveContinuation = nil
+                    c.resume()
+                    logger.warning("leaveChannel didLeaveChannel 回调 500ms 超时，由兜底 resume")
+                }
+            }
+        }
+
         engine.disableVideo()
         engine.disableAudio()
-        AgoraRtcEngineKit.destroy()
+        // 不再调用 AgoraRtcEngineKit.destroy()——保留 SDK 单例供后续 join 复用
         self.engine = nil
         state = .idle
         remoteUid = 0
         message = ""
         renewFailureCount = 0
         currentQuality = .normal
+    }
+
+    /// 真正退出 App / 登出时再彻底销毁 SDK 单例。本次修复不强求调用方，列为后续 backlog（SessionStore.logout）。
+    static func destroyEngine() {
+        AgoraRtcEngineKit.destroy()
+        logger.info("AgoraRtcEngineKit.destroy() invoked")
     }
 
     // MARK: - 编码档位切换（B 里程碑 spec §4 v5 弱网降级）
@@ -265,6 +308,18 @@ extension AgoraManager: AgoraRtcEngineDelegate {
         guard uid == 0 else { return }  // 0 表示本地
         Task { @MainActor [weak self] in
             self?.networkMonitor?.report(tx: txQuality, rx: rxQuality)
+        }
+    }
+
+    /// D 里程碑修复（v5.4）：本地 leave channel 完成回调 → resume leave() 内的 continuation
+    func rtcEngine(_ engine: AgoraRtcEngineKit, didLeaveChannelWith stats: AgoraChannelStats) {
+        logger.info("local left channel duration=\(stats.duration)s")
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if let c = self.leaveContinuation {
+                self.leaveContinuation = nil
+                c.resume()
+            }
         }
     }
 }

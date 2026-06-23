@@ -251,7 +251,8 @@ extension LiveStore {
 
         // 2) RTC leave 直播频道（保留 roomId/agoraChannelId/rtcToken 字段以备 resumeCall 回 join）
         //    agora 是 weak 引用，nil 时静默跳过（防御性）。
-        agora?.leave()
+        //    v5.4：await 等 didLeaveChannelWith 回调，避免紧接的通话 join 拿到半销毁 singleton。
+        await agora?.leave()
 
         // 3) 切换状态标志
         callState = 1

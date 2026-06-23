@@ -11,20 +11,36 @@ import SwiftUI
 /// 业务上由 RootView 监听 `CallStore.shared.state != .idle` 决定是否覆盖显示本视图。
 struct CallView: View {
     @ObservedObject var store: CallStore
+    /// D 里程碑修复（v5.4）：直播私 call 场景由 LiveRoomView 注入直播侧的 camera/beauty，
+    /// CallFaceTimeView 复用同一路 AVCaptureSession，避免双 CameraManager 实例抢占前置摄像头
+    /// → reason=3 → 20s watcher → forceEnd(endType=5) 误下播；同时保留主播美颜参数。
+    /// 非直播态（独立 1v1）保持 nil，CallFaceTimeView 走 fallbackCamera/fallbackBeauty 路径。
+    var liveCamera: CameraManager? = nil
+    var liveBeauty: BeautyParameters? = nil
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            switch store.state {
-            case .calling:
-                CallWaitingView(store: store)
-            case .connecting, .connected:
-                CallFaceTimeView(store: store)
-            case .idle, .prepared, .ended, .failed:
-                EmptyView()
-            }
+            bodyContent
         }
         .preferredColorScheme(.dark)
+    }
+
+    /// v5.5 修复（Bug A/B 同源根因）：消除 switch case 跨分支重建 CallFaceTimeView。
+    /// 直播私 call（frontGameType==.live）从 .calling → .connecting → .connected 全程落在同一 if
+    /// 分支，CallFaceTimeView 的 view identity 稳定 → CameraPreview / RemoteVideoView 不再被
+    /// SwiftUI dismantleUIView + 重建 → MetalPreviewView 实例稳定（onFrame 闭包目标不空窗）
+    /// + AgoraRtcVideoCanvas.view 引用稳定（远端首帧到达时 layer 就绪 → 不黑屏）。
+    /// 独立 1v1（frontGameType != .live）保留 Waiting → FaceTime 切换（无前置画面要保持）。
+    @ViewBuilder
+    private var bodyContent: some View {
+        if store.state == .calling, store.current.frontGameType != .live {
+            CallWaitingView(store: store)
+        } else if store.state == .calling || store.state == .connecting || store.state == .connected {
+            CallFaceTimeView(store: store, liveCamera: liveCamera, liveBeauty: liveBeauty)
+        } else {
+            EmptyView()
+        }
     }
 }
 
@@ -68,20 +84,20 @@ private struct CallWaitingView: View {
     }
 
     private var subtitle: String {
-        store.current.inOrOut == .out ? "呼叫中…" : "邀请你视频通话"
+        store.current.inOrOut == .out ? L10n.callSubtitleCallingOut : L10n.callSubtitleIncoming
     }
 
     @ViewBuilder private var buttons: some View {
         if store.current.inOrOut == .out {
-            CircleButton(systemName: "phone.down.fill", color: .red, label: "取消") {
+            CircleButton(systemName: "phone.down.fill", color: .red, label: L10n.callActionCancel) {
                 Task { await store.cancel() }
             }
         } else {
             HStack(spacing: 60) {
-                CircleButton(systemName: "phone.down.fill", color: .red, label: "拒接") {
+                CircleButton(systemName: "phone.down.fill", color: .red, label: L10n.callActionReject) {
                     Task { await store.reject() }
                 }
-                CircleButton(systemName: "phone.fill", color: .green, label: "接听") {
+                CircleButton(systemName: "phone.fill", color: .green, label: L10n.callActionAccept) {
                     Task { await store.accept() }
                 }
             }
@@ -93,17 +109,29 @@ private struct CallWaitingView: View {
 
 private struct CallFaceTimeView: View {
     @ObservedObject var store: CallStore
-    @StateObject private var camera = CameraManager()
-    @StateObject private var beautyParams = BeautyParameters()
+    /// D 里程碑修复（v5.4）：直播私 call 由 CallView 注入直播侧 camera/beauty 复用同一路采集，
+    /// 避免双 CameraManager 实例抢占摄像头（reason=3 → 20s watcher → forceEnd endType=5），
+    /// 且保留主播原美颜参数。独立 1v1 通话场景保持 nil → 走 fallback 自启动。
+    var liveCamera: CameraManager?
+    var liveBeauty: BeautyParameters?
+    @StateObject private var fallbackCamera = CameraManager()
+    @StateObject private var fallbackBeauty = BeautyParameters()
     @State private var elapsed: Int = 0
     private let tickTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    private var camera: CameraManager { liveCamera ?? fallbackCamera }
+    private var beautyParams: BeautyParameters { liveBeauty ?? fallbackBeauty }
 
     var body: some View {
         ZStack {
             // 远端全屏（声网 setupRemoteVideo 会渲染到 store.agora.remoteView）
             RemoteVideoView(manager: store.agora).ignoresSafeArea()
 
-            VStack {
+            VStack(spacing: 0) {
+                // D 里程碑：直播私 call 顶部提示条（仅 frontGameType=.live 时显示）
+                if store.current.frontGameType == .live {
+                    liveCallBanner.padding(.top, 12).padding(.horizontal, 16)
+                }
                 topBar.padding(.top, 12).padding(.horizontal, 16)
                 Spacer()
                 bottomBar.padding(.bottom, 36)
@@ -121,12 +149,18 @@ private struct CallFaceTimeView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
         }
         .onAppear {
-            camera.renderer.updateParameters(beautyParams)
-            CameraManager.requestAccess { granted in
-                if granted { camera.start() }
+            // D 里程碑修复（v5.4）：仅在独立 1v1 通话场景启停相机；
+            // 直播私 call 由 LiveRoomView 持有的 camera 连续运行，CallView 仅复用其推流。
+            if liveCamera == nil {
+                camera.renderer.updateParameters(beautyParams)
+                CameraManager.requestAccess { granted in
+                    if granted { camera.start() }
+                }
             }
         }
-        .onDisappear { camera.stop() }
+        .onDisappear {
+            if liveCamera == nil { camera.stop() }
+        }
         .onReceive(tickTimer) { _ in
             if store.state == .connected { elapsed += 1 }
         }
@@ -148,11 +182,26 @@ private struct CallFaceTimeView: View {
     private var bottomBar: some View {
         HStack {
             Spacer()
-            CircleButton(systemName: "phone.down.fill", color: .red, label: "挂断") {
+            CircleButton(systemName: "phone.down.fill", color: .red, label: hangupLabel) {
                 Task { await store.hangup() }
             }
             Spacer()
         }
+    }
+
+    private var hangupLabel: String {
+        store.current.frontGameType == .live ? L10n.callActionHangupBackToLive : L10n.callActionHangup
+    }
+
+    private var liveCallBanner: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "dot.radiowaves.left.and.right").font(.caption)
+            Text(L10n.callLiveBanner).font(.caption).bold()
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12).padding(.vertical, 6)
+        .background(.pink.opacity(0.85), in: Capsule())
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private func formatDuration(_ s: Int) -> String {

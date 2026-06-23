@@ -14,8 +14,12 @@ import UIKit
 ///
 /// **v5.3.1 review 修订**：
 /// - data race：render 改为 main queue 写 currentImage（原 background queue 写 + main queue 读 + ARC 不安全）
-/// - 鬼影：didEnterBackground 清空 currentImage 避免回前台先闪一帧旧画面
 /// - 重入：pendingForegroundDraw 可 cancel 的 DispatchWorkItem，didEnterBackground 时取消
+///
+/// **v5.5 反悔 v5.3.5（Bug C 修复）**：
+/// - 切后台保留 currentImage 作为最后一帧占位（不清空），回前台 setNeedsDisplay 立刻渲染最后一帧
+/// - 真新帧（AVCaptureSession 重启 1-2s 后到达）通过 render(_:) 自然替换，视觉无空窗黑屏
+/// - v5.3.5 注释里写"用户不介意闪烁"是当时错误判断，实测反馈"卡死"——决策反悔
 final class MetalPreviewView: MTKView {
     private let commandQueue: MTLCommandQueue
     private let ciContext: CIContext
@@ -62,13 +66,10 @@ final class MetalPreviewView: MTKView {
         // 取消可能 pending 的前台首帧绘制（双切场景）
         pendingForegroundDraw?.cancel()
         pendingForegroundDraw = nil
-        // v5.3.5：撤销 v5.3.4 的"不闪烁"修复，恢复 v5.3.1 行为清空 currentImage
-        // 闪烁版与不闪烁版的本质都是 AVCaptureSession 重启 1-2s 等待期：
-        //   - 清空：1-2s 黑屏 → 真实画面（短暂明确闪烁，用户视觉感知"app 重连中"）
-        //   - 不清空：1-2s 旧帧停留 → 真实画面（视觉像"画面卡住"，用户误判）
-        // 经用户反馈"不介意闪烁"，恢复闪烁版让重连感更明确，避免误判为 bug
-        currentImage = nil
-        // MTKView 官方推荐：主动释放 drawable GPU 资源
+        // v5.5 反悔 v5.3.5："清空 currentImage 让闪烁更明确"实测用户反馈是"卡死"。
+        // 现策略：保留最后一帧作占位，回前台 setNeedsDisplay 立刻渲染最后一帧 →
+        //   真新帧（AVCaptureSession startRunning 1-2s 后到达）自然替换，视觉无空窗
+        // 不再 currentImage = nil；仅释放 drawable GPU 资源（MTKView 官方推荐）。
         releaseDrawables()
     }
 

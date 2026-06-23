@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 import Network
+import os
 
 // MARK: - D 里程碑：CallStore 状态变化观察者协议
 //
@@ -106,16 +107,16 @@ final class CallStore: ObservableObject {
     private func handleRemoteRtcChange(uid: UInt) async {
         if uid != 0 {
             guard state == .connecting else {
-                print("📍 [CallStore] 远端 uid=\(uid) 加入但本端 state=\(state.rawValue)，等待 Accept 信令")
+                AppLogger.call.debug("📍 [CallStore] 远端 uid=\(uid, privacy: .public) 加入但本端 state=\(self.state.rawValue, privacy: .public)，等待 Accept 信令")
                 return
             }
             current.callConnectTime = Date().timeIntervalSince1970 * 1000
             state = .connected
-            print("✅ [CallStore] 远端 uid=\(uid) 加入 + 已收 Accept → state=connected")
+            AppLogger.call.info("✅ [CallStore] 远端 uid=\(uid, privacy: .public) 加入 + 已收 Accept → state=connected")
         } else {
             // 远端离开：仅在通话中兜底（一般已被对端 hangup 信令提前处理）
             guard state == .connected else { return }
-            print("⚠️ [CallStore] 远端离开 RTC（兜底挂断）")
+            AppLogger.call.notice("⚠️ [CallStore] 远端离开 RTC（兜底挂断）")
             await endLocally(reason: .remoteHangUp, rateCategory: nil, rateType: .caller, abnormal: 0)
         }
     }
@@ -130,7 +131,7 @@ final class CallStore: ObservableObject {
         // 防重入：start 有 2 个 await 点（getAgoraRtmToken / login），NWPathMonitor 与
         // startRetryTask 任一进入会引发"双 CallSignaling 实例 + 双 RTM client"泄漏。
         if isStarting {
-            print("⚠️ [CallStore] start 已在进行中，跳过 uid=\(myUserId)")
+            AppLogger.call.notice("⚠️ [CallStore] start 已在进行中，跳过 uid=\(myUserId, privacy: .public)")
             return
         }
         isStarting = true
@@ -163,18 +164,20 @@ final class CallStore: ObservableObject {
                 .sink { [weak self] new in
                     guard let self else { return }
                     if self.rtmConnectionState != new {
-                        print("📡 [CallStore] rtmConnectionState \(self.rtmConnectionState.rawValue) → \(new.rawValue)")
+                        AppLogger.rtm.debug("📡 [CallStore] rtmConnectionState \(self.rtmConnectionState.rawValue, privacy: .public) → \(new.rawValue, privacy: .public)")
                     }
                     self.rtmConnectionState = new
                 }
-            print("✅ [CallStore] start 成功 uid=\(myUserId)")
+            AppLogger.call.info("✅ [CallStore] start 成功 uid=\(myUserId, privacy: .public)")
         } catch let e as APIError {
-            lastError = "CallStore.start 失败: \(e.message)(\(e.code))"
-            print("❌ [CallStore] \(lastError)")
+            let msg = "CallStore.start 失败: \(e.message)(\(e.code))"
+            lastError = msg
+            AppLogger.call.error("❌ [CallStore] \(msg, privacy: .private)")
             scheduleStartRetry(myUserId: myUserId, reason: "api_\(e.code)")
         } catch {
-            lastError = "CallStore.start 异常: \(error.localizedDescription)"
-            print("❌ [CallStore] \(lastError)")
+            let msg = "CallStore.start 异常: \(error.localizedDescription)"
+            lastError = msg
+            AppLogger.call.error("❌ [CallStore] \(msg, privacy: .private)")
             scheduleStartRetry(myUserId: myUserId, reason: "exception")
         }
     }
@@ -185,7 +188,7 @@ final class CallStore: ObservableObject {
     private func scheduleStartRetry(myUserId: Int, reason: String) {
         cancelStartRetry()
         let delay: TimeInterval = isNetworkAvailable ? 5 : 10  // 无网络时等长一点，省电
-        print("🔄 [CallStore] scheduleStartRetry reason=\(reason) delay=\(delay)s (net=\(isNetworkAvailable))")
+        AppLogger.call.debug("🔄 [CallStore] scheduleStartRetry reason=\(reason, privacy: .public) delay=\(delay, privacy: .public)s (net=\(self.isNetworkAvailable, privacy: .public))")
         startRetryTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             if Task.isCancelled { return }
@@ -218,24 +221,24 @@ final class CallStore: ObservableObject {
                 let was = self.isNetworkAvailable
                 self.isNetworkAvailable = satisfied
                 if firstShot {
-                    print("📶 [CallStore] NWPathMonitor 首次回调 satisfied=\(satisfied)（仅同步初值）")
+                    AppLogger.rtm.debug("📶 [CallStore] NWPathMonitor 首次回调 satisfied=\(satisfied, privacy: .public)（仅同步初值）")
                     return
                 }
                 if !was && satisfied {
                     if !self.isSignalingReady, self.myUserId != 0 {
                         // 冷启动失败 → 立即 retry start（已 login 之前的路径）
-                        print("📶 [CallStore] 网络恢复 → 立即 retry start uid=\(self.myUserId)")
+                        AppLogger.rtm.debug("📶 [CallStore] 网络恢复 → 立即 retry start uid=\(self.myUserId, privacy: .public)")
                         self.cancelStartRetry()
                         await self.start(myUserId: self.myUserId)
                     } else if self.isSignalingReady, let s = self.signaling {
                         // 已 login → 通知 RtmReconnect 立即重连（消除慢重试 5s tick 等待）
-                        print("📶 [CallStore] 网络恢复 → 通知 RTM 立即重连")
+                        AppLogger.rtm.debug("📶 [CallStore] 网络恢复 → 通知 RTM 立即重连")
                         s.notifyNetworkResumed(reason: "network_resume")
                     } else {
-                        print("📶 [CallStore] 网络恢复（未登录，忽略）")
+                        AppLogger.rtm.debug("📶 [CallStore] 网络恢复（未登录，忽略）")
                     }
                 } else if was && !satisfied {
-                    print("📶 [CallStore] 网络断开 status=\(path.status)")
+                    AppLogger.rtm.debug("📶 [CallStore] 网络断开 status=\(String(describing: path.status), privacy: .public)")
                 }
             }
         }
@@ -243,11 +246,13 @@ final class CallStore: ObservableObject {
         // 网络变化是用户感知事件，闭包应尽快被调度（vs .utility 偏后台）。
         m.start(queue: DispatchQueue(label: "com.anchor.livechat.nwpath", qos: .userInitiated))
         nwMonitor = m
-        print("📶 [CallStore] NWPathMonitor 已启动")
+        AppLogger.rtm.debug("📶 [CallStore] NWPathMonitor 已启动")
     }
 
     /// 登出时清理 RTM + RTC + 状态。
-    func stop() {
+    /// D 里程碑修复（v5.4）：改 async，等 `agora.leave()` 真正完成（didLeaveChannelWith 回调）
+    /// 再做后续清理，避免下次 start 拿到半销毁 SDK singleton。
+    func stop() async {
         cancelCallOutTimeout()
         cancelStartRetry()
         nwMonitor?.cancel()
@@ -256,7 +261,7 @@ final class CallStore: ObservableObject {
         endedToIdleTask = nil
         rtmStateCancellable?.cancel()
         rtmStateCancellable = nil
-        if state != .idle { agora.leave() }
+        if state != .idle { await agora.leave() }
         signaling?.logout()
         signaling = nil
         isSignalingReady = false
@@ -281,7 +286,7 @@ final class CallStore: ObservableObject {
     // 被拒。已在 WSHeartbeat 调整为 .callEnd。
     func callOut(remoteUserId: String) async {
         guard state == .idle, let signaling else {
-            print("⚠️ [CallStore] callOut 跳过 state=\(state) signaling=\(signaling != nil)")
+            AppLogger.call.notice("⚠️ [CallStore] callOut 跳过 state=\(self.state.rawValue, privacy: .public) signaling=\(self.signaling != nil, privacy: .public)")
             return
         }
         guard let remoteUid = Int(remoteUserId), remoteUid > 0 else {
@@ -295,7 +300,7 @@ final class CallStore: ObservableObject {
             res = try await CallService.createCall(beCallUserId: remoteUid)
         } catch let e as APIError {
             lastError = e.message
-            print("❌ [CallStore] createCall 失败 code=\(e.code) msg=\(e.message)")
+            AppLogger.call.error("❌ [CallStore] createCall 失败 code=\(e.code, privacy: .public) msg=\(e.message, privacy: .private)")
             return
         } catch {
             lastError = error.localizedDescription
@@ -363,11 +368,11 @@ final class CallStore: ObservableObject {
     /// - 显式标记 `frontGameType = .live`，CallView UI 据此显示"直播私 call"标识 + "挂断回直播"
     func acceptIncomingFromLive(msg: CallMessage) async {
         guard state == .idle, let signaling else {
-            print("⚠️ [CallStore] acceptIncomingFromLive 跳过 state=\(state) signaling=\(signaling != nil)")
+            AppLogger.call.notice("⚠️ [CallStore] acceptIncomingFromLive 跳过 state=\(self.state.rawValue, privacy: .public) signaling=\(self.signaling != nil, privacy: .public)")
             return
         }
         guard let fromRoomId = msg.fromRoomId, !fromRoomId.isEmpty else {
-            print("⚠️ [CallStore] acceptIncomingFromLive 缺 fromRoomId")
+            AppLogger.call.notice("⚠️ [CallStore] acceptIncomingFromLive 缺 fromRoomId")
             return
         }
 
@@ -399,7 +404,7 @@ final class CallStore: ObservableObject {
         if agora.remoteUid != 0, state == .connecting {
             current.callConnectTime = Date().timeIntervalSince1970 * 1000
             state = .connected
-            print("✅ [CallStore] 直播私 call 接听后远端已在频道 → state=connected")
+            AppLogger.call.info("✅ [CallStore] 直播私 call 接听后远端已在频道 → state=connected")
         }
 
         // 5) 异步拉对方资料（C 范围 joinCall 接口；失败仅影响 UI，不影响接通能力）
@@ -414,7 +419,7 @@ final class CallStore: ObservableObject {
                 self.current.remoteCountryCode = r.countryCode ?? self.current.remoteCountryCode
                 self.current.remoteVideoPrice = r.videoPrice ?? self.current.remoteVideoPrice
             } catch {
-                print("⚠️ [CallStore] LIVE joinCall 拉对方资料失败 channel=\(fromRoomId) err=\(error.localizedDescription)")
+                AppLogger.call.notice("⚠️ [CallStore] LIVE joinCall 拉对方资料失败 channel=\(fromRoomId, privacy: .public) err=\(error.localizedDescription, privacy: .private)")
             }
         }
     }
@@ -444,7 +449,7 @@ final class CallStore: ObservableObject {
         if agora.remoteUid != 0, state == .connecting {
             current.callConnectTime = Date().timeIntervalSince1970 * 1000
             state = .connected
-            print("✅ [CallStore] accept 后远端已在频道 → state=connected")
+            AppLogger.call.info("✅ [CallStore] accept 后远端已在频道 → state=connected")
         }
 
         // 4) 接通率上报（被叫 answered）
@@ -528,7 +533,7 @@ final class CallStore: ObservableObject {
             // 路径；.connecting 适用于主/被叫 Accept 后的路径。其它（.ended/.failed/.idle）都
             // 表示通话已中止，幽灵 join 必须被阻断。
             guard state == .calling || state == .connecting else {
-                print("📍 [CallStore] joinRtc 拿到 token 后 state 已是 \(state.rawValue)（之前=\(stateBeforeAwait.rawValue)）→ 放弃 join")
+                AppLogger.call.debug("📍 [CallStore] joinRtc 拿到 token 后 state 已是 \(self.state.rawValue, privacy: .public)（之前=\(stateBeforeAwait.rawValue, privacy: .public)）→ 放弃 join")
                 return
             }
             agora.join(channelId: channel, token: rtcToken, uid: UInt(myUserId), profile: .communication)
@@ -550,7 +555,8 @@ final class CallStore: ObservableObject {
         cancelCallOutTimeout()
         let info = current
         current.hangupReason = reason
-        if state != .idle { agora.leave() }
+        // v5.4：await 等 didLeaveChannelWith，避免后续 start/join 拿到半销毁 singleton
+        if state != .idle { await agora.leave() }
         // ⚠️ 主播端**不调** `/callOver`（后端无此路由 → 404；该接口是用户端独有的，后端按
         // 用户端 callOver 触发结算）。本端只做 RTC leave + 状态复位 + callRate（可选）。
         if !info.channelId.isEmpty, let cat = rateCategory {
@@ -593,7 +599,7 @@ final class CallStore: ObservableObject {
             try? await Task.sleep(nanoseconds: UInt64(CallTuning.callOutTimeoutSeconds * 1_000_000_000))
             guard let self, !Task.isCancelled else { return }
             guard self.state == .calling, self.current.inOrOut == .out else { return }
-            print("⏰ [CallStore] 主叫 30s 超时无应答 → 自动取消")
+            AppLogger.call.debug("⏰ [CallStore] 主叫 30s 超时无应答 → 自动取消")
             if let signaling = self.signaling {
                 _ = await signaling.publish(self.buildMessage(action: .cancel))
             }
@@ -612,21 +618,21 @@ final class CallStore: ObservableObject {
 extension CallStore: CallSignalingDelegate {
     func signaling(_ signaling: CallSignaling, didReceive message: CallMessage, from publisher: String) {
         guard let action = message.action else {
-            print("⚠️ [CallStore] 未知 action=\(message.messageAction) from=\(publisher)")
+            AppLogger.call.notice("⚠️ [CallStore] 未知 action=\(message.messageAction, privacy: .public) from=\(publisher, privacy: .public)")
             return
         }
         Task { @MainActor in await self.handleRemote(action: action, message: message) }
     }
 
     func signalingDidDetectSameUidLogin(_ signaling: CallSignaling) {
-        print("🚨 [CallStore] 同 UID 登录 — 主流程交给 SessionStore.logout")
+        AppLogger.call.error("🚨 [CallStore] 同 UID 登录 — 主流程交给 SessionStore.logout")
         Task { @MainActor in SessionStore.shared.logout() }
     }
 
     private func handleRemote(action: CallAction, message msg: CallMessage) async {
         switch action {
         case .videoCall:   await handleIncomingVideoCall(msg)
-        case .audioCall:   print("⚠️ [CallStore] 收到 audioCall（C 不接入）from=\(msg.fromUserId)")
+        case .audioCall:   AppLogger.call.notice("⚠️ [CallStore] 收到 audioCall（C 不接入）from=\(msg.fromUserId, privacy: .public)")
         case .cancel:      await handleRemoteCancel(msg)
         case .accept:      await handleRemoteAccept(msg)
         case .reject:      await handleRemoteReject(msg)
@@ -637,19 +643,19 @@ extension CallStore: CallSignalingDelegate {
     private func handleIncomingVideoCall(_ msg: CallMessage) async {
         // 校验是发给本端的
         guard msg.remoteUserId == myUserId else {
-            print("⚠️ [CallStore] 来电 remoteUserId(\(msg.remoteUserId)) 与本端(\(myUserId)) 不符，忽略")
+            AppLogger.call.notice("⚠️ [CallStore] 来电 remoteUserId(\(msg.remoteUserId, privacy: .public)) 与本端(\(self.myUserId, privacy: .public)) 不符，忽略")
             return
         }
         // D 里程碑：直播态优先走"直播私 call 自动接听"分支（不弹浮层、无 UI 确认）
         // 协议保证：用户端在直播间内发起的拨打都视为直播私 call，无需在 RTM 协议层区分类型
         // weak liveStore 由 LiveRoomView/RootView 在直播态注入（对齐 AgoraManager.liveStore 模式）
         if let ls = liveStore, ls.state == .living, ls.callState == 0 {
-            print("📞 [CallStore] 直播态收到私 call → 委托 LiveStore.pauseForCall")
+            AppLogger.call.debug("📞 [CallStore] 直播态收到私 call → 委托 LiveStore.pauseForCall")
             await ls.pauseForCall(msg: msg)
             return
         }
         guard state == .idle else {
-            print("⚠️ [CallStore] 收到来电但本端非 idle（state=\(state)）→ 自动忙线拒绝")
+            AppLogger.call.notice("⚠️ [CallStore] 收到来电但本端非 idle（state=\(self.state.rawValue, privacy: .public)）→ 自动忙线拒绝")
             if let signaling {
                 // H5 callApi.ts:813 _autoReject 用 rejectByInternal=Internal(1) + reason="busy"，
                 // 不带 fromRoomId（Reject payload 与 H5 严格对齐）。
@@ -666,7 +672,7 @@ extension CallStore: CallSignalingDelegate {
 
         // VideoCall 必须带 fromRoomId（被叫据此 join），缺则视为非法消息丢弃
         guard let fromRoomId = msg.fromRoomId, !fromRoomId.isEmpty else {
-            print("⚠️ [CallStore] VideoCall 缺 fromRoomId from=\(msg.fromUserId) 丢弃")
+            AppLogger.call.notice("⚠️ [CallStore] VideoCall 缺 fromRoomId from=\(msg.fromUserId, privacy: .public) 丢弃")
             return
         }
 
@@ -693,7 +699,7 @@ extension CallStore: CallSignalingDelegate {
                 self.current.remoteCountryCode = r.countryCode ?? self.current.remoteCountryCode
                 self.current.remoteVideoPrice = r.videoPrice ?? self.current.remoteVideoPrice
             } catch {
-                print("⚠️ [CallStore] joinCall 拉对方资料失败/超时 channel=\(fromRoomId) err=\(error.localizedDescription)")
+                AppLogger.call.notice("⚠️ [CallStore] joinCall 拉对方资料失败/超时 channel=\(fromRoomId, privacy: .public) err=\(error.localizedDescription, privacy: .private)")
             }
         }
     }
@@ -713,7 +719,7 @@ extension CallStore: CallSignalingDelegate {
         if agora.remoteUid != 0, state == .connecting {
             current.callConnectTime = Date().timeIntervalSince1970 * 1000
             state = .connected
-            print("✅ [CallStore] 主叫收 Accept 后远端已在频道 → state=connected")
+            AppLogger.call.info("✅ [CallStore] 主叫收 Accept 后远端已在频道 → state=connected")
         }
     }
 
