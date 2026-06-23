@@ -1,6 +1,7 @@
 import Foundation
 import AgoraRtmKit
 import UIKit
+import os
 
 /// RTM 连接状态机（对应 H5 RTM_RECONNECT_STATE V2.1 精简版）。
 /// 注：H5 老版有 `.suspended`（network offline/page hidden）；V2.1 已精简掉，iOS 同步移除。
@@ -105,7 +106,7 @@ final class RtmReconnect: ObservableObject {
         case .failed:
             handleFailed(reason: reason)
         @unknown default:
-            print("⚠️ [RTM] 未知连接状态 \(s.rawValue) reason=\(reason.rawValue)")
+            AppLogger.rtm.notice("⚠️ [RTM] 未知连接状态 \(s.rawValue, privacy: .public) reason=\(reason.rawValue, privacy: .public)")
         }
     }
 
@@ -118,7 +119,7 @@ final class RtmReconnect: ObservableObject {
             await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
                 client.renewToken(new) { _, err in
                     if let err {
-                        print("⚠️ [RTM] tokenWillExpire renew 失败 code=\(err.errorCode.rawValue) reason=\(err.reason)")
+                        AppLogger.rtm.notice("⚠️ [RTM] tokenWillExpire renew 失败 code=\(err.errorCode.rawValue, privacy: .public) reason=\(err.reason, privacy: .private)")
                     }
                     cont.resume()
                 }
@@ -133,7 +134,7 @@ final class RtmReconnect: ObservableObject {
         // SAME_UID 致命态：账号在别处登录 / 被服务端封禁。延迟 500ms 后触发外部 logout，
         // 给前一段日志/埋点一个 flush 窗口（与 H5 一致）。
         if reason == .changedBannedByServer || reason == .changedRejectedByServer {
-            print("🚨 [RTM] 致命态 reason=\(reason.rawValue)（bannedByServer/rejectedByServer）→ \(CallTuning.sameUidLogoutDelayMs)ms 后触发 logout")
+            AppLogger.rtm.error("🚨 [RTM] 致命态 reason=\(reason.rawValue, privacy: .public)（bannedByServer/rejectedByServer）→ \(CallTuning.sameUidLogoutDelayMs, privacy: .public)ms 后触发 logout")
             cancelRetry()
             cancelRenewal()
             state = .idle
@@ -170,7 +171,7 @@ final class RtmReconnect: ObservableObject {
             delay = CallTuning.rtmSlowRetryInterval
             state = .disconnected
         }
-        print("📶 [RTM] scheduleReconnect reason=\(reason) delay=\(delay)s attempt=\(attempt + 1)")
+        AppLogger.rtm.debug("📶 [RTM] scheduleReconnect reason=\(reason, privacy: .public) delay=\(delay, privacy: .public)s attempt=\(attempt + 1, privacy: .public)")
 
         retryTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
@@ -184,7 +185,7 @@ final class RtmReconnect: ObservableObject {
         failedCount += 1
         let token = await refreshToken?() ?? ""
         if token.isEmpty {
-            print("⚠️ [RTM] reconnect 但 token 为空 attempt=\(failedCount) reason=\(reason) → 调度下一轮")
+            AppLogger.rtm.notice("⚠️ [RTM] reconnect 但 token 为空 attempt=\(self.failedCount, privacy: .public) reason=\(reason, privacy: .public) → 调度下一轮")
             scheduleReconnect(reason: "\(reason)_empty_token")
             return
         }
@@ -197,10 +198,10 @@ final class RtmReconnect: ObservableObject {
                 guard let self else { cont.resume(); return }
                 Task { @MainActor in
                     if let err {
-                        print("📶 [RTM] reconnect 登录失败 attempt=\(self.failedCount) reason=\(reason) code=\(err.errorCode.rawValue) msg=\(err.reason)")
+                        AppLogger.rtm.notice("📶 [RTM] reconnect 登录失败 attempt=\(self.failedCount, privacy: .public) reason=\(reason, privacy: .public) code=\(err.errorCode.rawValue, privacy: .public) msg=\(err.reason, privacy: .private)")
                         self.scheduleReconnect(reason: reason)
                     } else {
-                        print("📶 [RTM] reconnect 登录成功 attempt=\(self.failedCount) reason=\(reason)")
+                        AppLogger.rtm.debug("📶 [RTM] reconnect 登录成功 attempt=\(self.failedCount, privacy: .public) reason=\(reason, privacy: .public)")
                         // state 会由 connectionChange .connected 回调统一回写
                     }
                     cont.resume()
@@ -233,7 +234,7 @@ final class RtmReconnect: ObservableObject {
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             client.renewToken(token) { _, err in
                 if let err {
-                    print("⚠️ [RTM] proactive renewToken 失败 code=\(err.errorCode.rawValue) msg=\(err.reason)")
+                    AppLogger.rtm.notice("⚠️ [RTM] proactive renewToken 失败 code=\(err.errorCode.rawValue, privacy: .public) msg=\(err.reason, privacy: .private)")
                 }
                 cont.resume()
             }
@@ -257,7 +258,7 @@ final class RtmReconnect: ObservableObject {
     /// 时才 Task 提供 async 上下文。
     func forceImmediateReconnect(reason: String) {
         guard !disposed, client != nil, state == .disconnected else { return }
-        print("📶 [RTM] network 触发立即重连 reason=\(reason)")
+        AppLogger.rtm.debug("📶 [RTM] network 触发立即重连 reason=\(reason, privacy: .public)")
         cancelRetry()
         failedCount = 0
         Task { @MainActor [weak self] in
@@ -271,7 +272,7 @@ final class RtmReconnect: ObservableObject {
         Task { @MainActor [weak self] in
             guard let self, !self.disposed else { return }
             if self.state == .disconnected {
-                print("📶 [RTM] foreground 触发立即重连")
+                AppLogger.rtm.debug("📶 [RTM] foreground 触发立即重连")
                 self.cancelRetry()
                 self.failedCount = 0
                 await self.runReconnectOnce(reason: "foreground_resume")

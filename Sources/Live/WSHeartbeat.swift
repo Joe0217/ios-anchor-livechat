@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import os
 
 /// 主播在线态 WebSocket 心跳（对应 H5 `useUserHeartbeatState.js`）。
 ///
@@ -83,11 +84,11 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
     private func connect() {
         guard !disposed else { return }
         guard let url = buildHandshakeURL() else {
-            print("⚠️ [WS] 握手 URL 构造失败")
+            AppLogger.heartbeat.notice("⚠️ [WS] 握手 URL 构造失败")
             return
         }
         let queryLen = (url.query?.count ?? 0)
-        print("📡 [WS] connecting host=\(url.host ?? "?") path=\(url.path) queryLen=\(queryLen)")
+        AppLogger.heartbeat.debug("📡 [WS] connecting host=\(url.host ?? "?", privacy: .public) path=\(url.path, privacy: .public) queryLen=\(queryLen, privacy: .public)")
         let t = session.webSocketTask(with: url)
         task = t
         t.resume()
@@ -115,7 +116,7 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
               let cipher = CryptoUtil.aesEncryptECBToHex(jsonStr) else {
             return nil
         }
-        print("📡 [WS] cipher(hex) len=\(cipher.count) head=\(cipher.prefix(12))…")
+        AppLogger.heartbeat.debug("📡 [WS] cipher(hex) len=\(cipher.count, privacy: .public) head=\(cipher.prefix(12), privacy: .private)…")
         return URL(string: "\(AppConfig.socketBaseURL)/webSocket?ciphertext=\(cipher)")
     }
 
@@ -124,7 +125,7 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
     nonisolated func urlSession(_ session: URLSession,
                                 webSocketTask: URLSessionWebSocketTask,
                                 didOpenWithProtocol p: String?) {
-        print("📡 [WS] didOpen protocol=\(p ?? "nil")")
+        AppLogger.heartbeat.debug("📡 [WS] didOpen protocol=\(p ?? "nil", privacy: .public)")
     }
 
     nonisolated func urlSession(_ session: URLSession,
@@ -132,7 +133,7 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
                                 didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
                                 reason: Data?) {
         let reasonStr = reason.flatMap { String(data: $0, encoding: .utf8) } ?? "<nil>"
-        print("📡 [WS] didClose code=\(closeCode.rawValue) reason=\(reasonStr)")
+        AppLogger.heartbeat.debug("📡 [WS] didClose code=\(closeCode.rawValue, privacy: .public) reason=\(reasonStr, privacy: .private)")
     }
 
     nonisolated func urlSession(_ session: URLSession,
@@ -140,7 +141,7 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
                                 didCompleteWithError error: Error?) {
         let resp = task.response as? HTTPURLResponse
         let body = (task as? URLSessionDataTask).flatMap { _ in "" } ?? ""
-        print("📡 [WS] task didComplete status=\(resp?.statusCode ?? -1) err=\(error?.localizedDescription ?? "nil") body=\(body)")
+        AppLogger.heartbeat.debug("📡 [WS] task didComplete status=\(resp?.statusCode ?? -1, privacy: .public) err=\(error?.localizedDescription ?? "nil", privacy: .private) body=\(body, privacy: .private)")
     }
 
     // MARK: - 收 / 发
@@ -155,7 +156,7 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
                     // 服务端回应 messageType==1 = 心跳应答，不做业务处理
                     if !self.disposed { self.startReceiveLoop() }
                 case .failure(let err):
-                    print("📡 [WS] receive 失败: \(err.localizedDescription) → 调度重连")
+                    AppLogger.heartbeat.debug("📡 [WS] receive 失败: \(err.localizedDescription, privacy: .private) → 调度重连")
                     self.connected = false
                     self.scheduleReconnect()
                 }
@@ -177,7 +178,7 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
         guard let task else { return }
         task.send(.string(str)) { [weak self] err in
             if let err {
-                print("⚠️ [WS] send 失败 status=\(status.rawValue) err=\(err.localizedDescription)")
+                AppLogger.heartbeat.notice("⚠️ [WS] send 失败 status=\(status.rawValue, privacy: .public) err=\(err.localizedDescription, privacy: .private)")
                 Task { @MainActor in self?.scheduleReconnect() }
             }
         }
@@ -244,6 +245,6 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
         guard currentStatus != next else { return }
         currentStatus = next
         sendStatus(next)
-        print("📡 [WS] notifyCallStateChanged callState=\(callState) → onlineStatus=\(next.rawValue)")
+        AppLogger.heartbeat.debug("📡 [WS] notifyCallStateChanged callState=\(callState, privacy: .public) → onlineStatus=\(next.rawValue, privacy: .public)")
     }
 }

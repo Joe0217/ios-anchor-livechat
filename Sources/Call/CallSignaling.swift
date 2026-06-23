@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import AgoraRtmKit
+import os
 
 /// RTM 信令收发回调（由 CallStore 实现）
 @MainActor
@@ -82,7 +83,7 @@ final class CallSignaling: NSObject {
                 self.delegate?.signalingDidDetectSameUidLogin(self)
             }
         )
-        print("📶 [Signaling] login 成功 uid=\(myUserId)")
+        AppLogger.rtm.debug("📶 [Signaling] login 成功 uid=\(self.myUserId, privacy: .public)")
     }
 
     func logout() {
@@ -92,7 +93,7 @@ final class CallSignaling: NSObject {
             // 内部状态冲突，表现为重登后 publish 不出去、收不到对端信令。
             client.logout(nil)
             let code = client.destroy()
-            print("📶 [Signaling] logout + destroy code=\(code.rawValue)")
+            AppLogger.rtm.debug("📶 [Signaling] logout + destroy code=\(code.rawValue, privacy: .public)")
         }
         reconnect.dispose()
         client = nil
@@ -116,11 +117,11 @@ final class CallSignaling: NSObject {
     @discardableResult
     func publish(_ message: CallMessage) async -> Bool {
         guard let client else {
-            print("⚠️ [Signaling] publish 跳过：client 未就绪 action=\(message.messageAction)")
+            AppLogger.rtm.notice("⚠️ [Signaling] publish 跳过：client 未就绪 action=\(message.messageAction, privacy: .public)")
             return false
         }
         guard let data = try? JSONEncoder().encode(message) else {
-            print("⚠️ [Signaling] encode CallMessage 失败 action=\(message.messageAction)")
+            AppLogger.rtm.notice("⚠️ [Signaling] encode CallMessage 失败 action=\(message.messageAction, privacy: .public)")
             return false
         }
         let toUserId = String(message.remoteUserId)
@@ -132,11 +133,11 @@ final class CallSignaling: NSObject {
                 Task { @MainActor in
                     guard let self else { cont.resume(returning: false); return }
                     if let err {
-                        print("⚠️ [Signaling] publish 失败 action=\(message.messageAction) to=\(toUserId) code=\(err.errorCode.rawValue) msg=\(err.reason)")
+                        AppLogger.rtm.notice("⚠️ [Signaling] publish 失败 action=\(message.messageAction, privacy: .public) to=\(toUserId, privacy: .public) code=\(err.errorCode.rawValue, privacy: .public) msg=\(err.reason, privacy: .private)")
                         self.reconnect.triggerReconnect(reason: "publish_failed_\(err.errorCode.rawValue)")
                         cont.resume(returning: false)
                     } else {
-                        print("📤 [Signaling] publish 成功 action=\(message.messageAction) to=\(toUserId) ch=\(message.fromRoomId ?? "-") callId=\(message.callId) bytes=\(data.count)")
+                        AppLogger.rtm.debug("📤 [Signaling] publish 成功 action=\(message.messageAction, privacy: .public) to=\(toUserId, privacy: .public) ch=\(message.fromRoomId ?? "-", privacy: .public) callId=\(message.callId, privacy: .public) bytes=\(data.count, privacy: .public)")
                         cont.resume(returning: true)
                     }
                 }
@@ -165,13 +166,13 @@ extension CallSignaling: AgoraRtmClientDelegate {
         guard let data = payload,
               let msg = try? JSONDecoder().decode(CallMessage.self, from: data) else {
             let preview = payload.flatMap { String(data: $0.prefix(120), encoding: .utf8) } ?? "<nil>"
-            print("⚠️ [Signaling] 无法解析 RTM 消息 from=\(event.publisher) ch=\(event.channelName) preview=\(preview)")
+            AppLogger.rtm.notice("⚠️ [Signaling] 无法解析 RTM 消息 from=\(event.publisher, privacy: .public) ch=\(event.channelName, privacy: .public) preview=\(preview, privacy: .private)")
             return
         }
         let publisher = event.publisher
         Task { @MainActor [weak self] in
             guard let self else { return }
-            print("📥 [Signaling] 收到 action=\(msg.messageAction) from=\(publisher) callId=\(msg.callId) fromRoomId=\(msg.fromRoomId ?? "-")")
+            AppLogger.rtm.debug("📥 [Signaling] 收到 action=\(msg.messageAction, privacy: .public) from=\(publisher, privacy: .public) callId=\(msg.callId, privacy: .public) fromRoomId=\(msg.fromRoomId ?? "-", privacy: .public)")
             self.delegate?.signaling(self, didReceive: msg, from: publisher)
         }
     }
@@ -180,7 +181,7 @@ extension CallSignaling: AgoraRtmClientDelegate {
                             channel channelName: String,
                             connectionChangedToState state: AgoraRtmClientConnectionState,
                             reason: AgoraRtmClientConnectionChangeReason) {
-        print("📶 [Signaling] connection state=\(state.rawValue) reason=\(reason.rawValue) channel=\(channelName)")
+        AppLogger.rtm.debug("📶 [Signaling] connection state=\(state.rawValue, privacy: .public) reason=\(reason.rawValue, privacy: .public) channel=\(channelName, privacy: .public)")
         Task { @MainActor [weak self] in
             self?.reconnect.handleConnectionChange(state: state, reason: reason)
         }
@@ -188,7 +189,7 @@ extension CallSignaling: AgoraRtmClientDelegate {
 
     nonisolated func rtmKit(_ rtmKit: AgoraRtmClientKit,
                             tokenPrivilegeWillExpire channel: String?) {
-        print("📶 [Signaling] tokenPrivilegeWillExpire channel=\(channel ?? "nil")")
+        AppLogger.rtm.debug("📶 [Signaling] tokenPrivilegeWillExpire channel=\(channel ?? "nil", privacy: .public)")
         Task { @MainActor [weak self] in
             self?.reconnect.handleTokenPrivilegeWillExpire()
         }

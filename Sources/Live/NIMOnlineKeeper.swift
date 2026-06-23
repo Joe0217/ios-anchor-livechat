@@ -1,5 +1,6 @@
 import Foundation
 import NIMSDK
+import os
 
 /// 云信 NIM 长连接保活，专门用来上报"主播在线"。
 ///
@@ -21,21 +22,21 @@ final class NIMOnlineKeeper {
     func start(account: String, token: String) {
         NIMChatroomManager.setupOnce()  // 复用：确保 SDK 已 register(appKey:)
         if NIMSDK.shared().loginManager.isLogined() {
-            print("🟢 [NIMOnline] 已登录，跳过")
+            AppLogger.im.info("🟢 [NIMOnline] 已登录，跳过")
             isLogined = true
             return
         }
-        print("🟢 [NIMOnline] 开始登录 account=\(account) tokenLen=\(token.count)")
+        AppLogger.im.debug("🟢 [NIMOnline] 开始登录 account=\(account, privacy: .public) tokenLen=\(token.count, privacy: .private)")
         NIMSDK.shared().loginManager.login(account, token: token) { [weak self] error in
             DispatchQueue.main.async {
                 guard let self else { return }
                 if let error = error {
                     let code = (error as NSError).code
-                    print("🔴 [NIMOnline] 登录失败 code=\(code) err=\(error.localizedDescription)")
+                    AppLogger.im.error("🔴 [NIMOnline] 登录失败 code=\(code, privacy: .public) err=\(error.localizedDescription, privacy: .private)")
                     self.isLogined = false
                 } else {
                     self.isLogined = true
-                    print("✅ [NIMOnline] 登录成功 — 主播在线态已上报")
+                    AppLogger.im.info("✅ [NIMOnline] 登录成功 — 主播在线态已上报")
                 }
             }
         }
@@ -50,9 +51,9 @@ final class NIMOnlineKeeper {
         NIMSDK.shared().loginManager.logout { error in
             DispatchQueue.main.async {
                 if let error = error {
-                    print("⚠️ [NIMOnline] logout 失败: \(error.localizedDescription)")
+                    AppLogger.im.notice("⚠️ [NIMOnline] logout 失败: \(error.localizedDescription, privacy: .private)")
                 } else {
-                    print("🟢 [NIMOnline] 已 logout")
+                    AppLogger.im.info("🟢 [NIMOnline] 已 logout")
                 }
             }
         }

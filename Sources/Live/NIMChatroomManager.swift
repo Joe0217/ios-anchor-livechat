@@ -1,5 +1,6 @@
 import Foundation
 import NIMSDK
+import os
 
 /// 公屏一条消息。
 struct ChatMessage: Identifiable {
@@ -32,7 +33,7 @@ final class NIMChatroomManager: NSObject, ObservableObject {
     func enter(roomId: String, nickname: String, account: String, token: String) {
         NIMChatroomManager.setupOnce()
         self.roomId = roomId
-        print("🟣 [Chatroom] IM 登录 account=\(account) tokenLen=\(token.count) appKey=\(AppConfig.nimAppKey)")
+        AppLogger.im.debug("🟣 [Chatroom] IM 登录 account=\(account, privacy: .public) tokenLen=\(token.count, privacy: .private) appKey=\(AppConfig.nimAppKey, privacy: .private)")
         NIMSDK.shared().chatManager.add(self)
         NIMSDK.shared().chatroomManager.add(self)
 
@@ -44,13 +45,13 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                 guard let self else { return }
                 if let error = error {
                     let code = (error as NSError).code
-                    print("🔴 [Chatroom] IM 登录失败 code=\(code) \(error)")
+                    AppLogger.im.error("🔴 [Chatroom] IM 登录失败 code=\(code, privacy: .public) \(error.localizedDescription, privacy: .private)")
                     DispatchQueue.main.async {
                         self.push(String(format: L10n.imSystemLoginFailedFormat, "\(code)"), system: true)
                     }
                     return
                 }
-                print("🟢 [Chatroom] IM 登录成功，进聊天室")
+                AppLogger.im.info("🟢 [Chatroom] IM 登录成功，进聊天室")
                 self.enterChatroom(roomId: roomId, nickname: nickname)
             }
         }
@@ -68,10 +69,10 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                 guard let self else { return }
                 if let error = error {
                     let code = (error as NSError).code
-                    print("🔴 [Chatroom] 进房失败 code=\(code) \(error)")
+                    AppLogger.im.error("🔴 [Chatroom] 进房失败 code=\(code, privacy: .public) \(error.localizedDescription, privacy: .private)")
                     self.push(String(format: L10n.imSystemJoinFailedFormat, "\(code)"), system: true)
                 } else {
-                    print("🟢 [Chatroom] 进房成功 online=\(chatroom?.onlineUserCount ?? 0)")
+                    AppLogger.im.info("🟢 [Chatroom] 进房成功 online=\(chatroom?.onlineUserCount ?? 0, privacy: .public)")
                     self.connected = true
                     self.onlineCount = chatroom?.onlineUserCount ?? 0
                     self.push(L10n.imSystemJoined, system: true)

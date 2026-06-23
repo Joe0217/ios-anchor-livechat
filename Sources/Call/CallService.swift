@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// 1v1 通话相关接口（对应 H5 src/api/call/index.ts）。
 ///
@@ -49,9 +50,9 @@ enum CallService {
         do {
             _ = try await APIClient.shared.post("/api/call/callOver", body: body)
         } catch let e as APIError {
-            print("⚠️ [CallService] callOver 失败 channel=\(channelId) reason=\(overReason.rawValue) code=\(e.code) msg=\(e.message)")
+            AppLogger.call.notice("⚠️ [CallService] callOver 失败 channel=\(channelId, privacy: .public) reason=\(overReason.rawValue, privacy: .public) code=\(e.code, privacy: .public) msg=\(e.message, privacy: .private)")
         } catch {
-            print("⚠️ [CallService] callOver 异常 channel=\(channelId) error=\(error.localizedDescription)")
+            AppLogger.call.notice("⚠️ [CallService] callOver 异常 channel=\(channelId, privacy: .public) error=\(error.localizedDescription, privacy: .private)")
         }
     }
 
@@ -77,9 +78,9 @@ enum CallService {
         do {
             _ = try await APIClient.shared.post("/api/call/callRate", body: body)
         } catch let e as APIError {
-            print("⚠️ [CallService] callRate 失败 channel=\(channelId) cat=\(category.rawValue) code=\(e.code) msg=\(e.message)")
+            AppLogger.call.notice("⚠️ [CallService] callRate 失败 channel=\(channelId, privacy: .public) cat=\(category.rawValue, privacy: .public) code=\(e.code, privacy: .public) msg=\(e.message, privacy: .private)")
         } catch {
-            print("⚠️ [CallService] callRate 异常 error=\(error.localizedDescription)")
+            AppLogger.call.notice("⚠️ [CallService] callRate 异常 error=\(error.localizedDescription, privacy: .private)")
         }
     }
 }
