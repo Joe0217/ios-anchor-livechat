@@ -1,0 +1,5 @@
+/* Info.plist 权限弹窗文案本地化（en）
+ * iOS 弹相机/麦克风权限时显示这里的文案，覆盖 project.yml 里的 Info.plist 兜底值
+ */
+"NSCameraUsageDescription"     = "Used for real-time beauty preview and live streaming";
+"NSMicrophoneUsageDescription" = "Used for real-time audio/video calls";

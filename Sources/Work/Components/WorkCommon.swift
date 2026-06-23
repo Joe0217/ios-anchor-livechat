@@ -7,7 +7,8 @@ struct OutlineChevronPill: View {
     var body: some View {
         HStack(spacing: 3) {
             Text(title)
-            Image(systemName: "chevron.right")
+            // 使用 chevron.forward 而非 chevron.right：SF Symbols 的 .forward 会在 RTL 区域（如 ar）自动镜像
+            Image(systemName: "chevron.forward")
                 .font(.system(size: 9, weight: .semibold))
         }
         .font(Theme.Typography.pill)

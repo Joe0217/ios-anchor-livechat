@@ -11,12 +11,12 @@ struct LoginView: View {
             Color.black.ignoresSafeArea()
             VStack(spacing: 18) {
                 Spacer()
-                Text("主播登录").font(.largeTitle).bold().foregroundStyle(.white)
-                Text("dev · anchor.cphub.link").font(.caption).foregroundStyle(.secondary)
+                Text(L10n.authTitle).font(.largeTitle).bold().foregroundStyle(.white)
+                Text(L10n.authEnvHint).font(.caption).foregroundStyle(.secondary)
 
                 VStack(spacing: 14) {
                     TextField("", text: $email,
-                              prompt: Text("邮箱").foregroundColor(.white.opacity(0.5)))
+                              prompt: Text(L10n.authEmail).foregroundColor(.white.opacity(0.5)))
                         .textInputAutocapitalization(.never)
                         .keyboardType(.emailAddress)
                         .autocorrectionDisabled()
@@ -25,7 +25,7 @@ struct LoginView: View {
                         .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
 
                     SecureField("", text: $password,
-                                prompt: Text("密码").foregroundColor(.white.opacity(0.5)))
+                                prompt: Text(L10n.authPassword).foregroundColor(.white.opacity(0.5)))
                         .foregroundStyle(.white)
                         .padding(12)
                         .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
@@ -41,7 +41,7 @@ struct LoginView: View {
                     } label: {
                         HStack(spacing: 8) {
                             if session.isLoading { ProgressView().tint(.white) }
-                            Text(session.isLoading ? "登录中…" : "登录")
+                            Text(session.isLoading ? L10n.authLoggingIn : L10n.authLogin)
                                 .font(.headline).foregroundStyle(.white)
                         }
                         .frame(maxWidth: .infinity)

@@ -111,3 +111,79 @@
 "profile.cell.photo"         = "Photo";
 "profile.cell.video"         = "Video";
 "profile.emptyPlaceholder"   = "Nothing here yet";
+
+// MARK: - Auth 登录页
+"auth.title"                 = "Anchor Login";
+"auth.envHint"               = "dev · anchor.cphub.link";
+"auth.email"                 = "Email";
+"auth.password"              = "Password";
+"auth.login"                 = "Login";
+"auth.loggingIn"             = "Logging in...";
+
+// MARK: - LivePrepare 开播准备
+"livePrepare.navTitle"       = "Go Live Demo";
+"livePrepare.panelTitle"     = "Go Live Setup";
+"livePrepare.titlePlaceholder" = "Live title (leave empty for default bio)";
+"livePrepare.defaultTitle"   = "Live";
+"livePrepare.beautyToggle"   = "Beauty";
+"livePrepare.sliderBlur"     = "Smooth";
+"livePrepare.sliderWhiten"   = "Whiten";
+"livePrepare.sliderEyeEnlarge" = "Eye Enlarge";
+"livePrepare.sliderFaceThin" = "Face Thin";
+"livePrepare.start"          = "Start Live";
+"livePrepare.starting"       = "Starting...";
+"livePrepare.errorNoChannel" = "Failed: missing channel or token in response";
+"livePrepare.errorPrefix"    = "Failed: %@ (%@)";
+"livePrepare.errorGeneric"   = "Failed: %@";
+
+// MARK: - LiveRoom 直播间
+"liveRoom.permissionAlertTitle" = "Camera Permission Required";
+"liveRoom.permissionAlertOK" = "OK";
+"liveRoom.permissionAlertMessage" = "Please enable Camera access in Settings → Hily → Camera";
+"liveRoom.statusLiveFormat"  = "Live %@";
+"liveRoom.statusConnecting"  = "Connecting...";
+"liveRoom.anchorDefault"     = "Anchor";
+"liveRoom.toolBeauty"        = "Beauty";
+"liveRoom.endLive"           = "End Live";
+"liveRoom.beautyPanelTitle"  = "Beauty";
+
+// MARK: - Call POC（调试态保留，上线前删除）
+"call.statusWaitingRemote"   = "Waiting for remote";
+"call.permissionTitle"       = "Camera Permission Required";
+"call.permissionMessage"     = "Please enable in Settings → Privacy → Camera";
+"call.channelLabel"          = "Channel";
+"call.channelPlaceholder"    = "Channel name (must match)";
+"call.hangup"                = "Hang Up";
+"call.connecting"            = "Connecting...";
+"call.join"                  = "Join Call";
+"call.beautyBannerPassthrough" = "Passthrough preview · FaceUnity not integrated";
+"call.beautyBannerActive"    = "FaceUnity beauty active";
+"call.errorEmptyChannel"     = "Please enter channel name";
+"call.errorTokenFailed"      = "Failed to get token";
+"call.errorConnectPrefix"    = "Connect failed: %@ (%@)";
+"call.errorConnectGeneric"   = "Connect failed: %@";
+
+// MARK: - Call 1v1 真实通话视图（CallView.swift）
+"call.subtitle.callingOut"   = "Calling...";
+"call.subtitle.incoming"     = "is inviting you to a video call";
+"call.action.cancel"         = "Cancel";
+"call.action.reject"         = "Reject";
+"call.action.accept"         = "Accept";
+"call.action.hangupBackToLive" = "Hang up & back to live";
+"call.action.hangup"         = "Hang Up";
+"call.liveBanner"            = "Private call · Hang up to return to live";
+
+// MARK: - LiveRoom 挂断后回直播倒计时覆盖层
+"liveRoom.callEndedTitle"    = "Call ended";
+"liveRoom.returnCountdownFormat" = "Returning to live in %ds";
+
+// MARK: - 服务层错误（被 View 显示）
+"auth.error.noToken"         = "Login failed: server returned no token";
+"auth.error.networkFormat"   = "Network error: %@";
+"live.error.noCover"         = "No live cover set yet. Please configure a cover on the main app first.";
+
+// 公屏系统消息（用户在直播间内可见）
+"im.system.loginFailedFormat" = "IM login failed: %@";
+"im.system.joinFailedFormat"  = "Failed to join chatroom: %@";
+"im.system.joined"            = "Joined chatroom";
+"im.system.giftPlaceholder"   = "[Gift/Custom message]";

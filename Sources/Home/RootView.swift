@@ -25,6 +25,9 @@ struct RootView: View {
         .task(id: session.isLoggedIn) {
             await syncSessionDependent()
         }
+        #if DEBUG
+        .debugLocaleSwitcher()
+        #endif
     }
 
     /// 登录态相关的全局连接同步：
@@ -46,7 +49,7 @@ struct RootView: View {
         } else {
             WSHeartbeat.shared.stop()
             NIMOnlineKeeper.shared.stop()
-            callStore.stop()
+            await callStore.stop()
         }
     }
 }

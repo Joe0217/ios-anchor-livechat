@@ -1,0 +1,191 @@
+/* Hily 主播端本地化 — 阿拉伯语（ar）
+ *
+ * 工程占位翻译：由开发者完成业务术语级翻译，等真正上线前需翻译团队复审地道性/口语化。
+ * key 命名约定：模块.场景（lowerCamelCase 拼接），与 en.lproj 完全一致。
+ * 占位符 %@ %d 保留位置不变。
+ * 品牌词 "Hily" / "FaceUnity" / "Prime" / "Cysle" 不翻译。
+ */
+
+// MARK: - 强制下播原因（forceEnd reason UI 文案）
+"forceEnd.disconnected"      = "انقطع الاتصال";
+"forceEnd.banned"            = "تم إنهاء البث بسبب مخالفة الحساب";
+"forceEnd.cameraFailure"     = "فشل التقاط الكاميرا";
+"forceEnd.noPermission"      = "فشل التحقق من الصلاحيات";
+"forceEnd.weakNetwork"       = "الشبكة ضعيفة جدًا";
+
+// MARK: - 美颜降级
+"beauty.unavailable"         = "الفلتر غير متاح";
+
+// MARK: - 网络弱网降级（v5 分层）
+"network.warning"            = "الشبكة غير مستقرة، تم التبديل إلى معدل إطارات منخفض";
+
+// MARK: - 开播前置校验
+"prepare.titleEmpty"         = "يرجى إدخال عنوان البث";
+"prepare.coverEmpty"         = "يرجى تعيين غلاف البث";
+"prepare.cooldown"           = "يرجى الانتظار 60 ثانية بعد انتهاء البث الأخير";
+"prepare.imOffline"          = "خدمة الدردشة غير متصلة، يرجى إعادة المحاولة";
+
+// MARK: - 公屏
+"im.chatroom.reconnecting"   = "جارٍ إعادة الاتصال بغرفة الدردشة...";
+"im.chatroom.reconnected"    = "تم إعادة الاتصال بغرفة الدردشة";
+"im.userJoined"              = "انضم مستخدم إلى غرفة البث";
+"im.sendGiftAction"          = "أرسل";
+"im.complianceWarningDefault" = "تلقّى محتوى البث الخاص بك تحذيرًا";
+"im.anonymous"               = "مجهول";
+
+// MARK: - Work 工作台（设计稿还原）
+"work.weeklyLevel"           = "المستوى الأسبوعي";
+"work.detail"                = "تفاصيل";
+"work.scorePrefix"           = "النقاط: ";
+"work.needMoreFormat"        = "(تحتاج %d نقطة إضافية للترقية)";
+
+"work.callsToday"            = "مكالمات اليوم";
+"work.positiveRating"        = "تقييم إيجابي";
+"work.weeklyRevenue"         = "الأرباح الأسبوعية";
+
+"work.todaysIncome"          = "أرباح اليوم";
+"work.withdrawal"            = "سحب";
+"work.callIncomes"           = "أرباح المكالمات";
+"work.giftIncomes"           = "أرباح الهدايا";
+"work.taskIncomes"           = "أرباح المهام";
+"work.inviteIncomes"         = "أرباح الدعوات";
+"work.managedIncomes"        = "أرباح مُدارة";
+"work.totalIncomes"          = "إجمالي الأرباح";
+
+"work.tools"                 = "الأدوات";
+"work.online"                = "متصل";
+"work.online.on"             = "تشغيل";
+"work.online.off"            = "إيقاف";
+"work.offline"               = "غير متصل";
+
+// 工具图标标签
+"work.tool.hi"               = "مرحبا";
+"work.tool.goLive"           = "بث مباشر";
+"work.tool.match"            = "مطابقة";
+"work.tool.task"             = "مهمة";
+"work.tool.beauty"           = "الفلتر";
+"work.tool.points"           = "النقاط";
+"work.tool.giftMessage"      = "رسالة هدية";
+"work.tool.profileUpdate"    = "تحديث الملف";
+"work.tool.invite"           = "دعوة";
+"work.tool.workingGuide"     = "دليل العمل";
+"work.tool.backpack"         = "الحقيبة";
+
+// 底部 tab 标签
+"tab.home"                   = "الرئيسية";
+"tab.messages"               = "الرسائل";
+"tab.work"                   = "العمل";
+"tab.profile"                = "ملفي";
+
+// MARK: - Live 页（设计稿还原）
+"live.subTab.live"           = "البث";
+"live.subTab.list"           = "القائمة";
+"live.subTab.match"          = "مطابقة";
+"live.subTab.cysle"          = "Cysle";
+"live.subTab.comingSoon"     = "قريبًا";
+"live.viewers"               = "مشاهد";
+"live.rankBadge"             = "لوحة الصدارة";
+"live.refresh"               = "تحديث";
+"live.onlineDot"             = "متصل";
+
+// MARK: - List 子页（设计稿还原）
+"liveList.segment.online"    = "متصل";
+"liveList.segment.prime"     = "Prime";
+"liveList.invite.title"      = "ادعُ الأصدقاء";
+"liveList.invite.subtitle"   = "ادعُ المستخدمين واحصل على الماس";
+"liveList.action.chat"       = "دردشة";
+"liveList.action.live"       = "بث";
+"liveList.action.match"      = "مطابقة";
+"liveList.action.offline"    = "غير متصل";
+
+// MARK: - Profile 个人页（设计稿还原）
+"profile.settings"           = "الإعدادات";
+"profile.editName"           = "تعديل الاسم";
+"profile.idPrefix"           = "المعرّف:";
+"profile.following"          = "متابَع";
+"profile.followers"          = "متابعون";
+"profile.friends"            = "أصدقاء";
+"profile.tab.album"          = "الألبوم";
+"profile.tab.gifts"          = "الهدايا";
+"profile.tab.moment"         = "اللحظات";
+"profile.photos.format"      = "الصور (%d/%d)";
+"profile.videos.format"      = "الفيديوهات (%d/%d)";
+"profile.cell.photo"         = "صورة";
+"profile.cell.video"         = "فيديو";
+"profile.emptyPlaceholder"   = "لا يوجد محتوى هنا بعد";
+
+// MARK: - Auth 登录页
+"auth.title"                 = "تسجيل دخول المضيف";
+"auth.envHint"               = "dev · anchor.cphub.link";
+"auth.email"                 = "البريد الإلكتروني";
+"auth.password"              = "كلمة المرور";
+"auth.login"                 = "تسجيل الدخول";
+"auth.loggingIn"             = "جاري تسجيل الدخول...";
+
+// MARK: - LivePrepare 开播准备
+"livePrepare.navTitle"       = "تجربة البث";
+"livePrepare.panelTitle"     = "إعداد البث";
+"livePrepare.titlePlaceholder" = "عنوان البث (اتركه فارغًا للنبذة الافتراضية)";
+"livePrepare.defaultTitle"   = "بث";
+"livePrepare.beautyToggle"   = "الفلتر";
+"livePrepare.sliderBlur"     = "نعومة";
+"livePrepare.sliderWhiten"   = "تبييض";
+"livePrepare.sliderEyeEnlarge" = "تكبير العيون";
+"livePrepare.sliderFaceThin" = "تنحيف الوجه";
+"livePrepare.start"          = "بدء البث";
+"livePrepare.starting"       = "جاري البدء...";
+"livePrepare.errorNoChannel" = "فشل: لا توجد قناة أو رمز في الاستجابة";
+"livePrepare.errorPrefix"    = "فشل: %@ (%@)";
+"livePrepare.errorGeneric"   = "فشل: %@";
+
+// MARK: - LiveRoom 直播间
+"liveRoom.permissionAlertTitle" = "إذن الكاميرا مطلوب";
+"liveRoom.permissionAlertOK" = "حسنًا";
+"liveRoom.permissionAlertMessage" = "يرجى تفعيل الوصول للكاميرا في الإعدادات ← Hily ← الكاميرا";
+"liveRoom.statusLiveFormat"  = "بث %@";
+"liveRoom.statusConnecting"  = "جاري الاتصال...";
+"liveRoom.anchorDefault"     = "المضيف";
+"liveRoom.toolBeauty"        = "الفلتر";
+"liveRoom.endLive"           = "إنهاء البث";
+"liveRoom.beautyPanelTitle"  = "الفلتر";
+
+// MARK: - Call POC（调试态保留，上线前删除）
+"call.statusWaitingRemote"   = "في انتظار الطرف الآخر";
+"call.permissionTitle"       = "إذن الكاميرا مطلوب";
+"call.permissionMessage"     = "يرجى التفعيل في الإعدادات ← الخصوصية ← الكاميرا";
+"call.channelLabel"          = "القناة";
+"call.channelPlaceholder"    = "اسم القناة (يجب أن يتطابق الطرفان)";
+"call.hangup"                = "إنهاء";
+"call.connecting"            = "جاري الاتصال...";
+"call.join"                  = "الانضمام للمكالمة";
+"call.beautyBannerPassthrough" = "معاينة تمرير · FaceUnity غير مدمج";
+"call.beautyBannerActive"    = "تأثير FaceUnity مفعّل";
+"call.errorEmptyChannel"     = "يرجى إدخال اسم القناة";
+"call.errorTokenFailed"      = "فشل الحصول على الرمز";
+"call.errorConnectPrefix"    = "فشل الاتصال: %@ (%@)";
+"call.errorConnectGeneric"   = "فشل الاتصال: %@";
+
+// MARK: - Call 1v1 真实通话视图（CallView.swift）
+"call.subtitle.callingOut"   = "جاري الاتصال...";
+"call.subtitle.incoming"     = "يدعوك إلى مكالمة فيديو";
+"call.action.cancel"         = "إلغاء";
+"call.action.reject"         = "رفض";
+"call.action.accept"         = "قبول";
+"call.action.hangupBackToLive" = "إنهاء والعودة للبث";
+"call.action.hangup"         = "إنهاء";
+"call.liveBanner"            = "مكالمة خاصة · أنهِ المكالمة للعودة للبث";
+
+// MARK: - LiveRoom 挂断后回直播倒计时覆盖层
+"liveRoom.callEndedTitle"    = "انتهت المكالمة";
+"liveRoom.returnCountdownFormat" = "العودة للبث خلال %d ثانية";
+
+// MARK: - 服务层错误（被 View 显示）
+"auth.error.noToken"         = "فشل تسجيل الدخول: الخادم لم يُرجع رمزًا";
+"auth.error.networkFormat"   = "خطأ في الشبكة: %@";
+"live.error.noCover"         = "لم يتم تعيين غلاف بث بعد. يرجى تعيين الغلاف في التطبيق الرئيسي أولاً.";
+
+// 公屏系统消息（用户在直播间内可见）
+"im.system.loginFailedFormat" = "فشل تسجيل دخول الدردشة: %@";
+"im.system.joinFailedFormat"  = "فشل الانضمام لغرفة الدردشة: %@";
+"im.system.joined"            = "تم الانضمام لغرفة الدردشة";
+"im.system.giftPlaceholder"   = "[هدية/رسالة مخصصة]";

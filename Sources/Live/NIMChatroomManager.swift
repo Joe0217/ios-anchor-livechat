@@ -45,7 +45,9 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                 if let error = error {
                     let code = (error as NSError).code
                     print("🔴 [Chatroom] IM 登录失败 code=\(code) \(error)")
-                    DispatchQueue.main.async { self.push("IM 登录失败：\(code)", system: true) }
+                    DispatchQueue.main.async {
+                        self.push(String(format: L10n.imSystemLoginFailedFormat, "\(code)"), system: true)
+                    }
                     return
                 }
                 print("🟢 [Chatroom] IM 登录成功，进聊天室")
@@ -67,12 +69,12 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                 if let error = error {
                     let code = (error as NSError).code
                     print("🔴 [Chatroom] 进房失败 code=\(code) \(error)")
-                    self.push("加入聊天室失败：\(code)", system: true)
+                    self.push(String(format: L10n.imSystemJoinFailedFormat, "\(code)"), system: true)
                 } else {
                     print("🟢 [Chatroom] 进房成功 online=\(chatroom?.onlineUserCount ?? 0)")
                     self.connected = true
                     self.onlineCount = chatroom?.onlineUserCount ?? 0
-                    self.push("已进入聊天室", system: true)
+                    self.push(L10n.imSystemJoined, system: true)
                 }
             }
         }
@@ -107,13 +109,13 @@ extension NIMChatroomManager: NIMChatManagerDelegate {
                 let body = m.text ?? ""
                 items.append(ChatMessage(text: name.isEmpty ? body : "\(name)：\(body)", isSystem: false))
             case .custom:
-                items.append(ChatMessage(text: "[收到礼物/自定义消息]", isSystem: true))
+                items.append(ChatMessage(text: L10n.imSystemGiftPlaceholder, isSystem: true))
             case .notification:
                 if let obj = m.messageObject as? NIMNotificationObject,
                    let content = obj.content as? NIMChatroomNotificationContent {
                     if content.eventType == .enter {
                         delta += 1
-                        items.append(ChatMessage(text: "有用户进入了直播间", isSystem: true))
+                        items.append(ChatMessage(text: L10n.userJoined, isSystem: true))
                     } else if content.eventType == .exit {
                         delta -= 1
                     }

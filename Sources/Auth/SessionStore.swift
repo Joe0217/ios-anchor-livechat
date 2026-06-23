@@ -31,7 +31,7 @@ final class SessionStore: ObservableObject {
             )
             let result = try JSONDecoder().decode(LoginResult.self, from: data)
             guard let token = result.token, !token.isEmpty else {
-                errorMessage = "登录失败：服务未返回 token"
+                errorMessage = L10n.authErrorNoToken
                 return
             }
             user = result
@@ -41,7 +41,7 @@ final class SessionStore: ObservableObject {
             // 1005 = 账号未注册 / token 失效，直接展示后端文案
             errorMessage = e.message
         } catch {
-            errorMessage = "网络错误：\(error.localizedDescription)"
+            errorMessage = String(format: L10n.authErrorNetworkFormat, error.localizedDescription)
         }
     }
 

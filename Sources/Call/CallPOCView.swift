@@ -41,7 +41,7 @@ struct CallPOCView: View {
         }
         .onDisappear {
             camera.stop()
-            agora.leave()
+            Task { await agora.leave() }
         }
         .onReceive(params.objectWillChange) { _ in
             DispatchQueue.main.async { camera.renderer.updateParameters(params) }
@@ -67,7 +67,7 @@ struct CallPOCView: View {
                     RemoteVideoView(manager: agora)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 } else {
-                    Text("等待对端").font(.caption2).foregroundStyle(.white.opacity(0.6))
+                    Text(L10n.callStatusWaitingRemote).font(.caption2).foregroundStyle(.white.opacity(0.6))
                 }
             }
             .frame(width: 96, height: 160)
@@ -76,7 +76,7 @@ struct CallPOCView: View {
 
     private var beautyBanner: some View {
         let isPassthrough = camera.renderer is PassthroughRenderer
-        return Text(isPassthrough ? "直通预览 · 相芯未接入" : "相芯美颜已接入")
+        return Text(isPassthrough ? L10n.callBeautyBannerPassthrough : L10n.callBeautyBannerActive)
             .font(.footnote).foregroundStyle(.white)
             .padding(.horizontal, 12).padding(.vertical, 6)
             .background(.ultraThinMaterial, in: Capsule())
@@ -85,8 +85,8 @@ struct CallPOCView: View {
     private var permissionHint: some View {
         VStack(spacing: 12) {
             Image(systemName: "camera.fill").font(.largeTitle)
-            Text("需要摄像头权限").foregroundStyle(.white)
-            Text("请在 设置 > 隐私 > 相机 中开启").font(.footnote).foregroundStyle(.secondary)
+            Text(L10n.callPermissionTitle).foregroundStyle(.white)
+            Text(L10n.callPermissionMessage).font(.footnote).foregroundStyle(.secondary)
         }
     }
 
@@ -95,9 +95,9 @@ struct CallPOCView: View {
     private var controlPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("频道").foregroundStyle(.white)
+                Text(L10n.callChannelLabel).foregroundStyle(.white)
                 TextField("", text: $channel,
-                          prompt: Text("频道名（双方一致）").foregroundColor(.white.opacity(0.5)))
+                          prompt: Text(L10n.callChannelPlaceholder).foregroundColor(.white.opacity(0.5)))
                     .foregroundStyle(.white)
                     .padding(8)
                     .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
@@ -109,11 +109,15 @@ struct CallPOCView: View {
             }
 
             Button {
-                agora.isActive ? agora.leave() : startCall()
+                if agora.isActive {
+                    Task { await agora.leave() }
+                } else {
+                    startCall()
+                }
             } label: {
                 HStack(spacing: 8) {
                     if connecting { ProgressView().tint(.white) }
-                    Text(agora.isActive ? "挂断" : (connecting ? "接通中…" : "加入通话"))
+                    Text(agora.isActive ? L10n.callHangup : (connecting ? L10n.callConnecting : L10n.callJoin))
                         .font(.headline).foregroundStyle(.white)
                 }
                 .frame(maxWidth: .infinity).padding(.vertical, 10)
@@ -122,11 +126,11 @@ struct CallPOCView: View {
             }
             .disabled(connecting)
 
-            Toggle("美颜开关", isOn: $params.enabled).tint(.pink).foregroundStyle(.white)
-            slider("磨皮", value: $params.blur)
-            slider("美白", value: $params.whiten)
-            slider("大眼", value: $params.eyeEnlarge)
-            slider("瘦脸", value: $params.faceThin)
+            Toggle(L10n.livePrepareBeautyToggle, isOn: $params.enabled).tint(.pink).foregroundStyle(.white)
+            slider(L10n.livePrepareSliderBlur, value: $params.blur)
+            slider(L10n.livePrepareSliderWhiten, value: $params.whiten)
+            slider(L10n.livePrepareSliderEyeEnlarge, value: $params.eyeEnlarge)
+            slider(L10n.livePrepareSliderFaceThin, value: $params.faceThin)
         }
         .padding()
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
@@ -135,14 +139,14 @@ struct CallPOCView: View {
     /// 接通：getAgoraRtmToken 拿全量 token → rtc 通信模式加入频道
     private func startCall() {
         let ch = channel.trimmingCharacters(in: .whitespaces)
-        guard !ch.isEmpty else { errorMsg = "请输入频道名"; return }
+        guard !ch.isEmpty else { errorMsg = L10n.callErrorEmptyChannel; return }
         connecting = true
         errorMsg = ""
         Task { @MainActor in
             do {
                 let tokenRes = try await LiveService.getAgoraRtmToken()
                 guard let tk = tokenRes.rtcToken, !tk.isEmpty else {
-                    errorMsg = "获取 token 失败"
+                    errorMsg = L10n.callErrorTokenFailed
                     connecting = false
                     return
                 }
@@ -150,9 +154,9 @@ struct CallPOCView: View {
                 let uid = UInt(SessionStore.shared.user?.userId ?? 0)
                 agora.join(channelId: ch, token: tk, uid: uid, profile: .communication)
             } catch let e as APIError {
-                errorMsg = "接通失败：\(e.message)（\(e.code)）"
+                errorMsg = String(format: L10n.callErrorConnectPrefix, e.message, e.code)
             } catch {
-                errorMsg = "接通失败：\(error.localizedDescription)"
+                errorMsg = String(format: L10n.callErrorConnectGeneric, error.localizedDescription)
             }
             connecting = false
         }

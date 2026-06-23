@@ -1,0 +1,191 @@
+/* Hily 主播端本地化 — 土耳其语（tr）
+ *
+ * 工程占位翻译：由开发者完成业务术语级翻译，等真正上线前需翻译团队复审地道性/口语化。
+ * key 命名约定：模块.场景（lowerCamelCase 拼接），与 en.lproj 完全一致。
+ * 占位符 %@ %d 保留位置不变。
+ * 品牌词 "Hily" / "FaceUnity" / "Prime" / "Cysle" 不翻译。
+ */
+
+// MARK: - 强制下播原因（forceEnd reason UI 文案）
+"forceEnd.disconnected"      = "Bağlantı kesildi";
+"forceEnd.banned"            = "Hesap ihlali, yayın sonlandırıldı";
+"forceEnd.cameraFailure"     = "Kamera yakalama başarısız";
+"forceEnd.noPermission"      = "İzin kontrolü başarısız";
+"forceEnd.weakNetwork"       = "Ağ çok zayıf";
+
+// MARK: - 美颜降级
+"beauty.unavailable"         = "Güzellik kullanılamıyor";
+
+// MARK: - 网络弱网降级（v5 分层）
+"network.warning"            = "Ağ kararsız, düşük kare hızına geçildi";
+
+// MARK: - 开播前置校验
+"prepare.titleEmpty"         = "Lütfen yayın başlığı girin";
+"prepare.coverEmpty"         = "Lütfen yayın kapağı ayarlayın";
+"prepare.cooldown"           = "Son yayının bitiminden sonra 60 saniye bekleyin";
+"prepare.imOffline"          = "Sohbet hizmeti çevrimdışı, lütfen tekrar deneyin";
+
+// MARK: - 公屏
+"im.chatroom.reconnecting"   = "Sohbet odasına yeniden bağlanılıyor...";
+"im.chatroom.reconnected"    = "Sohbet odasına yeniden bağlanıldı";
+"im.userJoined"              = "Bir kullanıcı yayın odasına katıldı";
+"im.sendGiftAction"          = "gönderdi";
+"im.complianceWarningDefault" = "Yayın içeriğiniz uyarı aldı";
+"im.anonymous"               = "Anonim";
+
+// MARK: - Work 工作台（设计稿还原）
+"work.weeklyLevel"           = "Haftalık Seviye";
+"work.detail"                = "Detay";
+"work.scorePrefix"           = "Skor: ";
+"work.needMoreFormat"        = "(Seviye atlamak için %d puan daha gerekli)";
+
+"work.callsToday"            = "Bugünkü Aramalar";
+"work.positiveRating"        = "Olumlu Değerlendirme";
+"work.weeklyRevenue"         = "Haftalık Gelir";
+
+"work.todaysIncome"          = "Bugünkü Gelir";
+"work.withdrawal"            = "Çekim";
+"work.callIncomes"           = "Arama Gelirleri";
+"work.giftIncomes"           = "Hediye Gelirleri";
+"work.taskIncomes"           = "Görev Gelirleri";
+"work.inviteIncomes"         = "Davet Gelirleri";
+"work.managedIncomes"        = "Yönetilen Gelirler";
+"work.totalIncomes"          = "Toplam Gelir";
+
+"work.tools"                 = "Araçlar";
+"work.online"                = "Çevrimiçi";
+"work.online.on"             = "Açık";
+"work.online.off"            = "Kapalı";
+"work.offline"               = "Çevrimdışı";
+
+// 工具图标标签
+"work.tool.hi"               = "Merhaba";
+"work.tool.goLive"           = "Yayına Geç";
+"work.tool.match"            = "Eşleş";
+"work.tool.task"             = "Görev";
+"work.tool.beauty"           = "Güzellik";
+"work.tool.points"           = "Puan";
+"work.tool.giftMessage"      = "Hediye Mesajı";
+"work.tool.profileUpdate"    = "Profili Güncelle";
+"work.tool.invite"           = "Davet Et";
+"work.tool.workingGuide"     = "Çalışma Rehberi";
+"work.tool.backpack"         = "Çanta";
+
+// 底部 tab 标签
+"tab.home"                   = "Ana Sayfa";
+"tab.messages"               = "Mesajlar";
+"tab.work"                   = "İş";
+"tab.profile"                = "Profil";
+
+// MARK: - Live 页（设计稿还原）
+"live.subTab.live"           = "Canlı";
+"live.subTab.list"           = "Liste";
+"live.subTab.match"          = "Eşleş";
+"live.subTab.cysle"          = "Cysle";
+"live.subTab.comingSoon"     = "Yakında";
+"live.viewers"               = "izleyici";
+"live.rankBadge"             = "Lider Tablosu";
+"live.refresh"               = "Yenile";
+"live.onlineDot"             = "Çevrimiçi";
+
+// MARK: - List 子页（设计稿还原）
+"liveList.segment.online"    = "Çevrimiçi";
+"liveList.segment.prime"     = "Prime";
+"liveList.invite.title"      = "Arkadaşları davet et";
+"liveList.invite.subtitle"   = "Kullanıcıları davet et ve elmas kazan";
+"liveList.action.chat"       = "Sohbet";
+"liveList.action.live"       = "Canlı";
+"liveList.action.match"      = "Eşleş";
+"liveList.action.offline"    = "Çevrimdışı";
+
+// MARK: - Profile 个人页（设计稿还原）
+"profile.settings"           = "Ayarlar";
+"profile.editName"           = "İsmi düzenle";
+"profile.idPrefix"           = "Kimlik:";
+"profile.following"          = "Takip";
+"profile.followers"          = "Takipçi";
+"profile.friends"            = "Arkadaşlar";
+"profile.tab.album"          = "Albüm";
+"profile.tab.gifts"          = "Hediyeler";
+"profile.tab.moment"         = "Anlar";
+"profile.photos.format"      = "Fotoğraflar (%d/%d)";
+"profile.videos.format"      = "Videolar (%d/%d)";
+"profile.cell.photo"         = "Fotoğraf";
+"profile.cell.video"         = "Video";
+"profile.emptyPlaceholder"   = "Burada henüz içerik yok";
+
+// MARK: - Auth 登录页
+"auth.title"                 = "Yayıncı Girişi";
+"auth.envHint"               = "dev · anchor.cphub.link";
+"auth.email"                 = "E-posta";
+"auth.password"              = "Şifre";
+"auth.login"                 = "Giriş Yap";
+"auth.loggingIn"             = "Giriş yapılıyor...";
+
+// MARK: - LivePrepare 开播准备
+"livePrepare.navTitle"       = "Yayın Demo";
+"livePrepare.panelTitle"     = "Yayın Kurulumu";
+"livePrepare.titlePlaceholder" = "Yayın başlığı (boş bırakırsanız varsayılan biyografi kullanılır)";
+"livePrepare.defaultTitle"   = "Canlı";
+"livePrepare.beautyToggle"   = "Güzellik";
+"livePrepare.sliderBlur"     = "Pürüzsüz";
+"livePrepare.sliderWhiten"   = "Beyazlat";
+"livePrepare.sliderEyeEnlarge" = "Göz Büyüt";
+"livePrepare.sliderFaceThin" = "Yüz İnceltme";
+"livePrepare.start"          = "Yayını Başlat";
+"livePrepare.starting"       = "Başlatılıyor...";
+"livePrepare.errorNoChannel" = "Başarısız: yanıtta kanal veya token yok";
+"livePrepare.errorPrefix"    = "Başarısız: %@ (%@)";
+"livePrepare.errorGeneric"   = "Başarısız: %@";
+
+// MARK: - LiveRoom 直播间
+"liveRoom.permissionAlertTitle" = "Kamera İzni Gerekli";
+"liveRoom.permissionAlertOK" = "Tamam";
+"liveRoom.permissionAlertMessage" = "Ayarlar → Hily → Kamera bölümünden kamera erişimini etkinleştirin";
+"liveRoom.statusLiveFormat"  = "Canlı %@";
+"liveRoom.statusConnecting"  = "Bağlanılıyor...";
+"liveRoom.anchorDefault"     = "Yayıncı";
+"liveRoom.toolBeauty"        = "Güzellik";
+"liveRoom.endLive"           = "Yayını Bitir";
+"liveRoom.beautyPanelTitle"  = "Güzellik";
+
+// MARK: - Call POC（调试态保留，上线前删除）
+"call.statusWaitingRemote"   = "Karşı taraf bekleniyor";
+"call.permissionTitle"       = "Kamera İzni Gerekli";
+"call.permissionMessage"     = "Ayarlar → Gizlilik → Kamera bölümünden etkinleştirin";
+"call.channelLabel"          = "Kanal";
+"call.channelPlaceholder"    = "Kanal adı (iki tarafta da aynı olmalı)";
+"call.hangup"                = "Kapat";
+"call.connecting"            = "Bağlanılıyor...";
+"call.join"                  = "Aramaya Katıl";
+"call.beautyBannerPassthrough" = "Doğrudan önizleme · FaceUnity entegre değil";
+"call.beautyBannerActive"    = "FaceUnity güzellik aktif";
+"call.errorEmptyChannel"     = "Lütfen kanal adı girin";
+"call.errorTokenFailed"      = "Token alınamadı";
+"call.errorConnectPrefix"    = "Bağlantı başarısız: %@ (%@)";
+"call.errorConnectGeneric"   = "Bağlantı başarısız: %@";
+
+// MARK: - Call 1v1 真实通话视图（CallView.swift）
+"call.subtitle.callingOut"   = "Aranıyor...";
+"call.subtitle.incoming"     = "sizi görüntülü aramaya davet ediyor";
+"call.action.cancel"         = "İptal";
+"call.action.reject"         = "Reddet";
+"call.action.accept"         = "Kabul Et";
+"call.action.hangupBackToLive" = "Kapat ve yayına dön";
+"call.action.hangup"         = "Kapat";
+"call.liveBanner"            = "Özel arama · Yayına dönmek için kapatın";
+
+// MARK: - LiveRoom 挂断后回直播倒计时覆盖层
+"liveRoom.callEndedTitle"    = "Arama sona erdi";
+"liveRoom.returnCountdownFormat" = "%d saniye içinde yayına dönülüyor";
+
+// MARK: - 服务层错误（被 View 显示）
+"auth.error.noToken"         = "Giriş başarısız: sunucu token döndürmedi";
+"auth.error.networkFormat"   = "Ağ hatası: %@";
+"live.error.noCover"         = "Henüz yayın kapağı ayarlanmadı. Lütfen önce ana uygulamadan kapak yapılandırın.";
+
+// 公屏系统消息（用户在直播间内可见）
+"im.system.loginFailedFormat" = "Sohbet girişi başarısız: %@";
+"im.system.joinFailedFormat"  = "Sohbet odasına katılım başarısız: %@";
+"im.system.joined"            = "Sohbet odasına katıldınız";
+"im.system.giftPlaceholder"   = "[Hediye/Özel mesaj]";

@@ -1,0 +1,5 @@
+/* Info.plist 权限弹窗文案本地化（tr）
+ * iOS 弹相机/麦克风权限时显示这里的文案，覆盖 project.yml 里的 Info.plist 兜底值
+ */
+"NSCameraUsageDescription"     = "Gerçek zamanlı güzelleştirme önizlemesi ve canlı yayın için kullanılır";
+"NSMicrophoneUsageDescription" = "Gerçek zamanlı sesli/görüntülü aramalar için kullanılır";

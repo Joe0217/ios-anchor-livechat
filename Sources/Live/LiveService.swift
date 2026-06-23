@@ -59,7 +59,7 @@ enum LiveService {
     static func startLive(liveDescribe: String) async throws -> LiveRoomInfo {
         let settings = try await getMyLiveRoomRaw()
         guard let cover = settings["backgroundImgUrl"] as? String, !cover.isEmpty else {
-            throw APIError(code: "-1", message: "账号还没有直播封面，请先在主端设置封面后再试")
+            throw APIError(code: "-1", message: L10n.liveErrorNoCover)
         }
         let beginRes = try await beginLiveRoomRaw(settings: settings, liveDescribe: liveDescribe)
         var merged = settings
