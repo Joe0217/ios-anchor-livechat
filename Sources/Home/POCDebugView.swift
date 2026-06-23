@@ -2,56 +2,50 @@ import SwiftUI
 
 /// 临时 POC 调试台：通话/直播/账号入口集合。
 ///
-/// 阶段一为方便真机自测保留。Live 设计稿还原后从首屏移除，
-/// 改由全局右下角悬浮按钮触发 `.sheet` 弹层展示，后续上线前整体删除。
+/// 阶段一为方便真机自测保留。由 Work tab → Tools → Invite 工具入口 push 进入，
+/// 复用 WorkView 的 NavigationStack，主层级 tabbar 不受影响。
+/// 后续上线前整体删除。
 struct POCDebugView: View {
     @EnvironmentObject private var session: SessionStore
     @ObservedObject private var callStore = CallStore.shared
-    @Environment(\.dismiss) private var dismiss
 
     @State private var dialUserId: String = ""
     @State private var showDialAlert = false
 
     var body: some View {
-        NavigationStack {
-            List {
-                Section("调试功能") {
-                    NavigationLink {
-                        CallPOCView().navigationBarTitleDisplayMode(.inline)
-                    } label: {
-                        Label("美颜 + 单端入频道 POC", systemImage: "video.fill")
-                    }
-                    NavigationLink {
-                        LivePrepareView()
-                    } label: {
-                        Label("直播开播 Demo", systemImage: "dot.radiowaves.left.and.right")
-                    }
+        // push 进入：复用外层 WorkView 的 NavigationStack，不再自己嵌套一层。
+        List {
+            Section("调试功能") {
+                NavigationLink {
+                    CallPOCView().navigationBarTitleDisplayMode(.inline)
+                } label: {
+                    Label("美颜 + 单端入频道 POC", systemImage: "video.fill")
                 }
-
-                callSection
-
-                Section("账号") {
-                    if let name = session.user?.nickname, !name.isEmpty {
-                        Label(name, systemImage: "person.crop.circle")
-                    }
-                    if let uid = session.user?.userId {
-                        LabeledContent("userId", value: "\(uid)")
-                    }
-                    Button(role: .destructive) {
-                        session.logout()
-                    } label: {
-                        Label("退出登录", systemImage: "rectangle.portrait.and.arrow.right")
-                    }
+                NavigationLink {
+                    LivePrepareView()
+                } label: {
+                    Label("直播开播 Demo", systemImage: "dot.radiowaves.left.and.right")
                 }
             }
-            .navigationTitle("Anchor POC 调试台")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("关闭") { dismiss() }
+
+            callSection
+
+            Section("账号") {
+                if let name = session.user?.nickname, !name.isEmpty {
+                    Label(name, systemImage: "person.crop.circle")
+                }
+                if let uid = session.user?.userId {
+                    LabeledContent("userId", value: "\(uid)")
+                }
+                Button(role: .destructive) {
+                    session.logout()
+                } label: {
+                    Label("退出登录", systemImage: "rectangle.portrait.and.arrow.right")
                 }
             }
         }
+        .navigationTitle("Anchor POC 调试台")
+        .navigationBarTitleDisplayMode(.inline)
         .alert("通话异常", isPresented: $showDialAlert) {
             Button("OK", role: .cancel) {}
         } message: {

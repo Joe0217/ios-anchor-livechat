@@ -32,7 +32,23 @@ struct ToolsSection: View {
 
             LazyVGrid(columns: columns, alignment: .center, spacing: Theme.Metric.toolRowSpacing) {
                 ForEach(tools.indices, id: \.self) { i in
-                    toolCell(icon: tools[i].icon, label: tools[i].label)
+                    let cell = toolCell(icon: tools[i].icon, label: tools[i].label)
+                    #if DEBUG
+                    // DEBUG 临时入口（Release 不存在）：
+                    //   Hi     → locale 切换 sheet（i18n 任务）
+                    //   Invite → push POC 调试台（沿用 WorkView 的 NavigationStack）
+                    if tools[i].icon == "toolHi" {
+                        Button { DebugLocaleStore.shared.showSheet = true } label: { cell }
+                            .buttonStyle(.plain)
+                    } else if tools[i].icon == "toolInvite" {
+                        NavigationLink(value: WorkRoute.pocDebug) { cell }
+                            .buttonStyle(.plain)
+                    } else {
+                        cell
+                    }
+                    #else
+                    cell
+                    #endif
                 }
             }
             .padding(.top, 4)
