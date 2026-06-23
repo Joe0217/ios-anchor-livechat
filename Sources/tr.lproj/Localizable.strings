@@ -81,7 +81,7 @@
 "live.subTab.live"           = "Canlı";
 "live.subTab.list"           = "Liste";
 "live.subTab.match"          = "Eşleş";
-"live.subTab.cysle"          = "Cysle";
+"live.subTab.cysle"          = "Döngü";
 "live.subTab.comingSoon"     = "Yakında";
 "live.viewers"               = "izleyici";
 "live.rankBadge"             = "Lider Tablosu";
@@ -90,7 +90,7 @@
 
 // MARK: - List 子页（设计稿还原）
 "liveList.segment.online"    = "Çevrimiçi";
-"liveList.segment.prime"     = "Prime";
+"liveList.segment.prime"     = "Premium";
 "liveList.invite.title"      = "Arkadaşları davet et";
 "liveList.invite.subtitle"   = "Kullanıcıları davet et ve elmas kazan";
 "liveList.action.chat"       = "Sohbet";
@@ -113,6 +113,42 @@
 "profile.cell.photo"         = "Fotoğraf";
 "profile.cell.video"         = "Video";
 "profile.emptyPlaceholder"   = "Burada henüz içerik yok";
+"profile.loadFailed.format"  = "Profil yüklenemedi: %@";
+"profile.loading"            = "Yükleniyor...";
+"profile.retry"              = "Yeniden dene";
+"profile.ratePerMin.format"  = "%d/dk";
+
+// MARK: - FollowList 关注/粉丝/朋友列表
+"followList.action.follow"     = "Takip et";
+"followList.action.following"  = "Takip ediliyor";
+"followList.action.unfollow"   = "Takipten çık";
+"followList.action.block"      = "Engelle";
+"followList.end"               = "Daha fazla yok";
+"followList.empty"             = "Henüz kullanıcı yok";
+"profile.media.reviewing"      = "İnceleniyor";
+"profile.media.rejected"       = "Reddedildi";
+"mediaPreview.close"           = "Kapat";
+
+// MARK: - Settings 设置页
+"settings.title"               = "Ayarlar";
+"settings.section.account"     = "Hesap";
+"settings.section.general"     = "Genel";
+"settings.section.about"       = "Hakkında";
+"settings.blocklist"           = "Engellenenler";
+"settings.language"            = "Dil";
+"settings.feedback"            = "Geri bildirim";
+"settings.version"             = "Sürüm";
+"settings.tos"                 = "Kullanım Şartları";
+"settings.privacy"             = "Gizlilik Politikası";
+"settings.logout"              = "Çıkış Yap";
+"settings.logoutConfirm"       = "Bu hesaptan çıkış yapılsın mı?";
+"settings.cancel"              = "İptal";
+
+// MARK: - LevelDetail 段位详情页
+"level.title"                  = "Seviye Detayı";
+"level.current"                = "Mevcut Seviye";
+"level.spectrum"               = "Seviye Spektrumu";
+"profile.gifts.empty"          = "Henüz hediye yok";
 
 // MARK: - Auth 登录页
 "auth.title"                 = "Yayıncı Girişi";

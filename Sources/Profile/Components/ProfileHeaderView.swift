@@ -35,7 +35,7 @@ struct ProfileHeaderView: View {
     private var topActionRow: some View {
         HStack(spacing: 0) {
             Spacer()
-            Button(action: { /* 进入设置：占位 */ }) {
+            NavigationLink(value: ProfileRoute.settings) {
                 Image("profileSettingsIcon")
                     .resizable()
                     .scaledToFit()
@@ -58,14 +58,16 @@ struct ProfileHeaderView: View {
 
     private var avatar: some View {
         // 外环 72，内图 64：外圈描边在 72pt 圆上，内图 64pt 圆居中显示，单边间距 4pt
+        // CachedAsyncImage 命中内存缓存时**首次渲染就是最终图**，切 tab 回来无闪烁
         ZStack {
-            // 内图：占位头像，接入头像 URL 后用 AsyncImage 替换
-            Image(systemName: "person.crop.circle.fill")
-                .resizable()
-                .scaledToFill()
-                .foregroundStyle(.white.opacity(0.85))
-                .frame(width: Theme.Metric.profileAvatarInner, height: Theme.Metric.profileAvatarInner)
-                .clipShape(Circle())
+            CachedAsyncImage(url: vm.iconURL, contentMode: .fill) {
+                Image(systemName: "person.crop.circle.fill")
+                    .resizable()
+                    .scaledToFill()
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+            .frame(width: Theme.Metric.profileAvatarInner, height: Theme.Metric.profileAvatarInner)
+            .clipShape(Circle())
         }
         .frame(width: Theme.Metric.profileAvatarSize, height: Theme.Metric.profileAvatarSize)
         .overlay(
@@ -76,91 +78,127 @@ struct ProfileHeaderView: View {
     }
 
     private var nameAndMeta: some View {
+        // 字段空时整段不渲染，避免显示空白行
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(vm.displayName)
-                    .font(Theme.Typography.profileName)
-                    .foregroundColor(Theme.Palette.profileName)
-                Button(action: { /* 编辑昵称：占位 */ }) {
-                    Image("profileEditIcon")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 16, height: 16)
+            if !vm.displayName.isEmpty {
+                HStack(spacing: 6) {
+                    Text(vm.displayName)
+                        .font(Theme.Typography.profileName)
+                        .foregroundColor(Theme.Palette.profileName)
+                    Button(action: { /* 编辑昵称：占位 */ }) {
+                        Image("profileEditIcon")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 16, height: 16)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.profileEditName)
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(L10n.profileEditName)
             }
 
-            Text(L10n.profileIdPrefix + vm.userId)
-                .font(Theme.Typography.profileId)
-                .foregroundColor(Theme.Palette.profileIdText)
+            if !vm.userId.isEmpty {
+                Text(L10n.profileIdPrefix + vm.userId)
+                    .font(Theme.Typography.profileId)
+                    .foregroundColor(Theme.Palette.profileIdText)
+            }
 
-            HStack(spacing: 6) {
-                Image("profileGenderIcon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 14, height: 14)
-                    .accessibilityHidden(true)
-                Text(vm.ageText)
-                    .font(Theme.Typography.profileMeta)
-                    .foregroundColor(Theme.Palette.profileMetaText)
+            // 年龄 / 国旗任一为空时整行收缩，全空时整行不渲染
+            if !vm.ageText.isEmpty || !vm.countryFlag.isEmpty {
+                HStack(spacing: 6) {
+                    if !vm.ageText.isEmpty {
+                        Image("profileGenderIcon")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 14, height: 14)
+                            .accessibilityHidden(true)
+                        Text(vm.ageText)
+                            .font(Theme.Typography.profileMeta)
+                            .foregroundColor(Theme.Palette.profileMetaText)
+                    }
 
-                // 用 1pt 矩形作为视觉分隔条，避免 "|" 字符在 RTL/不同字体下错位
-                Rectangle()
-                    .fill(Color.white.opacity(0.25))
-                    .frame(width: 1, height: 10)
-                    .padding(.horizontal, 4)
-                    .accessibilityHidden(true)
+                    if !vm.ageText.isEmpty, !vm.countryFlag.isEmpty {
+                        // 仅在两侧都有内容时画分隔条
+                        Rectangle()
+                            .fill(Color.white.opacity(0.25))
+                            .frame(width: 1, height: 10)
+                            .padding(.horizontal, 4)
+                            .accessibilityHidden(true)
+                    }
 
-                Image("profileLocationIcon")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 14, height: 14)
-                    .accessibilityHidden(true)
-                Text(vm.countryFlag)
-                    .font(Theme.Typography.profileMeta)
+                    if !vm.countryFlag.isEmpty {
+                        Image("profileLocationIcon")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 14, height: 14)
+                            .accessibilityHidden(true)
+                        Text(vm.countryFlag)
+                            .font(Theme.Typography.profileMeta)
+                    }
+                }
             }
         }
     }
 
+    @ViewBuilder
     private var tierBlock: some View {
-        VStack(alignment: .trailing, spacing: 0) {
-            HStack(spacing: 4) {
-                Text(vm.tierLabel)
-                    .font(Theme.Typography.profileTier)
-                    .foregroundColor(Theme.Palette.profileTier)
-                Image("profileChevronRight")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 10, height: 10)
-                    .accessibilityHidden(true)
+        // tierLabel 与 ratePerMin 全空时整块不渲染（避免空白胶囊）
+        if !vm.tierLabel.isEmpty || vm.ratePerMin > 0 {
+            NavigationLink(value: ProfileRoute.levelDetail) {
+                VStack(alignment: .trailing, spacing: 0) {
+                    if !vm.tierLabel.isEmpty {
+                        HStack(spacing: 4) {
+                            Text(vm.tierLabel)
+                                .font(Theme.Typography.profileTier)
+                                .foregroundColor(Theme.Palette.profileTier)
+                            Image("profileChevronRight")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 10, height: 10)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    if vm.ratePerMin > 0 {
+                        Text(String(format: L10n.profileRatePerMinFormat, vm.ratePerMin))
+                            .font(Theme.Typography.profileRate)
+                            .foregroundColor(Theme.Palette.profileRate)
+                    }
+                }
+                .contentShape(Rectangle())
             }
-            Text(vm.rateText)
-                .font(Theme.Typography.profileRate)
-                .foregroundColor(Theme.Palette.profileRate)
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.levelDetailTitle)
         }
     }
 
     private var statsRow: some View {
         HStack(spacing: 0) {
-            statItem(value: vm.followingCount, caption: L10n.profileFollowing)
+            statItem(value: vm.followingCount, caption: L10n.profileFollowing, segment: .following)
             statDivider
-            statItem(value: vm.followersCount, caption: L10n.profileFollowers)
+            statItem(value: vm.followersCount, caption: L10n.profileFollowers, segment: .followers)
             statDivider
-            statItem(value: vm.friendsCount,   caption: L10n.profileFriends)
+            statItem(value: vm.friendsCount,   caption: L10n.profileFriends,   segment: .friends)
         }
     }
 
-    private func statItem(value: Int, caption: String) -> some View {
-        VStack(spacing: 4) {
-            Text("\(value)")
-                .font(Theme.Typography.profileStatNum)
-                .foregroundColor(Theme.Palette.profileName)
-            Text(caption)
-                .font(Theme.Typography.profileStatCap)
-                .foregroundColor(Theme.Palette.profileStatCaption)
+    /// 单个 stat 项：点击推入 FollowListView 对应 segment。
+    /// NavigationLink(value:) + NavigationStack.navigationDestination(for:) 解耦了
+    /// 跳转目标的具体类型，View 只负责声明意图，落地路由由 ProfileView 集中配置。
+    private func statItem(value: Int, caption: String, segment: FollowSegment) -> some View {
+        NavigationLink(value: segment) {
+            VStack(spacing: 4) {
+                Text("\(value)")
+                    .font(Theme.Typography.profileStatNum)
+                    .foregroundColor(Theme.Palette.profileName)
+                Text(caption)
+                    .font(Theme.Typography.profileStatCap)
+                    .foregroundColor(Theme.Palette.profileStatCaption)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity)
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(caption) \(value)")
     }
 
     private var statDivider: some View {

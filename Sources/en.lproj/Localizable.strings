@@ -79,7 +79,7 @@
 "live.subTab.live"           = "Live";
 "live.subTab.list"           = "List";
 "live.subTab.match"          = "Match";
-"live.subTab.cysle"          = "Cysle";
+"live.subTab.cysle"          = "Cycle";
 "live.subTab.comingSoon"     = "Coming Soon";
 "live.viewers"               = "viewers";
 "live.rankBadge"             = "Leaderboard";
@@ -88,7 +88,7 @@
 
 // MARK: - List 子页（设计稿还原）
 "liveList.segment.online"    = "Online";
-"liveList.segment.prime"     = "Prime";
+"liveList.segment.prime"     = "Premium";
 "liveList.invite.title"      = "Invite friends";
 "liveList.invite.subtitle"   = "Invite users and get diamonds";
 "liveList.action.chat"       = "Chat";
@@ -111,6 +111,42 @@
 "profile.cell.photo"         = "Photo";
 "profile.cell.video"         = "Video";
 "profile.emptyPlaceholder"   = "Nothing here yet";
+"profile.loadFailed.format"  = "Failed to load profile: %@";
+"profile.loading"            = "Loading...";
+"profile.retry"              = "Retry";
+"profile.ratePerMin.format"  = "%d/min";
+
+// MARK: - FollowList 关注/粉丝/朋友列表
+"followList.action.follow"     = "Follow";
+"followList.action.following"  = "Following";
+"followList.action.unfollow"   = "Unfollow";
+"followList.action.block"      = "Block";
+"followList.end"               = "No more";
+"followList.empty"             = "No users yet";
+"profile.media.reviewing"      = "Reviewing";
+"profile.media.rejected"       = "Rejected";
+"mediaPreview.close"           = "Close";
+
+// MARK: - Settings 设置页
+"settings.title"               = "Settings";
+"settings.section.account"     = "Account";
+"settings.section.general"     = "General";
+"settings.section.about"       = "About";
+"settings.blocklist"           = "Blocklist";
+"settings.language"            = "Language";
+"settings.feedback"            = "Feedback";
+"settings.version"             = "Version";
+"settings.tos"                 = "Terms of Service";
+"settings.privacy"             = "Privacy Policy";
+"settings.logout"              = "Log Out";
+"settings.logoutConfirm"       = "Log out of this account?";
+"settings.cancel"              = "Cancel";
+
+// MARK: - LevelDetail 段位详情页
+"level.title"                  = "Level Detail";
+"level.current"                = "Current Level";
+"level.spectrum"               = "Tier Spectrum";
+"profile.gifts.empty"          = "No gifts yet";
 
 // MARK: - Auth 登录页
 "auth.title"                 = "Anchor Login";

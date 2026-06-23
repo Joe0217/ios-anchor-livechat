@@ -81,7 +81,7 @@
 "live.subTab.live"           = "البث";
 "live.subTab.list"           = "القائمة";
 "live.subTab.match"          = "مطابقة";
-"live.subTab.cysle"          = "Cysle";
+"live.subTab.cysle"          = "دورة";
 "live.subTab.comingSoon"     = "قريبًا";
 "live.viewers"               = "مشاهد";
 "live.rankBadge"             = "لوحة الصدارة";
@@ -90,7 +90,7 @@
 
 // MARK: - List 子页（设计稿还原）
 "liveList.segment.online"    = "متصل";
-"liveList.segment.prime"     = "Prime";
+"liveList.segment.prime"     = "مميز";
 "liveList.invite.title"      = "ادعُ الأصدقاء";
 "liveList.invite.subtitle"   = "ادعُ المستخدمين واحصل على الماس";
 "liveList.action.chat"       = "دردشة";
@@ -113,6 +113,42 @@
 "profile.cell.photo"         = "صورة";
 "profile.cell.video"         = "فيديو";
 "profile.emptyPlaceholder"   = "لا يوجد محتوى هنا بعد";
+"profile.loadFailed.format"  = "فشل تحميل الملف الشخصي: %@";
+"profile.loading"            = "جارٍ التحميل...";
+"profile.retry"              = "إعادة المحاولة";
+"profile.ratePerMin.format"  = "%d/دقيقة";
+
+// MARK: - FollowList 关注/粉丝/朋友列表
+"followList.action.follow"     = "متابعة";
+"followList.action.following"  = "تتم المتابعة";
+"followList.action.unfollow"   = "إلغاء المتابعة";
+"followList.action.block"      = "حظر";
+"followList.end"               = "لا مزيد";
+"followList.empty"             = "لا يوجد مستخدمون بعد";
+"profile.media.reviewing"      = "قيد المراجعة";
+"profile.media.rejected"       = "مرفوض";
+"mediaPreview.close"           = "إغلاق";
+
+// MARK: - Settings 设置页
+"settings.title"               = "الإعدادات";
+"settings.section.account"     = "الحساب";
+"settings.section.general"     = "عام";
+"settings.section.about"       = "حول";
+"settings.blocklist"           = "قائمة الحظر";
+"settings.language"            = "اللغة";
+"settings.feedback"            = "التعليقات";
+"settings.version"             = "الإصدار";
+"settings.tos"                 = "شروط الخدمة";
+"settings.privacy"             = "سياسة الخصوصية";
+"settings.logout"              = "تسجيل الخروج";
+"settings.logoutConfirm"       = "تسجيل الخروج من هذا الحساب؟";
+"settings.cancel"              = "إلغاء";
+
+// MARK: - LevelDetail 段位详情页
+"level.title"                  = "تفاصيل المستوى";
+"level.current"                = "المستوى الحالي";
+"level.spectrum"               = "طيف المستويات";
+"profile.gifts.empty"          = "لا توجد هدايا بعد";
 
 // MARK: - Auth 登录页
 "auth.title"                 = "تسجيل دخول المضيف";

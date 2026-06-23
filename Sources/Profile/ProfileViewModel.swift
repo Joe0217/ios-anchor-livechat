@@ -1,36 +1,64 @@
 import Foundation
 import SwiftUI
+import Combine
 
-/// Profile 屏占位数据源（设计稿还原阶段不接后端，仅承载视觉所需字段）。
+/// Profile 屏 UI 状态包装（selectedTab）+ 转发 `AnchorInfoStore` 数据派生。
 ///
-/// 后续接入用户接口时，由 SessionStore.user / 用户详情接口替换 placeholder 字段；
-/// View 只读 @Published，副作用全收敛在此处。
+/// 主播信息持久层在 `AnchorInfoStore.shared`（singleton）；本 ViewModel 仅:
+/// - 持有 selectedTab（tab 切换是 UI-only 状态，不需要持久化）
+/// - 通过 cancellable 中继 store 的 objectWillChange，让 View 用 `vm.xxx` 读时仍能触发刷新
+/// - 暴露字段透传到 store（保持子视图签名不变，便于增量重构）
 @MainActor
 final class ProfileViewModel: ObservableObject {
-    // 头部
-    @Published var displayName: String = "Dawei"
-    @Published var userId: String      = "100000360"
-    @Published var ageText: String     = "24"
-    @Published var countryFlag: String = "🇺🇸"
-    @Published var tierLabel: String   = "SS"
-    @Published var rateText: String    = "800/min"
 
-    // stats
-    @Published var followingCount: Int = 13235
-    @Published var followersCount: Int = 354
-    @Published var friendsCount: Int   = 354
+    /// LoadState 类型透传（view 端继续用 `vm.LoadState` switch；底层是 store 的同类型）
+    typealias LoadState = AnchorInfoStore.LoadState
 
-    // 描述
-    @Published var bio: String = "✨ Your Starry Guide | Tap “+Follow” to catch daily heartbeats 🪐 | 📸 High-Sweet Live Blind Box launched | Generating your story’s BGM 🎵"
+    let store: AnchorInfoStore = .shared
 
-    // 内容 tab
+    /// 内容 tab 选项（UI-only，view 端独占）
     @Published var selectedTab: ProfileTab = .album
 
-    // 相册/视频数据（用本地占位封面色填充网格；接入相册接口时替换为远端 URL）
-    @Published var photos: [ProfileMediaItem] = ProfileMediaItem.previewPhotos(count: 6)
-    @Published var videos: [ProfileMediaItem] = ProfileMediaItem.previewVideos(count: 6)
-    @Published var photosTotal: Int = 9
-    @Published var videosTotal: Int = 6
+    private var cancellable: AnyCancellable?
+
+    init() {
+        // store 改变 → 中继到 vm，让 SwiftUI 通过 vm.xxx 读取的字段也能感知变化
+        cancellable = store.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+    }
+
+    // MARK: - 数据派生（全部转发到 store）
+    var loadState: LoadState { store.loadState }
+    var hasLoadedOnce: Bool { store.hasLoadedOnce }
+
+    var displayName: String { store.displayName }
+    var userId: String { store.userId }
+    var ageText: String { store.ageText }
+    var countryFlag: String { store.countryFlag }
+    var tierLabel: String { store.tierLabel }
+    var ratePerMin: Int { store.ratePerMin }
+    var iconURL: URL? { store.iconURL }
+    var bio: String { store.bio }
+
+    var photos: [MediaAsset] { store.photos }
+    var videos: [MediaAsset] { store.videos }
+    var photosTotal: Int { store.photos.count }
+    var videosTotal: Int { store.videos.count }
+    var giftList: [GiftItem] { store.giftList }
+
+    var followingCount: Int { store.followingCount }
+    var followersCount: Int { store.followersCount }
+    var friendsCount: Int { store.friendsCount }
+
+    // MARK: - 操作转发
+    func loadIfNeeded() async { await store.loadIfNeeded() }
+    func refresh() async { await store.refresh() }
+
+    // MARK: - 静态 Helper 透传（view 子组件历史调用点保留）
+    static func flagEmoji(from countryCode: String) -> String {
+        AnchorInfoStore.flagEmoji(from: countryCode)
+    }
 }
 
 /// 内容 tab 选项。
@@ -42,29 +70,6 @@ enum ProfileTab: CaseIterable, Hashable {
         case .album:  return L10n.profileTabAlbum
         case .gifts:  return L10n.profileTabGifts
         case .moment: return L10n.profileTabMoment
-        }
-    }
-}
-
-/// 媒体网格 cell 数据（接入真实接口前用 hue 区分占位）。
-struct ProfileMediaItem: Identifiable, Hashable {
-    let id: UUID = UUID()
-    /// 占位封面 hue（0..1），接入后替换为 URL/AsyncImage
-    let placeholderHue: Double
-    /// 是否视频（决定是否叠加播放图标）
-    let isVideo: Bool
-
-    static func previewPhotos(count: Int) -> [ProfileMediaItem] {
-        (0..<count).map { i in
-            ProfileMediaItem(placeholderHue: Double(i) / Double(max(count, 1)), isVideo: false)
-        }
-    }
-
-    static func previewVideos(count: Int) -> [ProfileMediaItem] {
-        // 视频占位 hue 整体偏移半轮，与 photos 色相错开，避免肉眼看像重复封面
-        (0..<count).map { i in
-            let hue = (Double(i) / Double(max(count, 1)) + 0.5).truncatingRemainder(dividingBy: 1.0)
-            return ProfileMediaItem(placeholderHue: hue, isVideo: true)
         }
     }
 }

@@ -10,7 +10,10 @@ final class SessionStore: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage = ""
 
-    private let storeKey = "session.user.v1"
+    /// v2 起 user 整体（含 token / imToken / loginUuid 等敏感字段）存 Keychain。
+    /// v1（UserDefaults）→ v2 一次性迁移：load() 命中旧键时搬到 Keychain 并清旧。
+    private let storeKey = "session.user.v2"
+    private let legacyStoreKey = "session.user.v1"
     private let defaults = UserDefaults.standard
 
     /// 当前登录 token，供需要鉴权的接口使用
@@ -49,24 +52,42 @@ final class SessionStore: ObservableObject {
         user = nil
         isLoggedIn = false
         errorMessage = ""
-        defaults.removeObject(forKey: storeKey)
+        KeychainStore.remove(for: storeKey)
+        defaults.removeObject(forKey: legacyStoreKey)   // 清掉历史残留
         AuthToken.value = nil
+        // 同步清空主播信息缓存，避免下个账号登录后看到上个号的残留
+        AnchorInfoStore.shared.clear()
+        // 图片缓存也清掉：上个号的头像/相册/视频缩略不应被下个号看到
+        ImageCache.shared.clear()
     }
 
     // MARK: - 持久化
 
     private func save() {
         guard let user, let data = try? JSONEncoder().encode(user) else { return }
-        defaults.set(data, forKey: storeKey)
+        KeychainStore.setData(data, for: storeKey)
         AuthToken.value = user.token   // 供 APIClient 自动附带
     }
 
     private func load() {
-        guard let data = defaults.data(forKey: storeKey),
-              let u = try? JSONDecoder().decode(LoginResult.self, from: data),
-              let t = u.token, !t.isEmpty else { return }
-        user = u
-        isLoggedIn = true
-        AuthToken.value = t
+        // v2 路径：Keychain
+        if let data = KeychainStore.getData(for: storeKey),
+           let u = try? JSONDecoder().decode(LoginResult.self, from: data),
+           let t = u.token, !t.isEmpty {
+            user = u
+            isLoggedIn = true
+            AuthToken.value = t
+            return
+        }
+        // v1 迁移：UserDefaults 残留 → Keychain，迁完清旧
+        if let legacyData = defaults.data(forKey: legacyStoreKey),
+           let u = try? JSONDecoder().decode(LoginResult.self, from: legacyData),
+           let t = u.token, !t.isEmpty {
+            KeychainStore.setData(legacyData, for: storeKey)
+            defaults.removeObject(forKey: legacyStoreKey)
+            user = u
+            isLoggedIn = true
+            AuthToken.value = t
+        }
     }
 }

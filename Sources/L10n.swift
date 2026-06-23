@@ -143,6 +143,50 @@ enum L10n {
     static var profileVideoCellA11y: String { localize("profile.cell.video", comment: "视频 cell a11y") }
     /// 空 tab 占位文案
     static var profileEmptyPlaceholder: String { localize("profile.emptyPlaceholder", comment: "tab 暂无内容占位") }
+    /// 数据加载错误 banner 格式 + 重试按钮
+    static var profileLoadFailedFormat: String { localize("profile.loadFailed.format", comment: "加载失败 banner 文案，%@ 为底层错误描述") }
+    static var profileLoading: String { localize("profile.loading", comment: "加载中 banner") }
+    static var profileRetry: String { localize("profile.retry", comment: "重试按钮") }
+    /// 单价格式（%d 是每分钟的数字）
+    static var profileRatePerMinFormat: String { localize("profile.ratePerMin.format", comment: "单价格式，%d/min") }
+
+    // MARK: - FollowList 关注/粉丝/朋友列表
+    static var followActionFollow: String   { localize("followList.action.follow", comment: "关注按钮") }
+    static var followActionFollowing: String { localize("followList.action.following", comment: "已关注按钮") }
+    static var followActionUnfollow: String { localize("followList.action.unfollow", comment: "取关按钮") }
+    static var followActionBlock: String    { localize("followList.action.block", comment: "拉黑按钮") }
+    static var followListEnd: String        { localize("followList.end", comment: "列表已到底") }
+    static var followListEmpty: String      { localize("followList.empty", comment: "列表无数据") }
+
+    /// 相册/视频审核态徽章
+    static var profileMediaReviewing: String { localize("profile.media.reviewing", comment: "审核中徽章") }
+    static var profileMediaRejected: String  { localize("profile.media.rejected", comment: "已拒徽章") }
+
+    /// 媒体预览关闭按钮 a11y
+    static var mediaPreviewClose: String { localize("mediaPreview.close", comment: "媒体预览关闭按钮") }
+
+    // MARK: - Settings 设置页
+    static var settingsTitle: String           { localize("settings.title", comment: "设置页标题") }
+    static var settingsSectionAccount: String  { localize("settings.section.account", comment: "账号区块") }
+    static var settingsSectionGeneral: String  { localize("settings.section.general", comment: "通用区块") }
+    static var settingsSectionAbout: String    { localize("settings.section.about", comment: "关于区块") }
+    static var settingsBlocklist: String       { localize("settings.blocklist", comment: "黑名单条目") }
+    static var settingsLanguage: String        { localize("settings.language", comment: "语言条目") }
+    static var settingsFeedback: String        { localize("settings.feedback", comment: "反馈条目") }
+    static var settingsVersion: String         { localize("settings.version", comment: "版本号 label") }
+    static var settingsTermsOfService: String  { localize("settings.tos", comment: "用户协议") }
+    static var settingsPrivacyPolicy: String   { localize("settings.privacy", comment: "隐私政策") }
+    static var settingsLogout: String          { localize("settings.logout", comment: "退出登录按钮") }
+    static var settingsLogoutConfirm: String   { localize("settings.logoutConfirm", comment: "退出登录确认") }
+    static var settingsCancel: String          { localize("settings.cancel", comment: "取消") }
+
+    // MARK: - LevelDetail 段位详情页
+    static var levelDetailTitle: String    { localize("level.title", comment: "段位详情标题") }
+    static var levelDetailCurrent: String  { localize("level.current", comment: "当前段位 caption") }
+    static var levelDetailSpectrum: String { localize("level.spectrum", comment: "段位光谱条 caption") }
+
+    /// 礼物墙空态
+    static var profileGiftsEmpty: String { localize("profile.gifts.empty", comment: "礼物墙空态文案") }
 
     // MARK: - Auth 登录页
     static var authTitle: String { localize("auth.title", comment: "登录页大标题：主播登录") }
