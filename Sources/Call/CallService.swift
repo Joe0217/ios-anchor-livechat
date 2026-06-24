@@ -58,7 +58,7 @@ enum CallService {
 
     // MARK: - 接通率上报（四节点）
 
-    /// POST /api/call/callRate —— 接听率统计上报。answered/rejected/timeout/canceled 各调一次。
+    /// POST /api/chat/callRate —— 接听率统计上报。answered/rejected/timeout/canceled 各调一次。
     /// 本端为主播，userType 默认 .anchor；callType（主/被叫）由调用方传。
     /// C 范围只保留调用入口，业务层是否真发由 CallStore 控制（默认不发，留给 implement 阶段补开关）。
     static func callRate(channelId: String,
@@ -76,7 +76,7 @@ enum CallService {
             "abnormal": abnormal,
         ]
         do {
-            _ = try await APIClient.shared.post("/api/call/callRate", body: body)
+            _ = try await APIClient.shared.post("/api/chat/callRate", body: body)
         } catch let e as APIError {
             AppLogger.call.notice("⚠️ [CallService] callRate 失败 channel=\(channelId, privacy: .public) cat=\(category.rawValue, privacy: .public) code=\(e.code, privacy: .public) msg=\(e.message, privacy: .private)")
         } catch {
