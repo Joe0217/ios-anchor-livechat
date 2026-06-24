@@ -77,12 +77,18 @@
 "tab.work"                   = "İş";
 "tab.profile"                = "Profil";
 
-// MARK: - Live 页（设计稿还原）
-"live.subTab.live"           = "Canlı";
-"live.subTab.list"           = "Liste";
-"live.subTab.match"          = "Eşleş";
-"live.subTab.cysle"          = "Döngü";
-"live.subTab.comingSoon"     = "Yakında";
+// MARK: - Home 顶部 4 tab（trial #1 重命名自 live.subTab.*，cysle typo → cycle）
+"home.topTab.live"           = "Canlı";
+"home.topTab.list"           = "Liste";
+"home.topTab.match"          = "Eşleş";
+"home.topTab.cycle"          = "Döngü";
+"home.topTab.comingSoon"     = "Yakında";
+
+// Cycle 朋友圈内 3 子 tab（trial #1）
+"home.cycle.official.label"      = "Resmi";
+"home.cycle.moment.label"        = "Anlar";
+"home.cycle.me.label"            = "Ben";
+"home.cycle.moment.error.title"  = "Anlar yüklenemedi";
 "live.viewers"               = "izleyici";
 "live.rankBadge"             = "Lider Tablosu";
 "live.refresh"               = "Yenile";
@@ -228,3 +234,71 @@
 "im.system.joinFailedFormat"  = "Sohbet odasına katılım başarısız: %@";
 "im.system.joined"            = "Sohbet odasına katıldınız";
 "im.system.giftPlaceholder"   = "[Hediye/Özel mesaj]";
+
+// MARK: - G 直播 PK 玩法（26 条；Türkçe）
+"pk.entry.title"             = "PK Başlat";
+"pk.entry.random"            = "Rastgele PK";
+"pk.entry.invite"            = "ID ile Davet Et";
+
+"pk.matching.title"          = "Rakip aranıyor...";
+"pk.matching.subtitle"       = "Lütfen bekleyin";
+"pk.matching.cancel"         = "İptal";
+"pk.matching.cancelled"      = "Eşleştirme iptal edildi";
+
+"pk.invite.title"            = "PK Daveti Gönder";
+"pk.invite.placeholder"      = "Rakip UID";
+"pk.invite.durationLabel"    = "PK süresi";
+"pk.invite.send"             = "Davet Gönder";
+"pk.invite.waiting"          = "Kabul bekleniyor...";
+"pk.invite.cancel"           = "Daveti İptal Et";
+"pk.invite.duration3"        = "3 dakika";
+"pk.invite.duration5"        = "5 dakika";
+"pk.invite.duration10"       = "10 dakika";
+"pk.invite.duration15"       = "15 dakika";
+
+"pk.invited.title"           = "PK Daveti Aldınız";
+"pk.invited.accept"          = "Kabul Et";
+"pk.invited.reject"          = "Reddet";
+
+"pk.arena.endPK"             = "PK'yi Bitir";
+"pk.punishing.title"         = "Ceza";
+"pk.punishing.endPunish"     = "Bitir";
+
+"pk.result.title"            = "PK Sona Erdi";
+"pk.result.confirm"          = "Tamam";
+
+"pk.toast.inviteRejectedFormat" = "%@ PK davetinizi reddetti";
+"pk.toast.inviteAcceptedFormat" = "%@ PK davetinizi kabul etti";
+"pk.toast.inviteTimeout"        = "PK daveti süresi doldu";
+
+// MARK: - H IM 完善 错误文案（NIMServiceError.errorDescription）
+"im.error.loginFailedFormat"         = "IM girişi başarısız (code=%@) %@";
+"im.error.tokenInvalid"              = "Oturum süresi doldu, lütfen tekrar giriş yapın";
+"im.error.kickedOut"                 = "Hesabınız başka bir cihazda giriş yaptı";
+"im.error.chatroomEnterFailedFormat" = "Sohbet odasına giriş başarısız (%@)";
+"im.error.networkErrorFormat"        = "IM ağ hatası (%@)";
+"im.error.decodingFormat"            = "Mesaj çözümleme başarısız: %@";
+
+// MARK: - Moment 动态卡片
+"moment.relative.justNow"        = "Az önce";
+"moment.relative.minutes.format" = "%d dk";
+"moment.relative.hours.format"   = "%d sa";
+"moment.relative.days.format"    = "%d g";
+"moment.action.like"             = "Beğen";
+"moment.action.unlike"           = "Beğenmekten Vazgeç";
+
+/* MARK: Blocklist 黑名单列表（I-1） */
+"blocklist.title"                       = "Engellenenler";
+"blocklist.empty.description"           = "Bir kullanıcı engellendiğinde, ondan haber alamazsınız.";
+"blocklist.removeConfirm.title"         = "Engelleme listesinden kaldır";
+"blocklist.removeConfirm.message"       = "Bu kullanıcıyı engelleme listesinden kaldırmak istediğinizden emin misiniz?";
+"blocklist.removeConfirm.action"        = "Kaldır";
+"blocklist.removeConfirm.cancel"        = "İptal";
+"blocklist.removeNetworkError"          = "Ağ hatası, lütfen tekrar deneyin.";
+"blocklist.removeBadUserId"             = "Geçersiz kullanıcı kimliği";
+"blocklist.loadError.retry"             = "Yüklenemedi, yeniden denemek için dokunun";
+"blocklist.loadEnd"                     = "Listenin sonu";
+"blocklist.accessibility.removeButton"  = "Engelleme listesinden kaldır";
+"blocklist.accessibility.row"           = "Engellenen kullanıcı %@, %@ tarihinde engellendi";
+"blocklist.accessibility.rowNoDate"     = "Engellenen kullanıcı %@";
+"blocklist.loadError.retryFormat"       = "%1$@ · %2$@";

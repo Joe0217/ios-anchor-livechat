@@ -75,12 +75,18 @@
 "tab.work"                   = "Work";
 "tab.profile"                = "Profile";
 
-// MARK: - Live 页（设计稿还原）
-"live.subTab.live"           = "Live";
-"live.subTab.list"           = "List";
-"live.subTab.match"          = "Match";
-"live.subTab.cysle"          = "Cycle";
-"live.subTab.comingSoon"     = "Coming Soon";
+// MARK: - Home 顶部 4 tab（trial #1 重命名自 live.subTab.*，cysle typo → cycle）
+"home.topTab.live"           = "Live";
+"home.topTab.list"           = "List";
+"home.topTab.match"          = "Match";
+"home.topTab.cycle"          = "Cycle";
+"home.topTab.comingSoon"     = "Coming Soon";
+
+// Cycle 朋友圈内 3 子 tab（trial #1）
+"home.cycle.official.label"      = "Official";
+"home.cycle.moment.label"        = "Moment";
+"home.cycle.me.label"            = "Me";
+"home.cycle.moment.error.title"  = "Failed to load moments";
 "live.viewers"               = "viewers";
 "live.rankBadge"             = "Leaderboard";
 "live.refresh"               = "Refresh";
@@ -226,3 +232,71 @@
 "im.system.joinFailedFormat"  = "Failed to join chatroom: %@";
 "im.system.joined"            = "Joined chatroom";
 "im.system.giftPlaceholder"   = "[Gift/Custom message]";
+
+// MARK: - G 直播 PK 玩法（26 条 + 强制下播/Toast 复用 B）
+"pk.entry.title"             = "Initiate PK";
+"pk.entry.random"            = "Random PK";
+"pk.entry.invite"            = "Invite by ID";
+
+"pk.matching.title"          = "Pairing with opponent...";
+"pk.matching.subtitle"       = "Searching, please wait";
+"pk.matching.cancel"         = "Cancel";
+"pk.matching.cancelled"      = "Matching cancelled";
+
+"pk.invite.title"            = "Invite to PK";
+"pk.invite.placeholder"      = "Opponent UID";
+"pk.invite.durationLabel"    = "PK duration";
+"pk.invite.send"             = "Send Invitation";
+"pk.invite.waiting"          = "Waiting for acceptance...";
+"pk.invite.cancel"           = "Cancel Invitation";
+"pk.invite.duration3"        = "3 minutes";
+"pk.invite.duration5"        = "5 minutes";
+"pk.invite.duration10"       = "10 minutes";
+"pk.invite.duration15"       = "15 minutes";
+
+"pk.invited.title"           = "PK Invitation Received";
+"pk.invited.accept"          = "Accept";
+"pk.invited.reject"          = "Reject";
+
+"pk.arena.endPK"             = "End PK";
+"pk.punishing.title"         = "Punishment";
+"pk.punishing.endPunish"     = "End";
+
+"pk.result.title"            = "PK Ended";
+"pk.result.confirm"          = "OK";
+
+"pk.toast.inviteRejectedFormat" = "%@ refused your PK invitation";
+"pk.toast.inviteAcceptedFormat" = "%@ accepted your PK invitation";
+"pk.toast.inviteTimeout"        = "PK invitation expired";
+
+// MARK: - H IM 完善 错误文案（NIMServiceError.errorDescription）
+"im.error.loginFailedFormat"         = "IM login failed (code=%@) %@";
+"im.error.tokenInvalid"              = "Session expired, please sign in again";
+"im.error.kickedOut"                 = "Your account is signed in on another device";
+"im.error.chatroomEnterFailedFormat" = "Failed to enter chatroom (%@)";
+"im.error.networkErrorFormat"        = "IM network error (%@)";
+"im.error.decodingFormat"            = "Failed to parse message: %@";
+
+// MARK: - Moment 动态卡片（Profile / Cycle）
+"moment.relative.justNow"        = "Just now";
+"moment.relative.minutes.format" = "%dm";
+"moment.relative.hours.format"   = "%dh";
+"moment.relative.days.format"    = "%dd";
+"moment.action.like"             = "Like";
+"moment.action.unlike"           = "Unlike";
+
+/* MARK: Blocklist 黑名单列表（I-1） */
+"blocklist.title"                       = "Blocklist";
+"blocklist.empty.description"           = "If a user is blacklisted, you won't hear from them.";
+"blocklist.removeConfirm.title"         = "Remove from blocklist";
+"blocklist.removeConfirm.message"       = "Are you sure you want to remove this user from the blocklist?";
+"blocklist.removeConfirm.action"        = "Remove";
+"blocklist.removeConfirm.cancel"        = "Cancel";
+"blocklist.removeNetworkError"          = "Network error, please try again.";
+"blocklist.removeBadUserId"             = "Invalid user ID";
+"blocklist.loadError.retry"             = "Failed to load, tap to retry";
+"blocklist.loadEnd"                     = "End of list";
+"blocklist.accessibility.removeButton"  = "Remove from blocklist";
+"blocklist.accessibility.row"           = "Blocked user %@, blocked on %@";
+"blocklist.accessibility.rowNoDate"     = "Blocked user %@";
+"blocklist.loadError.retryFormat"       = "%1$@ · %2$@";

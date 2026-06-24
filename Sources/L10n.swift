@@ -49,6 +49,43 @@ enum L10n {
     static var complianceWarningDefault: String { localize("im.complianceWarningDefault", comment: "您的直播内容已被警告") }
     static var anonymous: String { localize("im.anonymous", comment: "匿名") }
 
+    // MARK: - G 直播 PK 玩法（26 条；spec §9 全表）
+    enum PK {
+        static var entryTitle: String { localize("pk.entry.title", comment: "发起 PK") }
+        static var entryRandom: String { localize("pk.entry.random", comment: "随机匹配") }
+        static var entryInvite: String { localize("pk.entry.invite", comment: "邀请对方") }
+
+        static var matchingTitle: String { localize("pk.matching.title", comment: "匹配中") }
+        static var matchingSubtitle: String { localize("pk.matching.subtitle", comment: "搜索中等待") }
+        static var matchingCancel: String { localize("pk.matching.cancel", comment: "取消") }
+        static var matchingCancelled: String { localize("pk.matching.cancelled", comment: "匹配已取消") }
+
+        static var inviteTitle: String { localize("pk.invite.title", comment: "邀请 PK") }
+        static var invitePlaceholder: String { localize("pk.invite.placeholder", comment: "对手 UID") }
+        static var inviteDurationLabel: String { localize("pk.invite.durationLabel", comment: "PK 时长") }
+        static var inviteSend: String { localize("pk.invite.send", comment: "发送邀请") }
+        static var inviteWaiting: String { localize("pk.invite.waiting", comment: "等待对方接受") }
+        static var inviteCancel: String { localize("pk.invite.cancel", comment: "取消邀请") }
+        static var inviteDuration3: String { localize("pk.invite.duration3", comment: "3 分钟") }
+        static var inviteDuration5: String { localize("pk.invite.duration5", comment: "5 分钟") }
+        static var inviteDuration10: String { localize("pk.invite.duration10", comment: "10 分钟") }
+        static var inviteDuration15: String { localize("pk.invite.duration15", comment: "15 分钟") }
+
+        static var invitedTitle: String { localize("pk.invited.title", comment: "收到邀请") }
+        static var invitedAccept: String { localize("pk.invited.accept", comment: "接受") }
+        static var invitedReject: String { localize("pk.invited.reject", comment: "拒绝") }
+
+        static var arenaEndPK: String { localize("pk.arena.endPK", comment: "结束 PK") }
+        static var punishingTitle: String { localize("pk.punishing.title", comment: "惩罚阶段") }
+        static var punishingEnd: String { localize("pk.punishing.endPunish", comment: "结束惩罚") }
+        static var resultTitle: String { localize("pk.result.title", comment: "PK 结束") }
+        static var resultConfirm: String { localize("pk.result.confirm", comment: "确认") }
+
+        static var toastInviteRejectedFormat: String { localize("pk.toast.inviteRejectedFormat", comment: "%@ 拒绝了你的 PK 邀请") }
+        static var toastInviteAcceptedFormat: String { localize("pk.toast.inviteAcceptedFormat", comment: "%@ 接受了你的 PK 邀请") }
+        static var toastInviteTimeout: String { localize("pk.toast.inviteTimeout", comment: "PK 邀请超时") }
+    }
+
     // MARK: - Work 工作台（设计稿还原）
     static var workWeeklyLevel: String { localize("work.weeklyLevel", comment: "周等级") }
     static var workDetail: String { localize("work.detail", comment: "详情") }
@@ -93,14 +130,20 @@ enum L10n {
     static var tabWork: String { localize("tab.work", comment: "工作台") }
     static var tabProfile: String { localize("tab.profile", comment: "我的") }
 
-    // MARK: - Live 页（设计稿还原）
-    /// 顶部子 tab 名称
-    static var liveSubTabLive: String { localize("live.subTab.live", comment: "Live") }
-    static var liveSubTabList: String { localize("live.subTab.list", comment: "List") }
-    static var liveSubTabMatch: String { localize("live.subTab.match", comment: "Match") }
-    static var liveSubTabCysle: String { localize("live.subTab.cysle", comment: "Cysle") }
-    /// 占位子 tab 提示
-    static var liveSubTabComingSoon: String { localize("live.subTab.comingSoon", comment: "占位文案：敬请期待") }
+    // MARK: - Home 顶部 4 tab（trial #1 重命名自 live.subTab，case cysle typo → cycle）
+    static var homeTopTabLive: String  { localize("home.topTab.live",  comment: "Live") }
+    static var homeTopTabList: String  { localize("home.topTab.list",  comment: "List") }
+    static var homeTopTabMatch: String { localize("home.topTab.match", comment: "Match") }
+    static var homeTopTabCycle: String { localize("home.topTab.cycle", comment: "Cycle") }
+    /// 占位子 tab 提示（Match / Cycle Official 等未实现 tab 共用）
+    static var homeTopTabComingSoon: String { localize("home.topTab.comingSoon", comment: "占位文案：敬请期待") }
+
+    // MARK: - Cycle 朋友圈内 3 子 tab（trial #1 A-spec §6B.8）
+    static var cycleSubTabOfficial: String { localize("home.cycle.official.label", comment: "Cycle 子 tab Official") }
+    static var cycleSubTabMoment: String   { localize("home.cycle.moment.label",   comment: "Cycle 子 tab Moment（全站圈）") }
+    static var cycleSubTabMe: String       { localize("home.cycle.me.label",       comment: "Cycle 子 tab Me（我的）") }
+    /// Moment 加载失败提示
+    static var cycleMomentLoadError: String { localize("home.cycle.moment.error.title", comment: "Moment 加载失败提示") }
     /// 观看人数后缀（a11y）
     static var liveViewers: String { localize("live.viewers", comment: "观看人数 a11y 后缀") }
     /// 顶部右侧按钮 a11y
@@ -180,6 +223,32 @@ enum L10n {
     static var settingsLogoutConfirm: String   { localize("settings.logoutConfirm", comment: "退出登录确认") }
     static var settingsCancel: String          { localize("settings.cancel", comment: "取消") }
 
+    // MARK: - Blocklist 黑名单列表（I-1，spec §10.3）
+    static var blocklistTitle: String              { localize("blocklist.title", comment: "黑名单列表页标题") }
+    static var blocklistEmptyDescription: String   { localize("blocklist.empty.description", comment: "黑名单空态文案") }
+    static var blocklistRemoveConfirmTitle: String { localize("blocklist.removeConfirm.title", comment: "移除黑名单二次确认标题") }
+    static var blocklistRemoveConfirmMessage: String { localize("blocklist.removeConfirm.message", comment: "移除黑名单二次确认正文") }
+    static var blocklistRemoveConfirmAction: String { localize("blocklist.removeConfirm.action", comment: "移除按钮") }
+    static var blocklistRemoveConfirmCancel: String { localize("blocklist.removeConfirm.cancel", comment: "取消按钮") }
+    static var blocklistRemoveNetworkError: String { localize("blocklist.removeNetworkError", comment: "网络错误兜底") }
+    static var blocklistRemoveBadUserId: String    { localize("blocklist.removeBadUserId", comment: "userId 非法") }
+    static var blocklistLoadErrorRetry: String     { localize("blocklist.loadError.retry", comment: "加载失败 retry 文案") }
+    static var blocklistLoadEnd: String            { localize("blocklist.loadEnd", comment: "列表加载到底") }
+    static var blocklistAccessibilityRemoveButton: String { localize("blocklist.accessibility.removeButton", comment: "删除按钮无障碍 label") }
+    /// %@ = nickname / %@ = 日期；使用 String(format:) 拼接
+    static func blocklistAccessibilityRow(nickname: String, date: String) -> String {
+        String(format: localize("blocklist.accessibility.row", comment: "行无障碍 label，参数: nickname, date"), nickname, date)
+    }
+    /// 行无障碍 label 当无拉黑日期时使用（review #11，避免朗读「blocked on —」古怪语义）
+    static func blocklistAccessibilityRowNoDate(nickname: String) -> String {
+        String(format: localize("blocklist.accessibility.rowNoDate", comment: "行无障碍 label 无日期分支，参数: nickname"), nickname)
+    }
+    /// footer 错误条目 retry 文案 format（review #15，避免硬编码中点 ·）
+    /// 参数：%@ = 错误 message / %@ = "tap to retry"
+    static func blocklistLoadErrorRetryFormat(message: String) -> String {
+        String(format: localize("blocklist.loadError.retryFormat", comment: "加载失败 retry 拼接 format，参数: message"), message, blocklistLoadErrorRetry)
+    }
+
     // MARK: - LevelDetail 段位详情页
     static var levelDetailTitle: String    { localize("level.title", comment: "段位详情标题") }
     static var levelDetailCurrent: String  { localize("level.current", comment: "当前段位 caption") }
@@ -187,6 +256,20 @@ enum L10n {
 
     /// 礼物墙空态
     static var profileGiftsEmpty: String { localize("profile.gifts.empty", comment: "礼物墙空态文案") }
+
+    // MARK: - Moment 动态卡片（Profile / Cycle 共用 MomentPostRow）
+    /// 相对时间：刚刚发布（< 60 秒）
+    static var momentRelativeJustNow: String       { localize("moment.relative.justNow", comment: "动态时间：刚刚") }
+    /// 相对时间：分钟级，%d 代表数字
+    static var momentRelativeMinutesFormat: String { localize("moment.relative.minutes.format", comment: "动态时间：%d 分钟前") }
+    /// 相对时间：小时级
+    static var momentRelativeHoursFormat: String   { localize("moment.relative.hours.format", comment: "动态时间：%d 小时前") }
+    /// 相对时间：天级（< 7 天）
+    static var momentRelativeDaysFormat: String    { localize("moment.relative.days.format", comment: "动态时间：%d 天前") }
+    /// 点赞按钮 a11y（未点赞）
+    static var momentActionLike: String            { localize("moment.action.like", comment: "动态点赞 a11y") }
+    /// 取消点赞按钮 a11y（已点赞）
+    static var momentActionUnlike: String          { localize("moment.action.unlike", comment: "动态取消点赞 a11y") }
 
     // MARK: - Auth 登录页
     static var authTitle: String { localize("auth.title", comment: "登录页大标题：主播登录") }
@@ -266,4 +349,12 @@ enum L10n {
     static var imSystemJoinFailedFormat: String { localize("im.system.joinFailedFormat", comment: "公屏系统消息：加入聊天室失败 code=%@") }
     static var imSystemJoined: String { localize("im.system.joined", comment: "公屏系统消息：已进入聊天室") }
     static var imSystemGiftPlaceholder: String { localize("im.system.giftPlaceholder", comment: "公屏系统消息：礼物消息占位") }
+
+    // MARK: - H IM 完善 错误文案（NIMServiceError.errorDescription，与 APIError 对齐）
+    static var imErrorLoginFailedFormat: String { localize("im.error.loginFailedFormat", comment: "IM 登录失败：code=%@ %@") }
+    static var imErrorTokenInvalid: String { localize("im.error.tokenInvalid", comment: "1005 token 过期：会话已过期") }
+    static var imErrorKickedOut: String { localize("im.error.kickedOut", comment: "1004 挤下线：账号已在其他设备登录") }
+    static var imErrorChatroomEnterFailedFormat: String { localize("im.error.chatroomEnterFailedFormat", comment: "进入聊天室失败 (%@)") }
+    static var imErrorNetworkErrorFormat: String { localize("im.error.networkErrorFormat", comment: "IM 网络错误 (%@)") }
+    static var imErrorDecodingFormat: String { localize("im.error.decodingFormat", comment: "消息解析失败：%@") }
 }

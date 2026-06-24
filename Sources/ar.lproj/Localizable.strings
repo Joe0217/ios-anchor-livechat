@@ -77,12 +77,18 @@
 "tab.work"                   = "العمل";
 "tab.profile"                = "ملفي";
 
-// MARK: - Live 页（设计稿还原）
-"live.subTab.live"           = "البث";
-"live.subTab.list"           = "القائمة";
-"live.subTab.match"          = "مطابقة";
-"live.subTab.cysle"          = "دورة";
-"live.subTab.comingSoon"     = "قريبًا";
+// MARK: - Home 顶部 4 tab（trial #1 重命名自 live.subTab.*，cysle typo → cycle）
+"home.topTab.live"           = "البث";
+"home.topTab.list"           = "القائمة";
+"home.topTab.match"          = "مطابقة";
+"home.topTab.cycle"          = "دورة";
+"home.topTab.comingSoon"     = "قريبًا";
+
+// Cycle 朋友圈内 3 子 tab（trial #1）
+"home.cycle.official.label"      = "الرسمية";
+"home.cycle.moment.label"        = "اللحظات";
+"home.cycle.me.label"            = "أنا";
+"home.cycle.moment.error.title"  = "فشل تحميل اللحظات";
 "live.viewers"               = "مشاهد";
 "live.rankBadge"             = "لوحة الصدارة";
 "live.refresh"               = "تحديث";
@@ -228,3 +234,71 @@
 "im.system.joinFailedFormat"  = "فشل الانضمام لغرفة الدردشة: %@";
 "im.system.joined"            = "تم الانضمام لغرفة الدردشة";
 "im.system.giftPlaceholder"   = "[هدية/رسالة مخصصة]";
+
+// MARK: - G 直播 PK 玩法（26 条；RTL 阿语）
+"pk.entry.title"             = "بدء PK";
+"pk.entry.random"            = "PK عشوائي";
+"pk.entry.invite"            = "دعوة برقم المعرف";
+
+"pk.matching.title"          = "جاري البحث عن منافس...";
+"pk.matching.subtitle"       = "يرجى الانتظار";
+"pk.matching.cancel"         = "إلغاء";
+"pk.matching.cancelled"      = "تم إلغاء البحث";
+
+"pk.invite.title"            = "دعوة إلى PK";
+"pk.invite.placeholder"      = "رقم معرف المنافس";
+"pk.invite.durationLabel"    = "مدة PK";
+"pk.invite.send"             = "إرسال الدعوة";
+"pk.invite.waiting"          = "في انتظار القبول...";
+"pk.invite.cancel"           = "إلغاء الدعوة";
+"pk.invite.duration3"        = "3 دقائق";
+"pk.invite.duration5"        = "5 دقائق";
+"pk.invite.duration10"       = "10 دقائق";
+"pk.invite.duration15"       = "15 دقيقة";
+
+"pk.invited.title"           = "تلقيت دعوة PK";
+"pk.invited.accept"          = "قبول";
+"pk.invited.reject"          = "رفض";
+
+"pk.arena.endPK"             = "إنهاء PK";
+"pk.punishing.title"         = "العقوبة";
+"pk.punishing.endPunish"     = "إنهاء";
+
+"pk.result.title"            = "انتهى PK";
+"pk.result.confirm"          = "موافق";
+
+"pk.toast.inviteRejectedFormat" = "%@ رفض دعوة PK الخاصة بك";
+"pk.toast.inviteAcceptedFormat" = "%@ قبل دعوة PK الخاصة بك";
+"pk.toast.inviteTimeout"        = "انتهت صلاحية دعوة PK";
+
+// MARK: - H IM 完善 错误文案（NIMServiceError.errorDescription）
+"im.error.loginFailedFormat"         = "فشل تسجيل دخول الدردشة (code=%@) %@";
+"im.error.tokenInvalid"              = "انتهت صلاحية الجلسة، يرجى تسجيل الدخول مرة أخرى";
+"im.error.kickedOut"                 = "تم تسجيل دخول حسابك على جهاز آخر";
+"im.error.chatroomEnterFailedFormat" = "فشل دخول غرفة الدردشة (%@)";
+"im.error.networkErrorFormat"        = "خطأ شبكة الدردشة (%@)";
+"im.error.decodingFormat"            = "فشل تحليل الرسالة: %@";
+
+// MARK: - Moment 动态卡片
+"moment.relative.justNow"        = "الآن";
+"moment.relative.minutes.format" = "%d د";
+"moment.relative.hours.format"   = "%d س";
+"moment.relative.days.format"    = "%d ي";
+"moment.action.like"             = "إعجاب";
+"moment.action.unlike"           = "إلغاء الإعجاب";
+
+/* MARK: Blocklist 黑名单列表（I-1） */
+"blocklist.title"                       = "قائمة الحظر";
+"blocklist.empty.description"           = "إذا تم حظر مستخدم، فلن تتلقى رسائل منه.";
+"blocklist.removeConfirm.title"         = "إزالة من قائمة الحظر";
+"blocklist.removeConfirm.message"       = "هل أنت متأكد من إزالة هذا المستخدم من قائمة الحظر؟";
+"blocklist.removeConfirm.action"        = "إزالة";
+"blocklist.removeConfirm.cancel"        = "إلغاء";
+"blocklist.removeNetworkError"          = "خطأ في الشبكة، يرجى المحاولة مرة أخرى.";
+"blocklist.removeBadUserId"             = "معرف المستخدم غير صالح";
+"blocklist.loadError.retry"             = "فشل التحميل، انقر لإعادة المحاولة";
+"blocklist.loadEnd"                     = "نهاية القائمة";
+"blocklist.accessibility.removeButton"  = "إزالة من قائمة الحظر";
+"blocklist.accessibility.row"           = "المستخدم المحظور %@، تم الحظر في %@";
+"blocklist.accessibility.rowNoDate"     = "المستخدم المحظور %@";
+"blocklist.loadError.retryFormat"       = "%1$@ · %2$@";
