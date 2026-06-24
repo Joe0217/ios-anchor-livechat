@@ -104,7 +104,10 @@ private func withTimeout<T: Sendable>(seconds: TimeInterval,
             try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             throw CallTimeoutError(seconds: seconds)
         }
-        let first = try await group.next()!
+        // TaskGroup 已 addTask 2 次，next() 合约保证非 nil；guard 替代裸 `!`，失败时落到超时语义而非 Optional trap。
+        guard let first = try await group.next() else {
+            throw CallTimeoutError(seconds: seconds)
+        }
         group.cancelAll()
         return first
     }

@@ -29,8 +29,15 @@ final class MetalPreviewView: MTKView {
     private var pendingForegroundDraw: DispatchWorkItem?
 
     init(device: MTLDevice?) {
-        let dev = device ?? MTLCreateSystemDefaultDevice()!
-        self.commandQueue = dev.makeCommandQueue()!
+        // 项目仅 iPhone iOS 16+，所有目标设备均支持 Metal——理论上不会失败；
+        // 仍以 guard + fatalError 替代裸 `!`，失败时错误信息明确而非裸 Optional trap。
+        guard let dev = device ?? MTLCreateSystemDefaultDevice() else {
+            fatalError("Metal device unavailable — Hily requires iPhone with Metal support")
+        }
+        guard let queue = dev.makeCommandQueue() else {
+            fatalError("Failed to create Metal command queue on \(dev.name)")
+        }
+        self.commandQueue = queue
         self.ciContext = CIContext(mtlDevice: dev)
         super.init(frame: .zero, device: dev)
         framebufferOnly = false          // Core Image 需要可写纹理

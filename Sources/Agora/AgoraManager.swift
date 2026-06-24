@@ -19,11 +19,23 @@ final class AgoraManager: NSObject, ObservableObject {
         case failed = "加入失败"
     }
 
-    /// 视频编码档位（B 里程碑 spec §4 v5 弱网降级用）。
-    /// `normal` = 720×1280 / 30fps；`low` = 720×1280 / 15fps（仅降帧率，保留分辨率避免 reset 抖动）
+    /// 视频编码档位（B 里程碑 spec §4 弱网降级 + G 里程碑 spec §3.5 PK 期降分辨率）。
+    /// - `normal` 720×1280 / 30fps / Standard 自适应
+    /// - `low` 720×1280 / 15fps / 600kbps（弱网降级）
+    /// - `pkActive` 480×640 / 30fps / 500kbps（PK 期默认档位）
+    /// - `pkLow` 480×640 / 15fps / 400kbps（PK 期 + 弱网叠加）
+    /// 注意：setVideoEncoderConfiguration 是 engine 级别，会同时影响主频道观众端画质（R9）
     enum EncoderQuality {
         case normal
         case low
+        case pkActive
+        case pkLow
+    }
+
+    /// G 里程碑 M0 新增：多频道 join 失败错误类型。
+    enum AgoraError: Error {
+        case engineNotReady
+        case joinExFailed(code: Int)
     }
 
     @Published var state: State = .idle
@@ -55,6 +67,23 @@ final class AgoraManager: NSObject, ObservableObject {
 
     /// 当前视频编码档位（弱网降级 / 恢复时切换）
     private(set) var currentQuality: EncoderQuality = .normal
+
+    // MARK: - G 里程碑 PK 多频道（spec §3）
+
+    /// PK 对手画面渲染目标（M3 PKArenaView 接入；M0 阶段未挂 UI 也保留实例避免空判散落）
+    let oppositeRemoteView = UIView()
+
+    /// 多频道字典 + leave continuation 字典的串行锁。
+    /// 读写来自两端：MainActor（joinPKOpposite/leavePKOpposite 调用方）+ SDK 回调子线程
+    /// （PKChannelDelegate.didLeaveChannelExWith / pkConnection(forChannel:)）。
+    /// 锁内仅做字典 get/set，锁外再执行 SDK 调用，避免长持锁阻塞 main queue。
+    private let pkLock = NSLock()
+    /// 已 join 的 PK 频道 connection 字典，key = channelId
+    private var pkConnections: [String: AgoraRtcConnection] = [:]
+    /// 每个 PK 频道对应的独立 delegate，强引用避免 SDK 持有 weak 后被释放
+    private var pkDelegates: [String: PKChannelDelegate] = [:]
+    /// leavePKOpposite 的 CheckedContinuation 字典，key = channelId；500ms 兜底 + 实际回调任一先到 resume 一次
+    private var leavePKContinuations: [String: CheckedContinuation<Void, Never>] = [:]
 
     var isActive: Bool { state == .joined || state == .joining }
 
@@ -175,17 +204,161 @@ final class AgoraManager: NSObject, ObservableObject {
         logger.info("AgoraRtcEngineKit.destroy() invoked")
     }
 
+    // MARK: - PK 多频道 join / leave（G 里程碑 spec §3）
+
+    /// 加入对手 PK 频道（作为 audience 仅订阅、不推流），用 joinChannelEx + AgoraRtcConnection。
+    /// - 幂等：同 channel 重复调用直接 return
+    /// - join 成功后立刻把编码档位切到 `.pkActive`（PK 期默认）
+    /// - join 失败抛 `AgoraError.joinExFailed(code:)`，字典回滚
+    /// - 长跑验证（M0-3）：renewToken 是否自动覆盖 PK connection；失败则改逐 connection renewTokenEx（R10）
+    @MainActor
+    func joinPKOpposite(channel: String, oppositeUid: UInt, token: String, ownUid: UInt) async throws {
+        guard let engine else { throw AgoraError.engineNotReady }
+
+        // 幂等：channel 已在 pkConnections 直接返回
+        pkLock.lock()
+        let exists = pkConnections[channel] != nil
+        pkLock.unlock()
+        if exists {
+            logger.info("joinPKOpposite skipped: channel \(channel) already joined")
+            return
+        }
+
+        let conn = AgoraRtcConnection()
+        conn.channelId = channel
+        conn.localUid = ownUid
+
+        let delegate = PKChannelDelegate(owner: self, channel: channel, oppositeUid: oppositeUid)
+
+        let option = AgoraRtcChannelMediaOptions()
+        option.clientRoleType = .audience          // PK 对手频道我们仅观看
+        option.publishCustomVideoTrack = false
+        option.publishMicrophoneTrack = false
+        option.autoSubscribeAudio = true
+        option.autoSubscribeVideo = true
+
+        // 先写入字典：保证后续 SDK 回调 lookup 时引用已就位
+        pkLock.lock()
+        pkConnections[channel] = conn
+        pkDelegates[channel] = delegate
+        pkLock.unlock()
+
+        logger.info("joinChannelEx PK channel=\(channel) oppositeUid=\(oppositeUid) ownUid=\(ownUid)")
+        let ret = engine.joinChannelEx(byToken: token,
+                                       connection: conn,
+                                       delegate: delegate,
+                                       mediaOptions: option,
+                                       joinSuccess: nil)
+        if ret != 0 {
+            logger.error("joinChannelEx PK failed channel=\(channel) ret=\(ret)")
+            pkLock.lock()
+            pkConnections.removeValue(forKey: channel)
+            pkDelegates.removeValue(forKey: channel)
+            pkLock.unlock()
+            throw AgoraError.joinExFailed(code: Int(ret))
+        }
+
+        // 首次 PK 频道 join 成功 → 切 .pkActive；幂等 applyEncoderQuality 内已守 currentQuality 相等
+        applyEncoderQuality(.pkActive)
+    }
+
+    /// 离开对手 PK 频道（continuation 桥接 + 500ms 兜底）。
+    /// - 字典清理在 await 之后；全部 PK 频道清空时回切 `.normal` 档位
+    /// - 兜底与回调任一先到都安全：resumeLeavePKContinuation 在锁内 removeValue 拿 cont 才 resume
+    @MainActor
+    func leavePKOpposite(channel: String) async {
+        guard let engine else { return }
+
+        pkLock.lock()
+        let conn = pkConnections[channel]
+        pkLock.unlock()
+        guard let connection = conn else { return }
+
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            pkLock.lock()
+            if leavePKContinuations[channel] != nil {
+                // 已有 leave 在等待，直接 resume 避免重复 leaveChannelEx
+                pkLock.unlock()
+                cont.resume()
+                return
+            }
+            leavePKContinuations[channel] = cont
+            pkLock.unlock()
+
+            _ = engine.leaveChannelEx(connection, leaveChannelBlock: nil)
+
+            // 500ms 兜底：若 didLeaveChannelExWith 漏调，由本兜底 resume 同 channel 的 continuation
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                self?.resumeLeavePKContinuation(channel: channel)
+            }
+        }
+
+        pkLock.lock()
+        pkConnections.removeValue(forKey: channel)
+        pkDelegates.removeValue(forKey: channel)
+        let empty = pkConnections.isEmpty
+        pkLock.unlock()
+
+        if empty {
+            applyEncoderQuality(.normal)
+        }
+    }
+
+    /// PKChannelDelegate 在 SDK 子线程读字典；锁内拷贝引用 + 锁外返回，避免长持锁。
+    nonisolated func pkConnection(forChannel channel: String) -> AgoraRtcConnection? {
+        pkLock.lock()
+        let conn = pkConnections[channel]
+        pkLock.unlock()
+        return conn
+    }
+
+    /// PKChannelDelegate 在收到 didLeaveChannelExWith / 兜底 Task 在收到 500ms 超时时调用。
+    /// CheckedContinuation.resume 线程安全，调度无 main actor 依赖。
+    nonisolated func resumeLeavePKContinuation(channel: String) {
+        pkLock.lock()
+        let cont = leavePKContinuations.removeValue(forKey: channel)
+        pkLock.unlock()
+        cont?.resume()
+    }
+
     // MARK: - 编码档位切换（B 里程碑 spec §4 v5 弱网降级）
 
-    /// 由 NetworkQualityMonitor 调用：弱网累计 ≥10 次 → .low；恢复 ≥5 次 → .normal。
-    /// 已是目标档位时跳过；engine 未 join 时跳过。
+    /// 由 NetworkQualityMonitor / PKStore 调用切档位。已是目标档位时跳过；engine 未 join 时跳过。
+    /// - `.normal` 720×1280/30fps/Standard 自适应
+    /// - `.low` 720×1280/15fps/600kbps（弱网降级）
+    /// - `.pkActive` 480×640/30fps/500kbps（PK 期默认）
+    /// - `.pkLow` 480×640/15fps/400kbps（PK 期 + 弱网叠加，由 PKStore 监听 NQM weakSevere 触发）
     func applyEncoderQuality(_ q: EncoderQuality) {
         guard let engine, currentQuality != q else { return }
-        let fps = (q == .normal) ? AgoraVideoFrameRate.fps30.rawValue : AgoraVideoFrameRate.fps15.rawValue
-        // v5.1：low 模式同时降码率到 600kbps（弱网下 Standard 自适应不够激进，画面会卡）
-        let bitrate = (q == .normal) ? AgoraVideoBitrateStandard : 600
+        let size: CGSize
+        let fps: Int
+        let bitrate: Int
+        let label: String
+        switch q {
+        case .normal:
+            size = CGSize(width: 720, height: 1280)
+            fps = AgoraVideoFrameRate.fps30.rawValue
+            bitrate = AgoraVideoBitrateStandard
+            label = "normal/720x1280/30fps/auto"
+        case .low:
+            size = CGSize(width: 720, height: 1280)
+            fps = AgoraVideoFrameRate.fps15.rawValue
+            bitrate = 600
+            label = "low/720x1280/15fps/600kbps"
+        case .pkActive:
+            size = CGSize(width: 480, height: 640)
+            fps = AgoraVideoFrameRate.fps30.rawValue
+            bitrate = 500
+            label = "pkActive/480x640/30fps/500kbps"
+        case .pkLow:
+            size = CGSize(width: 480, height: 640)
+            fps = AgoraVideoFrameRate.fps15.rawValue
+            bitrate = 400
+            label = "pkLow/480x640/15fps/400kbps"
+        }
         let config = AgoraVideoEncoderConfiguration(
-            size: CGSize(width: 720, height: 1280),
+            size: size,
             frameRate: fps,
             bitrate: bitrate,
             orientationMode: .fixedPortrait,
@@ -193,7 +366,7 @@ final class AgoraManager: NSObject, ObservableObject {
         )
         engine.setVideoEncoderConfiguration(config)
         currentQuality = q
-        logger.info("encoder quality → \(q == .normal ? "normal/30fps/auto" : "low/15fps/600kbps")")
+        logger.info("encoder quality → \(label)")
     }
 
     // MARK: - token 续期（spec §7）
@@ -252,7 +425,8 @@ final class AgoraManager: NSObject, ObservableObject {
 extension AgoraManager: AgoraRtcEngineDelegate {
     func rtcEngine(_ engine: AgoraRtcEngineKit, didJoinChannel channel: String, withUid uid: UInt, elapsed: Int) {
         logger.info("local joined channel=\(channel) uid=\(uid) elapsed=\(elapsed)ms")
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
             self.state = .joined
             self.message = "本地已加入 uid=\(uid)"
         }
@@ -260,7 +434,8 @@ extension AgoraManager: AgoraRtcEngineDelegate {
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didJoinedOfUid uid: UInt, elapsed: Int) {
         logger.info("remote joined uid=\(uid)")
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
             self.remoteUid = uid
             let canvas = AgoraRtcVideoCanvas()
             canvas.uid = uid
@@ -271,8 +446,8 @@ extension AgoraManager: AgoraRtcEngineDelegate {
     }
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didOfflineOfUid uid: UInt, reason: AgoraUserOfflineReason) {
-        DispatchQueue.main.async {
-            guard self.remoteUid == uid else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.remoteUid == uid else { return }
             self.remoteUid = 0
             let canvas = AgoraRtcVideoCanvas()
             canvas.uid = uid
@@ -283,7 +458,8 @@ extension AgoraManager: AgoraRtcEngineDelegate {
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didOccurError errorCode: AgoraErrorCode) {
         logger.error("RTC error code \(errorCode.rawValue)")
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
             self.message = "RTC 错误码: \(errorCode.rawValue)"
             if self.state == .joining { self.state = .failed }
             // 109/110 走续期链路（spec §7.2）
@@ -295,8 +471,8 @@ extension AgoraManager: AgoraRtcEngineDelegate {
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, tokenPrivilegeWillExpire token: String) {
         logger.info("tokenPrivilegeWillExpire → renew")
-        DispatchQueue.main.async {
-            self.renewToken()
+        DispatchQueue.main.async { [weak self] in
+            self?.renewToken()
         }
     }
 
