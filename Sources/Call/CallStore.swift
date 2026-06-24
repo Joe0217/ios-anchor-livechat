@@ -47,6 +47,17 @@ final class CallStore: ObservableObject {
     /// HomeView 用此字段显示"已就绪/重连中/断连"。
     @Published private(set) var rtmConnectionState: RtmConnState = .idle
 
+    // MARK: - H M4：sysMsg 通道字段（待 C 期 backlog UI 绑订）
+
+    /// sysMsg -6 通话充值等待状态（type 0/1/2/3/4；0 表示未在等待）
+    @Published private(set) var callWaitState: Int = 0
+    /// sysMsg 90 通话充值累计钻石奖励
+    @Published private(set) var callWaitBonus: Int = 0
+    /// sysMsg -1 最近一条远端文字（C 期 UI 绑订显示气泡 / 翻译 toast）
+    @Published private(set) var callRecentRemoteText: String?
+    /// sysMsg -1 远端文字附带的 chatBubble id
+    @Published private(set) var callChatBubble: Int = 0
+
     /// RTC 管理器（CallView 用它做远端渲染 + push 美颜后的帧）
     let agora = AgoraManager()
 
@@ -81,6 +92,8 @@ final class CallStore: ObservableObject {
     /// 注入时机：LiveRoomView.onAppear 或 RootView 直播态分支；解绑：LiveRoomView 销毁。
     /// 用途：handleIncomingVideoCall 内判定 .living 时委托 LiveStore.pauseForCall 走直播私 call 流程。
     weak var liveStore: LiveStore?
+    /// G M6：PK 状态机弱引用；handleIncomingVideoCall 在 PK 期一律 busy reject 避免脏跳。
+    weak var pkStore: PKStore?
 
     /// D 里程碑：状态变化观察者（CallStoreObserver 协议 T4）。
     /// LiveStore 在 RootView/LiveRoomView 注入时挂载，监听 connected/connecting → ended/idle 触发 resumeCall。
@@ -117,7 +130,7 @@ final class CallStore: ObservableObject {
             // 远端离开：仅在通话中兜底（一般已被对端 hangup 信令提前处理）
             guard state == .connected else { return }
             AppLogger.call.notice("⚠️ [CallStore] 远端离开 RTC（兜底挂断）")
-            await endLocally(reason: .remoteHangUp, rateCategory: nil, rateType: .caller, abnormal: 0)
+            await endLocally(reason: .remoteHangUp, rateCategory: nil, rateType: .caller, answerTime: 0, abnormal: 0)
         }
     }
 
@@ -269,6 +282,10 @@ final class CallStore: ObservableObject {
         myUserId = 0
         state = .idle
         current = CurrentCallInfo()
+        // 退登链路：销毁 AgoraRtcEngineKit 全局单例。
+        // stop() 仅在 RootView.syncSessionDependent 的 logout 分支调用（唯一路径），
+        // 接通后下次登录时 sharedEngine(with:) 会拿到干净的新 singleton。
+        AgoraManager.destroyEngine()
     }
 
     // MARK: - 主叫：拨号
@@ -341,7 +358,8 @@ final class CallStore: ObservableObject {
         let ok = await signaling.publish(buildMessage(action: .videoCall))
         if !ok {
             lastError = "发送呼叫失败"
-            await endLocally(reason: .beginCallError, rateCategory: .canceled, rateType: .caller, abnormal: 1)
+            // H5 callOutCancel L1065/1076：主动取消桶 answerTime=0
+            await endLocally(reason: .beginCallError, rateCategory: .canceled, rateType: .caller, answerTime: 0, abnormal: 1)
             return
         }
     }
@@ -354,7 +372,8 @@ final class CallStore: ObservableObject {
         if let signaling {
             _ = await signaling.publish(buildMessage(action: .cancel))
         }
-        await endLocally(reason: .localHangUp, rateCategory: .canceled, rateType: .caller, abnormal: 0)
+        // H5 callOutCancel L1065/1076：主动取消桶 answerTime=0
+        await endLocally(reason: .localHangUp, rateCategory: .canceled, rateType: .caller, answerTime: 0, abnormal: 0)
     }
 
     // MARK: - 被叫：接受 / 拒绝
@@ -391,7 +410,7 @@ final class CallStore: ObservableObject {
         let ok = await signaling.publish(buildMessage(action: .accept))
         guard ok else {
             lastError = "私 call 发送接听失败"
-            await endLocally(reason: .beginCallError, rateCategory: nil, rateType: .callee, abnormal: 1)
+            await endLocally(reason: .beginCallError, rateCategory: nil, rateType: .callee, answerTime: 0, abnormal: 1)
             return
         }
         state = .connecting
@@ -407,7 +426,14 @@ final class CallStore: ObservableObject {
             AppLogger.call.info("✅ [CallStore] 直播私 call 接听后远端已在频道 → state=connected")
         }
 
-        // 5) 异步拉对方资料（C 范围 joinCall 接口；失败仅影响 UI，不影响接通能力）
+        // 5) 接通率上报（answered 节点，对齐 accept() 同位置上报）。同步 await：fire-and-forget
+        //    会与对端 RTM hangup 入队的 handleRemote Task 形成 FIFO race，hangup 先跑会推到
+        //    state=.ended → reportRate 入口守卫拦截 → answered 永久漏报。同步 await 把这次上报
+        //    放在 publish/joinRtc 共同 MainActor 串行链路上，handleRemote 必排队在后。
+        await reportRate(category: .answered, type: .callee,
+                         answerTime: current.sinceStartDuration, abnormal: 0)
+
+        // 6) 异步拉对方资料（C 范围 joinCall 接口；失败仅影响 UI，不影响接通能力）
         Task { @MainActor in
             do {
                 let r = try await CallService.joinCall(channelId: fromRoomId)
@@ -436,7 +462,7 @@ final class CallStore: ObservableObject {
         let ok = await signaling.publish(buildMessage(action: .accept))
         guard ok else {
             lastError = "发送接听失败"
-            await endLocally(reason: .beginCallError, rateCategory: nil, rateType: .callee, abnormal: 1)
+            await endLocally(reason: .beginCallError, rateCategory: nil, rateType: .callee, answerTime: 0, abnormal: 1)
             return
         }
         state = .connecting
@@ -460,7 +486,8 @@ final class CallStore: ObservableObject {
     func reject() async {
         guard state == .calling, current.inOrOut == .in, let signaling else { return }
         _ = await signaling.publish(buildMessage(action: .reject))
-        await endLocally(reason: .localHangUp, rateCategory: .rejected, rateType: .callee, abnormal: 0)
+        // H5 callInCancel L1119/1129：被叫主动拒接桶 answerTime=0
+        await endLocally(reason: .localHangUp, rateCategory: .rejected, rateType: .callee, answerTime: 0, abnormal: 0)
     }
 
     // MARK: - 接通后：挂断
@@ -471,7 +498,7 @@ final class CallStore: ObservableObject {
         if let signaling {
             _ = await signaling.publish(buildMessage(action: .hangup))
         }
-        await endLocally(reason: .localHangUp, rateCategory: nil, rateType: .caller, abnormal: 0)
+        await endLocally(reason: .localHangUp, rateCategory: nil, rateType: .caller, answerTime: 0, abnormal: 0)
     }
 
     // MARK: - 内部：构造 CallMessage
@@ -526,7 +553,7 @@ final class CallStore: ObservableObject {
             let tokenRes = try await LiveService.getAgoraRtmToken()
             guard let rtcToken = tokenRes.rtcToken, !rtcToken.isEmpty else {
                 lastError = "获取 rtcToken 失败"
-                await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, abnormal: 1)
+                await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, answerTime: 0, abnormal: 1)
                 return
             }
             // 关键守卫：state 必须仍在拨号/接通过程中。.calling 适用于主叫端 callOut 后立刻 join 的
@@ -539,10 +566,10 @@ final class CallStore: ObservableObject {
             agora.join(channelId: channel, token: rtcToken, uid: UInt(myUserId), profile: .communication)
         } catch let e as APIError {
             lastError = "rtcToken: \(e.message)"
-            await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, abnormal: 1)
+            await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, answerTime: 0, abnormal: 1)
         } catch {
             lastError = "rtcToken: \(error.localizedDescription)"
-            await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, abnormal: 1)
+            await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, answerTime: 0, abnormal: 1)
         }
     }
 
@@ -551,6 +578,7 @@ final class CallStore: ObservableObject {
     private func endLocally(reason: CallOverReason,
                             rateCategory: CallRateCategory?,
                             rateType: CallRateType,
+                            answerTime: Int = 0,
                             abnormal: Int) async {
         cancelCallOutTimeout()
         let info = current
@@ -560,8 +588,13 @@ final class CallStore: ObservableObject {
         // ⚠️ 主播端**不调** `/callOver`（后端无此路由 → 404；该接口是用户端独有的，后端按
         // 用户端 callOver 触发结算）。本端只做 RTC leave + 状态复位 + callRate（可选）。
         if !info.channelId.isEmpty, let cat = rateCategory {
+            // answerTime 由调用方按 H5 useCallApi.js 分桶语义传入（统一取值会污染 cancel/reject 桶）：
+            //   answered = sinceStartDuration（等待时长，H5 getDuration/duraction）
+            //   timeout  = 字面 30（H5 handleCallingTimeout L540）
+            //   主动 cancel | reject = 0（H5 callOutCancel L1065/1076 + callInCancel L1119/1129）
+            //   remoteCancel | remoteReject = sinceStartDuration（H5 callDuration in calling 阶段）
             await reportRate(category: cat, type: rateType,
-                             answerTime: info.connectedDuration > 0 ? info.connectedDuration : info.sinceStartDuration,
+                             answerTime: answerTime,
                              abnormal: abnormal)
         }
         state = .ended
@@ -581,8 +614,18 @@ final class CallStore: ObservableObject {
         }
     }
 
+    /// 接通率统一上报入口。
+    /// ⚠️ state 守卫：joinRtc 失败 → endLocally → state=.ended 后，控制流回到
+    /// acceptIncomingFromLive L414 / accept() L463 仍会继续执行 reportRate(.answered)，
+    /// 污染后端接通率统计（虚假 abnormal=0）。守卫下沉到入口拦截抢跑。
+    /// endLocally 内的 reportRate（L573）调用时 state 仍是 .calling/.connecting/.connected
+    /// （state=.ended 在 L577，reportRate 之后），不会被本守卫误拦截。
     private func reportRate(category: CallRateCategory, type: CallRateType,
                             answerTime: Int, abnormal: Int) async {
+        guard state != .ended, state != .idle, state != .failed else {
+            AppLogger.call.notice("⚠️ [CallStore] reportRate 抢跑拦截 state=\(self.state.rawValue, privacy: .public) cat=\(category.rawValue, privacy: .public)")
+            return
+        }
         guard callRateEnabled, !current.channelId.isEmpty else { return }
         await CallService.callRate(
             channelId: current.channelId,
@@ -603,7 +646,8 @@ final class CallStore: ObservableObject {
             if let signaling = self.signaling {
                 _ = await signaling.publish(self.buildMessage(action: .cancel))
             }
-            await self.endLocally(reason: .userConcurrentCancel, rateCategory: .timeout, rateType: .caller, abnormal: 0)
+            // H5 handleCallingTimeout L540：timeout 桶 answerTime 字面 30
+            await self.endLocally(reason: .userConcurrentCancel, rateCategory: .timeout, rateType: .caller, answerTime: 30, abnormal: 0)
         }
     }
 
@@ -652,6 +696,22 @@ extension CallStore: CallSignalingDelegate {
         if let ls = liveStore, ls.state == .living, ls.callState == 0 {
             AppLogger.call.debug("📞 [CallStore] 直播态收到私 call → 委托 LiveStore.pauseForCall")
             await ls.pauseForCall(msg: msg)
+            return
+        }
+        // G M6 / spec §8.2：PK 期（matching/inviting/invited/starting/inPK/punishing/endingPK）显式 busy reject。
+        // 现有的 `ls.callState == 0` 守卫在 PK 期 callState=2/3 会 fall through 到下面 `state == .idle` 分支，
+        // 若 CallStore 也是 .idle 就会创建错通话（spec §B 警示）；本分支显式拦截。
+        if let pk = pkStore, pk.state != .idle, pk.state != .failed {
+            AppLogger.call.notice("⚠️ [CallStore] PK 中收到来电 pkState=\(pk.state.rawValue, privacy: .public) → 自动 busy reject")
+            if let signaling {
+                let busy = CallMessage(action: .reject,
+                                       fromUserId: myUserId,
+                                       remoteUserId: msg.fromUserId,
+                                       callId: msg.callId,
+                                       rejectReason: "busy",
+                                       rejectByInternal: 1)
+                _ = await signaling.publish(busy)
+            }
             return
         }
         guard state == .idle else {
@@ -707,7 +767,8 @@ extension CallStore: CallSignalingDelegate {
     private func handleRemoteCancel(_ msg: CallMessage) async {
         guard state == .calling, current.callId == msg.callId else { return }
         // H5 CALL_OVER_REASON_NUMBER 没有"远端取消"独立码，沿用 2 (remoteHangUp) 是历史选择。
-        await endLocally(reason: .remoteHangUp, rateCategory: .canceled, rateType: .callee, abnormal: 0)
+        // H5 useCallApi.js remoteCancel：calling 阶段 callDuration → answerTime=sinceStartDuration
+        await endLocally(reason: .remoteHangUp, rateCategory: .canceled, rateType: .callee, answerTime: current.sinceStartDuration, abnormal: 0)
     }
 
     private func handleRemoteAccept(_ msg: CallMessage) async {
@@ -726,11 +787,55 @@ extension CallStore: CallSignalingDelegate {
     private func handleRemoteReject(_ msg: CallMessage) async {
         guard state == .calling, current.inOrOut == .out, current.callId == msg.callId else { return }
         lastError = "对方已拒绝"
-        await endLocally(reason: .remoteHangUp, rateCategory: .rejected, rateType: .caller, abnormal: 0)
+        // H5 useCallApi.js remoteReject：calling 阶段 callDuration → answerTime=sinceStartDuration
+        await endLocally(reason: .remoteHangUp, rateCategory: .rejected, rateType: .caller, answerTime: current.sinceStartDuration, abnormal: 0)
     }
 
     private func handleRemoteHangup(_ msg: CallMessage) async {
         guard state == .connecting || state == .connected, current.callId == msg.callId else { return }
-        await endLocally(reason: .remoteHangUp, rateCategory: nil, rateType: .caller, abnormal: 0)
+        await endLocally(reason: .remoteHangUp, rateCategory: nil, rateType: .caller, answerTime: 0, abnormal: 0)
     }
 }
+
+// MARK: - H M4：SystemMessageRouter sysMsg 通道入口（spec §3.1 / H 校验清单 §1.1.2 A 表）
+
+extension CallStore {
+
+    /// sysMsg -1：通话内远端文字消息（含翻译 + chatBubble）。
+    /// H5 message.js:636-665 解码 `unescape(content)` + 调 translateText API；
+    /// iOS H 阶段仅落 store 字段，翻译 / 气泡 UI 留 C 期 backlog。
+    func handleRemoteText(_ text: String, chatBubble: Int? = nil) {
+        guard !text.isEmpty else { return }
+        callRecentRemoteText = text
+        if let cb = chatBubble { callChatBubble = cb }
+        AppLogger.call.info("[CallStore] handleRemoteText len=\(text.count, privacy: .public) bubble=\(chatBubble ?? -1, privacy: .public)")
+    }
+
+    /// sysMsg -6：通话充值等待状态变更（type 1/2/3/4）。
+    func updateWaitState(type: Int) {
+        callWaitState = type
+        AppLogger.call.info("[CallStore] updateWaitState type=\(type, privacy: .public)")
+    }
+
+    /// sysMsg 15：通话每分钟预估收入累加。
+    func appendCallIncome(num: Int) {
+        guard num > 0 else { return }
+        current.callIncome += num
+        AppLogger.call.info("[CallStore] appendCallIncome +\(num, privacy: .public) total=\(self.current.callIncome, privacy: .public)")
+    }
+
+    /// sysMsg 18：通话礼物预估收入累加。
+    func appendGiftIncome(num: Int) {
+        guard num > 0 else { return }
+        current.callGiftIncome += num
+        AppLogger.call.info("[CallStore] appendGiftIncome +\(num, privacy: .public) total=\(self.current.callGiftIncome, privacy: .public)")
+    }
+
+    /// sysMsg 90：通话充值成功钻石奖励累加（H5 callWaitBonus）。
+    func appendWaitBonus(num: Int) {
+        guard num > 0 else { return }
+        callWaitBonus += num
+        AppLogger.call.info("[CallStore] appendWaitBonus +\(num, privacy: .public) total=\(self.callWaitBonus, privacy: .public)")
+    }
+}
+
