@@ -25,6 +25,12 @@ struct LiveRoomView: View {
     @State private var showBeauty = false
     @State private var elapsed = 0
 
+    // ⚠️ G 里程碑 M0 临时调试入口（PR 前删除）：手动加入/离开对手 PK 频道，验证 joinChannelEx 通路
+    @State private var showPKDebug = false
+    @State private var pkDebugChannel = ""
+    @State private var pkDebugOppositeUid = ""
+    @State private var pkDebugMessage = ""
+
     private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
@@ -58,6 +64,7 @@ struct LiveRoomView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showBeauty) { beautyPanel }
+        .sheet(isPresented: $showPKDebug) { pkDebugPanel }   // ⚠️ M0 调试入口（PR 前删除）
         .alert(L10n.liveRoomPermissionAlertTitle, isPresented: $store.permissionDeniedAlert) {
             Button(L10n.liveRoomPermissionAlertOK) { dismiss() }
         } message: {
@@ -281,6 +288,8 @@ struct LiveRoomView: View {
         HStack(spacing: 16) {
             Button { showBeauty = true } label: { toolButton(L10n.liveRoomToolBeauty, system: "wand.and.stars") }
                 .disabled(!store.beautyAvailable)
+            // ⚠️ G 里程碑 M0 临时入口（PR 前删除）
+            Button { showPKDebug = true } label: { toolButton("PK", system: "person.2.fill") }
             Spacer()
             Button {
                 Task { await store.endLive() }
@@ -290,6 +299,72 @@ struct LiveRoomView: View {
                     .background(Color.red, in: Capsule())
             }
         }
+    }
+
+    // MARK: - G 里程碑 M0 调试面板（PR 前删除）
+
+    private var pkDebugPanel: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("PK Test (M0)").font(.headline)
+            Text("token 复用主直播 rtcToken；ownUid 复用 roomInfo.userId")
+                .font(.caption2).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Opposite channelId").font(.caption)
+                TextField("e.g. anchor_xxx", text: $pkDebugChannel)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .textFieldStyle(.roundedBorder)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Opposite uid").font(.caption)
+                TextField("e.g. 123456", text: $pkDebugOppositeUid)
+                    .keyboardType(.numberPad)
+                    .textFieldStyle(.roundedBorder)
+            }
+            HStack(spacing: 12) {
+                Button("Join") {
+                    Task { await runPKDebugJoin() }
+                }
+                .disabled(pkDebugChannel.isEmpty || pkDebugOppositeUid.isEmpty)
+                .buttonStyle(.borderedProminent)
+                Button("Leave") {
+                    Task { await runPKDebugLeave() }
+                }
+                .disabled(pkDebugChannel.isEmpty)
+                .buttonStyle(.bordered)
+            }
+            if !pkDebugMessage.isEmpty {
+                Text(pkDebugMessage)
+                    .font(.caption).foregroundStyle(.orange)
+                    .padding(.top, 4)
+            }
+            Spacer()
+        }
+        .padding()
+        .presentationDetents([.medium])
+    }
+
+    private func runPKDebugJoin() async {
+        guard let uidInt = UInt(pkDebugOppositeUid.trimmingCharacters(in: .whitespaces)) else {
+            pkDebugMessage = "invalid uid"
+            return
+        }
+        let token = roomInfo.rtcToken ?? ""
+        let ownUid = UInt(roomInfo.userId ?? 0)
+        do {
+            try await agora.joinPKOpposite(channel: pkDebugChannel,
+                                           oppositeUid: uidInt,
+                                           token: token,
+                                           ownUid: ownUid)
+            pkDebugMessage = "join requested, watch Console for didJoinedOfUid"
+        } catch {
+            pkDebugMessage = "join failed: \(error)"
+        }
+    }
+
+    private func runPKDebugLeave() async {
+        await agora.leavePKOpposite(channel: pkDebugChannel)
+        pkDebugMessage = "leave completed for \(pkDebugChannel)"
     }
 
     private func toolButton(_ t: String, system: String) -> some View {

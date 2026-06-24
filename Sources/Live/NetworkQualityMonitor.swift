@@ -5,6 +5,16 @@ import os
 
 private let logger = Logger(subsystem: "com.anchor.livechat", category: "NetworkMonitor")
 
+/// 网络质量分层（G 里程碑 spec §3.5）：
+/// - `normal` 正常态，无降级
+/// - `weakWarning` 连续 ≥10 次坏质量（已 toast + 编码 30→15fps）
+/// - `weakSevere` 连续 ≥30 次坏质量（默认行为下 forceEnd 直播；PK 期 PKStore 监听本值拦截 forceEnd 改为切 .pkLow）
+enum NetworkQualityLevel: String {
+    case normal
+    case weakWarning
+    case weakSevere
+}
+
 /// 调试用：网络监控实时计数（v5.1 显示到 LiveRoomView 调试面板）。
 struct NetworkDebugInfo: Equatable {
     var status: String = "normal"           // normal / degraded / ended
@@ -27,8 +37,12 @@ struct NetworkDebugInfo: Equatable {
 ///
 /// PK 期间（G 里程碑）使用 pause/resume，保留计数。
 @MainActor
-final class NetworkQualityMonitor {
+final class NetworkQualityMonitor: ObservableObject {
     private enum Status: String { case normal, degraded, ended }
+
+    /// G 里程碑 spec §3.5：PKStore enter inPK 时订阅本值，监听到 .weakSevere 时拦截 forceEnd 改切 .pkLow；
+    /// exit endingPK 时解除订阅。非 PK 期间保持 NQM 自身 forceEnd 行为不变。
+    @Published private(set) var currentLevel: NetworkQualityLevel = .normal
 
     /// 触发降级（toast + fps 30→15）的连续坏质量次数
     private let warnThreshold = 10
@@ -98,6 +112,7 @@ final class NetworkQualityMonitor {
     func start() {
         isRunning = true
         status = .normal
+        currentLevel = .normal
         consecutiveBadCount = 0
         consecutiveGoodCount = 0
         agora?.applyEncoderQuality(.normal)
@@ -195,6 +210,7 @@ final class NetworkQualityMonitor {
 
     private func degrade() {
         logger.warning("network degraded (≥\(self.warnThreshold) bad) → low fps + 600kbps + camera throttle 15fps + toast")
+        currentLevel = .weakWarning
         agora?.applyEncoderQuality(.low)
         camera?.targetFPS = 15                    // v5.1：相机推帧同步降到 15fps 防堆积
         store?.setNetworkWarning(L10n.networkWarning)
@@ -202,6 +218,7 @@ final class NetworkQualityMonitor {
 
     private func recover() {
         logger.info("network recovered (≥\(self.recoverThreshold) good) → normal fps + auto bitrate + camera 30fps + clear toast")
+        currentLevel = .normal
         agora?.applyEncoderQuality(.normal)
         camera?.targetFPS = 30                    // v5.1：相机推帧恢复 30fps
         store?.setNetworkWarning(nil)
@@ -209,6 +226,7 @@ final class NetworkQualityMonitor {
 
     private func endLive() {
         logger.error("network bad ≥\(self.endThreshold) → forceEnd weakNetwork")
+        currentLevel = .weakSevere
         // TODO: ThinkingData 接入后真实埋点 c_log_networkBad（J 里程碑）
         Task { [weak self] in
             await self?.store?.forceEnd(reason: .weakNetwork, subSource: "network_bad_30")
