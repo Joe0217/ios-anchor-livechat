@@ -28,6 +28,20 @@ struct NetworkDebugInfo: Equatable {
     var cameraFps: Int = 30                  // CameraManager.targetFPS 节流值
 }
 
+/// 网络调试信息独立 store：把高频（2s/次）@Published 写从 LiveStore 隔离出来，
+/// 避免 LiveRoomView 因 networkDebugInfo 变化触发整树 body re-eval。
+/// 仅 DebugNetworkPanel 订阅本类，LiveRoomView 不读 info 字段。
+@MainActor
+final class NetworkDebugStore: ObservableObject {
+    @Published private(set) var info = NetworkDebugInfo()
+
+    func update(_ block: (inout NetworkDebugInfo) -> Void) {
+        var next = info
+        block(&next)
+        info = next
+    }
+}
+
 /// 直播网络质量监控（B 里程碑 spec §4 v5 分层版）。
 ///
 /// **三阈值分层**（声网 networkQuality 回调 2s 一次）：

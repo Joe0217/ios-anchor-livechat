@@ -30,7 +30,13 @@ final class LiveStore: ObservableObject {
     @Published private(set) var networkWarningToast: String?
 
     // ─── 调试用：网络监控实时计数（v5.1 显示到 LiveRoomView 调试面板）
-    @Published private(set) var networkDebugInfo = NetworkDebugInfo()
+    // 独立 ObservableObject，避免高频（2s/次）写触发 LiveRoomView 整树重渲染。
+    // 仅 DebugNetworkPanel 订阅 networkDebugStore；LiveStore 自身不再 @Published 持有。
+    let networkDebugStore = NetworkDebugStore()
+
+    // ─── 直播时长计时器（M1 起，原在 LiveRoomView 内 Timer.publish + @State 驱动）
+    // 独立 ObservableObject 隔离 1Hz 高频 @Published 写；attachLiving 启动 / teardown 停止。
+    let elapsedTimerStore = LiveTimerStore()
 
     // ─── 美颜可用性（§6 fallback；M2 接入）─────
     @Published private(set) var beautyAvailable: Bool = true
@@ -56,17 +62,14 @@ final class LiveStore: ObservableObject {
     private lazy var heartbeat: HeartbeatController = HeartbeatController(store: self)
     private lazy var monitor: NetworkQualityMonitor = NetworkQualityMonitor(store: self)
 
+    /// G 里程碑 spec §3.5：PKStore 通过本访问器订阅 NQM `$currentLevel` 拦截 forceEnd 改切 .pkLow。
+    /// 仅暴露读取，避免外部替换 monitor 实例。
+    var networkMonitor: NetworkQualityMonitor { monitor }
+
     /// D 里程碑新增：直播 RTC 实例的 weak 引用，wire 时由 LiveRoomView 注入。
     /// 用途：pauseForCall 内调 agora?.leave() 离开直播频道；resumeCall 内调 agora?.join() 回直播。
     /// weak：LiveStore 不强持有，LiveRoomView 销毁时自动清理。
     private weak var agora: AgoraManager?
-
-    /// D 里程碑跨会话过渡占位（B 会话临时加，B build 不被 D 阻塞）。
-    /// D-spec 最终采用 **weak ref 对齐 AgoraManager.liveStore 模式**（见 `CallStore.swift:50-52` 注释），
-    /// `CallStore.swift:L435/L437` 的 `LiveStore.shared.*` 引用是 D-spec 早期草案，**待 D 会话清理**。
-    /// ⚠️ 本 shared 与 LiveRoomView 内 @StateObject 持有的 store 是不同对象——`.state == .living` 检查永远 false，
-    /// 安全副作用：L435 条件永远不成立，CallStore 走 L443+ 的 weak ref 流程。
-    static let shared = LiveStore()
 
     private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveStore")
 
@@ -96,6 +99,7 @@ extension LiveStore {
         self.state = .living
         heartbeat.start()
         monitor.start()
+        elapsedTimerStore.start()
         logger.info("attachLiving roomId=\(roomInfo.id ?? -1)")
     }
 
@@ -184,6 +188,7 @@ extension LiveStore {
     private func teardown() async {
         heartbeat.stop()
         monitor.stop()
+        elapsedTimerStore.stop()
         cameraFailureWatcher?.cancel()
         cameraFailureWatcher = nil
         cameraFailureStartedAt = nil
@@ -228,11 +233,10 @@ extension LiveStore {
         networkWarningToast = text
     }
 
-    /// v5.1：NetworkQualityMonitor 每次 report 后调用更新调试信息（LiveRoomView 调试面板实时显示）
+    /// v5.1：NetworkQualityMonitor 每次 report 后调用更新调试信息（LiveRoomView 调试面板实时显示）。
+    /// 转发到独立的 NetworkDebugStore，避免 LiveStore.objectWillChange 触发 LiveRoomView 整树重渲染。
     func updateNetworkDebug(_ block: (inout NetworkDebugInfo) -> Void) {
-        var info = networkDebugInfo
-        block(&info)
-        networkDebugInfo = info
+        networkDebugStore.update(block)
     }
 
     /// 直播态下收到 RTM VideoCall → 暂停直播 → 委托 CallStore 自动接听。
@@ -245,9 +249,10 @@ extension LiveStore {
         }
         logger.info("pauseForCall: 暂停直播 → 接听 from=\(msg.fromUserId)")
 
-        // 1) 停心跳 + 网络监控（B 已落地的 stop/start；stop 内自动重置 failureCount=0）
+        // 1) 停心跳 + 网络监控（B 已落地的 stop/start；stop 内自动重置 failureCount=0）+ 暂停直播时长计时
         heartbeat.stop()
         monitor.stop()
+        elapsedTimerStore.stop()
 
         // 2) RTC leave 直播频道（保留 roomId/agoraChannelId/rtcToken 字段以备 resumeCall 回 join）
         //    agora 是 weak 引用，nil 时静默跳过（防御性）。
@@ -350,6 +355,7 @@ extension LiveStore {
             await self.rejoinLiveChannel()
             self.heartbeat.start()   // start 内会先 stop 再启动，failureCount 重置为 0
             self.monitor.start()
+            self.elapsedTimerStore.start()   // 恢复直播时长计时（保留已累加值，继续累加）
             self.callState = 0
             self.isWaitingReturnLive = false
             WSHeartbeat.shared.notifyCallStateChanged(callState: 0)
@@ -398,5 +404,40 @@ extension LiveStore: CallStoreObserver {
         guard wasInCall, nowEnded, callState == 1 else { return }
         logger.info("CallStore 通话结束 (\(String(describing: previous)) → \(String(describing: newState))) → 启动 resumeCall")
         Task { await resumeCall() }
+    }
+}
+
+// MARK: - LiveTimerStore：直播时长 1Hz 计时（独立 ObservableObject）
+//
+// 原 LiveRoomView 内 Timer.publish + @State elapsed 模式违反 CLAUDE.md 实现纪律
+// （"Timer 业务计时器应收敛进 Store"）；拆出后 LiveStore 显式 start/stop，
+// 仅 LiveElapsedCapsule 子 view 订阅 elapsedSeconds 字段，1Hz 写不波及 LiveRoomView 整树。
+
+@MainActor
+final class LiveTimerStore: ObservableObject {
+    @Published private(set) var elapsedSeconds: Int = 0
+    private var task: Task<Void, Never>?
+
+    /// 启动 1Hz 计时（不重置 elapsedSeconds，支持暂停-恢复）。
+    /// 重复调 start 幂等：先 cancel 旧 task 再起新 task。
+    func start() {
+        task?.cancel()
+        task = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                if Task.isCancelled { return }
+                self?.elapsedSeconds += 1
+            }
+        }
+    }
+
+    func stop() {
+        task?.cancel()
+        task = nil
+    }
+
+    func reset() {
+        stop()
+        elapsedSeconds = 0
     }
 }

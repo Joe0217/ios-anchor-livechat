@@ -14,6 +14,10 @@ struct LiveRoomView: View {
     @StateObject private var camera = CameraManager()
     @StateObject private var agora = AgoraManager()
     @StateObject private var nim = NIMChatroomManager()
+    /// G 里程碑 M3：PK 主态状态机；onAppear weak 注入 store/agora/nim/observer/networkMonitor
+    @StateObject private var pkStore = PKStore()
+    /// G 里程碑 M3：PK 结束后 didEndPK observer 桥到 UI 弹结果窗
+    @StateObject private var pkResultBridge = PKResultBridge()
     /// D 里程碑：监听 CallStore 状态，直播态收到私 call 时用 CallView overlay 覆盖直播画面。
     /// 对齐 H5 g-faceTime 全局浮层模式。RootView 的 ZStack 浮层在 sheet 内不可见，必须在
     /// LiveRoomView 内自己 overlay。
@@ -23,15 +27,18 @@ struct LiveRoomView: View {
 
     @State private var authorized = false
     @State private var showBeauty = false
-    @State private var elapsed = 0
 
-    // ⚠️ G 里程碑 M0 临时调试入口（PR 前删除）：手动加入/离开对手 PK 频道，验证 joinChannelEx 通路
+    // G 里程碑 M0 临时调试入口：手动加入/离开对手 PK 频道，验证 joinChannelEx 通路
+    // 用 #if DEBUG 隔离，release 包不带（避免审核侧看到内部调试入口）
+    #if DEBUG
     @State private var showPKDebug = false
     @State private var pkDebugChannel = ""
     @State private var pkDebugOppositeUid = ""
     @State private var pkDebugMessage = ""
+    #endif
 
-    private let ticker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    /// G M3：邀请发起 sheet 显示状态
+    @State private var showInviteSheet = false
 
     var body: some View {
         ZStack {
@@ -39,9 +46,19 @@ struct LiveRoomView: View {
             if authorized {
                 CameraPreview(camera: camera, agora: agora).ignoresSafeArea()
             }
+            // G M3 / spec §6.1：PKArenaView 跨 .starting/.inPK/.punishing 三态用 if 链承载（铁律 §1）；
+            // .id("pkArena") 锁 identity 避免 dismantleUIView 反复触发 → AgoraRtcVideoCanvas.view 黑屏。
+            // 本端 CameraPreview 不在内重建（铁律 §3）；PKArenaView 仅占右半边盖对手画面。
+            if pkStore.state == .starting || pkStore.state == .inPK || pkStore.state == .punishing {
+                PKArenaView(store: pkStore, agora: agora)
+                    .id("pkArena")
+                    .ignoresSafeArea()
+                    .transition(.opacity)
+            }
             VStack(spacing: 12) {
                 topBar
-                debugNetworkPanel    // v5.1 调试面板（弱网计数实时显示）
+                // 独立 ObservableObject，仅本子 view 订阅；高频（2s/次）写不波及 LiveRoomView 整树
+                DebugNetworkPanel(debugStore: store.networkDebugStore)
                 if !store.beautyAvailable {
                     Text(L10n.beautyUnavailableHint)
                         .font(.caption2)
@@ -64,7 +81,28 @@ struct LiveRoomView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showBeauty) { beautyPanel }
-        .sheet(isPresented: $showPKDebug) { pkDebugPanel }   // ⚠️ M0 调试入口（PR 前删除）
+        #if DEBUG
+        .sheet(isPresented: $showPKDebug) { pkDebugPanel }   // M0 调试入口（仅 DEBUG）
+        #endif
+        .sheet(isPresented: $showInviteSheet) {
+            PKInviteSheet(store: pkStore, isPresented: $showInviteSheet)
+        }
+        // G M3 / spec §6.1：PK 各态 overlay；半透明胶囊条不全屏盖（铁律 §8）
+        .overlay { PKMatchingOverlay(store: pkStore).transition(.opacity) }
+        .overlay { PKInvitedSheet(store: pkStore).transition(.opacity) }
+        .overlay { PKPunishingOverlay(store: pkStore).transition(.opacity) }
+        .overlay {
+            PKResultOverlay(isPresented: $pkResultBridge.presented,
+                            myScore: pkResultBridge.myScore,
+                            oppositeScore: pkResultBridge.opponentScore,
+                            top3: pkResultBridge.top3)
+        }
+        .overlay(alignment: .bottomTrailing) {
+            PKEntryButton(store: pkStore, showInviteSheet: $showInviteSheet)
+                .padding(.trailing, 12)
+                .padding(.bottom, 110)        // 让出 bottomBar 高度
+        }
+        .animation(.easeInOut(duration: 0.2), value: pkStore.state)
         .alert(L10n.liveRoomPermissionAlertTitle, isPresented: $store.permissionDeniedAlert) {
             Button(L10n.liveRoomPermissionAlertOK) { dismiss() }
         } message: {
@@ -106,6 +144,26 @@ struct LiveRoomView: View {
             // 通话挂断后 resumeCall 回直播的协议入口）。weak 引用，LiveRoomView 销毁时自动清理。
             CallStore.shared.liveStore = store
             CallStore.shared.observer = store
+            // G M6：把 PKStore 注入给 CallStore，PK 期收到私 call 自动 busy reject（spec §8.2）
+            CallStore.shared.pkStore = pkStore
+            // G M3：PKStore 注入。weak 引用，PKStore 在 LiveRoomView 销毁时随 @StateObject 一起释放。
+            pkStore.liveStore = store
+            pkStore.agora = agora
+            pkStore.nim = nim
+            pkStore.observer = pkResultBridge
+            pkStore.networkMonitor = store.networkMonitor
+            pkStore.ownAnchorId = SessionStore.shared.user?.userId ?? 0
+            pkStore.ownRoomId = roomInfo.id ?? 0
+            // M3 bug 修复：声网 PK 多频道 join 时复用主直播 rtcToken（绑 uid 不绑 channel）
+            pkStore.rtcToken = roomInfo.rtcToken ?? ""
+            // G M4：把 PKStore.router 挂到 NIMChatroomManager 的 weak pkRouter；onRecvMessages 收到
+            // attachType 97/98/99/100/-8/-9 时自动路由到 PKStore.handle*
+            // H M2 双轨过渡：旧 weak pkRouter 路径保留（M5 才删）；同时注册到 NIMService 路由链路，
+            // 让 M5 后 NIMChatroomManager.onRecvMessages 改走 NIMService.dispatch(.liveChatroom) 时立刻生效。
+            nim.pkRouter = pkStore.router
+            NIMService.shared.registerRouter(pkStore.router)
+            // 进房同步远端 PK 状态（H5 syncPkStateAfterReconnect 同行为）
+            Task { await pkStore.reconcileOnReconnect() }
         }
         .onDisappear {
             // v5.3.3 真根因修复：SwiftUI 在 ScenePhase=.background 时也会触发 onDisappear（snapshot 用），
@@ -121,6 +179,10 @@ struct LiveRoomView: View {
             Task { await agora.leave() }
             nim.leave()
             camera.stop()
+            // H M2：与 onAppear 的 registerRouter 配平，避免 NIMService.routers 残留弱引用
+            NIMService.shared.unregisterRouter(pkStore.router)
+            // G M3：PKStore teardown 取消倒计时 / 解 NQM 订阅 / 清字段；setCallState 内部 guard 会拦 ended 态调用
+            Task { await pkStore.teardown() }
         }
         .onChange(of: store.state) { newState in
             if newState == .ended { dismiss() }
@@ -131,10 +193,8 @@ struct LiveRoomView: View {
         .onReceive(beauty.objectWillChange) { _ in
             DispatchQueue.main.async { camera.renderer.updateParameters(beauty) }
         }
-        .onReceive(ticker) { _ in
-            guard agora.state == .joined else { return }
-            elapsed += 1
-        }
+        // 直播时长由 LiveStore.elapsedTimerStore 在 attachLiving/teardown 内自管启停；
+        // 时间 capsule 通过独立 LiveElapsedCapsule 子 view 订阅，避免 1Hz 触发本树重渲染。
         // D 里程碑：直播态期间收到私 call → CallView 顶层 overlay 覆盖直播画面。
         // 对齐 H5 g-faceTime 浮层模式。state != .idle 时显示（含 .calling/.connecting/.connected/.ended 过渡态）。
         .overlay {
@@ -191,15 +251,19 @@ struct LiveRoomView: View {
                     .font(.caption2).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
             }
             Spacer()
-            HStack(spacing: 6) {
-                Circle().fill(.red).frame(width: 8, height: 8)
-                Text(agora.state == .joined
-                     ? String(format: L10n.liveRoomStatusLiveFormat, timeString)
-                     : L10n.liveRoomStatusConnecting)
-                    .font(.caption).foregroundStyle(.white)
+            // 时间 capsule：joined 时显示 elapsed 时长（独立 store 隔离 1Hz 写）；
+            // 未 joined 显示 "Connecting…"——这一态由父 view 的 agora.state 触发 re-eval（极低频）。
+            if agora.state == .joined {
+                LiveElapsedCapsule(timerStore: store.elapsedTimerStore)
+            } else {
+                HStack(spacing: 6) {
+                    Circle().fill(.red).frame(width: 8, height: 8)
+                    Text(L10n.liveRoomStatusConnecting)
+                        .font(.caption).foregroundStyle(.white)
+                }
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .background(.black.opacity(0.4), in: Capsule())
             }
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(.black.opacity(0.4), in: Capsule())
             HStack(spacing: 4) {
                 Image(systemName: "person.2.fill").font(.caption2)
                 Text("\(nim.onlineCount)").font(.caption)
@@ -220,37 +284,6 @@ struct LiveRoomView: View {
             .background(.orange.opacity(0.9), in: RoundedRectangle(cornerRadius: 10))
             .frame(maxWidth: .infinity, alignment: .center)
             .transition(.move(edge: .top).combined(with: .opacity))
-    }
-
-    // MARK: - 网络监控调试面板（v5.1，弱网计数实时显示）
-
-    private var debugNetworkPanel: some View {
-        let info = store.networkDebugInfo
-        let statusColor: Color = {
-            switch info.status {
-            case "normal":   return .green
-            case "degraded": return .orange
-            case "ended":    return .red
-            default:         return .gray
-            }
-        }()
-        return VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 6) {
-                Circle().fill(statusColor).frame(width: 8, height: 8)
-                Text("net.\(info.status) bad=\(info.bad)/10→30 good=\(info.good)/5")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.white)
-            }
-            Text("tx=\(info.lastTx) rx=\(info.lastRx) worst=\(info.lastWorst) total=\(info.total)")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.85))
-            Text("agora.fps=\(info.agoraFps) cam.fps=\(info.cameraFps)")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.85))
-        }
-        .padding(.horizontal, 8).padding(.vertical, 4)
-        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - 网络弱网降级条幅（NetworkQualityMonitor 触发，恢复时自动消失）
@@ -288,8 +321,10 @@ struct LiveRoomView: View {
         HStack(spacing: 16) {
             Button { showBeauty = true } label: { toolButton(L10n.liveRoomToolBeauty, system: "wand.and.stars") }
                 .disabled(!store.beautyAvailable)
-            // ⚠️ G 里程碑 M0 临时入口（PR 前删除）
+            #if DEBUG
+            // G 里程碑 M0 临时入口（仅 DEBUG，release 不带）
             Button { showPKDebug = true } label: { toolButton("PK", system: "person.2.fill") }
+            #endif
             Spacer()
             Button {
                 Task { await store.endLive() }
@@ -301,8 +336,9 @@ struct LiveRoomView: View {
         }
     }
 
-    // MARK: - G 里程碑 M0 调试面板（PR 前删除）
+    // MARK: - G 里程碑 M0 调试面板（仅 DEBUG 构建）
 
+    #if DEBUG
     private var pkDebugPanel: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("PK Test (M0)").font(.headline)
@@ -366,6 +402,7 @@ struct LiveRoomView: View {
         await agora.leavePKOpposite(channel: pkDebugChannel)
         pkDebugMessage = "leave completed for \(pkDebugChannel)"
     }
+    #endif
 
     private func toolButton(_ t: String, system: String) -> some View {
         VStack(spacing: 4) {
@@ -405,7 +442,59 @@ struct LiveRoomView: View {
         }
     }
 
-    private var timeString: String {
-        String(format: "%02d:%02d", elapsed / 60, elapsed % 60)
+}
+
+// MARK: - 时间 capsule（订阅独立 LiveTimerStore，1Hz 写不波及 LiveRoomView 主树）
+
+private struct LiveElapsedCapsule: View {
+    @ObservedObject var timerStore: LiveTimerStore
+
+    var body: some View {
+        let secs = timerStore.elapsedSeconds
+        let timeString = String(format: "%02d:%02d", secs / 60, secs % 60)
+        return HStack(spacing: 6) {
+            Circle().fill(.red).frame(width: 8, height: 8)
+            Text(String(format: L10n.liveRoomStatusLiveFormat, timeString))
+                .font(.caption).foregroundStyle(.white)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(.black.opacity(0.4), in: Capsule())
+    }
+}
+
+// MARK: - 网络监控调试面板（v5.1，弱网计数实时显示）
+// 独立子 view + 独立 NetworkDebugStore：高频 2s/次的网络计数变化只触发本 view body re-eval，
+// 不再影响 LiveRoomView 主树（详见 LiveStore.networkDebugStore）。
+
+private struct DebugNetworkPanel: View {
+    @ObservedObject var debugStore: NetworkDebugStore
+
+    var body: some View {
+        let info = debugStore.info
+        let statusColor: Color = {
+            switch info.status {
+            case "normal":   return .green
+            case "degraded": return .orange
+            case "ended":    return .red
+            default:         return .gray
+            }
+        }()
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 6) {
+                Circle().fill(statusColor).frame(width: 8, height: 8)
+                Text("net.\(info.status) bad=\(info.bad)/10→30 good=\(info.good)/5")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.white)
+            }
+            Text("tx=\(info.lastTx) rx=\(info.lastRx) worst=\(info.lastWorst) total=\(info.total)")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.85))
+            Text("agora.fps=\(info.agoraFps) cam.fps=\(info.cameraFps)")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.85))
+        }
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
