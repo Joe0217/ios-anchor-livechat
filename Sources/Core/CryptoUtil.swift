@@ -22,23 +22,33 @@ enum CryptoUtil {
 
     // MARK: - AES-128-CBC
 
-    /// 加密 JSON 字符串 → Base64（请求体）
+    /// 加密 JSON 字符串 → Base64（请求体，主接口默认 key/iv）
     static func aesEncryptToBase64(_ plain: String) -> String? {
+        aesEncryptToBase64(plain, key: AppConfig.aesKey, iv: AppConfig.aesIV)
+    }
+
+    /// Hex 密文 → 解密为字符串（响应体 result，主接口默认 key/iv）
+    static func aesDecryptFromHex(_ hex: String) -> String? {
+        aesDecryptFromHex(hex, key: AppConfig.aesKey, iv: AppConfig.aesIV)
+    }
+
+    /// 参数化加密：sapi 用独立 key/iv（H5 .env VITE_AES_KEY_BAGSHOP_URL / VITE_AES_IV_BAGSHOP_URL）
+    static func aesEncryptToBase64(_ plain: String, key: String, iv: String) -> String? {
         guard let input = plain.data(using: .utf8),
-              let out = crypt(data: input, operation: kCCEncrypt) else { return nil }
+              let out = crypt(data: input, operation: kCCEncrypt, key: key, iv: iv) else { return nil }
         return out.base64EncodedString()
     }
 
-    /// Hex 密文 → 解密为字符串（响应体 result）
-    static func aesDecryptFromHex(_ hex: String) -> String? {
+    /// 参数化解密：sapi 响应 result Hex 用独立 key/iv
+    static func aesDecryptFromHex(_ hex: String, key: String, iv: String) -> String? {
         guard let input = Data(hexString: hex),
-              let out = crypt(data: input, operation: kCCDecrypt) else { return nil }
+              let out = crypt(data: input, operation: kCCDecrypt, key: key, iv: iv) else { return nil }
         return String(data: out, encoding: .utf8)
     }
 
-    private static func crypt(data: Data, operation: Int) -> Data? {
-        let keyData = Data(AppConfig.aesKey.utf8)
-        let ivData = Data(AppConfig.aesIV.utf8)
+    private static func crypt(data: Data, operation: Int, key: String, iv: String) -> Data? {
+        let keyData = Data(key.utf8)
+        let ivData = Data(iv.utf8)
         guard keyData.count == kCCKeySizeAES128, ivData.count == kCCBlockSizeAES128 else { return nil }
 
         let bufferSize = data.count + kCCBlockSizeAES128

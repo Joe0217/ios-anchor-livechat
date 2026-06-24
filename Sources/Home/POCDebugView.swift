@@ -26,6 +26,11 @@ struct POCDebugView: View {
                 } label: {
                     Label("直播开播 Demo", systemImage: "dot.radiowaves.left.and.right")
                 }
+                NavigationLink {
+                    PartyRoomListView()
+                } label: {
+                    Label("派对房 Demo", systemImage: "person.3.fill")
+                }
             }
 
             callSection

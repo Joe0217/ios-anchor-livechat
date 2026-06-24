@@ -23,6 +23,12 @@ enum AppConfig {
     static var aesKey: String      { plistString("HilyAESKey",     fallback: "9986sdff5s4f1123") }
     static var aesIV: String       { plistString("HilyAESIV",      fallback: "9986sdff5s4y456a") }
 
+    // MARK: - sapi（vvi）AES-128-CBC
+    // H5 dev 与主接口同套（巧合）；test/prod 是独立的 cbilx4v7vgz6jpw7 / dmnry3u8bhk5zq9f。
+    // 来源：anchor-livechat-h5 .env.development / .env.test / .env.production VITE_AES_KEY_BAGSHOP_URL / VITE_AES_IV_BAGSHOP_URL。
+    static var sapiAesKey: String  { plistString("HilySAPIAESKey", fallback: "9986sdff5s4f1123") }
+    static var sapiAesIV: String   { plistString("HilySAPIAESIV",  fallback: "9986sdff5s4y456a") }
+
     // MARK: - WebSocket 握手 AES-128-ECB（与主接口 CBC 是两套）
     static var wsAesKey: String    { plistString("HilyWSAESKey",   fallback: "9976kk4322578894") }
 

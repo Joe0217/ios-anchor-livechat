@@ -91,9 +91,11 @@ final class SessionStore: ObservableObject {
         KeychainStore.remove(for: storeKey)
         defaults.removeObject(forKey: legacyStoreKey)   // 清掉历史残留
         AuthToken.value = nil
-        // 同步清空主播信息缓存，避免下个账号登录后看到上个号的残留
+        // sapi（vvi 派对房/背包等链路）的 auth_token 与主 token 是两套独立生命周期，需同步清
+        SapiTokenStore.shared.clear()
+        // 同步清空主播信息缓存,避免下个账号登录后看到上个号的残留
         AnchorInfoStore.shared.clear()
-        // 图片缓存也清掉：上个号的头像/相册/视频缩略不应被下个号看到
+        // 图片缓存也清掉:上个号的头像/相册/视频缩略不应被下个号看到
         ImageCache.shared.clear()
     }
 
