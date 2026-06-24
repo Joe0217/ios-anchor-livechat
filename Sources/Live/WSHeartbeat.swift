@@ -2,19 +2,23 @@ import Foundation
 import UIKit
 import os
 
-/// 主播在线态 WebSocket 心跳（对应 H5 `useUserHeartbeatState.js`）。
+/// 主播在线态 WebSocket 心跳（对应安卓 `VptWebSocketManager` + 后端 `weidou-socket`）。
 ///
-/// **这是用户端"看到主播在线"的唯一来源**——后端按 WS 长连接 + 5s 心跳里的 `onlineStatus`
+/// **这是用户端"看到主播在线"的唯一来源**——后端按 WS 长连接 + 周期心跳里的 `onlineStatus`
 /// 维护 `onlineGroupStatus`。NIM 长连虽然必要（用于 IM 消息），但 dev 环境的"主播是否在线"
 /// 列表字段由本通道驱动。
 ///
-/// 协议（与 H5 严格对齐）：
-/// - 握手 URL：`{socketBaseURL}/webSocket?ciphertext={AES_Base64({"appToken":<loginUuid>})}`
-/// - 心跳间隔 5 秒
-/// - 心跳 payload：`{"requestId":"<deviceId>","messageType":1,"expandParams":{"channelId":"","onlineStatus":<int>}}`
-/// - onlineStatus 取值：见 LIVE_STATUS_NUMBER（H5 `src/constant/live.ts`）
-///     1=ONLINE / 2=OFFLINE / 3=DISCONNECT / 10000=CALLING / 10001=CALL_END
-///     10002=FOREGROUND / 10003=BACKGROUND
+/// 协议（与安卓主播端严格对齐，照后端 `WebSocketOnlineUserConfig` 真值）：
+/// - 握手 URL：`{socketBaseURL}/webSocket?ciphertext={AES_ECB_Hex({"appToken":<loginUuid>})}`
+/// - **心跳间隔 15s**（对齐安卓 `VptWebSocketManager.java:43`；上限 `USER_PARTY_ROOM_STATUS` TTL 25s）
+/// - **messageType = 1（REPORT_STATUS）**：唯一心跳类型；后端 `MyWebSocketHandler.java:77` 路由到
+///   `reportStatusHandler(userType=2)` 写主播在线表 + **同时** `partyRoomHeartbeat()` 刷新派对键
+/// - **expandParams 字段**：`{channelId, onlineStatus, roomId?, seatIndex?}` —— `roomId/seatIndex`
+///   仅在派对房内有值时附；安卓用 Gson null 省略，iOS 同等价
+/// - **30s 阈值踢下麦**（`PartyRoomSeatServiceImpl.java:626`，全员统一无主播豁免）
+/// - 关键守卫：`partyRoomHeartbeat` 仅当 `roomId>0` 才刷新派对键（`WebSocketOnlineUserConfig.java:435`）
+/// - onlineStatus 取值：1=ONLINE / 2=OFFLINE / 10000=CALLING / 10001=CALL_END /
+///   10002=FOREGROUND / 10003=BACKGROUND
 /// - 断线重连：5s/次（H5 是 720 次 ≈ 1h；iOS 简化为无上限直到 stop）
 @MainActor
 final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
@@ -37,13 +41,21 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
     private var reconnectTask: Task<Void, Never>?
     private var loginUuid: String = ""
     private var disposed = true
-    private let interval: TimeInterval = 5
+    /// 心跳间隔。15s 对齐安卓主播端（`VptWebSocketManager.java:43`）；
+    /// 后端 `USER_PARTY_ROOM_STATUS` TTL 25s + 麦位踢人 30s，间隔须 <25s。
+    private let interval: TimeInterval = 15
     private let reconnectDelay: TimeInterval = 5
 
     /// 当前应发的"在线态"状态。startPing/前后台切换/重连握手首包统一读取此值，
     /// 由 `notifyCallStateChanged(callState:)` 改写，让通话状态变化能影响周期心跳值。
     /// 默认 `.callEnd`（空闲在线）。
     private var currentStatus: OnlineStatus = .callEnd
+
+    /// 派对房上下文（安卓确认 + spec v3）：用户在派对房时 WS 心跳必须带 roomId（在麦上时再附 seatIndex），
+    /// 后端 `partyRoomHeartbeat()` 据此写 `user:online:party:room[userId].lastActiveTime`，30s 阈值踢下麦。
+    /// 由 `PartyStore.enterRoom/leaveRoom/postMikeList` 调用 `setPartyContext` 更新。
+    private var partyRoomId: String = ""
+    private var partySeatIndex: Int = -1   // >0 麦位号 1-13；其余视为不在麦上，省略字段（对齐安卓 Gson null 省略）
 
     private override init() {
         super.init()
@@ -116,7 +128,9 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
               let cipher = CryptoUtil.aesEncryptECBToHex(jsonStr) else {
             return nil
         }
-        AppLogger.heartbeat.debug("📡 [WS] cipher(hex) len=\(cipher.count, privacy: .public) head=\(cipher.prefix(12), privacy: .private)…")
+        // 仅打 cipher 长度做诊断；不再泄露密文 prefix（AES-128-ECB 固定 key + 已知明文头部 `{"appT`
+        // 重放风险，dev console privacy:.private 仍可见）。
+        AppLogger.heartbeat.debug("📡 [WS] cipher(hex) len=\(cipher.count, privacy: .public)")
         return URL(string: "\(AppConfig.socketBaseURL)/webSocket?ciphertext=\(cipher)")
     }
 
@@ -165,13 +179,26 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
     }
 
     private func sendStatus(_ status: OnlineStatus, channelId: String = "") {
+        // messageType=1（REPORT_STATUS）：后端 `MyWebSocketHandler.java:77` 路由到
+        // `reportStatusHandler(userType=2)` 写主播在线表 + 同时 `partyRoomHeartbeat()` 刷新派对键。
+        // 派对房上下文（roomId/seatIndex）走同一条 expandParams 注入；不发独立的 messageType=3
+        // （H5 用户端那套用户级心跳是另一协议，安卓主播端只发 messageType=1 / 15s）。
+        // 关键守卫：`partyRoomHeartbeat` 仅当 `roomId>0` 才刷新派对键（`WebSocketOnlineUserConfig.java:435`）。
+        var expand: [String: Any] = [
+            "channelId": channelId,
+            "onlineStatus": status.rawValue,
+        ]
+        if !partyRoomId.isEmpty {
+            expand["roomId"] = partyRoomId
+            // 仅在麦上才带 seatIndex（>0 1-13 麦位号）；不在麦时省略字段（对齐安卓 Gson null 省略）
+            if partySeatIndex > 0 {
+                expand["seatIndex"] = partySeatIndex
+            }
+        }
         let payload: [String: Any] = [
             "requestId": DeviceInfo.deviceId,
             "messageType": 1,
-            "expandParams": [
-                "channelId": channelId,
-                "onlineStatus": status.rawValue,
-            ],
+            "expandParams": expand,
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: payload),
               let str = String(data: data, encoding: .utf8) else { return }
@@ -182,6 +209,28 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
                 Task { @MainActor in self?.scheduleReconnect() }
             }
         }
+    }
+
+    // MARK: - 派对房上下文（安卓确认 + spec v3）
+    //
+    // 实现简化：不启独立 timer，仅更新字段 + 立即补一发 sendStatus，
+    // 让现有 15s pingTask 自然承载（与安卓主播端单心跳模型一致）。
+
+    /// 派对房进退房 / 上下麦时调用。`roomId` 空 → 清空。
+    /// `seatIndex` >0 表示具体麦位号 1-13；其余视为不在麦上（不带该字段）。
+    func setPartyContext(roomId: String, seatIndex: Int) {
+        partyRoomId = roomId
+        partySeatIndex = seatIndex
+        AppLogger.heartbeat.notice("📡 [WS] partyContext roomId=\(roomId, privacy: .public) seatIdx=\(seatIndex, privacy: .public)")
+        // 立即补一发让服务端尽快感知新上下文
+        sendStatus(currentStatus)
+    }
+
+    func clearPartyContext() {
+        partyRoomId = ""
+        partySeatIndex = -1
+        AppLogger.heartbeat.notice("📡 [WS] partyContext cleared")
+        sendStatus(currentStatus)
     }
 
     // MARK: - 计时器
