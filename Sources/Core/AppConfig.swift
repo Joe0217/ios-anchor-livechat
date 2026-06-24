@@ -24,8 +24,10 @@ enum AppConfig {
     static var aesIV: String       { plistString("HilyAESIV",      fallback: "9986sdff5s4y456a") }
 
     // MARK: - sapi（vvi）AES-128-CBC
-    // H5 dev 与主接口同套（巧合）；test/prod 是独立的 cbilx4v7vgz6jpw7 / dmnry3u8bhk5zq9f。
-    // 来源：anchor-livechat-h5 .env.development / .env.test / .env.production VITE_AES_KEY_BAGSHOP_URL / VITE_AES_IV_BAGSHOP_URL。
+    // dev 巧合与主接口同套（已在 Config-Dev.xcconfig 显式声明 HILY_SAPI_AES_KEY/IV，不再共用 HILY_AES_KEY/IV）；
+    // test 是 cbilx4v7vgz6jpw7 / dmnry3u8bhk5zq9f；prod 是另一套（Config-Prod.xcconfig 切换时务必同时换 sapi 密钥）。
+    // 来源：anchor-livechat-h5 .env.* VITE_AES_KEY_BAGSHOP_URL / VITE_AES_IV_BAGSHOP_URL。
+    // fallback 仅为 xcconfig 缺失时的兜底，不应作为正式发布值。
     static var sapiAesKey: String  { plistString("HilySAPIAESKey", fallback: "9986sdff5s4f1123") }
     static var sapiAesIV: String   { plistString("HilySAPIAESIV",  fallback: "9986sdff5s4y456a") }
 

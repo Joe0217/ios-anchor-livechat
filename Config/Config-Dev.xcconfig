@@ -36,6 +36,11 @@ HILY_NIM_APP_KEY = 124f689baed25c488e1330bc42e528af
 HILY_AES_KEY = 9986sdff5s4f1123
 HILY_AES_IV = 9986sdff5s4y456a
 
+// sapi（vvi 背包商城 / 派对房）请求体 AES-128-CBC
+// dev 巧合与主接口同套；test 是 cbilx4v7vgz6jpw7 / dmnry3u8bhk5zq9f；prod 是另一套（见 Config-Prod.xcconfig）
+HILY_SAPI_AES_KEY = 9986sdff5s4f1123
+HILY_SAPI_AES_IV = 9986sdff5s4y456a
+
 // WebSocket 握手 AES-128-ECB（与主接口的 CBC 是两套不同算法/密钥）
 HILY_WS_AES_KEY = 9976kk4322578894
 
