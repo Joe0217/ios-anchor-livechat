@@ -11,6 +11,7 @@ enum AppLogger {
     private static let subsystem = Bundle.main.bundleIdentifier ?? "com.anchor.livechat"
 
     static let net = Logger(subsystem: subsystem, category: "network")
+    static let auth = Logger(subsystem: subsystem, category: "auth")
     static let live = Logger(subsystem: subsystem, category: "live")
     static let call = Logger(subsystem: subsystem, category: "call")
     static let im = Logger(subsystem: subsystem, category: "im")

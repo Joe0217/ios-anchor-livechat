@@ -85,6 +85,16 @@ struct LivePrepareView: View {
 
     /// 对应 H5 handleStartLive：getMyLiveRoom（拿封面/配置）→ beginLiveRoom（真建房）
     private func startLive() {
+        // A 收尾：userType 守卫。userType==2 已审核主播才允许开播；
+        // ==9 代理账号 / nil 或其他值 视为未审核完成（H5 同样限制非主播账号入口）。
+        guard let user = SessionStore.shared.user else {
+            errorMsg = L10n.livePrepareGuardUnverified
+            return
+        }
+        if user.userType != 2 {
+            errorMsg = (user.userType == 9) ? L10n.livePrepareGuardAgent : L10n.livePrepareGuardUnverified
+            return
+        }
         isStarting = true
         errorMsg = ""
         Task { @MainActor in
@@ -101,6 +111,13 @@ struct LivePrepareView: View {
                 isStarting = false
                 goLive = true
             } catch let e as APIError {
+                // 1004 挤下线 / 1005 token 失效已由 APIClient → SessionStore observer 链路
+                // 统一登出 + 弹错误；这里短路 return，避免与 SessionStore.errorMessage 双重显示，
+                // 也避免随后用户重试触发 user==nil 守卫，把 errorMsg 覆盖为「未审核」误导。
+                if e.code == "1004" || e.code == "1005" {
+                    isStarting = false
+                    return
+                }
                 errorMsg = String(format: L10n.livePrepareErrorPrefix, e.message, e.code)
                 isStarting = false
             } catch {

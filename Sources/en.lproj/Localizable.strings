@@ -171,6 +171,8 @@
 "livePrepare.errorNoChannel" = "Failed: missing channel or token in response";
 "livePrepare.errorPrefix"    = "Failed: %@ (%@)";
 "livePrepare.errorGeneric"   = "Failed: %@";
+"livePrepare.guardUnverified" = "Your anchor account is not approved yet.";
+"livePrepare.guardAgent"     = "Agent accounts cannot start a live stream.";
 
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "Camera Permission Required";
@@ -216,6 +218,7 @@
 // MARK: - 服务层错误（被 View 显示）
 "auth.error.noToken"         = "Login failed: server returned no token";
 "auth.error.networkFormat"   = "Network error: %@";
+"auth.error.sessionInvalidated" = "Your session has expired or your account was signed in elsewhere. Please log in again.";
 "live.error.noCover"         = "No live cover set yet. Please configure a cover on the main app first.";
 
 // 公屏系统消息（用户在直播间内可见）

@@ -173,6 +173,8 @@
 "livePrepare.errorNoChannel" = "Başarısız: yanıtta kanal veya token yok";
 "livePrepare.errorPrefix"    = "Başarısız: %@ (%@)";
 "livePrepare.errorGeneric"   = "Başarısız: %@";
+"livePrepare.guardUnverified" = "Sunucu hesabınız henüz onaylanmadı.";
+"livePrepare.guardAgent"     = "Acente hesapları canlı yayın başlatamaz.";
 
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "Kamera İzni Gerekli";
@@ -218,6 +220,7 @@
 // MARK: - 服务层错误（被 View 显示）
 "auth.error.noToken"         = "Giriş başarısız: sunucu token döndürmedi";
 "auth.error.networkFormat"   = "Ağ hatası: %@";
+"auth.error.sessionInvalidated" = "Oturumunuz sona erdi veya hesabınız başka bir yerden açıldı. Lütfen yeniden giriş yapın.";
 "live.error.noCover"         = "Henüz yayın kapağı ayarlanmadı. Lütfen önce ana uygulamadan kapak yapılandırın.";
 
 // 公屏系统消息（用户在直播间内可见）

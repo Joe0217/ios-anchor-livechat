@@ -173,6 +173,8 @@
 "livePrepare.errorNoChannel" = "فشل: لا توجد قناة أو رمز في الاستجابة";
 "livePrepare.errorPrefix"    = "فشل: %@ (%@)";
 "livePrepare.errorGeneric"   = "فشل: %@";
+"livePrepare.guardUnverified" = "لم تتم الموافقة على حسابك كمضيف بعد.";
+"livePrepare.guardAgent"     = "حسابات الوكلاء لا يمكنها بدء البث المباشر.";
 
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "إذن الكاميرا مطلوب";
@@ -218,6 +220,7 @@
 // MARK: - 服务层错误（被 View 显示）
 "auth.error.noToken"         = "فشل تسجيل الدخول: الخادم لم يُرجع رمزًا";
 "auth.error.networkFormat"   = "خطأ في الشبكة: %@";
+"auth.error.sessionInvalidated" = "انتهت جلستك أو تم تسجيل الدخول من مكان آخر. يرجى تسجيل الدخول مرة أخرى.";
 "live.error.noCover"         = "لم يتم تعيين غلاف بث بعد. يرجى تعيين الغلاف في التطبيق الرئيسي أولاً.";
 
 // 公屏系统消息（用户在直播间内可见）

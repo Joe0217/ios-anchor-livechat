@@ -62,6 +62,16 @@ final class APIClient {
         let message = env["message"] as? String ?? ""
 
         guard code == "0000" else {
+            // A 收尾：1004 挤下线 / 1005 token 失效集中分流。
+            // 单点 throw 前 post 通知，SessionStore 监听后统一 logout + 弹 UI 提示，
+            // 业务层 catch APIError 仍可拿到原始 code/message（兼容现有错误处理代码）。
+            if code == "1004" || code == "1005" {
+                NotificationCenter.default.post(
+                    name: .apiSessionInvalidated,
+                    object: nil,
+                    userInfo: ["code": code, "message": message]
+                )
+            }
             throw APIError(code: code, message: message.isEmpty ? "请求失败(\(code))" : message)
         }
 
@@ -101,6 +111,12 @@ final class APIClient {
             "anchorToken": t,
         ]
     }
+}
+
+/// A 收尾：APIClient 层 1004/1005 集中分流通知名。
+/// SessionStore 在 init 时挂 observer → 自动 logout + 设置 errorMessage 给 UI。
+extension Notification.Name {
+    static let apiSessionInvalidated = Notification.Name("APIClient.sessionInvalidated")
 }
 
 /// 设备标识：本地生成一次并持久化（对应 H5 deviceInfo-V2）。

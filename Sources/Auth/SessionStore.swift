@@ -19,7 +19,43 @@ final class SessionStore: ObservableObject {
     /// 当前登录 token，供需要鉴权的接口使用
     var token: String? { user?.token }
 
-    init() { load() }
+    /// A 收尾：APIClient 抛 1004/1005 时通过 NotificationCenter 集中通知，这里挂 observer。
+    /// observer 闭包持 weak self，避免循环引用；deinit 显式移除（双保险）。
+    private var sessionInvalidatedObserver: NSObjectProtocol?
+
+    init() {
+        load()
+        sessionInvalidatedObserver = NotificationCenter.default.addObserver(
+            forName: .apiSessionInvalidated,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            Task { @MainActor in
+                self?.handleSessionInvalidated(userInfo: note.userInfo)
+            }
+        }
+    }
+
+    deinit {
+        if let obs = sessionInvalidatedObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
+    }
+
+    /// 1004 挤下线 / 1005 token 失效：清会话 + UI 统一提示。
+    /// 后端原始 message 放 userInfo["message"]，非空时拼到统一文案之后供排查。
+    /// 错误码拼到文案末尾 `[xxxx]` 形式，让用户/客服可区分 1004 vs 1005。
+    /// 同时通过 AppLogger.auth.error 打日志，供生产排查会话失效频率/触发码。
+    private func handleSessionInvalidated(userInfo: [AnyHashable: Any]?) {
+        let code = (userInfo?["code"] as? String) ?? ""
+        let backend = (userInfo?["message"] as? String) ?? ""
+        AppLogger.auth.error("session invalidated code=\(code, privacy: .public) backend=\(backend, privacy: .private)")
+        logout()
+        let codeSuffix = code.isEmpty ? "" : " [\(code)]"
+        errorMessage = backend.isEmpty
+            ? "\(L10n.authErrorSessionInvalidated)\(codeSuffix)"
+            : "\(L10n.authErrorSessionInvalidated)\(codeSuffix) (\(backend))"
+    }
 
     func login(email: String, password: String) async {
         isLoading = true
