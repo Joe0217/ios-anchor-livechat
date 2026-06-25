@@ -72,13 +72,6 @@ final class CameraManager: NSObject, ObservableObject {
     private let position: AVCaptureDevice.Position = .front
     private var configured = false
 
-    /// v5.9 长后台修复：最后一次 captureOutput 时间（CACurrentMediaTime 秒）。
-    /// 长后台 >15s 回前台时，iOS 可能已释放底层 video device input，简单 startRunning() 不再生效；
-    /// 用本字段判定"采集是否真的还在跑"：距上次帧 >3s 即视为 stale，触发 forceRestartIfStale。
-    /// 跨线程读写：captureOutput (videoQueue) 写 + forceRestartIfStale (sessionQueue) 读 → 必须 lock。
-    private let lastFrameAtLock = NSLock()
-    private var lastFrameAt: TimeInterval = 0
-
     override init() {
         // B 里程碑 spec §6.2：FUBeautyRenderer setup 失败自动降级
         do {
@@ -237,53 +230,13 @@ final class CameraManager: NSObject, ObservableObject {
         start()
     }
 
-    /// v5.2：回前台防御性兜底（v5.9 升级为长后台 stale 检测）
+    /// v5.2：回前台防御性兜底
     /// 注：v5.3.1 review #6 注释纠正——startRunning 在 isInterrupted=true 时**不是 silently fail**，
     /// 而是被 iOS 内部排队，等 InterruptionEnded 后自动执行。
-    /// **v5.9 长后台修复**：iOS 长后台 >15s 可能释放底层 video device input，简单 start() 不再生效；
-    /// 改调 forceRestartIfStale()——若距上次帧 >3s 则**重配 input/output + 重启 session**。
+    /// 本入口保留作 InterruptionEnded 通知丢失时的最终兜底；正常路径由 handleInterruptionEnded 触发。
     @objc private func handleWillEnterForeground(_ note: Notification) {
-        logger.info("App will enter foreground; check stale and force restart if needed")
-        forceRestartIfStale()
-    }
-
-    /// v5.9 长后台修复：检测采集是否 stale，必要时**重配 input/output + 重启 session**。
-    ///
-    /// 长后台 >15s 后 iOS 可能：(1) 释放 video device input；(2) interrupt 不发 InterruptionEnded；
-    /// (3) startRunning() 静默 no-op。本方法是最后一道恢复防线。
-    ///
-    /// 判定 stale：距上次 captureOutput >3s 或 session.isRunning=false。
-    /// 重启路径：sessionQueue.async → stopRunning → 清空 inputs/outputs → configured=false →
-    /// configureIfNeeded（重装 input/output）→ startRunning。
-    ///
-    /// 由 willEnterForeground 自动调；LiveStore.handleWillEnterForeground 也可主动调（双保险）。
-    func forceRestartIfStale() {
-        sessionQueue.async { [weak self] in
-            guard let self else { return }
-            self.lastFrameAtLock.lock()
-            let lastAt = self.lastFrameAt
-            self.lastFrameAtLock.unlock()
-            let now = CACurrentMediaTime()
-            let stale = lastAt == 0 || (now - lastAt) > 3.0
-            let running = self.session.isRunning
-            if !stale && running {
-                logger.info("camera forceRestartIfStale skipped: not stale (lastFrameΔ=\(String(format: "%.1f", now - lastAt))s, running=true)")
-                return
-            }
-            logger.warning("camera forceRestartIfStale: stale=\(stale) running=\(running) lastFrameΔ=\(String(format: "%.1f", now - lastAt))s")
-            if self.session.isRunning {
-                self.session.stopRunning()
-            }
-            // 长后台后 session.inputs 可能 device 已断；强制重装
-            self.session.beginConfiguration()
-            for input in self.session.inputs { self.session.removeInput(input) }
-            for output in self.session.outputs { self.session.removeOutput(output) }
-            self.session.commitConfiguration()
-            self.configured = false
-            self.configureIfNeeded()
-            if !self.session.isRunning { self.session.startRunning() }
-            logger.info("camera forceRestartIfStale done: running=\(self.session.isRunning)")
-        }
+        logger.info("App will enter foreground; ensure capture session is running")
+        start()
     }
 
     /// v5.3.1 review #5 阻塞修复：CameraManager observer 跨 dismiss 仍响应导致摄像头灯亮。
@@ -314,10 +267,6 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         // v5.1 弱网降级：按 targetFPS 节流推帧（targetFPS=15 时丢一半帧，避免编码器堆积导致卡顿）
         let now = CACurrentMediaTime()
-        // v5.9 长后台修复：每帧记 lastFrameAt 供 forceRestartIfStale 检测；锁粒度最小
-        lastFrameAtLock.lock()
-        lastFrameAt = now
-        lastFrameAtLock.unlock()
         let interval = 1.0 / Double(max(1, targetFPS))
         if now - lastPushedAt < interval { return }
         lastPushedAt = now

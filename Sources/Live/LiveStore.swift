@@ -72,22 +72,9 @@ final class LiveStore: ObservableObject {
     /// weak：LiveStore 不强持有，LiveRoomView 销毁时自动清理。
     private weak var agora: AgoraManager?
 
-    /// v5.9 长后台修复：相机管理实例的 weak 引用，wire 时注入。
-    /// 用途：handleWillEnterForeground 时调 camera.forceRestartIfStale() 重启长后台后失效的采集。
-    private weak var camera: CameraManager?
-
-    /// v5.9 长后台修复：切后台时间戳，回前台算时长决定是否触发 rejoin/restart。
-    private var backgroundedAt: TimeInterval?
-
     private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveStore")
 
-    init() {
-        addAppLifecycleObservers()
-    }
-
-    deinit {
-        NotificationCenter.default.removeObserver(self)
-    }
+    init() {}
 }
 
 // MARK: - 生命周期入口（spec §2.4）
@@ -125,7 +112,6 @@ extension LiveStore {
     ///   主动 leave/join 直播 RTC 频道（不强持有，LiveRoomView 销毁时自动清理）
     func wire(_ agora: AgoraManager, camera: CameraManager? = nil) {
         self.agora = agora
-        self.camera = camera
         agora.liveStore = self
         agora.networkMonitor = monitor
         monitor.agora = agora
@@ -414,66 +400,6 @@ extension LiveStore {
         // RTC join（对齐 attachLiving 内的直播 profile）
         agora?.join(channelId: channelId, token: token, uid: UInt(uid), profile: .liveBroadcasting)
         logger.info("rejoinLiveChannel: 已请求 join channelId=\(channelId)")
-    }
-}
-
-// MARK: - v5.9 长后台修复：回前台 stale 检测 + 主动 rejoin/restart 触发链
-
-extension LiveStore {
-    /// 监听 didEnterBackground / willEnterForeground；切后台 >10s 回前台时主动协调：
-    /// (1) camera.forceRestartIfStale() 重启长后台后失效的 AVCaptureSession
-    /// (2) agora.needsRejoin=true → rejoinLiveChannel() 重连推流频道
-    /// (3) MetalPreviewView 在自身 lifecycle observer 内多档重试 setNeedsDisplay（独立路径）
-    ///
-    /// 仅 .living + callState=0（普通直播）触发；私 call/PK/派对房有各自的恢复逻辑不在本路径处理。
-    fileprivate func addAppLifecycleObservers() {
-        let nc = NotificationCenter.default
-        nc.addObserver(self,
-                       selector: #selector(handleDidEnterBackground),
-                       name: UIApplication.didEnterBackgroundNotification,
-                       object: nil)
-        nc.addObserver(self,
-                       selector: #selector(handleWillEnterForeground),
-                       name: UIApplication.willEnterForegroundNotification,
-                       object: nil)
-    }
-
-    @objc fileprivate func handleDidEnterBackground() {
-        backgroundedAt = CACurrentMediaTime()
-    }
-
-    @objc fileprivate func handleWillEnterForeground() {
-        guard let bgAt = backgroundedAt else { return }
-        let duration = CACurrentMediaTime() - bgAt
-        backgroundedAt = nil
-
-        // 触发条件守卫：只在普通直播态处理；私 call/PK 用各自 state 机的恢复路径
-        guard case .living = state, callState == 0 else {
-            logger.info("foreground: skip stale recovery (state=\(String(describing: self.state)) callState=\(self.callState))")
-            return
-        }
-        // 仅长后台才触发 — 短后台已由 CameraManager.handleInterruptionEnded 自然恢复
-        guard duration > 10.0 else {
-            logger.info("foreground: short background (\(String(format: "%.1f", duration))s); rely on InterruptionEnded path")
-            return
-        }
-        logger.warning("foreground: long background \(String(format: "%.1f", duration))s; trigger camera restart + agora rejoin chain")
-
-        // 1) Camera 强重启：sessionQueue 异步，长后台后重配 input/output
-        camera?.forceRestartIfStale()
-
-        // 2) Agora 重连：connectionChangedTo 或 handleWillEnterForeground 已置 needsRejoin
-        let needsRejoin = agora?.needsRejoin ?? false
-        if needsRejoin {
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.logger.info("foreground: agora.needsRejoin=true; calling rejoinLiveChannel")
-                await self.rejoinLiveChannel()
-                self.agora?.clearNeedsRejoin()
-            }
-        } else {
-            logger.info("foreground: agora.needsRejoin=false; skip rejoin (connection believed alive)")
-        }
     }
 }
 
