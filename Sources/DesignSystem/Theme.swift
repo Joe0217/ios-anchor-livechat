@@ -152,6 +152,26 @@ enum Theme {
         static let profileSection      = Color.white
         /// 网格 cell 占位（无图时）
         static let profileGridPlaceholder = Color(hex: 0x2B213E)
+
+        // MARK: Blocklist 页（I-1 设计稿还原）
+        /// 黑名单条目主文本（昵称）— 白
+        static let blocklistName       = Color.white
+        /// 黑名单条目次要文本（国家 / 年龄）— 白 85%
+        static let blocklistMeta       = Color.white.opacity(0.85)
+        /// 黑名单条目日期 + 删除图标 — 灰 #9CA3AF（H5 gray-400 同步）
+        static let blocklistTertiary   = Color(hex: 0x9CA3AF)
+        /// 默认头像兜底底色（无头像 URL / 加载失败时）— 复用 cardFill 同色 0x2B213E（review #17）
+        static let blocklistAvatarFallback = cardFill
+        /// 空态 + 错误态图标颜色（白 30%）
+        static let blocklistEmptyIcon  = Color.white.opacity(0.3)
+        /// retry 按钮 capsule 背景（白 15%）
+        static let blocklistRetryButton = Color.white.opacity(0.15)
+        /// retry 按钮 capsule 文字（白）
+        static let blocklistRetryText   = Color.white
+        /// 错误态 message 文字（白 80%）
+        static let blocklistErrorMessage = Color.white.opacity(0.8)
+        /// transient toast 背景（黑 70%）
+        static let blocklistToastBackground = Color.black.opacity(0.7)
     }
 
     // MARK: - 间距
@@ -223,6 +243,53 @@ enum Theme {
         static let profileGridGap: CGFloat      = 6
         /// 网格 section 上下间距
         static let profileGridSectionGap: CGFloat = 18
+
+        // MARK: Blocklist 页（I-1 设计稿还原）
+        /// 行内左右内边距
+        static let blocklistRowHPadding: CGFloat = 16
+        /// 行内上下内边距
+        static let blocklistRowVPadding: CGFloat = 12
+        /// 头像直径
+        static let blocklistAvatarSize: CGFloat  = 40
+        /// 头像与文字之间间距
+        static let blocklistAvatarGap: CGFloat   = 10
+        /// 昵称与副信息（位置/年龄）之间垂直间距
+        static let blocklistNameToMetaGap: CGFloat = 6
+        /// meta 行内图标与文字间距
+        static let blocklistMetaIconGap: CGFloat = 4
+        /// meta 行内"位置"与"年龄"两组之间间距
+        static let blocklistMetaGroupGap: CGFloat = 8
+        /// 位置/年龄图标尺寸
+        static let blocklistMetaIconSize: CGFloat = 12
+        /// 删除按钮尺寸
+        static let blocklistDeleteSize: CGFloat   = 16
+        /// 日期与删除按钮垂直间距
+        static let blocklistDateToDeleteGap: CGFloat = 6
+        /// 按钮 disabled 透明度
+        static let blocklistButtonDisabledOpacity: Double = 0.5
+        /// 主信息区与右侧（日期+删除）之间最小间距
+        static let blocklistMainToTrailingMin: CGFloat = 8
+        /// 空态 + 错误态中心图标尺寸
+        static let blocklistEmptyIconSize: CGFloat = 36
+        /// 错误态警告图标尺寸
+        static let blocklistErrorIconSize: CGFloat = 32
+        /// 错误态间距（图标 / 文字 / 按钮垂直堆叠）
+        static let blocklistErrorVStackSpacing: CGFloat = 12
+        /// retry 按钮内边距
+        static let blocklistRetryPaddingH: CGFloat = 20
+        static let blocklistRetryPaddingV: CGFloat = 8
+        /// 空态文字与图标的左右内边距
+        static let blocklistEmptyTextHPadding: CGFloat = 32
+        /// 错误态文字左右内边距
+        static let blocklistErrorTextHPadding: CGFloat = 24
+        /// footer 行垂直内边距
+        static let blocklistFooterVPadding: CGFloat = 16
+        /// transient toast 距顶部
+        static let blocklistToastTopPadding: CGFloat = 8
+        /// transient toast 横向内边距
+        static let blocklistToastHPadding: CGFloat = 14
+        /// transient toast 垂直内边距
+        static let blocklistToastVPadding: CGFloat = 8
     }
 
     // MARK: - 圆角
@@ -324,6 +391,18 @@ enum Theme {
         static let profileTabInactive = Font.system(size: 15, weight: .regular)
         /// section 标题（Photos (6/9)）
         static let profileSection  = Font.system(size: 14, weight: .medium)
+
+        // MARK: Blocklist 页（I-1 设计稿还原）
+        /// 行内昵称（白色 medium 16pt）
+        static let blocklistName    = Font.system(size: 16, weight: .medium)
+        /// meta 行（位置/年龄）
+        static let blocklistMeta    = Font.system(size: 12, weight: .regular)
+        /// 日期（灰）
+        static let blocklistDate    = Font.system(size: 12, weight: .regular)
+        /// 空态文案
+        static let blocklistEmpty   = Font.system(size: 14, weight: .regular)
+        /// transient toast 字体
+        static let blocklistToast   = Font.system(size: 13, weight: .medium)
     }
 
     // MARK: - 渐变与段位光谱

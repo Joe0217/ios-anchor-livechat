@@ -25,6 +25,7 @@ private struct MediaPreviewContext: Identifiable {
 enum ProfileRoute: Hashable {
     case settings
     case levelDetail
+    case blocklist
 }
 
 struct ProfileView: View {

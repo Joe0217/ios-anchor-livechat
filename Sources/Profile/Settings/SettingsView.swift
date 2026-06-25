@@ -39,7 +39,11 @@ struct SettingsView: View {
 
     private var accountSection: some View {
         Section(L10n.settingsSectionAccount) {
-            settingsRow(icon: "person.text.rectangle", title: L10n.settingsBlocklist) { /* L19 */ }
+            // I-1：黑名单列表。用 NavigationLink(value:) 沿 MainTabView 注册的
+            // navigationDestination(for: ProfileRoute.self) 路由（spec §6.D）。
+            NavigationLink(value: ProfileRoute.blocklist) {
+                settingsRowContent(icon: "person.text.rectangle", title: L10n.settingsBlocklist)
+            }
         }
         .listRowBackground(Theme.Palette.cardFill.opacity(0.6))
     }
@@ -91,19 +95,29 @@ struct SettingsView: View {
 
     private func settingsRow(icon: String, title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack {
-                Image(systemName: icon)
-                    .foregroundStyle(.white.opacity(0.7))
-                    .frame(width: 22)
-                Text(title)
-                    .foregroundColor(.white)
-                Spacer()
+            settingsRowContent(icon: icon, title: title, showChevron: true)
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Row 内部视觉内容（图标 + 标题 + 可选 chevron）。
+    /// NavigationLink(value:) 自带 disclosure chevron，调用 showChevron=false（默认）；
+    /// Button 路径（旧入口）调用 showChevron=true 手动追加，保持视觉一致（review #19）。
+    @ViewBuilder
+    private func settingsRowContent(icon: String, title: String, showChevron: Bool = false) -> some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundStyle(.white.opacity(0.7))
+                .frame(width: 22)
+            Text(title)
+                .foregroundColor(.white)
+            Spacer()
+            if showChevron {
                 Image(systemName: "chevron.right")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.3))
             }
         }
-        .buttonStyle(.plain)
     }
 
     private static var appVersion: String {

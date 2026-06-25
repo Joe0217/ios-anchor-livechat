@@ -90,6 +90,7 @@ struct MainTabView: View {
                         switch route {
                         case .settings:    SettingsView()
                         case .levelDetail: LevelDetailView()
+                        case .blocklist:   BlocklistView()
                         }
                     }
             }

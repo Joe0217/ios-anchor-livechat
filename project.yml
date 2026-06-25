@@ -101,6 +101,35 @@ targets:
       - path: Sources/Core/AppLogger.swift
       - path: Sources/Core/KeychainStore.swift
       - path: Sources/Networking/APIClient.swift
+      # G 里程碑 M1：PK 数据契约 + NIM AttachType（仅纯数据/解析层，零 SDK 依赖）
+      - path: Sources/Live/NIM/AttachType.swift
+      - path: Sources/PK/PKModels.swift
+      - path: Sources/PK/PKContext.swift
+      - path: Sources/PK/PKServiceError.swift
+      # H 里程碑 M1：IM 通用路由抽象 + payload 解析（无 NIMSDK 依赖；纯 Foundation + Compression）
+      - path: Sources/Live/NIM/MessageRouter.swift
+      - path: Sources/Live/NIM/NIMPayloadDecoder.swift
+      - path: Sources/Party/Utils/GzipDecompressor.swift
+      # H 里程碑 M3：派对房 attachType 枚举（纯 Int rawValue，无 NIMSDK 依赖）
+      - path: Sources/Party/Models/PartyAttachType.swift
+      - path: Sources/Party/Models/PartyMsgType.swift
+      # G 里程碑 M2：PKCountdownController（纯 Foundation Task；PKStore 状态机依赖 SDK 不入测）
+      - path: Sources/PK/PKCountdownController.swift
+      # A 里程碑 trial #1 (Cycle 朋友圈 tab)：纯枚举 + 状态机 + 服务层 protocol
+      # 注意：枚举的 +Label.swift extension 依赖 L10n，**不**入 sources（label 是 view 层关注）
+      - path: Sources/Home/HomeTopTab.swift
+      - path: Sources/Home/Cycle/CycleSubTab.swift
+      - path: Sources/Home/Cycle/HomeTopTabStore.swift
+      - path: Sources/Home/Cycle/CycleStore.swift
+      - path: Sources/Home/Cycle/MomentFeedStore.swift
+      - path: Sources/Profile/Moment/CircleService.swift
+      - path: Sources/Profile/Moment/MomentModels.swift
+      - path: Sources/Profile/AnchorTierClassifier.swift
+      # I 里程碑 I-1 (黑名单列表)：纯数据模型 + State + Protocol + @MainActor ViewModel + Service decode
+      # 注意：BlocklistViewModel+Runtime.swift 依赖 L10n/BlocklistService.shared，不入 sources
+      - path: Sources/Profile/Settings/Blocklist/BlocklistModels.swift
+      - path: Sources/Profile/Settings/Blocklist/BlocklistViewModel.swift
+      - path: Sources/Profile/Settings/Blocklist/BlocklistService.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.anchor.livechat.tests
