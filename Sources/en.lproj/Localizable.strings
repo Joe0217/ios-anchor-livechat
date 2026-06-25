@@ -269,6 +269,21 @@
 "pk.toast.inviteAcceptedFormat" = "%@ accepted your PK invitation";
 "pk.toast.inviteTimeout"        = "PK invitation expired";
 
+"pk.invite.searchPlaceholder"   = "UID or nickname";
+"pk.invite.recommendTitle"      = "Recommend";
+"pk.invite.searchResultTitle"   = "Search Results";
+"pk.invite.empty"               = "No data";
+"pk.invite.acceptSwitch"        = "Accept PK invitations";
+"pk.invite.btn.invite"          = "Invite";
+"pk.invite.btn.waiting"         = "Waiting";
+"pk.invite.btn.pking"           = "PKing";
+"pk.invite.toast.busy"          = "The other streamer is busy. Try again later";
+"pk.invite.toast.beingInvited"  = "Other handling another PK invite. Try later";
+"pk.invite.toast.self"          = "Cannot invite yourself";
+"pk.invite.toast.limit"         = "PK invitation limit reached. Try later";
+"pk.invite.toast.matching"      = "Random matching in progress. Cancel to invite";
+"pk.invite.toast.sent"          = "PK invitation sent";
+
 // MARK: - H IM 完善 错误文案（NIMServiceError.errorDescription）
 "im.error.loginFailedFormat"         = "IM login failed (code=%@) %@";
 "im.error.tokenInvalid"              = "Session expired, please sign in again";

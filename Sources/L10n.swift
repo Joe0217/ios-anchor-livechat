@@ -84,6 +84,22 @@ enum L10n {
         static var toastInviteRejectedFormat: String { localize("pk.toast.inviteRejectedFormat", comment: "%@ 拒绝了你的 PK 邀请") }
         static var toastInviteAcceptedFormat: String { localize("pk.toast.inviteAcceptedFormat", comment: "%@ 接受了你的 PK 邀请") }
         static var toastInviteTimeout: String { localize("pk.toast.inviteTimeout", comment: "PK 邀请超时") }
+
+        // MARK: - 推荐列表 + 搜索 + 5 态按钮（2026-06-25 §1.2 反悔扩展）
+        static var inviteSearchPlaceholder: String { localize("pk.invite.searchPlaceholder", comment: "UID 或昵称") }
+        static var inviteRecommendTitle: String { localize("pk.invite.recommendTitle", comment: "推荐") }
+        static var inviteSearchResultTitle: String { localize("pk.invite.searchResultTitle", comment: "搜索结果") }
+        static var inviteEmpty: String { localize("pk.invite.empty", comment: "暂无数据") }
+        static var inviteAcceptSwitch: String { localize("pk.invite.acceptSwitch", comment: "接受 PK 邀请") }
+        static var inviteBtnInvite: String { localize("pk.invite.btn.invite", comment: "邀请") }
+        static var inviteBtnWaiting: String { localize("pk.invite.btn.waiting", comment: "等待中") }
+        static var inviteBtnPKing: String { localize("pk.invite.btn.pking", comment: "PK 中") }
+        static var inviteToastBusy: String { localize("pk.invite.toast.busy", comment: "对方繁忙，请稍后再试") }
+        static var inviteToastBeingInvited: String { localize("pk.invite.toast.beingInvited", comment: "对方正在处理其他邀请") }
+        static var inviteToastSelf: String { localize("pk.invite.toast.self", comment: "不能邀请自己") }
+        static var inviteToastLimit: String { localize("pk.invite.toast.limit", comment: "邀请已达上限") }
+        static var inviteToastMatching: String { localize("pk.invite.toast.matching", comment: "随机匹配中，请先取消") }
+        static var inviteToastInviteSent: String { localize("pk.invite.toast.sent", comment: "PK 邀请已发送") }
     }
 
     // MARK: - Work 工作台（设计稿还原）

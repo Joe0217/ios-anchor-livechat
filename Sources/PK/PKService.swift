@@ -8,10 +8,11 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "PKServi
 /// 全部走 `APIClient.shared.post` AES 加解密 + 公共头链路（与 B/C/D 一致）。
 /// 错误码 1004/1005 在 APIClient 单点分流 logout，PKService 仅转译 APIError → PKServiceError.business。
 ///
-/// **必用 11 个**（spec §1.4）：startPkMatch / cancelMatch / joinPk / invitePk / handleInvite /
-/// endPk / endPunishing / getPkTop3RankList / getPkStatus / mutePkRoom / updateInviteSwitch。
-/// **占位 6 个**（throw `.notImplemented`，待 H/I 接续）：getPkRankList / getRecommendAnchorList /
-/// getPkRecordList / queryInviteSwitch / getPkInfo / selectPKRuleIcon。
+/// **必用 13 个**（spec §1.4 + 2026-06-25 §1.2 反悔扩展）：startPkMatch / cancelMatch / joinPk / invitePk /
+/// handleInvite / endPk / endPunishing / getPkTop3RankList / getPkStatus / mutePkRoom / updateInviteSwitch /
+/// **getRecommendAnchorList / queryInviteSwitch**（后两者为推荐列表 + 接受邀请开关 UI 接入）。
+/// **占位 4 个**（throw `.notImplemented`，待 H/I 接续）：getPkRankList / getPkRecordList /
+/// getPkInfo / selectPKRuleIcon。
 enum PKService {
     // MARK: - 通用响应解码 helper
 
@@ -166,9 +167,40 @@ enum PKService {
         throw PKServiceError.notImplemented
     }
 
-    /// 占位：邀请列表/搜索推荐主播（G 极简版仅"输入对手 ID"，不做推荐列表）。
-    static func getRecommendAnchorList(pageSize: Int, anchorId: String?, nickname: String?) async throws -> [PKTopUser] {
-        throw PKServiceError.notImplemented
+    /// 推荐主播列表 / 搜索（spec §1.2 反悔扩展，2026-06-25 G #11 落地）。
+    ///
+    /// H5 蓝本：`useServerPagination(getRecommendAnchorsApi, {pageSize: 20})` + `buildSearchParams`。
+    /// - 不传 `anchorId` / `nickname` → 推荐列表
+    /// - 纯数字搜索 → 走 `anchorId: Int`
+    /// - 非数字搜索 → 走 `nickname: String`
+    /// - 分页：`currentPage` 从 1 开始；`pageSize` 默认 20
+    ///
+    /// 后端响应可能是 `{list/records/data: [...]}` 包装或裸数组——`PKRecommendListPagedResponse` decode 失败时
+    /// 直接尝试解为 `[PKRecommendAnchor]` 兜底。
+    static func getRecommendAnchorList(currentPage: Int = 1,
+                                       pageSize: Int = 20,
+                                       anchorId: Int? = nil,
+                                       nickname: String? = nil) async throws -> [PKRecommendAnchor] {
+        var body: [String: Any] = ["currentPage": currentPage, "pageSize": pageSize]
+        if let anchorId { body["anchorId"] = anchorId }
+        if let nickname, !nickname.isEmpty { body["nickname"] = nickname }
+        let data: Data
+        do {
+            data = try await APIClient.shared.post("/api/pk/getRecommendAnchorList", body: body)
+        } catch let err as APIError {
+            throw PKServiceError.business(code: err.code, message: err.message)
+        }
+        // 包装结构优先
+        if let wrap = try? JSONDecoder().decode(PKRecommendListPagedResponse.self, from: data) {
+            return wrap.items
+        }
+        // 裸数组兜底
+        if let arr = try? JSONDecoder().decode([PKRecommendAnchor].self, from: data) {
+            return arr
+        }
+        logger.error("decode /api/pk/getRecommendAnchorList failed; raw=\(String(data: data, encoding: .utf8) ?? "nil", privacy: .private)")
+        throw PKServiceError.decode(NSError(domain: "PKService", code: -1,
+                                            userInfo: [NSLocalizedDescriptionKey: "getRecommendAnchorList decode failed"]))
     }
 
     /// 占位：PK 历史记录（G 范围外）。
@@ -176,9 +208,33 @@ enum PKService {
         throw PKServiceError.notImplemented
     }
 
-    /// 占位：查询接受邀请开关（H5 用，G 由 enter inPK 时直接覆盖 + 快照恢复，不主动查询）。
-    static func queryInviteSwitch() async throws -> Int {
-        throw PKServiceError.notImplemented
+    /// 查询接受邀请开关状态（2026-06-25 G #11 落地：邀请弹窗 UI 接入）。
+    ///
+    /// 后端返回语义不固定（可能 Bool / Int 0|1 / String "0"|"1"），全兼容；
+    /// **统一返回 `acceptEnabled: Bool`**（true=接受开启，false=关闭）。
+    /// - H5 `acceptInvitation.value = res` 同语义：接受开关本身
+    /// - 与 `updateInviteSwitch(close:)` 反向：close=true 即 acceptEnabled=false
+    static func queryInviteSwitch() async throws -> Bool {
+        let data: Data
+        do {
+            data = try await APIClient.shared.post("/api/pk/queryInviteSwitch", body: [:])
+        } catch let err as APIError {
+            throw PKServiceError.business(code: err.code, message: err.message)
+        }
+        // 优先解 Bool
+        if let b = try? JSONDecoder().decode(Bool.self, from: data) { return b }
+        // 解 Int（0=关闭接受 / 1=开启 — 与 searchValue 反向；H5 后端 H5 res 直 unwrap 用 truthy）
+        if let i = try? JSONDecoder().decode(Int.self, from: data) { return i != 0 }
+        // 解 String "true"/"1" → true
+        if let s = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "\"")) {
+            if s.isEmpty || s == "null" { return true }            // 缺省视为开启接受
+            if s == "true" || s == "1" { return true }
+            if s == "false" || s == "0" { return false }
+        }
+        logger.warning("queryInviteSwitch unknown response; default to true (accept enabled)")
+        return true
     }
 
     /// 占位：客态 PK 进房拉双主播信息（G 客态范围外）。

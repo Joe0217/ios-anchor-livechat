@@ -271,6 +271,21 @@
 "pk.toast.inviteAcceptedFormat" = "%@ قبل دعوة PK الخاصة بك";
 "pk.toast.inviteTimeout"        = "انتهت صلاحية دعوة PK";
 
+"pk.invite.searchPlaceholder"   = "المعرف أو الاسم المستعار";
+"pk.invite.recommendTitle"      = "موصى به";
+"pk.invite.searchResultTitle"   = "نتائج البحث";
+"pk.invite.empty"               = "لا توجد بيانات";
+"pk.invite.acceptSwitch"        = "قبول دعوات PK";
+"pk.invite.btn.invite"          = "دعوة";
+"pk.invite.btn.waiting"         = "في الانتظار";
+"pk.invite.btn.pking"           = "في PK";
+"pk.invite.toast.busy"          = "البث المباشر مشغول، حاول لاحقاً";
+"pk.invite.toast.beingInvited"  = "يعالج دعوة PK أخرى، حاول لاحقاً";
+"pk.invite.toast.self"          = "لا يمكنك دعوة نفسك";
+"pk.invite.toast.limit"         = "وصلت الحد الأقصى لدعوات PK";
+"pk.invite.toast.matching"      = "جارٍ المطابقة العشوائية، الإلغاء للدعوة";
+"pk.invite.toast.sent"          = "تم إرسال دعوة PK";
+
 // MARK: - H IM 完善 错误文案（NIMServiceError.errorDescription）
 "im.error.loginFailedFormat"         = "فشل تسجيل دخول الدردشة (code=%@) %@";
 "im.error.tokenInvalid"              = "انتهت صلاحية الجلسة، يرجى تسجيل الدخول مرة أخرى";

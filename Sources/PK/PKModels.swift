@@ -151,3 +151,33 @@ enum PKRemoteStatus: String, Codable {
     case inPK = "INPK"
     case punishing = "PUNISHING"
 }
+
+// MARK: - 推荐主播列表（G §6 / spec §1.2 反悔扩展）
+
+/// 推荐主播条目（getRecommendAnchorList 返回）。
+/// 字段对齐 H5 pkAnchorListItem.vue + usePkInviteButton.js：
+/// - `userId` 必返；`nickname` / `avatar` / `icon` 二选一；`countryId` 国家码；
+/// - `pkStatus` 关键按钮态分流（0忙 / 1可邀 / 2等待同意 / 3 PK中）。
+struct PKRecommendAnchor: Codable, Equatable, Identifiable {
+    let userId: Int
+    let nickname: String?
+    let avatar: String?
+    let icon: String?
+    let countryId: String?
+    /// 0不可邀（离线/忙）/ 1可邀 / 2 等待同意（已被别人邀）/ 3 PK 中（H5 usePkInviteButton 同语义）
+    let pkStatus: Int?
+
+    var id: Int { userId }
+    /// UI 显示头像：优先 avatar，fallback icon（对齐 H5 `anchor.avatar || anchor.icon`）
+    var displayAvatar: String? { avatar ?? icon }
+}
+
+/// getRecommendAnchorList 分页响应解码包装。
+/// 后端可能返回 `{list: [...], totalCount: ...}` 或裸数组——本结构兼容前者，裸数组用 `PKRecommendListPagedResponse.tryDecode`。
+struct PKRecommendListPagedResponse: Codable {
+    let list: [PKRecommendAnchor]?
+    let records: [PKRecommendAnchor]?
+    let data: [PKRecommendAnchor]?
+
+    var items: [PKRecommendAnchor] { list ?? records ?? data ?? [] }
+}

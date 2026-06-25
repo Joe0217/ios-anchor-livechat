@@ -271,6 +271,21 @@
 "pk.toast.inviteAcceptedFormat" = "%@ PK davetinizi kabul etti";
 "pk.toast.inviteTimeout"        = "PK daveti süresi doldu";
 
+"pk.invite.searchPlaceholder"   = "UID veya kullanıcı adı";
+"pk.invite.recommendTitle"      = "Öneriler";
+"pk.invite.searchResultTitle"   = "Arama Sonuçları";
+"pk.invite.empty"               = "Veri yok";
+"pk.invite.acceptSwitch"        = "PK davetlerini kabul et";
+"pk.invite.btn.invite"          = "Davet et";
+"pk.invite.btn.waiting"         = "Bekleniyor";
+"pk.invite.btn.pking"           = "PK'de";
+"pk.invite.toast.busy"          = "Diğer yayıncı meşgul, sonra dene";
+"pk.invite.toast.beingInvited"  = "Başka PK daveti işliyor, sonra dene";
+"pk.invite.toast.self"          = "Kendinizi davet edemezsiniz";
+"pk.invite.toast.limit"         = "PK daveti üst sınırına ulaşıldı";
+"pk.invite.toast.matching"      = "Rastgele eşleşme sürüyor, davet için iptal et";
+"pk.invite.toast.sent"          = "PK daveti gönderildi";
+
 // MARK: - H IM 完善 错误文案（NIMServiceError.errorDescription）
 "im.error.loginFailedFormat"         = "IM girişi başarısız (code=%@) %@";
 "im.error.tokenInvalid"              = "Oturum süresi doldu, lütfen tekrar giriş yapın";

@@ -32,6 +32,21 @@ final class PKStore: ObservableObject {
     @Published private(set) var scores: PKScoreUpdate?
     @Published private(set) var receivedInvite: PKInviteInfo?
 
+    /// 邀请弹窗：接受邀请开关 UI 绑定值（true=允许接收邀请；对齐 H5 acceptInvitation）。
+    /// 加载入口 `loadInviteSwitchIfNeeded()`；写入入口 `setInviteSwitch(accept:)`。
+    @Published private(set) var acceptInviteSwitchOn: Bool = true
+    @Published private(set) var inviteSwitchLoading: Bool = false
+
+    /// 推荐列表 UI 状态（PKInviteSheet 绑定）。
+    @Published private(set) var recommendList: [PKRecommendAnchor] = []
+    @Published private(set) var recommendLoading: Bool = false
+    @Published private(set) var recommendHasMore: Bool = true
+    @Published private(set) var recommendCurrentPage: Int = 1
+    /// 搜索关键词（UI 双向绑定通过 `setSearchKeyword`）。
+    @Published private(set) var searchKeyword: String = ""
+    /// 是否处于搜索态（影响 UI 标题 + load more 参数）。
+    @Published private(set) var isSearching: Bool = false
+
     /// 三个倒计时的剩余秒（UI 直接绑定显示）。
     @Published private(set) var inviteRemainingSeconds: Int = 0
     @Published private(set) var pkRemainingSeconds: Int = 0
@@ -433,6 +448,108 @@ final class PKStore: ObservableObject {
     func userToggledInviteSwitch(_ close: Bool) async {
         userToggledInviteSwitch = true
         await updateInviteSwitchSafe(close: close)
+    }
+
+    /// 邀请弹窗打开时调用：拉取"接受邀请"开关当前值（仅首次或失败时；幂等）。
+    /// 已加载且不在 loading → 跳过；接口失败保留默认 true（H5 同行为：兜底允许接受）。
+    func loadInviteSwitchIfNeeded() async {
+        guard !inviteSwitchLoading else { return }
+        inviteSwitchLoading = true
+        defer { inviteSwitchLoading = false }
+        do {
+            let acceptOn = try await PKService.queryInviteSwitch()
+            acceptInviteSwitchOn = acceptOn
+            logger.info("loadInviteSwitch ok acceptOn=\(acceptOn, privacy: .public)")
+        } catch {
+            logger.warning("queryInviteSwitch failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    /// 用户在邀请弹窗手动切换"接受邀请"开关。
+    /// - `accept=false` 同时本端处于 .invited → 同步拒绝当前邀请（H5 line 363-367 行为）
+    /// - 写入接口同步本端 published 值
+    func setInviteSwitch(accept: Bool) async {
+        let prev = acceptInviteSwitchOn
+        acceptInviteSwitchOn = accept                   // 乐观更新 UI
+        // 关闭开关时若处于被邀请态 → 同步拒绝（H5 同行为）
+        if !accept, state == .invited {
+            await rejectInvite()
+        }
+        // PK 期内手动切换标记为"用户主动"，PK 结束时不覆盖（spec §8.3 R6）
+        if state == .inPK || state == .punishing {
+            userToggledInviteSwitch = true
+        }
+        do {
+            try await PKService.updateInviteSwitch(close: !accept)
+        } catch {
+            logger.warning("setInviteSwitch updateInviteSwitch failed: \(String(describing: error), privacy: .private)")
+            acceptInviteSwitchOn = prev                 // 回滚
+        }
+    }
+
+    // MARK: - 用户操作：推荐列表（PKInviteSheet）
+
+    /// 邀请弹窗打开时调用：刷新推荐列表（重置分页 + 拉第一页）。
+    /// 当前若处于 .matching → 仍允许查看列表（H5 在 matching 时禁止点击 invite 按钮，由 UI 控制）。
+    func refreshRecommendList() async {
+        recommendCurrentPage = 1
+        recommendHasMore = true
+        recommendList = []
+        await loadMoreRecommend()
+    }
+
+    /// 加载下一页（推荐 or 搜索结果根据 isSearching 分流）。
+    /// 由 UI 滚动到底部触发。
+    func loadMoreRecommend() async {
+        guard !recommendLoading, recommendHasMore else { return }
+        recommendLoading = true
+        defer { recommendLoading = false }
+        let page = recommendCurrentPage
+        let kw = searchKeyword.trimmingCharacters(in: .whitespaces)
+        let anchorIdParam: Int? = isSearching && Int(kw) != nil ? Int(kw) : nil
+        let nicknameParam: String? = isSearching && anchorIdParam == nil && !kw.isEmpty ? kw : nil
+        do {
+            let items = try await PKService.getRecommendAnchorList(currentPage: page,
+                                                                    pageSize: 20,
+                                                                    anchorId: anchorIdParam,
+                                                                    nickname: nicknameParam)
+            recommendList.append(contentsOf: items)
+            recommendCurrentPage = page + 1
+            // hasMore：少于 pageSize 视为最后一页
+            recommendHasMore = items.count >= 20
+            logger.info("loadMoreRecommend page=\(page, privacy: .public) got=\(items.count, privacy: .public) total=\(self.recommendList.count, privacy: .public)")
+        } catch {
+            logger.warning("loadMoreRecommend failed: \(String(describing: error), privacy: .private)")
+            recommendHasMore = false                    // 失败时关闭 loadMore 触发器，避免重复重试
+        }
+    }
+
+    /// 设置搜索关键词（UI TextField onChange）。
+    func setSearchKeyword(_ value: String) {
+        searchKeyword = value
+    }
+
+    /// 触发搜索：按当前 searchKeyword 重置列表 + 拉第一页。
+    /// 关键词为空 → 退出搜索态，刷推荐列表。
+    func performSearch() async {
+        let kw = searchKeyword.trimmingCharacters(in: .whitespaces)
+        if kw.isEmpty {
+            isSearching = false
+            await refreshRecommendList()
+            return
+        }
+        isSearching = true
+        recommendCurrentPage = 1
+        recommendHasMore = true
+        recommendList = []
+        await loadMoreRecommend()
+    }
+
+    /// 清除搜索：回到推荐态。
+    func clearSearch() async {
+        searchKeyword = ""
+        isSearching = false
+        await refreshRecommendList()
     }
 
     // MARK: - NIM 入口（M4 由 PKNIMRouter 路由）
