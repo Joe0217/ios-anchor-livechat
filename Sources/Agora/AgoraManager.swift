@@ -68,6 +68,20 @@ final class AgoraManager: NSObject, ObservableObject {
     /// 当前视频编码档位（弱网降级 / 恢复时切换）
     private(set) var currentQuality: EncoderQuality = .normal
 
+    // MARK: - v5.9 长后台修复：rejoin 上下文
+
+    /// join() 最后一次入参缓存，供 LiveStore.handleWillEnterForeground 调 rejoinLiveChannel 时取用。
+    /// LiveStore 已有 agoraChannelId/rtcToken 字段；本字段是 AgoraManager 内部的"已 join 过什么"标记，
+    /// 用于 connectionChangedTo 等被动信号触发 needsRejoin 判定。
+    private(set) var hasJoinedAtLeastOnce: Bool = false
+
+    /// 标记当前连接已断/失败、回前台需要 rejoin。LiveStore.handleWillEnterForeground 读取此标志决定是否触发 rejoinLiveChannel。
+    /// 触发源：(1) connectionChangedTo .disconnected/.failed；(2) 切后台 >10s 回前台
+    private(set) var needsRejoin: Bool = false
+
+    /// 切后台时间戳；willEnterForeground 算时长判定是否需 rejoin
+    private var backgroundedAt: TimeInterval?
+
     // MARK: - G 里程碑 PK 多频道（spec §3）
 
     /// PK 对手画面渲染目标（M3 PKArenaView 接入；M0 阶段未挂 UI 也保留实例避免空判散落）
@@ -77,15 +91,67 @@ final class AgoraManager: NSObject, ObservableObject {
     /// 读写来自两端：MainActor（joinPKOpposite/leavePKOpposite 调用方）+ SDK 回调子线程
     /// （PKChannelDelegate.didLeaveChannelExWith / pkConnection(forChannel:)）。
     /// 锁内仅做字典 get/set，锁外再执行 SDK 调用，避免长持锁阻塞 main queue。
+    /// ⚠️ **铁律**：以下三个字典所有读写必须经 pkLock；nonisolated 方法 + main actor 方法共用同一把锁串行。
     private let pkLock = NSLock()
-    /// 已 join 的 PK 频道 connection 字典，key = channelId
+    /// 已 join 的 PK 频道 connection 字典，key = channelId。所有访问必须经 pkLock。
     private var pkConnections: [String: AgoraRtcConnection] = [:]
-    /// 每个 PK 频道对应的独立 delegate，强引用避免 SDK 持有 weak 后被释放
+    /// 每个 PK 频道对应的独立 delegate，强引用避免 SDK 持有 weak 后被释放。所有访问必须经 pkLock。
+    /// joinPKOpposite 失败回滚时 removeValue 即可让实例 release；SDK 真实回调若仍引用旧 delegate，
+    /// 内部 owner 是 weak，pkConnection(forChannel:) 拿 nil 自然跳过（C3 风险天然守护）。
     private var pkDelegates: [String: PKChannelDelegate] = [:]
-    /// leavePKOpposite 的 CheckedContinuation 字典，key = channelId；500ms 兜底 + 实际回调任一先到 resume 一次
+    /// leavePKOpposite 的 CheckedContinuation 字典，key = channelId。所有访问必须经 pkLock。
+    /// 500ms 兜底 Task 与 SDK 真 didLeaveChannelExWith 任一先到都安全：
+    /// resumeLeavePKContinuation 锁内 removeValue 拿到非 nil 才 resume，另一路拿 nil 跳过，
+    /// 不会触发 CheckedContinuation 重 resume crash。
     private var leavePKContinuations: [String: CheckedContinuation<Void, Never>] = [:]
 
     var isActive: Bool { state == .joined || state == .joining }
+
+    // MARK: - 生命周期
+
+    override init() {
+        super.init()
+        addAppLifecycleObservers()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    // MARK: - v5.9 长后台监听
+
+    private func addAppLifecycleObservers() {
+        let nc = NotificationCenter.default
+        nc.addObserver(self,
+                       selector: #selector(handleDidEnterBackground),
+                       name: UIApplication.didEnterBackgroundNotification,
+                       object: nil)
+        nc.addObserver(self,
+                       selector: #selector(handleWillEnterForeground),
+                       name: UIApplication.willEnterForegroundNotification,
+                       object: nil)
+    }
+
+    @objc private func handleDidEnterBackground() {
+        backgroundedAt = CACurrentMediaTime()
+    }
+
+    @objc private func handleWillEnterForeground() {
+        guard let bgAt = backgroundedAt else { return }
+        let duration = CACurrentMediaTime() - bgAt
+        backgroundedAt = nil
+        // 后台 >10s 且已 join 过 → 标记 needsRejoin；具体 rejoin 由 LiveStore.handleWillEnterForeground 触发
+        // （LiveStore 同时协调 camera 重启 + RTM 状态机），AgoraManager 不自行 rejoin 避免与 LiveStore 状态冲突
+        if duration > 10.0, state == .joined {
+            needsRejoin = true
+            logger.warning("agora: background \(String(format: "%.1f", duration))s; needsRejoin=true (waiting LiveStore foreground trigger)")
+        }
+    }
+
+    /// LiveStore.handleWillEnterForeground 在 rejoin 成功后调用清标志。
+    func clearNeedsRejoin() {
+        needsRejoin = false
+    }
 
     // MARK: - 加入
 
@@ -138,6 +204,9 @@ final class AgoraManager: NSObject, ObservableObject {
             logger.error("joinChannel failed ret=\(ret)")
             state = .failed
             message = "joinChannel 调用失败: \(ret)"
+        } else {
+            hasJoinedAtLeastOnce = true
+            needsRejoin = false
         }
     }
 
@@ -229,6 +298,9 @@ final class AgoraManager: NSObject, ObservableObject {
         conn.localUid = ownUid
 
         let delegate = PKChannelDelegate(owner: self, channel: channel, oppositeUid: oppositeUid)
+        // M3 bug 修复：把 oppositeRemoteView 注入 delegate，didJoinedOfUid 才能调 setupRemoteVideoEx
+        // 否则对手 uid 已 join，但 SDK canvas.view 缺失 → 永远不渲染远端画面
+        delegate.oppositeView = oppositeRemoteView
 
         let option = AgoraRtcChannelMediaOptions()
         option.clientRoleType = .audience          // PK 对手频道我们仅观看
@@ -288,9 +360,12 @@ final class AgoraManager: NSObject, ObservableObject {
             _ = engine.leaveChannelEx(connection, leaveChannelBlock: nil)
 
             // 500ms 兜底：若 didLeaveChannelExWith 漏调，由本兜底 resume 同 channel 的 continuation
+            // 兜底命中（return true）打 warning，便于 M0-7 真机长跑发现 SDK 漏调
             Task { @MainActor [weak self] in
                 try? await Task.sleep(nanoseconds: 500_000_000)
-                self?.resumeLeavePKContinuation(channel: channel)
+                if let self, self.resumeLeavePKContinuation(channel: channel) {
+                    logger.warning("leavePKOpposite didLeaveChannelExWith 回调 500ms 超时，由兜底 resume channel=\(channel)")
+                }
             }
         }
 
@@ -315,11 +390,15 @@ final class AgoraManager: NSObject, ObservableObject {
 
     /// PKChannelDelegate 在收到 didLeaveChannelExWith / 兜底 Task 在收到 500ms 超时时调用。
     /// CheckedContinuation.resume 线程安全，调度无 main actor 依赖。
-    nonisolated func resumeLeavePKContinuation(channel: String) {
+    /// 返回值：true=本次调用拿到 cont 并 resume；false=另一路已先 resume，本次无操作。
+    /// 兜底 Task 用返回值决定是否打 warning（SDK 漏调侦测）。
+    @discardableResult
+    nonisolated func resumeLeavePKContinuation(channel: String) -> Bool {
         pkLock.lock()
         let cont = leavePKContinuations.removeValue(forKey: channel)
         pkLock.unlock()
         cont?.resume()
+        return cont != nil
     }
 
     // MARK: - 编码档位切换（B 里程碑 spec §4 v5 弱网降级）
@@ -484,6 +563,24 @@ extension AgoraManager: AgoraRtcEngineDelegate {
         guard uid == 0 else { return }  // 0 表示本地
         Task { @MainActor [weak self] in
             self?.networkMonitor?.report(tx: txQuality, rx: rxQuality)
+        }
+    }
+
+    /// v5.9 长后台修复：连接状态变化被动信号。SDK 检测到 disconnected/failed 时设 needsRejoin，
+    /// 等 LiveStore.handleWillEnterForeground 触发 rejoinLiveChannel。
+    /// 不在此处主动 rejoin，避免与 LiveStore 状态机 (pauseForCall/resumeCall) 冲突。
+    func rtcEngine(_ engine: AgoraRtcEngineKit,
+                   connectionChangedTo state: AgoraConnectionState,
+                   reason: AgoraConnectionChangedReason) {
+        logger.info("connectionChanged state=\(state.rawValue) reason=\(reason.rawValue)")
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if state == .disconnected || state == .failed {
+                if self.state == .joined {
+                    self.needsRejoin = true
+                    logger.warning("agora connection lost (state=\(state.rawValue) reason=\(reason.rawValue)); needsRejoin=true")
+                }
+            }
         }
     }
 

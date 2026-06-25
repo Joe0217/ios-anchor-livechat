@@ -25,8 +25,10 @@ final class MetalPreviewView: MTKView {
     private let ciContext: CIContext
     /// 仅 main queue 读写（v5.3.1 修 data race）
     private var currentImage: CIImage?
-    /// 可取消的前台首帧绘制任务（v5.3.1 修双切场景：300ms 内再次后台时 cancel 避免 drawable 仍 nil 时 setNeedsDisplay 空跑）
-    private var pendingForegroundDraw: DispatchWorkItem?
+    /// 可取消的前台首帧绘制任务数组（v5.9 多档重试：替代 v5.3.1 的单 DispatchWorkItem）。
+    /// 长后台 >15s 后 drawable 重建实测 500ms-2s，v5.3.1 单次 300ms 重试可能未拿到 drawable 即作废；
+    /// 改为 300/800/1500/3000ms 多档串行重试，任一档拿到 drawable 完成 draw 即生效。
+    private var pendingForegroundDraws: [DispatchWorkItem] = []
 
     init(device: MTLDevice?) {
         // 项目仅 iPhone iOS 16+，所有目标设备均支持 Metal——理论上不会失败；
@@ -50,7 +52,7 @@ final class MetalPreviewView: MTKView {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
-        pendingForegroundDraw?.cancel()
+        pendingForegroundDraws.forEach { $0.cancel() }
     }
 
     required init(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -70,9 +72,9 @@ final class MetalPreviewView: MTKView {
     }
 
     @objc private func handleDidEnterBackground() {
-        // 取消可能 pending 的前台首帧绘制（双切场景）
-        pendingForegroundDraw?.cancel()
-        pendingForegroundDraw = nil
+        // 取消所有 pending 重试（双切场景 / 任一档拿到 drawable 后剩余档不必再触发）
+        pendingForegroundDraws.forEach { $0.cancel() }
+        pendingForegroundDraws.removeAll()
         // v5.5 反悔 v5.3.5："清空 currentImage 让闪烁更明确"实测用户反馈是"卡死"。
         // 现策略：保留最后一帧作占位，回前台 setNeedsDisplay 立刻渲染最后一帧 →
         //   真新帧（AVCaptureSession startRunning 1-2s 后到达）自然替换，视觉无空窗
@@ -80,18 +82,28 @@ final class MetalPreviewView: MTKView {
         releaseDrawables()
     }
 
+    /// v5.9 长后台修复：从单次 300ms 改为多档重试 300/800/1500/3000ms。
+    ///
+    /// 历史 v5.3 设计基于 iOS 17 短后台实测："drawable 100ms 内 reattach，留余量到 300ms"。
+    /// 但长后台 >15s 后 drawable 重建实测 500ms~2s，单次 300ms 重试可能 currentDrawable=nil →
+    /// draw(_:) guard return → 画面永久停留在最后一帧（即使 captureOutput 后续给新帧也无 displayLink 触发渲染）。
+    ///
+    /// 多档重试每次 guard applicationState==.active + setNeedsDisplay；任一档拿到 drawable 完成
+    /// draw 即视觉恢复，后续档为冗余兜底。再后台时全部 cancel。
     @objc private func handleWillEnterForeground() {
-        // 取消旧 pending 任务（重复切后台/前台）
-        pendingForegroundDraw?.cancel()
-        let work = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            // 守卫：300ms 内若再次进入 background，applicationState 已变，避免 drawable nil 时 setNeedsDisplay 空跑
-            guard UIApplication.shared.applicationState == .active else { return }
-            self.setNeedsDisplay()
+        pendingForegroundDraws.forEach { $0.cancel() }
+        pendingForegroundDraws.removeAll()
+        let delays: [Double] = [0.3, 0.8, 1.5, 3.0]
+        for delay in delays {
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                // 守卫：重试期间若再次进入 background，跳过本次 setNeedsDisplay
+                guard UIApplication.shared.applicationState == .active else { return }
+                self.setNeedsDisplay()
+            }
+            pendingForegroundDraws.append(work)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
         }
-        pendingForegroundDraw = work
-        // 延迟 300ms 等 CAMetalLayer 完全 attach 到 window scene（实测 iOS 17 上 100ms 内，留余量）
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
     }
 
     // MARK: - 渲染
