@@ -1,10 +1,14 @@
 import Foundation
+import os
 
 /// 全局配置：值由 xcconfig 注入到 Info.plist，运行时从 plist 读出。
 /// 多环境切换走 Config/Config-Dev.xcconfig ↔ Config/Config-Prod.xcconfig。
 ///
-/// 内置 fallback：plist 缺失 / 残留字面 "$(VAR)" 时回 dev 默认值——
-/// 真机直跑（无 configFiles）或忘配 xcconfig 时仍能跑通 dev，不至于硬崩。
+/// **fallback 策略**（防 prod 悄悄落回 dev 密钥）：
+/// - **DEBUG**：plist 缺失 / 残留字面 "$(VAR)" 时回 dev 默认值——真机直跑（无 configFiles）
+///   或忘配 xcconfig 时仍能跑通 dev，不至于硬崩。
+/// - **Release**：plist 缺失 / 残留字面 "$(VAR)" 直接 `fatalError` abort——避免上次 sapi
+///   xcconfig 槽位漏配时悄悄走 dev 密钥到 prod 后端的灾难（参见审查报告 P0-1 + P1-2 复合修复）。
 enum AppConfig {
     // MARK: - 域名（xcconfig 只存 host，scheme 在此拼接，避开 "//" 注释坑）
     static var apiBaseURL: String    { "https://" + plistString("HilyAPIHost",   fallback: "anchor.cphub.link") }
@@ -35,10 +39,20 @@ enum AppConfig {
     static var wsAesKey: String    { plistString("HilyWSAESKey",   fallback: "9976kk4322578894") }
 
     // MARK: - 内部
+
+    /// "$(VAR)" 说明 xcconfig 没绑或变量未定义，DEBUG 用 fallback；Release abort。
+    /// 这是审查报告 P0-1 + P1-2 的修复关键：dev 默认值绝不能进 prod 二进制运行时路径。
     private static func plistString(_ key: String, fallback: String) -> String {
         let raw = Bundle.main.object(forInfoDictionaryKey: key) as? String ?? ""
-        // "$(VAR)" 说明 xcconfig 没绑或变量未定义，按 fallback 走
-        if raw.isEmpty || raw.hasPrefix("$(") { return fallback }
+        if raw.isEmpty || raw.hasPrefix("$(") {
+            #if DEBUG
+            return fallback
+            #else
+            let logger = Logger(subsystem: "com.anchor.livechat", category: "AppConfig")
+            logger.fault("AppConfig: \(key, privacy: .public) missing from Info.plist (xcconfig not configured for this build)")
+            fatalError("AppConfig: \(key) missing from Info.plist (xcconfig not configured for this build)")
+            #endif
+        }
         return raw
     }
 }

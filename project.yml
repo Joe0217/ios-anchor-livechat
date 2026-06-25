@@ -83,6 +83,9 @@ targets:
         HilyNIMAppKey: $(HILY_NIM_APP_KEY)
         HilyAESKey: $(HILY_AES_KEY)
         HilyAESIV: $(HILY_AES_IV)
+        # sapi（vvi 派对房/背包商城）AES-128-CBC：dev 巧合与主接口同套；test/prod 是独立的另一套，必须在对应 xcconfig 切
+        HilySAPIAESKey: $(HILY_SAPI_AES_KEY)
+        HilySAPIAESIV: $(HILY_SAPI_AES_IV)
         HilyWSAESKey: $(HILY_WS_AES_KEY)
         HilyAgoraAppID: $(HILY_AGORA_APP_ID)
 
@@ -110,18 +113,20 @@ targets:
       - path: Sources/Live/NIM/MessageRouter.swift
       - path: Sources/Live/NIM/NIMPayloadDecoder.swift
       - path: Sources/Party/Utils/GzipDecompressor.swift
+      # H 里程碑 M4-6：SystemMessageRouter 决策表（pure，无 SDK 依赖）
+      - path: Sources/Live/NIM/SystemMessageRouteDecision.swift
       # H 里程碑 M3：派对房 attachType 枚举（纯 Int rawValue，无 NIMSDK 依赖）
       - path: Sources/Party/Models/PartyAttachType.swift
       - path: Sources/Party/Models/PartyMsgType.swift
       # G 里程碑 M2：PKCountdownController（纯 Foundation Task；PKStore 状态机依赖 SDK 不入测）
       - path: Sources/PK/PKCountdownController.swift
-      # A 里程碑 trial #1 (Cycle 朋友圈 tab)：纯枚举 + 状态机 + 服务层 protocol
+      # A 里程碑 trial #1 (Circle 朋友圈 tab)：纯枚举 + 状态机 + 服务层 protocol
       # 注意：枚举的 +Label.swift extension 依赖 L10n，**不**入 sources（label 是 view 层关注）
       - path: Sources/Home/HomeTopTab.swift
-      - path: Sources/Home/Cycle/CycleSubTab.swift
-      - path: Sources/Home/Cycle/HomeTopTabStore.swift
-      - path: Sources/Home/Cycle/CycleStore.swift
-      - path: Sources/Home/Cycle/MomentFeedStore.swift
+      - path: Sources/Home/Circle/CircleSubTab.swift
+      - path: Sources/Home/Circle/HomeTopTabStore.swift
+      - path: Sources/Home/Circle/CircleStore.swift
+      - path: Sources/Home/Circle/MomentFeedStore.swift
       - path: Sources/Profile/Moment/CircleService.swift
       - path: Sources/Profile/Moment/MomentModels.swift
       - path: Sources/Profile/AnchorTierClassifier.swift
@@ -130,6 +135,18 @@ targets:
       - path: Sources/Profile/Settings/Blocklist/BlocklistModels.swift
       - path: Sources/Profile/Settings/Blocklist/BlocklistViewModel.swift
       - path: Sources/Profile/Settings/Blocklist/BlocklistService.swift
+      # List 子页 H5 对齐：纯模型 + 状态机 + Protocol + ViewModel + Service decode
+      # 注意：LiveListSegment+Label.swift 依赖 L10n，不入 sources
+      - path: Sources/Home/LiveTab/List/LiveListModels.swift
+      - path: Sources/Home/LiveTab/List/LiveListViewModel.swift
+      - path: Sources/Home/LiveTab/List/LiveListService.swift
+      # H 里程碑 H-0 (用户详情页 step 1a)：Models + State + Protocol + @MainActor ViewModel + Service stub
+      # step 1c 替换 stub 为真接口；step 1a 仅 stub 抛 stubNotImplemented
+      - path: Sources/Profile/UserProfile/UserProfileModels.swift
+      - path: Sources/Profile/UserProfile/UserProfileViewModel.swift
+      - path: Sources/Profile/UserProfile/UserProfileService.swift
+      # `.followRelationChanged` Notification 抽出独立小文件（H-0 step 1a 复用此通知做跨页同步）
+      - path: Sources/Profile/FollowList/FollowRelationNotification.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.anchor.livechat.tests

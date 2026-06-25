@@ -42,6 +42,10 @@
 	<string>$(HILY_NIM_APP_KEY)</string>
 	<key>HilyOcpApimKey</key>
 	<string>$(HILY_OCP_APIM_KEY)</string>
+	<key>HilySAPIAESIV</key>
+	<string>$(HILY_SAPI_AES_IV)</string>
+	<key>HilySAPIAESKey</key>
+	<string>$(HILY_SAPI_AES_KEY)</string>
 	<key>HilySAPIHost</key>
 	<string>$(HILY_SAPI_HOST)</string>
 	<key>HilySocketHost</key>
