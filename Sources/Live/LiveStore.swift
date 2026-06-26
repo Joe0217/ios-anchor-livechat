@@ -1,5 +1,4 @@
 import Foundation
-import UIKit
 import os
 
 /// 直播态唯一收口（B 里程碑 spec §2）。
@@ -300,14 +299,6 @@ extension LiveStore {
             // 仍未恢复 → forceEnd 采集失败（spec §11 endType=5）
             await MainActor.run {
                 guard self.cameraFailureStartedAt != nil else { return }
-                // v5.3.2 #12 回归修复：Task.sleep 在后台不挂起，20s 后可能在仍处于后台时唤醒，
-                // 误触 endType=5 cameraFailure。仅在 applicationState==.active 时才真正下播；
-                // 后台或 .inactive 状态下静默清理 watcher，让回前台的 interruptionEnded 重新决定。
-                guard UIApplication.shared.applicationState == .active else {
-                    logger.info("camera watcher fired but app not active; reset watcher and wait for interruptionEnded")
-                    self.cameraFailureStartedAt = nil
-                    return
-                }
                 Task { await self.forceEnd(reason: .cameraFailure, subSource: "camera_runtime_20s") }
             }
         }
