@@ -1,0 +1,88 @@
+import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.anchor.livechat", category: "sys-msg-router")
+
+/// 系统消息路由（H 里程碑 spec §3.1）。
+///
+/// 负责 `nim.on('sysMsg', ...)` 收到的所有 `attachType` 分发到对应业务 store。
+///
+/// **M4 范围**：H 核心 12 case（spec §6.2 渐进式接入）：
+/// - 强制下播 / 合规：44 forceEndLive / 61 complianceWarning / 62 banned / 63 boostingExposure / 64 boostingExposureExit
+/// - 通话相关（C 期缺口）：-3 callCancel（占位）/ -6 callPayWaitState / -1 callRemoteMessage / 15 callIncomePerMinute / 18 callGiftIncome / 90 callRechargeReward
+/// - SessionStore：-4 followIncrement / 58 anchorAuditChange
+///
+/// **未覆盖 case**（spec §6.2 R2 缓解）：进入 default 分支仅 `logger.debug` 不噪音不阻塞业务，
+/// 后续 I/J 期按需扩展只动 switch case 不破协议。
+///
+/// **通道范围**（spec §1.1.2）：
+/// 本 router 只在 `.sysMsg` / `.syncSysMsg` 通道分发；`.liveChatroom` / `.partyChatroom` / `.p2p`
+/// 直接 `return false` 让链路下游或回到 chatroom 主路径处理。
+/// 44/61/62/63/64 在 B 期 iOS 路径**只有**心跳 1992/1006（HeartbeatController）触发 forceEnd，
+/// H M4 sysMsg 路径是首次补齐 H5 已有的 sysMsg 触发入口（不重复触发；不与 chatroom 路径冲突）。
+/// LiveStore.forceEnd 内部 `inFlightEnd` 守卫天然兼容多源并发触发。
+///
+/// **单例设计**（H M4 收尾）：sysMsg 全局只有一条流，多实例 router 并存会导致先注册者
+/// `liveStore=nil` 时 case `.forceEndLive` 仍 `return true` 短路掉后注册者真实路径。
+/// 改为 shared 单例后由 `NIMService.setupOnce` 一次性注入 `callStore` / `sessionStore`，
+/// `liveStore` 在 `LiveRoomView.onAppear` 注入、`onDisappear` 清空（weak 兜底）。
+@MainActor
+final class SystemMessageRouter: MessageRouter {
+
+    static let shared = SystemMessageRouter()
+
+    weak var liveStore: LiveStore?
+    weak var callStore: CallStore?
+    weak var sessionStore: SessionStore?
+
+    private init() {}
+
+    func route(_ attachType: AttachType,
+               payload: [String: Any],
+               context: MessageContext) -> Bool {
+        let action = SystemMessageRouteDecision.decide(
+            attachType: attachType, payload: payload, context: context
+        )
+        return execute(action, attachType: attachType, context: context)
+    }
+
+    /// 把 `SystemMessageAction` 派发到对应 store；动作 ≠ `.passThrough` 时即认为消费链路。
+    private func execute(_ action: SystemMessageAction,
+                         attachType: AttachType,
+                         context: MessageContext) -> Bool {
+        switch action {
+        case .forceEndLive(let sub):
+            Task { @MainActor [weak self] in
+                await self?.liveStore?.forceEnd(reason: .disconnected, subSource: sub)
+            }
+        case .banned(let sub):
+            Task { @MainActor [weak self] in
+                await self?.liveStore?.forceEnd(reason: .banned, subSource: sub)
+            }
+        case .complianceWarning(let text):
+            // payload 缺 content 时 decide 返空串；这里兜底为 L10n 默认文案
+            liveStore?.warn(message: text.isEmpty ? L10n.complianceWarningDefault : text)
+        case .markBoostingExposure(let on):
+            liveStore?.markBoostingExposure(on)
+        case .callRemoteText(let text, let chatBubble):
+            callStore?.handleRemoteText(text, chatBubble: chatBubble)
+        case .callWaitState(let type):
+            callStore?.updateWaitState(type: type)
+        case .callIncome(let delta):
+            callStore?.appendCallIncome(num: delta)
+        case .callGiftIncome(let delta):
+            callStore?.appendGiftIncome(num: delta)
+        case .callRechargeReward(let delta):
+            callStore?.appendWaitBonus(num: delta)
+        case .callCancelLogOnly(let type):
+            logger.info("[SysMsgRouter] callCancel type=\(type, privacy: .public) — RTM 主路径已处理")
+        case .followIncrement:
+            sessionStore?.incrementFollow()
+        case .anchorAuditChange(let s, let c):
+            sessionStore?.handleAuditStatus(applyStatus: s, content: c)
+        case .passThrough:
+            logger.debug("[SysMsgRouter] passThrough \(attachType.raw, privacy: .public) ctx=\(String(describing: context), privacy: .public)")
+        }
+        return action != .passThrough
+    }
+}

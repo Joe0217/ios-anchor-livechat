@@ -102,6 +102,79 @@ enum L10n {
         static var inviteToastInviteSent: String { localize("pk.invite.toast.sent", comment: "PK 邀请已发送") }
     }
 
+    // MARK: - E/F 派对房（spec §1.4 + H i18n 收尾）
+    enum Party {
+        // 通用
+        static var defaultRoomName: String { localize("party.defaultRoomName", comment: "派对房默认房名") }
+        static var defaultUser: String { localize("party.defaultUser", comment: "用户兜底") }
+        static var defaultGift: String { localize("party.defaultGift", comment: "礼物兜底") }
+        static var cancel: String { localize("party.cancel", comment: "取消") }
+        static var retry: String { localize("party.retry", comment: "重试") }
+        static var loading: String { localize("party.loading", comment: "加载中…") }
+        static var ok: String { localize("party.ok", comment: "好的") }
+        static var alertTitle: String { localize("party.alert.title", comment: "提示") }
+        static var onlineCountFormat: String { localize("party.onlineCount.format", comment: "在线 %d") }
+
+        // 房列表（PartyRoomListView）
+        static var listNavTitle: String { localize("party.list.navTitle", comment: "派对房列表标题") }
+        static var listLoadMore: String { localize("party.list.loadMore", comment: "上拉加载更多") }
+        static var listUnnamed: String { localize("party.list.unnamed", comment: "未命名房间") }
+        static var listErrorLoadFailedFormat: String { localize("party.list.error.loadFailedFormat", comment: "加载失败：%@") }
+        static var listErrorDecodeFormat: String { localize("party.list.error.decodeFormat", comment: "解码失败：%@") }
+
+        // 创建房（PartyCreateRoomView）
+        static var createNavTitle: String { localize("party.create.navTitle", comment: "创建派对房") }
+        static var createSubmit: String { localize("party.create.submit", comment: "创建房间") }
+        static var createSectionName: String { localize("party.create.section.name", comment: "房间名称") }
+        static var createNamePlaceholder: String { localize("party.create.name.placeholder", comment: "最多 20 个字") }
+        static var createSectionTemplate: String { localize("party.create.section.template", comment: "选择模板") }
+        static var createTemplateLoading: String { localize("party.create.template.loading", comment: "加载模板…") }
+        static var createTemplateEmpty: String { localize("party.create.template.empty", comment: "dev 暂无可用模板") }
+        static var createTemplateFallbackFormat: String { localize("party.create.template.fallbackFormat", comment: "模板 %d") }
+        static var createTemplateDetailFormat: String { localize("party.create.template.detailFormat", comment: "总麦位 %d · 视频 %d · 语聊 %d") }
+        static var createErrorTemplateLoad: String { localize("party.create.error.templateLoad", comment: "模板加载失败") }
+        static var createErrorTemplateLoadFormat: String { localize("party.create.error.templateLoadFormat", comment: "模板加载失败：%@") }
+        static var createErrorNoRoomId: String { localize("party.create.error.noRoomId", comment: "服务端未返 roomId") }
+        static var createErrorFailed: String { localize("party.create.error.failed", comment: "创建失败") }
+        static var createErrorFailedFormat: String { localize("party.create.error.failedFormat", comment: "创建失败：%@") }
+
+        // 房间内（PartyRoomView）
+        static var inviteTitle: String { localize("party.invite.title", comment: "视频位邀请") }
+        static var inviteAccept: String { localize("party.invite.accept", comment: "接受") }
+        static var inviteReject: String { localize("party.invite.reject", comment: "拒绝") }
+        static var inviteMessageFormat: String { localize("party.invite.messageFormat", comment: "%@ 邀请你上视频位 %d") }
+        static var selfActionsTitle: String { localize("party.selfActions.title", comment: "我的麦位") }
+        static var selfMicOn: String { localize("party.selfActions.micOn", comment: "开麦克风") }
+        static var selfMicOff: String { localize("party.selfActions.micOff", comment: "关麦克风") }
+        static var selfCamOn: String { localize("party.selfActions.camOn", comment: "开摄像头") }
+        static var selfCamOff: String { localize("party.selfActions.camOff", comment: "关摄像头") }
+        static var selfLeaveSeat: String { localize("party.selfActions.leaveSeat", comment: "下麦") }
+        static var inputPlaceholder: String { localize("party.input.placeholder", comment: "说点什么…") }
+        static var giftMessageFormat: String { localize("party.gift.messageFormat", comment: "🎁 %@ 送出 %@ x%d") }
+
+        // 房态徽章
+        static var stateJoined: String { localize("party.state.joined", comment: "已进房") }
+        static var stateEntering: String { localize("party.state.entering", comment: "进房中…") }
+        static var stateLeaving: String { localize("party.state.leaving", comment: "退房中…") }
+        static var stateEnded: String { localize("party.state.ended", comment: "已离开") }
+
+        // 麦位（PartySeatItemView）
+        static var seatEmpty: String { localize("party.seat.empty", comment: "空麦位 a11y") }
+        static var seatOccupied: String { localize("party.seat.occupied", comment: "麦上用户 a11y") }
+
+        // 业务错误（PartyRoomError.errorDescription）
+        static var errorEnterFailedFormat: String { localize("party.error.enterFailedFormat", comment: "进房失败：%@") }
+        static var errorExitFailedFormat: String { localize("party.error.exitFailedFormat", comment: "退房失败：%@") }
+        static var errorSeatOccupied: String { localize("party.error.seatOccupied", comment: "麦位已被占用") }
+        static var errorSeatEmpty: String { localize("party.error.seatEmpty", comment: "麦位为空") }
+        static var errorBanned: String { localize("party.error.banned", comment: "已被封禁") }
+        static var errorLevelInsufficient: String { localize("party.error.levelInsufficient", comment: "等级不足") }
+        static var errorNetworkLost: String { localize("party.error.networkLost", comment: "网络连接已断开") }
+        static var errorKicked: String { localize("party.error.kicked", comment: "已被房主踢出") }
+        static var errorPasswordWrong: String { localize("party.error.passwordWrong", comment: "进房密码错误") }
+        static var errorMediaSwitchFailed: String { localize("party.error.mediaSwitchFailed", comment: "麦克风/摄像头切换失败") }
+    }
+
     // MARK: - Work 工作台（设计稿还原）
     static var workWeeklyLevel: String { localize("work.weeklyLevel", comment: "周等级") }
     static var workDetail: String { localize("work.detail", comment: "详情") }
@@ -146,20 +219,20 @@ enum L10n {
     static var tabWork: String { localize("tab.work", comment: "工作台") }
     static var tabProfile: String { localize("tab.profile", comment: "我的") }
 
-    // MARK: - Home 顶部 4 tab（trial #1 重命名自 live.subTab，case cysle typo → cycle）
-    static var homeTopTabLive: String  { localize("home.topTab.live",  comment: "Live") }
-    static var homeTopTabList: String  { localize("home.topTab.list",  comment: "List") }
-    static var homeTopTabMatch: String { localize("home.topTab.match", comment: "Match") }
-    static var homeTopTabCycle: String { localize("home.topTab.cycle", comment: "Cycle") }
-    /// 占位子 tab 提示（Match / Cycle Official 等未实现 tab 共用）
+    // MARK: - Home 顶部 4 tab（对齐 H5 homeConfig.ts → key: live/list/match/circle）
+    static var homeTopTabLive: String   { localize("home.topTab.live",   comment: "Live") }
+    static var homeTopTabList: String   { localize("home.topTab.list",   comment: "List") }
+    static var homeTopTabMatch: String  { localize("home.topTab.match",  comment: "Match") }
+    static var homeTopTabCircle: String { localize("home.topTab.circle", comment: "Circle") }
+    /// 占位子 tab 提示（Match / Circle Official 等未实现 tab 共用）
     static var homeTopTabComingSoon: String { localize("home.topTab.comingSoon", comment: "占位文案：敬请期待") }
 
-    // MARK: - Cycle 朋友圈内 3 子 tab（trial #1 A-spec §6B.8）
-    static var cycleSubTabOfficial: String { localize("home.cycle.official.label", comment: "Cycle 子 tab Official") }
-    static var cycleSubTabMoment: String   { localize("home.cycle.moment.label",   comment: "Cycle 子 tab Moment（全站圈）") }
-    static var cycleSubTabMe: String       { localize("home.cycle.me.label",       comment: "Cycle 子 tab Me（我的）") }
+    // MARK: - Circle 朋友圈内 3 子 tab（trial #1 A-spec §6B.8）
+    static var circleSubTabOfficial: String { localize("home.circle.official.label", comment: "Circle 子 tab Official") }
+    static var circleSubTabMoment: String   { localize("home.circle.moment.label",   comment: "Circle 子 tab Moment（全站圈）") }
+    static var circleSubTabMe: String       { localize("home.circle.me.label",       comment: "Circle 子 tab Me（我的）") }
     /// Moment 加载失败提示
-    static var cycleMomentLoadError: String { localize("home.cycle.moment.error.title", comment: "Moment 加载失败提示") }
+    static var circleMomentLoadError: String { localize("home.circle.moment.error.title", comment: "Moment 加载失败提示") }
     /// 观看人数后缀（a11y）
     static var liveViewers: String { localize("live.viewers", comment: "观看人数 a11y 后缀") }
     /// 顶部右侧按钮 a11y
@@ -171,14 +244,16 @@ enum L10n {
     /// 顶部 Online/Prime 分段
     static var liveListSegmentOnline: String { localize("liveList.segment.online", comment: "Online 分段") }
     static var liveListSegmentPrime: String { localize("liveList.segment.prime", comment: "Prime 分段") }
-    /// Invite friends banner
-    static var liveListInviteTitle: String { localize("liveList.invite.title", comment: "邀请好友标题") }
-    static var liveListInviteSubtitle: String { localize("liveList.invite.subtitle", comment: "邀请好友副标题") }
     /// 卡片右侧动作按钮 a11y
     static var liveListActionChat: String { localize("liveList.action.chat", comment: "聊天按钮 a11y") }
     static var liveListActionLive: String { localize("liveList.action.live", comment: "直播按钮 a11y") }
     static var liveListActionMatch: String { localize("liveList.action.match", comment: "匹配按钮 a11y") }
     static var liveListActionOffline: String { localize("liveList.action.offline", comment: "下线开关 a11y") }
+    /// 列表状态文案
+    static var liveListEmpty: String { localize("liveList.empty", comment: "List 子页空数据提示") }
+    static var liveListEnd: String { localize("liveList.end", comment: "List 子页已到底提示") }
+    static var liveListLoadMoreFailed: String { localize("liveList.loadMoreFailed", comment: "触底加载失败提示") }
+    static var liveListPullToRetry: String { localize("liveList.pullToRetry", comment: "首屏错误态引导下拉刷新") }
 
     // MARK: - Profile 个人页（设计稿还原）
     /// 顶部按钮 a11y
@@ -273,7 +348,7 @@ enum L10n {
     /// 礼物墙空态
     static var profileGiftsEmpty: String { localize("profile.gifts.empty", comment: "礼物墙空态文案") }
 
-    // MARK: - Moment 动态卡片（Profile / Cycle 共用 MomentPostRow）
+    // MARK: - Moment 动态卡片（Profile / Circle 共用 MomentPostRow）
     /// 相对时间：刚刚发布（< 60 秒）
     static var momentRelativeJustNow: String       { localize("moment.relative.justNow", comment: "动态时间：刚刚") }
     /// 相对时间：分钟级，%d 代表数字
@@ -286,6 +361,8 @@ enum L10n {
     static var momentActionLike: String            { localize("moment.action.like", comment: "动态点赞 a11y") }
     /// 取消点赞按钮 a11y（已点赞）
     static var momentActionUnlike: String          { localize("moment.action.unlike", comment: "动态取消点赞 a11y") }
+    /// 删除动态按钮 a11y（仅 me 入口）
+    static var momentActionDelete: String          { localize("moment.action.delete", comment: "动态删除 a11y") }
 
     // MARK: - Auth 登录页
     static var authTitle: String { localize("auth.title", comment: "登录页大标题：主播登录") }
@@ -319,6 +396,12 @@ enum L10n {
     static var liveRoomPermissionAlertMessage: String { localize("liveRoom.permissionAlertMessage", comment: "相机权限弹窗内容") }
     static var liveRoomStatusLiveFormat: String { localize("liveRoom.statusLiveFormat", comment: "直播中状态（%@ 为时长）") }
     static var liveRoomStatusConnecting: String { localize("liveRoom.statusConnecting", comment: "连接中状态") }
+    /// AgoraManager.State.label — 直播间 / Call POC 顶栏 RTC 状态文案
+    static var liveRoomStatusIdle: String       { localize("liveRoom.status.idle", comment: "RTC 未加入") }
+    static var liveRoomStatusJoined: String     { localize("liveRoom.status.joined", comment: "RTC 已加入频道") }
+    static var liveRoomStatusFailed: String     { localize("liveRoom.status.failed", comment: "RTC 加入失败") }
+    /// RTC 错误码格式（%d 为错误码）
+    static var liveRoomStatusRtcErrorFormat: String { localize("liveRoom.status.rtcErrorFormat", comment: "RTC 错误码格式") }
     static var liveRoomAnchorDefault: String { localize("liveRoom.anchorDefault", comment: "主播默认昵称") }
     static var liveRoomToolBeauty: String { localize("liveRoom.toolBeauty", comment: "底部美颜按钮") }
     static var liveRoomEndLive: String { localize("liveRoom.endLive", comment: "结束直播按钮") }
@@ -339,6 +422,18 @@ enum L10n {
     static var callErrorTokenFailed: String { localize("call.errorTokenFailed", comment: "通话 POC：获取 token 失败") }
     static var callErrorConnectPrefix: String { localize("call.errorConnectPrefix", comment: "通话 POC：接通失败：%@ (%@)") }
     static var callErrorConnectGeneric: String { localize("call.errorConnectGeneric", comment: "通话 POC：接通失败：%@") }
+    // CallStore.lastError（C 期 UI 接入前预留 i18n）：用户可感知的通话错误文案
+    static var callErrorRtmTokenEmpty: String      { localize("call.error.rtmTokenEmpty", comment: "RTM token 为空") }
+    static var callErrorInvalidRemoteUserId: String { localize("call.error.invalidRemoteUserId", comment: "对方 userId 非法") }
+    static var callErrorCreateFailed: String       { localize("call.error.createFailed", comment: "通话发起失败") }
+    static var callErrorSendFailed: String         { localize("call.error.sendFailed", comment: "呼叫信令发送失败") }
+    static var callErrorAcceptFailed: String       { localize("call.error.acceptFailed", comment: "接听信令发送失败") }
+    static var callErrorRtcTokenFailed: String     { localize("call.error.rtcTokenFailed", comment: "获取 RTC token 失败") }
+    /// "rtcToken: %@" 错误格式（%@ 为底层错误消息）
+    static var callErrorRtcTokenFormat: String     { localize("call.error.rtcTokenFormat", comment: "RTC token 错误格式") }
+    static var callErrorRemoteRejected: String     { localize("call.error.remoteRejected", comment: "对方已拒绝") }
+    /// 通用：会话已过期 / 未登录提示
+    static var sessionExpiredError: String         { localize("auth.sessionExpired", comment: "未登录 / 会话已过期") }
 
     // MARK: - Call 1v1 真实通话视图（CallView.swift）
     static var callSubtitleCallingOut: String { localize("call.subtitle.callingOut", comment: "1v1：主叫副标题") }
@@ -349,6 +444,20 @@ enum L10n {
     static var callActionHangupBackToLive: String { localize("call.action.hangupBackToLive", comment: "1v1：挂断回直播（直播私 call）") }
     static var callActionHangup: String { localize("call.action.hangup", comment: "1v1：挂断按钮") }
     static var callLiveBanner: String { localize("call.liveBanner", comment: "1v1：直播私 call 顶部 banner") }
+
+    // MARK: - C 1v1 通话（HUD）
+    enum Call {
+        enum Hud {
+            static var incomeFormat: String { localize("call.hud.incomeFormat", comment: "通话收入累加（%d 钻石）") }
+            static var giftIncomeFormat: String { localize("call.hud.giftIncomeFormat", comment: "礼物收入累加（%d 钻石）") }
+            static var waitBonusFormat: String { localize("call.hud.waitBonusFormat", comment: "充值奖励气泡（%d 钻石）") }
+            static var remoteTextFormat: String { localize("call.hud.remoteTextFormat", comment: "远端文字气泡（%@ 为原文）") }
+            static var waitStartPay: String { localize("call.hud.wait.startPay", comment: "用户发起支付（type=1）") }
+            static var waitPaySuccess: String { localize("call.hud.wait.paySuccess", comment: "用户支付成功（type=2）") }
+            static var waitCallTimeEnd: String { localize("call.hud.wait.callTimeEnd", comment: "通话计时已暂停（type=3）") }
+            static var waitPayCancel: String { localize("call.hud.wait.payCancel", comment: "用户取消支付（type=4）") }
+        }
+    }
 
     // MARK: - LiveRoom 挂断后回直播倒计时覆盖层
     static var liveRoomCallEndedTitle: String { localize("liveRoom.callEndedTitle", comment: "挂断回直播：通话已结束") }
@@ -373,4 +482,31 @@ enum L10n {
     static var imErrorChatroomEnterFailedFormat: String { localize("im.error.chatroomEnterFailedFormat", comment: "进入聊天室失败 (%@)") }
     static var imErrorNetworkErrorFormat: String { localize("im.error.networkErrorFormat", comment: "IM 网络错误 (%@)") }
     static var imErrorDecodingFormat: String { localize("im.error.decodingFormat", comment: "消息解析失败：%@") }
+
+    // MARK: - H-0 用户详情页（对照 H5 userProfile/index.vue）
+    static var userProfileUidPrefix: String         { localize("userProfile.uid.prefix", comment: "uid 前缀，含冒号空格") }
+    static var userProfileLikeLabel: String         { localize("userProfile.like.label", comment: "卡片：点赞数标题") }
+    static var userProfileFavoriteLabel: String     { localize("userProfile.favorite.label", comment: "卡片：收藏数标题") }
+    static var userProfileFollow: String            { localize("userProfile.follow", comment: "FOLLOW 按钮") }
+    static var userProfileFollowing: String         { localize("userProfile.following", comment: "FOLLOWING 按钮（已关注）") }
+    static var userProfileMenuReport: String        { localize("userProfile.menu.report", comment: "菜单：举报") }
+    static var userProfileMenuBlock: String         { localize("userProfile.menu.block", comment: "菜单：拉黑") }
+    static var userProfileBlockConfirmTitle: String { localize("userProfile.blockConfirm.title", comment: "拉黑二次确认标题") }
+    static var userProfileBlockConfirmMessage: String { localize("userProfile.blockConfirm.message", comment: "拉黑二次确认正文") }
+    static var userProfileBlockConfirmAction: String { localize("userProfile.blockConfirm.action", comment: "拉黑确认按钮") }
+    static var userProfileBlockConfirmCancel: String { localize("userProfile.blockConfirm.cancel", comment: "拉黑取消按钮") }
+    static var userProfileBlockSuccess: String      { localize("userProfile.block.success", comment: "拉黑成功 toast") }
+    static var userProfileBlockFail: String         { localize("userProfile.block.fail", comment: "拉黑失败 toast") }
+    static var userProfileGiftWallTitle: String     { localize("userProfile.giftWall.title", comment: "礼物墙区块标题") }
+    static var userProfileGiftWallPlaceholder: String { localize("userProfile.giftWall.placeholder", comment: "礼物墙占位 coming soon") }
+    static var userProfileActionMessage: String     { localize("userProfile.action.message", comment: "底部 ActionBar：私聊") }
+    static var userProfileActionCall: String        { localize("userProfile.action.call", comment: "底部 ActionBar：通话") }
+    static var userProfileNetworkError: String      { localize("userProfile.networkError", comment: "网络错误兜底") }
+    static var userProfileBadUserId: String         { localize("userProfile.badUserId", comment: "userId 非法") }
+    static var userProfileLoadErrorRetry: String    { localize("userProfile.loadError.retry", comment: "加载失败 retry") }
+    static var commonComingSoon: String             { localize("common.comingSoon", comment: "占位按钮 toast") }
+    static var commonBack: String                   { localize("common.back", comment: "无障碍：返回按钮 label") }
+    static var userProfileA11yAvatar: String        { localize("userProfile.a11y.avatar", comment: "无障碍：头像 label") }
+    static var userProfileA11yMenu: String          { localize("userProfile.a11y.menu", comment: "无障碍：菜单按钮 label") }
+    static var userProfileA11yGiftFallback: String  { localize("userProfile.a11y.giftFallback", comment: "无障碍：礼物 name 为 nil 时兜底") }
 }

@@ -8,7 +8,9 @@ import SwiftUI
 struct LiveRoomView: View {
     let roomInfo: LiveRoomInfo
     let title: String
-    @ObservedObject var beauty: BeautyParameters
+    /// **不**用 `@ObservedObject`：父 view body 不再因 slider 拖动（每秒 30-60 publish）
+    /// 触发整树重算 + .onReceive 入队。监听 + renderer 更新已下沉到 `BeautyPanel` 内（throttle）。
+    let beauty: BeautyParameters
 
     @StateObject private var store = LiveStore()
     @StateObject private var camera = CameraManager()
@@ -21,7 +23,11 @@ struct LiveRoomView: View {
     /// D 里程碑：监听 CallStore 状态，直播态收到私 call 时用 CallView overlay 覆盖直播画面。
     /// 对齐 H5 g-faceTime 全局浮层模式。RootView 的 ZStack 浮层在 sheet 内不可见，必须在
     /// LiveRoomView 内自己 overlay。
-    @ObservedObject private var callStore = CallStore.shared
+    /// **不**用 `@ObservedObject`：CallStore 上 5 个 HUD 字段（callWaitState/callWaitBonus/...）
+    /// 每条 sysMsg publish 一次，订阅整 store 会触发 LiveRoomView 整树（含 CameraPreview/PKArenaView/
+    /// publicScreen）重算。仅订阅 .state 镜像到本地 @State 即可（CallView overlay 显隐唯一依赖）。
+    private let callStore = CallStore.shared
+    @State private var callState: CallState = .idle
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
@@ -87,16 +93,9 @@ struct LiveRoomView: View {
         .sheet(isPresented: $showInviteSheet) {
             PKInviteSheet(store: pkStore, isPresented: $showInviteSheet)
         }
-        // G M3 / spec §6.1：PK 各态 overlay；半透明胶囊条不全屏盖（铁律 §8）
-        .overlay { PKMatchingOverlay(store: pkStore).transition(.opacity) }
-        .overlay { PKInvitedSheet(store: pkStore).transition(.opacity) }
-        .overlay { PKPunishingOverlay(store: pkStore).transition(.opacity) }
-        .overlay {
-            PKResultOverlay(isPresented: $pkResultBridge.presented,
-                            myScore: pkResultBridge.myScore,
-                            oppositeScore: pkResultBridge.opponentScore,
-                            top3: pkResultBridge.top3)
-        }
+        // G M3 / spec §6.1：PK 各态 overlay 合并为单一 PKOverlayHost，避免 5 层 _OverlayModifier
+        // 链路 layout pass + 多 overlay 同时订阅 pkStore 触发 body 重算。
+        .overlay { PKOverlayHost(pkStore: pkStore, resultBridge: pkResultBridge) }
         .overlay(alignment: .bottomTrailing) {
             PKEntryButton(store: pkStore, showInviteSheet: $showInviteSheet)
                 .padding(.trailing, 12)
@@ -134,10 +133,10 @@ struct LiveRoomView: View {
                        token: roomInfo.rtcToken ?? "",
                        uid: UInt(roomInfo.userId ?? 0))
             if let yx = roomInfo.yxRoomId, let user = SessionStore.shared.user {
+                // H M5：IM 登录由 NIMOnlineKeeper.start 在 SessionStore.login 后已完成；
+                // NIMChatroomManager.enter 仅进聊天室，不再传 account/token。
                 nim.enter(roomId: "\(yx)",
-                          nickname: user.nickname ?? L10n.liveRoomAnchorDefault,
-                          account: user.yxAccid ?? "",
-                          token: user.imToken ?? "")
+                          nickname: user.nickname ?? L10n.liveRoomAnchorDefault)
             }
             store.attachLiving(roomInfo: roomInfo)
             // D 里程碑：注入 LiveStore 给 CallStore + 挂 observer（直播态期间直播私 call 接听 +
@@ -156,12 +155,10 @@ struct LiveRoomView: View {
             pkStore.ownRoomId = roomInfo.id ?? 0
             // M3 bug 修复：声网 PK 多频道 join 时复用主直播 rtcToken（绑 uid 不绑 channel）
             pkStore.rtcToken = roomInfo.rtcToken ?? ""
-            // G M4：把 PKStore.router 挂到 NIMChatroomManager 的 weak pkRouter；onRecvMessages 收到
-            // attachType 97/98/99/100/-8/-9 时自动路由到 PKStore.handle*
-            // H M2 双轨过渡：旧 weak pkRouter 路径保留（M5 才删）；同时注册到 NIMService 路由链路，
-            // 让 M5 后 NIMChatroomManager.onRecvMessages 改走 NIMService.dispatch(.liveChatroom) 时立刻生效。
-            nim.pkRouter = pkStore.router
+            // H M5：PK router 走 NIMService 路由链路
             NIMService.shared.registerRouter(pkStore.router)
+            // H M4：注入直播态 weak liveStore；全局 sysRouter 由 NIMService.setupOnce 永驻注册
+            SystemMessageRouter.shared.liveStore = store
             // 进房同步远端 PK 状态（H5 syncPkStateAfterReconnect 同行为）
             Task { await pkStore.reconcileOnReconnect() }
         }
@@ -179,8 +176,8 @@ struct LiveRoomView: View {
             Task { await agora.leave() }
             nim.leave()
             camera.stop()
-            // H M2：与 onAppear 的 registerRouter 配平，避免 NIMService.routers 残留弱引用
             NIMService.shared.unregisterRouter(pkStore.router)
+            SystemMessageRouter.shared.liveStore = nil
             // G M3：PKStore teardown 取消倒计时 / 解 NQM 订阅 / 清字段；setCallState 内部 guard 会拦 ended 态调用
             Task { await pkStore.teardown() }
         }
@@ -190,15 +187,13 @@ struct LiveRoomView: View {
         // v5.8：本体 CameraPreview 的帧 sink 由 CameraManager.subscribers 字典持有，
         // 与 PIP CameraPreview 的 sink 独立共存；PIP 在 dismantleUIView 时精准注销自己那一格，
         // 本体不再依赖任何 SwiftUI re-eval 时机。详见 Sources/Camera/CameraPreview.swift v5.8 注释。
-        .onReceive(beauty.objectWillChange) { _ in
-            DispatchQueue.main.async { camera.renderer.updateParameters(beauty) }
-        }
+        // 美颜参数变化 → renderer 更新已下沉到 BeautyPanel 子 view（throttle 60ms），父 view 不再监听
         // 直播时长由 LiveStore.elapsedTimerStore 在 attachLiving/teardown 内自管启停；
         // 时间 capsule 通过独立 LiveElapsedCapsule 子 view 订阅，避免 1Hz 触发本树重渲染。
         // D 里程碑：直播态期间收到私 call → CallView 顶层 overlay 覆盖直播画面。
         // 对齐 H5 g-faceTime 浮层模式。state != .idle 时显示（含 .calling/.connecting/.connected/.ended 过渡态）。
         .overlay {
-            if callStore.state != .idle {
+            if callState != .idle {
                 // D 里程碑修复（v5.4）：注入直播侧 camera/beauty 复用同一路采集，
                 // 避免 CallFaceTimeView 自启第二个 CameraManager 实例抢占摄像头 →
                 // reason=3 → 20s watcher → forceEnd endType=5 误下播；同时保留主播美颜参数。
@@ -207,13 +202,14 @@ struct LiveRoomView: View {
             }
         }
         // D 里程碑：通话挂断后 15s 倒计时覆盖层（对齐 H5 liveRoom.vue:218-227 waitingReturnLive）。
-        // CallView overlay 在 callStore.state→.ended/.idle 后消失，本覆盖层接力显示倒计时直到 rejoinLive。
+        // CallView overlay 在 callState→.ended/.idle 后消失，本覆盖层接力显示倒计时直到 rejoinLive。
         .overlay {
             if store.isWaitingReturnLive {
                 returnLiveCountdownOverlay.transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: callStore.state)
+        .animation(.easeInOut(duration: 0.2), value: callState)
+        .onReceive(callStore.$state) { newState in callState = newState }
         .animation(.easeInOut(duration: 0.2), value: store.isWaitingReturnLive)
     }
 
@@ -227,6 +223,7 @@ struct LiveRoomView: View {
         VStack {
             HStack(spacing: 8) {
                 Image(systemName: "dot.radiowaves.left.and.right").font(.caption)
+                    .accessibilityHidden(true)
                 Text(L10n.liveRoomCallEndedTitle).font(.caption).bold()
                 Text(String(format: L10n.liveRoomReturnCountdownFormat, store.returnLiveCountdown))
                     .font(.caption).monospacedDigit()
@@ -235,6 +232,7 @@ struct LiveRoomView: View {
             .padding(.horizontal, 14).padding(.vertical, 8)
             .background(.pink.opacity(0.85), in: Capsule())
             .padding(.top, 80)
+            .accessibilityElement(children: .combine)
             Spacer()
         }
     }
@@ -245,9 +243,10 @@ struct LiveRoomView: View {
         HStack(spacing: 10) {
             Circle().fill(.pink.opacity(0.6)).frame(width: 40, height: 40)
                 .overlay(Image(systemName: "person.fill").foregroundStyle(.white))
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.subheadline).bold().foregroundStyle(.white).lineLimit(1)
-                Text(agora.message.isEmpty ? agora.state.rawValue : agora.message)
+                Text(agora.message.isEmpty ? agora.state.label : agora.message)
                     .font(.caption2).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
             }
             Spacer()
@@ -266,11 +265,15 @@ struct LiveRoomView: View {
             }
             HStack(spacing: 4) {
                 Image(systemName: "person.2.fill").font(.caption2)
-                Text("\(nim.onlineCount)").font(.caption)
+                    .accessibilityHidden(true)
+                // review 202606260029 P1-1：onlineCount 抽到子 view 内观测，
+                // 避免本体 LiveRoomView 因 .enter/.exit 通知频繁重算（含 CameraPreview / RemoteVideoView）。
+                OnlineCountText(store: nim.presenceStore)
             }
             .foregroundStyle(.white)
             .padding(.horizontal, 10).padding(.vertical, 6)
             .background(.black.opacity(0.4), in: Capsule())
+            .accessibilityElement(children: .combine)
         }
     }
 
@@ -291,6 +294,7 @@ struct LiveRoomView: View {
     private func networkBanner(_ text: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "wifi.exclamationmark").font(.caption)
+                .accessibilityHidden(true)
             Text(text).font(.caption)
         }
         .foregroundStyle(.white)
@@ -298,21 +302,13 @@ struct LiveRoomView: View {
         .background(.blue.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
         .frame(maxWidth: .infinity, alignment: .center)
         .transition(.move(edge: .top).combined(with: .opacity))
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - 公屏消息
 
     private var publicScreen: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(nim.messages.suffix(6)) { msg in
-                Text(msg.text)
-                    .font(.caption)
-                    .foregroundStyle(msg.isSystem ? .yellow.opacity(0.9) : .white)
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 12))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        PublicScreenList(store: nim.messagesStore)
     }
 
     // MARK: - 底部工具栏
@@ -407,16 +403,33 @@ struct LiveRoomView: View {
     private func toolButton(_ t: String, system: String) -> some View {
         VStack(spacing: 4) {
             Image(systemName: system).font(.title3)
+                .accessibilityHidden(true)
             Text(t).font(.caption2)
         }
         .foregroundStyle(.white)
         .frame(width: 56, height: 56)
         .background(.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - 美颜面板
 
     private var beautyPanel: some View {
+        BeautyPanel(beauty: beauty, camera: camera)
+    }
+
+}
+
+// MARK: - BeautyPanel：sheet 内独立 @ObservedObject，throttle 60ms 调 renderer
+//
+// 父 LiveRoomView 持 `let beauty` 不订阅 publish；只有 sheet 打开期间本子 view 监听并节流更新
+// renderer，避免 slider 拖动每秒 30-60 次 publish 触发父 view 整树重算。
+private struct BeautyPanel: View {
+    @ObservedObject var beauty: BeautyParameters
+    let camera: CameraManager
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(L10n.liveRoomBeautyPanelTitle).font(.headline)
             Toggle(L10n.livePrepareBeautyToggle, isOn: $beauty.enabled).tint(.pink)
@@ -428,6 +441,12 @@ struct LiveRoomView: View {
         }
         .padding()
         .presentationDetents([.medium])
+        .onReceive(
+            beauty.objectWillChange
+                .throttle(for: 0.06, scheduler: DispatchQueue.main, latest: true)
+        ) { _ in
+            camera.renderer.updateParameters(beauty)
+        }
     }
 
     private func sheetSlider(_ t: String, value: Binding<Double>) -> some View {
@@ -441,7 +460,6 @@ struct LiveRoomView: View {
             Slider(value: value, in: 0...1).tint(.pink).disabled(!beauty.enabled)
         }
     }
-
 }
 
 // MARK: - 时间 capsule（订阅独立 LiveTimerStore，1Hz 写不波及 LiveRoomView 主树）
@@ -496,5 +514,60 @@ private struct DebugNetworkPanel: View {
         .padding(.horizontal, 8).padding(.vertical, 4)
         .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 6))
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - PKOverlayHost：合并 5 个 PK overlay
+//
+// 原实现：5 个连续 `.overlay { ... }` 包裹 PKMatchingOverlay / PKInvitedSheet / PKPunishingOverlay /
+// PKResultOverlay 4 个状态层 + PKEntryButton 入口按钮 — 每层都是独立 `_OverlayModifier`，
+// layout pass 反复算尺寸；且各子 view 都 `@ObservedObject pkStore`，任一字段变更触发所有 body 重算。
+// 现合并为单一 host，所有 PK 状态层共享一个 `.overlay`，PKEntryButton 保留为独立 bottomTrailing overlay。
+private struct PKOverlayHost: View {
+    @ObservedObject var pkStore: PKStore
+    @ObservedObject var resultBridge: PKResultBridge
+
+    var body: some View {
+        ZStack {
+            PKMatchingOverlay(store: pkStore).transition(.opacity)
+            PKInvitedSheet(store: pkStore).transition(.opacity)
+            PKPunishingOverlay(store: pkStore).transition(.opacity)
+            PKResultOverlay(isPresented: $resultBridge.presented,
+                            myScore: resultBridge.myScore,
+                            oppositeScore: resultBridge.opponentScore,
+                            top3: resultBridge.top3)
+        }
+    }
+}
+
+// MARK: - PublicScreenList：独立订阅 ChatMessagesStore，append 不波及 LiveRoomView
+//
+// LiveRoomView 顶层 `@StateObject nim` 仍存在，但 messages 字段已迁出到 ChatMessagesStore；
+// 本 view 直接订阅 messagesStore，消息 publish 仅触发本子 view 重算，topBar / PKOverlayHost /
+// CameraPreview / DebugNetworkPanel 等兄弟子树不受影响（review P1-3）。
+private struct PublicScreenList: View {
+    @ObservedObject var store: ChatMessagesStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(store.messages.suffix(6)) { msg in
+                Text(msg.text)
+                    .font(.caption)
+                    .foregroundStyle(msg.isSystem ? .yellow.opacity(0.9) : .white)
+                    .padding(.horizontal, 10).padding(.vertical, 6)
+                    .background(.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// review 202606260029 P1-1：onlineCount 子 view 内观测。
+/// 父 view 顶层不读 `nim.presenceStore.onlineCount`，避免 .enter/.exit 通知触发整树重算。
+private struct OnlineCountText: View {
+    @ObservedObject var store: ChatPresenceStore
+
+    var body: some View {
+        Text("\(store.onlineCount)").font(.caption)
     }
 }

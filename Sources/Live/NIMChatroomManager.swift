@@ -9,94 +9,107 @@ struct ChatMessage: Identifiable {
     let isSystem: Bool
 }
 
-/// 云信聊天室（独立模式）：进房 + 收公屏文本 + 进出房在线人数。
-/// 对应 H5 useCallApi.joinChatRoom + live.js chatroomLiveChatRecordMsg。
-/// 礼物等自定义消息(attachType=50)需注册自定义附件解析，先占位显示。
+/// 公屏消息独立 ObservableObject：与 LiveStore.networkDebugStore 同模式。
+/// 让 `NIMChatroomManager.objectWillChange` 不因每条公屏消息发射，避免 LiveRoomView 整树重渲染
+/// （review P1-3）。子 view `PublicScreenList` 直接订阅本 store，append 仅触发子 view 重算。
+@MainActor
+final class ChatMessagesStore: ObservableObject {
+    @Published var messages: [ChatMessage] = []
+
+    func append(_ msg: ChatMessage, limit: Int = 80) {
+        messages.append(msg)
+        if messages.count > limit { messages.removeFirst(messages.count - limit) }
+    }
+}
+
+/// 在线人数独立 ObservableObject（review 202606260029 P1-1）：onlineCount 在 .enter/.exit 通知下
+/// >1Hz 变化，原 @Published 挂在 NIMChatroomManager 上会触发 LiveRoomView 整树（CameraPreview /
+/// RemoteVideoView / PKOverlayHost / publicScreen）重算。抽出独立 store 后仅 topBar 子 view
+/// `OnlineCountText` 订阅，本体 LiveRoomView 不受影响。
+@MainActor
+final class ChatPresenceStore: ObservableObject {
+    @Published var onlineCount: Int = 0
+}
+
+/// 直播云信聊天室（独立模式）：进/退房 + 公屏文本 + 在线人数 + 路由分发。
 ///
-/// 线程模型（对齐 PartyRoomChatManager）：整类 @MainActor，NIM SDK 子线程回调
-/// (`onRecvMessages` / `chatroom(_:connectionStateChanged:)`) 标 `nonisolated`，
-/// 函数体仅 `Task { @MainActor }` 切回主 actor 后执行 `processIncoming` 等业务逻辑。
-/// 不再混用 DispatchQueue.main.async（@MainActor 已保证主线程）。
+/// H M5 简化（207 → ~130 行）：
+/// - 删 IM 登录代码：登录由 `NIMOnlineKeeper.start` 统一处理（spec §3 / NIMService.login）
+/// - 删 `weak pkRouter` 字段：M2 后所有 router 走 `NIMService.shared.registerRouter`，dispatch 通过协议
+/// - `onRecvMessages` 改走 `NIMService.shared.dispatch(_:payload:context:.liveChatroom)`：router 链路按 protocol 短路
+/// - `setupOnce` 改 forwarder（保留旧调用点兼容；实际工作转 `NIMService.setupOnce`）
+///
+/// 线程模型：整类 `@MainActor`，NIMSDK 子线程回调（`onRecvMessages` / `chatroom(_:connectionStateChanged:)`）
+/// 标 `nonisolated`，函数体仅 `Task { @MainActor }` 切回主 actor。
 @MainActor
 final class NIMChatroomManager: NSObject, ObservableObject {
-    @Published var messages: [ChatMessage] = []
-    @Published var onlineCount: Int = 0
-    @Published var connected = false
+    /// 公屏消息独立 store；子 view 订阅，append 不触发 LiveRoomView 整树重渲染。
+    let messagesStore = ChatMessagesStore()
+    /// 在线人数独立 store（review 202606260029 P1-1）：>1Hz 变化字段抽出，子 view 内观测。
+    let presenceStore = ChatPresenceStore()
+    /// 长连接态；当前无 view 订阅（grep 0 命中），保留为普通字段供内部状态机使用，不发 publish。
+    private(set) var connected = false
 
     private var roomId = ""
-    private static var didSetup = false
-
-    /// G M4-3：PKNIMRouter weak 注入；onRecvMessages 收到 attachType 97/98/99/100/-8/-9 时路由到 PKStore
-    weak var pkRouter: PKNIMRouter?
+    private var hasJoined = false   // 防止重复 enter 导致 NIMSDK delegate 重复 add → 公屏双播
 
     /// 兜底：LiveRoomView.onDisappear 的 leave() 受 scenePhase + state 双守卫，logout / 路由切换等
     /// 非 .ended 路径下 view 销毁会跳过 leave；deinit 在此强制注销 NIMSDK delegate 防回调残留。
-    /// NIMSDK delegate 注销 API 不需要 main actor 隔离（SDK 内部串行化）。
-    /// 聊天室 exitChatroom 不在此调（避免 deinit 读 @MainActor 字段），由云信自然超时退房。
     deinit {
         NIMSDK.shared().chatManager.remove(self)
         NIMSDK.shared().chatroomManager.remove(self)
     }
 
-    /// 全局初始化：注册 appKey + 通用自定义消息解码器（只一次）。
-    /// H M1：实际工作转移到 `NIMService.setupOnce`，本方法保留作 forwarder 避免破坏旧调用点。
-    static func setupOnce() {
-        guard !didSetup else { return }
-        didSetup = true
+    /// 进聊天室。**前置**：NIMSDK 已由 `NIMOnlineKeeper.start` 完成 login；本方法不再 login。
+    /// H M5：account / token 参数删除，调用点 (LiveRoomView) 同步简化。
+    func enter(roomId: String, nickname: String) {
+        guard !hasJoined else {
+            AppLogger.im.notice("[Chatroom] already joined room=\(self.roomId, privacy: .public), skip enter")
+            return
+        }
+        hasJoined = true
         NIMService.setupOnce()
-    }
-
-    /// 对齐 H5：先 IM 登录（nim.connect），再进聊天室（依赖 IM 通道，非独立模式）。
-    /// account=yxAccid，token=imToken（H5 注释「云信密码」，即静态 token 鉴权）。
-    func enter(roomId: String, nickname: String, account: String, token: String) {
-        NIMChatroomManager.setupOnce()
         self.roomId = roomId
-        AppLogger.im.debug("🟣 [Chatroom] IM 登录 account=\(account, privacy: .public) tokenLen=\(token.count, privacy: .private)")
+        AppLogger.im.debug("🟣 [Chatroom] enter roomId=\(roomId, privacy: .public) nickname=\(nickname, privacy: .private)")
         NIMSDK.shared().chatManager.add(self)
         NIMSDK.shared().chatroomManager.add(self)
 
-        // 已登录则直接进房；否则先登录
-        if NIMSDK.shared().loginManager.isLogined() {
-            enterChatroom(roomId: roomId, nickname: nickname)
-        } else {
-            NIMSDK.shared().loginManager.login(account, token: token) { [weak self] error in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    if let error = error {
-                        let code = (error as NSError).code
-                        AppLogger.im.error("🔴 [Chatroom] IM 登录失败 code=\(code, privacy: .public) \(error.localizedDescription, privacy: .private)")
-                        self.push(String(format: L10n.imSystemLoginFailedFormat, "\(code)"), system: true)
-                        return
-                    }
-                    AppLogger.im.info("🟢 [Chatroom] IM 登录成功，进聊天室")
-                    self.enterChatroom(roomId: roomId, nickname: nickname)
+        guard NIMSDK.shared().loginManager.isLogined() else {
+            AppLogger.im.error("🔴 [Chatroom] IM 未登录，无法进房；NIMOnlineKeeper.start 应先于 enter 调用")
+            push(String(format: L10n.imSystemLoginFailedFormat, "0"), system: true)
+            rollbackEnterFailure()
+            return
+        }
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let chatroom = try await NIMService.shared.enterChatroom(roomId: roomId, nickname: nickname)
+                self.connected = true
+                self.presenceStore.onlineCount = chatroom?.onlineUserCount ?? 0
+                self.push(L10n.imSystemJoined, system: true)
+                AppLogger.im.info("🟢 [Chatroom] enter ok online=\(self.presenceStore.onlineCount, privacy: .public)")
+            } catch let err as NIMServiceError {
+                if case let .chatroomEnterFailed(code, _) = err {
+                    self.push(String(format: L10n.imSystemJoinFailedFormat, "\(code)"), system: true)
                 }
+                self.rollbackEnterFailure()
+            } catch {
+                self.push(String(format: L10n.imSystemJoinFailedFormat, "-1"), system: true)
+                self.rollbackEnterFailure()
             }
         }
     }
 
-    /// 进聊天室（mode=nil，复用 IM 长连接自动取地址，无需独立模式地址回调）。
-    private func enterChatroom(roomId: String, nickname: String) {
-        let request = NIMChatroomEnterRequest()
-        request.roomId = roomId
-        request.roomNickname = nickname
-        request.retryCount = 3
-
-        NIMSDK.shared().chatroomManager.enterChatroom(request) { [weak self] error, chatroom, _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                if let error = error {
-                    let code = (error as NSError).code
-                    AppLogger.im.error("🔴 [Chatroom] 进房失败 code=\(code, privacy: .public) \(error.localizedDescription, privacy: .private)")
-                    self.push(String(format: L10n.imSystemJoinFailedFormat, "\(code)"), system: true)
-                } else {
-                    AppLogger.im.info("🟢 [Chatroom] 进房成功 online=\(chatroom?.onlineUserCount ?? 0, privacy: .public)")
-                    self.connected = true
-                    self.onlineCount = chatroom?.onlineUserCount ?? 0
-                    self.push(L10n.imSystemJoined, system: true)
-                }
-            }
-        }
+    /// review 202606260029 P2-3：enter 失败两条路径（IM 未登录 / enterChatroom 抛错）必须回滚
+    /// hasJoined + 已 add 的 NIMSDK delegate + roomId，否则用户重试 enter() 会被 `guard !hasJoined`
+    /// 永久 skip，且残留 delegate 在 leave() 前持续接收同 roomId 消息。
+    private func rollbackEnterFailure() {
+        NIMSDK.shared().chatManager.remove(self)
+        NIMSDK.shared().chatroomManager.remove(self)
+        roomId = ""
+        hasJoined = false
+        connected = false
     }
 
     func leave() {
@@ -106,78 +119,80 @@ final class NIMChatroomManager: NSObject, ObservableObject {
         NIMSDK.shared().chatroomManager.exitChatroom(roomId, completion: nil)
         roomId = ""
         connected = false
+        hasJoined = false
     }
 
     private func push(_ text: String, system: Bool) {
-        messages.append(ChatMessage(text: text, isSystem: system))
-        if messages.count > 80 { messages.removeFirst(messages.count - 80) }
+        messagesStore.append(ChatMessage(text: text, isSystem: system))
     }
 
-    /// 收公屏消息后的统一处理（main actor）。
-    /// 路径：(1) PK 业务字段 `remoteExt.attachType` 走 PKNIMRouter；
-    /// (2) 文本 / 通知 / 占位礼物 push 到 messages；(3) enter/exit 维护 onlineCount。
+    /// 收公屏消息（main actor）。H M5：自定义消息分发统一走 `NIMService.dispatch`，
+    /// 路由器按 protocol 短路决定消费；公屏文本副作用（-9 pkChatNotice）由本方法兼顾。
     fileprivate func processIncoming(_ batch: [NIMMessage]) {
         var items: [ChatMessage] = []
         var delta = 0
+
         for m in batch {
-            guard m.session?.sessionType == .chatroom else { continue }
-            // G M4 真根因修复：PK 业务字段走 NIM `remoteExt`（对应 H5 `msgItem.ext`，live.js:223 parseMessageExt），
-            // 不是 custom attachment。试 2 条 fallback 路径：(1) remoteExt 顶层；(2) attachment.encode() JSON 内
-            var pkPayload: [String: Any]? = nil
+            // 双过滤（对齐 PartyRoomChatManager.belongsToThisRoom）：仅本聊天室且本 roomId 的消息进流程。
+            // 防多 chatManager delegate 共存时（如同时持有直播 + 派对房）串消息。
+            guard let s = m.session,
+                  s.sessionType == .chatroom,
+                  s.sessionId == roomId else { continue }
+
+            // 提取自定义消息 payload（remoteExt 顶层 / attachment.rawDict / attachment.encode JSON）
+            var payload: [String: Any]?
             if let ext = m.remoteExt as? [String: Any], ext["attachType"] != nil {
-                pkPayload = ext
+                payload = ext
             } else if m.messageType == .custom,
-                      let obj = m.messageObject as? NIMCustomObject,
-                      let attach = obj.attachment {
-                let raw = attach.encode()
-                if let data = raw.data(using: .utf8),
-                   let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   parsed["attachType"] != nil {
-                    pkPayload = parsed
+                      let obj = m.messageObject as? NIMCustomObject {
+                if let attach = obj.attachment as? GenericCustomAttachment {
+                    payload = attach.rawDict
+                } else if let attach = obj.attachment {
+                    let raw = attach.encode()
+                    if let data = raw.data(using: .utf8),
+                       let parsed = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       parsed["attachType"] != nil {
+                        payload = parsed
+                    }
                 }
             }
-            // 调试：把 chatroom custom 消息形态全 dump，方便后续抓 backend payload 真实结构
-            if m.messageType == .custom {
-                AppLogger.im.notice("🟣 [PK debug] custom msg remoteExt=\(String(describing: m.remoteExt), privacy: .private) hasPayload=\(pkPayload != nil, privacy: .public)")
-            }
-            if let payload = pkPayload {
+
+            if let payload {
                 let at = AttachType(raw: payload["attachType"])
+                // H M5：路由统一走 NIMService.dispatch；PKNIMRouter / GiftMessageRouter / SystemMessageRouter
+                // 等按 protocol 短路决定消费
+                NIMService.shared.dispatch(at, payload: payload, context: .liveChatroom(roomId: roomId))
+
+                // 公屏文本副作用：-9 pkChatNotice 的 content 直接展示
+                if at == .pkChatNotice, let txt = payload["content"] as? String, !txt.isEmpty {
+                    items.append(ChatMessage(text: txt, isSystem: true))
+                    continue
+                }
+                // 其他 PK 消息已 dispatch，不进公屏
                 switch at {
-                case .pkInvite, .pkScoreUpdate, .pkInviteAck, .pkStatusBundle,
-                     .pkMuteBroadcast, .pkChatNotice:
-                    pkRouter?.route(at, payload: payload)
-                    if at == .pkChatNotice, let txt = payload["content"] as? String, !txt.isEmpty {
-                        items.append(ChatMessage(text: txt, isSystem: true))
-                    }
+                case .pkInvite, .pkScoreUpdate, .pkInviteAck, .pkStatusBundle, .pkMuteBroadcast:
+                    continue
+                case .knownButUnhandled, .unknown:
+                    // 已知但不实现（132/133/1004/1007/1014/...）+ unknown：仅静默 dispatch（router 已分发），不污染公屏
                     continue
                 default:
-                    break
+                    // 礼物 / 合规等 H 阶段仍占位显示（H 礼物会话接 SVGA 后改）
+                    if m.messageType == .custom {
+                        items.append(ChatMessage(text: L10n.imSystemGiftPlaceholder, isSystem: true))
+                        continue
+                    }
                 }
             }
+
+            // 文本 / notification（无 payload）
             switch m.messageType {
             case .text:
                 let name = m.senderName ?? ""
                 let body = m.text ?? ""
                 items.append(ChatMessage(text: name.isEmpty ? body : "\(name)：\(body)", isSystem: false))
             case .custom:
-                // G M4：分发 attachType 97/98/99/100/-8/-9 到 PKNIMRouter；其他（礼物 1/4/15/18 / 合规 44/61/62/63）暂保持 placeholder（H 阶段做礼物动画）
-                if let obj = m.messageObject as? NIMCustomObject,
-                   let attach = obj.attachment as? GenericCustomAttachment {
-                    let at = AttachType(raw: attach.rawDict["attachType"])
-                    switch at {
-                    case .pkInvite, .pkScoreUpdate, .pkInviteAck, .pkStatusBundle,
-                         .pkMuteBroadcast, .pkChatNotice:
-                        pkRouter?.route(at, payload: attach.rawDict)
-                        // attachType=-9 公屏文本由 payload.content 直接展示（H5 同行为）
-                        if at == .pkChatNotice, let txt = attach.rawDict["content"] as? String, !txt.isEmpty {
-                            items.append(ChatMessage(text: txt, isSystem: true))
-                        }
-                    default:
-                        items.append(ChatMessage(text: L10n.imSystemGiftPlaceholder, isSystem: true))
-                    }
-                } else {
-                    items.append(ChatMessage(text: L10n.imSystemGiftPlaceholder, isSystem: true))
-                }
+                // 解码失败兜底
+                items.append(ChatMessage(text: L10n.imSystemGiftPlaceholder, isSystem: true))
             case .notification:
                 if let obj = m.messageObject as? NIMNotificationObject,
                    let content = obj.content as? NIMChatroomNotificationContent {
@@ -192,13 +207,16 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                 break
             }
         }
+
         guard !items.isEmpty || delta != 0 else { return }
         for it in items { push(it.text, system: it.isSystem) }
-        if delta != 0 { onlineCount = max(0, onlineCount + delta) }
+        if delta != 0 {
+            presenceStore.onlineCount = max(0, presenceStore.onlineCount + delta)
+        }
     }
 }
 
-// MARK: - 收消息（NIMSDK 回调，非 main actor → Task 切回）
+// MARK: - 收消息 / 连接状态（NIMSDK 子线程回调）
 
 extension NIMChatroomManager: NIMChatManagerDelegate {
     nonisolated func onRecvMessages(_ messages: [NIMMessage]) {
@@ -208,10 +226,8 @@ extension NIMChatroomManager: NIMChatManagerDelegate {
     }
 }
 
-// MARK: - 连接状态
-
 extension NIMChatroomManager: NIMChatroomManagerDelegate {
     nonisolated func chatroom(_ roomId: String, connectionStateChanged state: NIMChatroomConnectionState) {
-        // 可按需处理重连/断开（占位；与 PartyRoomChatManager 对称的 nonisolated 回调）
+        // M5：长连接 / 重连状态由 NIMService.connectionState 全局承担；本回调暂留占位
     }
 }

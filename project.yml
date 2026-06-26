@@ -56,6 +56,11 @@ targets:
         CFBundleVersion: "1"
         # 提审：本 app 仅使用 iOS 内置加密（HTTPS/系统 API），无自研专有加密 → 走加密豁免（5D992）
         ITSAppUsesNonExemptEncryption: false
+        # ATS 显式锁死：AppConfig 全 https/wss 默认即可，显式声明避免依赖 SDK（声网/云信/未来三方）
+        # 通过 podspec 静默注入 NSAllowsArbitraryLoads=YES 致整 app ATS 被打开 → 提审 5.1.1/2.5.1 被拒。
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: false
+          NSAllowsArbitraryLoadsInWebContent: false
         # i18n：en 为默认/开发语言；ar/tr 让 RTL 镜像与文案长度差异在各模块开发期即暴露（J 里程碑收尾真正翻译）
         CFBundleDevelopmentRegion: en
         CFBundleLocalizations:

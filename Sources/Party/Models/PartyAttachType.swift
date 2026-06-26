@@ -46,16 +46,6 @@ enum PartyAttachType: Int {
         PartyAttachType(rawValue: rawValue)
     }
 
-    /// 该 attachType 是否需要 gzip 解压（1001 / 2049 / 1017 等压缩消息）。
-    var requiresGzip: Bool {
-        switch self {
-        case .seatUpdate, .giftCompressed:
-            return true
-        default:
-            return false
-        }
-    }
-
     /// 映射到公屏渲染 `PartyMsgType`。多数 attachType 是房态信令不上公屏 → nil。
     func toMsgType() -> PartyMsgType? {
         switch self {

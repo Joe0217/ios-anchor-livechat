@@ -8,55 +8,53 @@ import os
 /// 看到"主播在线"的唯一来源。iOS 主播登录后必须立刻建 NIM 长连接并保持，否则即便登录成功，
 /// 用户端 `apiBatchQueryYxStatByUid` / NIM `subscribeOnlineStatusEvents` 都查不到本端在线。
 ///
-/// 与 NIMChatroomManager 解耦：聊天室登录态会复用本类已建好的连接（`loginManager.isLogined()`
-/// 命中后直接进房，不重复 login）。
+/// **H M1 重构**：内部委托给 `NIMService.shared.login` / `logout`；外部 API 不变，
+/// `start(account:token:)` / `stop()` 调用点（HilyApp / SessionStore）零改动。
 @MainActor
 final class NIMOnlineKeeper {
     static let shared = NIMOnlineKeeper()
 
     @Published private(set) var isLogined: Bool = false
 
+    /// 串行化 start/stop：快速切账号场景（token 失效自动重登）下避免 logout Task 还在跑、
+    /// start Task 已并发 await login，最终 connectionState 被 logout 完成后写回 idle 覆盖新登录态。
+    private var pendingTask: Task<Void, Never>?
+
     private init() {}
 
     /// 登录后调用。重复调用安全：已登录直接返回。
     func start(account: String, token: String) {
-        NIMChatroomManager.setupOnce()  // 复用：确保 SDK 已 register(appKey:)
+        NIMService.setupOnce()
         if NIMSDK.shared().loginManager.isLogined() {
             AppLogger.im.info("🟢 [NIMOnline] 已登录，跳过")
             isLogined = true
             return
         }
-        AppLogger.im.debug("🟢 [NIMOnline] 开始登录 account=\(account, privacy: .public) tokenLen=\(token.count, privacy: .private)")
-        NIMSDK.shared().loginManager.login(account, token: token) { [weak self] error in
-            DispatchQueue.main.async {
-                guard let self else { return }
-                if let error = error {
-                    let code = (error as NSError).code
-                    AppLogger.im.error("🔴 [NIMOnline] 登录失败 code=\(code, privacy: .public) err=\(error.localizedDescription, privacy: .private)")
-                    self.isLogined = false
-                } else {
-                    self.isLogined = true
-                    AppLogger.im.info("✅ [NIMOnline] 登录成功 — 主播在线态已上报")
-                }
+        AppLogger.im.debug("🟢 [NIMOnline] 开始登录 account=\(account, privacy: .private) tokenLen=\(token.count, privacy: .private)")
+        let prior = pendingTask
+        pendingTask = Task { @MainActor [weak self] in
+            _ = await prior?.value
+            guard let self else { return }
+            do {
+                try await NIMService.shared.login(account: account, token: token)
+                self.isLogined = true
+                AppLogger.im.info("✅ [NIMOnline] 登录成功 — 主播在线态已上报")
+            } catch {
+                self.isLogined = false
+                AppLogger.im.error("🔴 [NIMOnline] 登录失败 \(String(describing: error), privacy: .private)")
             }
         }
     }
 
     /// 登出时调用。
     func stop() {
-        guard NIMSDK.shared().loginManager.isLogined() else {
-            isLogined = false
-            return
+        let prior = pendingTask
+        pendingTask = Task { @MainActor [weak self] in
+            _ = await prior?.value
+            guard let self else { return }
+            await NIMService.shared.logout()
+            self.isLogined = false
+            AppLogger.im.info("🟢 [NIMOnline] 已 logout")
         }
-        NIMSDK.shared().loginManager.logout { error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    AppLogger.im.notice("⚠️ [NIMOnline] logout 失败: \(error.localizedDescription, privacy: .private)")
-                } else {
-                    AppLogger.im.info("🟢 [NIMOnline] 已 logout")
-                }
-            }
-        }
-        isLogined = false
     }
 }

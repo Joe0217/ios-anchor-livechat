@@ -39,8 +39,20 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
 
     weak var delegate: PartyRoomChatManagerDelegate?
 
+    /// H M3：自定义消息分发抽到 `PartyMessageRouter`；本 manager 仅保留 enter/exit/pullHistory/sendText
+    /// + text + notification 处理。custom 分支转发到 router.processCustom(_:)。
+    weak var router: PartyMessageRouter?
+
     private(set) var roomId: String = ""
     private var hasJoined: Bool = false   // 防止重复 enter
+
+    /// 异常路径（scenePhase=.background 销毁、未走 leave()）下注销 delegate，
+    /// 避免下个派对房 manager 实例共存时 NIMSDK 回调跨房分发到错的 PartyStore。
+    /// NIMSDK 10.x 的 chatManager/chatroomManager 容器内部 thread-safe，deinit 直接 remove 安全。
+    deinit {
+        NIMSDK.shared().chatManager.remove(self)
+        NIMSDK.shared().chatroomManager.remove(self)
+    }
 
     // MARK: - 进 / 退 房
 
@@ -71,6 +83,11 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
                 if let error = error {
                     let code = (error as NSError).code
                     AppLogger.party.error("[PartyChat] enter failed code=\(code, privacy: .public)")
+                    // review 202606260029 P2-6：失败回滚 add 在 line 72-73 已注册的 delegate + 清 roomId，
+                    // 防止用户重试 enter() 时残留 delegate 双播 / 同实例响应同 roomId 消息。
+                    NIMSDK.shared().chatManager.remove(self)
+                    NIMSDK.shared().chatroomManager.remove(self)
+                    self.roomId = ""
                     self.delegate?.partyRoomChat(self, didFailToEnter: "enter_\(code)")
                     return
                 }
@@ -222,7 +239,7 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
                 }
 
             case .custom:
-                dispatchCustom(m)
+                router?.processCustom(m)
 
             case .notification:
                 if let obj = m.messageObject as? NIMNotificationObject,
@@ -245,135 +262,9 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
         }
     }
 
-    /// 自定义消息分发：按 `remoteExt.type` / `remoteExt.attachType` 取数字键 → enum 转换 → 6+9 类 handler。
-    /// 未识别项打 warning 日志；值冲突项（45 / 1029）+ 范围外 attachType（1004/1014/1017/1018-1027/1049-1052/1100-1112）
-    /// 通过 `PartyKnownButUnhandledAttachType.codes` 降噪。
-    private func dispatchCustom(_ m: NIMMessage) {
-        guard let ext = m.remoteExt as? [String: Any] else { return }
-        // 兼容两种键名：sapi 数字消息用 type，聊天室 attach 用 attachType
-        let raw: Int
-        if let v = ext["type"] as? Int { raw = v }
-        else if let v = ext["attachType"] as? Int { raw = v }
-        else if let s = ext["type"] as? String, let v = Int(s) { raw = v }
-        else if let s = ext["attachType"] as? String, let v = Int(s) { raw = v }
-        else {
-            AppLogger.party.notice("[PartyChat] custom msg missing type field; ext keys=\(Array(ext.keys), privacy: .public)")
-            return
-        }
-
-        guard let kind = PartyAttachType.from(rawValue: raw) else {
-            // 值冲突 / F 期常量 → 仅 debug 级降噪
-            if PartyKnownButUnhandledAttachType.codes.contains(raw) {
-                AppLogger.party.debug("[PartyChat] known-but-unhandled attachType=\(raw, privacy: .public)")
-            } else {
-                AppLogger.party.notice("[PartyChat] unrecognized attachType=\(raw, privacy: .public)")
-            }
-            return
-        }
-
-        handle(attachType: kind, message: m, ext: ext)
-    }
-
-    private func handle(attachType: PartyAttachType, message m: NIMMessage, ext: [String: Any]) {
-        // gzip payload：data 字段（Base64）→ Data → GzipDecompressor → JSON
-        var payload: [String: Any] = [:]
-        if attachType.requiresGzip {
-            payload = decodeGzipPayload(ext: ext)
-        } else if let data = ext["data"] as? [String: Any] {
-            payload = data
-        }
-
-        AppLogger.party.info("[PartyChat] handle \(attachType.rawValue, privacy: .public)")
-
-        switch attachType {
-        case .seatUpdate:
-            delegate?.partyRoomChat(self, didReceiveSeatUpdate: payload, raw: m)
-        case .seatUpdateList:
-            delegate?.partyRoomChatDidRequireSeatListReload(self)
-        case .prohibitMic:
-            delegate?.partyRoomChat(self, didReceiveProhibitMic: payload, raw: m)
-        case .kickedOut:
-            handleKickedOut(payload: payload)
-        case .updateMedia:
-            delegate?.partyRoomChat(self, didReceiveMediaUpdate: payload, raw: m)
-        case .giftCompressed:
-            delegate?.partyRoomChat(self, didReceiveGift: payload, raw: m)
-        case .inviteVideoSeat:
-            handleVideoSeatInvite(payload: payload, raw: m)
-        case .inviteVideoSeatAccept:
-            delegate?.partyRoomChat(self, didReceiveInviteResult: .accepted)
-        case .inviteVideoSeatReject:
-            delegate?.partyRoomChat(self, didReceiveInviteResult: .rejected)
-        case .inviteVideoSeatTimeout:
-            delegate?.partyRoomChat(self, didReceiveInviteResult: .timeout)
-        case .inviteVideoSeatLeave:
-            delegate?.partyRoomChat(self, didReceiveInviteResult: .leave)
-        case .inviteVideoSeatOccupied:
-            delegate?.partyRoomChat(self, didReceiveInviteResult: .occupied)
-        case .inviteVideoSeatAlreadyOn:
-            delegate?.partyRoomChat(self, didReceiveInviteResult: .alreadyOn)
-        case .inviteVideoSeatBroadcast:
-            delegate?.partyRoomChat(self, didReceiveInviteResult: .broadcast)
-        case .inviteVideoSeatJoinFailed:
-            delegate?.partyRoomChat(self, didReceiveInviteResult: .joinFailed)
-        }
-    }
-
-    /// 被踢双字段守护（spec §1.4.4 防误踢）：payload 内 `userId == 自己 && roomId == 当前房` 才认。
-    private func handleKickedOut(payload: [String: Any]) {
-        let myUserId = SessionStore.shared.user?.userId.map(String.init)
-        let targetUserId = (payload["userId"] as? String) ?? (payload["userId"].map { "\($0)" })
-        let targetRoomId = payload["roomId"] as? String
-
-        guard let me = myUserId, let t = targetUserId, me == t else {
-            AppLogger.party.notice("[PartyChat] kickedOut not for me, skip")
-            return
-        }
-        guard let r = targetRoomId, r == roomId else {
-            AppLogger.party.notice("[PartyChat] kickedOut roomId mismatch, skip")
-            return
-        }
-        delegate?.partyRoomChatDidKickOut(self)
-    }
-
-    private func handleVideoSeatInvite(payload: [String: Any], raw m: NIMMessage) {
-        let inviteId = (payload["inviteId"] as? String) ?? ""
-        let seatIndex = (payload["seatIndex"] as? Int) ?? -1
-        guard !inviteId.isEmpty, seatIndex > 0 else {
-            AppLogger.party.notice("[PartyChat] invite payload missing inviteId/seatIndex")
-            return
-        }
-        let invite = PartyVideoSeatInvite(
-            inviteId: inviteId,
-            seatIndex: seatIndex,
-            fromUserId: payload["fromUserId"] as? String,
-            fromNickname: payload["fromNickname"] as? String,
-            roomId: payload["roomId"] as? String ?? roomId,
-            timestamp: Int64(m.timestamp * 1000)
-        )
-        delegate?.partyRoomChat(self, didReceiveVideoSeatInvite: invite)
-    }
-
-    /// 解 gzip + Base64 payload：`ext.data` 或 `ext.content` 字段都试
-    /// 真实字段位 M3 真机自检确认。
-    private func decodeGzipPayload(ext: [String: Any]) -> [String: Any] {
-        let base64Str = (ext["data"] as? String) ?? (ext["content"] as? String) ?? ""
-        guard !base64Str.isEmpty, let zipped = Data(base64Encoded: base64Str) else {
-            AppLogger.party.notice("[PartyChat] gzip payload base64 missing or invalid")
-            return [:]
-        }
-        do {
-            let raw = try GzipDecompressor.decompress(zipped)
-            guard let json = try JSONSerialization.jsonObject(with: raw) as? [String: Any] else {
-                AppLogger.party.notice("[PartyChat] gzip payload not a JSON object")
-                return [:]
-            }
-            return json
-        } catch {
-            AppLogger.party.error("[PartyChat] gzip decompress failed: \(String(describing: error), privacy: .private)")
-            return [:]
-        }
-    }
+    // H M3：dispatchCustom / handle / handleKickedOut / handleVideoSeatInvite / unwrapDataField
+    //       全部抽到 `PartyMessageRouter`。本 manager 仅保留 IM 通道层（enter/exit/text/notification）。
+    //       processIncoming 内 case .custom 分支已改为转发到 router.processCustom(_:)。
 }
 
 // MARK: - 收消息（NIMSDK 回调，非 main actor → Task 切回）
