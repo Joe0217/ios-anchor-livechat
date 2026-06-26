@@ -112,19 +112,14 @@ final class PartyMessageRouter: MessageRouter {
     /// 被踢双字段守护（spec §1.4.4 防误踢）：payload 内 `userId == 自己 && roomId == 当前房` 才认。
     /// 安卓确认 §3.4：1003 payload `{seatIndex, roomId, userId}` 均为 **Number**（不是 String）；
     /// 跨通道归一化用 `PartyValueNormalizer`（HTTP roomId 是 String / NIM payload 是 Number）。
+    /// 守护逻辑下沉 `PartyKickedOutGuard.shouldHandle`（C 档单测重构，2026-06-26）。
     private func handleKickedOut(payload: [String: Any], chat: PartyRoomChatManager) {
         let myUserId = SessionStore.shared.user?.userId.map(String.init)
-        let targetUserId = PartyValueNormalizer.stringify(payload["userId"])
-        let targetRoomId = PartyValueNormalizer.stringify(payload["roomId"])
-
-        guard let me = myUserId, let t = targetUserId, me == t else {
-            // review 202606260029 P2-7：与 line 49 同源威胁模型 — payload 来自远端 NIM 自定义消息，
-            // key 名可能夹带 PII，统一 .private 让 Release 包遮蔽。
-            AppLogger.party.notice("[PartyRouter] kickedOut not for me, skip (myUid=\(myUserId ?? "nil", privacy: .private) keys=\(Array(payload.keys), privacy: .private))")
-            return
-        }
-        guard let r = targetRoomId, r == chat.roomId else {
-            AppLogger.party.notice("[PartyRouter] kickedOut roomId mismatch chat.roomId=\(chat.roomId, privacy: .private) payload.roomId=\(targetRoomId ?? "nil", privacy: .private)")
+        guard PartyKickedOutGuard.shouldHandle(payload: payload,
+                                                myUserId: myUserId,
+                                                chatRoomId: chat.roomId) else {
+            // review 202606260029 P2-7：payload 远端可控，key 名可能夹带 PII，.private 让 Release 包遮蔽。
+            AppLogger.party.notice("[PartyRouter] kickedOut guard failed (myUid=\(myUserId ?? "nil", privacy: .private) keys=\(Array(payload.keys), privacy: .private))")
             return
         }
         delegate?.partyRoomChatDidKickOut(chat)
@@ -135,22 +130,16 @@ final class PartyMessageRouter: MessageRouter {
         // {attachType:1040, inviteId(String), roomId(Number), yxRoomId(String),
         //  seatIndex(Number), ownerUserId(发起人id), ownerNick(发起人昵称), ttl(秒,默认30), roomTempId(Number)}
         // ⚠️ 字段名是 ownerUserId/ownerNick，不是 fromUserId/fromNickname
-        let inviteId = PartyValueNormalizer.stringify(payload["inviteId"]) ?? ""
-        guard let seatIndex = PartyValueNormalizer.intify(payload["seatIndex"]),
-              seatIndex > 0,
-              !inviteId.isEmpty else {
+        // 解析+守卫下沉 `PartyVideoSeatInvite.from`（C 档单测重构，2026-06-26）。
+        guard let invite = PartyVideoSeatInvite.from(
+            payload: payload,
+            fallbackRoomId: chat.roomId,
+            timestampMs: Int64(m.timestamp * 1000)
+        ) else {
             // review 202606260029 P2-7：payload 远端可控，key 名可能夹带 PII，与 line 49 同源 .private。
             AppLogger.party.notice("[PartyRouter] 1040 invite payload missing inviteId/seatIndex; keys=\(Array(payload.keys), privacy: .private)")
             return
         }
-        let invite = PartyVideoSeatInvite(
-            inviteId: inviteId,
-            seatIndex: seatIndex,
-            fromUserId: PartyValueNormalizer.stringify(payload["ownerUserId"]),
-            fromNickname: payload["ownerNick"] as? String,
-            roomId: PartyValueNormalizer.stringify(payload["roomId"]) ?? chat.roomId,
-            timestamp: Int64(m.timestamp * 1000)
-        )
         delegate?.partyRoomChat(chat, didReceiveVideoSeatInvite: invite)
     }
 

@@ -46,3 +46,57 @@ struct PartySendGiftResult: Codable, Equatable {
     let num: Int?
     let totalValue: Int?
 }
+
+// MARK: - 纯解析（脱 NIMSDK 单测覆盖）
+
+extension PartyGiftEvent {
+    /// 从 2049 解压后的 payload 构造 PartyGiftEvent（pure / 无 SDK 依赖 / C 档单测用）。
+    /// 安卓确认 §3.3 schema：`giftId` / `giftNum`（非 num）/ `sendUser`（嵌套）/ `receiveUserList`（数组）/ 无 timestamp。
+    /// 字段缺失策略（与原内联 didReceiveGift 等价，零业务行为变更）：
+    /// - `giftId` 缺/类型错 → 默认 0
+    /// - `giftNum` 缺 → 默认 1
+    /// - `sendUser` 缺 → senderUserId/senderNickname nil
+    /// - `receiveUserList` 缺/项缺 userId → 静默丢弃（compactMap）
+    /// `timestampMs` 由调用方注入（NIM 路径用 `raw.timestamp * 1000`，单测可注入固定值）。
+    static func from(payload: [String: Any], timestampMs: Int64) -> PartyGiftEvent {
+        let sendUserObj = payload["sendUser"] as? [String: Any]
+        let receiveList = payload["receiveUserList"] as? [[String: Any]] ?? []
+        let receiverIds = receiveList.compactMap { PartyValueNormalizer.stringify($0["userId"]) }
+        return PartyGiftEvent(
+            giftId: PartyValueNormalizer.intify(payload["giftId"]) ?? 0,
+            giftName: nil,
+            num: PartyValueNormalizer.intify(payload["giftNum"]) ?? 1,
+            senderUserId: sendUserObj.flatMap { PartyValueNormalizer.stringify($0["userId"]) },
+            senderNickname: sendUserObj?["nickname"] as? String,
+            receiverUserIds: receiverIds,
+            timestamp: timestampMs
+        )
+    }
+}
+
+extension PartyVideoSeatInvite {
+    /// 从 1040 payload 构造 PartyVideoSeatInvite（pure / 无 SDK 依赖 / C 档单测用）。
+    /// 安卓确认 §3.8 schema：
+    /// `inviteId` (String) / `seatIndex` (Number) / `ownerUserId` / `ownerNick` / `roomId` (Number) /
+    /// `yxRoomId` / `ttl` (秒) / `roomTempId` (Number)。
+    /// 守卫：`!inviteId.isEmpty && seatIndex > 0` 否则返回 nil（不入弹窗队列）。
+    /// `fallbackRoomId` 用于 payload roomId 缺时退化为当前 chat.roomId。
+    static func from(payload: [String: Any],
+                     fallbackRoomId: String,
+                     timestampMs: Int64) -> PartyVideoSeatInvite? {
+        let inviteId = PartyValueNormalizer.stringify(payload["inviteId"]) ?? ""
+        guard let seatIndex = PartyValueNormalizer.intify(payload["seatIndex"]),
+              seatIndex > 0,
+              !inviteId.isEmpty else {
+            return nil
+        }
+        return PartyVideoSeatInvite(
+            inviteId: inviteId,
+            seatIndex: seatIndex,
+            fromUserId: PartyValueNormalizer.stringify(payload["ownerUserId"]),
+            fromNickname: payload["ownerNick"] as? String,
+            roomId: PartyValueNormalizer.stringify(payload["roomId"]) ?? fallbackRoomId,
+            timestamp: timestampMs
+        )
+    }
+}

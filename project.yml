@@ -123,6 +123,13 @@ targets:
       # H 里程碑 M3：派对房 attachType 枚举（纯 Int rawValue，无 NIMSDK 依赖）
       - path: Sources/Party/Models/PartyAttachType.swift
       - path: Sources/Party/Models/PartyMsgType.swift
+      # E 里程碑 C 档单测（2026-06-26）：派对房 model / 解析 / Identity / 跨通道归一化（纯 Foundation + Codable，零 SDK 依赖）
+      - path: Sources/Party/Models/PartyEnums.swift
+      - path: Sources/Party/Models/PartyEvents.swift
+      - path: Sources/Party/Models/PartyRoomInfo.swift
+      - path: Sources/Party/Models/PartyRoomSeat.swift
+      - path: Sources/Party/Utils/PartyValueNormalizer.swift
+      - path: Sources/Party/NIM/PartyKickedOutGuard.swift
       # G 里程碑 M2：PKCountdownController（纯 Foundation Task；PKStore 状态机依赖 SDK 不入测）
       - path: Sources/PK/PKCountdownController.swift
       # A 里程碑 trial #1 (Circle 朋友圈 tab)：纯枚举 + 状态机 + 服务层 protocol

@@ -636,24 +636,11 @@ extension PartyStore: PartyRoomChatManagerDelegate {
     }
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveGift payload: [String: Any], raw: NIMMessage) {
-        // 安卓确认 §3.3 真实字段（解压后）：
-        // - giftId / giftNum（**不是 num**）/ giftIcon / giftPrice / giftType / smallImg
-        // - sendUser（对象：userId/nickname/icon/yxAccid/userType...）
-        // - receiveUserList（对象数组）
-        // - roomId / ownerId / gems / cost ...
-        // **无 timestamp 字段**——去重键用 `giftId + sendUser.userId`（+NIM 消息时间）
-        let sendUserObj = payload["sendUser"] as? [String: Any]
-        let receiveList = payload["receiveUserList"] as? [[String: Any]] ?? []
-        let receiverIds = receiveList.compactMap { PartyValueNormalizer.stringify($0["userId"]) }
-
-        let event = PartyGiftEvent(
-            giftId: PartyValueNormalizer.intify(payload["giftId"]) ?? 0,
-            giftName: nil,    // 后端 payload 无 giftName 字段，需客户端查礼物表（MVP 不实装）
-            num: PartyValueNormalizer.intify(payload["giftNum"]) ?? 1,
-            senderUserId: sendUserObj.flatMap { PartyValueNormalizer.stringify($0["userId"]) },
-            senderNickname: sendUserObj?["nickname"] as? String,
-            receiverUserIds: receiverIds,
-            timestamp: Int64(raw.timestamp * 1000)   // 用 NIM 消息时间替代（payload 无 timestamp 字段）
+        // C 档单测重构（2026-06-26）：解析逻辑下沉到 PartyGiftEvent.from(payload:timestampMs:)
+        // 仅此处保留 NIMMessage → timestampMs 桥接，避免 from 静态函数耦合 NIMSDK。
+        let event = PartyGiftEvent.from(
+            payload: payload,
+            timestampMs: Int64(raw.timestamp * 1000)
         )
         lastGiftEvent = event
     }
