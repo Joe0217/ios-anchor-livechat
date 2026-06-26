@@ -75,18 +75,18 @@
 "tab.work"                   = "Work";
 "tab.profile"                = "Profile";
 
-// MARK: - Home 顶部 4 tab（trial #1 重命名自 live.subTab.*，cysle typo → cycle）
+// MARK: - Home 顶部 4 tab（对齐 H5 homeConfig.ts → live/list/match/circle）
 "home.topTab.live"           = "Live";
 "home.topTab.list"           = "List";
 "home.topTab.match"          = "Match";
-"home.topTab.cycle"          = "Cycle";
+"home.topTab.circle"         = "Circle";
 "home.topTab.comingSoon"     = "Coming Soon";
 
-// Cycle 朋友圈内 3 子 tab（trial #1）
-"home.cycle.official.label"      = "Official";
-"home.cycle.moment.label"        = "Moment";
-"home.cycle.me.label"            = "Me";
-"home.cycle.moment.error.title"  = "Failed to load moments";
+// Circle 朋友圈内 3 子 tab（trial #1）
+"home.circle.official.label"      = "Official";
+"home.circle.moment.label"        = "Moment";
+"home.circle.me.label"            = "Me";
+"home.circle.moment.error.title"  = "Failed to load moments";
 "live.viewers"               = "viewers";
 "live.rankBadge"             = "Leaderboard";
 "live.refresh"               = "Refresh";
@@ -94,13 +94,15 @@
 
 // MARK: - List 子页（设计稿还原）
 "liveList.segment.online"    = "Online";
-"liveList.segment.prime"     = "Premium";
-"liveList.invite.title"      = "Invite friends";
-"liveList.invite.subtitle"   = "Invite users and get diamonds";
+"liveList.segment.prime"     = "Prime";
 "liveList.action.chat"       = "Chat";
 "liveList.action.live"       = "Live";
 "liveList.action.match"      = "Match";
 "liveList.action.offline"    = "Offline";
+"liveList.empty"             = "No users yet";
+"liveList.end"               = "No more";
+"liveList.loadMoreFailed"    = "Failed to load more";
+"liveList.pullToRetry"       = "Pull down to refresh";
 
 // MARK: - Profile 个人页（设计稿还原）
 "profile.settings"           = "Settings";
@@ -186,6 +188,10 @@
 "liveRoom.permissionAlertMessage" = "Please enable Camera access in Settings → Hily → Camera";
 "liveRoom.statusLiveFormat"  = "Live %@";
 "liveRoom.statusConnecting"  = "Connecting...";
+"liveRoom.status.idle"       = "Idle";
+"liveRoom.status.joined"     = "Live";
+"liveRoom.status.failed"     = "Connection failed";
+"liveRoom.status.rtcErrorFormat" = "RTC error %d";
 "liveRoom.anchorDefault"     = "Anchor";
 "liveRoom.toolBeauty"        = "Beauty";
 "liveRoom.endLive"           = "End Live";
@@ -206,6 +212,15 @@
 "call.errorTokenFailed"      = "Failed to get token";
 "call.errorConnectPrefix"    = "Connect failed: %@ (%@)";
 "call.errorConnectGeneric"   = "Connect failed: %@";
+"call.error.rtmTokenEmpty"     = "RTM token is empty";
+"call.error.invalidRemoteUserId" = "Invalid remote user ID";
+"call.error.createFailed"      = "Failed to initiate the call";
+"call.error.sendFailed"        = "Failed to send call signal";
+"call.error.acceptFailed"      = "Failed to send accept signal";
+"call.error.rtcTokenFailed"    = "Failed to fetch RTC token";
+"call.error.rtcTokenFormat"    = "RTC token: %@";
+"call.error.remoteRejected"    = "The call was declined";
+"auth.sessionExpired"          = "Session expired, please sign in again";
 
 // MARK: - Call 1v1 真实通话视图（CallView.swift）
 "call.subtitle.callingOut"   = "Calling...";
@@ -216,6 +231,16 @@
 "call.action.hangupBackToLive" = "Hang up & back to live";
 "call.action.hangup"         = "Hang Up";
 "call.liveBanner"            = "Private call · Hang up to return to live";
+
+// MARK: - Call HUD（H M4 sysMsg 写入 5 publishers 的可视化）
+"call.hud.incomeFormat"      = "💰 %d";
+"call.hud.giftIncomeFormat"  = "🎁 %d";
+"call.hud.waitBonusFormat"   = "Recharge bonus +%d💎";
+"call.hud.remoteTextFormat"  = "%@";
+"call.hud.wait.startPay"     = "User is paying…";
+"call.hud.wait.paySuccess"   = "User paid successfully";
+"call.hud.wait.callTimeEnd"  = "Call timer paused";
+"call.hud.wait.payCancel"    = "User cancelled payment";
 
 // MARK: - LiveRoom 挂断后回直播倒计时覆盖层
 "liveRoom.callEndedTitle"    = "Call ended";
@@ -292,13 +317,14 @@
 "im.error.networkErrorFormat"        = "IM network error (%@)";
 "im.error.decodingFormat"            = "Failed to parse message: %@";
 
-// MARK: - Moment 动态卡片（Profile / Cycle）
+// MARK: - Moment 动态卡片（Profile / Circle）
 "moment.relative.justNow"        = "Just now";
 "moment.relative.minutes.format" = "%dm";
 "moment.relative.hours.format"   = "%dh";
 "moment.relative.days.format"    = "%dd";
 "moment.action.like"             = "Like";
 "moment.action.unlike"           = "Unlike";
+"moment.action.delete"           = "Delete";
 
 /* MARK: Blocklist 黑名单列表（I-1） */
 "blocklist.title"                       = "Blocklist";
@@ -315,3 +341,94 @@
 "blocklist.accessibility.row"           = "Blocked user %@, blocked on %@";
 "blocklist.accessibility.rowNoDate"     = "Blocked user %@";
 "blocklist.loadError.retryFormat"       = "%1$@ · %2$@";
+
+// MARK: - E/F 派对房（spec §1.4 + H i18n 收尾）
+"party.defaultRoomName"                  = "Party Room";
+"party.defaultUser"                      = "User";
+"party.defaultGift"                      = "Gift";
+"party.cancel"                           = "Cancel";
+"party.retry"                            = "Retry";
+"party.loading"                          = "Loading…";
+"party.ok"                               = "OK";
+"party.alert.title"                      = "Notice";
+"party.onlineCount.format"               = "%d online";
+
+"party.list.navTitle"                    = "Party Rooms";
+"party.list.loadMore"                    = "Pull up to load more";
+"party.list.unnamed"                     = "Unnamed Room";
+"party.list.error.loadFailedFormat"      = "Load failed: %@";
+"party.list.error.decodeFormat"          = "Decode failed: %@";
+
+"party.create.navTitle"                  = "Create Party Room";
+"party.create.submit"                    = "Create Room";
+"party.create.section.name"              = "Room Name";
+"party.create.name.placeholder"          = "Up to 20 characters";
+"party.create.section.template"          = "Select Template";
+"party.create.template.loading"          = "Loading templates…";
+"party.create.template.empty"            = "No templates available in dev";
+"party.create.template.fallbackFormat"   = "Template %d";
+"party.create.template.detailFormat"     = "Seats %d · Video %d · Voice %d";
+"party.create.error.templateLoad"        = "Failed to load templates";
+"party.create.error.templateLoadFormat"  = "Failed to load templates: %@";
+"party.create.error.noRoomId"            = "Server did not return roomId";
+"party.create.error.failed"              = "Create failed";
+"party.create.error.failedFormat"        = "Create failed: %@";
+
+"party.invite.title"                     = "Video Seat Invitation";
+"party.invite.accept"                    = "Accept";
+"party.invite.reject"                    = "Decline";
+"party.invite.messageFormat"             = "%@ invited you to take video seat %d";
+"party.selfActions.title"                = "My Seat";
+"party.selfActions.micOn"                = "Turn On Mic";
+"party.selfActions.micOff"               = "Turn Off Mic";
+"party.selfActions.camOn"                = "Turn On Camera";
+"party.selfActions.camOff"               = "Turn Off Camera";
+"party.selfActions.leaveSeat"            = "Leave Seat";
+"party.input.placeholder"                = "Say something…";
+"party.gift.messageFormat"               = "🎁 %@ sent %@ x%d";
+
+"party.state.joined"                     = "Joined";
+"party.state.entering"                   = "Joining…";
+"party.state.leaving"                    = "Leaving…";
+"party.state.ended"                      = "Left";
+
+"party.seat.empty"                       = "Empty seat";
+"party.seat.occupied"                    = "Seated user";
+
+"party.error.enterFailedFormat"          = "Failed to join: %@";
+"party.error.exitFailedFormat"           = "Failed to leave: %@";
+"party.error.seatOccupied"               = "Seat is occupied";
+"party.error.seatEmpty"                  = "Seat is empty";
+"party.error.banned"                     = "Account banned";
+"party.error.levelInsufficient"          = "Insufficient level";
+"party.error.networkLost"                = "Network disconnected";
+"party.error.kicked"                     = "Kicked by host";
+"party.error.passwordWrong"              = "Wrong room password";
+"party.error.mediaSwitchFailed"          = "Failed to switch mic/camera";
+
+/* MARK: - H-0 用户详情页 */
+"userProfile.uid.prefix"                 = "uid: ";
+"userProfile.like.label"                 = "Like Count";
+"userProfile.favorite.label"             = "Favorite Count";
+"userProfile.follow"                     = "Follow";
+"userProfile.following"                  = "Following";
+"userProfile.menu.report"                = "Report";
+"userProfile.menu.block"                 = "Block";
+"userProfile.blockConfirm.title"         = "";
+"userProfile.blockConfirm.message"       = "When a user is blacklisted, you will no longer receive their messages.";
+"userProfile.blockConfirm.action"        = "Confirm";
+"userProfile.blockConfirm.cancel"        = "Cancel";
+"userProfile.block.success"              = "add blacklist success.";
+"userProfile.block.fail"                 = "add blacklist fail.";
+"userProfile.giftWall.title"             = "Send Gifts";
+"userProfile.giftWall.placeholder"       = "Gift wall coming soon";
+"userProfile.action.message"             = "Message";
+"userProfile.action.call"                = "Call";
+"userProfile.networkError"               = "Network error, please try again.";
+"userProfile.badUserId"                  = "Invalid user ID";
+"userProfile.loadError.retry"            = "Retry";
+"common.comingSoon"                      = "Coming soon";
+"common.back"                            = "Back";
+"userProfile.a11y.avatar"                = "Avatar";
+"userProfile.a11y.menu"                  = "More options";
+"userProfile.a11y.giftFallback"          = "Gift";

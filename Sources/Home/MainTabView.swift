@@ -9,13 +9,20 @@ import SwiftUI
 /// 容器永驻视图层级（frame(height: 0) + clipped + opacity 0 + allowsHitTesting false），
 /// 不做 if/EmptyView 增删——iOS 16 上几何坍缩比 view 增删的过渡动画更稳。
 ///
+/// **Tab keep-alive 策略**：
+/// - **Home / Messages**：用 ZStack + opacity 永久持有，view 树不被 dismantle —— 切走再回来时
+///   `@StateObject`（朋友圈 feed / List segment / 滚动位置 / 网络请求缓存）全部保留
+/// - **Work / Profile**：仍走 switch 销毁重建（用户接受重新加载）—— 避免长持栈占资源
+///
 /// 切 tab 行为：用户选择"切走回根"——`onChange(of: selection)` 触发即清空两 tab 的 path，
-/// 切回时回到 tab 根页（与 Instagram 一致；不沿用 iOS 系统 TabView 默认保留行为）。
+/// 切回时回到 tab 根页（与 Instagram 一致；NavigationStack 永久持有但 path 清空，所以视觉上
+/// 仍回根页，而根页内 @StateObject 状态完整保留——朋友圈滚动位置不丢）。
 ///
 /// scenePhase 守卫：CLAUDE.md v5.3.3 真根因坑——SwiftUI 在 `.background` 时仍触发 onChange，
 /// 切后台时不要触发 withAnimation（回前台 backlog 会一次性闪烁），仅在 active/inactive 才动画。
 struct MainTabView: View {
     @State private var selection: MainTab = .home
+    @State private var homePath: NavigationPath = NavigationPath()
     @State private var workPath: NavigationPath = NavigationPath()
     @State private var profilePath: NavigationPath = NavigationPath()
     @State private var isOnSubpage: Bool = false
@@ -26,6 +33,7 @@ struct MainTabView: View {
     /// 三个独立 onChange 在同一 transaction 内互相 reentrancy 导致动画闪烁。
     private var isOnSubpageSignal: Bool {
         switch selection {
+        case .home:    return !homePath.isEmpty    // H-0：用户详情页等多入口共享 UserProfileRoute
         case .work:    return !workPath.isEmpty
         case .profile: return !profilePath.isEmpty
         default:       return false
@@ -51,48 +59,72 @@ struct MainTabView: View {
             }
         }
         .onChange(of: selection) { _ in
-            // 切走 tab 立即清空两 tab 的 path，切回时回到根页
+            // 切走 tab 立即清空各 tab 的 path，切回时回到根页
+            homePath = NavigationPath()
             workPath = NavigationPath()
             profilePath = NavigationPath()
         }
         .preferredColorScheme(.dark)
     }
 
-    @ViewBuilder
+    /// content 分两层：
+    /// 1. ZStack 永久持有 Home / Messages（opacity 切显隐，view 树不 dismantle）
+    /// 2. 内嵌 if 切换 Work / Profile（销毁重建，资源不长持）
     private var content: some View {
-        switch selection {
-        case .home:
-            HomeView()
-        case .messages:
-            PlaceholderTab(title: L10n.tabMessages)
-        case .work:
-            // workPath 由 MainTabView 持有：tabbar 才能感知 push/pop 深度
-            // navigationDestination 紧贴 NavigationStack 根节点注册，避免挂在 WorkView ZStack 时的解析时机风险
-            NavigationStack(path: $workPath) {
-                WorkView(path: $workPath)
-                    .navigationDestination(for: WorkRoute.self) { route in
-                        switch route {
-                        case .pocDebug:
-                            POCDebugView()
+        ZStack {
+            // —— Home：永久持有 ——
+            // H-0：home tab 加 NavigationStack 支持多入口 UserProfileRoute（spec §5.3）。
+            // 未来兄弟入口（Circle 头像 / Live 主播头像）也通过 NavigationLink(value: UserProfileRoute.userId(...)) 推入。
+            //
+            // `isHomeTabActive` 注入：keep-alive 架构下 view 永久持有，view tree 不能用 .task 触发首次拉数据
+            // （否则 app 启动即预热）。下游 LiveTabView 据此判断"home 是否真正被用户访问"，做 lazy load。
+            NavigationStack(path: $homePath) {
+                HomeView()
+                    .navigationDestination(for: UserProfileRoute.self) { route in
+                        if case let .userId(uid) = route {
+                            UserProfileView(userId: uid)
                         }
                     }
             }
-        case .profile:
-            // profilePath 同 workPath 上抬到 MainTabView：Profile 子页 push 时 tabbar 也参与坍缩。
-            // ProfileView 内自带 NavigationStack 已删除，两段 navigationDestination
-            //（FollowSegment + ProfileRoute）上移到此根节点统一注册。
-            NavigationStack(path: $profilePath) {
-                ProfileView(path: $profilePath)
-                    .navigationDestination(for: FollowSegment.self) { segment in
-                        FollowListView(initialSegment: segment)
-                    }
-                    .navigationDestination(for: ProfileRoute.self) { route in
-                        switch route {
-                        case .settings:    SettingsView()
-                        case .levelDetail: LevelDetailView()
-                        case .blocklist:   BlocklistView()
+            .environment(\.isHomeTabActive, selection == .home)
+            .opacity(selection == .home ? 1 : 0)
+            .allowsHitTesting(selection == .home)
+            .accessibilityHidden(selection != .home)
+
+            // —— Messages：永久持有 ——
+            // 当前是占位 view 但仍按 keep-alive 架构挂上，未来真接入消息列表/会话页时
+            // 切走再回来自然保留滚动位置 / 未读位 / 会话草稿。
+            PlaceholderTab(title: L10n.tabMessages)
+                .opacity(selection == .messages ? 1 : 0)
+                .allowsHitTesting(selection == .messages)
+                .accessibilityHidden(selection != .messages)
+
+            // —— Work / Profile：if 切换销毁重建 ——
+            // 用户接受重新加载；不长持 NavigationStack + WorkView/ProfileView 内的资源。
+            if selection == .work {
+                NavigationStack(path: $workPath) {
+                    WorkView(path: $workPath)
+                        .navigationDestination(for: WorkRoute.self) { route in
+                            switch route {
+                            case .pocDebug:
+                                POCDebugView()
+                            }
                         }
-                    }
+                }
+            } else if selection == .profile {
+                NavigationStack(path: $profilePath) {
+                    ProfileView(path: $profilePath)
+                        .navigationDestination(for: FollowSegment.self) { segment in
+                            FollowListView(initialSegment: segment)
+                        }
+                        .navigationDestination(for: ProfileRoute.self) { route in
+                            switch route {
+                            case .settings:    SettingsView()
+                            case .levelDetail: LevelDetailView()
+                            case .blocklist:   BlocklistView()
+                            }
+                        }
+                }
             }
         }
     }
@@ -174,6 +206,24 @@ enum MainTab: CaseIterable {
         case .work:     return L10n.tabWork
         case .profile:  return L10n.tabProfile
         }
+    }
+}
+
+// MARK: - EnvironmentKey
+
+/// 标记 home tab 是否被用户选中。MainTabView 注入，LiveTabView/CircleView 等下游消费。
+///
+/// **设计动机**：home tab 采用 ZStack opacity 的 keep-alive 架构，view tree 永久持有 →
+/// `.task` / `.onAppear` 不在用户切到 home 时触发（启动时即触发）。
+/// 下游需要"home 是否真正访问"信号来做 lazy load —— 避免启动即预热朋友圈 / List 数据。
+private struct IsHomeTabActiveKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
+extension EnvironmentValues {
+    var isHomeTabActive: Bool {
+        get { self[IsHomeTabActiveKey.self] }
+        set { self[IsHomeTabActiveKey.self] = newValue }
     }
 }
 

@@ -3,7 +3,7 @@
  * 工程占位翻译：由开发者完成业务术语级翻译，等真正上线前需翻译团队复审地道性/口语化。
  * key 命名约定：模块.场景（lowerCamelCase 拼接），与 en.lproj 完全一致。
  * 占位符 %@ %d 保留位置不变。
- * 品牌词 "Hily" / "FaceUnity" / "Prime" / "Cysle" 不翻译。
+ * 品牌词 "Hily" / "FaceUnity" / "Prime" 不翻译。
  */
 
 // MARK: - 强制下播原因（forceEnd reason UI 文案）
@@ -77,18 +77,18 @@
 "tab.work"                   = "İş";
 "tab.profile"                = "Profil";
 
-// MARK: - Home 顶部 4 tab（trial #1 重命名自 live.subTab.*，cysle typo → cycle）
+// MARK: - Home 顶部 4 tab（对齐 H5 homeConfig.ts → live/list/match/circle；circle 取 H5 tr.json:115）
 "home.topTab.live"           = "Canlı";
 "home.topTab.list"           = "Liste";
 "home.topTab.match"          = "Eşleş";
-"home.topTab.cycle"          = "Döngü";
+"home.topTab.circle"         = "Çevre";
 "home.topTab.comingSoon"     = "Yakında";
 
-// Cycle 朋友圈内 3 子 tab（trial #1）
-"home.cycle.official.label"      = "Resmi";
-"home.cycle.moment.label"        = "Anlar";
-"home.cycle.me.label"            = "Ben";
-"home.cycle.moment.error.title"  = "Anlar yüklenemedi";
+// Circle 朋友圈内 3 子 tab（trial #1）
+"home.circle.official.label"      = "Resmi";
+"home.circle.moment.label"        = "Anlar";
+"home.circle.me.label"            = "Ben";
+"home.circle.moment.error.title"  = "Anlar yüklenemedi";
 "live.viewers"               = "izleyici";
 "live.rankBadge"             = "Lider Tablosu";
 "live.refresh"               = "Yenile";
@@ -96,13 +96,15 @@
 
 // MARK: - List 子页（设计稿还原）
 "liveList.segment.online"    = "Çevrimiçi";
-"liveList.segment.prime"     = "Premium";
-"liveList.invite.title"      = "Arkadaşları davet et";
-"liveList.invite.subtitle"   = "Kullanıcıları davet et ve elmas kazan";
+"liveList.segment.prime"     = "Prime";
 "liveList.action.chat"       = "Sohbet";
 "liveList.action.live"       = "Canlı";
 "liveList.action.match"      = "Eşleş";
 "liveList.action.offline"    = "Çevrimdışı";
+"liveList.empty"             = "Henüz kullanıcı yok";
+"liveList.end"               = "Daha fazla yok";
+"liveList.loadMoreFailed"    = "Daha fazla yüklenemedi";
+"liveList.pullToRetry"       = "Yenilemek için aşağı çekin";
 
 // MARK: - Profile 个人页（设计稿还原）
 "profile.settings"           = "Ayarlar";
@@ -188,6 +190,10 @@
 "liveRoom.permissionAlertMessage" = "Ayarlar → Hily → Kamera bölümünden kamera erişimini etkinleştirin";
 "liveRoom.statusLiveFormat"  = "Canlı %@";
 "liveRoom.statusConnecting"  = "Bağlanılıyor...";
+"liveRoom.status.idle"       = "Boşta";
+"liveRoom.status.joined"     = "Canlı";
+"liveRoom.status.failed"     = "Bağlantı başarısız";
+"liveRoom.status.rtcErrorFormat" = "RTC hatası %d";
 "liveRoom.anchorDefault"     = "Yayıncı";
 "liveRoom.toolBeauty"        = "Güzellik";
 "liveRoom.endLive"           = "Yayını Bitir";
@@ -208,6 +214,15 @@
 "call.errorTokenFailed"      = "Token alınamadı";
 "call.errorConnectPrefix"    = "Bağlantı başarısız: %@ (%@)";
 "call.errorConnectGeneric"   = "Bağlantı başarısız: %@";
+"call.error.rtmTokenEmpty"     = "RTM token boş";
+"call.error.invalidRemoteUserId" = "Geçersiz alıcı kullanıcı kimliği";
+"call.error.createFailed"      = "Arama başlatılamadı";
+"call.error.sendFailed"        = "Arama sinyali gönderilemedi";
+"call.error.acceptFailed"      = "Kabul sinyali gönderilemedi";
+"call.error.rtcTokenFailed"    = "RTC token alınamadı";
+"call.error.rtcTokenFormat"    = "RTC token: %@";
+"call.error.remoteRejected"    = "Arama reddedildi";
+"auth.sessionExpired"          = "Oturum süresi doldu, lütfen tekrar giriş yapın";
 
 // MARK: - Call 1v1 真实通话视图（CallView.swift）
 "call.subtitle.callingOut"   = "Aranıyor...";
@@ -218,6 +233,16 @@
 "call.action.hangupBackToLive" = "Kapat ve yayına dön";
 "call.action.hangup"         = "Kapat";
 "call.liveBanner"            = "Özel arama · Yayına dönmek için kapatın";
+
+// MARK: - Call HUD（H M4 sysMsg 写入 5 publishers 的可视化）
+"call.hud.incomeFormat"      = "💰 %d";
+"call.hud.giftIncomeFormat"  = "🎁 %d";
+"call.hud.waitBonusFormat"   = "Şarj bonusu +%d💎";
+"call.hud.remoteTextFormat"  = "%@";
+"call.hud.wait.startPay"     = "Kullanıcı ödüyor…";
+"call.hud.wait.paySuccess"   = "Ödeme başarılı";
+"call.hud.wait.callTimeEnd"  = "Arama sayacı duraklatıldı";
+"call.hud.wait.payCancel"    = "Kullanıcı ödemeyi iptal etti";
 
 // MARK: - LiveRoom 挂断后回直播倒计时覆盖层
 "liveRoom.callEndedTitle"    = "Arama sona erdi";
@@ -301,6 +326,7 @@
 "moment.relative.days.format"    = "%d g";
 "moment.action.like"             = "Beğen";
 "moment.action.unlike"           = "Beğenmekten Vazgeç";
+"moment.action.delete"           = "Sil";
 
 /* MARK: Blocklist 黑名单列表（I-1） */
 "blocklist.title"                       = "Engellenenler";
@@ -317,3 +343,94 @@
 "blocklist.accessibility.row"           = "Engellenen kullanıcı %@, %@ tarihinde engellendi";
 "blocklist.accessibility.rowNoDate"     = "Engellenen kullanıcı %@";
 "blocklist.loadError.retryFormat"       = "%1$@ · %2$@";
+
+// MARK: - E/F 派对房（spec §1.4 + H i18n 收尾）
+"party.defaultRoomName"                  = "Parti Odası";
+"party.defaultUser"                      = "Kullanıcı";
+"party.defaultGift"                      = "Hediye";
+"party.cancel"                           = "İptal";
+"party.retry"                            = "Tekrar Dene";
+"party.loading"                          = "Yükleniyor…";
+"party.ok"                               = "Tamam";
+"party.alert.title"                      = "Bildirim";
+"party.onlineCount.format"               = "%d çevrimiçi";
+
+"party.list.navTitle"                    = "Parti Odaları";
+"party.list.loadMore"                    = "Daha fazlasını yüklemek için yukarı çekin";
+"party.list.unnamed"                     = "Adsız Oda";
+"party.list.error.loadFailedFormat"      = "Yükleme başarısız: %@";
+"party.list.error.decodeFormat"          = "Çözümleme başarısız: %@";
+
+"party.create.navTitle"                  = "Parti Odası Oluştur";
+"party.create.submit"                    = "Oda Oluştur";
+"party.create.section.name"              = "Oda Adı";
+"party.create.name.placeholder"          = "En fazla 20 karakter";
+"party.create.section.template"          = "Şablon Seç";
+"party.create.template.loading"          = "Şablonlar yükleniyor…";
+"party.create.template.empty"            = "dev'de kullanılabilir şablon yok";
+"party.create.template.fallbackFormat"   = "Şablon %d";
+"party.create.template.detailFormat"     = "Koltuk %d · Video %d · Ses %d";
+"party.create.error.templateLoad"        = "Şablonlar yüklenemedi";
+"party.create.error.templateLoadFormat"  = "Şablonlar yüklenemedi: %@";
+"party.create.error.noRoomId"            = "Sunucu roomId döndürmedi";
+"party.create.error.failed"              = "Oluşturma başarısız";
+"party.create.error.failedFormat"        = "Oluşturma başarısız: %@";
+
+"party.invite.title"                     = "Video Koltuğu Daveti";
+"party.invite.accept"                    = "Kabul Et";
+"party.invite.reject"                    = "Reddet";
+"party.invite.messageFormat"             = "%@ sizi %d numaralı video koltuğuna davet etti";
+"party.selfActions.title"                = "Koltuğum";
+"party.selfActions.micOn"                = "Mikrofonu Aç";
+"party.selfActions.micOff"               = "Mikrofonu Kapat";
+"party.selfActions.camOn"                = "Kamerayı Aç";
+"party.selfActions.camOff"               = "Kamerayı Kapat";
+"party.selfActions.leaveSeat"            = "Koltuktan Kalk";
+"party.input.placeholder"                = "Bir şeyler söyleyin…";
+"party.gift.messageFormat"               = "🎁 %@ %@ ×%d gönderdi";
+
+"party.state.joined"                     = "Katıldınız";
+"party.state.entering"                   = "Katılıyor…";
+"party.state.leaving"                    = "Ayrılıyor…";
+"party.state.ended"                      = "Ayrıldınız";
+
+"party.seat.empty"                       = "Boş koltuk";
+"party.seat.occupied"                    = "Oturmuş kullanıcı";
+
+"party.error.enterFailedFormat"          = "Katılma başarısız: %@";
+"party.error.exitFailedFormat"           = "Ayrılma başarısız: %@";
+"party.error.seatOccupied"               = "Koltuk dolu";
+"party.error.seatEmpty"                  = "Koltuk boş";
+"party.error.banned"                     = "Hesap yasaklandı";
+"party.error.levelInsufficient"          = "Seviye yetersiz";
+"party.error.networkLost"                = "Bağlantı kesildi";
+"party.error.kicked"                     = "Ev sahibi tarafından atıldınız";
+"party.error.passwordWrong"              = "Yanlış oda şifresi";
+"party.error.mediaSwitchFailed"          = "Mikrofon/kamera değiştirilemedi";
+
+/* MARK: - H-0 用户详情页 */
+"userProfile.uid.prefix"                 = "uid: ";
+"userProfile.like.label"                 = "Beğeni Sayısı";
+"userProfile.favorite.label"             = "Favori Sayısı";
+"userProfile.follow"                     = "Takip Et";
+"userProfile.following"                  = "Takip Edilenler";
+"userProfile.menu.report"                = "Bildir";
+"userProfile.menu.block"                 = "Engelle";
+"userProfile.blockConfirm.title"         = "";
+"userProfile.blockConfirm.message"       = "Bir kullanıcı kara listeye alındığında, artık mesajlarını alamayacaksınız.";
+"userProfile.blockConfirm.action"        = "Onayla";
+"userProfile.blockConfirm.cancel"        = "İptal";
+"userProfile.block.success"              = "Kara listeye eklendi";
+"userProfile.block.fail"                 = "Kara listeye eklenemedi";
+"userProfile.giftWall.title"             = "Hediyeler Gönder";
+"userProfile.giftWall.placeholder"       = "Hediye duvarı yakında";
+"userProfile.action.message"             = "Mesaj";
+"userProfile.action.call"                = "Ara";
+"userProfile.networkError"               = "Ağ hatası, lütfen tekrar deneyin.";
+"userProfile.badUserId"                  = "Geçersiz kullanıcı kimliği";
+"userProfile.loadError.retry"            = "Yeniden Dene";
+"common.comingSoon"                      = "Yakında";
+"common.back"                            = "Geri";
+"userProfile.a11y.avatar"                = "Avatar";
+"userProfile.a11y.menu"                  = "Daha fazla seçenek";
+"userProfile.a11y.giftFallback"          = "Hediye";

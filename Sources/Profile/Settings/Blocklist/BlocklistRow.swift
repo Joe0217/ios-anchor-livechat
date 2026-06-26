@@ -36,8 +36,26 @@ struct BlocklistRow: View {
 
     @ViewBuilder
     private var avatar: some View {
-        // TODO(step 1c): if let urlStr = item.icon, let url = URL(string: urlStr) { AsyncImage(url:) }
-        //   icon 字段非空时渲染网络头像；本期统一 SF Symbol 兜底（review #9 标记）。
+        Group {
+            if let s = item.icon, let url = URL(string: s) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        avatarFallback
+                    }
+                }
+            } else {
+                avatarFallback
+            }
+        }
+        .frame(width: Theme.Metric.blocklistAvatarSize, height: Theme.Metric.blocklistAvatarSize)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
+    }
+
+    private var avatarFallback: some View {
         ZStack {
             Circle().fill(Theme.Palette.blocklistAvatarFallback)
             Image(systemName: "person.crop.circle.fill")
@@ -45,9 +63,6 @@ struct BlocklistRow: View {
                 .scaledToFit()
                 .foregroundStyle(.white.opacity(0.5))
         }
-        .frame(width: Theme.Metric.blocklistAvatarSize, height: Theme.Metric.blocklistAvatarSize)
-        .clipShape(Circle())
-        .accessibilityHidden(true)
     }
 
     // MARK: - 主信息（昵称 + 位置·年龄）

@@ -3,7 +3,7 @@
  * 工程占位翻译：由开发者完成业务术语级翻译，等真正上线前需翻译团队复审地道性/口语化。
  * key 命名约定：模块.场景（lowerCamelCase 拼接），与 en.lproj 完全一致。
  * 占位符 %@ %d 保留位置不变。
- * 品牌词 "Hily" / "FaceUnity" / "Prime" / "Cysle" 不翻译。
+ * 品牌词 "Hily" / "FaceUnity" / "Prime" 不翻译。
  */
 
 // MARK: - 强制下播原因（forceEnd reason UI 文案）
@@ -77,18 +77,18 @@
 "tab.work"                   = "العمل";
 "tab.profile"                = "ملفي";
 
-// MARK: - Home 顶部 4 tab（trial #1 重命名自 live.subTab.*，cysle typo → cycle）
+// MARK: - Home 顶部 4 tab（对齐 H5 homeConfig.ts → live/list/match/circle；circle 取 H5 ar.json:117）
 "home.topTab.live"           = "البث";
 "home.topTab.list"           = "القائمة";
 "home.topTab.match"          = "مطابقة";
-"home.topTab.cycle"          = "دورة";
+"home.topTab.circle"         = "الدائرة";
 "home.topTab.comingSoon"     = "قريبًا";
 
-// Cycle 朋友圈内 3 子 tab（trial #1）
-"home.cycle.official.label"      = "الرسمية";
-"home.cycle.moment.label"        = "اللحظات";
-"home.cycle.me.label"            = "أنا";
-"home.cycle.moment.error.title"  = "فشل تحميل اللحظات";
+// Circle 朋友圈内 3 子 tab（trial #1）
+"home.circle.official.label"      = "الرسمية";
+"home.circle.moment.label"        = "اللحظات";
+"home.circle.me.label"            = "أنا";
+"home.circle.moment.error.title"  = "فشل تحميل اللحظات";
 "live.viewers"               = "مشاهد";
 "live.rankBadge"             = "لوحة الصدارة";
 "live.refresh"               = "تحديث";
@@ -96,13 +96,15 @@
 
 // MARK: - List 子页（设计稿还原）
 "liveList.segment.online"    = "متصل";
-"liveList.segment.prime"     = "مميز";
-"liveList.invite.title"      = "ادعُ الأصدقاء";
-"liveList.invite.subtitle"   = "ادعُ المستخدمين واحصل على الماس";
+"liveList.segment.prime"     = "برايم";
 "liveList.action.chat"       = "دردشة";
 "liveList.action.live"       = "بث";
 "liveList.action.match"      = "مطابقة";
 "liveList.action.offline"    = "غير متصل";
+"liveList.empty"             = "لا يوجد مستخدمون بعد";
+"liveList.end"               = "لا مزيد";
+"liveList.loadMoreFailed"    = "فشل تحميل المزيد";
+"liveList.pullToRetry"       = "اسحب للأسفل لإعادة المحاولة";
 
 // MARK: - Profile 个人页（设计稿还原）
 "profile.settings"           = "الإعدادات";
@@ -188,6 +190,10 @@
 "liveRoom.permissionAlertMessage" = "يرجى تفعيل الوصول للكاميرا في الإعدادات ← Hily ← الكاميرا";
 "liveRoom.statusLiveFormat"  = "بث %@";
 "liveRoom.statusConnecting"  = "جاري الاتصال...";
+"liveRoom.status.idle"       = "غير متصل";
+"liveRoom.status.joined"     = "البث المباشر";
+"liveRoom.status.failed"     = "فشل الاتصال";
+"liveRoom.status.rtcErrorFormat" = "خطأ RTC %d";
 "liveRoom.anchorDefault"     = "المضيف";
 "liveRoom.toolBeauty"        = "الفلتر";
 "liveRoom.endLive"           = "إنهاء البث";
@@ -208,6 +214,15 @@
 "call.errorTokenFailed"      = "فشل الحصول على الرمز";
 "call.errorConnectPrefix"    = "فشل الاتصال: %@ (%@)";
 "call.errorConnectGeneric"   = "فشل الاتصال: %@";
+"call.error.rtmTokenEmpty"     = "رمز RTM فارغ";
+"call.error.invalidRemoteUserId" = "معرّف المستخدم المستلم غير صالح";
+"call.error.createFailed"      = "تعذّر بدء المكالمة";
+"call.error.sendFailed"        = "تعذّر إرسال إشارة الاتصال";
+"call.error.acceptFailed"      = "تعذّر إرسال إشارة القبول";
+"call.error.rtcTokenFailed"    = "تعذّر جلب رمز RTC";
+"call.error.rtcTokenFormat"    = "رمز RTC: %@";
+"call.error.remoteRejected"    = "تم رفض المكالمة";
+"auth.sessionExpired"          = "انتهت صلاحية الجلسة، يرجى تسجيل الدخول مرة أخرى";
 
 // MARK: - Call 1v1 真实通话视图（CallView.swift）
 "call.subtitle.callingOut"   = "جاري الاتصال...";
@@ -218,6 +233,16 @@
 "call.action.hangupBackToLive" = "إنهاء والعودة للبث";
 "call.action.hangup"         = "إنهاء";
 "call.liveBanner"            = "مكالمة خاصة · أنهِ المكالمة للعودة للبث";
+
+// MARK: - Call HUD（H M4 sysMsg 写入 5 publishers 的可视化）
+"call.hud.incomeFormat"      = "💰 %d";
+"call.hud.giftIncomeFormat"  = "🎁 %d";
+"call.hud.waitBonusFormat"   = "مكافأة الشحن +%d💎";
+"call.hud.remoteTextFormat"  = "%@";
+"call.hud.wait.startPay"     = "المستخدم يدفع…";
+"call.hud.wait.paySuccess"   = "تم الدفع بنجاح";
+"call.hud.wait.callTimeEnd"  = "تم إيقاف مؤقت المكالمة";
+"call.hud.wait.payCancel"    = "ألغى المستخدم الدفع";
 
 // MARK: - LiveRoom 挂断后回直播倒计时覆盖层
 "liveRoom.callEndedTitle"    = "انتهت المكالمة";
@@ -301,6 +326,7 @@
 "moment.relative.days.format"    = "%d ي";
 "moment.action.like"             = "إعجاب";
 "moment.action.unlike"           = "إلغاء الإعجاب";
+"moment.action.delete"           = "حذف";
 
 /* MARK: Blocklist 黑名单列表（I-1） */
 "blocklist.title"                       = "قائمة الحظر";
@@ -317,3 +343,94 @@
 "blocklist.accessibility.row"           = "المستخدم المحظور %@، تم الحظر في %@";
 "blocklist.accessibility.rowNoDate"     = "المستخدم المحظور %@";
 "blocklist.loadError.retryFormat"       = "%1$@ · %2$@";
+
+// MARK: - E/F 派对房（spec §1.4 + H i18n 收尾）
+"party.defaultRoomName"                  = "غرفة الحفلات";
+"party.defaultUser"                      = "مستخدم";
+"party.defaultGift"                      = "هدية";
+"party.cancel"                           = "إلغاء";
+"party.retry"                            = "إعادة المحاولة";
+"party.loading"                          = "جارٍ التحميل…";
+"party.ok"                               = "حسنًا";
+"party.alert.title"                      = "تنبيه";
+"party.onlineCount.format"               = "%d متصل";
+
+"party.list.navTitle"                    = "غرف الحفلات";
+"party.list.loadMore"                    = "اسحب لأعلى لتحميل المزيد";
+"party.list.unnamed"                     = "غرفة بدون اسم";
+"party.list.error.loadFailedFormat"      = "فشل التحميل: %@";
+"party.list.error.decodeFormat"          = "فشل فك التشفير: %@";
+
+"party.create.navTitle"                  = "إنشاء غرفة حفلات";
+"party.create.submit"                    = "إنشاء الغرفة";
+"party.create.section.name"              = "اسم الغرفة";
+"party.create.name.placeholder"          = "حتى 20 حرفًا";
+"party.create.section.template"          = "اختر القالب";
+"party.create.template.loading"          = "جارٍ تحميل القوالب…";
+"party.create.template.empty"            = "لا توجد قوالب متاحة في dev";
+"party.create.template.fallbackFormat"   = "قالب %d";
+"party.create.template.detailFormat"     = "المقاعد %d · فيديو %d · صوت %d";
+"party.create.error.templateLoad"        = "فشل تحميل القوالب";
+"party.create.error.templateLoadFormat"  = "فشل تحميل القوالب: %@";
+"party.create.error.noRoomId"            = "الخادم لم يُرجِع roomId";
+"party.create.error.failed"              = "فشل الإنشاء";
+"party.create.error.failedFormat"        = "فشل الإنشاء: %@";
+
+"party.invite.title"                     = "دعوة لمقعد الفيديو";
+"party.invite.accept"                    = "قبول";
+"party.invite.reject"                    = "رفض";
+"party.invite.messageFormat"             = "دعاك %@ للجلوس في مقعد الفيديو %d";
+"party.selfActions.title"                = "مقعدي";
+"party.selfActions.micOn"                = "تشغيل الميكروفون";
+"party.selfActions.micOff"               = "إيقاف الميكروفون";
+"party.selfActions.camOn"                = "تشغيل الكاميرا";
+"party.selfActions.camOff"               = "إيقاف الكاميرا";
+"party.selfActions.leaveSeat"            = "مغادرة المقعد";
+"party.input.placeholder"                = "قُل شيئًا…";
+"party.gift.messageFormat"               = "🎁 أرسل %@ %@ ×%d";
+
+"party.state.joined"                     = "تم الانضمام";
+"party.state.entering"                   = "جارٍ الانضمام…";
+"party.state.leaving"                    = "جارٍ المغادرة…";
+"party.state.ended"                      = "تمت المغادرة";
+
+"party.seat.empty"                       = "مقعد فارغ";
+"party.seat.occupied"                    = "مستخدم في المقعد";
+
+"party.error.enterFailedFormat"          = "فشل الانضمام: %@";
+"party.error.exitFailedFormat"           = "فشل المغادرة: %@";
+"party.error.seatOccupied"               = "المقعد مشغول";
+"party.error.seatEmpty"                  = "المقعد فارغ";
+"party.error.banned"                     = "تم حظر الحساب";
+"party.error.levelInsufficient"          = "المستوى غير كافٍ";
+"party.error.networkLost"                = "انقطع الاتصال بالشبكة";
+"party.error.kicked"                     = "تم طردك من قِبل المالك";
+"party.error.passwordWrong"              = "كلمة مرور الغرفة غير صحيحة";
+"party.error.mediaSwitchFailed"          = "فشل تبديل الميكروفون/الكاميرا";
+
+/* MARK: - H-0 用户详情页 */
+"userProfile.uid.prefix"                 = "المعرف: ";
+"userProfile.like.label"                 = "عدد الإعجابات";
+"userProfile.favorite.label"             = "عدد المفضلات";
+"userProfile.follow"                     = "متابعة";
+"userProfile.following"                  = "المتابعون";
+"userProfile.menu.report"                = "إبلاغ";
+"userProfile.menu.block"                 = "حظر";
+"userProfile.blockConfirm.title"         = "";
+"userProfile.blockConfirm.message"       = "عندما يتم وضع مستخدم في القائمة السوداء، لن تتلقى رسائله بعد الآن.";
+"userProfile.blockConfirm.action"        = "تأكيد";
+"userProfile.blockConfirm.cancel"        = "إلغاء";
+"userProfile.block.success"              = "تمت الإضافة إلى القائمة السوداء";
+"userProfile.block.fail"                 = "فشل في الإضافة إلى القائمة السوداء";
+"userProfile.giftWall.title"             = "إرسال الهدايا";
+"userProfile.giftWall.placeholder"       = "جدار الهدايا قريباً";
+"userProfile.action.message"             = "رسالة";
+"userProfile.action.call"                = "اتصال";
+"userProfile.networkError"               = "خطأ في الشبكة، يرجى المحاولة مرة أخرى.";
+"userProfile.badUserId"                  = "معرف المستخدم غير صالح";
+"userProfile.loadError.retry"            = "إعادة المحاولة";
+"common.comingSoon"                      = "قريباً";
+"common.back"                            = "رجوع";
+"userProfile.a11y.avatar"                = "الصورة الرمزية";
+"userProfile.a11y.menu"                  = "المزيد من الخيارات";
+"userProfile.a11y.giftFallback"          = "هدية";

@@ -33,6 +33,9 @@ final class BlocklistViewModel: ObservableObject {
     private let networkErrorFallback: String
     private let badUserIdFallback: String
 
+    /// `.blocklistChanged` observer（H-0 拉黑成功后 post → 黑名单列表自动 refresh，spec §5.4）。
+    private var blocklistChangedObserver: NSObjectProtocol?
+
     init(service: BlocklistServiceProtocol,
          pageSize: Int = 20,
          networkErrorFallback: String = "Network error, please try again.",
@@ -41,6 +44,23 @@ final class BlocklistViewModel: ObservableObject {
         self.pageSize = pageSize
         self.networkErrorFallback = networkErrorFallback
         self.badUserIdFallback = badUserIdFallback
+        // 跨页同步：H-0 用户详情页拉黑成功 post `.blocklistChanged` → 本 VM reload
+        // 不区分 sender（自身 post 也接收）：黑名单列表自己没有 post 通道，不会自触发死循环
+        self.blocklistChangedObserver = NotificationCenter.default.addObserver(
+            forName: .blocklistChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                logger.info("blocklist received .blocklistChanged, reloading first page")
+                await self.loadFirstPage()
+            }
+        }
+    }
+
+    deinit {
+        if let obs = blocklistChangedObserver {
+            NotificationCenter.default.removeObserver(obs)
+        }
     }
 
     // MARK: - Actions
@@ -71,7 +91,7 @@ final class BlocklistViewModel: ObservableObject {
         // 1. 类型转换在最外层守卫，避免任何 mutation（不变量 #1 持稳）
         guard let uidInt = Int(item.userId) else {
             transientError = badUserIdFallback
-            logger.warning("unblock: bad userId=\(item.userId)")
+            logger.warning("unblock: bad userId=\(item.userId, privacy: .private)")
             return
         }
         // 2. items 非空守卫（不变量 #5）
@@ -93,11 +113,11 @@ final class BlocklistViewModel: ObservableObject {
             try await service.removeBlock(
                 request: BlockOptRequest(type: 1, userId: uidInt, yxAccid: item.yxAccid)
             )
-            logger.info("unblock uid=\(item.userId) ok")
+            logger.info("unblock uid=\(item.userId, privacy: .private) ok")
         } catch {
             // 7. 回滚前检测代际 token（不变量 #4）
             guard myGeneration == loadGeneration else {
-                logger.warning("unblock uid=\(item.userId) failed but generation drifted, drop rollback")
+                logger.warning("unblock uid=\(item.userId, privacy: .private) failed but generation drifted, drop rollback")
                 return
             }
             // 8. 失败回滚：插回原 index（边界裁剪到当前 items.count）
@@ -109,7 +129,7 @@ final class BlocklistViewModel: ObservableObject {
             } else {
                 transientError = networkErrorFallback
             }
-            logger.error("unblock uid=\(item.userId) error: \(String(describing: error))")
+            logger.error("unblock uid=\(item.userId, privacy: .private) error: \(String(describing: error), privacy: .private)")
         }
     }
 

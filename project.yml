@@ -152,6 +152,13 @@ targets:
       - path: Sources/Profile/UserProfile/UserProfileService.swift
       # `.followRelationChanged` Notification 抽出独立小文件（H-0 step 1a 复用此通知做跨页同步）
       - path: Sources/Profile/FollowList/FollowRelationNotification.swift
+      # J 里程碑（发布朋友圈 step 1a）：纯 Swift 模型 + protocol + ViewModel + multipart 拼装
+      # 注意：ImageCompressor.swift 依赖 UIKit/ImageIO 不入 sources；ViewModel 用 closure 注入 compressImage
+      - path: Sources/Home/Circle/Publish/PostPublishModels.swift
+      - path: Sources/Home/Circle/Publish/PostPublishServiceProtocol.swift
+      - path: Sources/Home/Circle/Publish/OssUploadServiceProtocol.swift
+      - path: Sources/Home/Circle/Publish/OssMultipartBodyBuilder.swift
+      - path: Sources/Home/Circle/Publish/PostPublishViewModel.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.anchor.livechat.tests

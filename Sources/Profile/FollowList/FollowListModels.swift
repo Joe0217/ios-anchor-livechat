@@ -66,9 +66,4 @@ struct FollowListPage {
     static let empty = FollowListPage(users: [], currentPage: 0, hasMore: false)
 }
 
-extension Notification.Name {
-    /// 关注关系变更：跨页同步 followFlag。userInfo: ["userId": Int, "followFlag": Int (0/1)]。
-    /// 触发场景：FollowListViewModel.toggleFollow 成功后；ProfileViewModel 监听更新 followingCount。
-    /// 对应 H5/安卓的 LiveEventBus(REFRESH_FOLLOWING_LIST) 行为（蓝本 02-11 §4）。
-    static let followRelationChanged = Notification.Name("Hily.followRelationChanged")
-}
+// `.followRelationChanged` 已抽到 `FollowRelationNotification.swift`（让 HilyTests 可编译）

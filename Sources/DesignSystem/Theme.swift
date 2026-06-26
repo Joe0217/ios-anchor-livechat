@@ -172,6 +172,27 @@ enum Theme {
         static let blocklistErrorMessage = Color.white.opacity(0.8)
         /// transient toast 背景（黑 70%）
         static let blocklistToastBackground = Color.black.opacity(0.7)
+
+        // MARK: UserProfile 详情页（H-0，对照 H5 视觉）
+        /// like/favorite 卡片底色（H5 #2B213E）
+        static let userProfileStatsCardFill = Color(hex: 0x2B213E)
+        /// 头像三色光环（H5 #72ACF6 / #A211FC / #FA226A）
+        static let userProfileAvatarRing1  = Color(hex: 0x72ACF6)
+        static let userProfileAvatarRing2  = Color(hex: 0xA211FC)
+        static let userProfileAvatarRing3  = Color(hex: 0xFA226A)
+        /// FOLLOW 渐变 #8515FF → #E40132
+        static let userProfileFollowGradientStart = Color(hex: 0x8515FF)
+        static let userProfileFollowGradientEnd   = Color(hex: 0xE40132)
+        /// FOLLOWING 紫罗兰半透明
+        static let userProfileFollowingButton     = Color(hex: 0x9E7DDC).opacity(0.5)
+        /// 详情页主文字 / uid 50% / stats label 50%
+        static let userProfileNickname            = Color.white
+        static let userProfileUid                 = Color.white.opacity(0.5)
+        static let userProfileStatsLabel          = Color.white.opacity(0.5)
+        /// 占位 / coming-soon 背景（与 blocklistRetryButton 同语义）
+        static let userProfilePlaceholderBg       = Color.white.opacity(0.1)
+        /// 菜单 / popup 黑底（H5 CMenuPop 风格）
+        static let userProfileMenuBackground      = Color(hex: 0x1F1830)
     }
 
     // MARK: - 间距
@@ -290,6 +311,62 @@ enum Theme {
         static let blocklistToastHPadding: CGFloat = 14
         /// transient toast 垂直内边距
         static let blocklistToastVPadding: CGFloat = 8
+
+        // MARK: UserProfile 详情页（H-0，对照 H5 视觉）
+        /// 屏幕左右内边距（H5 px-16）
+        static let userProfileScreenHPadding: CGFloat = 16
+        /// 头像尺寸（H5 70x70）
+        static let userProfileAvatarSize: CGFloat = 70
+        /// 三色光环 stroke 宽 + gap
+        static let userProfileAvatarRingWidth: CGFloat = 2
+        static let userProfileAvatarRingGap: CGFloat   = 2
+        /// 顶部 NavBar 操作行垂直内边距
+        static let userProfileHeaderVPadding: CGFloat = 12
+        /// 昵称 + gender icon 行水平间距
+        static let userProfileNicknameToGenderGap: CGFloat = 6
+        /// gender icon 尺寸（H5 h-14 w-22）
+        static let userProfileGenderIconWidth: CGFloat  = 22
+        static let userProfileGenderIconHeight: CGFloat = 14
+        /// uid 行上下 margin
+        static let userProfileUidTopMargin: CGFloat = 5
+        static let userProfileUidBottomMargin: CGFloat = 15
+        /// meta 行（country + age + connRate）icon 尺寸 + 间距
+        static let userProfileMetaIconSize: CGFloat = 12
+        static let userProfileMetaIconTextGap: CGFloat = 5
+        static let userProfileMetaGroupGap: CGFloat = 20
+        /// meta 行底部 margin
+        static let userProfileMetaBottomMargin: CGFloat = 20
+        /// stats 卡片间距 + 内边距 + 图标
+        static let userProfileStatsCardGap: CGFloat = 8
+        static let userProfileStatsCardPadding: CGFloat = 16
+        static let userProfileStatsCardRadius: CGFloat = 12
+        static let userProfileStatsIconSize: CGFloat = 20
+        static let userProfileStatsIconToTextGap: CGFloat = 16
+        /// FOLLOW/FOLLOWING 按钮（H5 me-20 / p-[7px_16px]）
+        static let userProfileFollowBtnHPadding: CGFloat = 16
+        static let userProfileFollowBtnVPadding: CGFloat = 7
+        static let userProfileFollowBtnIconSize: CGFloat = 14
+        static let userProfileFollowBtnIconGap: CGFloat = 5
+        static let userProfileFollowBtnRadius: CGFloat = 20
+        /// 占位区块（礼物墙 / ActionBar）
+        static let userProfilePlaceholderHPadding: CGFloat = 16
+        static let userProfilePlaceholderVPadding: CGFloat = 24
+        static let userProfilePlaceholderRadius: CGFloat = 12
+        static let userProfileSectionVTop: CGFloat = 10
+        /// ActionBar 按钮高
+        static let userProfileActionBarBtnHeight: CGFloat = 44
+        static let userProfileActionBarBtnGap: CGFloat = 12
+        static let userProfileActionBarHPadding: CGFloat = 16
+        static let userProfileActionBarVPadding: CGFloat = 16
+        /// 拉黑 confirm popup
+        static let userProfilePopupWidth: CGFloat = 319
+        static let userProfilePopupRadius: CGFloat = 16
+        static let userProfilePopupBtnHeight: CGFloat = 44
+        static let userProfilePopupBtnWidth: CGFloat = 128
+        static let userProfilePopupBtnGap: CGFloat = 12
+        static let userProfilePopupVPadding: CGFloat = 24
+        static let userProfilePopupMsgHPadding: CGFloat = 24
+        static let userProfilePopupMsgBottomGap: CGFloat = 20
     }
 
     // MARK: - 圆角
@@ -403,6 +480,28 @@ enum Theme {
         static let blocklistEmpty   = Font.system(size: 14, weight: .regular)
         /// transient toast 字体
         static let blocklistToast   = Font.system(size: 13, weight: .medium)
+
+        // MARK: UserProfile 详情页（H-0）
+        /// 昵称（H5 没明示，按视觉 18pt semibold）
+        static let userProfileNickname    = Font.system(size: 18, weight: .semibold)
+        /// uid 行（H5 默认）
+        static let userProfileUid         = Font.system(size: 13, weight: .regular)
+        /// meta 行 country/age/connRate（H5 默认 ~14）
+        static let userProfileMeta        = Font.system(size: 14, weight: .regular)
+        /// stats 数字（H5 text-20 font-600）
+        static let userProfileStatsValue  = Font.system(size: 20, weight: .semibold)
+        /// stats label（H5 text-12 font-600）
+        static let userProfileStatsLabel  = Font.system(size: 12, weight: .semibold)
+        /// section 标题（H5 default）
+        static let userProfileSection     = Font.system(size: 15, weight: .medium)
+        /// FOLLOW/FOLLOWING 按钮文字
+        static let userProfileFollowBtn   = Font.system(size: 12, weight: .semibold)
+        /// 占位 coming-soon 文字
+        static let userProfilePlaceholder = Font.system(size: 13, weight: .regular)
+        /// 拉黑 popup 标题
+        static let userProfilePopupTitle  = Font.system(size: 16, weight: .semibold)
+        /// 菜单项 / ActionBar 按钮
+        static let userProfileMenuItem    = Font.system(size: 15, weight: .medium)
     }
 
     // MARK: - 渐变与段位光谱
