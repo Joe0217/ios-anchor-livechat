@@ -23,12 +23,21 @@ struct PartyRoomView: View {
     let roomId: String
 
     @ObservedObject private var store = PartyStore.shared
-    @ObservedObject private var chat = PartyStore.shared.chat
+    // P1-6：chat 不在顶层观测 — 移到 PartyMessageListView 子 view + PartyRoomHeaderView 子 view 内单独观测
+    // chat.messages 高频变化（>5 条/秒）不再触发 PartyRoomView body 重算 → 麦位区/视频区稳定
 
     @Environment(\.dismiss) private var dismiss
+    /// v5.3.3 真根因坑：SwiftUI 在 ScenePhase=.background 时也会调度 onDisappear（snapshot 用），
+    /// 必须双守卫（scenePhase != .background + state != .joined/.entering）防误退房。
+    @Environment(\.scenePhase) private var scenePhase
     @State private var inputText: String = ""
     @State private var showSelfActions: Bool = false
     @State private var showError: Bool = false
+    /// 守卫：onAppear 只触发一次进房（PartyRoomView 一次性进入；pop 后销毁，不会 re-appear）
+    @State private var didStartEnter: Bool = false
+    /// P2-10：sortedSeats 缓存，仅在 store.seatList 真正变化时重算（onChange 触发）
+    /// 避免 body 内 computed property 每次重算都 O(n log n) 排序
+    @State private var sortedSeatsCache: [PartyRoomSeat] = []
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
 
@@ -39,29 +48,49 @@ struct PartyRoomView: View {
                 .padding(.vertical, 12)
                 .background(Color(.systemBackground))
             Divider()
-            messageList
+            // P1-6：抽子 view 切断 chat 维度失效——chat.messages / chat.onlineCount 高频变化不再波及麦位区
+            // 注：store.lastGiftEvent 仍在父 body 内被参数读取，礼物到达时父 body 会重 evaluate（频率低，且 P1-8 已让 cell re-init 极廉价）
+            PartyMessageListView(chat: store.chat, lastGiftEvent: store.lastGiftEvent)
             inputBar
         }
         .navigationBarBackButtonHidden(true)
         .toolbar { ToolbarItem(placement: .navigationBarLeading) { EmptyView() } }
-        .task { await ensureEntered() }
+        // 用 .onAppear + 独立 Task（脱离 view lifecycle），避免父 view re-evaluate
+        // 触发 .task cancellation 导致 URLSession 抛 -999 cancelled（PartyRoomView 是叶子页面，
+        // pop 后销毁不会 re-appear，didStartEnter 守卫一次即可）
+        .onAppear {
+            // P2-10：onAppear 同步 cache 一次仅作为"上次会话残留"兜底
+            // —— enterRoom() 是同帧异步 Task，首次进入时 store.seatList 通常为 [] → 该行为 no-op；
+            // 后续真值靠 .onChange(of: store.seatList) 在 enterRoom 写入后填充
+            sortedSeatsCache = store.seatList.sorted { ($0.seatIndex ?? 0) < ($1.seatIndex ?? 0) }
+            guard !didStartEnter else { return }
+            didStartEnter = true
+            Task { await ensureEntered() }
+        }
+        // P2-10：seatList 变化时一次性重排，避免 body 重算时每次都 O(n log n) 排序
+        .onChange(of: store.seatList) { newList in
+            sortedSeatsCache = newList.sorted { ($0.seatIndex ?? 0) < ($1.seatIndex ?? 0) }
+        }
         .onDisappear {
+            // v5.3.3 真根因双守卫：(1) scenePhase != .background 防切后台误退房（系统 snapshot 也调 onDisappear）；
+            // (2) 仅当处于活跃房态时才 leave，避免重复退房。真正退房路径仍走顶栏 ✕ 按钮显式调 leaveRoom。
+            guard scenePhase != .background else { return }
             if store.roomState == .joined || store.roomState == .entering {
                 Task { await store.leaveRoom() }
             }
         }
         // 视频位邀请弹窗（spec §1.4.4 仅接被邀响应）
-        .alert("视频位邀请", isPresented: invitePresented) {
-            Button("接受") { Task { await store.acceptVideoSeatInvite() } }
-            Button("拒绝", role: .cancel) { Task { await store.rejectVideoSeatInvite() } }
+        .alert(L10n.Party.inviteTitle, isPresented: invitePresented) {
+            Button(L10n.Party.inviteAccept) { Task { await store.acceptVideoSeatInvite() } }
+            Button(L10n.Party.inviteReject, role: .cancel) { Task { await store.rejectVideoSeatInvite() } }
         } message: {
             if let i = store.pendingVideoSeatInvite {
-                Text("\(i.fromNickname ?? "用户") 邀请你上视频位 \(i.seatIndex)")
+                Text(String(format: L10n.Party.inviteMessageFormat, i.fromNickname ?? L10n.Party.defaultUser, i.seatIndex))
             }
         }
         // 错误 toast
-        .alert("提示", isPresented: $showError) {
-            Button("好的") { store.clearLastError() }
+        .alert(L10n.Party.alertTitle, isPresented: $showError) {
+            Button(L10n.Party.ok) { store.clearLastError() }
         } message: {
             Text(store.lastError?.errorDescription ?? "")
         }
@@ -69,97 +98,68 @@ struct PartyRoomView: View {
             showError = !msg.isEmpty
         }
         // 自己点麦位 sheet
-        .confirmationDialog("我的麦位", isPresented: $showSelfActions) {
+        .confirmationDialog(L10n.Party.selfActionsTitle, isPresented: $showSelfActions) {
             if let me = store.selfSeat {
                 let micOn = (me.microphoneEnabled ?? 0) == 1 && (me.seatMicrophoneEnabled ?? 0) == 1
-                Button(micOn ? "关麦克风" : "开麦克风") {
+                Button(micOn ? L10n.Party.selfMicOff : L10n.Party.selfMicOn) {
                     Task { await store.toggleSelfMedia(type: 1, enable: !micOn) }
                 }
                 if me.seatType == 1 {
                     let camOn = (me.cameraEnabled ?? 0) == 1
-                    Button(camOn ? "关摄像头" : "开摄像头") {
+                    Button(camOn ? L10n.Party.selfCamOff : L10n.Party.selfCamOn) {
                         Task { await store.toggleSelfMedia(type: 2, enable: !camOn) }
                     }
                 }
-                Button("下麦", role: .destructive) {
+                Button(L10n.Party.selfLeaveSeat, role: .destructive) {
                     Task { await store.requestDownSeat() }
                 }
             }
-            Button("取消", role: .cancel) {}
+            Button(L10n.Party.cancel, role: .cancel) {}
         }
     }
 
     // MARK: - 顶栏
 
+    /// P1-6：header 抽子 view，chat 由本子 view 观测；顶层 PartyRoomView 不再持 chat 引用
     private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(store.roomInfo?.roomName ?? "派对房")
-                    .font(.system(size: 16, weight: .semibold))
-                Text("在线 \(store.onlineUserCount)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            Spacer()
-            stateBadge
-            Button {
+        PartyRoomHeaderView(
+            roomName: store.roomInfo?.roomName ?? L10n.Party.defaultRoomName,
+            chat: store.chat,
+            roomState: store.roomState,
+            onLeave: {
                 Task {
                     await store.leaveRoom()
                     dismiss()
                 }
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundColor(.secondary)
             }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color(.secondarySystemBackground))
-    }
-
-    private var stateBadge: some View {
-        let label: String
-        let color: Color
-        switch store.roomState {
-        case .joined:
-            label = "已进房"
-            color = .green
-        case .entering, .preparing:
-            label = "进房中…"
-            color = .orange
-        case .leaving:
-            label = "退房中…"
-            color = .orange
-        case .ended:
-            label = "已离开"
-            color = .secondary
-        case .idle:
-            label = "—"
-            color = .secondary
-        }
-        return Text(label)
-            .font(.caption)
-            .foregroundColor(.white)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(Capsule().fill(color))
+        )
     }
 
     // MARK: - 麦位网格
 
     private var seatGrid: some View {
+        // P1-8：cell 改为参数注入，不再 @ObservedObject store；
+        // 在父 view 一次性提取需要的字段下发，避免 9-12 个 cell × 11 个 @Published 字段的失效风暴
         LazyVGrid(columns: columns, spacing: 14) {
-            ForEach(sortedSeats, id: \.id) { seat in
-                PartySeatItemView(seat: seat, isSelf: isSelf(seat), store: store)
-                    .onTapGesture { handleSeatTap(seat) }
+            // P1-5：用 stableId（seatIndex 衍生，麦位号 1-13 唯一），避免 PartyRoomSeat.id String? 多 nil 时 Identity 坍缩 → PartyRemoteVideoView 远端黑屏
+            ForEach(sortedSeats, id: \.stableId) { seat in
+                PartySeatItemView(
+                    seat: seat,
+                    isSelf: isSelf(seat),
+                    isLocalCameraActive: store.isLocalCameraActive,
+                    camera: store.camera,
+                    engine: store.rtc
+                )
+                .onTapGesture { handleSeatTap(seat) }
             }
         }
         .padding(.horizontal, 12)
     }
 
+    /// P2-10：sortedSeats 用 @State 缓存 + onChange 触发；避免 body 重算时全量 O(n log n) 排序 + 数组拷贝
     private var sortedSeats: [PartyRoomSeat] {
-        store.seatList.sorted { ($0.seatIndex ?? 0) < ($1.seatIndex ?? 0) }
+        // 实际渲染走 @State sortedSeatsCache（line 见 onChange 钩子）
+        sortedSeatsCache
     }
 
     private func isSelf(_ seat: PartyRoomSeat) -> Bool {
@@ -181,57 +181,11 @@ struct PartyRoomView: View {
         // 他人已占位：MVP 不弹管理操作（推 F 期）
     }
 
-    // MARK: - 公屏
-
-    private var messageList: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 6) {
-                    ForEach(chat.messages) { msg in
-                        messageRow(msg).id(msg.id)
-                    }
-                    // 送礼事件落公屏（仅最近一条占位）
-                    if let g = store.lastGiftEvent {
-                        Text("🎁 \(g.senderNickname ?? "用户") 送出 \(g.giftName ?? "礼物") x\(g.num)")
-                            .font(.system(size: 13))
-                            .foregroundColor(.orange)
-                            .padding(.horizontal, 12)
-                            .id("gift_\(g.timestamp)")
-                    }
-                }
-                .padding(.vertical, 8)
-            }
-            .onChange(of: chat.messages.count) { _ in
-                if let last = chat.messages.last {
-                    withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
-                }
-            }
-        }
-        .frame(maxHeight: .infinity)
-        .background(Color(.systemBackground))
-    }
-
-    private func messageRow(_ msg: PartyChatMessage) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            if let n = msg.nickname, !n.isEmpty {
-                Text("\(n):")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(msg.role == .owner ? .orange : .blue)
-            }
-            Text(msg.text).font(.system(size: 13))
-            Spacer(minLength: 0)
-            if msg.isLocal {
-                Image(systemName: "clock").font(.system(size: 10)).foregroundColor(.secondary)
-            }
-        }
-        .padding(.horizontal, 12)
-    }
-
     // MARK: - 输入栏
 
     private var inputBar: some View {
         HStack(spacing: 8) {
-            TextField("说点什么…", text: $inputText)
+            TextField(L10n.Party.inputPlaceholder, text: $inputText)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit(sendText)
             Button {
@@ -252,20 +206,21 @@ struct PartyRoomView: View {
     private func sendText() {
         let txt = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !txt.isEmpty, store.roomState == .joined else { return }
-        chat.sendText(txt)
+        store.chat.sendText(txt)  // P1-6：通过 store 拿 chat 实例，避免顶层观测
         inputText = ""
     }
 
     /// 送礼骨架：固定 demo giftId=1 num=1 → 当前在麦的第一个非自己用户。
-    /// 若无可送目标 → 弹 toast。
+    /// `yxAccidList` 必须用 `yxAccid`（云信 accid），不是 `userId`。
     private func sendDemoGift() {
         guard let info = store.roomInfo else { return }
         let target = store.seatList.first { seat in
+            guard let accid = seat.yxAccid, !accid.isEmpty else { return false }
             guard let uid = seat.userId, !uid.isEmpty else { return false }
             return uid != store.myUserIdString
         }
-        guard let targetUid = target?.userId else {
-            AppLogger.party.notice("[PartyRoom] no gift target; skip")
+        guard let targetAccid = target?.yxAccid else {
+            AppLogger.party.notice("[PartyRoom] no gift target (need yxAccid); skip")
             return
         }
         Task {
@@ -274,7 +229,7 @@ struct PartyRoomView: View {
                     roomId: info.id ?? "",
                     giftId: 1,
                     num: 1,
-                    yxAccidList: [targetUid]
+                    yxAccidList: [targetAccid]
                 )
             } catch {
                 AppLogger.party.error("[PartyRoom] sendGift failed: \(String(describing: error), privacy: .private)")

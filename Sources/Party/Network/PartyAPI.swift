@@ -15,14 +15,60 @@ enum PartyAPI {
 
     // MARK: - 私有解码辅助
 
-    /// envelope.result 为 "null" 字面值时数组类型自动空数组
+    /// 兼容三种 sapi 返回 schema：
+    /// 1. envelope.result 直接是数组 `[...]`
+    /// 2. envelope.result 是分页包装 `{list/records/data/rows/items: [...], ...}`
+    /// 3. envelope.result 是 "null" 字面值（视为空数组）
+    /// 任一路径解码成功即返回；全部失败时打印 raw JSON 后抛具体 DecodingError 供排查字段类型不符。
     private static func decodeArrayOrEmpty<T: Decodable>(_ data: Data, as: T.Type) throws -> [T] {
-        if let s = String(data: data, encoding: .utf8), s == "null" { return [] }
+        let rawPreview = String(data: data, encoding: .utf8) ?? "<binary>"
+        if rawPreview == "null" { return [] }
+
+        // 1. 直接数组
+        if let arr = try? decoder.decode([T].self, from: data) { return arr }
+
+        // 2. wrapper key 探测
+        if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            for key in ["list", "records", "data", "rows", "items"] {
+                guard let inner = dict[key] else { continue }
+                guard JSONSerialization.isValidJSONObject(inner) else { continue }
+                if let innerData = try? JSONSerialization.data(withJSONObject: inner),
+                   let arr = try? decoder.decode([T].self, from: innerData) {
+                    AppLogger.party.info("[PartyAPI] decoded array via wrapper key '\(key, privacy: .public)'")
+                    return arr
+                }
+            }
+        }
+
+        // 3. 全部失败 → 打 raw + 抛真实 DecodingError 让上层看到具体字段错
+        // raw 是 AES 解密后的明文业务数据（含 PII / 收益等），Release 包必须脱敏
+        AppLogger.party.error("[PartyAPI] decode array failed; raw=\(rawPreview, privacy: .private)")
         return try decoder.decode([T].self, from: data)
     }
 
+    /// 单对象解码：兼容 envelope.result 是 `{... 业务字段 ...}` 直接对象 / `{data: {...}}` 包装。
     private static func decodeObject<T: Decodable>(_ data: Data, as: T.Type) throws -> T {
-        try decoder.decode(T.self, from: data)
+        // 1. 直接对象
+        if let obj = try? decoder.decode(T.self, from: data) { return obj }
+
+        // 2. 单层包装探测
+        if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            for key in ["data", "result", "info"] {
+                guard let inner = dict[key] else { continue }
+                guard JSONSerialization.isValidJSONObject(inner) else { continue }
+                if let innerData = try? JSONSerialization.data(withJSONObject: inner),
+                   let obj = try? decoder.decode(T.self, from: innerData) {
+                    AppLogger.party.info("[PartyAPI] decoded object via wrapper key '\(key, privacy: .public)'")
+                    return obj
+                }
+            }
+        }
+
+        // 3. 失败 → 打 raw + 抛真实 DecodingError
+        // raw 是 AES 解密后的明文业务数据（含 PII / 收益等），Release 包必须脱敏
+        let rawPreview = String(data: data, encoding: .utf8) ?? "<binary>"
+        AppLogger.party.error("[PartyAPI] decode object failed; raw=\(rawPreview, privacy: .private)")
+        return try decoder.decode(T.self, from: data)
     }
 
     // MARK: - room
@@ -114,6 +160,9 @@ enum PartyAPI {
 
     /// 上麦。返回 micId 字符串（接口参考 §3.B 描述返回 String，实际语义 M2 联调时确认）。
     /// 错误码 `ROOM_SEAT_IS_OCCUPIED / ROOM_SEAT_EMPTY` 由上层 `PartyRoomErrorMapper` 映射后触发自动重拉对账。
+    /// `roomTempId` **Int（后端 Long）**——安卓确认结果 §2.2：全系统 DTO 是 Long。
+    /// 调用方从 `PartyRoomInfo.roomTempId(String?)` 转：`Int(info.roomTempId ?? "1") ?? 1`。
+    /// 排队 vs 直接占座由服务端按"房内角色 + 申请开关"决定，调用方需能处理「已入队」返回。
     static func onSeat(roomId: String, seatIndex: Int, yxRoomId: String, roomTempId: Int) async throws -> String {
         let data = try await PartyAPIClient.shared.post(
             "\(pathPrefix)/seat/onSeat",
@@ -140,9 +189,10 @@ enum PartyAPI {
         )
     }
 
-    /// 切换麦克风/摄像头开关。`type: 1=麦克风 2=摄像头`。
-    /// 服务端成功后下发 NIM `1008 PARTY_ROOM_UPDATE_MEDIA` 广播给全员（M3 内分发）。
-    /// `enable` 走 Int 1/0；M5 真机自检确认后端实际接受类型再切 Bool。
+    /// 切换麦克风/摄像头开关。`type: 1=麦克风 / 2=摄像头 / 3=麦+摄像头`（安卓确认 §2.3）。
+    /// 服务端成功后下发 NIM `1008 PARTY_ROOM_UPDATE_MEDIA` 广播全员（M3 内分发）。
+    /// `enable` Int 0/1（安卓确认 §2.3 后端 DTO 是 Integer）。
+    /// 安卓接受视频位邀请后调 `updateMedia(type=3, enable=1)` 自动开摄像头。
     static func updateMedia(roomId: String, seatIndex: Int, type: Int, enable: Bool, yxRoomId: String) async throws {
         _ = try await PartyAPIClient.shared.post(
             "\(pathPrefix)/seat/updateMedia",
@@ -152,6 +202,30 @@ enum PartyAPI {
                 "type": type,
                 "enable": enable ? 1 : 0,
                 "yxRoomId": yxRoomId,
+            ]
+        )
+    }
+
+    /// 响应视频位邀请（安卓确认 §3.8）。1040 弹窗后必须走此接口（**不是直接 onSeat**）。
+    /// `action`: 1=接受 / 2=拒绝 / 3=超时；接受时后端内部置 byInvite=true 直接 doOnSeat（绕过排队与等级校验）。
+    /// 接受成功后客户端再调 `updateMedia(type=3, enable=1)` 自动开摄像头。
+    static func respondInvite(
+        roomId: String,
+        yxRoomId: String,
+        seatIndex: Int,
+        inviteId: String,
+        action: Int,
+        roomTempId: Int
+    ) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/seat/respondInvite",
+            body: [
+                "roomId": roomId,
+                "yxRoomId": yxRoomId,
+                "seatIndex": seatIndex,
+                "inviteId": inviteId,
+                "action": action,
+                "roomTempId": roomTempId,
             ]
         )
     }

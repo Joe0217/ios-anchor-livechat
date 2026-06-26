@@ -32,6 +32,9 @@ final class PartyStore: ObservableObject {
 
     let rtc = PartyRTCEngine()
     let chat = PartyRoomChatManager()
+    /// H M3：派对房 NIM 消息路由（dispatchCustom + 业务 handler）从 chat 拆出。
+    /// PartyStore 实现 PartyRoomChatManagerDelegate 的回调由 chatRouter 转发，chat 只管 IM 通道。
+    let chatRouter = PartyMessageRouter()
 
     /// 视频位本地采集（仅在视频位上麦时实例化；下麦/退房 tearDown + 置 nil 释放相机+美颜）。
     /// CameraManager 已封装 FUBeautyRenderer + Passthrough 降级，sink 收到的就是美颜后的 BGRA。
@@ -68,6 +71,16 @@ final class PartyStore: ObservableObject {
     private init() {
         rtc.delegate = self
         chat.delegate = self
+        // H M3：派对房消息路由 wiring。chatRouter 持 chat 的 weak 引用以转发 delegate 调用第一参；
+        // chat 持 chatRouter 的 weak 引用以 processIncoming case .custom 调度。
+        // delegate 仍是 PartyStore（实现 PartyRoomChatManagerDelegate）。
+        chatRouter.delegate = self
+        chatRouter.chatManager = chat
+        chat.router = chatRouter
+        // M5 备用路径：上游 NIMChatroomManager 改走 NIMService.dispatch(context: .liveChatroom) 时，
+        // 本 router 在直播聊天室通道短路（避免下游意外消费派对房 attachType）；
+        // 派对房通道仍由 chat.processIncoming → chatRouter.processCustom 单一路径维持。
+        NIMService.shared.registerRouter(chatRouter)
     }
 
     // MARK: - enterRoom
@@ -92,16 +105,23 @@ final class PartyStore: ObservableObject {
             lastError = mapped
             AppLogger.party.error("[PartyStore] enter HTTP failed: \(api.localizedDescription, privacy: .private)")
             return
+        } catch let dec as DecodingError {
+            roomState = .ended
+            let detail = "enter 解码: \(dec)"
+            lastError = .enterFailed(underlying: detail)
+            AppLogger.party.error("[PartyStore] enter decoding error: \(String(describing: dec), privacy: .public)")
+            return
         } catch {
             roomState = .ended
             lastError = .enterFailed(underlying: error.localizedDescription)
+            AppLogger.party.error("[PartyStore] enter unknown error: \(String(describing: error), privacy: .public)")
             return
         }
 
         // Step 2: 写入本地状态 + 预对账
         roomInfo = info
-        seatList = info.seatList ?? []
-        onlineUserCount = info.onlineCount ?? 0
+        seatList = info.roomSeatList ?? []
+        onlineUserCount = info.onlineCount
         roomState = .entering
 
         // Step 3: RTC join
@@ -148,6 +168,10 @@ final class PartyStore: ObservableObject {
 
         // Step 5: 首次对账（即使 RTC didJoin 还没回，先用 info.seatList 让 UI 状态正确）
         postMikeList()
+        // Step 6: 通知 WS 心跳进入派对房上下文（spec §1.5 v3）
+        // 后端 weidou-socket.partyRoomHeartbeat() 据 roomId+seatIndex 更新 lastActiveTime，
+        // 30s 无心跳 → 强制下麦。iOS 现有 5s 心跳保活，理论上足够。
+        WSHeartbeat.shared.setPartyContext(roomId: roomId, seatIndex: selfSeat?.seatIndex ?? -1)
         // roomState = .joined 由 RTC didJoin + Chat didEnter 双就绪后回调 markJoinedIfReady() 设置
     }
 
@@ -164,7 +188,7 @@ final class PartyStore: ObservableObject {
         let roomIdBiz = roomInfo?.id ?? ""
         let yxRoomId = roomInfo?.yxRoomId ?? ""
         let mySeatIndex = selfSeat?.seatIndex ?? 0
-        let roomTempId = roomInfo?.roomTempId ?? 0
+        let roomTempId = roomInfo?.roomTempIdInt ?? 1
 
         // Step 1: 在麦时先 downSeat
         if mySeatIndex > 0 {
@@ -189,7 +213,10 @@ final class PartyStore: ObservableObject {
         // Step 4: Chat leave
         chat.leave()
 
-        // Step 5: reset
+        // Step 5: 清 WS 心跳的派对房上下文
+        WSHeartbeat.shared.clearPartyContext()
+
+        // Step 6: reset
         resetState()
         roomState = .ended
         AppLogger.party.info("[PartyStore] leaveRoom done")
@@ -212,6 +239,7 @@ final class PartyStore: ObservableObject {
         disableLocalVideoCapture()
         await rtc.leave()
         chat.leave()
+        WSHeartbeat.shared.clearPartyContext()
         resetState()
         roomState = .ended
 
@@ -248,7 +276,7 @@ final class PartyStore: ObservableObject {
                 roomId: info.id ?? "",
                 seatIndex: seatIndex,
                 yxRoomId: info.yxRoomId ?? "",
-                roomTempId: info.roomTempId ?? 0
+                roomTempId: info.roomTempIdInt
             )
             // 成功后等服务端下发 1001 → seatList 更新触发 postMikeList；不乐观更新
         } catch let api as PartyAPIError {
@@ -269,7 +297,7 @@ final class PartyStore: ObservableObject {
                 roomId: info.id ?? "",
                 seatIndex: idx,
                 yxRoomId: info.yxRoomId ?? "",
-                roomTempId: info.roomTempId ?? 0
+                roomTempId: info.roomTempIdInt
             )
         } catch {
             lastError = .underlying((error as? PartyAPIError) ?? .networkError)
@@ -295,17 +323,54 @@ final class PartyStore: ObservableObject {
         }
     }
 
-    /// 接受视频位邀请：调 onSeat(seatIndex)；服务端会发 1041 给房主。
-    /// 注：是否还需另调 respondInviteSeat(action=1) 待 §1.5 implement 期对照后端。
+    /// 接受视频位邀请：调 `seat/respondInvite(action=1)`（**不是直接 onSeat**，安卓确认 §3.8）。
+    /// 后端内部置 byInvite=true 直接 doOnSeat 绕过排队。
+    /// 接受成功后立即 `updateMedia(type=3, enable=1)` 自动开麦+摄像头（安卓行为）。
     func acceptVideoSeatInvite() async {
-        guard let invite = pendingVideoSeatInvite else { return }
+        guard let invite = pendingVideoSeatInvite, let info = roomInfo else { return }
         pendingVideoSeatInvite = nil
-        await requestOnSeat(seatIndex: invite.seatIndex)
+        do {
+            try await PartyAPI.respondInvite(
+                roomId: info.id ?? "",
+                yxRoomId: info.yxRoomId ?? "",
+                seatIndex: invite.seatIndex,
+                inviteId: invite.inviteId,
+                action: 1,
+                roomTempId: info.roomTempIdInt
+            )
+            // 接受成功 → 自动开麦+摄像头（安卓 PartyRoomDataManager 行为）
+            try await PartyAPI.updateMedia(
+                roomId: info.id ?? "",
+                seatIndex: invite.seatIndex,
+                type: 3,
+                enable: true,
+                yxRoomId: info.yxRoomId ?? ""
+            )
+        } catch {
+            lastError = .underlying((error as? PartyAPIError) ?? .networkError)
+            AppLogger.party.error("[PartyStore] acceptInvite failed: \(String(describing: error), privacy: .private)")
+        }
     }
 
+    /// 拒绝视频位邀请：调 `seat/respondInvite(action=2)`。
     func rejectVideoSeatInvite() async {
-        // MVP 暂无 respondInviteSeat 接口封装（不在 10 端点 MVP 子集）；F 期补
+        guard let invite = pendingVideoSeatInvite, let info = roomInfo else {
+            pendingVideoSeatInvite = nil
+            return
+        }
         pendingVideoSeatInvite = nil
+        do {
+            try await PartyAPI.respondInvite(
+                roomId: info.id ?? "",
+                yxRoomId: info.yxRoomId ?? "",
+                seatIndex: invite.seatIndex,
+                inviteId: invite.inviteId,
+                action: 2,
+                roomTempId: info.roomTempIdInt
+            )
+        } catch {
+            AppLogger.party.error("[PartyStore] rejectInvite failed: \(String(describing: error), privacy: .private)")
+        }
     }
 
     /// 清空待响应邀请（用户长时间未操作时由 UI 调用）
@@ -337,9 +402,11 @@ final class PartyStore: ObservableObject {
 
     /// 每次 seatList 变更全量遍历执行；语聊位语义已完整，视频位推帧 M5 在此基础上叠加 CameraManager 订阅。
     /// 三分类：他人在麦 / 自己在麦 / 自己不在麦。禁用 `muteRemoteAudioStream`（spec §1.2）。
+    /// v4：追加他人视频位远端流 bind/unbind 对账（spec amendment v4 §4）。
     private func postMikeList() {
         let myUid = myRtcUid
         let mySelf = selfSeat
+        AppLogger.party.notice("[PartyStore] postMikeList seats=\(self.seatList.count, privacy: .public) selfOn=\(mySelf != nil, privacy: .public) selfIdx=\(mySelf?.seatIndex ?? -1, privacy: .public) myUid=\(myUid ?? 0, privacy: .public)")
 
         // 1. 他人静音/取消静音（播放端）
         for seat in seatList {
@@ -348,6 +415,35 @@ final class PartyStore: ObservableObject {
             if uid == myUid { continue }
             let micOK = (seat.microphoneEnabled ?? 0) == 1 && (seat.seatMicrophoneEnabled ?? 0) == 1
             rtc.setRemoteAudio(uid: uid, enabled: micOK)
+        }
+
+        // 1b. 他人视频位远端流绑定对账（spec v4 §4）
+        // diff 算法：本轮应绑的 seatIndex 集合 vs 上轮已绑；新增/同 → bindRemoteVideo（幂等）；
+        // 上轮有本轮无 → unbindRemoteVideo（用旧 uid 解关联）。
+        // 摄像头开关不影响绑定 —— UI 头像覆盖即可（H5 行为，对齐 spec v4 §2）；流持续订阅保证开关切换无首帧丢失。
+        var desiredBindings: Set<Int> = []
+        for seat in seatList {
+            guard let idx = seat.seatIndex, idx > 0 else { continue }
+            guard seat.seatType == 1, seat.occupied else { continue }
+            guard let uidStr = seat.userId, let uid = UInt(uidStr), uid > 0 else {
+                if let bad = seat.userId {
+                    AppLogger.party.notice("[PartyStore] postMikeList skip remote video, bad uid=\(bad, privacy: .public) seatIndex=\(idx, privacy: .public)")
+                }
+                continue
+            }
+            if uid == myUid { continue }  // R7：自己视频位不进远端绑定
+            desiredBindings.insert(idx)
+            rtc.bindRemoteVideo(seatIndex: idx, uid: uid)
+        }
+        // 上轮绑过但本轮不在 desired 的 → 清理
+        let previouslyBound = rtc.boundRemoteSeatIndices
+        for idx in previouslyBound where !desiredBindings.contains(idx) {
+            rtc.unbindRemoteVideo(seatIndex: idx)
+        }
+
+        // 同步 WS 心跳的 seatIndex，让 5s 周期心跳带最新麦位状态（spec §1.5 v3）
+        if roomState == .joined || roomState == .entering, let rid = roomInfo?.id, !rid.isEmpty {
+            WSHeartbeat.shared.setPartyContext(roomId: rid, seatIndex: mySelf?.seatIndex ?? -1)
         }
 
         // 2. 自己在麦 / 不在麦
@@ -464,41 +560,100 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         _ = raw
         // MVP 简化：1001 payload schema 待 M3 抓真实帧确认；
         // 现策略——若 payload 含完整 seatList 数组直接替换，否则全量重拉。
+        AppLogger.party.notice("[PartyStore] 1001 seatUpdate payload keys=\(Array(payload.keys), privacy: .public)")
         if let seats = decodeSeatListField(payload) {
+            AppLogger.party.notice("[PartyStore] 1001 direct seatList replace count=\(seats.count, privacy: .public)")
             seatList = seats
             postMikeList()
         } else {
+            AppLogger.party.notice("[PartyStore] 1001 fallback to reloadSeatListFromServer")
             Task { [weak self] in await self?.reloadSeatListFromServer() }
         }
     }
 
     func partyRoomChatDidRequireSeatListReload(_ chat: PartyRoomChatManager) {
+        AppLogger.party.notice("[PartyStore] 1012 require full seatList reload")
         Task { [weak self] in await self?.reloadSeatListFromServer() }
     }
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveProhibitMic payload: [String: Any], raw: NIMMessage) {
         _ = raw
-        // 简化：直接 reload seatList 保证持久态对齐
-        Task { [weak self] in await self?.reloadSeatListFromServer() }
+        // 安卓确认 §3.7：1015 payload `{roomId, seatIndex, seatMicrophoneEnabled(0禁/1解), userId, operatorType(6禁/7解)}`。
+        // 定向更新（取代全量 reload），减少抖动。
+        applyMediaUpdate(payload, isProhibit: true)
     }
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveMediaUpdate payload: [String: Any], raw: NIMMessage) {
         _ = raw
-        // 同 prohibitMic：reload + postMikeList
-        Task { [weak self] in await self?.reloadSeatListFromServer() }
+        // 安卓确认 §3.6：1008 payload `{roomId, seatIndex, seatType, userId, cameraEnabled(0/1), microphoneEnabled(0/1)}`。
+        // 定向更新（取代全量 reload）。
+        applyMediaUpdate(payload, isProhibit: false)
+    }
+
+    /// 把 1008 / 1015 payload 的字段定向更新到 seatList 对应麦位 → 触发 postMikeList 对账。
+    /// `isProhibit=true` 时更新 `seatMicrophoneEnabled`（管理员禁麦态），
+    /// `false` 时更新 `microphoneEnabled / cameraEnabled`（用户自身开关）。
+    /// 字段缺失则不更新该字段（与服务端 partial update 语义一致）。
+    private func applyMediaUpdate(_ payload: [String: Any], isProhibit: Bool) {
+        guard let targetSeatIndex = PartyValueNormalizer.intify(payload["seatIndex"]) else {
+            AppLogger.party.notice("[PartyStore] media update payload missing seatIndex; full reload fallback")
+            Task { [weak self] in await self?.reloadSeatListFromServer() }
+            return
+        }
+        guard let idx = seatList.firstIndex(where: { $0.seatIndex == targetSeatIndex }) else {
+            // 未匹配（房间模板可能切了）→ 全量 reload 兜底
+            Task { [weak self] in await self?.reloadSeatListFromServer() }
+            return
+        }
+        let old = seatList[idx]
+        let newSeat = PartyRoomSeat(
+            id: old.id,
+            roomId: old.roomId,
+            seatIndex: old.seatIndex,
+            userId: old.userId,
+            avatar: old.avatar,
+            nickname: old.nickname,
+            seatType: PartyValueNormalizer.intify(payload["seatType"]) ?? old.seatType,
+            isOccupied: old.isOccupied,
+            cameraEnabled: isProhibit ? old.cameraEnabled : (PartyValueNormalizer.intify(payload["cameraEnabled"]) ?? old.cameraEnabled),
+            microphoneEnabled: isProhibit ? old.microphoneEnabled : (PartyValueNormalizer.intify(payload["microphoneEnabled"]) ?? old.microphoneEnabled),
+            roomRoleType: old.roomRoleType,
+            giftValueCount: old.giftValueCount,
+            headFrame: old.headFrame,
+            yxAccid: old.yxAccid,
+            userType: old.userType,
+            seatCameraEnabled: old.seatCameraEnabled,
+            seatMicrophoneEnabled: isProhibit ? (PartyValueNormalizer.intify(payload["seatMicrophoneEnabled"]) ?? old.seatMicrophoneEnabled) : old.seatMicrophoneEnabled,
+            lockFlag: old.lockFlag,
+            roomTempId: old.roomTempId,
+            isHostSeat: old.isHostSeat,
+            isPlatformAdmin: old.isPlatformAdmin,
+            showBubble: old.showBubble,
+            anchorTaskRewardExt: old.anchorTaskRewardExt
+        )
+        seatList[idx] = newSeat
+        postMikeList()
     }
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveGift payload: [String: Any], raw: NIMMessage) {
+        // 安卓确认 §3.3 真实字段（解压后）：
+        // - giftId / giftNum（**不是 num**）/ giftIcon / giftPrice / giftType / smallImg
+        // - sendUser（对象：userId/nickname/icon/yxAccid/userType...）
+        // - receiveUserList（对象数组）
+        // - roomId / ownerId / gems / cost ...
+        // **无 timestamp 字段**——去重键用 `giftId + sendUser.userId`（+NIM 消息时间）
+        let sendUserObj = payload["sendUser"] as? [String: Any]
+        let receiveList = payload["receiveUserList"] as? [[String: Any]] ?? []
+        let receiverIds = receiveList.compactMap { PartyValueNormalizer.stringify($0["userId"]) }
+
         let event = PartyGiftEvent(
-            giftId: (payload["giftId"] as? Int) ?? 0,
-            giftName: payload["giftName"] as? String,
-            num: (payload["num"] as? Int) ?? 1,
-            senderUserId: (payload["senderUserId"] as? String) ?? (payload["fromUserId"] as? String),
-            senderNickname: (payload["senderNickname"] as? String) ?? (payload["fromNickname"] as? String),
-            receiverUserIds: (payload["receiverUserIds"] as? [String])
-                ?? (payload["yxAccidList"] as? [String])
-                ?? [],
-            timestamp: Int64((payload["timestamp"] as? Double) ?? raw.timestamp * 1000)
+            giftId: PartyValueNormalizer.intify(payload["giftId"]) ?? 0,
+            giftName: nil,    // 后端 payload 无 giftName 字段，需客户端查礼物表（MVP 不实装）
+            num: PartyValueNormalizer.intify(payload["giftNum"]) ?? 1,
+            senderUserId: sendUserObj.flatMap { PartyValueNormalizer.stringify($0["userId"]) },
+            senderNickname: sendUserObj?["nickname"] as? String,
+            receiverUserIds: receiverIds,
+            timestamp: Int64(raw.timestamp * 1000)   // 用 NIM 消息时间替代（payload 无 timestamp 字段）
         )
         lastGiftEvent = event
     }
@@ -513,21 +668,24 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         lastInviteResult = result
     }
 
-    /// 尝试从 1001 payload 解出完整 seatList 字段；
-    /// 兼容常见字段名 `seatList / mikeList / list / data`。失败返 nil → 触发全量 reload。
+    /// 从 1001 payload 解 seats 数组（安卓确认 §3.1：顶层 key=`seats`，全量麦位，附 `seatOperate` 变更原因）。
+    /// 失败返 nil → 触发全量 reload。
     private func decodeSeatListField(_ payload: [String: Any]) -> [PartyRoomSeat]? {
-        for key in ["seatList", "mikeList", "list", "data"] {
-            if let arr = payload[key] as? [[String: Any]] {
-                do {
-                    let jsonData = try JSONSerialization.data(withJSONObject: arr)
-                    let seats = try JSONDecoder().decode([PartyRoomSeat].self, from: jsonData)
-                    return seats
-                } catch {
-                    continue
-                }
-            }
+        // 安卓真值：1001 顶层 key 是 `seats`（不是 seatList/mikeList/list/data）
+        guard let arr = payload["seats"] as? [[String: Any]] else {
+            return nil
         }
-        return nil
+        // 顺带打日志 seatOperate 字段（调试用，MVP 不分支处理）
+        if let op = payload["seatOperate"] as? Int {
+            AppLogger.party.notice("[PartyStore] 1001 seatOperate=\(op, privacy: .public) seatCount=\(arr.count, privacy: .public)")
+        }
+        do {
+            let jsonData = try JSONSerialization.data(withJSONObject: arr)
+            return try JSONDecoder().decode([PartyRoomSeat].self, from: jsonData)
+        } catch {
+            AppLogger.party.error("[PartyStore] 1001 seats decode failed: \(String(describing: error), privacy: .public)")
+            return nil
+        }
     }
 }
 

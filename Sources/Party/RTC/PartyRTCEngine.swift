@@ -43,8 +43,35 @@ final class PartyRTCEngine: NSObject, ObservableObject {
     /// leave channel 异步等待句柄（D v5.4 模式）
     private var leaveContinuation: CheckedContinuation<Void, Never>?
 
+    /// leave 500ms 兜底 Task 句柄（二轮复查 wfpw5v1us）：
+    /// didLeaveChannelWith 正常 resume 时 cancel，避免 Task 泄漏 + 多余日志。
+    private var leaveTimeoutTask: Task<Void, Never>?
+
     /// 视频位推帧是否已启用（默认 false，仅 `enableVideoSeat()` 后置 true）
     private(set) var videoSeatActive = false
+
+    /// pushFrame 跨 actor 安全的状态快照（review 202606252033 P0-1）。
+    /// pushFrame 是 nonisolated（CameraManager.videoQueue 调用），但 engine / state / videoSeatActive 在 @MainActor 写。
+    /// 用 NSLock 守 frameSnapshot；任何 @MainActor 写完上述字段后调 `updateFrameSnapshot()` 刷新快照，
+    /// pushFrame 锁内取快照 → 锁外推帧。`leave()` 置 nil 与 pushFrame 读字段的数据竞争由此消除（CLAUDE.md v5.3.1 同源）。
+    private let frameLock = NSLock()
+    private var frameSnapshot: (engine: AgoraRtcEngineKit?, active: Bool) = (nil, false)
+
+    /// 远端视频位 UIView 池（spec v4 §4，按 seatIndex 缓存稳定实例 → SwiftUI redraw 不丢首帧）。
+    /// 与 H5 `#partyMicDom-${seatIndex}` 对齐：池容量随麦位数懒增长，退房统一释放。
+    /// rules `swiftui-camera-preview.md` §2：AgoraRtcVideoCanvas.view 反复 makeUIView 会丢首帧。
+    private var seatIndexToView: [Int: UIView] = [:]
+
+    /// 上次按 seatIndex 绑过的远端 uid（用于换人时拿旧 uid 清理 canvas）。
+    /// key 缺失 = 该麦位从未绑过；value=0 = 已显式清理。
+    private var seatIndexToBoundUid: [Int: UInt] = [:]
+
+    /// 当前有效绑定的 seatIndex 集合（用于 PartyStore.postMikeList diff 对账，spec v4 §4）。
+    /// 仅 @MainActor 调用 —— 字典写入路径（bindRemoteVideo / unbindRemoteVideo / releaseAllRemoteViews）均 @MainActor。
+    @MainActor
+    var boundRemoteSeatIndices: Set<Int> {
+        Set(seatIndexToBoundUid.compactMap { $0.value > 0 ? $0.key : nil })
+    }
 
     /// 当前在频道（state == .joined 衍生方便外部判定）
     var isActive: Bool { state == .joined || state == .joining }
@@ -92,6 +119,7 @@ final class PartyRTCEngine: NSObject, ObservableObject {
             state = .failed("joinChannel: \(ret)")
             delegate?.partyRTCEngine(self, didFailWithReason: "join_\(ret)")
         }
+        updateFrameSnapshot()  // P0-1：写完 engine/state 必须刷新 pushFrame 快照
     }
 
     // MARK: - 上下麦
@@ -174,6 +202,7 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         engine.updateChannel(with: option)
         videoSeatActive = true
         AppLogger.party.info("[PartyRTC] enableVideoSeat 360x640@15fps")
+        updateFrameSnapshot()  // P0-1
     }
 
     /// 关闭视频位推帧。
@@ -183,6 +212,7 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         disableVideoSeatInternal()
     }
 
+    @MainActor
     private func disableVideoSeatInternal() {
         guard let engine else { return }
         let option = AgoraRtcChannelMediaOptions()
@@ -192,16 +222,102 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         engine.disableVideo()
         videoSeatActive = false
         AppLogger.party.info("[PartyRTC] disableVideoSeat")
+        updateFrameSnapshot()  // P0-1
     }
 
-    /// 视频位本端推帧入口。PartyStore 在 CameraManager 订阅字典 sink 内调用。
+    // MARK: - 远端视频流绑定（spec v4 §4 / H5 playVideoInDom 等价）
+
+    /// 取按 seatIndex 缓存的远端渲染 UIView；不存在则懒创建后入池。
+    /// **必须在 main thread** —— SwiftUI `UIViewRepresentable.makeUIView` 已是 main isolated。
+    /// view 永远不复制不替换；后续 `setupRemoteVideo` 的 canvas.view 始终是池中实例（rules §2 关键）。
+    @MainActor
+    func acquireRemoteView(seatIndex: Int) -> UIView {
+        if let existing = seatIndexToView[seatIndex] { return existing }
+        let v = UIView()
+        v.backgroundColor = .black
+        v.isUserInteractionEnabled = false
+        seatIndexToView[seatIndex] = v
+        AppLogger.party.info("[PartyRTC] acquireRemoteView seatIndex=\(seatIndex, privacy: .public) created")
+        return v
+    }
+
+    /// 绑定 seatIndex 对应的远端视频流到 (uid, view) canvas。
+    /// 幂等：同 (seatIndex, uid) 重入 = no-op；不同 uid（换人）= 先清旧 uid 再绑新 uid。
+    /// `autoSubscribeVideo` 已在 join 时置 true，无需 muteRemoteVideoStream(false)。
+    @MainActor
+    func bindRemoteVideo(seatIndex: Int, uid: UInt) {
+        guard let engine, uid > 0 else { return }
+        if let last = seatIndexToBoundUid[seatIndex], last == uid {
+            return  // 幂等：无变化
+        }
+        // 换人：先清旧 uid 的 canvas（防 SDK 内部把新 view 错关联到旧 uid 流）
+        if let last = seatIndexToBoundUid[seatIndex], last != 0, last != uid {
+            let clear = AgoraRtcVideoCanvas()
+            clear.uid = last
+            clear.view = nil
+            engine.setupRemoteVideo(clear)
+            AppLogger.party.info("[PartyRTC] bindRemoteVideo replace seatIndex=\(seatIndex, privacy: .public) old=\(last, privacy: .public) new=\(uid, privacy: .public)")
+        }
+        let view = acquireRemoteView(seatIndex: seatIndex)
+        let canvas = AgoraRtcVideoCanvas()
+        canvas.uid = uid
+        canvas.view = view
+        canvas.renderMode = .hidden    // 等比裁剪铺满 56×56 圆形容器
+        engine.setupRemoteVideo(canvas)
+        seatIndexToBoundUid[seatIndex] = uid
+        AppLogger.party.info("[PartyRTC] bindRemoteVideo seatIndex=\(seatIndex, privacy: .public) uid=\(uid, privacy: .public)")
+    }
+
+    /// 清理 seatIndex 对应远端 canvas（用上次绑过的 uid）。
+    /// 不释放 view 池：进房期间 view 保留以便下个人上同位时复用。退房时统一 `releaseAllRemoteViews`。
+    @MainActor
+    func unbindRemoteVideo(seatIndex: Int) {
+        guard let engine, let lastUid = seatIndexToBoundUid[seatIndex], lastUid != 0 else { return }
+        let canvas = AgoraRtcVideoCanvas()
+        canvas.uid = lastUid
+        canvas.view = nil
+        engine.setupRemoteVideo(canvas)
+        seatIndexToBoundUid[seatIndex] = 0
+        AppLogger.party.info("[PartyRTC] unbindRemoteVideo seatIndex=\(seatIndex, privacy: .public) uid=\(lastUid, privacy: .public)")
+    }
+
+    /// 释放整个远端 view 池（退房时调）。先逐个 unbind 让 SDK 解关联，再清字典。
+    /// **P2-9**：keys 快照后迭代——unbindRemoteVideo 会写 seatIndexToBoundUid[seatIndex]=0，
+    /// for-in 中 mutate 被迭代字典是 Swift 未定义行为，必须先快照。
+    @MainActor
+    func releaseAllRemoteViews() {
+        for seatIndex in Array(seatIndexToBoundUid.keys) {
+            unbindRemoteVideo(seatIndex: seatIndex)
+        }
+        seatIndexToBoundUid.removeAll()
+        seatIndexToView.removeAll()
+        AppLogger.party.info("[PartyRTC] releaseAllRemoteViews done")
+    }
+
+    /// 视频位本端推帧入口。PartyStore 在 CameraManager 订阅字典 sink 内调用（videoQueue 后台线程）。
+    /// **跨 actor 安全**：锁内取 frameSnapshot 快照，锁外用快照推帧；与 @MainActor 写 engine/state/videoSeatActive 的链路通过锁完全隔离。
     func pushFrame(_ pixelBuffer: CVPixelBuffer) {
-        guard let engine, state == .joined, videoSeatActive else { return }
+        frameLock.lock()
+        let snap = frameSnapshot
+        frameLock.unlock()
+        guard let engine = snap.engine, snap.active else { return }
         let frame = AgoraVideoFrame()
         frame.format = AgoraVideoFormat.cvPixelBGRA.rawValue
         frame.textureBuf = pixelBuffer
         frame.rotation = 0
         engine.pushExternalVideoFrame(frame, videoTrackId: 0)
+    }
+
+    /// 刷新 pushFrame 用的状态快照（P0-1 修复配套）。
+    /// 在 @MainActor 路径写完 engine / state / videoSeatActive 后必须调；
+    /// 触发点：join 失败 / didJoinChannel / enableVideoSeat / disableVideoSeatInternal / leave。
+    @MainActor
+    private func updateFrameSnapshot() {
+        let nextEngine = engine
+        let nextActive = (state == .joined && videoSeatActive)
+        frameLock.lock()
+        frameSnapshot = (nextEngine, nextActive)
+        frameLock.unlock()
     }
 
     // MARK: - leave
@@ -211,6 +327,14 @@ final class PartyRTCEngine: NSObject, ObservableObject {
     @MainActor
     func leave() async {
         guard let engine else { return }
+
+        // 二轮复查 wfpw5v1us：本地快照 wasVideoActive
+        // 必须在 videoSeatActive=false 之前取值，否则 line 358 永远走不到 disableVideo() 分支（死分支 / video source 不释放）
+        let wasVideoActive = videoSeatActive
+
+        // P0-1：进 leave 立即作废 pushFrame 快照，防止 didLeave 回调返回前 captureOutput 仍在推帧到正在销毁的 channel
+        videoSeatActive = false
+        updateFrameSnapshot()
 
         // 先关推流（让远端尽快感知离开）
         let option = AgoraRtcChannelMediaOptions()
@@ -227,7 +351,8 @@ final class PartyRTCEngine: NSObject, ObservableObject {
             leaveContinuation = cont
             engine.leaveChannel(nil)
             // 500ms 兜底：极小概率 SDK 漏调 didLeaveChannelWith
-            Task { @MainActor [weak self] in
+            // 二轮复查 wfpw5v1us：保存 Task 句柄，didLeaveChannelWith 正常 resume 时 cancel，避免 Task 泄漏 + 多余日志
+            leaveTimeoutTask = Task { @MainActor [weak self] in
                 try? await Task.sleep(nanoseconds: 500_000_000)
                 guard let self else { return }
                 if let c = self.leaveContinuation {
@@ -237,16 +362,23 @@ final class PartyRTCEngine: NSObject, ObservableObject {
                 }
             }
         }
+        // 正常 resume 后清 timeout task 句柄（didLeaveChannelWith 路径也会清，二层兜底）
+        leaveTimeoutTask?.cancel()
+        leaveTimeoutTask = nil
 
         engine.disableAudio()
-        if videoSeatActive { engine.disableVideo() }
-        // 解绑 delegate 防后续直播侧收到派对房残留回调
+        if wasVideoActive { engine.disableVideo() }  // 二轮复查：用快照避死分支（videoSeatActive 入口已置 false）
+        // 二轮复查 wfpw5v1us（P2-9 加固）：delegate=nil 顺序前移到 releaseAllRemoteViews 之前
+        // 防 unbindRemoteVideo → setupRemoteVideo(view:nil) 触发 SDK 回调进 Task 队列写已退场 state
         engine.delegate = nil
+        // 清远端 view 池（spec v4 §5 R11 退进同房循环不残留）
+        releaseAllRemoteViews()
         self.engine = nil
         state = .idle
         remoteUids = []
         remoteVolumes = [:]
         videoSeatActive = false
+        updateFrameSnapshot()  // P0-1：engine=nil 后再刷新一次，快照彻底失效
         AppLogger.party.info("[PartyRTC] leave done")
     }
 }
@@ -257,21 +389,26 @@ extension PartyRTCEngine: AgoraRtcEngineDelegate {
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didJoinChannel channel: String, withUid uid: UInt, elapsed: Int) {
         AppLogger.party.info("[PartyRTC] didJoin ch=\(channel, privacy: .public) uid=\(uid, privacy: .public) elapsed=\(elapsed, privacy: .public)ms")
-        Task { @MainActor in
+        // P1-4：weak self 避 SDK 回调 backlog 持有旧实例（D v5.3.2 同源）
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             self.state = .joined
+            self.updateFrameSnapshot()  // P0-1：state 变更必须刷新快照
             self.delegate?.partyRTCEngineDidJoin(self)
         }
     }
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didJoinedOfUid uid: UInt, elapsed: Int) {
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             self.remoteUids.insert(uid)
             self.delegate?.partyRTCEngine(self, didJoinedRemoteUid: uid)
         }
     }
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didOfflineOfUid uid: UInt, reason: AgoraUserOfflineReason) {
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             self.remoteUids.remove(uid)
             self.remoteVolumes.removeValue(forKey: uid)
             self.delegate?.partyRTCEngine(self, didOfflineRemoteUid: uid)
@@ -286,14 +423,19 @@ extension PartyRTCEngine: AgoraRtcEngineDelegate {
                 self.leaveContinuation = nil
                 c.resume()
             }
+            // 二轮复查 wfpw5v1us：SDK 正常回调，cancel 500ms timeout Task（一层兜底，leave() await 后还有二层）
+            self.leaveTimeoutTask?.cancel()
+            self.leaveTimeoutTask = nil
         }
     }
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didOccurError errorCode: AgoraErrorCode) {
         AppLogger.party.error("[PartyRTC] error code=\(errorCode.rawValue, privacy: .public)")
-        Task { @MainActor in
+        Task { @MainActor [weak self] in
+            guard let self else { return }
             if self.state == .joining {
                 self.state = .failed("rtc_\(errorCode.rawValue)")
+                self.updateFrameSnapshot()  // P0-1：state 变更
             }
             self.delegate?.partyRTCEngine(self, didFailWithReason: "rtc_\(errorCode.rawValue)")
         }
@@ -303,9 +445,15 @@ extension PartyRTCEngine: AgoraRtcEngineDelegate {
         AppLogger.party.notice("[PartyRTC] connection state=\(state.rawValue, privacy: .public) reason=\(reason.rawValue, privacy: .public)")
         // 被踢 / 永久断开：通知 PartyStore（M4 内对接 forceLeaveRoom）
         if reason == .reasonBannedByServer {
-            Task { @MainActor in self.delegate?.partyRTCEngine(self, didFailWithReason: "banned_by_server") }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.delegate?.partyRTCEngine(self, didFailWithReason: "banned_by_server")
+            }
         } else if reason == .reasonJoinFailed {
-            Task { @MainActor in self.delegate?.partyRTCEngine(self, didFailWithReason: "join_failed") }
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.delegate?.partyRTCEngine(self, didFailWithReason: "join_failed")
+            }
         }
     }
 

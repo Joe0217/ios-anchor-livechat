@@ -21,20 +21,20 @@ struct PartyCreateRoomView: View {
 
     var body: some View {
         Form {
-            Section("房间名称") {
-                TextField("最多 20 个字", text: $roomName)
+            Section(L10n.Party.createSectionName) {
+                TextField(L10n.Party.createNamePlaceholder, text: $roomName)
                     .onChange(of: roomName) { new in
                         if new.count > 20 { roomName = String(new.prefix(20)) }
                     }
             }
-            Section("选择模板") {
+            Section(L10n.Party.createSectionTemplate) {
                 if loadingTemplates {
-                    HStack { ProgressView(); Text("加载模板…") }
+                    HStack { ProgressView(); Text(L10n.Party.createTemplateLoading) }
                 } else if !loadError.isEmpty {
                     Text(loadError).foregroundColor(.red).font(.caption)
-                    Button("重试") { Task { await loadTemplates() } }
+                    Button(L10n.Party.retry) { Task { await loadTemplates() } }
                 } else if templates.isEmpty {
-                    Text("dev 暂无可用模板").foregroundColor(.secondary).font(.caption)
+                    Text(L10n.Party.createTemplateEmpty).foregroundColor(.secondary).font(.caption)
                 } else {
                     ForEach(templates) { temp in
                         Button {
@@ -42,9 +42,12 @@ struct PartyCreateRoomView: View {
                         } label: {
                             HStack {
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text(temp.name ?? "模板 \(temp.id)")
+                                    Text(temp.name ?? String(format: L10n.Party.createTemplateFallbackFormat, temp.id))
                                         .foregroundColor(.primary)
-                                    Text("总麦位 \(temp.seatCount ?? 0) · 视频 \(temp.videoSeatCount ?? 0) · 语聊 \(temp.voiceSeatCount ?? 0)")
+                                    Text(String(format: L10n.Party.createTemplateDetailFormat,
+                                                temp.seatCount ?? 0,
+                                                temp.videoSeatCount ?? 0,
+                                                temp.voiceSeatCount ?? 0))
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
@@ -67,14 +70,14 @@ struct PartyCreateRoomView: View {
                     HStack {
                         Spacer()
                         if isSubmitting { ProgressView().padding(.trailing, 6) }
-                        Text("创建房间").bold()
+                        Text(L10n.Party.createSubmit).bold()
                         Spacer()
                     }
                 }
                 .disabled(!canSubmit || isSubmitting)
             }
         }
-        .navigationTitle("创建派对房")
+        .navigationTitle(L10n.Party.createNavTitle)
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $pushRoom) {
             PartyRoomView(roomId: createdRoomId)
@@ -96,9 +99,11 @@ struct PartyCreateRoomView: View {
             templates = try await PartyAPI.roomTempList()
             if selectedTemplate == nil { selectedTemplate = templates.first }
         } catch let api as PartyAPIError {
-            loadError = api.errorDescription ?? "模板加载失败"
+            loadError = api.errorDescription ?? L10n.Party.createErrorTemplateLoad
+        } catch let dec as DecodingError {
+            loadError = String(format: L10n.Party.listErrorDecodeFormat, PartyDecodeErrorDescriber.describe(dec))
         } catch {
-            loadError = "模板加载失败：\(error.localizedDescription)"
+            loadError = String(format: L10n.Party.createErrorTemplateLoadFormat, error.localizedDescription)
         }
     }
 
@@ -116,15 +121,17 @@ struct PartyCreateRoomView: View {
                 roomTempId: temp.id
             )
             guard let id = info.id, !id.isEmpty else {
-                submitError = "服务端未返 roomId"
+                submitError = L10n.Party.createErrorNoRoomId
                 return
             }
             createdRoomId = id
             pushRoom = true
         } catch let api as PartyAPIError {
-            submitError = api.errorDescription ?? "创建失败"
+            submitError = api.errorDescription ?? L10n.Party.createErrorFailed
+        } catch let dec as DecodingError {
+            submitError = String(format: L10n.Party.listErrorDecodeFormat, PartyDecodeErrorDescriber.describe(dec))
         } catch {
-            submitError = "创建失败：\(error.localizedDescription)"
+            submitError = String(format: L10n.Party.createErrorFailedFormat, error.localizedDescription)
         }
     }
 }

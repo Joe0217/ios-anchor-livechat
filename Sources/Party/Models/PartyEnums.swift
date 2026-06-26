@@ -30,6 +30,22 @@ enum PartyOperatorType: Int, Codable {
     case removeAdminAndHoldDown = 11
 }
 
+/// 1001 麦位变化通知里 `seatOperate` 字段（后端 `SeatOperationTypeEnum`，安卓确认 §3.1）。
+/// MVP 仅观测打日志，不严格校验；F 期管理动作落地时按需消费具体 case。
+enum PartySeatOperate: Int {
+    case applyOnMike = 1          // 注：原 spec 误标为"上麦"，实际是"申请上麦"（普通用户走排队）
+    case downMike = 2             // 下麦
+    case holdDownMike = 3         // 抱下麦
+    case holdUpMike = 4           // 抱上麦
+    case switchMike = 5           // 换麦
+    case prohibitMic = 6          // 禁麦
+    case unprohibitMic = 7        // 解禁
+    case lockSeat = 8             // 锁麦
+    case unlockSeat = 9           // 解锁
+    case exchange = 10            // 交换
+    case removeAdminAndHoldDown = 11   // 取消管理同时抱下
+}
+
 /// 派对房房间状态机（spec §1.4.2）。F 期再扩 `.kicked` / `.minimized`。
 enum PartyRoomState: Equatable {
     case idle

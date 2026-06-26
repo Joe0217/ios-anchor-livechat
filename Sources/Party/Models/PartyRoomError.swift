@@ -19,16 +19,16 @@ enum PartyRoomError: Error, LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .enterFailed(let msg): return "进房失败: \(msg)"
-        case .exitFailed(let msg): return "退房失败: \(msg)"
-        case .seatOccupied: return "麦位已被占用"
-        case .seatEmpty: return "麦位为空"
-        case .banned: return "已被封禁"
-        case .levelInsufficient: return "等级不足"
-        case .networkLost: return "网络连接已断开"
-        case .kicked: return "已被房主踢出"
-        case .passwordWrong: return "进房密码错误"
-        case .mediaSwitchFailed: return "麦克风/摄像头切换失败"
+        case .enterFailed(let msg): return String(format: L10n.Party.errorEnterFailedFormat, msg)
+        case .exitFailed(let msg): return String(format: L10n.Party.errorExitFailedFormat, msg)
+        case .seatOccupied: return L10n.Party.errorSeatOccupied
+        case .seatEmpty: return L10n.Party.errorSeatEmpty
+        case .banned: return L10n.Party.errorBanned
+        case .levelInsufficient: return L10n.Party.errorLevelInsufficient
+        case .networkLost: return L10n.Party.errorNetworkLost
+        case .kicked: return L10n.Party.errorKicked
+        case .passwordWrong: return L10n.Party.errorPasswordWrong
+        case .mediaSwitchFailed: return L10n.Party.errorMediaSwitchFailed
         case .underlying(let api): return api.errorDescription
         }
     }
