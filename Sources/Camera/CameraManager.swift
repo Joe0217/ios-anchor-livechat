@@ -212,7 +212,15 @@ final class CameraManager: NSObject, ObservableObject {
             logger.info("background-type interruption (reason=\(reasonRaw)); not reporting to LiveStore")
             return
         }
+        // v5.10 真根因：app 切后台时 iOS 也会派发 reason=3（video device 被系统 acquire），
+        // 与 handleRuntimeError:192-196 的 background 静默策略**不对称**是漏洞。
+        // 累积切后台 >20s 时，watcher 醒来时 InterruptionEnded 尚未派发到 main queue → forceEnd 误触发。
+        // 前台真相机占用（真 reason=3）仍能上报——回前台后如果占用未解，会重新派发。
         DispatchQueue.main.async { [weak self] in
+            guard UIApplication.shared.applicationState != .background else {
+                logger.warning("interrupted reason=\(reasonRaw) in background; not reporting (avoid 20s watcher误触发)")
+                return
+            }
             self?.onError?(.wasInterrupted(reasonRaw: reasonRaw))
         }
     }

@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import os
 
 private let logger = Logger(subsystem: "com.anchor.livechat", category: "sys-msg-router")
@@ -35,7 +36,28 @@ final class SystemMessageRouter: MessageRouter {
     weak var callStore: CallStore?
     weak var sessionStore: SessionStore?
 
-    private init() {}
+    /// 回前台 5s 冷却结束时间。NIM SDK 重连完成 `loginOK` 后会**逐条补发**离线 backlog
+    /// （NIMService.swift:288-298 注释自承），此时 applicationState 已是 .active，单 background
+    /// guard 拦不住 → 回前台瞬间触发 forceEnd。对齐 NetworkQualityMonitor 的同款冷却策略。
+    private var foregroundCooldownUntil: Date?
+
+    private init() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func handleWillEnterForeground() {
+        foregroundCooldownUntil = Date().addingTimeInterval(5)
+        logger.info("[SysMsgRouter] will enter foreground; 5s cooldown to drop NIM SDK backlog")
+    }
 
     func route(_ attachType: AttachType,
                payload: [String: Any],
@@ -52,10 +74,28 @@ final class SystemMessageRouter: MessageRouter {
                          context: MessageContext) -> Bool {
         switch action {
         case .forceEndLive(let sub):
+            // 后台守卫 + 回前台 5s 冷却：sysMsg 推送下播独立于 HeartbeatController，必须自带防御。
+            // 对齐 HeartbeatController.tick:46-50 + NetworkQualityMonitor cooldown 模式。
+            guard UIApplication.shared.applicationState != .background else {
+                logger.info("[SysMsgRouter] forceEndLive deferred: app in background sub=\(sub, privacy: .public)")
+                return true
+            }
+            if let cd = foregroundCooldownUntil, Date() < cd {
+                logger.info("[SysMsgRouter] forceEndLive deferred: foreground cooldown sub=\(sub, privacy: .public)")
+                return true
+            }
             Task { @MainActor [weak self] in
                 await self?.liveStore?.forceEnd(reason: .disconnected, subSource: sub)
             }
         case .banned(let sub):
+            guard UIApplication.shared.applicationState != .background else {
+                logger.info("[SysMsgRouter] banned deferred: app in background sub=\(sub, privacy: .public)")
+                return true
+            }
+            if let cd = foregroundCooldownUntil, Date() < cd {
+                logger.info("[SysMsgRouter] banned deferred: foreground cooldown sub=\(sub, privacy: .public)")
+                return true
+            }
             Task { @MainActor [weak self] in
                 await self?.liveStore?.forceEnd(reason: .banned, subSource: sub)
             }

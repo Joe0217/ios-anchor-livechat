@@ -110,8 +110,15 @@ struct LiveRoomView: View {
         .onAppear {
             camera.renderer.updateParameters(beauty)
             // M2：相机错误转发到 store
+            // v5.11 真根因修复：CameraManager 的 onError 3 处调用点全在 DispatchQueue.main.async 内，
+            // 已保证 wasInterrupted → interruptionEnded 的 FIFO 派发顺序；此处用 Task { @MainActor in }
+            // 二次包装会把 start/stopWatcher 拆到两个独立 Task 排队等 MainActor executor，
+            // Swift Task 调度非严格 FIFO → 反序时 stopWatcher 先跑（无操作）后 startWatcher 起孤儿 watcher，
+            // 20s 后误触发 forceEnd(.cameraFailure)。改 assumeIsolated 同步执行、复用 main queue FIFO。
             camera.onError = { error in
-                Task { @MainActor in store.onCameraError(error) }
+                MainActor.assumeIsolated {
+                    store.onCameraError(error)
+                }
             }
             // M2：美颜降级通知（CameraManager init 时已确定）
             if camera.isBeautyFallback {
