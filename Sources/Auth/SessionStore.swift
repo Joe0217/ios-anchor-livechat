@@ -10,6 +10,13 @@ final class SessionStore: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage = ""
 
+    // MARK: - H M4：sysMsg 通道字段（C/J 期 UI 绑订）
+
+    /// sysMsg -4 被关注通知累计计数（J 期 UI Toast / Badge 订阅）
+    @Published private(set) var followIncrementCount: Int = 0
+    /// sysMsg 58 主播审核状态变更最近一次 payload（applyStatus + content）
+    @Published private(set) var lastAuditStatus: (applyStatus: Int, content: String)?
+
     /// v2 起 user 整体（含 token / imToken / loginUuid 等敏感字段）存 Keychain。
     /// v1（UserDefaults）→ v2 一次性迁移：load() 命中旧键时搬到 Keychain 并清旧。
     private let storeKey = "session.user.v2"
@@ -97,6 +104,24 @@ final class SessionStore: ObservableObject {
         AnchorInfoStore.shared.clear()
         // 图片缓存也清掉:上个号的头像/相册/视频缩略不应被下个号看到
         ImageCache.shared.clear()
+        // IM 场景闸门清空（防 A 账号场景残留误导 B 账号过滤逻辑）
+        IMSceneGate.shared.resetAll()
+    }
+
+    // MARK: - H M4：sysMsg 通道入口（spec §3.1 / H 校验清单 §1.1.2 A 表）
+
+    /// sysMsg -4：被关注通知。仅累加 @Published 计数，UI 订阅做 Toast / Badge。
+    func incrementFollow() {
+        followIncrementCount += 1
+        AppLogger.auth.info("[Session] follow incr total=\(self.followIncrementCount, privacy: .public)")
+    }
+
+    /// sysMsg 58：主播审核状态变更（applyStatus 0=通过 / 1=拒绝）。
+    /// - 0 通过：H5 行为是 logOut 让主播重登；J 期产品确认后再决定是否自动 logout
+    /// - 1 拒绝：UI 弹 content 提示；本方法仅落 @Published 字段
+    func handleAuditStatus(applyStatus: Int, content: String) {
+        lastAuditStatus = (applyStatus, content)
+        AppLogger.auth.notice("[Session] audit status=\(applyStatus, privacy: .public) content=\(content, privacy: .public)")
     }
 
     // MARK: - 持久化

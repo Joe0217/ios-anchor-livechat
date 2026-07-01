@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import os
 
 /// 直播态唯一收口（B 里程碑 spec §2）。
@@ -11,7 +12,20 @@ import os
 @MainActor
 final class LiveStore: ObservableObject {
     // ─── 状态 ───────────────────────────────────────
-    @Published private(set) var state: LiveState = .idle
+    @Published private(set) var state: LiveState = .idle {
+        didSet {
+            guard oldValue != state else { return }
+            // IM 场景闸门 wiring：进入/退出 .living 同步 IMSceneGate（直播相关 sysMsg 过滤）。
+            // 详见 Sources/Live/NIM/IMSceneFilter.swift §设计核心。
+            let wasLiving = (oldValue == .living)
+            let isLiving = (state == .living)
+            if !wasLiving && isLiving {
+                IMSceneGate.shared.enter(.live)
+            } else if wasLiving && !isLiving {
+                IMSceneGate.shared.exit(.live)
+            }
+        }
+    }
     @Published private(set) var callState: Int = 0     // 0 直播 / 1 通话 / 2 匹配 / 3 PK；阶段一恒为 0
     @Published private(set) var endType: Int?          // 仅 ended 态有值
 
@@ -296,9 +310,26 @@ extension LiveStore {
             try? await Task.sleep(nanoseconds: 20_000_000_000)
             guard !Task.isCancelled else { return }
             guard let self else { return }
-            // 仍未恢复 → forceEnd 采集失败（spec §11 endType=5）
+            // v5.10 真根因修复（用户日志实证 forceEnd sub=camera_runtime_20s 即命中此路径）：
+            // Task.sleep 在后台不挂起，20s 后可能在后台/inactive 状态唤醒；也可能在回前台
+            // 瞬间 InterruptionEnded 清 watcher 之前抢先执行 → 误触 endType=5 自动下播。
+            //
+            // 三层守卫：
+            //   1. yield + 500ms grace：让 pending 的 handleInterruptionEnded 派发到 main queue 的 block 优先跑
+            //   2. applicationState==.active：非 active 静默重置 watcher，等 interruptionEnded 决策
+            //   3. 立即清 flag：防止重入
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 guard self.cameraFailureStartedAt != nil else { return }
+                guard UIApplication.shared.applicationState == .active else {
+                    logger.info("camera watcher fired but app not active; reset watcher and wait for interruptionEnded")
+                    self.cameraFailureStartedAt = nil
+                    return
+                }
+                self.cameraFailureStartedAt = nil
+                self.cameraFailureWatcher = nil
                 Task { await self.forceEnd(reason: .cameraFailure, subSource: "camera_runtime_20s") }
             }
         }

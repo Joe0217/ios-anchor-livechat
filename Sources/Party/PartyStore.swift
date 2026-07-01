@@ -23,7 +23,21 @@ final class PartyStore: ObservableObject {
     @Published private(set) var isJoinedChannel: Bool = false   // RTC joined
     @Published private(set) var imAlive: Bool = false           // NIM chatroom enterOK
     @Published private(set) var lastGiftEvent: PartyGiftEvent?
-    @Published private(set) var roomState: PartyRoomState = .idle
+    @Published private(set) var roomState: PartyRoomState = .idle {
+        didSet {
+            guard oldValue != roomState else { return }
+            // IM 场景闸门 wiring：进入/退出 .joined 同步 IMSceneGate（派对房 sysMsg 不走 sysMsg
+            // 通道，但 .party active 表示用户在派对房中——其他场景的 sysMsg 应根据 .party 状态过滤）。
+            // 详见 Sources/Live/NIM/IMSceneFilter.swift §设计核心。
+            let wasJoined = (oldValue == .joined)
+            let isJoined = (roomState == .joined)
+            if !wasJoined && isJoined {
+                IMSceneGate.shared.enter(.party)
+            } else if wasJoined && !isJoined {
+                IMSceneGate.shared.exit(.party)
+            }
+        }
+    }
     @Published private(set) var pendingVideoSeatInvite: PartyVideoSeatInvite?
     @Published private(set) var lastInviteResult: PartyVideoSeatInviteResult?
     @Published private(set) var lastError: PartyRoomError?

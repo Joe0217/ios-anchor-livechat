@@ -112,6 +112,9 @@ final class NIMService: NSObject, ObservableObject {
                         cont.resume(throwing: mapped)
                     } else {
                         self.connectionState = .connected
+                        // 防御性双保险：一般 SDK 先触发 onLogin(.loginOK) delegate 再回调 completion（那里已开 grace），
+                        // 但契约不保证顺序；此处再开一次保证 login 成功路径 backlog 窗口一定生效。openBacklogGrace 幂等安全。
+                        IMSceneGate.shared.openBacklogGrace()
                         Self.logger.info("✅ [NIMService] login 成功 account=\(account, privacy: .private)")
                         cont.resume()
                     }
@@ -212,27 +215,30 @@ final class NIMService: NSObject, ObservableObject {
         routers.removeAll()
     }
 
-    /// 主分发入口：按注册顺序调每个 router 的 `route`，第一个返回 true 的消费链路终止。
+    /// 主分发入口：按注册顺序调每个 router 的 `route`，第一个返回 true 的消费链路终止（短路 return）。
     /// 死引用 router 自动跳过并清扫。
+    ///
+    /// **场景过滤**：dispatch 入口先过 `IMSceneGate.allows` 闸门，drop 不相关场景的 sysMsg
+    /// （chatroom 通道直接放行，由 router context guard 自治）。详见 IMSceneFilter / IMSceneGate。
     func dispatch(_ attachType: AttachType,
                   payload: [String: Any],
                   context: MessageContext) {
-        var consumed = false
+        // 场景闸门（业务正确性 + 性能双收益）
+        guard IMSceneGate.shared.allows(attachType, context: context) else {
+            Self.logger.debug("[NIMService] scene-drop \(attachType.raw, privacy: .public) ctx=\(String(describing: context), privacy: .public)")
+            return
+        }
+
         var hasDead = false
         for wrap in routers {
             guard let r = wrap.router else { hasDead = true; continue }
-            if consumed { continue }
             if r.route(attachType, payload: payload, context: context) {
-                consumed = true
+                if hasDead { routers.removeAll { !$0.isAlive } }
+                return  // 短路 return：第一个消费即终止
             }
         }
-        // 仅在确实有死引用时重建数组，避免热路径每次分配
-        if hasDead {
-            routers.removeAll { !$0.isAlive }
-        }
-        if !consumed {
-            Self.logger.debug("[NIMService] dispatch \(attachType.raw, privacy: .public) ctx=\(String(describing: context), privacy: .public) — no router consumed")
-        }
+        if hasDead { routers.removeAll { !$0.isAlive } }
+        Self.logger.debug("[NIMService] dispatch \(attachType.raw, privacy: .public) ctx=\(String(describing: context), privacy: .public) — no router consumed")
     }
 
     // MARK: - 系统通知 dispatch helper
@@ -303,6 +309,9 @@ extension NIMService: NIMSystemNotificationManagerDelegate {
 extension NIMService: NIMLoginManagerDelegate {
 
     /// IM 登录状态进度（SDK 内部重连也走这里）。
+    ///
+    /// **backlog grace**：.loginOK 时启用 10s 全放行窗口，覆盖离线/重连后 SDK 逐条推送的累积消息——
+    /// backlog 是过去事件，不能按当前 active 场景过滤（参考 IMSceneFilter §设计核心 4）。
     nonisolated func onLogin(_ step: NIMLoginStep) {
         Task { @MainActor in
             switch step {
@@ -312,6 +321,7 @@ extension NIMService: NIMLoginManagerDelegate {
                 self.connectionState = .connecting
             case .loginOK:
                 self.connectionState = .connected
+                IMSceneGate.shared.openBacklogGrace()
             default:
                 break
             }

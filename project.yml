@@ -120,6 +120,8 @@ targets:
       - path: Sources/Party/Utils/GzipDecompressor.swift
       # H 里程碑 M4-6：SystemMessageRouter 决策表（pure，无 SDK 依赖）
       - path: Sources/Live/NIM/SystemMessageRouteDecision.swift
+      # H 里程碑 M7：IM 场景过滤纯函数（pure，无 SDK 依赖；IMSceneGate 副作用层含 @MainActor 不入测）
+      - path: Sources/Live/NIM/IMSceneFilter.swift
       # H 里程碑 M3：派对房 attachType 枚举（纯 Int rawValue，无 NIMSDK 依赖）
       - path: Sources/Party/Models/PartyAttachType.swift
       - path: Sources/Party/Models/PartyMsgType.swift

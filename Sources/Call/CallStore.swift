@@ -36,8 +36,30 @@ final class CallStore: ObservableObject {
         didSet {
             guard oldValue != state else { return }
             observer?.callStore(self, stateDidChange: state, previous: oldValue)
+            updateElapsedTimer(prev: oldValue)
+            updateIMSceneGate(prev: oldValue, next: state)
         }
     }
+
+    /// IM 场景闸门 wiring：state 离开/进入 .idle 同步 IMSceneGate（通话相关 sysMsg 过滤）。
+    ///
+    /// **exit 8s grace**：state → .idle 后延迟 8s 才真退场景，接收挂断后尾消息——
+    /// callRechargeReward 等 server 异步推送可能在挂断后几秒到达。详见 IMSceneFilter §设计核心 5。
+    private func updateIMSceneGate(prev: CallState, next: CallState) {
+        let wasActive = (prev != .idle)
+        let isActive = (next != .idle)
+        if !wasActive && isActive {
+            IMSceneGate.shared.enter(.call)
+        } else if wasActive && !isActive {
+            IMSceneGate.shared.exit(.call, delay: 8.0)
+        }
+    }
+    /// 通话计时（秒）。CallWaitingView 用作主叫超时圆环；CallFaceTimeView 用作通话时长。
+    /// 规则：`.calling` 进入从 0 累加 → `.connected` 切换时重置为 0（通话时长起点）→
+    /// `.ended` / `.idle` 停止 + 归 0。view 端只读 store 字段，不在 view 内持 `Timer.publish`
+    /// （违反 `.claude/rules` 副作用收敛进 Store；且 struct view 重建会重生 publisher 引发多 timer
+    /// 并发 tick 跳秒）。
+    @Published private(set) var callElapsed: Int = 0
     @Published private(set) var current: CurrentCallInfo = CurrentCallInfo()
     @Published private(set) var lastError: String = ""
     /// RTM client 是否已 login（永真直到 stop）。语义：login 已建立 → 信令通道存在。
@@ -69,6 +91,8 @@ final class CallStore: ObservableObject {
     /// ended → idle 的延迟切换 task。被 stop()/新 callOut 触发时必须 cancel，否则会异步把
     /// 已经被新通话覆盖的 state 重置回 .idle。
     private var endedToIdleTask: Task<Void, Never>?
+    /// callElapsed 计时 task（每秒 +1）。state didSet 内启停 + 重置。
+    private var elapsedTask: Task<Void, Never>?
     private var cancellables = Set<AnyCancellable>()
     /// RTM 状态订阅句柄。CallStore 是单例 stop/start 可反复调用，订阅必须独立管理避免累积。
     private var rtmStateCancellable: AnyCancellable?
@@ -144,7 +168,7 @@ final class CallStore: ObservableObject {
         // 防重入：start 有 2 个 await 点（getAgoraRtmToken / login），NWPathMonitor 与
         // startRetryTask 任一进入会引发"双 CallSignaling 实例 + 双 RTM client"泄漏。
         if isStarting {
-            AppLogger.call.notice("⚠️ [CallStore] start 已在进行中，跳过 uid=\(myUserId, privacy: .public)")
+            AppLogger.call.notice("⚠️ [CallStore] start 已在进行中，跳过 uid=\(myUserId, privacy: .private)")
             return
         }
         isStarting = true
@@ -156,7 +180,7 @@ final class CallStore: ObservableObject {
         do {
             let tokenRes = try await LiveService.getAgoraRtmToken()
             guard let rtm = tokenRes.rtmToken, !rtm.isEmpty else {
-                lastError = "RTM token 为空"
+                lastError = L10n.callErrorRtmTokenEmpty
                 scheduleStartRetry(myUserId: myUserId, reason: "empty_token")
                 return
             }
@@ -181,7 +205,7 @@ final class CallStore: ObservableObject {
                     }
                     self.rtmConnectionState = new
                 }
-            AppLogger.call.info("✅ [CallStore] start 成功 uid=\(myUserId, privacy: .public)")
+            AppLogger.call.info("✅ [CallStore] start 成功 uid=\(myUserId, privacy: .private)")
         } catch let e as APIError {
             let msg = "CallStore.start 失败: \(e.message)(\(e.code))"
             lastError = msg
@@ -224,11 +248,14 @@ final class CallStore: ObservableObject {
         // NWPathMonitor.start 后会立即首次回调当前实际网络状态。初值 isNetworkAvailable=false
         // 与"网络恢复"边沿（was=false → satisfied=true）匹配，会触发一次不必要的 retry 调度
         // （isStarting 守卫挡住但产生噪音日志）。用 firstCallback flag 跳过首次仅同步初值。
-        var isFirstCallback = true
+        // Swift 6 严格并发禁止 var 被 @Sendable 闭包捕获后修改，用引用类型 box 包装；
+        // pathUpdateHandler 由 NWPathMonitor 在单一 queue 串行回调，无需额外锁。
+        final class FirstCallbackBox: @unchecked Sendable { var value = true }
+        let firstCallback = FirstCallbackBox()
         m.pathUpdateHandler = { [weak self] path in
             let satisfied = (path.status == .satisfied)
-            let firstShot = isFirstCallback
-            isFirstCallback = false
+            let firstShot = firstCallback.value
+            firstCallback.value = false
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 let was = self.isNetworkAvailable
@@ -240,7 +267,7 @@ final class CallStore: ObservableObject {
                 if !was && satisfied {
                     if !self.isSignalingReady, self.myUserId != 0 {
                         // 冷启动失败 → 立即 retry start（已 login 之前的路径）
-                        AppLogger.rtm.debug("📶 [CallStore] 网络恢复 → 立即 retry start uid=\(self.myUserId, privacy: .public)")
+                        AppLogger.rtm.debug("📶 [CallStore] 网络恢复 → 立即 retry start uid=\(self.myUserId, privacy: .private)")
                         self.cancelStartRetry()
                         await self.start(myUserId: self.myUserId)
                     } else if self.isSignalingReady, let s = self.signaling {
@@ -307,7 +334,7 @@ final class CallStore: ObservableObject {
             return
         }
         guard let remoteUid = Int(remoteUserId), remoteUid > 0 else {
-            lastError = "对方 userId 非法"
+            lastError = L10n.callErrorInvalidRemoteUserId
             return
         }
 
@@ -324,7 +351,7 @@ final class CallStore: ObservableObject {
             return
         }
         guard let channelId = res.channelId, !channelId.isEmpty else {
-            lastError = "createCall 返回空 channelId"
+            lastError = L10n.callErrorCreateFailed
             return
         }
 
@@ -357,7 +384,7 @@ final class CallStore: ObservableObject {
         // 5) 发 RTM VideoCall（H5 await _publishMessage）
         let ok = await signaling.publish(buildMessage(action: .videoCall))
         if !ok {
-            lastError = "发送呼叫失败"
+            lastError = L10n.callErrorSendFailed
             // H5 callOutCancel L1065/1076：主动取消桶 answerTime=0
             await endLocally(reason: .beginCallError, rateCategory: .canceled, rateType: .caller, answerTime: 0, abnormal: 1)
             return
@@ -409,7 +436,7 @@ final class CallStore: ObservableObject {
         // 2) 立刻发 Accept（publish 失败必须收尾，避免主叫永等不到 Accept）
         let ok = await signaling.publish(buildMessage(action: .accept))
         guard ok else {
-            lastError = "私 call 发送接听失败"
+            lastError = L10n.callErrorAcceptFailed
             await endLocally(reason: .beginCallError, rateCategory: nil, rateType: .callee, answerTime: 0, abnormal: 1)
             return
         }
@@ -445,7 +472,7 @@ final class CallStore: ObservableObject {
                 self.current.remoteCountryCode = r.countryCode ?? self.current.remoteCountryCode
                 self.current.remoteVideoPrice = r.videoPrice ?? self.current.remoteVideoPrice
             } catch {
-                AppLogger.call.notice("⚠️ [CallStore] LIVE joinCall 拉对方资料失败 channel=\(fromRoomId, privacy: .public) err=\(error.localizedDescription, privacy: .private)")
+                AppLogger.call.notice("⚠️ [CallStore] LIVE joinCall 拉对方资料失败 channel=\(fromRoomId, privacy: .private) err=\(error.localizedDescription, privacy: .private)")
             }
         }
     }
@@ -461,7 +488,7 @@ final class CallStore: ObservableObject {
         //    会丢 Cancel → 卡死 .connecting。
         let ok = await signaling.publish(buildMessage(action: .accept))
         guard ok else {
-            lastError = "发送接听失败"
+            lastError = L10n.callErrorAcceptFailed
             await endLocally(reason: .beginCallError, rateCategory: nil, rateType: .callee, answerTime: 0, abnormal: 1)
             return
         }
@@ -552,7 +579,7 @@ final class CallStore: ObservableObject {
         do {
             let tokenRes = try await LiveService.getAgoraRtmToken()
             guard let rtcToken = tokenRes.rtcToken, !rtcToken.isEmpty else {
-                lastError = "获取 rtcToken 失败"
+                lastError = L10n.callErrorRtcTokenFailed
                 await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, answerTime: 0, abnormal: 1)
                 return
             }
@@ -565,10 +592,10 @@ final class CallStore: ObservableObject {
             }
             agora.join(channelId: channel, token: rtcToken, uid: UInt(myUserId), profile: .communication)
         } catch let e as APIError {
-            lastError = "rtcToken: \(e.message)"
+            lastError = String(format: L10n.callErrorRtcTokenFormat, e.message)
             await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, answerTime: 0, abnormal: 1)
         } catch {
-            lastError = "rtcToken: \(error.localizedDescription)"
+            lastError = String(format: L10n.callErrorRtcTokenFormat, error.localizedDescription)
             await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, answerTime: 0, abnormal: 1)
         }
     }
@@ -611,6 +638,11 @@ final class CallStore: ObservableObject {
             guard let self, !Task.isCancelled, self.state == .ended else { return }
             self.state = .idle
             self.current = CurrentCallInfo()
+            // H M4：HUD 顶级 @Published 不在 current 内，需单独 reset，避免新通话 HUD 残留旧气泡
+            self.callRecentRemoteText = nil
+            self.callChatBubble = 0
+            self.callWaitBonus = 0
+            self.callWaitState = 0
         }
     }
 
@@ -676,7 +708,7 @@ extension CallStore: CallSignalingDelegate {
     private func handleRemote(action: CallAction, message msg: CallMessage) async {
         switch action {
         case .videoCall:   await handleIncomingVideoCall(msg)
-        case .audioCall:   AppLogger.call.notice("⚠️ [CallStore] 收到 audioCall（C 不接入）from=\(msg.fromUserId, privacy: .public)")
+        case .audioCall:   AppLogger.call.notice("⚠️ [CallStore] 收到 audioCall（C 不接入）from=\(msg.fromUserId, privacy: .private)")
         case .cancel:      await handleRemoteCancel(msg)
         case .accept:      await handleRemoteAccept(msg)
         case .reject:      await handleRemoteReject(msg)
@@ -687,7 +719,7 @@ extension CallStore: CallSignalingDelegate {
     private func handleIncomingVideoCall(_ msg: CallMessage) async {
         // 校验是发给本端的
         guard msg.remoteUserId == myUserId else {
-            AppLogger.call.notice("⚠️ [CallStore] 来电 remoteUserId(\(msg.remoteUserId, privacy: .public)) 与本端(\(self.myUserId, privacy: .public)) 不符，忽略")
+            AppLogger.call.notice("⚠️ [CallStore] 来电 remoteUserId(\(msg.remoteUserId, privacy: .private)) 与本端(\(self.myUserId, privacy: .private)) 不符，忽略")
             return
         }
         // D 里程碑：直播态优先走"直播私 call 自动接听"分支（不弹浮层、无 UI 确认）
@@ -732,7 +764,7 @@ extension CallStore: CallSignalingDelegate {
 
         // VideoCall 必须带 fromRoomId（被叫据此 join），缺则视为非法消息丢弃
         guard let fromRoomId = msg.fromRoomId, !fromRoomId.isEmpty else {
-            AppLogger.call.notice("⚠️ [CallStore] VideoCall 缺 fromRoomId from=\(msg.fromUserId, privacy: .public) 丢弃")
+            AppLogger.call.notice("⚠️ [CallStore] VideoCall 缺 fromRoomId from=\(msg.fromUserId, privacy: .private) 丢弃")
             return
         }
 
@@ -759,7 +791,7 @@ extension CallStore: CallSignalingDelegate {
                 self.current.remoteCountryCode = r.countryCode ?? self.current.remoteCountryCode
                 self.current.remoteVideoPrice = r.videoPrice ?? self.current.remoteVideoPrice
             } catch {
-                AppLogger.call.notice("⚠️ [CallStore] joinCall 拉对方资料失败/超时 channel=\(fromRoomId, privacy: .public) err=\(error.localizedDescription, privacy: .private)")
+                AppLogger.call.notice("⚠️ [CallStore] joinCall 拉对方资料失败/超时 channel=\(fromRoomId, privacy: .private) err=\(error.localizedDescription, privacy: .private)")
             }
         }
     }
@@ -786,7 +818,7 @@ extension CallStore: CallSignalingDelegate {
 
     private func handleRemoteReject(_ msg: CallMessage) async {
         guard state == .calling, current.inOrOut == .out, current.callId == msg.callId else { return }
-        lastError = "对方已拒绝"
+        lastError = L10n.callErrorRemoteRejected
         // H5 useCallApi.js remoteReject：calling 阶段 callDuration → answerTime=sinceStartDuration
         await endLocally(reason: .remoteHangUp, rateCategory: .rejected, rateType: .caller, answerTime: current.sinceStartDuration, abnormal: 0)
     }
@@ -794,6 +826,40 @@ extension CallStore: CallSignalingDelegate {
     private func handleRemoteHangup(_ msg: CallMessage) async {
         guard state == .connecting || state == .connected, current.callId == msg.callId else { return }
         await endLocally(reason: .remoteHangUp, rateCategory: nil, rateType: .caller, answerTime: 0, abnormal: 0)
+    }
+
+    // MARK: - 通话计时 driver
+
+    /// state didSet 钩子：根据状态转移启停 / 重置 `callElapsed`。
+    /// - `.calling`：从 0 累加（主叫超时圆环 / 被叫等待时长）
+    /// - `.connecting`：暂停 + 归 0（RTC 建链中不累加，对齐旧 view-state 初始 0 行为，
+    ///   避免 `CallFaceTimeView` 在 `.connecting` 时显示 calling 阶段已累加的杂值）
+    /// - `.connected`：重置 0 重启（通话时长起点）
+    /// - `.ended` / `.idle` / `.prepared` / `.failed`：停止 + 归 0
+    private func updateElapsedTimer(prev: CallState) {
+        switch state {
+        case .calling:
+            callElapsed = 0
+            startElapsedTask()
+        case .connected:
+            callElapsed = 0
+            startElapsedTask()
+        case .connecting, .ended, .idle, .prepared, .failed:
+            elapsedTask?.cancel()
+            elapsedTask = nil
+            callElapsed = 0
+        }
+    }
+
+    private func startElapsedTask() {
+        elapsedTask?.cancel()
+        elapsedTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard !Task.isCancelled, let self else { return }
+                self.callElapsed += 1
+            }
+        }
     }
 }
 
