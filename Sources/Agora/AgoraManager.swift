@@ -12,11 +12,23 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "Agora")
 /// - `tokenPrivilegeWillExpire` 真正续期（拉新 token → renewToken）
 /// - 109/110 error code 同链路；续期失败 → store.forceEnd(.disconnected)
 final class AgoraManager: NSObject, ObservableObject {
+    /// rawValue 走英文 internal code（用于 logger / 调试日志，绝不直接显示到 UI）；
+    /// 用户可见的 status 文案统一走 `var label: String` 经 L10n。
     enum State: String {
-        case idle = "未加入"
-        case joining = "加入中…"
-        case joined = "已加入频道"
-        case failed = "加入失败"
+        case idle
+        case joining
+        case joined
+        case failed
+
+        /// 用户可见的本地化文案；LiveRoomView / CallPOCView 显示用本字段。
+        var label: String {
+            switch self {
+            case .idle:    return L10n.liveRoomStatusIdle
+            case .joining: return L10n.liveRoomStatusConnecting
+            case .joined:  return L10n.liveRoomStatusJoined
+            case .failed:  return L10n.liveRoomStatusFailed
+            }
+        }
     }
 
     /// 视频编码档位（B 里程碑 spec §4 弱网降级 + G 里程碑 spec §3.5 PK 期降分辨率）。
