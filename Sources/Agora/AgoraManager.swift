@@ -149,7 +149,7 @@ final class AgoraManager: NSObject, ObservableObject {
         if ret != 0 {
             logger.error("joinChannel failed ret=\(ret)")
             state = .failed
-            message = "joinChannel 调用失败: \(ret)"
+            message = String(format: L10n.liveRoomStatusJoinChannelFailedFormat, ret)
         }
     }
 
@@ -208,6 +208,17 @@ final class AgoraManager: NSObject, ObservableObject {
         message = ""
         renewFailureCount = 0
         currentQuality = .normal
+
+        // 清理残留的 PK 多频道字典：异常路径（forceEnd / 用户主动下播未先 leavePKOpposite）会跳过
+        // 各 channel 的 leavePKOpposite 清理逻辑，字典残留会导致下次 join 幽灵 continuation 永挂。
+        // 锁内快照 continuations 后清空，锁外 resume 避免持锁调外部代码。
+        pkLock.lock()
+        let pendingConts = leavePKContinuations
+        leavePKContinuations.removeAll()
+        pkConnections.removeAll()
+        pkDelegates.removeAll()
+        pkLock.unlock()
+        pendingConts.values.forEach { $0.resume() }
     }
 
     /// 真正退出 App / 登出时再彻底销毁 SDK 单例。本次修复不强求调用方，列为后续 backlog（SessionStore.logout）。
@@ -440,7 +451,7 @@ extension AgoraManager: AgoraRtcEngineDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.state = .joined
-            self.message = "本地已加入 uid=\(uid)"
+            self.message = ""
         }
     }
 
@@ -472,7 +483,7 @@ extension AgoraManager: AgoraRtcEngineDelegate {
         logger.error("RTC error code \(errorCode.rawValue)")
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.message = "RTC 错误码: \(errorCode.rawValue)"
+            self.message = String(format: L10n.liveRoomStatusRtcErrorFormat, errorCode.rawValue)
             if self.state == .joining { self.state = .failed }
             // 109/110 走续期链路（spec §7.2）
             if errorCode.rawValue == 109 || errorCode.rawValue == 110 {

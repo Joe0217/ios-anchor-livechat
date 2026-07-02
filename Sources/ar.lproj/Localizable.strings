@@ -13,6 +13,12 @@
 "forceEnd.noPermission"      = "فشل التحقق من الصلاحيات";
 "forceEnd.weakNetwork"       = "الشبكة ضعيفة جدًا";
 
+// MARK: - 切后台超限（BackgroundMonitor 预警 + 本地通知）
+"live.background.count_warning"      = "غادرت التطبيق %d/%d مرات. سيتم إنهاء البث تلقائيًا بعد %d مرات.";
+"live.background.cumulative_warning" = "لقد غبت لمدة %d دقيقة تراكميًا — تقترب من الحد الأقصى 5 دقائق.";
+"live.background.notif.title"        = "عد إلى البث الآن";
+"live.background.notif.body"         = "سيتم إنهاء بثك تلقائيًا إذا بقيت في الخلفية.";
+
 // MARK: - 美颜降级
 "beauty.unavailable"         = "الفلتر غير متاح";
 
@@ -39,9 +45,11 @@
 "work.scorePrefix"           = "النقاط: ";
 "work.needMoreFormat"        = "(تحتاج %d نقطة إضافية للترقية)";
 
-"work.callsToday"            = "مكالمات اليوم";
+"work.levelText.topHost"     = "أنت مضيف من الطراز الأول";
+
+"work.onlineTime"            = "وقت الاتصال (يوم)";
+"work.avgCallDuration"       = "متوسط مدة المكالمة (يوم)";
 "work.positiveRating"        = "تقييم إيجابي";
-"work.weeklyRevenue"         = "الأرباح الأسبوعية";
 
 "work.todaysIncome"          = "أرباح اليوم";
 "work.withdrawal"            = "سحب";
@@ -70,6 +78,13 @@
 "work.tool.invite"           = "دعوة";
 "work.tool.workingGuide"     = "دليل العمل";
 "work.tool.backpack"         = "الحقيبة";
+"work.tool.liveData"         = "بيانات البث";
+
+"work.invite.earnMoney"      = "اكسب المال";
+
+"work.offline.confirmMessage" = "هل أنت متأكد من إيقاف الاتصال؟";
+"work.offline.confirmYes"    = "نعم، إيقاف الاتصال";
+"work.offline.confirmNo"     = "البقاء متصلاً";
 
 // 底部 tab 标签
 "tab.home"                   = "الرئيسية";
@@ -158,6 +173,29 @@
 "level.spectrum"               = "طيف المستويات";
 "profile.gifts.empty"          = "لا توجد هدايا بعد";
 
+// MARK: - J Publish (发布朋友圈)
+"publish.navTitle"           = "منشور";
+"publish.cancel"             = "إلغاء";
+"publish.release"            = "نشر";
+"publish.placeholder"        = "اكتب ما تريد قوله";
+"publish.charCountFormat"    = "%d/500";
+"publish.posting"            = "جارٍ النشر...";
+"publish.addImage"           = "إضافة صورة";
+"publish.removeImage"        = "إزالة الصورة";
+"publish.fabLabel"           = "إنشاء منشور";
+"publish.discard.title"      = "تجاهل المنشور؟";
+"publish.discard.message"    = "سيتم فقدان المحتوى الذي أدخلته.";
+"publish.discard.confirm"    = "تجاهل";
+"publish.discard.keep"       = "متابعة التحرير";
+"publish.toast.textEmpty"    = "يرجى إدخال المحتوى";
+"publish.toast.noImages"     = "يرجى إضافة صورة واحدة على الأقل";
+"publish.toast.imageTooLarge" = "الصورة كبيرة جدًا (>10MB)";
+"publish.toast.credentialFailed" = "فشل في الحصول على بيانات الاعتماد";
+"publish.toast.uploadFailed" = "فشل التحميل، حاول مجددًا";
+"publish.toast.createFailed" = "فشل النشر";
+"publish.toast.networkError" = "خطأ في الشبكة، حاول مجددًا";
+"publish.toast.success"      = "تم النشر بنجاح";
+
 // MARK: - Auth 登录页
 "auth.title"                 = "تسجيل دخول المضيف";
 "auth.envHint"               = "dev · anchor.cphub.link";
@@ -184,6 +222,32 @@
 "livePrepare.guardUnverified" = "لم تتم الموافقة على حسابك كمضيف بعد.";
 "livePrepare.guardAgent"     = "حسابات الوكلاء لا يمكنها بدء البث المباشر.";
 
+// MARK: - LiveSettings إعدادات البث المباشر（对齐 H5 ar.json）
+"liveSettings.navTitle"              = "إعدادات البث المباشر";
+"liveSettings.bioTitle"              = "السيرة الذاتية المباشرة";
+"liveSettings.bioIntro"              = "سيتم عرضها في صفحة البث المباشر";
+"liveSettings.bioPlaceholder"        = "يرجى إدخال…";
+"liveSettings.coverTitle"            = "غلاف البث المباشر";
+"liveSettings.privateCallTitle"      = "مكالمة مباشرة إعداد هدية مجانية لمدة 5 دقائق";
+"liveSettings.privateCallIntro"      = "قم بإعداد هدية تسمح للمستخدمين بالاتصال بك مباشرة في غرفة البث المباشر. ستُحتسب هذه الهدية كدخل مكالمة، وليس دخل هدايا. سعر هذه الهدية سيغطي دخلك لأول 5 دقائق من المكالمة. بعد 5 دقائق، سيعتمد الدخل على سعر مكالمتك. يرجى ضبط سعر هذه الهدية وفقًا لسعر مكالمتك.";
+"liveSettings.wishlistTitle"         = "قائمة أمنيات البث المباشر";
+"liveSettings.wishlistIntro"         = "اختر هدايا لإضافتها إلى قائمة أمنيات البث المباشر. إذا تلقيت هذه الهدايا أثناء البث المباشر، ستتم مكافأتك بنقاط أو ماس إضافية. ملاحظة: لا يمكن أن تتداخل هذه الهدايا مع هدية المكالمة المباشرة.";
+"liveSettings.beautyTitle"           = "إعدادات الجمال";
+"liveSettings.goToSettings"          = "انتقل إلى الإعدادات >>>";
+"liveSettings.comingSoon"            = "قريبًا";
+"liveSettings.counterFormat"         = "%d/200";
+"liveSettings.coverUploadHint"       = "انقر للتغيير";
+"liveSettings.coverUploading"        = "جارٍ الرفع...";
+"liveSettings.giftAddHint"           = "انقر لاختيار هدية";
+"liveSettings.giftRemove"            = "إزالة";
+
+// GiftPicker sheet
+"giftPicker.title"                   = "اختر هدية";
+"giftPicker.cancel"                  = "إلغاء";
+"giftPicker.confirm"                 = "تأكيد";
+"giftPicker.retry"                   = "إعادة المحاولة";
+"giftPicker.empty"                   = "لا توجد هدايا متاحة";
+
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "إذن الكاميرا مطلوب";
 "liveRoom.permissionAlertOK" = "حسنًا";
@@ -194,6 +258,7 @@
 "liveRoom.status.joined"     = "البث المباشر";
 "liveRoom.status.failed"     = "فشل الاتصال";
 "liveRoom.status.rtcErrorFormat" = "خطأ RTC %d";
+"liveRoom.status.joinChannelFailedFormat" = "فشل الانضمام إلى القناة (%d)";
 "liveRoom.anchorDefault"     = "المضيف";
 "liveRoom.toolBeauty"        = "الفلتر";
 "liveRoom.endLive"           = "إنهاء البث";
@@ -343,6 +408,19 @@
 "blocklist.accessibility.row"           = "المستخدم المحظور %@، تم الحظر في %@";
 "blocklist.accessibility.rowNoDate"     = "المستخدم المحظور %@";
 "blocklist.loadError.retryFormat"       = "%1$@ · %2$@";
+
+// MARK: - Message P2P 会话列表（H-1 MVP）
+"message.category.flame"                = "المفضلة";
+"message.category.stranger"             = "غرباء";
+"message.category.prime"                = "المميّزون";
+"message.empty.flame"                   = "لا توجد محادثات نشطة بعد";
+"message.empty.stranger"                = "لا توجد رسائل من الغرباء";
+"message.empty.prime"                   = "لا يوجد أعضاء مميّزون بعد";
+"message.loadError.retry"               = "فشل التحميل، اضغط لإعادة المحاولة";
+"message.action.stickTop"               = "تثبيت";
+"message.action.unstickTop"             = "إلغاء التثبيت";
+"message.action.delete"                 = "حذف";
+"message.action.failedToast"            = "فشلت العملية، يرجى المحاولة مرة أخرى";
 
 // MARK: - E/F 派对房（spec §1.4 + H i18n 收尾）
 "party.defaultRoomName"                  = "غرفة الحفلات";

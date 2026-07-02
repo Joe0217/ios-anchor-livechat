@@ -29,6 +29,22 @@ enum L10n {
     static var forceEndNoPermission: String { localize("forceEnd.noPermission", comment: "权限校验失败") }
     static var forceEndWeakNetwork: String { localize("forceEnd.weakNetwork", comment: "网络环境过差") }
 
+    // 切后台超限（BackgroundMonitor 预警 + 本地通知，B 里程碑增补 spec §3）
+    /// %d 已切次数 / %d 上限次数
+    static var liveBackgroundCountWarningFormat: String {
+        localize("live.background.count_warning", comment: "切后台次数预警 toast：已切 %d/%d 次，再切一次将下播")
+    }
+    /// %d 已累计分钟
+    static var liveBackgroundCumulativeWarningFormat: String {
+        localize("live.background.cumulative_warning", comment: "累计后台时长预警 toast：已累计 %d 分钟")
+    }
+    static var liveBackgroundNotifTitle: String {
+        localize("live.background.notif.title", comment: "本地通知标题：回到 App 继续直播")
+    }
+    static var liveBackgroundNotifBody: String {
+        localize("live.background.notif.body", comment: "本地通知正文：20 秒内不回则自动下播")
+    }
+
     // 美颜降级提示
     static var beautyUnavailableHint: String { localize("beauty.unavailable", comment: "美颜不可用") }
 
@@ -181,9 +197,11 @@ enum L10n {
     static var workScorePrefix: String { localize("work.scorePrefix", comment: "分数前缀") }
     static var workNeedMoreFormat: String { localize("work.needMoreFormat", comment: "升级还需 %d 分") }
 
-    static var workCallsToday: String { localize("work.callsToday", comment: "今日通话数") }
+    static var workLevelTextTopHost: String { localize("work.levelText.topHost", comment: "顶级主播场景文案") }
+
+    static var workOnlineTime: String { localize("work.onlineTime", comment: "在线时长") }
+    static var workAvgCallDuration: String { localize("work.avgCallDuration", comment: "平均通话时长") }
     static var workPositiveRating: String { localize("work.positiveRating", comment: "好评率") }
-    static var workWeeklyRevenue: String { localize("work.weeklyRevenue", comment: "周收益") }
 
     static var workTodaysIncome: String { localize("work.todaysIncome", comment: "今日收益") }
     static var workWithdrawal: String { localize("work.withdrawal", comment: "提现") }
@@ -212,6 +230,15 @@ enum L10n {
     static var toolInvite: String { localize("work.tool.invite", comment: "邀请") }
     static var toolWorkingGuide: String { localize("work.tool.workingGuide", comment: "工作指南") }
     static var toolBackpack: String { localize("work.tool.backpack", comment: "背包") }
+    static var toolLiveData: String { localize("work.tool.liveData", comment: "直播数据") }
+
+    // Invite 角标（H5 style: 金红渐变 "Earn Money"）
+    static var inviteEarnMoney: String { localize("work.invite.earnMoney", comment: "邀请赚钱角标") }
+
+    // 下线确认弹窗（对齐 H5 onlineStatus.*）
+    static var offlineConfirmMessage: String { localize("work.offline.confirmMessage", comment: "确认下线？") }
+    static var offlineConfirmYes: String { localize("work.offline.confirmYes", comment: "确认下线") }
+    static var offlineConfirmNo: String { localize("work.offline.confirmNo", comment: "取消下线") }
 
     // 底部 tab 标签
     static var tabHome: String { localize("tab.home", comment: "首页") }
@@ -340,6 +367,19 @@ enum L10n {
         String(format: localize("blocklist.loadError.retryFormat", comment: "加载失败 retry 拼接 format，参数: message"), message, blocklistLoadErrorRetry)
     }
 
+    // MARK: - Message P2P 会话列表（H-1 MVP，spec §1.2 三分类）
+    static var messageCategoryFlame: String     { localize("message.category.flame", comment: "会话分类 Flame") }
+    static var messageCategoryStranger: String  { localize("message.category.stranger", comment: "会话分类 Stranger") }
+    static var messageCategoryPrime: String     { localize("message.category.prime", comment: "会话分类 Prime") }
+    static var messageEmptyFlame: String        { localize("message.empty.flame", comment: "Flame 空态文案") }
+    static var messageEmptyStranger: String     { localize("message.empty.stranger", comment: "Stranger 空态文案") }
+    static var messageEmptyPrime: String        { localize("message.empty.prime", comment: "Prime 空态文案") }
+    static var messageLoadErrorRetry: String    { localize("message.loadError.retry", comment: "加载失败 retry") }
+    static var messageActionStickTop: String    { localize("message.action.stickTop", comment: "置顶") }
+    static var messageActionUnstickTop: String  { localize("message.action.unstickTop", comment: "取消置顶") }
+    static var messageActionDelete: String      { localize("message.action.delete", comment: "删除会话") }
+    static var messageActionFailedToast: String { localize("message.action.failedToast", comment: "操作失败通用 toast") }
+
     // MARK: - LevelDetail 段位详情页
     static var levelDetailTitle: String    { localize("level.title", comment: "段位详情标题") }
     static var levelDetailCurrent: String  { localize("level.current", comment: "当前段位 caption") }
@@ -363,6 +403,33 @@ enum L10n {
     static var momentActionUnlike: String          { localize("moment.action.unlike", comment: "动态取消点赞 a11y") }
     /// 删除动态按钮 a11y（仅 me 入口）
     static var momentActionDelete: String          { localize("moment.action.delete", comment: "动态删除 a11y") }
+
+    // MARK: - J 里程碑：发布朋友圈页（spec §7 v3）
+    enum Publish {
+        static var navTitle: String        { localize("publish.navTitle", comment: "发布页导航标题") }
+        static var cancel: String          { localize("publish.cancel", comment: "取消按钮") }
+        static var release: String         { localize("publish.release", comment: "发布按钮") }
+        static var placeholder: String     { localize("publish.placeholder", comment: "文本框占位") }
+        static var charCountFormat: String { localize("publish.charCountFormat", comment: "字数计数 %d/500") }
+        static var posting: String         { localize("publish.posting", comment: "上传遮罩文案") }
+        static var addImage: String        { localize("publish.addImage", comment: "选图按钮 a11y") }
+        static var removeImage: String     { localize("publish.removeImage", comment: "移除单张图 a11y") }
+        static var fabLabel: String        { localize("publish.fabLabel", comment: "Circle 容器内 FAB a11y") }
+        // 确认 dialog
+        static var discardTitle: String    { localize("publish.discard.title", comment: "切走确认 dialog 标题") }
+        static var discardMessage: String  { localize("publish.discard.message", comment: "切走确认正文") }
+        static var discardConfirm: String  { localize("publish.discard.confirm", comment: "确认放弃按钮") }
+        static var discardKeep: String     { localize("publish.discard.keep", comment: "保留编辑按钮") }
+        // toast 文案（统一注入 ViewModel）
+        static var textEmpty: String         { localize("publish.toast.textEmpty", comment: "请输入内容") }
+        static var noImages: String          { localize("publish.toast.noImages", comment: "至少 1 张图") }
+        static var imageTooLarge: String     { localize("publish.toast.imageTooLarge", comment: "图片过大 (>10MB)") }
+        static var credentialFailed: String  { localize("publish.toast.credentialFailed", comment: "凭证获取失败") }
+        static var uploadFailed: String      { localize("publish.toast.uploadFailed", comment: "上传失败") }
+        static var createFailed: String      { localize("publish.toast.createFailed", comment: "发布失败兜底") }
+        static var networkError: String      { localize("publish.toast.networkError", comment: "网络错误兜底") }
+        static var publishSuccess: String    { localize("publish.toast.success", comment: "发布成功") }
+    }
 
     // MARK: - Auth 登录页
     static var authTitle: String { localize("auth.title", comment: "登录页大标题：主播登录") }
@@ -390,6 +457,33 @@ enum L10n {
     static var livePrepareGuardUnverified: String { localize("livePrepare.guardUnverified", comment: "userType 守卫：账号未审核为主播") }
     static var livePrepareGuardAgent: String { localize("livePrepare.guardAgent", comment: "userType 守卫：代理账号不支持开播") }
 
+    // MARK: - LiveSettings 直播设置页（B-spec-开播设置页 v3；对齐 H5 5 张 CCard）
+    static var liveSettingsNavTitle: String { localize("liveSettings.navTitle", comment: "H5 live.live setting") }
+    static var liveSettingsBioTitle: String { localize("liveSettings.bioTitle", comment: "H5 live.live bio 卡片 title") }
+    static var liveSettingsBioIntro: String { localize("liveSettings.bioIntro", comment: "H5 live.live bio desc 副标题") }
+    static var liveSettingsBioPlaceholder: String { localize("liveSettings.bioPlaceholder", comment: "H5 common.please enter") }
+    static var liveSettingsCoverTitle: String { localize("liveSettings.coverTitle", comment: "H5 live.live cover 卡片 title") }
+    static var liveSettingsPrivateCallTitle: String { localize("liveSettings.privateCallTitle", comment: "H5 live.live call free 5 minute gift setup") }
+    static var liveSettingsPrivateCallIntro: String { localize("liveSettings.privateCallIntro", comment: "H5 live.live call gift setup intro") }
+    static var liveSettingsWishlistTitle: String { localize("liveSettings.wishlistTitle", comment: "H5 live.live wishlist") }
+    static var liveSettingsWishlistIntro: String { localize("liveSettings.wishlistIntro", comment: "H5 live.live wishlist intro") }
+    static var liveSettingsBeautyTitle: String { localize("liveSettings.beautyTitle", comment: "H5 beauty.beauty settings") }
+    static var liveSettingsGoToSettings: String { localize("liveSettings.goToSettings", comment: "H5 beauty.go to setttings（H5 key typo 保留原样）") }
+    static var liveSettingsComingSoon: String { localize("liveSettings.comingSoon", comment: "灰态占位后缀") }
+    static var liveSettingsCounterFormat: String { localize("liveSettings.counterFormat", comment: "字符计数 %d/200") }
+
+    // v5：Cover 上传 + Gift 选择
+    static var liveSettingsCoverUploadHint: String { localize("liveSettings.coverUploadHint", comment: "tap 更换封面提示") }
+    static var liveSettingsCoverUploading: String { localize("liveSettings.coverUploading", comment: "上传中 overlay 文案") }
+    static var liveSettingsGiftAddHint: String { localize("liveSettings.giftAddHint", comment: "私 call 礼物添加提示") }
+    static var liveSettingsGiftRemove: String { localize("liveSettings.giftRemove", comment: "移除已选礼物") }
+
+    static var giftPickerTitle: String { localize("giftPicker.title", comment: "礼物选择弹窗标题") }
+    static var giftPickerCancel: String { localize("giftPicker.cancel", comment: "取消") }
+    static var giftPickerConfirm: String { localize("giftPicker.confirm", comment: "确认") }
+    static var giftPickerRetry: String { localize("giftPicker.retry", comment: "重试") }
+    static var giftPickerEmpty: String { localize("giftPicker.empty", comment: "空态") }
+
     // MARK: - LiveRoom 直播间
     static var liveRoomPermissionAlertTitle: String { localize("liveRoom.permissionAlertTitle", comment: "相机权限弹窗标题") }
     static var liveRoomPermissionAlertOK: String { localize("liveRoom.permissionAlertOK", comment: "相机权限弹窗确定按钮") }
@@ -402,6 +496,8 @@ enum L10n {
     static var liveRoomStatusFailed: String     { localize("liveRoom.status.failed", comment: "RTC 加入失败") }
     /// RTC 错误码格式（%d 为错误码）
     static var liveRoomStatusRtcErrorFormat: String { localize("liveRoom.status.rtcErrorFormat", comment: "RTC 错误码格式") }
+    /// joinChannel 调用失败（%d 为返回码）
+    static var liveRoomStatusJoinChannelFailedFormat: String { localize("liveRoom.status.joinChannelFailedFormat", comment: "joinChannel 调用失败") }
     static var liveRoomAnchorDefault: String { localize("liveRoom.anchorDefault", comment: "主播默认昵称") }
     static var liveRoomToolBeauty: String { localize("liveRoom.toolBeauty", comment: "底部美颜按钮") }
     static var liveRoomEndLive: String { localize("liveRoom.endLive", comment: "结束直播按钮") }

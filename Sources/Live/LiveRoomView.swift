@@ -63,8 +63,11 @@ struct LiveRoomView: View {
             }
             VStack(spacing: 12) {
                 topBar
+                #if DEBUG
                 // 独立 ObservableObject，仅本子 view 订阅；高频（2s/次）写不波及 LiveRoomView 整树
+                // release 不带（避免审核侧看到内部弱网降级阈值 / fps 档位等实现细节，与 pkDebugPanel 同款处理）
                 DebugNetworkPanel(debugStore: store.networkDebugStore)
+                #endif
                 if !store.beautyAvailable {
                     Text(L10n.beautyUnavailableHint)
                         .font(.caption2)
@@ -166,17 +169,19 @@ struct LiveRoomView: View {
             NIMService.shared.registerRouter(pkStore.router)
             // H M4：注入直播态 weak liveStore；全局 sysRouter 由 NIMService.setupOnce 永驻注册
             SystemMessageRouter.shared.liveStore = store
-            // 进房同步远端 PK 状态（H5 syncPkStateAfterReconnect 同行为）
-            Task { await pkStore.reconcileOnReconnect() }
         }
         .onDisappear {
             // v5.3.3 真根因修复：SwiftUI 在 ScenePhase=.background 时也会触发 onDisappear（snapshot 用），
             // 若此时 tearDown camera/agora/nim，则切后台→回前台后帧分发永久断开（v5.8 已用 subscribers
             // 字典让每个 CameraPreview 独立注销，仍以"真正 dismiss 才清理"为正路径）。
-            // 真正 dismiss 的标志：scenePhase != .background（不是切后台）+ store.state == .ended（forceEnd/endLive 完成）。
-            guard scenePhase != .background, store.state == .ended else {
-                return
-            }
+            // 场景 A（切后台）：guard 短路，资源保留等待回前台
+            guard scenePhase != .background else { return }
+            // 场景 B（真 dismiss）：无论 .living / .forceEnding / .ending / .ended 都清资源
+            //
+            // 复查 202607012202 S-7：原实现 guard `state == .ended` 会跳过 forceEnding 中途 dismiss
+            // 的清理（用户物理返回 / 系统触发 dismiss），导致摄像头持续采集 + 声网频道持续推流。
+            // 各清理调用均幂等：camera.tearDown 已 stop 时无副作用；agora.leave 内 guard engine
+            // 幂等；nim.leave / observer 解绑同幂等。
             camera.tearDown()
             // D 里程碑修复（v5.4）：agora.leave 改 async，onDisappear 不是 async 上下文，
             // 包 Task 让出；nim.leave 与 camera.stop 同步走，不依赖 agora 完成。
@@ -187,6 +192,11 @@ struct LiveRoomView: View {
             SystemMessageRouter.shared.liveStore = nil
             // G M3：PKStore teardown 取消倒计时 / 解 NQM 订阅 / 清字段；setCallState 内部 guard 会拦 ended 态调用
             Task { await pkStore.teardown() }
+            // 非 .ended 追加 endLiveRoom 兜底，避免僵尸房间（tryEnterEnding 内已 guard inFlightEnd
+            // + state==.living，forceEnding 已在 flight 会被拦、无重复请求）
+            if store.state != .ended {
+                Task { await store.endLive() }
+            }
         }
         .onChange(of: store.state) { newState in
             if newState == .ended { dismiss() }
@@ -253,23 +263,13 @@ struct LiveRoomView: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.subheadline).bold().foregroundStyle(.white).lineLimit(1)
-                Text(agora.message.isEmpty ? agora.state.label : agora.message)
-                    .font(.caption2).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
+                // 复查 202607012202 S-8：agora.message/state 变化只让本子 view 重算，
+                // 不再触发 LiveRoomView 整树重算（含 CameraPreview / PKArenaView / publicScreen）
+                AgoraStatusText(agora: agora)
             }
             Spacer()
-            // 时间 capsule：joined 时显示 elapsed 时长（独立 store 隔离 1Hz 写）；
-            // 未 joined 显示 "Connecting…"——这一态由父 view 的 agora.state 触发 re-eval（极低频）。
-            if agora.state == .joined {
-                LiveElapsedCapsule(timerStore: store.elapsedTimerStore)
-            } else {
-                HStack(spacing: 6) {
-                    Circle().fill(.red).frame(width: 8, height: 8)
-                    Text(L10n.liveRoomStatusConnecting)
-                        .font(.caption).foregroundStyle(.white)
-                }
-                .padding(.horizontal, 10).padding(.vertical, 6)
-                .background(.black.opacity(0.4), in: Capsule())
-            }
+            // 复查 S-8：同样隔离 agora.state 的 joined 判定，避免弱网 didOccurError 频发时整树重算
+            AgoraConnectingCapsule(agora: agora, timerStore: store.elapsedTimerStore)
             HStack(spacing: 4) {
                 Image(systemName: "person.2.fill").font(.caption2)
                     .accessibilityHidden(true)
@@ -487,10 +487,48 @@ private struct LiveElapsedCapsule: View {
     }
 }
 
+// MARK: - AgoraStatusText / AgoraConnectingCapsule（复查 202607012202 S-8）
+//
+// 把 topBar 内 agora.message / agora.state 的读点收敛到子 view，让 LiveRoomView 主 body
+// 不再订阅 AgoraManager.objectWillChange —— agora.remoteUid / message / state 高频变（弱网
+// 109/110 didOccurError 反复触发）时不再整树重算 CameraPreview / PKArenaView / publicScreen。
+// 对齐 [.claude/rules/swiftui-keepalive-publisher-isolation.md] 订阅隔离原则。
+// LiveRoomView 顶层保留 `@StateObject agora` 归属生命周期，body 只把引用传给这两个子 view。
+
+private struct AgoraStatusText: View {
+    @ObservedObject var agora: AgoraManager
+
+    var body: some View {
+        Text(agora.message.isEmpty ? agora.state.label : agora.message)
+            .font(.caption2).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
+    }
+}
+
+private struct AgoraConnectingCapsule: View {
+    @ObservedObject var agora: AgoraManager
+    let timerStore: LiveTimerStore
+
+    var body: some View {
+        if agora.state == .joined {
+            LiveElapsedCapsule(timerStore: timerStore)
+        } else {
+            HStack(spacing: 6) {
+                Circle().fill(.red).frame(width: 8, height: 8)
+                Text(L10n.liveRoomStatusConnecting)
+                    .font(.caption).foregroundStyle(.white)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(.black.opacity(0.4), in: Capsule())
+        }
+    }
+}
+
 // MARK: - 网络监控调试面板（v5.1，弱网计数实时显示）
 // 独立子 view + 独立 NetworkDebugStore：高频 2s/次的网络计数变化只触发本 view body re-eval，
 // 不再影响 LiveRoomView 主树（详见 LiveStore.networkDebugStore）。
+// 仅 DEBUG 构建编译，release 剥离整个 struct（减少 binary footprint + 避免审核侧看到）。
 
+#if DEBUG
 private struct DebugNetworkPanel: View {
     @ObservedObject var debugStore: NetworkDebugStore
 
@@ -523,6 +561,7 @@ private struct DebugNetworkPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+#endif
 
 // MARK: - PKOverlayHost：合并 5 个 PK overlay
 //

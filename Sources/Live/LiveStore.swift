@@ -75,6 +75,11 @@ final class LiveStore: ObservableObject {
     // ─── 子模块（lazy 避免 init 内 self 循环）───
     private lazy var heartbeat: HeartbeatController = HeartbeatController(store: self)
     private lazy var monitor: NetworkQualityMonitor = NetworkQualityMonitor(store: self)
+    private lazy var backgroundMonitor: BackgroundMonitor = {
+        let m = BackgroundMonitor()
+        m.store = self
+        return m
+    }()
 
     /// G 里程碑 spec §3.5：PKStore 通过本访问器订阅 NQM `$currentLevel` 拦截 forceEnd 改切 .pkLow。
     /// 仅暴露读取，避免外部替换 monitor 实例。
@@ -113,6 +118,7 @@ extension LiveStore {
         self.state = .living
         heartbeat.start()
         monitor.start()
+        backgroundMonitor.start()
         elapsedTimerStore.start()
         logger.info("attachLiving roomId=\(roomInfo.id ?? -1)")
     }
@@ -148,7 +154,7 @@ extension LiveStore {
         await teardown()
         state = .ended
         endType = 1
-        UserDefaults.standard.set(Date(), forKey: "lastEndAt")  // §8.3 用
+        UserDefaults.standard.set(Date(), forKey: LastEndLiveTracker.key)  // §8.3 用
     }
 }
 
@@ -167,6 +173,7 @@ extension LiveStore {
         await teardown()
         state = .ended
         endType = reason.code
+        UserDefaults.standard.set(Date(), forKey: LastEndLiveTracker.key)  // 60s 冷却对齐 endLive（LiveSettings §1.3）
     }
 
     private func tryEnterForceEnding(_ reason: ForceEndReason) -> Bool {
@@ -202,6 +209,7 @@ extension LiveStore {
     private func teardown() async {
         heartbeat.stop()
         monitor.stop()
+        backgroundMonitor.stop()
         elapsedTimerStore.stop()
         cameraFailureWatcher?.cancel()
         cameraFailureWatcher = nil
@@ -263,18 +271,21 @@ extension LiveStore {
         }
         logger.info("pauseForCall: 暂停直播 → 接听 from=\(msg.fromUserId)")
 
-        // 1) 停心跳 + 网络监控（B 已落地的 stop/start；stop 内自动重置 failureCount=0）+ 暂停直播时长计时
+        // 1) 提前切换 callState 闸门（BackgroundMonitor 检查此字段，避免 leave await 期间用户切后台
+        //    时被误计入 backgroundCount；红队 🟠-4 修复）。
+        //    副作用：pauseForCall 期间 heartbeat/monitor 尚未 stop，callState=1 会传给心跳接口 —
+        //    这与 D 里程碑通话期 callState=1 语义一致，服务端接受。
+        callState = 1
+
+        // 2) 停心跳 + 网络监控（B 已落地的 stop/start；stop 内自动重置 failureCount=0）+ 暂停直播时长计时
         heartbeat.stop()
         monitor.stop()
         elapsedTimerStore.stop()
 
-        // 2) RTC leave 直播频道（保留 roomId/agoraChannelId/rtcToken 字段以备 resumeCall 回 join）
+        // 3) RTC leave 直播频道（保留 roomId/agoraChannelId/rtcToken 字段以备 resumeCall 回 join）
         //    agora 是 weak 引用，nil 时静默跳过（防御性）。
         //    v5.4：await 等 didLeaveChannelWith 回调，避免紧接的通话 join 拿到半销毁 singleton。
         await agora?.leave()
-
-        // 3) 切换状态标志
-        callState = 1
 
         // 4) 在线态联动（D-M0 已落地的 WSHeartbeat 接口；通话期 onlineStatus=CALLING(10000)）
         WSHeartbeat.shared.notifyCallStateChanged(callState: 1)
@@ -456,8 +467,9 @@ final class LiveTimerStore: ObservableObject {
         task = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
-                if Task.isCancelled { return }
-                self?.elapsedSeconds += 1
+                // 复查 202607012202 S-11：外部释放后立即退出 loop，避免每秒 nil 写空转
+                guard let self, !Task.isCancelled else { return }
+                self.elapsedSeconds += 1
             }
         }
     }

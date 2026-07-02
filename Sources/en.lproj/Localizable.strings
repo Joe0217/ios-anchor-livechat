@@ -11,6 +11,12 @@
 "forceEnd.noPermission"      = "Permission check failed";
 "forceEnd.weakNetwork"       = "Network too weak";
 
+// MARK: - 切后台超限（BackgroundMonitor 预警 + 本地通知）
+"live.background.count_warning"      = "You've been away %d/%d times. Live will end automatically after %d times.";
+"live.background.cumulative_warning" = "You've been away for %d minutes cumulatively — approaching the 5-minute limit.";
+"live.background.notif.title"        = "Return to your live now";
+"live.background.notif.body"         = "Your live will end automatically if you stay in background.";
+
 // MARK: - 美颜降级
 "beauty.unavailable"         = "Beauty unavailable";
 
@@ -37,9 +43,11 @@
 "work.scorePrefix"           = "Score: ";
 "work.needMoreFormat"        = "(Need %d more to level up)";
 
-"work.callsToday"            = "Calls Today";
+"work.levelText.topHost"     = "You are a top host";
+
+"work.onlineTime"            = "Online Time (d)";
+"work.avgCallDuration"       = "Avg Call Duration (d)";
 "work.positiveRating"        = "Positive Rating";
-"work.weeklyRevenue"         = "Weekly Revenue";
 
 "work.todaysIncome"          = "Today's Income";
 "work.withdrawal"            = "Withdrawal";
@@ -68,6 +76,13 @@
 "work.tool.invite"           = "Invite";
 "work.tool.workingGuide"     = "Working Guide";
 "work.tool.backpack"         = "Backpack";
+"work.tool.liveData"         = "Live Data";
+
+"work.invite.earnMoney"      = "Earn Money";
+
+"work.offline.confirmMessage" = "Are you sure you want to go offline?";
+"work.offline.confirmYes"    = "Yes, go offline";
+"work.offline.confirmNo"     = "Stay online";
 
 // 底部 tab 标签
 "tab.home"                   = "Home";
@@ -156,6 +171,29 @@
 "level.spectrum"               = "Tier Spectrum";
 "profile.gifts.empty"          = "No gifts yet";
 
+// MARK: - J Publish (发布朋友圈)
+"publish.navTitle"           = "Post";
+"publish.cancel"             = "Cancel";
+"publish.release"            = "Release";
+"publish.placeholder"        = "Enter what you want to say";
+"publish.charCountFormat"    = "%d/500";
+"publish.posting"            = "Posting...";
+"publish.addImage"           = "Add image";
+"publish.removeImage"        = "Remove image";
+"publish.fabLabel"           = "Create post";
+"publish.discard.title"      = "Discard post?";
+"publish.discard.message"    = "Your content will be lost.";
+"publish.discard.confirm"    = "Discard";
+"publish.discard.keep"       = "Keep editing";
+"publish.toast.textEmpty"    = "Please enter content";
+"publish.toast.noImages"     = "Please add at least 1 image";
+"publish.toast.imageTooLarge" = "Image too large (>10MB)";
+"publish.toast.credentialFailed" = "Failed to get upload credential";
+"publish.toast.uploadFailed" = "Upload failed, please retry";
+"publish.toast.createFailed" = "Publish failed";
+"publish.toast.networkError" = "Network error, please try again";
+"publish.toast.success"      = "Successfully published";
+
 // MARK: - Auth 登录页
 "auth.title"                 = "Anchor Login";
 "auth.envHint"               = "dev · anchor.cphub.link";
@@ -182,6 +220,32 @@
 "livePrepare.guardUnverified" = "Your anchor account is not approved yet.";
 "livePrepare.guardAgent"     = "Agent accounts cannot start a live stream.";
 
+// MARK: - LiveSettings 直播设置页（对齐 H5 5 张 CCard；文案直译 H5 en.json）
+"liveSettings.navTitle"              = "Live Setting";
+"liveSettings.bioTitle"              = "Live Bio";
+"liveSettings.bioIntro"              = "Will be displayed on the live page";
+"liveSettings.bioPlaceholder"        = "Please Enter...";
+"liveSettings.coverTitle"            = "Live Cover";
+"liveSettings.privateCallTitle"      = "Live Call Free 5 Minute Gift Setup";
+"liveSettings.privateCallIntro"      = "Set up a gift that allows users to call you directly in the live room. This gift will be counted as call income, not gift income. The price of this gift will cover your income for the first 5 minutes of the call. After 5 minutes, income will be based on your call price. Please set the price of this gift according to your call price.";
+"liveSettings.wishlistTitle"         = "Live Wishlist";
+"liveSettings.wishlistIntro"         = "Choose gifts to add to the live wishlist. If you receive these gifts during live streaming, you will be rewarded with extra points or diamonds. Note: These gifts cannot overlap with the live call gift.";
+"liveSettings.beautyTitle"           = "Beauty Settings";
+"liveSettings.goToSettings"          = "Go to Settings >>>";
+"liveSettings.comingSoon"            = "Coming Soon";
+"liveSettings.counterFormat"         = "%d/200";
+"liveSettings.coverUploadHint"       = "Tap to change";
+"liveSettings.coverUploading"        = "Uploading...";
+"liveSettings.giftAddHint"           = "Tap to select a gift";
+"liveSettings.giftRemove"            = "Remove";
+
+// GiftPicker sheet
+"giftPicker.title"                   = "Select Gift";
+"giftPicker.cancel"                  = "Cancel";
+"giftPicker.confirm"                 = "Confirm";
+"giftPicker.retry"                   = "Retry";
+"giftPicker.empty"                   = "No gifts available";
+
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "Camera Permission Required";
 "liveRoom.permissionAlertOK" = "OK";
@@ -192,6 +256,7 @@
 "liveRoom.status.joined"     = "Live";
 "liveRoom.status.failed"     = "Connection failed";
 "liveRoom.status.rtcErrorFormat" = "RTC error %d";
+"liveRoom.status.joinChannelFailedFormat" = "Join channel failed (%d)";
 "liveRoom.anchorDefault"     = "Anchor";
 "liveRoom.toolBeauty"        = "Beauty";
 "liveRoom.endLive"           = "End Live";
@@ -341,6 +406,19 @@
 "blocklist.accessibility.row"           = "Blocked user %@, blocked on %@";
 "blocklist.accessibility.rowNoDate"     = "Blocked user %@";
 "blocklist.loadError.retryFormat"       = "%1$@ · %2$@";
+
+// MARK: - Message P2P 会话列表（H-1 MVP）
+"message.category.flame"                = "Flame";
+"message.category.stranger"             = "Stranger";
+"message.category.prime"                = "Prime";
+"message.empty.flame"                   = "No hot conversations yet";
+"message.empty.stranger"                = "No stranger messages";
+"message.empty.prime"                   = "No premium members yet";
+"message.loadError.retry"               = "Failed to load, tap to retry";
+"message.action.stickTop"               = "Pin";
+"message.action.unstickTop"             = "Unpin";
+"message.action.delete"                 = "Delete";
+"message.action.failedToast"            = "Action failed, please try again";
 
 // MARK: - E/F 派对房（spec §1.4 + H i18n 收尾）
 "party.defaultRoomName"                  = "Party Room";

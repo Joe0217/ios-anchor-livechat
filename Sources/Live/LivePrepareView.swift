@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 
 /// 开播准备页（对应 H5 liveSetting）：设置标题 + 美颜预览，点击开始直播调用真实 beginLiveRoom 后进入直播间。
 struct LivePrepareView: View {
@@ -38,13 +39,22 @@ struct LivePrepareView: View {
                 authorized = ok
                 if ok { camera.start() }
             }
+            // BackgroundMonitor "切后台超限强制下播" 用本地通知在 1:40 提醒用户回 App。
+            // 权限前置到开播前静默请求（notDetermined 时才弹系统 dialog）；
+            // 拒绝也不影响后续开播（willEnterForeground 结算主路径不依赖通知）。
+            requestNotificationAuthorizationIfNeeded()
         }
         .onDisappear {
             // 进入直播间时也会触发：直播间用自己的相机，这里停掉预览相机让出摄像头
             camera.stop()
         }
-        .onReceive(params.objectWillChange) { _ in
-            DispatchQueue.main.async { camera.renderer.updateParameters(params) }
+        // slider 拖动 30-60Hz 通过 objectWillChange publish；throttle 到 60ms
+        // 与 LiveRoomView.BeautyPanel 同款处理，避免 body 整树重算 + renderer 更新任务堆积
+        .onReceive(
+            params.objectWillChange
+                .throttle(for: 0.06, scheduler: DispatchQueue.main, latest: true)
+        ) { _ in
+            camera.renderer.updateParameters(params)
         }
     }
 
@@ -124,6 +134,14 @@ struct LivePrepareView: View {
                 errorMsg = String(format: L10n.livePrepareErrorGeneric, error.localizedDescription)
                 isStarting = false
             }
+        }
+    }
+
+    private func requestNotificationAuthorizationIfNeeded() {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            guard settings.authorizationStatus == .notDetermined else { return }
+            center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
         }
     }
 

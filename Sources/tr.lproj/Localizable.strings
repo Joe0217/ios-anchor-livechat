@@ -13,6 +13,12 @@
 "forceEnd.noPermission"      = "İzin kontrolü başarısız";
 "forceEnd.weakNetwork"       = "Ağ çok zayıf";
 
+// MARK: - 切后台超限（BackgroundMonitor 预警 + 本地通知）
+"live.background.count_warning"      = "Uygulamadan %d/%d kez uzaklaştınız. %d kez sonra yayın otomatik olarak sona erecek.";
+"live.background.cumulative_warning" = "Toplam %d dakika uzakta kaldınız — 5 dakika sınırına yaklaşıyor.";
+"live.background.notif.title"        = "Yayınınıza dönün";
+"live.background.notif.body"         = "Arka planda kalmaya devam ederseniz yayınınız otomatik olarak sona erecek.";
+
 // MARK: - 美颜降级
 "beauty.unavailable"         = "Güzellik kullanılamıyor";
 
@@ -39,9 +45,11 @@
 "work.scorePrefix"           = "Skor: ";
 "work.needMoreFormat"        = "(Seviye atlamak için %d puan daha gerekli)";
 
-"work.callsToday"            = "Bugünkü Aramalar";
+"work.levelText.topHost"     = "Sen üst düzey bir yayıncısın";
+
+"work.onlineTime"            = "Çevrimiçi Süre (g)";
+"work.avgCallDuration"       = "Ort. Arama Süresi (g)";
 "work.positiveRating"        = "Olumlu Değerlendirme";
-"work.weeklyRevenue"         = "Haftalık Gelir";
 
 "work.todaysIncome"          = "Bugünkü Gelir";
 "work.withdrawal"            = "Çekim";
@@ -70,6 +78,13 @@
 "work.tool.invite"           = "Davet Et";
 "work.tool.workingGuide"     = "Çalışma Rehberi";
 "work.tool.backpack"         = "Çanta";
+"work.tool.liveData"         = "Yayın Verileri";
+
+"work.invite.earnMoney"      = "Para Kazan";
+
+"work.offline.confirmMessage" = "Çevrimdışı olmak istediğinizden emin misiniz?";
+"work.offline.confirmYes"    = "Evet, çevrimdışı ol";
+"work.offline.confirmNo"     = "Çevrimiçi kal";
 
 // 底部 tab 标签
 "tab.home"                   = "Ana Sayfa";
@@ -158,6 +173,29 @@
 "level.spectrum"               = "Seviye Spektrumu";
 "profile.gifts.empty"          = "Henüz hediye yok";
 
+// MARK: - J Publish (发布朋友圈)
+"publish.navTitle"           = "Gönderi";
+"publish.cancel"             = "İptal";
+"publish.release"            = "Yayınla";
+"publish.placeholder"        = "Ne söylemek istersin?";
+"publish.charCountFormat"    = "%d/500";
+"publish.posting"            = "Yayınlanıyor...";
+"publish.addImage"           = "Resim ekle";
+"publish.removeImage"        = "Resmi kaldır";
+"publish.fabLabel"           = "Gönderi oluştur";
+"publish.discard.title"      = "Gönderi iptal edilsin mi?";
+"publish.discard.message"    = "Girdiğiniz içerik kaybolacak.";
+"publish.discard.confirm"    = "İptal et";
+"publish.discard.keep"       = "Düzenlemeye devam";
+"publish.toast.textEmpty"    = "Lütfen içerik girin";
+"publish.toast.noImages"     = "Lütfen en az 1 resim ekleyin";
+"publish.toast.imageTooLarge" = "Resim çok büyük (>10MB)";
+"publish.toast.credentialFailed" = "Yükleme bilgileri alınamadı";
+"publish.toast.uploadFailed" = "Yükleme başarısız, tekrar deneyin";
+"publish.toast.createFailed" = "Yayınlama başarısız";
+"publish.toast.networkError" = "Ağ hatası, tekrar deneyin";
+"publish.toast.success"      = "Başarıyla yayınlandı";
+
 // MARK: - Auth 登录页
 "auth.title"                 = "Yayıncı Girişi";
 "auth.envHint"               = "dev · anchor.cphub.link";
@@ -184,6 +222,32 @@
 "livePrepare.guardUnverified" = "Sunucu hesabınız henüz onaylanmadı.";
 "livePrepare.guardAgent"     = "Acente hesapları canlı yayın başlatamaz.";
 
+// MARK: - LiveSettings Canlı Yayın Ayarları（对齐 H5 tr.json）
+"liveSettings.navTitle"              = "Canlı Yayın Ayarları";
+"liveSettings.bioTitle"              = "Canlı Yayın Biyografisi";
+"liveSettings.bioIntro"              = "Canlı sayfada görüntülenecek";
+"liveSettings.bioPlaceholder"        = "Lütfen Girin...";
+"liveSettings.coverTitle"            = "Canlı Yayın Kapak Görseli";
+"liveSettings.privateCallTitle"      = "Canlı Arama Ücretsiz 5 Dakika Hediye Ayarı";
+"liveSettings.privateCallIntro"      = "Kullanıcıların canlı odada size doğrudan arama yapmasına izin veren bir hediye ayarlayın. Bu hediye, hediye geliri değil, arama geliri olarak sayılacaktır. Bu hediyenin fiyatı, aramanın ilk 5 dakikası için gelirinizi karşılayacaktır. 5 dakikadan sonra gelir, arama fiyatınıza göre belirlenecektir. Lütfen bu hediyenin fiyatını arama fiyatınıza göre ayarlayın.";
+"liveSettings.wishlistTitle"         = "Canlı Yayın Dilek Listesi";
+"liveSettings.wishlistIntro"         = "Canlı dilek listesine eklemek için hediye seçin. Canlı yayın sırasında bu hediyeleri alırsanız, ekstra puan veya elmaslarla ödüllendirileceksiniz. Not: Bu hediyeler canlı arama hediyesiyle çakışamaz.";
+"liveSettings.beautyTitle"           = "Güzellik Ayarları";
+"liveSettings.goToSettings"          = "Ayarlar'a Git >>>";
+"liveSettings.comingSoon"            = "Yakında";
+"liveSettings.counterFormat"         = "%d/200";
+"liveSettings.coverUploadHint"       = "Değiştirmek için dokunun";
+"liveSettings.coverUploading"        = "Yükleniyor...";
+"liveSettings.giftAddHint"           = "Bir hediye seçmek için dokunun";
+"liveSettings.giftRemove"            = "Kaldır";
+
+// GiftPicker sheet
+"giftPicker.title"                   = "Hediye Seç";
+"giftPicker.cancel"                  = "İptal";
+"giftPicker.confirm"                 = "Onayla";
+"giftPicker.retry"                   = "Tekrar dene";
+"giftPicker.empty"                   = "Kullanılabilir hediye yok";
+
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "Kamera İzni Gerekli";
 "liveRoom.permissionAlertOK" = "Tamam";
@@ -194,6 +258,7 @@
 "liveRoom.status.joined"     = "Canlı";
 "liveRoom.status.failed"     = "Bağlantı başarısız";
 "liveRoom.status.rtcErrorFormat" = "RTC hatası %d";
+"liveRoom.status.joinChannelFailedFormat" = "Kanala katılım başarısız (%d)";
 "liveRoom.anchorDefault"     = "Yayıncı";
 "liveRoom.toolBeauty"        = "Güzellik";
 "liveRoom.endLive"           = "Yayını Bitir";
@@ -343,6 +408,19 @@
 "blocklist.accessibility.row"           = "Engellenen kullanıcı %@, %@ tarihinde engellendi";
 "blocklist.accessibility.rowNoDate"     = "Engellenen kullanıcı %@";
 "blocklist.loadError.retryFormat"       = "%1$@ · %2$@";
+
+// MARK: - Message P2P 会话列表（H-1 MVP）
+"message.category.flame"                = "Ateşli";
+"message.category.stranger"             = "Yabancı";
+"message.category.prime"                = "Elit";
+"message.empty.flame"                   = "Henüz ateşli sohbet yok";
+"message.empty.stranger"                = "Yabancı mesajı yok";
+"message.empty.prime"                   = "Henüz elit üye yok";
+"message.loadError.retry"               = "Yüklenemedi, yeniden denemek için dokun";
+"message.action.stickTop"               = "Sabitle";
+"message.action.unstickTop"             = "Sabitlemeyi Kaldır";
+"message.action.delete"                 = "Sil";
+"message.action.failedToast"            = "İşlem başarısız, lütfen tekrar deneyin";
 
 // MARK: - E/F 派对房（spec §1.4 + H i18n 收尾）
 "party.defaultRoomName"                  = "Parti Odası";
