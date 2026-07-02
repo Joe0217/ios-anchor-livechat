@@ -502,6 +502,9 @@ final class PartyStore: ObservableObject {
         }
         cm.start()
         isLocalCameraActive = true
+        // K 里程碑：attach `.party` token 到 Sharer，让 K 页面调过的美颜参数广播到派对房 renderer
+        BeautyPipelineSharer.shared.attach(cm.renderer as AnyObject & BeautyRenderer, token: .party)
+        BeautyPipelineSharer.shared.reportSetupResult(cm.isBeautyFallback ? .failure(.genericSetupFailed) : .success(()))
         AppLogger.party.info("[PartyStore] camera capture started (video seat)")
     }
 
@@ -509,6 +512,8 @@ final class PartyStore: ObservableObject {
     /// tearDown 内会 stop session + remove observers + clear subscribers + 释放美颜资源。
     private func disableLocalVideoCapture() {
         guard let cm = camera else { return }
+        // K 里程碑：detach Sharer 订阅（在 tearDown 前，让 subscribers 栈及时更新）
+        BeautyPipelineSharer.shared.detach(cm.renderer as AnyObject & BeautyRenderer)
         cm.unsubscribe(ObjectIdentifier(self))
         cm.tearDown()
         camera = nil

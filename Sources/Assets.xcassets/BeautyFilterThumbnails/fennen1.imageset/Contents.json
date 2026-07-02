@@ -1,0 +1,6 @@
+{
+  "images" : [
+    { "idiom" : "universal", "filename" : "fennen1.png", "scale" : "1x" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}

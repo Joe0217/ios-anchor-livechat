@@ -47,6 +47,13 @@
 
 "work.levelText.topHost"     = "Sen üst düzey bir yayıncısın";
 
+"call.reconnect"             = "Yeniden Bağlan";
+
+"setToBusy.title"            = "Bugün Meşgul Olarak Ayarlandı";
+"setToBusy.description"      = "Bugünkü arama sınırına ulaştınız. Yayın veya Eşleşme üzerinden devam edin.";
+"setToBusy.goLive"           = "Yayına Geç";
+"setToBusy.goMatch"          = "Eşleş";
+
 "work.onlineTime"            = "Çevrimiçi Süre (g)";
 "work.avgCallDuration"       = "Ort. Arama Süresi (g)";
 "work.positiveRating"        = "Olumlu Değerlendirme";
@@ -120,6 +127,11 @@
 "liveList.end"               = "Daha fazla yok";
 "liveList.loadMoreFailed"    = "Daha fazla yüklenemedi";
 "liveList.pullToRetry"       = "Yenilemek için aşağı çekin";
+
+// MARK: - Live 广场（H5 liveList.vue 对齐）
+"liveStream.empty"           = "Şu anda canlı yayın yok";
+"liveStream.inPK"            = "PK modunda";
+"live.banner.a11y"           = "Ana sayfa banner";
 
 // MARK: - Profile 个人页（设计稿还原）
 "profile.settings"           = "Ayarlar";
@@ -247,6 +259,38 @@
 "giftPicker.confirm"                 = "Onayla";
 "giftPicker.retry"                   = "Tekrar dene";
 "giftPicker.empty"                   = "Kullanılabilir hediye yok";
+
+// MARK: - L-spec-愿望单设置页 v1
+"wishSetting.navTitle"               = "Dilek Ayarları";
+"wishSetting.record"                 = "Kayıt";
+"wishSetting.themeTitle"             = "Dilek konusu";
+"wishSetting.themeIntro"             = "Kullanıcı dileğini yerine getirdikten sonra yapmayı vaat ettiğin şey (en fazla 15 karakter)";
+"wishSetting.submit"                 = "Gönder";
+"wishSetting.selectTemplate"         = "Şablon seç";
+"wishSetting.chooseTemplate"         = "Lütfen bir şablon seçin";
+"wishSetting.type.noText"            = "Metin yok";
+"wishSetting.type.common"            = "Ortak şablon";
+"wishSetting.type.private"           = "Özel şablon";
+"wishSetting.noTemplateAvailable"    = "Şablon bulunmuyor";
+"wishSetting.added.format"           = "Eklendi %d/%d";
+"wishSetting.upTo.format"            = "En fazla %d dilek hediyesi";
+"wishSetting.giftCount"              = "Sayı";
+"wishSetting.maxGiftNum"             = "Maksimum hediye sayısına ulaşıldı";
+"wishSetting.ruleTitle"              = "Dilek Taahhüt Kuralları";
+"wishSetting.ruleAgree"              = "Dilek listenizi açmadan önce dikkatlice okuyun ve kabul edin.";
+"wishSetting.ruleLink"               = "Dilek Taahhüt Kuralları >>>";
+"wishSetting.ruleDoc"                = "Dilekleri adil ve içten kullanmayı ve platform kurallarına uymayı taahhüt ediyoruz. Herhangi bir ihlal hesap kısıtlamasına yol açabilir.";
+"wishSetting.save"                   = "Kaydet";
+"wishSetting.pleaseEnterTheme"       = "Lütfen konu girin";
+"wishSetting.themeMaxLen"            = "Konu 20 karakteri aşamaz";
+"wishSetting.submittedForReview"     = "İncelemeye gönderildi";
+"wishSetting.reviewStatus"           = "İnceleme durumu";
+"wishSetting.reviewStatusIntro"      = "Onaylandıktan sonra, özel şablon kullanıcılara görünür olacak.";
+"wishSetting.type.commonSub"         = "Tüm yayıncılara uygun";
+"wishSetting.type.privateSub"        = "Yalnızca kendine görünür";
+"wishSetting.type.noTextSub"         = "Yalnızca kapak";
+"wishSetting.ruleAgreeShort"         = "Kabul ediyorum";
+"wishSetting.ruleFooter"             = "Hediyeleri adil ve içten kullanmayı ve platform kurallarına uymayı taahhüt ediyoruz.";
 
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "Kamera İzni Gerekli";
@@ -421,6 +465,10 @@
 "message.action.unstickTop"             = "Sabitlemeyi Kaldır";
 "message.action.delete"                 = "Sil";
 "message.action.failedToast"            = "İşlem başarısız, lütfen tekrar deneyin";
+"message.systemInbox.station"           = "İstasyon Bilgileri";
+"message.systemInbox.notification"      = "Sistem Bilgileri";
+"message.systemInbox.admin"             = "Yönetici";
+"message.systemInbox.comingSoon"        = "Ayrıntılar yakında";
 
 // MARK: - E/F 派对房（spec §1.4 + H i18n 收尾）
 "party.defaultRoomName"                  = "Parti Odası";
@@ -512,3 +560,86 @@
 "userProfile.a11y.avatar"                = "Avatar";
 "userProfile.a11y.menu"                  = "Daha fazla seçenek";
 "userProfile.a11y.giftFallback"          = "Hediye";
+
+// MARK: - K 里程碑 美颜设置页（en 英文兜底，J 里程碑翻译团队补齐 tr）
+"beautySettings.pageTitle"                                  = "Beauty";
+"beautySettings.globalToggle"                               = "Beauty";
+"beautySettings.resetDefaults"                              = "Reset";
+"beautySettings.done"                                       = "Done";
+"beautySettings.tab.skin"                                   = "Skin";
+"beautySettings.tab.shape"                                  = "Shape";
+"beautySettings.tab.filter"                                 = "Filter";
+"beautySettings.tab.sticker"                                = "Sticker";
+"beautySettings.banner.loading"                             = "Beauty engine loading...";
+"beautySettings.banner.unavailable"                         = "Beauty engine unavailable";
+"beautySettings.banner.interrupted"                         = "Preview paused";
+"beautySettings.param.blur"                                 = "Smooth";
+"beautySettings.param.whiten"                               = "Whiten";
+"beautySettings.param.red"                                  = "Rosy";
+"beautySettings.param.clarity"                              = "Clarity";
+"beautySettings.param.sharpen"                              = "Sharpen";
+"beautySettings.param.faceThreed"                           = "3D";
+"beautySettings.param.eyeBright"                            = "Bright Eyes";
+"beautySettings.param.toothWhiten"                          = "White Teeth";
+"beautySettings.param.removePouch"                          = "Under-Eye";
+"beautySettings.param.removeNasolabialFolds"                = "Smile Lines";
+"beautySettings.param.cheekV"                               = "V Face";
+"beautySettings.param.cheekNarrow"                          = "Narrow";
+"beautySettings.param.cheekShort"                           = "Short Face";
+"beautySettings.param.cheekSmall"                           = "Small Face";
+"beautySettings.param.intensityCheekbones"                  = "Cheekbones";
+"beautySettings.param.intensityLowerJaw"                    = "Lower Jaw";
+"beautySettings.param.eyeEnlarging"                         = "Big Eyes";
+"beautySettings.param.intensityEyeCircle"                   = "Round Eyes";
+"beautySettings.param.intensityChin"                        = "Chin";
+"beautySettings.param.intensityForehead"                    = "Forehead";
+"beautySettings.param.intensityNose"                        = "Slim Nose";
+"beautySettings.param.intensityMouth"                       = "Mouth";
+"beautySettings.param.intensityLipThick"                    = "Lip Thickness";
+"beautySettings.param.intensityCanthus"                     = "Eye Corner";
+"beautySettings.param.intensityEyeSpace"                    = "Eye Distance";
+"beautySettings.filter.origin"                              = "Original";
+"beautySettings.filter.ziran"                               = "Natural";
+"beautySettings.filter.zhiganhui"                           = "Texture";
+"beautySettings.filter.mitao"                               = "Peach";
+"beautySettings.filter.bailiang"                            = "Bright";
+"beautySettings.filter.fennen"                              = "Pink";
+"beautySettings.filter.lengsediao"                          = "Cool";
+"beautySettings.filter.nuansediao"                          = "Warm";
+"beautySettings.filter.gexing"                              = "Personality";
+"beautySettings.filter.xiaoqingxin"                         = "Fresh";
+"beautySettings.filter.heibai"                              = "Mono";
+"beautySettings.filter.levelLabel"                          = "Filter Strength";
+"beautySettings.sticker.comingSoon"                         = "Stickers coming soon";
+"beauty.error.authExpired"                                  = "Beauty license expired. Please update the app.";
+"beauty.error.bundleMissing"                                = "Beauty resource missing.";
+"beauty.error.genericSetupFailed"                           = "Failed to init beauty engine.";
+"beauty.error.setupTimeout"                                 = "Beauty engine startup timed out.";
+"beauty.error.persistenceDecodeFailed"                      = "Failed to read beauty settings.";
+"beauty.error.persistenceWriteFailed"                       = "Failed to save beauty settings.";
+"beautySettings.a11y.preview"                               = "Beauty preview";
+"beautySettings.a11y.sliderFormat"                          = "%@, value %d";
+"beautySettings.recover"                                    = "Recover";
+"beautySettings.save"                                       = "Save";
+
+/* MARK: - H-2 GiftMessage 私密媒体解锁 */
+"giftMessage.navTitle"              = "Hediye Mesajı";
+"giftMessage.photoTitle"            = "Gizli Fotoğraf Mesajları";
+"giftMessage.videoTitle"            = "Gizli Video Mesajları";
+"giftMessage.setGiftIntro"          = "Bir hediye belirleyin ve açın, hediye alacaksınız";
+"giftMessage.submit"                = "Gönder";
+"giftMessage.giftPicker.title"      = "Kullanıcıların gizli mesajınızı açması için bir hediye belirleyin";
+"giftMessage.giftPicker.loadFail"   = "Hediyeler yüklenemedi";
+"giftMessage.reachedLimit"          = "Sınıra ulaşıldı";
+"giftMessage.selectGiftRequired"    = "Lütfen tüm öğeler için hediye seçin";
+"giftMessage.addMedia"              = "Ekle";
+"giftMessage.deleteItem"            = "Sil";
+"giftMessage.networkErrorFallback"  = "Ağ hatası, lütfen tekrar deneyin.";
+"giftMessage.unsupportedFile"       = "Desteklenmeyen dosya";
+"giftMessage.uploading"             = "Yükleniyor...";
+"giftMessage.photoCountFormat"      = "(%d/%d)";
+"giftMessage.videoCountFormat"      = "(%d/%d)";
+"beautySettings.recoverConfirm.title"                       = "Reset settings?";
+"beautySettings.recoverConfirm.message"                     = "Current adjustments will be cleared.";
+"beautySettings.recoverConfirm.yes"                         = "Reset";
+"beautySettings.recoverConfirm.no"                          = "Cancel";

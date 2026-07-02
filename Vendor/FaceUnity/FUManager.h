@@ -26,6 +26,18 @@ NS_ASSUME_NONNULL_BEGIN
           faceThin:(double)faceThin
            enabled:(BOOL)enabled;
 
+// MARK: - K 里程碑（2026-07-02）：贴纸接入
+// 参考 FULiveDemo (https://github.com/Faceunity/FULiveDemo) 的 sticker 加载模式：
+// FUStickerContainer.removeAllSticks + addSticker:completion:（同时刻仅 1 张，对齐 H5 §3.4）
+
+/// 加载贴纸 bundle。bundleName 为不含 .bundle 扩展名的资源名（如 "BlueMask" / "CatSparks"）。
+/// 内部先 removeAllSticks 再 addSticker，保证同时刻只有 1 张贴纸。
+/// 返回 NO：bundleName 为空 or bundle 未在 mainBundle 中找到（未拷入 Vendor/FaceUnity/bundles/stickers/）
+- (BOOL)loadSticker:(nullable NSString *)bundleName;
+
+/// 清除当前贴纸（等价 loadSticker:nil）
+- (void)clearSticker;
+
 @end
 
 NS_ASSUME_NONNULL_END

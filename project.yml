@@ -32,6 +32,11 @@ targets:
         buildPhase: resources
       - path: Vendor/FaceUnity/bundles/ai_face_processor.bundle
         buildPhase: resources
+      # K 需求 4（2026-07-02）：贴纸 bundles 目录（用户拷 FULiveDemo 里的 .bundle 到此，见 stickers/README.md）
+      # xcodegen 会把目录下所有 .bundle 递归纳入 resources
+      - path: Vendor/FaceUnity/bundles/stickers
+        buildPhase: resources
+        optional: true
     dependencies:
       - framework: Vendor/FaceUnity/FURenderKit.framework
         embed: true
@@ -122,6 +127,25 @@ targets:
       - path: Sources/Live/NIM/SystemMessageRouteDecision.swift
       # H 里程碑 M7：IM 场景过滤纯函数（pure，无 SDK 依赖；IMSceneGate 副作用层含 @MainActor 不入测）
       - path: Sources/Live/NIM/IMSceneFilter.swift
+      # H-1 P2P 会话列表 MVP：model + classifier + event 合并 + Store（依赖 protocol 注入，零 SDK 依赖）
+      - path: Sources/Message/Models/MessageSession.swift
+      - path: Sources/Message/Models/MessageSessionCategory.swift
+      - path: Sources/Message/Models/MessageSessionEvent.swift
+      - path: Sources/Message/Models/MessageSessionState.swift
+      - path: Sources/Message/MessageSessionProviders.swift
+      - path: Sources/Message/MessageSessionStore.swift
+      # H-1 Step 1c：Prime 拉取 service + Codable model（分批 ≤50 + 部分批失败仅该批不进；APIClient 已入）
+      - path: Sources/Message/Services/PrimeLevelModels.swift
+      - path: Sources/Message/Services/PrimeLevelService.swift
+      # H-1c v4：Flame 顶部 3 系统消息入口（Station HTTP / Notification P2P / Admin P2P）
+      - path: Sources/Message/Models/SystemInboxEntry.swift
+      - path: Sources/Message/Services/StationListModels.swift
+      - path: Sources/Message/Services/StationListService.swift
+      - path: Sources/Message/Services/CustomerServiceIdStore.swift
+      # H-1d v4：对端用户画像批查（apiBatchQueryYxStat）覆盖 nickname/icon
+      - path: Sources/Message/Services/ConversationProfileService.swift
+      # H-1e v4：在线状态常量表（对齐 H5 LIVE_STATUS_NUMBER；纯 Int 常量）
+      - path: Sources/Message/Models/AnchorOnlineStatus.swift
       # H 里程碑 M3：派对房 attachType 枚举（纯 Int rawValue，无 NIMSDK 依赖）
       - path: Sources/Party/Models/PartyAttachType.swift
       - path: Sources/Party/Models/PartyMsgType.swift
@@ -161,13 +185,32 @@ targets:
       - path: Sources/Profile/UserProfile/UserProfileService.swift
       # `.followRelationChanged` Notification 抽出独立小文件（H-0 step 1a 复用此通知做跨页同步）
       - path: Sources/Profile/FollowList/FollowRelationNotification.swift
-      # J 里程碑（发布朋友圈 step 1a）：纯 Swift 模型 + protocol + ViewModel + multipart 拼装
-      # 注意：ImageCompressor.swift 依赖 UIKit/ImageIO 不入 sources；ViewModel 用 closure 注入 compressImage
+      # Core/Upload（通用上传能力，Step 5 重构后从 J 里程碑抽出到 Core/）
+      # 注意：ImageCompressor.swift + ImageUploader.swift + OssCredentialService/OssUploadService 依赖 UIKit/APIClient/URLSession 不入 sources
+      - path: Sources/Core/Upload/OssCredential.swift
+      - path: Sources/Core/Upload/OssCredentialServiceProtocol.swift
+      - path: Sources/Core/Upload/OssUploadServiceProtocol.swift
+      - path: Sources/Core/Upload/OssMultipartBodyBuilder.swift
+      - path: Sources/Core/Upload/ImageCompressionPreset.swift
+      # J 里程碑（发布朋友圈 step 1a）：纯 Swift 模型 + protocol + ViewModel
       - path: Sources/Home/Circle/Publish/PostPublishModels.swift
       - path: Sources/Home/Circle/Publish/PostPublishServiceProtocol.swift
-      - path: Sources/Home/Circle/Publish/OssUploadServiceProtocol.swift
-      - path: Sources/Home/Circle/Publish/OssMultipartBodyBuilder.swift
       - path: Sources/Home/Circle/Publish/PostPublishViewModel.swift
+      # H 里程碑 H-2 (私密媒体解锁 step 1a)：Models + Store + Service stub（真接口 step 1c）
+      - path: Sources/Work/GiftMessage/GiftMessageModels.swift
+      - path: Sources/Work/GiftMessage/GiftMessageStore.swift
+      # 注意：GiftMessageService.swift / PrivateMediaUploadService.swift 真实现依赖 GiftService/OSS 集成路径，不入 tests；
+      # Store 单测通过 protocol 注入 FakeGiftMessageService / FakePrivateMediaUploadService（Tests/HilyTests/GiftMessage/）
+      # K 里程碑（美颜设置页 step 1a）：纯 Swift 模型 + 状态机 + Store + Sharer（无 SDK 依赖）
+      # 注意：FUBeautyRenderer.swift 依赖 FURenderKit 不入 sources；tests 只覆盖 protocol + 逻辑层
+      - path: Sources/Beauty/BeautyError.swift
+      - path: Sources/Beauty/BeautyParameters.swift
+      - path: Sources/Beauty/BeautyRenderer.swift
+      - path: Sources/Beauty/BeautySettings.swift
+      - path: Sources/Beauty/ReflexType.swift
+      - path: Sources/Core/Media/BeautyPipeline/BeautySettingsPersistence.swift
+      - path: Sources/Core/Media/BeautyPipeline/BeautySettingsStore.swift
+      - path: Sources/Core/Media/BeautyPipeline/BeautyPipelineSharer.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.anchor.livechat.tests

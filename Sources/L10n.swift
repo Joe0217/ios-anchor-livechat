@@ -199,6 +199,15 @@ enum L10n {
 
     static var workLevelTextTopHost: String { localize("work.levelText.topHost", comment: "顶级主播场景文案") }
 
+    // Home 顶部刷新按钮 toast（对齐 H5 tabsNav.vue refreshIMOnline → showToast('call.reconnect')）
+    static var callReconnect: String { localize("call.reconnect", comment: "重连 toast") }
+
+    // "今日已设为忙碌"弹窗（对齐安卓 SetToBusyDialog）
+    static var setToBusyTitle: String { localize("setToBusy.title", comment: "已设为忙碌弹窗标题") }
+    static var setToBusyDescription: String { localize("setToBusy.description", comment: "已设为忙碌弹窗描述") }
+    static var setToBusyGoLive: String { localize("setToBusy.goLive", comment: "去直播按钮") }
+    static var setToBusyGoMatch: String { localize("setToBusy.goMatch", comment: "去匹配按钮") }
+
     static var workOnlineTime: String { localize("work.onlineTime", comment: "在线时长") }
     static var workAvgCallDuration: String { localize("work.avgCallDuration", comment: "平均通话时长") }
     static var workPositiveRating: String { localize("work.positiveRating", comment: "好评率") }
@@ -266,6 +275,14 @@ enum L10n {
     static var liveRankBadge: String { localize("live.rankBadge", comment: "排行榜按钮 a11y") }
     static var liveRefresh: String { localize("live.refresh", comment: "刷新按钮 a11y") }
     static var liveOnlineDot: String { localize("live.onlineDot", comment: "在线状态 a11y") }
+
+    // MARK: - Live 广场（H5 liveList.vue 对齐）
+    /// 广场空态提示（当前没有主播在直播）
+    static var liveStreamEmpty: String { localize("liveStream.empty", comment: "Live 广场空数据提示") }
+    /// PK 中角标 a11y
+    static var liveStreamInPK: String { localize("liveStream.inPK", comment: "PK 中角标 a11y") }
+    /// Banner 通用 a11y（本次不接跳转，仅描述）
+    static var liveBannerA11y: String { localize("live.banner.a11y", comment: "首页 banner a11y") }
 
     // MARK: - List 子页（设计稿还原）
     /// 顶部 Online/Prime 分段
@@ -380,6 +397,12 @@ enum L10n {
     static var messageActionDelete: String      { localize("message.action.delete", comment: "删除会话") }
     static var messageActionFailedToast: String { localize("message.action.failedToast", comment: "操作失败通用 toast") }
 
+    // MARK: - Message 顶部系统消息 3 入口（H-1c v4）
+    static var messageSystemInboxStation: String       { localize("message.systemInbox.station", comment: "Flame 顶部 Station 入口标题") }
+    static var messageSystemInboxNotification: String  { localize("message.systemInbox.notification", comment: "Flame 顶部 Notification 入口标题") }
+    static var messageSystemInboxAdmin: String         { localize("message.systemInbox.admin", comment: "Flame 顶部 Admin 客服入口标题") }
+    static var messageSystemInboxComingSoon: String    { localize("message.systemInbox.comingSoon", comment: "3 入口详情页留 H-2 未开放 toast") }
+
     // MARK: - LevelDetail 段位详情页
     static var levelDetailTitle: String    { localize("level.title", comment: "段位详情标题") }
     static var levelDetailCurrent: String  { localize("level.current", comment: "当前段位 caption") }
@@ -483,6 +506,39 @@ enum L10n {
     static var giftPickerConfirm: String { localize("giftPicker.confirm", comment: "确认") }
     static var giftPickerRetry: String { localize("giftPicker.retry", comment: "重试") }
     static var giftPickerEmpty: String { localize("giftPicker.empty", comment: "空态") }
+
+    // MARK: - L-spec-愿望单设置页 v1
+    static var wishSettingNavTitle: String { localize("wishSetting.navTitle", comment: "Wish Setting 页顶部") }
+    static var wishSettingRecord: String { localize("wishSetting.record", comment: "顶部 Record 审核记录按钮") }
+    static var wishSettingThemeTitle: String { localize("wishSetting.themeTitle", comment: "Wish theme 卡片 title") }
+    static var wishSettingThemeIntro: String { localize("wishSetting.themeIntro", comment: "Wish theme 副标题") }
+    static var wishSettingSubmit: String { localize("wishSetting.submit", comment: "Wish theme Submit 审核") }
+    static var wishSettingSelectTemplate: String { localize("wishSetting.selectTemplate", comment: "Select template 卡片 title") }
+    static var wishSettingChooseTemplate: String { localize("wishSetting.chooseTemplate", comment: "dropdown 未选提示") }
+    static var wishSettingTypeNoText: String { localize("wishSetting.type.noText", comment: "承诺档 No text") }
+    static var wishSettingTypeCommon: String { localize("wishSetting.type.common", comment: "承诺档 Common template") }
+    static var wishSettingTypePrivate: String { localize("wishSetting.type.private", comment: "承诺档 Private template") }
+    static var wishSettingNoTemplateAvailable: String { localize("wishSetting.noTemplateAvailable", comment: "模板列表空") }
+    static var wishSettingAddedFormat: String { localize("wishSetting.added.format", comment: "已添加 %d/%d") }
+    static var wishSettingUpToFormat: String { localize("wishSetting.upTo.format", comment: "最多 %d 心愿礼物") }
+    static var wishSettingGiftCount: String { localize("wishSetting.giftCount", comment: "sheet 内数量 label") }
+    static var wishSettingMaxGiftNum: String { localize("wishSetting.maxGiftNum", comment: "礼物数量已达上限") }
+    static var wishSettingRuleTitle: String { localize("wishSetting.ruleTitle", comment: "合规规范卡 title") }
+    static var wishSettingRuleAgree: String { localize("wishSetting.ruleAgree", comment: "勾选合规规范文案") }
+    static var wishSettingRuleLink: String { localize("wishSetting.ruleLink", comment: "合规规范链接文字") }
+    static var wishSettingRuleDoc: String { localize("wishSetting.ruleDoc", comment: "合规规范只读文档正文") }
+    static var wishSettingSave: String { localize("wishSetting.save", comment: "Save 按钮") }
+    static var wishSettingPleaseEnterTheme: String { localize("wishSetting.pleaseEnterTheme", comment: "Wish theme 为空 toast") }
+    static var wishSettingThemeMaxLen: String { localize("wishSetting.themeMaxLen", comment: "Wish theme > 15 chars") }
+    static var wishSettingSubmittedForReview: String { localize("wishSetting.submittedForReview", comment: "Submit 成功 Alert 标题") }
+    // v2 设计稿对齐补充
+    static var wishSettingReviewStatus: String { localize("wishSetting.reviewStatus", comment: "Review status 卡标题") }
+    static var wishSettingReviewStatusIntro: String { localize("wishSetting.reviewStatusIntro", comment: "Review status 副标题") }
+    static var wishSettingTypeCommonSub: String { localize("wishSetting.type.commonSub", comment: "Common template chip 副标题") }
+    static var wishSettingTypePrivateSub: String { localize("wishSetting.type.privateSub", comment: "Private template chip 副标题") }
+    static var wishSettingTypeNoTextSub: String { localize("wishSetting.type.noTextSub", comment: "No text chip 副标题") }
+    static var wishSettingRuleAgreeShort: String { localize("wishSetting.ruleAgreeShort", comment: "勾选行 I agree") }
+    static var wishSettingRuleFooter: String { localize("wishSetting.ruleFooter", comment: "合规规范尾部承诺") }
 
     // MARK: - LiveRoom 直播间
     static var liveRoomPermissionAlertTitle: String { localize("liveRoom.permissionAlertTitle", comment: "相机权限弹窗标题") }
@@ -605,4 +661,116 @@ enum L10n {
     static var userProfileA11yAvatar: String        { localize("userProfile.a11y.avatar", comment: "无障碍：头像 label") }
     static var userProfileA11yMenu: String          { localize("userProfile.a11y.menu", comment: "无障碍：菜单按钮 label") }
     static var userProfileA11yGiftFallback: String  { localize("userProfile.a11y.giftFallback", comment: "无障碍：礼物 name 为 nil 时兜底") }
+
+    // MARK: - K 里程碑 美颜设置页（对照 H5 beautySettings/index.vue；spec §4）
+    enum BeautySettings {
+        // 页面标题 + 底部按钮
+        static var pageTitle: String        { localize("beautySettings.pageTitle", comment: "美颜设置页标题") }
+        static var globalToggle: String     { localize("beautySettings.globalToggle", comment: "全局开关：美颜") }
+        static var resetDefaults: String    { localize("beautySettings.resetDefaults", comment: "恢复默认") }
+        static var done: String             { localize("beautySettings.done", comment: "完成/关闭") }
+
+        // Tab
+        static var tabSkin: String          { localize("beautySettings.tab.skin", comment: "美肤 tab") }
+        static var tabShape: String         { localize("beautySettings.tab.shape", comment: "美型 tab") }
+        static var tabFilter: String        { localize("beautySettings.tab.filter", comment: "滤镜 tab") }
+        static var tabSticker: String       { localize("beautySettings.tab.sticker", comment: "贴纸 tab") }
+
+        // 状态横幅
+        static var bannerLoading: String    { localize("beautySettings.banner.loading", comment: "美颜引擎加载中") }
+        static var bannerUnavailable: String { localize("beautySettings.banner.unavailable", comment: "美颜不可用") }
+        static var bannerInterrupted: String { localize("beautySettings.banner.interrupted", comment: "预览已暂停") }
+
+        // 美肤 10 项
+        static var paramBlur: String        { localize("beautySettings.param.blur", comment: "磨皮") }
+        static var paramWhiten: String      { localize("beautySettings.param.whiten", comment: "美白") }
+        static var paramRed: String         { localize("beautySettings.param.red", comment: "红润") }
+        static var paramClarity: String     { localize("beautySettings.param.clarity", comment: "清晰") }
+        static var paramSharpen: String     { localize("beautySettings.param.sharpen", comment: "锐化") }
+        static var paramFaceThreed: String  { localize("beautySettings.param.faceThreed", comment: "五官立体") }
+        static var paramEyeBright: String   { localize("beautySettings.param.eyeBright", comment: "亮眼") }
+        static var paramToothWhiten: String { localize("beautySettings.param.toothWhiten", comment: "美牙") }
+        static var paramRemovePouch: String { localize("beautySettings.param.removePouch", comment: "去黑眼圈") }
+        static var paramRemoveNasolabialFolds: String { localize("beautySettings.param.removeNasolabialFolds", comment: "去法令纹") }
+
+        // 美型 15 项
+        static var paramCheekV: String      { localize("beautySettings.param.cheekV", comment: "V脸") }
+        static var paramCheekNarrow: String { localize("beautySettings.param.cheekNarrow", comment: "窄脸") }
+        static var paramCheekShort: String  { localize("beautySettings.param.cheekShort", comment: "短脸") }
+        static var paramCheekSmall: String  { localize("beautySettings.param.cheekSmall", comment: "小脸") }
+        static var paramIntensityCheekbones: String { localize("beautySettings.param.intensityCheekbones", comment: "瘦颧骨") }
+        static var paramIntensityLowerJaw: String { localize("beautySettings.param.intensityLowerJaw", comment: "瘦下颌骨") }
+        static var paramEyeEnlarging: String { localize("beautySettings.param.eyeEnlarging", comment: "大眼") }
+        static var paramIntensityEyeCircle: String { localize("beautySettings.param.intensityEyeCircle", comment: "圆眼") }
+        static var paramIntensityChin: String { localize("beautySettings.param.intensityChin", comment: "下巴") }
+        static var paramIntensityForehead: String { localize("beautySettings.param.intensityForehead", comment: "额头") }
+        static var paramIntensityNose: String { localize("beautySettings.param.intensityNose", comment: "瘦鼻") }
+        static var paramIntensityMouth: String { localize("beautySettings.param.intensityMouth", comment: "嘴型") }
+        static var paramIntensityLipThick: String { localize("beautySettings.param.intensityLipThick", comment: "嘴唇厚度") }
+        static var paramIntensityCanthus: String { localize("beautySettings.param.intensityCanthus", comment: "开眼角") }
+        static var paramIntensityEyeSpace: String { localize("beautySettings.param.intensityEyeSpace", comment: "眼距") }
+
+        // 11 滤镜
+        static var filterOrigin: String     { localize("beautySettings.filter.origin", comment: "原图") }
+        static var filterZiran: String      { localize("beautySettings.filter.ziran", comment: "自然") }
+        static var filterZhiganhui: String  { localize("beautySettings.filter.zhiganhui", comment: "质感灰") }
+        static var filterMitao: String      { localize("beautySettings.filter.mitao", comment: "蜜桃") }
+        static var filterBailiang: String   { localize("beautySettings.filter.bailiang", comment: "白亮") }
+        static var filterFennen: String     { localize("beautySettings.filter.fennen", comment: "粉嫩") }
+        static var filterLengsediao: String { localize("beautySettings.filter.lengsediao", comment: "冷色调") }
+        static var filterNuansediao: String { localize("beautySettings.filter.nuansediao", comment: "暖色调") }
+        static var filterGexing: String     { localize("beautySettings.filter.gexing", comment: "个性") }
+        static var filterXiaoqingxin: String { localize("beautySettings.filter.xiaoqingxin", comment: "小清新") }
+        static var filterHeibai: String     { localize("beautySettings.filter.heibai", comment: "黑白") }
+        static var filterLevelLabel: String { localize("beautySettings.filter.levelLabel", comment: "滤镜强度") }
+
+        // 贴纸占位
+        static var stickerComingSoon: String { localize("beautySettings.sticker.comingSoon", comment: "贴纸敬请期待") }
+
+        // 错误文案（对齐 BeautyError.localizationKey）
+        static var errorAuthExpired: String { localize("beauty.error.authExpired", comment: "authpack 过期请更新 App") }
+        static var errorBundleMissing: String { localize("beauty.error.bundleMissing", comment: "美颜资源缺失") }
+        static var errorGenericSetupFailed: String { localize("beauty.error.genericSetupFailed", comment: "美颜引擎初始化失败") }
+        static var errorSetupTimeout: String { localize("beauty.error.setupTimeout", comment: "美颜引擎超时") }
+        static var errorPersistenceDecodeFailed: String { localize("beauty.error.persistenceDecodeFailed", comment: "美颜设置读取失败") }
+        static var errorPersistenceWriteFailed: String { localize("beauty.error.persistenceWriteFailed", comment: "美颜设置保存失败") }
+
+        // 无障碍
+        static var a11yPreview: String      { localize("beautySettings.a11y.preview", comment: "无障碍：预览区") }
+        static var a11ySliderFormat: String { localize("beautySettings.a11y.sliderFormat", comment: "无障碍：滑块 %@ 值 %d") }
+
+        // H5 对齐 2026-07-02：icon row 首位 Recover + 顶部 Save
+        static var recover: String          { localize("beautySettings.recover", comment: "参数图标行第一位：恢复默认") }
+        static var save: String             { localize("beautySettings.save", comment: "顶部保存按钮") }
+
+        // Recover 确认弹窗（2026-07-02 需求 2）
+        static var recoverConfirmTitle: String   { localize("beautySettings.recoverConfirm.title", comment: "Recover 确认弹窗标题") }
+        static var recoverConfirmMessage: String { localize("beautySettings.recoverConfirm.message", comment: "Recover 确认弹窗正文") }
+        static var recoverConfirmYes: String     { localize("beautySettings.recoverConfirm.yes", comment: "Recover 确认按钮") }
+        static var recoverConfirmNo: String      { localize("beautySettings.recoverConfirm.no", comment: "Recover 取消按钮") }
+    }
+
+    // MARK: - H-2 私密媒体解锁（Gift Message，对齐 H5 secretMessage）
+    enum GiftMessage {
+        static var navTitle: String            { localize("giftMessage.navTitle", comment: "导航栏标题") }
+        static var photoTitle: String          { localize("giftMessage.photoTitle", comment: "图片区标题") }
+        static var videoTitle: String          { localize("giftMessage.videoTitle", comment: "视频区标题") }
+        static var setGiftIntro: String        { localize("giftMessage.setGiftIntro", comment: "卡片副标题") }
+        static var submit: String              { localize("giftMessage.submit", comment: "提交按钮") }
+        static var giftPickerTitle: String     { localize("giftMessage.giftPicker.title", comment: "礼物选择标题") }
+        static var giftPickerLoadFail: String  { localize("giftMessage.giftPicker.loadFail", comment: "礼物列表加载失败") }
+        static var reachedLimit: String        { localize("giftMessage.reachedLimit", comment: "达到上限") }
+        static var selectGiftRequired: String  { localize("giftMessage.selectGiftRequired", comment: "所有项必须绑礼物") }
+        static var addMedia: String            { localize("giftMessage.addMedia", comment: "+ a11y") }
+        static var deleteItem: String          { localize("giftMessage.deleteItem", comment: "删除 a11y") }
+        static var networkErrorFallback: String { localize("giftMessage.networkErrorFallback", comment: "网络错误兜底") }
+        static var unsupportedFile: String     { localize("giftMessage.unsupportedFile", comment: "文件不支持") }
+        static var uploading: String           { localize("giftMessage.uploading", comment: "上传中 loading 文案") }
+        static func photoCountFormat(_ current: Int, _ max: Int) -> String {
+            String(format: localize("giftMessage.photoCountFormat", comment: "(%d/%d)"), current, max)
+        }
+        static func videoCountFormat(_ current: Int, _ max: Int) -> String {
+            String(format: localize("giftMessage.videoCountFormat", comment: "(%d/%d)"), current, max)
+        }
+    }
 }

@@ -14,7 +14,7 @@ struct CallView: View {
     /// D 里程碑修复（v5.4）：直播私 call 场景由 LiveRoomView 注入直播侧的 camera/beauty，
     /// CallFaceTimeView 复用同一路 AVCaptureSession，避免双 CameraManager 实例抢占前置摄像头
     /// → reason=3 → 20s watcher → forceEnd(endType=5) 误下播；同时保留主播美颜参数。
-    /// 非直播态（独立 1v1）保持 nil，CallFaceTimeView 走 fallbackCamera/fallbackBeauty 路径。
+    /// 非直播态（独立 1v1）保持 nil，CallFaceTimeView 走 `CallFaceTimeFallbackHolder` lazy 路径。
     var liveCamera: CameraManager? = nil
     var liveBeauty: BeautyParameters? = nil
 
@@ -22,6 +22,8 @@ struct CallView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             bodyContent
+            // H M4 HUD：sysMsg → CallStore 5 publishers 的可视化
+            CallHudOverlay(store: store).allowsHitTesting(false)
         }
         .preferredColorScheme(.dark)
     }
@@ -48,8 +50,6 @@ struct CallView: View {
 
 private struct CallWaitingView: View {
     @ObservedObject var store: CallStore
-    @State private var elapsed: Int = 0
-    private let tickTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         VStack(spacing: 24) {
@@ -63,9 +63,9 @@ private struct CallWaitingView: View {
 
             Text(subtitle).font(.subheadline).foregroundStyle(.white.opacity(0.75))
 
-            // 圆环倒计时（主叫 30s）
+            // 圆环倒计时（主叫 30s）：elapsed 走 CallStore.callElapsed（统一收敛，避免 view 内 Timer.publish 后台 backlog）
             if store.current.inOrOut == .out {
-                CountdownRing(elapsed: elapsed, total: Int(CallTuning.callOutTimeoutSeconds))
+                CountdownRing(elapsed: store.callElapsed, total: Int(CallTuning.callOutTimeoutSeconds))
                     .frame(width: 80, height: 80)
                     .padding(.top, 8)
             }
@@ -75,12 +75,6 @@ private struct CallWaitingView: View {
             buttons.padding(.bottom, 40)
         }
         .padding()
-        .onReceive(tickTimer) { _ in
-            if store.state == .calling { elapsed += 1 }
-        }
-        .onChange(of: store.state) { newValue in
-            if newValue != .calling { elapsed = 0 }
-        }
     }
 
     private var subtitle: String {
@@ -114,13 +108,14 @@ private struct CallFaceTimeView: View {
     /// 且保留主播原美颜参数。独立 1v1 通话场景保持 nil → 走 fallback 自启动。
     var liveCamera: CameraManager?
     var liveBeauty: BeautyParameters?
-    @StateObject private var fallbackCamera = CameraManager()
-    @StateObject private var fallbackBeauty = BeautyParameters()
-    @State private var elapsed: Int = 0
-    private let tickTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    /// 用 holder + lazy 包装：直播私 call 路径下 `liveCamera != nil`，fallback 不会被实例化，
+    /// 避免 SwiftUI `@StateObject = CameraManager()` 默认值在 view init 时**立即**调构造器（即使
+    /// liveCamera 已提供），导致 AVCaptureSession + Metal renderer + 美颜资源（FURenderKit 100MB+）
+    /// 全程多占一份 → 增加 OOM 风险（review P1-1）。
+    @StateObject private var fallback = CallFaceTimeFallbackHolder()
 
-    private var camera: CameraManager { liveCamera ?? fallbackCamera }
-    private var beautyParams: BeautyParameters { liveBeauty ?? fallbackBeauty }
+    private var camera: CameraManager { liveCamera ?? fallback.camera }
+    private var beautyParams: BeautyParameters { liveBeauty ?? fallback.beauty }
 
     var body: some View {
         ZStack {
@@ -157,12 +152,16 @@ private struct CallFaceTimeView: View {
                     if granted { camera.start() }
                 }
             }
+            // K 里程碑：attach `.call` token 让 K 页面调过的美颜参数广播到通话 renderer
+            // 同一 CameraManager.renderer 多处 attach 时后写覆盖前写（Sharer 幂等）；
+            // 直播私 call 场景下 LiveRoomView 已 attach `.live`，此处 attach `.call` 优先级更高（栈顶生效）
+            BeautyPipelineSharer.shared.attach(camera.renderer as AnyObject & BeautyRenderer, token: .call)
+            BeautyPipelineSharer.shared.reportSetupResult(camera.isBeautyFallback ? .failure(.genericSetupFailed) : .success(()))
         }
         .onDisappear {
+            // K 里程碑：detach Sharer 订阅；若为直播私 call，LiveRoomView 那一格保留（下次 apply 走 `.live` 栈顶）
+            BeautyPipelineSharer.shared.detach(camera.renderer as AnyObject & BeautyRenderer)
             if liveCamera == nil { camera.stop() }
-        }
-        .onReceive(tickTimer) { _ in
-            if store.state == .connected { elapsed += 1 }
         }
     }
 
@@ -171,7 +170,7 @@ private struct CallFaceTimeView: View {
             Text(store.current.remoteNickname.isEmpty ? store.current.remoteUserIdString : store.current.remoteNickname)
                 .font(.headline).foregroundStyle(.white)
             Spacer()
-            Text(formatDuration(elapsed))
+            Text(formatDuration(store.callElapsed))
                 .font(.subheadline).monospacedDigit()
                 .foregroundStyle(.white.opacity(0.85))
                 .padding(.horizontal, 10).padding(.vertical, 4)
@@ -196,12 +195,14 @@ private struct CallFaceTimeView: View {
     private var liveCallBanner: some View {
         HStack(spacing: 6) {
             Image(systemName: "dot.radiowaves.left.and.right").font(.caption)
+                .accessibilityHidden(true)
             Text(L10n.callLiveBanner).font(.caption).bold()
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 12).padding(.vertical, 6)
         .background(.pink.opacity(0.85), in: Capsule())
         .frame(maxWidth: .infinity, alignment: .center)
+        .accessibilityElement(children: .combine)
     }
 
     private func formatDuration(_ s: Int) -> String {
@@ -274,8 +275,149 @@ private struct CircleButton: View {
                     .foregroundStyle(.white)
                     .frame(width: 64, height: 64)
                     .background(color, in: Circle())
+                    .accessibilityHidden(true)   // SF Symbol 仅装饰，语义在 Button.accessibilityLabel
             }
+            .accessibilityLabel(label)
+            .accessibilityAddTraits(.isButton)
             Text(label).font(.caption).foregroundStyle(.white.opacity(0.85))
+                .accessibilityHidden(true)        // 视觉文本，避免 VoiceOver 重复朗读
+        }
+    }
+}
+
+// MARK: - 独立 1v1 通话路径的相机/美颜 lazy holder
+//
+// 直播私 call（liveCamera != nil）路径下，下列字段**永不**被访问 → CameraManager / BeautyParameters
+// 永不构造；省下 AVCaptureSession + Metal context + FURenderKit 资源占用。
+@MainActor
+private final class CallFaceTimeFallbackHolder: ObservableObject {
+    lazy var camera: CameraManager = CameraManager()
+    lazy var beauty: BeautyParameters = BeautyParameters()
+}
+
+// MARK: - HUD：sysMsg 5 publishers 可视化
+
+/// `.task(id:)` 模式：id 变化时 SwiftUI 自动取消旧 task → 新 task 重新计时，
+/// 避免 `onChange` + `Task.sleep` 老任务串扰新内容（与 BlocklistView.transientErrorToast 一致）。
+private struct CallHudOverlay: View {
+    @ObservedObject var store: CallStore
+    @State private var visibleRemoteText: String?
+    @State private var visibleBonus: Int?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack { Spacer(); incomeChips }
+                .padding(.top, 100).padding(.trailing, 16)
+
+            Spacer()
+
+            if let text = visibleRemoteText {
+                remoteTextBubble(text)
+                    .padding(.horizontal, 32)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+            if let bonus = visibleBonus {
+                bonusBubble(bonus)
+                    .padding(.top, 12)
+                    .transition(.scale.combined(with: .opacity))
+            }
+
+            Spacer()
+
+            if store.callWaitState > 0 {
+                pill(waitStateText(store.callWaitState),
+                     font: .caption, bg: .blue, bgOpacity: 0.7)
+                    .padding(.bottom, 130)
+                    .transition(.opacity)
+            }
+        }
+        .task(id: store.callRecentRemoteText) {
+            guard let text = store.callRecentRemoteText, !text.isEmpty else {
+                visibleRemoteText = nil
+                return
+            }
+            await flashTransient(seconds: 4,
+                                 set: { visibleRemoteText = text },
+                                 reset: { visibleRemoteText = nil })
+        }
+        .task(id: store.callWaitBonus) {
+            let bonus = store.callWaitBonus
+            guard bonus > 0 else {
+                visibleBonus = nil
+                return
+            }
+            await flashTransient(seconds: 3,
+                                 set: { visibleBonus = bonus },
+                                 reset: { visibleBonus = nil })
+        }
+    }
+
+    /// 触发瞬时显示 N 秒后自动隐藏。`.task(id:)` 取消时不复位（让下一个 task 接管，避免闪烁覆盖）。
+    private func flashTransient(seconds: TimeInterval,
+                                set: () -> Void,
+                                reset: () -> Void) async {
+        withAnimation(.easeInOut(duration: 0.25)) { set() }
+        try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeInOut(duration: 0.25)) { reset() }
+    }
+
+    @ViewBuilder
+    private var incomeChips: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            if store.current.callIncome > 0 {
+                pill(String(format: L10n.Call.Hud.incomeFormat, store.current.callIncome),
+                     font: .system(size: 13, weight: .semibold), bg: .black, bgOpacity: 0.45,
+                     hPad: 10, vPad: 4)
+            }
+            if store.current.callGiftIncome > 0 {
+                pill(String(format: L10n.Call.Hud.giftIncomeFormat, store.current.callGiftIncome),
+                     font: .system(size: 13, weight: .semibold), bg: .black, bgOpacity: 0.45,
+                     hPad: 10, vPad: 4)
+            }
+        }
+    }
+
+    /// 胶囊样式统一入口：chip / bonus / wait state 三处共用。
+    /// `remoteTextBubble` 因 cornerRadius 16 + multiline 与胶囊形态不同，保留独立。
+    private func pill(_ text: String,
+                      font: Font,
+                      fg: Color = .white,
+                      bg: Color,
+                      bgOpacity: Double = 1,
+                      hPad: CGFloat = 12,
+                      vPad: CGFloat = 6) -> some View {
+        Text(text)
+            .font(font)
+            .foregroundStyle(fg)
+            .monospacedDigit()
+            .padding(.horizontal, hPad).padding(.vertical, vPad)
+            .background(bg.opacity(bgOpacity), in: Capsule())
+    }
+
+    private func remoteTextBubble(_ text: String) -> some View {
+        Text(String(format: L10n.Call.Hud.remoteTextFormat, text))
+            .font(.subheadline)
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 16))
+            .frame(maxWidth: 300)
+    }
+
+    private func bonusBubble(_ amount: Int) -> some View {
+        pill(String(format: L10n.Call.Hud.waitBonusFormat, amount),
+             font: .system(size: 14, weight: .bold),
+             fg: .black, bg: .yellow, bgOpacity: 0.9)
+    }
+
+    private func waitStateText(_ type: Int) -> String {
+        switch type {
+        case 1: return L10n.Call.Hud.waitStartPay
+        case 2: return L10n.Call.Hud.waitPaySuccess
+        case 3: return L10n.Call.Hud.waitCallTimeEnd
+        case 4: return L10n.Call.Hud.waitPayCancel
+        default: return ""
         }
     }
 }

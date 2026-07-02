@@ -28,6 +28,10 @@ struct MainTabView: View {
     @State private var isOnSubpage: Bool = false
     @Environment(\.scenePhase) private var scenePhase
 
+    /// `.starting` 期间锁 tabbar 拦截触摸，防止 push 到 LiveRoomView 前 tab 切换导致
+    /// NavigationStack 销毁 → 后端已建房 iOS 无心跳/rtc = 僵尸房间（B-spec-开播设置页 §1.4 🔴#1 🔴#5）
+    @ObservedObject private var liveSettingsLock = LiveSettingsLock.shared
+
     /// 派生信号：当前选中 tab 是否在子页（对应 tab 的 path 非空）。
     /// 用单一 Equatable 信号触发 onChange，避免 selection / workPath.count / profilePath.count
     /// 三个独立 onChange 在同一 transaction 内互相 reentrancy 导致动画闪烁。
@@ -64,6 +68,11 @@ struct MainTabView: View {
             workPath = NavigationPath()
             profilePath = NavigationPath()
         }
+        .task {
+            // 全局图片配置预热（对齐 H5 app.js `getBannerList([2])`）：
+            // 首页 banner 位靠此接口喂数据；J 里程碑接入启动图/挂件/榜单/分类贴图时按需扩 types
+            await AppPictureStore.shared.loadIfNeeded(types: [.banner])
+        }
         .preferredColorScheme(.dark)
     }
 
@@ -92,9 +101,9 @@ struct MainTabView: View {
             .accessibilityHidden(selection != .home)
 
             // —— Messages：永久持有 ——
-            // 当前是占位 view 但仍按 keep-alive 架构挂上，未来真接入消息列表/会话页时
-            // 切走再回来自然保留滚动位置 / 未读位 / 会话草稿。
-            PlaceholderTab(title: L10n.tabMessages)
+            // H-1 MVP：P2P 会话列表 shared 单例 + keep-alive；切走再回来保留 selectedCategory /
+            // sessions / delegate 订阅。详见 [MessageSessionStoreShared.swift](../Message/MessageSessionStoreShared.swift)
+            MessageListView(store: MessageSessionStore.shared)
                 .opacity(selection == .messages ? 1 : 0)
                 .allowsHitTesting(selection == .messages)
                 .accessibilityHidden(selection != .messages)
@@ -108,6 +117,14 @@ struct MainTabView: View {
                             switch route {
                             case .pocDebug:
                                 POCDebugView()
+                            case .liveSettings:
+                                LiveSettingsView()
+                            case .wishSetting:
+                                WishSettingView()
+                            case .beautySettings:
+                                BeautySettingsView()
+                            case .giftMessage:
+                                GiftMessageView()
                             }
                         }
                 }
@@ -131,12 +148,17 @@ struct MainTabView: View {
 
     /// tabbar 永驻容器：用几何坍缩 + 透明度切换隐显，不做 if/EmptyView 增删。
     /// allowsHitTesting / accessibilityHidden 同步切，避免坍缩后误命中或被 VoiceOver 聚焦。
+    ///
+    /// `liveSettingsLock.isLocked` 拦截触摸（B-spec-开播设置页 §1.4）：
+    /// 即使 tabbar 视觉上因子页坍缩为 0 高度，isOnSubpage=true 时它已不响应；`.starting`
+    /// 状态下 LiveSettingsView 仍在栈内（isOnSubpage=true），tabbar 已经拦截，本 lock 兜底
+    /// 覆盖"子页突然消失"边界（B 档保守）。
     private var tabBarHostContainer: some View {
         ZStack { tabBar }
             .frame(height: isOnSubpage ? 0 : Theme.Metric.tabBarHeight)
             .clipped()
             .opacity(isOnSubpage ? 0 : 1)
-            .allowsHitTesting(!isOnSubpage)
+            .allowsHitTesting(!isOnSubpage && !liveSettingsLock.isLocked)
             .accessibilityHidden(isOnSubpage)
     }
 

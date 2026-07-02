@@ -42,22 +42,32 @@
 # 1. 提示用户：先关闭 Hily.xcworkspace（让 Xcode 释放 .xcodeproj 内存 cache）
 # 2. 我跑命令链：
 xcodegen generate && LANG=en_US.UTF-8 pod install
-# 3. Sanity check：验证 script phase 注入成功
-phase_count=$(grep -c 'PBXShellScriptBuildPhase' Hily.xcodeproj/project.pbxproj)
-if [ "$phase_count" -lt 3 ]; then
-  echo "❌ Pods script phase 注入失败 (count=$phase_count, 期望 ≥3)"
+# 3. Sanity check：验证 phase 注入 + 命令行 build 通
+#    ⚠️ 不要用 `grep -c PBXShellScriptBuildPhase`——那数关键字次数（section start/end + 每 phase 1 次 isa），
+#      count 4 = 2 phases、count 5 = 3 phases，非直观且易错判。
+#    正确方法：数 `name = "[CP]` 出现的**唯一 phase 名**：
+phase_names=$(grep 'name = "\[CP\]' Hily.xcodeproj/project.pbxproj | sort -u | wc -l | tr -d ' ')
+if [ "$phase_names" -lt 2 ]; then
+  echo "❌ Pods phase 注入不足 (unique names=$phase_names, 期望 ≥2)"
   echo "   检查 Xcode 是否还开着 workspace；关掉后再跑一次 pod install"
   exit 1
 fi
-# 4. 跑完用户再 open Hily.xcworkspace 重新打开
+# 4. 更硬的验证：直接跑一次命令行 build（Xcode IDE cache 独立于此路径）
+xcodebuild build -workspace Hily.xcworkspace -scheme Hily \
+  -destination 'generic/platform=iOS' -configuration Debug \
+  CODE_SIGNING_ALLOWED=NO 2>&1 | grep -E "error:|BUILD (SUCCEEDED|FAILED)" | tail -5
+# 5. 跑完用户再 open Hily.xcworkspace 重新打开 + Clean Build Folder (Shift+Cmd+K)
 ```
 
-预期至少 3 个 `PBXShellScriptBuildPhase`：
+**Hily target 里预期至少 2 个 CP phase**（CocoaPods 1.16 分工模型）：
 - `[CP] Check Pods Manifest.lock`
-- `[CP] Copy XCFrameworks`
 - `[CP] Embed Pods Frameworks`
 
-**< 3 直接报错**，不让用户白浪费时间真机 build 才发现。
+**Copy XCFrameworks 不在 Hily target**（**注意 CocoaPods 1.16 分工**）：CocoaPods 1.16+ 把 `[CP] Copy XCFrameworks` phase 加到 `Pods.xcodeproj` 里**每个 pod target**（AgoraVideo_Special_iOS / NIMSDK_LITE / AgoraRtm_OC_Special / YXArtemis_XCFramework），不加到 Hily target。查证方法：`grep 'Copy XCFrameworks' Pods/Pods.xcodeproj/project.pbxproj`（应 ≥ 3 处）。若 Pods.xcodeproj 里也没有，才是真挂。
+
+**验证**：`grep 'Copy XCFrameworks' Pods/Pods.xcodeproj/project.pbxproj | wc -l` 应 ≥ 3
+
+**Sanity check 有硬约束**：命令行 `xcodebuild build` **必须 SUCCEEDED**。命令行成功 + Xcode IDE 失败 = **纯 IDE cache 问题**（用户重新打开 workspace + Clean Build Folder 即可）。
 
 ## 与既有 CLAUDE.md 关联
 
@@ -73,3 +83,4 @@ CLAUDE.md "构建工作流" 段已写明此铁律：
 
 - 2026-06-24 H M0-9 / M1-12：跑 xcodegen 验证主 target build 没跟 pod install，用户真机 build 触发上述错误链，需要重新 pod install 修复
 - 2026-06-25 trial #3 H-0：xcodegen + pod install 都跑了 3 次都看到 "Pod installation complete!"，但 Xcode 一直开着 workspace → 真机 Cmd+B 报 `No such module 'AgoraRtcKit'`。grep pbxproj 0 script phase。**真因**：Xcode IDE 持有 .xcodeproj 内存 cache 覆盖了磁盘 pod install 写入。本规则补"预防"段沉淀。
+- 2026-07-02 K H5 对齐后 IDE build 挂：跑完 xcodegen + pod install + sanity check `grep -c PBXShellScriptBuildPhase = 4` 通过 → 结果 IDE Cmd+B 报 `Search path XCFrameworkIntermediates not found`。**发现 2 个 bug**：(1) sanity check 命令数关键字次数（section+isa）不是 phase 数量，count 4 实为 2 phases；(2) CocoaPods 1.16 分工模型下 Copy XCFrameworks 在 Pods.xcodeproj 各 pod target 里，**不在 Hily target 里**——旧规则以为 Hily target 里应有 Copy XCFrameworks 是错的。**真因**：命令行 `xcodebuild build` SUCCEEDED，Xcode IDE 错是纯 DerivedData/内存 cache 遗留（用户之前 Xcode 开着 workspace 时 build 过失败版本，cache 里存了 stale 状态）。修复：重启 Xcode + Clean Build Folder + 重 build。本规则补 sanity check 命令 + CocoaPods 1.16 分工说明。

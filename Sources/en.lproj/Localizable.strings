@@ -45,6 +45,13 @@
 
 "work.levelText.topHost"     = "You are a top host";
 
+"call.reconnect"             = "Reconnect";
+
+"setToBusy.title"            = "Set to Busy Today";
+"setToBusy.description"      = "You've reached today's call limit. Continue via Live or Match.";
+"setToBusy.goLive"           = "Go Live";
+"setToBusy.goMatch"          = "Go Match";
+
 "work.onlineTime"            = "Online Time (d)";
 "work.avgCallDuration"       = "Avg Call Duration (d)";
 "work.positiveRating"        = "Positive Rating";
@@ -118,6 +125,11 @@
 "liveList.end"               = "No more";
 "liveList.loadMoreFailed"    = "Failed to load more";
 "liveList.pullToRetry"       = "Pull down to refresh";
+
+// MARK: - Live 广场（H5 liveList.vue 对齐）
+"liveStream.empty"           = "No live streams right now";
+"liveStream.inPK"            = "In PK";
+"live.banner.a11y"           = "Home banner";
 
 // MARK: - Profile 个人页（设计稿还原）
 "profile.settings"           = "Settings";
@@ -245,6 +257,38 @@
 "giftPicker.confirm"                 = "Confirm";
 "giftPicker.retry"                   = "Retry";
 "giftPicker.empty"                   = "No gifts available";
+
+// MARK: - L-spec-愿望单设置页 v1（对齐 H5 wishSetting）
+"wishSetting.navTitle"               = "Wish Setting";
+"wishSetting.record"                 = "Record";
+"wishSetting.themeTitle"             = "Wish theme";
+"wishSetting.themeIntro"             = "What you promise to do after the user grants your wish (max 15 chars)";
+"wishSetting.submit"                 = "Submit";
+"wishSetting.selectTemplate"         = "Select template";
+"wishSetting.chooseTemplate"         = "Please choose a template";
+"wishSetting.type.noText"            = "No text";
+"wishSetting.type.common"            = "Common template";
+"wishSetting.type.private"           = "Private template";
+"wishSetting.noTemplateAvailable"    = "No template available";
+"wishSetting.added.format"           = "Added %d/%d";
+"wishSetting.upTo.format"            = "Up to %d wish gifts";
+"wishSetting.giftCount"              = "Count";
+"wishSetting.maxGiftNum"             = "Max gift num reached";
+"wishSetting.ruleTitle"              = "Wish Commitment Guidelines";
+"wishSetting.ruleAgree"              = "Please read carefully and agree before opening your wish list.";
+"wishSetting.ruleLink"               = "Wish Commitment Guidelines >>>";
+"wishSetting.ruleDoc"                = "We promise to use the wishes fairly and sincerely, and to abide by the platform rules. Any violation may result in account restrictions.";
+"wishSetting.save"                   = "Save";
+"wishSetting.pleaseEnterTheme"       = "Please enter theme";
+"wishSetting.themeMaxLen"            = "Theme cannot exceed 20 characters";
+"wishSetting.submittedForReview"     = "Submitted for review";
+"wishSetting.reviewStatus"           = "Review status";
+"wishSetting.reviewStatusIntro"      = "Once approved, the private template will be visible to users.";
+"wishSetting.type.commonSub"         = "Suitable for all streamers";
+"wishSetting.type.privateSub"        = "Visible only to yourself";
+"wishSetting.type.noTextSub"         = "Cover only";
+"wishSetting.ruleAgreeShort"         = "I agree";
+"wishSetting.ruleFooter"             = "We promise to use the gifts fairly and sincerely, and to abide by the platform rules.";
 
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "Camera Permission Required";
@@ -419,6 +463,10 @@
 "message.action.unstickTop"             = "Unpin";
 "message.action.delete"                 = "Delete";
 "message.action.failedToast"            = "Action failed, please try again";
+"message.systemInbox.station"           = "Station Information";
+"message.systemInbox.notification"      = "System Information";
+"message.systemInbox.admin"             = "Administrator";
+"message.systemInbox.comingSoon"        = "Details coming soon";
 
 // MARK: - E/F 派对房（spec §1.4 + H i18n 收尾）
 "party.defaultRoomName"                  = "Party Room";
@@ -510,3 +558,86 @@
 "userProfile.a11y.avatar"                = "Avatar";
 "userProfile.a11y.menu"                  = "More options";
 "userProfile.a11y.giftFallback"          = "Gift";
+
+// MARK: - K 里程碑 美颜设置页
+"beautySettings.pageTitle"                                  = "Beauty";
+"beautySettings.globalToggle"                               = "Beauty";
+"beautySettings.resetDefaults"                              = "Reset";
+"beautySettings.done"                                       = "Done";
+"beautySettings.tab.skin"                                   = "Skin";
+"beautySettings.tab.shape"                                  = "Shape";
+"beautySettings.tab.filter"                                 = "Filter";
+"beautySettings.tab.sticker"                                = "Sticker";
+"beautySettings.banner.loading"                             = "Beauty engine loading...";
+"beautySettings.banner.unavailable"                         = "Beauty engine unavailable";
+"beautySettings.banner.interrupted"                         = "Preview paused";
+"beautySettings.param.blur"                                 = "Smooth";
+"beautySettings.param.whiten"                               = "Whiten";
+"beautySettings.param.red"                                  = "Rosy";
+"beautySettings.param.clarity"                              = "Clarity";
+"beautySettings.param.sharpen"                              = "Sharpen";
+"beautySettings.param.faceThreed"                           = "3D";
+"beautySettings.param.eyeBright"                            = "Bright Eyes";
+"beautySettings.param.toothWhiten"                          = "White Teeth";
+"beautySettings.param.removePouch"                          = "Under-Eye";
+"beautySettings.param.removeNasolabialFolds"                = "Smile Lines";
+"beautySettings.param.cheekV"                               = "V Face";
+"beautySettings.param.cheekNarrow"                          = "Narrow";
+"beautySettings.param.cheekShort"                           = "Short Face";
+"beautySettings.param.cheekSmall"                           = "Small Face";
+"beautySettings.param.intensityCheekbones"                  = "Cheekbones";
+"beautySettings.param.intensityLowerJaw"                    = "Lower Jaw";
+"beautySettings.param.eyeEnlarging"                         = "Big Eyes";
+"beautySettings.param.intensityEyeCircle"                   = "Round Eyes";
+"beautySettings.param.intensityChin"                        = "Chin";
+"beautySettings.param.intensityForehead"                    = "Forehead";
+"beautySettings.param.intensityNose"                        = "Slim Nose";
+"beautySettings.param.intensityMouth"                       = "Mouth";
+"beautySettings.param.intensityLipThick"                    = "Lip Thickness";
+"beautySettings.param.intensityCanthus"                     = "Eye Corner";
+"beautySettings.param.intensityEyeSpace"                    = "Eye Distance";
+"beautySettings.filter.origin"                              = "Original";
+"beautySettings.filter.ziran"                               = "Natural";
+"beautySettings.filter.zhiganhui"                           = "Texture";
+"beautySettings.filter.mitao"                               = "Peach";
+"beautySettings.filter.bailiang"                            = "Bright";
+"beautySettings.filter.fennen"                              = "Pink";
+"beautySettings.filter.lengsediao"                          = "Cool";
+"beautySettings.filter.nuansediao"                          = "Warm";
+"beautySettings.filter.gexing"                              = "Personality";
+"beautySettings.filter.xiaoqingxin"                         = "Fresh";
+"beautySettings.filter.heibai"                              = "Mono";
+"beautySettings.filter.levelLabel"                          = "Filter Strength";
+"beautySettings.sticker.comingSoon"                         = "Stickers coming soon";
+"beauty.error.authExpired"                                  = "Beauty license expired. Please update the app.";
+"beauty.error.bundleMissing"                                = "Beauty resource missing.";
+"beauty.error.genericSetupFailed"                           = "Failed to init beauty engine.";
+"beauty.error.setupTimeout"                                 = "Beauty engine startup timed out.";
+"beauty.error.persistenceDecodeFailed"                      = "Failed to read beauty settings.";
+"beauty.error.persistenceWriteFailed"                       = "Failed to save beauty settings.";
+"beautySettings.a11y.preview"                               = "Beauty preview";
+"beautySettings.a11y.sliderFormat"                          = "%@, value %d";
+"beautySettings.recover"                                    = "Recover";
+"beautySettings.save"                                       = "Save";
+
+/* MARK: - H-2 GiftMessage 私密媒体解锁（对齐 H5 secretMessage） */
+"giftMessage.navTitle"              = "Gift Message";
+"giftMessage.photoTitle"            = "Secret Photo Messages";
+"giftMessage.videoTitle"            = "Secret Video Messages";
+"giftMessage.setGiftIntro"          = "Set a gift and unlock, you will get gift";
+"giftMessage.submit"                = "Submit";
+"giftMessage.giftPicker.title"      = "Set a gift for users to unlock your secret message";
+"giftMessage.giftPicker.loadFail"   = "Failed to load gifts";
+"giftMessage.reachedLimit"          = "Reached limit";
+"giftMessage.selectGiftRequired"    = "Please select gift for all items";
+"giftMessage.addMedia"              = "Add";
+"giftMessage.deleteItem"            = "Delete";
+"giftMessage.networkErrorFallback"  = "Network error, please try again.";
+"giftMessage.unsupportedFile"       = "Unsupported file";
+"giftMessage.uploading"             = "Uploading...";
+"giftMessage.photoCountFormat"      = "(%d/%d)";
+"giftMessage.videoCountFormat"      = "(%d/%d)";
+"beautySettings.recoverConfirm.title"                       = "Reset settings?";
+"beautySettings.recoverConfirm.message"                     = "Current adjustments will be cleared.";
+"beautySettings.recoverConfirm.yes"                         = "Reset";
+"beautySettings.recoverConfirm.no"                          = "Cancel";
