@@ -32,7 +32,8 @@ targets:
         buildPhase: resources
       - path: Vendor/FaceUnity/bundles/ai_face_processor.bundle
         buildPhase: resources
-      # K 需求 4（2026-07-02）：贴纸 bundles 目录（用户拷 FULiveDemo 里的 .bundle 到此，见 stickers/README.md）
+      # K 需求 4（2026-07-02）：贴纸 bundles 目录（用户拷 FULiveDemo 里的 .bundle 到此，
+      # 见 docs/plan/K-sticker-bundle-guide-*.md；bundles/ 已 gitignore 不入库）
       # xcodegen 会把目录下所有 .bundle 递归纳入 resources
       - path: Vendor/FaceUnity/bundles/stickers
         buildPhase: resources
