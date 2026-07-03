@@ -14,6 +14,11 @@ struct LiveStreamGrid: View {
     var body: some View {
         VStack(spacing: 12) {
             statefulContent
+            // footer 挪出 cardGrid.overlay 到 VStack 尾部——原先用 `.offset(y: 32)` 从 overlay
+            // 拽出到 grid 底部之外是 hack 结构（overlay 不占父容器空间，短列表时 footer 会贴在
+            // 最后一行下方而不是 ScrollView 底部）。挪到这里后走正常布局 flow，
+            // footer 内部各 case 已 guard `!items.isEmpty`，空态自然 EmptyView 不占空间
+            footerView
             Color.clear.frame(height: 12)
         }
     }
@@ -49,10 +54,6 @@ struct LiveStreamGrid: View {
                         }
                     }
             }
-        }
-        .overlay(alignment: .bottom) {
-            footerView
-                .offset(y: 32)
         }
     }
 

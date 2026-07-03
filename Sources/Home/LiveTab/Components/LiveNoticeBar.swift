@@ -9,8 +9,20 @@ import SwiftUI
 /// 紫粉横向渐变胶囊底 + 玫红描边——沿用旧 mock 版本的视觉。
 struct LiveNoticeBar: View {
     let items: [GiftMarqueeItem]
+    /// 是否处于可见/活跃状态。keep-alive 架构下 view 不 dismount，autoplay `.task`
+    /// 也不会随切走 tab 而 cancel——此参数让父容器（LiveTabView）传"真可见"信号：
+    /// `isHomeTabActive && current == .live`；不 active 时 task 立即 return，能耗归零。
+    var isActive: Bool = true
 
     @State private var currentIndex: Int = 0
+
+    /// task id 组合 items.count + isActive——任一变化都 cancel 旧 task 起新 task。
+    /// active 切换时 currentIndex **不重置**，切走再回来从当前位置继续；items.count 变化
+    /// 时同理，靠 safeIndex `currentIndex % items.count` 兜底越界（不再手动归零）。
+    private struct LoopKey: Hashable {
+        let count: Int
+        let active: Bool
+    }
 
     var body: some View {
         if items.isEmpty {
@@ -34,12 +46,8 @@ struct LiveNoticeBar: View {
             .animation(.easeInOut(duration: 0.4), value: currentIndex)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(accessibilityText(items[safeIndex]))
-                // autoplay：.task(id: items.count) 让 SwiftUI 托管——items.count 变化时自动重启
-                // （currentIndex 归 0 免越界），view 消失自动 cancel，替代裸 Task {} +
-                // onAppear + 单独 onChange 三处逻辑（202607031151 审查建议-2）
-                .task(id: items.count) {
-                    currentIndex = 0
-                    guard items.count > 1 else { return }
+                .task(id: LoopKey(count: items.count, active: isActive)) {
+                    guard isActive, items.count > 1 else { return }
                     while !Task.isCancelled {
                         try? await Task.sleep(nanoseconds: 3_000_000_000)
                         if Task.isCancelled { break }

@@ -10,8 +10,20 @@ import SwiftUI
 /// 目前仅作视觉展示，点击无响应，与 Live 卡片保持一致的处理原则。
 struct LiveBanner: View {
     let items: [AppPictureItem]
+    /// 是否处于可见/活跃状态。keep-alive 架构下 view 永远不 dismount，autoplay `.task`
+    /// 也不会随切走 tab 而 cancel——此参数让父容器（LiveTabView）传"真可见"信号：
+    /// `isHomeTabActive && current == .live`；不 active 时 task 立即 return，能耗归零。
+    var isActive: Bool = true
 
     @State private var currentIndex: Int = 0
+
+    /// task id 组合 items.count + isActive——任一变化 SwiftUI 都会 cancel 旧 task 起新 task。
+    /// active 切换时 currentIndex **不重置**（@State 独立于 task 生命周期），切走再回来
+    /// 从当前位置继续；items.count 变化时同理，靠 modulo 兜底越界（不再重置为 0）。
+    private struct LoopKey: Hashable {
+        let count: Int
+        let active: Bool
+    }
 
     var body: some View {
         if items.isEmpty {
@@ -26,10 +38,8 @@ struct LiveBanner: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .automatic))
             .frame(height: Theme.Metric.liveBannerHeight)
-            // autoplay：.task(id:) 让 SwiftUI 托管 Task 生命周期——view 消失 / items.count 变化
-            // 自动 cancel 旧循环起新循环，避免 onAppear + 裸 Task {} 累积僵尸 Task（202607031151 审查建议-1）
-            .task(id: items.count) {
-                guard items.count > 1 else { return }
+            .task(id: LoopKey(count: items.count, active: isActive)) {
+                guard isActive, items.count > 1 else { return }
                 while !Task.isCancelled {
                     try? await Task.sleep(nanoseconds: 3_000_000_000)
                     if Task.isCancelled { break }

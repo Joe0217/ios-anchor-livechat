@@ -179,7 +179,8 @@ struct LiveTabView: View {
                 get: { current },
                 set: { homeStore.tapOuter($0) }
             )) {
-                liveStream.tag(HomeTopTab.live)
+                // isActive 组合两条件：Home tab 被选中 + outer tab 是 .live——切走任一都停 autoplay
+                liveStream(isActive: isHomeTabActive && current == .live).tag(HomeTopTab.live)
                 LiveListView(viewModel: listViewModel).tag(HomeTopTab.list)
                 placeholderTab.tag(HomeTopTab.match)
                 // CircleView 接收 isActive，在 outer tab 切到 .circle 时才触发 sub store 的 lazy load
@@ -207,14 +208,15 @@ struct LiveTabView: View {
 
     /// Live 子 tab 主体：跑马灯(接口) + banner(接口) + 广场卡片网格(接口)，可纵向滚动 + 下拉刷新。
     /// 下拉刷新只刷广场（对齐 H5：`listRefresh` 只调 `getListData`；跑马灯/banner 走启动预热）。
-    private var liveStream: some View {
+    /// - Parameter isActive: `isHomeTabActive && current == .live`；仅真可见时跑马灯/Banner 才 autoplay
+    private func liveStream(isActive: Bool) -> some View {
         ScrollView {
             VStack(spacing: 12) {
-                LiveNoticeBar(items: giftMarqueeStore.items)
+                LiveNoticeBar(items: giftMarqueeStore.items, isActive: isActive)
                     .padding(.horizontal, Theme.Metric.liveScreenMargin)
                     .padding(.top, giftMarqueeStore.items.isEmpty ? 0 : 10)
 
-                LiveBanner(items: homeBannerItems)
+                LiveBanner(items: homeBannerItems, isActive: isActive)
                     .padding(.horizontal, Theme.Metric.liveScreenMargin)
 
                 LiveStreamGrid(viewModel: streamViewModel)

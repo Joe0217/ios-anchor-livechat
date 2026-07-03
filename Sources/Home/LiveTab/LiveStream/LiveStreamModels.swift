@@ -83,8 +83,26 @@ extension LiveStreamAnchor {
         self.backgroundImgUrl = dict["backgroundImgUrl"] as? String
         self.joinNum = watchNum
         self.weekIncome = income
-        self.pkStatus = (dict["pkStatus"] as? NSNumber)?.intValue
-        self.diamondGiftActive = (dict["diamondGiftActive"] as? NSNumber)?.intValue
+        // pkStatus / diamondGiftActive 也可能被后端以 String 返回（H5 type.ts 不可信,
+        // 见 .claude/rules/ios-decode-userid-compat.md）——String/Int 双兼容避免 PK 角标
+        // 与钻石盲盒角标失显
+        self.pkStatus = Self.decodeInt(dict, key: "pkStatus")
+        self.diamondGiftActive = Self.decodeInt(dict, key: "diamondGiftActive")
+    }
+
+    /// 数值字段 String/Int 双兼容 decoder（对齐 userId / joinNum 同款 pattern）。
+    /// - NSNumber Bool 桥接（objCType "c"/"B"）返 nil，避免 true/false 被误认为 1/0
+    /// - String 走 `Int(_:)`，非数字字符串返 nil
+    private static func decodeInt(_ dict: [String: Any], key: String) -> Int? {
+        if let n = dict[key] as? NSNumber {
+            let cType = String(cString: n.objCType)
+            if cType == "c" || cType == "B" { return nil }
+            return n.intValue
+        }
+        if let s = dict[key] as? String {
+            return Int(s)
+        }
+        return nil
     }
 }
 
