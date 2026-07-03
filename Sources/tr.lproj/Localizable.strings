@@ -164,6 +164,9 @@
 "profile.media.reviewing"      = "İnceleniyor";
 "profile.media.rejected"       = "Reddedildi";
 "mediaPreview.close"           = "Kapat";
+"mediaPreview.image"           = "Resim";
+"mediaPreview.video"           = "Video";
+"mediaPreview.positionFormat"  = "%d / %d";
 
 // MARK: - Settings 设置页
 "settings.title"               = "Ayarlar";
@@ -313,6 +316,26 @@
 "liveRoom.toolBeauty"        = "Güzellik";
 "liveRoom.endLive"           = "Yayını Bitir";
 "liveRoom.beautyPanelTitle"  = "Güzellik";
+
+/* LiveRoom design-restoration additions */
+"liveRoom.viewerCount.a11y"       = "Çevrimiçi izleyiciler";
+"liveRoom.close.a11y"             = "Yayın odasını kapat";
+"liveRoom.task.a11y"              = "Günlük görev";
+"liveRoom.contribution.a11y"      = "Yayın katkısı";
+"liveRoom.rankFormat"             = "No.%d";
+"liveRoom.rankUnlisted"           = "Sıralama";
+"liveRoom.rank.a11y"              = "Haftalık sıralama";
+"liveRoom.underway.label"         = "Yayında";
+"liveRoom.privateCall.label"      = "Özel Arama";
+"liveRoom.tool.pkDebug"           = "PK Hata Ayıklama";
+"liveRoom.input.placeholder"      = "Selam de...";
+"liveRoom.input.send.a11y"        = "Mesaj gönder";
+"liveRoom.comingSoon.task"        = "Görev listesi yakında";
+"liveRoom.comingSoon.contribution" = "Katkı detayları yakında";
+"liveRoom.comingSoon.rank"        = "Haftalık sıralama yakında";
+"liveRoom.comingSoon.privateCall" = "Özel arama yakında";
+"liveRoom.comingSoon.gift"        = "Hediye mağazası yakında";
+"liveRoom.comingSoon.send"        = "Sohbet gönderme yakında";
 
 // MARK: - Call POC（调试态保留，上线前删除）
 "call.statusWaitingRemote"   = "Karşı taraf bekleniyor";
@@ -665,6 +688,7 @@
 "giftMessage.networkErrorFallback"  = "Ağ hatası, lütfen tekrar deneyin.";
 "giftMessage.unsupportedFile"       = "Desteklenmeyen dosya";
 "giftMessage.uploading"             = "Yükleniyor...";
+"giftMessage.submitSucceed"         = "Başarıyla gönderildi";
 "giftMessage.photoCountFormat"      = "(%d/%d)";
 "giftMessage.videoCountFormat"      = "(%d/%d)";
 "beautySettings.recoverConfirm.title"                       = "Reset settings?";

@@ -37,7 +37,7 @@ final class MomentTabViewModel: ObservableObject {
     private func load(reset: Bool) async {
         if loadState.isLoading { return }
         guard let userId = SessionStore.shared.user?.userId else {
-            loadState = .error("Not logged in")
+            loadState = .error(L10n.sessionExpiredError)
             return
         }
 
@@ -45,7 +45,7 @@ final class MomentTabViewModel: ObservableObject {
         loadState = .loading
 
         do {
-            let page = try await MomentService.getMyMoments(
+            let page = try await CircleService.getMyMoments(
                 userId: userId, pageSize: pageSize, currentPage: nextPage
             )
             if reset {

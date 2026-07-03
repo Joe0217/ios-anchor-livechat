@@ -164,6 +164,9 @@
 "profile.media.reviewing"      = "قيد المراجعة";
 "profile.media.rejected"       = "مرفوض";
 "mediaPreview.close"           = "إغلاق";
+"mediaPreview.image"           = "صورة";
+"mediaPreview.video"           = "فيديو";
+"mediaPreview.positionFormat"  = "%d من %d";
 
 // MARK: - Settings 设置页
 "settings.title"               = "الإعدادات";
@@ -313,6 +316,26 @@
 "liveRoom.toolBeauty"        = "الفلتر";
 "liveRoom.endLive"           = "إنهاء البث";
 "liveRoom.beautyPanelTitle"  = "الفلتر";
+
+/* LiveRoom design-restoration additions */
+"liveRoom.viewerCount.a11y"       = "المشاهدون المتصلون";
+"liveRoom.close.a11y"             = "إغلاق غرفة البث";
+"liveRoom.task.a11y"              = "المهمة اليومية";
+"liveRoom.contribution.a11y"      = "مساهمة البث";
+"liveRoom.rankFormat"             = "رقم %d";
+"liveRoom.rankUnlisted"           = "الترتيب";
+"liveRoom.rank.a11y"              = "الترتيب الأسبوعي";
+"liveRoom.underway.label"         = "جاري البث";
+"liveRoom.privateCall.label"      = "مكالمة خاصة";
+"liveRoom.tool.pkDebug"           = "تصحيح PK";
+"liveRoom.input.placeholder"      = "قل مرحبًا...";
+"liveRoom.input.send.a11y"        = "إرسال الرسالة";
+"liveRoom.comingSoon.task"        = "قائمة المهام قريبًا";
+"liveRoom.comingSoon.contribution" = "تفاصيل المساهمة قريبًا";
+"liveRoom.comingSoon.rank"        = "الترتيب الأسبوعي قريبًا";
+"liveRoom.comingSoon.privateCall" = "المكالمة الخاصة قريبًا";
+"liveRoom.comingSoon.gift"        = "متجر الهدايا قريبًا";
+"liveRoom.comingSoon.send"        = "إرسال الدردشة قريبًا";
 
 // MARK: - Call POC（调试态保留，上线前删除）
 "call.statusWaitingRemote"   = "في انتظار الطرف الآخر";
@@ -665,6 +688,7 @@
 "giftMessage.networkErrorFallback"  = "خطأ في الشبكة، يرجى المحاولة مرة أخرى.";
 "giftMessage.unsupportedFile"       = "ملف غير مدعوم";
 "giftMessage.uploading"             = "جارٍ الرفع...";
+"giftMessage.submitSucceed"         = "تم الإرسال بنجاح";
 "giftMessage.photoCountFormat"      = "(%d/%d)";
 "giftMessage.videoCountFormat"      = "(%d/%d)";
 "beautySettings.recoverConfirm.title"                       = "Reset settings?";

@@ -1,13 +1,22 @@
 import SwiftUI
 
-/// 朋友圈一条动态卡片：作者 + 时间 + 文本 + 图片九宫格 + 赞/评统计。
+/// 朋友圈一条动态卡片：作者 + 时间 + 文本 + 图片网格 + 赞/评/删除操作行。
 ///
-/// L14 阶段仅渲染，无点赞/评论/删除交互；L15-L16 接入操作。
+/// 三入口视觉差异由调用方注入 flag：
+/// - `onLikeTap` 非 nil → 点赞按钮可点（me + moment 入口）
+/// - `onDeleteTap` 非 nil → 显示删除按钮（仅 me 入口）
+/// - `showComment` → 显示评论计数（me + moment 入口；official 隐藏）
 struct MomentPostRow: View {
     let post: MomentPost
-    /// 点赞回调（可选）。Cycle Moment trial #1 注入 → 触发 `MomentFeedStore.tapLike`；
+    /// 点赞回调（可选）。Circle Moment trial #1 注入 → 触发 `MomentFeedStore.tapLike`；
     /// Profile MomentTabView 只读不传，默认 nil 时 heart 不可点击。
     var onLikeTap: (() -> Void)? = nil
+    /// 删除回调（仅 me 入口注入；对齐 H5 `circle/me.vue` showDelete=true）。
+    var onDeleteTap: (() -> Void)? = nil
+    /// 是否显示评论计数（official 入口为 false，对齐 H5 `circle/official.vue` showContent=false）。
+    var showComment: Bool = true
+    /// 图片/视频 cell 点击回调（父 view 拉起大图预览）。参数：`imgUrls` 中的 index。
+    var onImageTap: ((Int) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -16,12 +25,18 @@ struct MomentPostRow: View {
                 Text(text)
                     .font(.system(size: 14))
                     .foregroundColor(.white.opacity(0.92))
-                    .lineLimit(8)
+                    // 对齐 H5 `whitespace-pre-wrap break-all`，不截断
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if let urls = post.imgUrls, !urls.isEmpty {
                 imageGrid(urls: urls)
             }
             footer
+            // 评论列表（对齐 H5 `circleContent.vue:229`：永久挂载，不受 showContent 控制；
+            // 视口内 cell 出现时 .task 触发拉一次，无评论时 view 内部 v-if 不渲染，无空白）
+            if let pid = post.postId {
+                MomentCommentsSection(postId: pid)
+            }
         }
         .padding(12)
         .background(Theme.Palette.cardFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -32,18 +47,17 @@ struct MomentPostRow: View {
         HStack(spacing: 10) {
             // 动态作者头像：作为通用组件，按"他人头像"规则 persistent=false，不污染缓存。
             // 若实际就是登录账号自己的头像（"我的"动态 tab），NSCache 命中后仍能复用。
-            CachedAsyncImage(url: URL(string: post.icon ?? ""), contentMode: .fill, persistent: false) {
-                Color.gray.opacity(0.3)
-            }
-            .frame(width: 36, height: 36)
-            .clipShape(Circle())
+            AvatarView(urlString: post.icon, size: 36, kind: .anchor)
 
             VStack(alignment: .leading, spacing: 2) {
+                // 对齐 H5 `font-500 text-16` 昵称字号
                 Text(post.nickname ?? "—")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.white)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Text(Self.relativeTime(str: post.createTime))
-                    .font(.system(size: 11))
+                    .font(.system(size: 12))
                     .foregroundColor(.white.opacity(0.5))
             }
             Spacer()
@@ -51,28 +65,79 @@ struct MomentPostRow: View {
     }
 
     private func imageGrid(urls: [String]) -> some View {
-        // 1 张：大图；2-4 张：2×2；5+：3 列
-        let columnCount: Int = urls.count == 1 ? 1 : (urls.count <= 4 ? 2 : 3)
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: columnCount)
+        // 对齐 H5 `circle/components/list.vue`：统一 3 列 1:1 正方形 + 6px 间距。
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 3)
 
-        return LazyVGrid(columns: columns, spacing: 4) {
+        return LazyVGrid(columns: columns, spacing: 6) {
             ForEach(urls.indices, id: \.self) { i in
-                CachedAsyncImage(url: URL(string: urls[i]), contentMode: .fill) {
-                    Theme.Palette.profileGridPlaceholder
-                }
-                .aspectRatio(1, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                gridCell(url: urls[i], index: i)
             }
+        }
+    }
+
+    /// 视频/图片分开渲染 + **硬约束正方形尺寸**（对齐 H5 `circleContent.vue`）。
+    ///
+    /// **尺寸约束策略**：外层 `Color.clear.aspectRatio(1, .fit)` 撑正方形骨架（Color 无
+    /// intrinsic size 会严格遵守 aspectRatio），内部 `.overlay` 图片/视频再撑满 —— 比
+    /// 直接给 `CachedAsyncImage.aspectRatio` 更稳。
+    ///
+    /// **点击预览**：用 `Button + buttonStyle(.plain)` 包裹而非 `.onTapGesture` —— footer 里的 delete
+    /// Button（Me 入口）会 "snoop" 上下 view tree 的 `.onTapGesture` 导致 hit conflict；Button
+    /// 天然优先级更明确且与其他 Button 兼容。同时保持视觉透明（.plain 不 tint）。
+    @ViewBuilder
+    private func gridCell(url: String, index: Int) -> some View {
+        Button {
+            onImageTap?(index)
+        } label: {
+            Color.clear
+                .aspectRatio(1, contentMode: .fit)  // 骨架强制正方形（Color 无 intrinsic size，严格遵守）
+                .overlay {
+                    if MomentPost.isVideo(url: url) {
+                        videoCellPlaceholder
+                    } else {
+                        CachedAsyncImage(url: URL(string: url), contentMode: .fill) {
+                            Theme.Palette.profileGridPlaceholder
+                        }
+                    }
+                }
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 视频占位：黑底 + 播放图标。真缩略图 backlog（需 AVAssetImageGenerator）。
+    private var videoCellPlaceholder: some View {
+        ZStack {
+            Color.black.opacity(0.55)
+            Image(systemName: "play.circle.fill")
+                .font(.system(size: 32))
+                .foregroundStyle(.white.opacity(0.8))
         }
     }
 
     private var footer: some View {
         HStack(spacing: 18) {
             Spacer()
+            // me 入口显示删除按钮（onDeleteTap 非 nil 时）
+            if let onDeleteTap {
+                Button {
+                    onDeleteTap()
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.white.opacity(0.55))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.momentActionDelete)
+            }
             likeStatItem
-            statItem(icon: "bubble.left",
-                     value: post.commentCount ?? 0,
-                     tint: Color.white.opacity(0.55))
+            // official 入口隐藏评论计数（showComment=false）
+            if showComment {
+                statItem(icon: "bubble.left",
+                         value: post.commentCount ?? 0,
+                         tint: Color.white.opacity(0.55))
+            }
         }
     }
 

@@ -162,6 +162,9 @@
 "profile.media.reviewing"      = "Reviewing";
 "profile.media.rejected"       = "Rejected";
 "mediaPreview.close"           = "Close";
+"mediaPreview.image"           = "Image";
+"mediaPreview.video"           = "Video";
+"mediaPreview.positionFormat"  = "%d of %d";
 
 // MARK: - Settings 设置页
 "settings.title"               = "Settings";
@@ -311,6 +314,26 @@
 "liveRoom.toolBeauty"        = "Beauty";
 "liveRoom.endLive"           = "End Live";
 "liveRoom.beautyPanelTitle"  = "Beauty";
+
+/* LiveRoom design-restoration additions */
+"liveRoom.viewerCount.a11y"       = "Viewers online";
+"liveRoom.close.a11y"             = "Close live room";
+"liveRoom.task.a11y"              = "Daily task";
+"liveRoom.contribution.a11y"      = "Live contribution";
+"liveRoom.rankFormat"             = "No.%d";
+"liveRoom.rankUnlisted"           = "Rank";
+"liveRoom.rank.a11y"              = "Weekly rank";
+"liveRoom.underway.label"         = "Underway";
+"liveRoom.privateCall.label"      = "Private Call";
+"liveRoom.tool.pkDebug"           = "PK debug";
+"liveRoom.input.placeholder"      = "Say hi...";
+"liveRoom.input.send.a11y"        = "Send message";
+"liveRoom.comingSoon.task"        = "Task list coming soon";
+"liveRoom.comingSoon.contribution" = "Contribution details coming soon";
+"liveRoom.comingSoon.rank"        = "Weekly rank coming soon";
+"liveRoom.comingSoon.privateCall" = "Private call coming soon";
+"liveRoom.comingSoon.gift"        = "Gift shop coming soon";
+"liveRoom.comingSoon.send"        = "Chat send coming soon";
 
 // MARK: - Call POC（调试态保留，上线前删除）
 "call.statusWaitingRemote"   = "Waiting for remote";
@@ -663,6 +686,7 @@
 "giftMessage.networkErrorFallback"  = "Network error, please try again.";
 "giftMessage.unsupportedFile"       = "Unsupported file";
 "giftMessage.uploading"             = "Uploading...";
+"giftMessage.submitSucceed"         = "Submit succeed";
 "giftMessage.photoCountFormat"      = "(%d/%d)";
 "giftMessage.videoCountFormat"      = "(%d/%d)";
 "beautySettings.recoverConfirm.title"                       = "Reset settings?";

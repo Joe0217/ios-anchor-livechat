@@ -344,6 +344,12 @@ enum L10n {
 
     /// 媒体预览关闭按钮 a11y
     static var mediaPreviewClose: String { localize("mediaPreview.close", comment: "媒体预览关闭按钮") }
+    /// 媒体预览图片 a11y 前缀
+    static var mediaPreviewImage: String { localize("mediaPreview.image", comment: "媒体预览图片 a11y") }
+    /// 媒体预览视频 a11y 前缀
+    static var mediaPreviewVideo: String { localize("mediaPreview.video", comment: "媒体预览视频 a11y") }
+    /// 媒体预览页码格式（%d/%d）
+    static var mediaPreviewPositionFormat: String { localize("mediaPreview.positionFormat", comment: "媒体预览页码 %d/%d") }
 
     // MARK: - Settings 设置页
     static var settingsTitle: String           { localize("settings.title", comment: "设置页标题") }
@@ -599,6 +605,44 @@ enum L10n {
     static var liveRoomEndLive: String { localize("liveRoom.endLive", comment: "结束直播按钮") }
     static var liveRoomBeautyPanelTitle: String { localize("liveRoom.beautyPanelTitle", comment: "美颜面板标题") }
 
+    // MARK: - LiveRoom 设计稿还原新增文案（顶部区域 / 公屏 / 底部工具 / a11y / coming soon）
+    /// 顶部观众数徽章 a11y
+    static var liveRoomViewerCountA11y: String { localize("liveRoom.viewerCount.a11y", comment: "顶部观众数徽章 a11y") }
+    /// 顶部关闭按钮 a11y
+    static var liveRoomCloseA11y: String { localize("liveRoom.close.a11y", comment: "顶部关闭按钮 a11y") }
+    /// 顶部 Task 徽章 a11y
+    static var liveRoomTaskA11y: String { localize("liveRoom.task.a11y", comment: "Task 徽章 a11y") }
+    /// 顶部本场直播贡献值徽章 a11y
+    static var liveRoomContributionA11y: String { localize("liveRoom.contribution.a11y", comment: "本场直播贡献值徽章 a11y") }
+    /// 排行榜位次格式（%d 位次）
+    static var liveRoomRankFormat: String { localize("liveRoom.rankFormat", comment: "排行榜位次格式 No.%d") }
+    /// 未上榜时的文字（对齐 H5 未上榜态）
+    static var liveRoomRankUnlisted: String { localize("liveRoom.rankUnlisted", comment: "排行榜未上榜文字") }
+    /// 排行榜徽章 a11y
+    static var liveRoomRankA11y: String { localize("liveRoom.rank.a11y", comment: "排行榜徽章 a11y") }
+    /// Underway 徽章文字
+    static var liveRoomUnderwayLabel: String { localize("liveRoom.underway.label", comment: "Underway 徽章文字") }
+    /// Pavate Call 大按钮标签（H5 拼写 "Private Call"）
+    static var liveRoomPrivateCallLabel: String { localize("liveRoom.privateCall.label", comment: "Private Call 大按钮标签") }
+    /// 底部工具栏 PK 调试入口 a11y（仅 DEBUG）
+    static var liveRoomToolPKDebug: String { localize("liveRoom.tool.pkDebug", comment: "底部 PK 调试按钮 a11y") }
+    /// Say hi 输入框 placeholder
+    static var liveRoomInputPlaceholder: String { localize("liveRoom.input.placeholder", comment: "Say hi 输入框 placeholder") }
+    /// 发送按钮 a11y
+    static var liveRoomInputSendA11y: String { localize("liveRoom.input.send.a11y", comment: "发送按钮 a11y") }
+    /// Coming soon 提示（Task）
+    static var liveRoomComingSoonTask: String { localize("liveRoom.comingSoon.task", comment: "点击 Task 徽章占位提示") }
+    /// Coming soon 提示（贡献值明细）
+    static var liveRoomComingSoonContribution: String { localize("liveRoom.comingSoon.contribution", comment: "点击贡献值徽章占位提示") }
+    /// Coming soon 提示（排行榜）
+    static var liveRoomComingSoonRank: String { localize("liveRoom.comingSoon.rank", comment: "点击排行榜徽章占位提示") }
+    /// Coming soon 提示（Private Call 主动发起）
+    static var liveRoomComingSoonPrivateCall: String { localize("liveRoom.comingSoon.privateCall", comment: "点击 Private Call 大按钮占位提示") }
+    /// Coming soon 提示（快捷礼物）
+    static var liveRoomComingSoonGift: String { localize("liveRoom.comingSoon.gift", comment: "点击底部快捷礼物占位提示") }
+    /// Coming soon 提示（公屏发送）
+    static var liveRoomComingSoonSend: String { localize("liveRoom.comingSoon.send", comment: "点击 Say hi 发送按钮占位提示") }
+
     // MARK: - Call POC（调试态保留，上线前删除）
     static var callStatusWaitingRemote: String { localize("call.statusWaitingRemote", comment: "通话 POC：等待对端") }
     static var callPermissionTitle: String { localize("call.permissionTitle", comment: "通话 POC：需要摄像头权限") }
@@ -806,6 +850,7 @@ enum L10n {
         static var networkErrorFallback: String { localize("giftMessage.networkErrorFallback", comment: "网络错误兜底") }
         static var unsupportedFile: String     { localize("giftMessage.unsupportedFile", comment: "文件不支持") }
         static var uploading: String           { localize("giftMessage.uploading", comment: "上传中 loading 文案") }
+        static var submitSucceed: String       { localize("giftMessage.submitSucceed", comment: "提交成功 toast，对齐 H5 showToast('submit succeed')") }
         static func photoCountFormat(_ current: Int, _ max: Int) -> String {
             String(format: localize("giftMessage.photoCountFormat", comment: "(%d/%d)"), current, max)
         }
