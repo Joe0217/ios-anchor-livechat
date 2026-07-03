@@ -78,7 +78,11 @@ final class AppPictureStore: ObservableObject {
     // MARK: - private
 
     private func performLoad(types: [AppPictureType]) async {
-        let task = Task { @MainActor [self] in
+        // 请求生命周期隔离——Task.detached 让请求不受调用侧 view cancel 传播影响；
+        // 对齐 AnchorInfoStore / LiveStreamViewModel / GiftMarqueeStore 同款模式，
+        // 未来 J 里程碑下游 short-lived view 用 `.task { store.loadIfNeeded(...) }` 也不踩 -999
+        // （202607031151 审查建议-3）。
+        let task = Task.detached { @MainActor [self] in
             await doLoad(types: types)
         }
         inflight = task

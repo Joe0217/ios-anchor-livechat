@@ -28,10 +28,17 @@ struct LiveNoticeBar: View {
                 .animation(.easeInOut(duration: 0.35), value: currentIndex)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(accessibilityText(items[safeIndex]))
-                .onAppear { startAutoplay() }
-                .onChange(of: items.count) { _ in
-                    // items 变更（如刷新后条数变化），重置索引避免越界
+                // autoplay：.task(id: items.count) 让 SwiftUI 托管——items.count 变化时自动重启
+                // （currentIndex 归 0 免越界），view 消失自动 cancel，替代裸 Task {} +
+                // onAppear + 单独 onChange 三处逻辑（202607031151 审查建议-2）
+                .task(id: items.count) {
                     currentIndex = 0
+                    guard items.count > 1 else { return }
+                    while !Task.isCancelled {
+                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        if Task.isCancelled { break }
+                        currentIndex = (currentIndex + 1) % max(items.count, 1)
+                    }
                 }
         }
     }
@@ -87,18 +94,6 @@ struct LiveNoticeBar: View {
 
     private func accessibilityText(_ item: GiftMarqueeItem) -> String {
         "\(item.nickname) \(L10n.giftSendSuperRocket) \(item.diamond)"
-    }
-
-    /// SwiftUI 无内置 marquee 组件；起 Task 每 3s 切一条。
-    /// items 数量变化 / view 消失自动收敛（Task.isCancelled + count guard）。
-    private func startAutoplay() {
-        Task { @MainActor in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                guard items.count > 1 else { return }
-                currentIndex = (currentIndex + 1) % items.count
-            }
-        }
     }
 }
 

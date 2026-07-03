@@ -26,7 +26,18 @@ struct LiveBanner: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .automatic))
             .frame(height: Theme.Metric.liveBannerHeight)
-            .onAppear { startAutoplay() }
+            // autoplay：.task(id:) 让 SwiftUI 托管 Task 生命周期——view 消失 / items.count 变化
+            // 自动 cancel 旧循环起新循环，避免 onAppear + 裸 Task {} 累积僵尸 Task（202607031151 审查建议-1）
+            .task(id: items.count) {
+                guard items.count > 1 else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    if Task.isCancelled { break }
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        currentIndex = (currentIndex + 1) % max(items.count, 1)
+                    }
+                }
+            }
         }
     }
 
@@ -46,21 +57,6 @@ struct LiveBanner: View {
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
-    }
-
-    /// SwiftUI TabView 没有内置 autoplay，起个 Task 每 3s 切一张（H5 Autoplay 3000ms）。
-    /// items 数量变化 / view 消失时 Task 自动取消（onAppear 每次都是新 Task；.task 更安全但
-    /// 这里用 Task { } 起足够，因为多轮情况 currentIndex 靠 modulo 收敛）。
-    private func startAutoplay() {
-        Task { @MainActor in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                guard items.count > 1 else { return }
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    currentIndex = (currentIndex + 1) % items.count
-                }
-            }
-        }
     }
 }
 
