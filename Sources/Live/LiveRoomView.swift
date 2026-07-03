@@ -112,6 +112,14 @@ struct LiveRoomView: View {
         }
         .onAppear {
             camera.renderer.updateParameters(beauty)
+            // K 里程碑 P0-2 fix（2026-07-03 review 202607030426）：接入 Sharer `.live` token，
+            // 让用户在美颜设置页调过的 25+ 参数 + 贴纸广播到直播 renderer。首帧 apply 保证
+            // 用户不进设置页直接开播时 SDK 参数与 K store defaults 一致（对齐 CallView 模式）。
+            // 注意与上一行 legacy updateParameters(beauty) 并存：legacy 只影响 4 参数（BeautyPanel
+            // 用户拖 slider 时覆盖），K store 覆盖 25+ 参数；两条路径不冲突。
+            BeautyPipelineSharer.shared.attach(camera.renderer as AnyObject & BeautyRenderer, token: .live)
+            BeautyPipelineSharer.shared.reportSetupResult(camera.isBeautyFallback ? .failure(.genericSetupFailed) : .success(()))
+            camera.renderer.apply(BeautyPipelineSharer.shared.store.settings)
             // M2：相机错误转发到 store
             // v5.11 真根因修复：CameraManager 的 onError 3 处调用点全在 DispatchQueue.main.async 内，
             // 已保证 wasInterrupted → interruptionEnded 的 FIFO 派发顺序；此处用 Task { @MainActor in }
@@ -182,6 +190,8 @@ struct LiveRoomView: View {
             // 的清理（用户物理返回 / 系统触发 dismiss），导致摄像头持续采集 + 声网频道持续推流。
             // 各清理调用均幂等：camera.tearDown 已 stop 时无副作用；agora.leave 内 guard engine
             // 幂等；nim.leave / observer 解绑同幂等。
+            // K 里程碑 P0-2 fix：detach Sharer 订阅（camera.tearDown 前，确保栈顶变化及时）
+            BeautyPipelineSharer.shared.detach(camera.renderer as AnyObject & BeautyRenderer)
             camera.tearDown()
             // D 里程碑修复（v5.4）：agora.leave 改 async，onDisappear 不是 async 上下文，
             // 包 Task 让出；nim.leave 与 camera.stop 同步走，不依赖 agora 完成。
@@ -258,8 +268,7 @@ struct LiveRoomView: View {
 
     private var topBar: some View {
         HStack(spacing: 10) {
-            Circle().fill(.pink.opacity(0.6)).frame(width: 40, height: 40)
-                .overlay(Image(systemName: "person.fill").foregroundStyle(.white))
+            AvatarView(urlString: nil, size: 40, kind: .anchor)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.subheadline).bold().foregroundStyle(.white).lineLimit(1)

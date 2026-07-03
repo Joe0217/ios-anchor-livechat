@@ -505,6 +505,8 @@ final class PartyStore: ObservableObject {
         // K 里程碑：attach `.party` token 到 Sharer，让 K 页面调过的美颜参数广播到派对房 renderer
         BeautyPipelineSharer.shared.attach(cm.renderer as AnyObject & BeautyRenderer, token: .party)
         BeautyPipelineSharer.shared.reportSetupResult(cm.isBeautyFallback ? .failure(.genericSetupFailed) : .success(()))
+        // K 里程碑 P0-3 fix（2026-07-03 review 202607030426）：首帧一致（同 CallView 模式）
+        cm.renderer.apply(BeautyPipelineSharer.shared.store.settings)
         AppLogger.party.info("[PartyStore] camera capture started (video seat)")
     }
 

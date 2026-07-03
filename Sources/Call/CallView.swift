@@ -157,6 +157,10 @@ private struct CallFaceTimeView: View {
             // 直播私 call 场景下 LiveRoomView 已 attach `.live`，此处 attach `.call` 优先级更高（栈顶生效）
             BeautyPipelineSharer.shared.attach(camera.renderer as AnyObject & BeautyRenderer, token: .call)
             BeautyPipelineSharer.shared.reportSetupResult(camera.isBeautyFallback ? .failure(.genericSetupFailed) : .success(()))
+            // K 里程碑 P0-3 fix（2026-07-03 review 202607030426）：首帧一致 —— 若 attach 时 Sharer
+            // 尚未 ready（setup 首次访问从 .notStarted 变 .ready 时 attach 本身不会 apply），
+            // 显式 apply 保证首帧 SDK 参数与 K store 一致，避免 SDK 默认全零 vs UI 显示值不一致。
+            camera.renderer.apply(BeautyPipelineSharer.shared.store.settings)
         }
         .onDisappear {
             // K 里程碑：detach Sharer 订阅；若为直播私 call，LiveRoomView 那一格保留（下次 apply 走 `.live` 栈顶）

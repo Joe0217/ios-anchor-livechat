@@ -67,8 +67,11 @@ final class BeautyPipelineSharer: ObservableObject {
 
     /// 当前栈顶 renderer（按 token 优先级最高的有效 entry）
     private var topRenderer: (AnyObject & BeautyRenderer)? {
+        // P0-1 fix（2026-07-03 review 202607030426）：顺便清理 weak 已释放的死引用，
+        // 防 subscribers 数组无限累积（compactSubscribers() 单独定义但历史无外部调用点）
+        subscribers.removeAll { $0.renderer == nil }
         // 从最高优先级找起；同 token 时后加入的优先（LIFO 语义），符合"call 结束时 pop 回 live"
-        subscribers
+        return subscribers
             .reversed()
             .compactMap { entry -> (SubscriberToken, AnyObject & BeautyRenderer)? in
                 guard let r = entry.renderer else { return nil }
