@@ -43,17 +43,22 @@ struct LiveNoticeBar: View {
                 Capsule()
                     .strokeBorder(Theme.Palette.liveNoticeBarBorder.opacity(0.6), lineWidth: 1)
             )
-            .animation(.easeInOut(duration: 0.4), value: currentIndex)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel(accessibilityText(items[safeIndex]))
-                .task(id: LoopKey(count: items.count, active: isActive)) {
-                    guard isActive, items.count > 1 else { return }
-                    while !Task.isCancelled {
-                        try? await Task.sleep(nanoseconds: 3_000_000_000)
-                        if Task.isCancelled { break }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(accessibilityText(items[safeIndex]))
+            // 用 withAnimation 显式包裹 currentIndex 修改触发 singleRow 的 .transition(.asymmetric)
+            // ——不用外层 `.animation(_:value: currentIndex)` 隐式动画：后者会 monitor currentIndex
+            // 变化给整个 modifier chain 加 transaction，与 `.task(id:)` 的 restart 检测存在干扰
+            // （实测切走 tab 后返回时 task 不重启，但 Banner 用 withAnimation 结构则正常）。
+            .task(id: LoopKey(count: items.count, active: isActive)) {
+                guard isActive, items.count > 1 else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    if Task.isCancelled { break }
+                    withAnimation(.easeInOut(duration: 0.4)) {
                         currentIndex = (currentIndex + 1) % max(items.count, 1)
                     }
                 }
+            }
         }
     }
 
@@ -79,7 +84,11 @@ struct LiveNoticeBar: View {
             amountTag(item.diamond)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .id(item.id) // 让 SwiftUI 视新 item 为新 view，配合外层 animation 触发 transition
+        // 用 currentIndex 而非 item.id 做 view identity：跑马灯后端会返"同一 userId 上榜多次"
+        // （送礼数量不同但用户相同），item.id 会重复→SwiftUI 视为同 view→content 更新但无 transition,
+        // 视觉上只有 diamond 数字变、头像/昵称/整卡片不动，用户误以为"跑马灯没切换"。
+        // currentIndex 单调递增永不重复，保证每次切换都触发 slide transition。
+        .id(currentIndex)
         // 垂直 slide：新条从底部滑入 + 淡入；旧条向顶部滑出 + 淡出（对齐 H5 c-marquee 竖向 Swiper）
         .transition(.asymmetric(
             insertion: .move(edge: .bottom).combined(with: .opacity),
