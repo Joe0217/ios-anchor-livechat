@@ -16,16 +16,22 @@ struct LiveNoticeBar: View {
         if items.isEmpty {
             EmptyView()
         } else {
-            singleRow(items[safeIndex])
-                .frame(height: Theme.Metric.liveNoticeBarHeight)
-                .background(
-                    Capsule().fill(Theme.Gradients.liveNoticeBar)
-                )
-                .overlay(
-                    Capsule()
-                        .strokeBorder(Theme.Palette.liveNoticeBarBorder.opacity(0.6), lineWidth: 1)
-                )
-                .animation(.easeInOut(duration: 0.35), value: currentIndex)
+            // 垂直 slide 转场对齐 H5 `c-marquee`（Swiper vertical + autoplay 3000）：
+            // 新条从下方滑入 / 旧条向上滑出，避免淡入淡出的"呼吸"感。
+            // 外层 clipShape(Capsule) 让 slide 期间新旧条在胶囊内完成，不溢出边界。
+            ZStack {
+                Capsule().fill(Theme.Gradients.liveNoticeBar)
+                singleRow(items[safeIndex])
+                    .padding(.leading, 4)
+                    .padding(.trailing, 12)
+            }
+            .frame(height: Theme.Metric.liveNoticeBarHeight)
+            .clipShape(Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(Theme.Palette.liveNoticeBarBorder.opacity(0.6), lineWidth: 1)
+            )
+            .animation(.easeInOut(duration: 0.4), value: currentIndex)
                 .accessibilityElement(children: .combine)
                 .accessibilityLabel(accessibilityText(items[safeIndex]))
                 // autoplay：.task(id: items.count) 让 SwiftUI 托管——items.count 变化时自动重启
@@ -64,10 +70,13 @@ struct LiveNoticeBar: View {
             Spacer(minLength: 6)
             amountTag(item.diamond)
         }
-        .padding(.leading, 4)
-        .padding(.trailing, 12)
-        .id(item.id) // 让 SwiftUI 视新 item 为新 view，配合外层 animation 做过渡
-        .transition(.opacity)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .id(item.id) // 让 SwiftUI 视新 item 为新 view，配合外层 animation 触发 transition
+        // 垂直 slide：新条从底部滑入 + 淡入；旧条向顶部滑出 + 淡出（对齐 H5 c-marquee 竖向 Swiper）
+        .transition(.asymmetric(
+            insertion: .move(edge: .bottom).combined(with: .opacity),
+            removal: .move(edge: .top).combined(with: .opacity)
+        ))
     }
 
     private func avatar(_ item: GiftMarqueeItem) -> some View {
