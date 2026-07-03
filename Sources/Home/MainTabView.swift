@@ -73,6 +73,11 @@ struct MainTabView: View {
             // 首页 banner 位靠此接口喂数据；J 里程碑接入启动图/挂件/榜单/分类贴图时按需扩 types
             await AppPictureStore.shared.loadIfNeeded(types: [.banner])
         }
+        .task {
+            // 跑马灯预热（对齐 H5 `getLiveMarqueeListData()` 进 Live 广场就调）——
+            // 独立 .task 让两个预热并发起飞（一起 await 也可以；分开更直观）
+            await GiftMarqueeStore.shared.loadIfNeeded()
+        }
         .preferredColorScheme(.dark)
     }
 
@@ -94,8 +99,28 @@ struct MainTabView: View {
                             UserProfileView(userId: uid)
                         }
                     }
+                    // Home 也持有 WorkRoute destination——QuickGoLive 从 Home 内 push LiveSettings 后,
+                    // LiveSettings 内嵌 NavigationLink(WorkRoute.wishSetting/.beautySettings) 也要能
+                    // 在同一 stack 内 push。**必须与 Work stack 保持 case 一致**，否则从 Home 入口进入
+                    // 开播设置后点 Wishlist / Beauty 会走 EmptyView。
+                    // 复用 WorkRoute 类型（不新建 HomeRoute）——LiveSettings 内的链接 value 类型已固定为 WorkRoute，
+                    // 换类型需侵入 LiveSettings 源码。
+                    .navigationDestination(for: WorkRoute.self) { route in
+                        switch route {
+                        case .liveSettings:   LiveSettingsView()
+                        case .wishSetting:    WishSettingView()
+                        case .beautySettings: BeautySettingsView()
+                        case .giftMessage:    GiftMessageView()
+                        case .pocDebug:       POCDebugView()
+                        }
+                    }
             }
             .environment(\.isHomeTabActive, selection == .home)
+            .environment(\.quickGoLive, QuickGoLiveAction {
+                // 在当前 Home NavigationStack 内 push LiveSettings（对齐用户偏好：
+                // 不切 tab、保持上下文；比 H5 CGoLive 切 tab 更内聚）。
+                homePath.append(WorkRoute.liveSettings)
+            })
             .opacity(selection == .home ? 1 : 0)
             .allowsHitTesting(selection == .home)
             .accessibilityHidden(selection != .home)
@@ -246,6 +271,26 @@ extension EnvironmentValues {
     var isHomeTabActive: Bool {
         get { self[IsHomeTabActiveKey.self] }
         set { self[IsHomeTabActiveKey.self] = newValue }
+    }
+}
+
+/// 跨 tab 导航 action：Home Live tab 的 QuickGoLiveButton 触发时切到 Work tab + push LiveSettings。
+///
+/// **设计动机**：`LiveSettingsView` 挂在 Work NavigationStack 的 `WorkRoute.liveSettings`，
+/// 单一入口避免多 tab 持有同一 view 导致 state 冲突。CGoLive 对齐 H5：进入开播设置流程。
+struct QuickGoLiveAction {
+    let perform: () -> Void
+    static let noop = QuickGoLiveAction(perform: {})
+}
+
+private struct QuickGoLiveKey: EnvironmentKey {
+    static let defaultValue: QuickGoLiveAction = .noop
+}
+
+extension EnvironmentValues {
+    var quickGoLive: QuickGoLiveAction {
+        get { self[QuickGoLiveKey.self] }
+        set { self[QuickGoLiveKey.self] = newValue }
     }
 }
 

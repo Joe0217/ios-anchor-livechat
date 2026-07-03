@@ -130,6 +130,7 @@
 "liveStream.empty"           = "No live streams right now";
 "liveStream.inPK"            = "In PK";
 "live.banner.a11y"           = "Home banner";
+"gift.sendSuperRocket"       = "sends out a super rocket";
 
 // MARK: - Profile 个人页（设计稿还原）
 "profile.settings"           = "Settings";
@@ -282,6 +283,11 @@
 "wishSetting.pleaseEnterTheme"       = "Please enter theme";
 "wishSetting.themeMaxLen"            = "Theme cannot exceed 20 characters";
 "wishSetting.submittedForReview"     = "Submitted for review";
+"wishSetting.pleaseAgreeRule"        = "Please agree to the Wish Commitment Guidelines";
+"wishSetting.pleaseAddGift"          = "Please add at least one wish gift";
+"wishSetting.pleasePickTemplate"     = "Please pick a common template";
+"wishSetting.pleasePickPrivate"      = "Please pick a private commitment";
+"wishSetting.saved"                  = "Saved";
 "wishSetting.reviewStatus"           = "Review status";
 "wishSetting.reviewStatusIntro"      = "Once approved, the private template will be visible to users.";
 "wishSetting.type.commonSub"         = "Suitable for all streamers";
@@ -467,6 +473,28 @@
 "message.systemInbox.notification"      = "System Information";
 "message.systemInbox.admin"             = "Administrator";
 "message.systemInbox.comingSoon"        = "Details coming soon";
+// v5 F-3 消息 preview 归一化
+"message.preview.image"                 = "[Image]";
+"message.preview.voice"                 = "[Voice]";
+"message.preview.video"                 = "[Video]";
+"message.preview.location"              = "[Location]";
+"message.preview.gift"                  = "[Gift]";
+"message.preview.unknown"               = "[Unknown]";
+"message.preview.callMissed"            = "Missed";
+"message.preview.callRejected"          = "Rejected";
+"message.preview.callCancelled"         = "Cancelled";
+// v5 F-4 通用操作
+"message.action.cancel"                 = "Cancel";
+// v5 F-5 时间
+"message.time.yesterday"                = "Yesterday";
+// v5 F-6 a11y
+"message.a11y.online"                   = "Online";
+"message.a11y.offline"                  = "Offline";
+"message.a11y.pinned"                   = "Pinned";
+"message.a11y.vip"                      = "VIP";
+"message.a11y.activeTycoon"             = "Active tycoon";
+"message.a11y.unreadCountFormat"        = "%d unread";
+"message.a11y.levelFormat"              = "Level %@";
 
 // MARK: - E/F 派对房（spec §1.4 + H i18n 收尾）
 "party.defaultRoomName"                  = "Party Room";

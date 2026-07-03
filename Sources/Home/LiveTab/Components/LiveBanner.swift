@@ -1,77 +1,83 @@
 import SwiftUI
 
-/// 圣诞活动 banner：左侧标题+日期，右侧圣诞老人雪橇插画（无素材时用占位渐变 + emoji 兜底）。
+/// 首页 banner 位。接受 `AppPictureStore` 派生的 `[AppPictureItem]` 数组。
+///
+/// 对齐 H5 `views/home/components/banner.vue`：
+/// - 空态直接 `EmptyView`（H5 `v-if="bannerList.length"`）
+/// - 多张时轮播（H5 `:loop="bannerList?.length > 1"` + Autoplay）
+///
+/// 卡片点击**本次不做**（客态直播间独立里程碑；banner 跳转 iframe 也需要 J 里程碑内嵌浏览器基建）——
+/// 目前仅作视觉展示，点击无响应，与 Live 卡片保持一致的处理原则。
 struct LiveBanner: View {
-    let data: LiveBannerData
+    let items: [AppPictureItem]
+
+    @State private var currentIndex: Int = 0
 
     var body: some View {
-        HStack(spacing: 0) {
-            leftCopy
-            Spacer(minLength: 8)
-            illustration
+        if items.isEmpty {
+            EmptyView()
+        } else if items.count == 1 {
+            singleImage(items[0])
+        } else {
+            TabView(selection: $currentIndex) {
+                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                    singleImage(item).tag(index)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .automatic))
+            .frame(height: Theme.Metric.liveBannerHeight)
+            .onAppear { startAutoplay() }
         }
-        .padding(.horizontal, 14)
+    }
+
+    private func singleImage(_ item: AppPictureItem) -> some View {
+        CachedAsyncImage(url: item.picURL, contentMode: .fill, persistent: false) {
+            placeholderGradient
+        }
         .frame(height: Theme.Metric.liveBannerHeight)
-        .background(
-            RoundedRectangle(cornerRadius: Theme.Radius.liveBanner, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [Theme.Palette.liveBannerFill, Color(hex: 0x3B1452)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.liveBanner, style: .continuous)
-                .strokeBorder(Theme.Palette.liveBannerBorder.opacity(0.55), lineWidth: 1)
-        )
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(data.title) \(data.period)")
+        .frame(maxWidth: .infinity)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.liveBanner, style: .continuous))
+        .accessibilityLabel(L10n.liveBannerA11y)
     }
 
-    private var leftCopy: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(data.title)
-                .font(.system(size: 18, weight: .heavy, design: .rounded))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Color(hex: 0xFFE56E), Color(hex: 0xFFFFFF)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
-            Text(data.period)
-                .font(.system(size: 10, weight: .regular))
-                .foregroundStyle(.white.opacity(0.75))
-                .lineLimit(1)
-        }
+    private var placeholderGradient: some View {
+        LinearGradient(
+            colors: [Theme.Palette.liveBannerFill, Color(hex: 0x3B1452)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 
-    /// 右侧插画占位：渐变圆 + 圣诞 emoji。
-    /// 后续接入真实活动 banner 图后替换为 Image。
-    private var illustration: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [
-                            Color(hex: 0xFFB347, opacity: 0.85),
-                            Color(hex: 0xC026D3, opacity: 0.4),
-                        ],
-                        center: .center,
-                        startRadius: 4,
-                        endRadius: 60
-                    )
-                )
-                .frame(width: 90, height: 90)
-                .blur(radius: 4)
-            Text("🎅")
-                .font(.system(size: 48))
+    /// SwiftUI TabView 没有内置 autoplay，起个 Task 每 3s 切一张（H5 Autoplay 3000ms）。
+    /// items 数量变化 / view 消失时 Task 自动取消（onAppear 每次都是新 Task；.task 更安全但
+    /// 这里用 Task { } 起足够，因为多轮情况 currentIndex 靠 modulo 收敛）。
+    private func startAutoplay() {
+        Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                guard items.count > 1 else { return }
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    currentIndex = (currentIndex + 1) % items.count
+                }
+            }
         }
-        .frame(width: 96, height: 76)
-        .accessibilityHidden(true)
     }
 }
+
+#if DEBUG
+struct LiveBanner_Previews: PreviewProvider {
+    static var previews: some View {
+        VStack(spacing: 16) {
+            LiveBanner(items: [
+                AppPictureItem(id: "1", picUrl: nil, directUrl: nil, bannerPosition: ["首页"])
+            ])
+            LiveBanner(items: (1...3).map {
+                AppPictureItem(id: "\($0)", picUrl: nil, directUrl: nil, bannerPosition: ["首页"])
+            })
+        }
+        .padding()
+        .background(Theme.Palette.liveBottomDark)
+        .preferredColorScheme(.dark)
+    }
+}
+#endif

@@ -283,6 +283,8 @@ enum L10n {
     static var liveStreamInPK: String { localize("liveStream.inPK", comment: "PK 中角标 a11y") }
     /// Banner 通用 a11y（本次不接跳转，仅描述）
     static var liveBannerA11y: String { localize("live.banner.a11y", comment: "首页 banner a11y") }
+    /// 跑马灯"sends out a super rocket"文案（H5 i18n key `gift.sends out a super rocket`）
+    static var giftSendSuperRocket: String { localize("gift.sendSuperRocket", comment: "跑马灯：发送超级火箭") }
 
     // MARK: - List 子页（设计稿还原）
     /// 顶部 Online/Prime 分段
@@ -402,6 +404,38 @@ enum L10n {
     static var messageSystemInboxNotification: String  { localize("message.systemInbox.notification", comment: "Flame 顶部 Notification 入口标题") }
     static var messageSystemInboxAdmin: String         { localize("message.systemInbox.admin", comment: "Flame 顶部 Admin 客服入口标题") }
     static var messageSystemInboxComingSoon: String    { localize("message.systemInbox.comingSoon", comment: "3 入口详情页留 H-2 未开放 toast") }
+
+    // MARK: - Message 消息 preview 归一化（v5 F-3 i18n）
+    static var messagePreviewImage: String          { localize("message.preview.image", comment: "会话预览：图片") }
+    static var messagePreviewVoice: String          { localize("message.preview.voice", comment: "会话预览：语音") }
+    static var messagePreviewVideo: String          { localize("message.preview.video", comment: "会话预览：视频") }
+    static var messagePreviewLocation: String       { localize("message.preview.location", comment: "会话预览：位置") }
+    static var messagePreviewGift: String           { localize("message.preview.gift", comment: "会话预览：礼物") }
+    static var messagePreviewUnknown: String        { localize("message.preview.unknown", comment: "会话预览：未知消息") }
+    static var messagePreviewCallMissed: String     { localize("message.preview.callMissed", comment: "会话预览：未接来电") }
+    static var messagePreviewCallRejected: String   { localize("message.preview.callRejected", comment: "会话预览：拒接") }
+    static var messagePreviewCallCancelled: String  { localize("message.preview.callCancelled", comment: "会话预览：已取消") }
+
+    // MARK: - Message 通用操作（v5 F-4 i18n）
+    static var messageActionCancel: String          { localize("message.action.cancel", comment: "confirmationDialog Cancel 按钮") }
+
+    // MARK: - Message 时间格式（v5 F-5 i18n）
+    static var messageTimeYesterday: String         { localize("message.time.yesterday", comment: "会话时间：昨天") }
+
+    // MARK: - Message a11y label（v5 F-6 i18n；VoiceOver 朗读）
+    static var messageA11yOnline: String            { localize("message.a11y.online", comment: "a11y 在线") }
+    static var messageA11yOffline: String           { localize("message.a11y.offline", comment: "a11y 离线") }
+    static var messageA11yPinned: String            { localize("message.a11y.pinned", comment: "a11y 已置顶") }
+    static var messageA11yVIP: String               { localize("message.a11y.vip", comment: "a11y VIP") }
+    static var messageA11yActiveTycoon: String      { localize("message.a11y.activeTycoon", comment: "a11y 活跃大 R") }
+    /// %d = unread count
+    static func messageA11yUnreadCountFormat(_ n: Int) -> String {
+        String(format: localize("message.a11y.unreadCountFormat", comment: "a11y 未读数 format，参数: 数量"), n)
+    }
+    /// %@ = level number string
+    static func messageA11yLevelFormat(_ level: String) -> String {
+        String(format: localize("message.a11y.levelFormat", comment: "a11y 等级 format，参数: 等级"), level)
+    }
 
     // MARK: - LevelDetail 段位详情页
     static var levelDetailTitle: String    { localize("level.title", comment: "段位详情标题") }
@@ -531,6 +565,12 @@ enum L10n {
     static var wishSettingPleaseEnterTheme: String { localize("wishSetting.pleaseEnterTheme", comment: "Wish theme 为空 toast") }
     static var wishSettingThemeMaxLen: String { localize("wishSetting.themeMaxLen", comment: "Wish theme > 15 chars") }
     static var wishSettingSubmittedForReview: String { localize("wishSetting.submittedForReview", comment: "Submit 成功 Alert 标题") }
+    // P0-1 分层校验 toast + P1-2 保存成功 toast（对齐 H5 index.vue:351-397）
+    static var wishSettingPleaseAgreeRule: String { localize("wishSetting.pleaseAgreeRule", comment: "未勾选合规规范") }
+    static var wishSettingPleaseAddGift: String { localize("wishSetting.pleaseAddGift", comment: "未添加心愿礼物") }
+    static var wishSettingPleasePickTemplate: String { localize("wishSetting.pleasePickTemplate", comment: "Common 未选模板") }
+    static var wishSettingPleasePickPrivate: String { localize("wishSetting.pleasePickPrivate", comment: "Private 未选文案") }
+    static var wishSettingSaved: String { localize("wishSetting.saved", comment: "保存成功 toast") }
     // v2 设计稿对齐补充
     static var wishSettingReviewStatus: String { localize("wishSetting.reviewStatus", comment: "Review status 卡标题") }
     static var wishSettingReviewStatusIntro: String { localize("wishSetting.reviewStatusIntro", comment: "Review status 副标题") }

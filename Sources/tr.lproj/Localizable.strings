@@ -132,6 +132,7 @@
 "liveStream.empty"           = "Şu anda canlı yayın yok";
 "liveStream.inPK"            = "PK modunda";
 "live.banner.a11y"           = "Ana sayfa banner";
+"gift.sendSuperRocket"       = "süper roket gönderdi";
 
 // MARK: - Profile 个人页（设计稿还原）
 "profile.settings"           = "Ayarlar";
@@ -284,6 +285,11 @@
 "wishSetting.pleaseEnterTheme"       = "Lütfen konu girin";
 "wishSetting.themeMaxLen"            = "Konu 20 karakteri aşamaz";
 "wishSetting.submittedForReview"     = "İncelemeye gönderildi";
+"wishSetting.pleaseAgreeRule"        = "Lütfen Dilek Taahhüt Kurallarını kabul edin";
+"wishSetting.pleaseAddGift"          = "Lütfen en az bir dilek hediyesi ekleyin";
+"wishSetting.pleasePickTemplate"     = "Lütfen bir ortak şablon seçin";
+"wishSetting.pleasePickPrivate"      = "Lütfen bir özel taahhüt seçin";
+"wishSetting.saved"                  = "Kaydedildi";
 "wishSetting.reviewStatus"           = "İnceleme durumu";
 "wishSetting.reviewStatusIntro"      = "Onaylandıktan sonra, özel şablon kullanıcılara görünür olacak.";
 "wishSetting.type.commonSub"         = "Tüm yayıncılara uygun";
@@ -469,6 +475,28 @@
 "message.systemInbox.notification"      = "Sistem Bilgileri";
 "message.systemInbox.admin"             = "Yönetici";
 "message.systemInbox.comingSoon"        = "Ayrıntılar yakında";
+// v5 F-3 消息 preview 归一化
+"message.preview.image"                 = "[Resim]";
+"message.preview.voice"                 = "[Sesli mesaj]";
+"message.preview.video"                 = "[Video]";
+"message.preview.location"              = "[Konum]";
+"message.preview.gift"                  = "[Hediye]";
+"message.preview.unknown"               = "[Bilinmeyen mesaj]";
+"message.preview.callMissed"            = "Cevapsız";
+"message.preview.callRejected"          = "Reddedildi";
+"message.preview.callCancelled"         = "İptal edildi";
+// v5 F-4 通用操作
+"message.action.cancel"                 = "İptal";
+// v5 F-5 时间
+"message.time.yesterday"                = "Dün";
+// v5 F-6 a11y
+"message.a11y.online"                   = "Çevrimiçi";
+"message.a11y.offline"                  = "Çevrimdışı";
+"message.a11y.pinned"                   = "Sabitlenmiş";
+"message.a11y.vip"                      = "VIP";
+"message.a11y.activeTycoon"             = "Aktif zengin";
+"message.a11y.unreadCountFormat"        = "%d okunmamış";
+"message.a11y.levelFormat"              = "Seviye %@";
 
 // MARK: - E/F 派对房（spec §1.4 + H i18n 收尾）
 "party.defaultRoomName"                  = "Parti Odası";

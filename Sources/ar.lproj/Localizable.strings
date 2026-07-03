@@ -132,6 +132,7 @@
 "liveStream.empty"           = "لا توجد بثوث مباشرة حاليًا";
 "liveStream.inPK"            = "في وضع PK";
 "live.banner.a11y"           = "بانر الصفحة الرئيسية";
+"gift.sendSuperRocket"       = "أرسل صاروخًا خارقًا";
 
 // MARK: - Profile 个人页（设计稿还原）
 "profile.settings"           = "الإعدادات";
@@ -284,6 +285,11 @@
 "wishSetting.pleaseEnterTheme"       = "يرجى إدخال الموضوع";
 "wishSetting.themeMaxLen"            = "لا يمكن أن يتجاوز الموضوع 20 حرفًا";
 "wishSetting.submittedForReview"     = "تم الإرسال للمراجعة";
+"wishSetting.pleaseAgreeRule"        = "يرجى الموافقة على إرشادات التزام الأمنية";
+"wishSetting.pleaseAddGift"          = "يرجى إضافة هدية أمنية واحدة على الأقل";
+"wishSetting.pleasePickTemplate"     = "يرجى اختيار قالب عام";
+"wishSetting.pleasePickPrivate"      = "يرجى اختيار التزام خاص";
+"wishSetting.saved"                  = "تم الحفظ";
 "wishSetting.reviewStatus"           = "حالة المراجعة";
 "wishSetting.reviewStatusIntro"      = "بمجرد الموافقة، سيكون القالب الخاص مرئيًا للمستخدمين.";
 "wishSetting.type.commonSub"         = "مناسب لجميع البث";
@@ -469,6 +475,28 @@
 "message.systemInbox.notification"      = "معلومات النظام";
 "message.systemInbox.admin"             = "المسؤول";
 "message.systemInbox.comingSoon"        = "التفاصيل قريباً";
+// v5 F-3 消息 preview 归一化
+"message.preview.image"                 = "[صورة]";
+"message.preview.voice"                 = "[رسالة صوتية]";
+"message.preview.video"                 = "[فيديو]";
+"message.preview.location"              = "[موقع]";
+"message.preview.gift"                  = "[هدية]";
+"message.preview.unknown"               = "[رسالة غير معروفة]";
+"message.preview.callMissed"            = "مكالمة فائتة";
+"message.preview.callRejected"          = "مرفوضة";
+"message.preview.callCancelled"         = "أُلغيت";
+// v5 F-4 通用操作
+"message.action.cancel"                 = "إلغاء";
+// v5 F-5 时间
+"message.time.yesterday"                = "أمس";
+// v5 F-6 a11y
+"message.a11y.online"                   = "متصل";
+"message.a11y.offline"                  = "غير متصل";
+"message.a11y.pinned"                   = "مثبت";
+"message.a11y.vip"                      = "VIP";
+"message.a11y.activeTycoon"             = "قطب نشط";
+"message.a11y.unreadCountFormat"        = "%d غير مقروء";
+"message.a11y.levelFormat"              = "المستوى %@";
 
 // MARK: - E/F 派对房（spec §1.4 + H i18n 收尾）
 "party.defaultRoomName"                  = "غرفة الحفلات";
