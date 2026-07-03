@@ -102,7 +102,7 @@ struct LiveSettingsView: View {
         }
         .sheet(isPresented: $showGiftPicker) {
             GiftPickerSheet(
-                minPrice: LiveSettingsStore.privateCallGiftMinPrice,
+                minPrice: store.privateCallGiftMinPrice,
                 initialSelection: store.selectedGift,
                 onConfirm: { store.setSelectedGift($0) }
             )
@@ -169,10 +169,12 @@ struct LiveSettingsView: View {
                 .buttonStyle(.plain)
                 .disabled(isBusy || store.isUploadingCover)
 
-                Text(store.isUploadingCover ? L10n.liveSettingsCoverUploading
-                                            : L10n.liveSettingsCoverUploadHint)
-                    .font(.caption)
-                    .foregroundStyle(.white.opacity(0.55))
+                // stage 3：仅在上传中显示"Uploading..."，非上传态不显示 hint（对齐 H5 无提示语）
+                if store.isUploadingCover {
+                    Text(L10n.liveSettingsCoverUploading)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.55))
+                }
                 Spacer()
             }
         }

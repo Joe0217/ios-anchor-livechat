@@ -36,14 +36,42 @@ enum LiveService {
         return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
     }
 
-    /// 开播建房。对齐 H5：把 getMyLiveRoom 的配置整体回传，并附礼物/愿望单字段。
-    static func beginLiveRoomRaw(settings: [String: Any], liveDescribe: String) async throws -> [String: Any] {
+    /// 开播建房。对齐 H5 `checkCanLive` 组装 payload（index.vue:214-226）：
+    /// - `liveDescribe` 非空覆盖 settings 原值
+    /// - `backgroundImgUrl` 若用户上传了新封面，覆盖服务端 default
+    /// - `giftId/giftPrice/privateCallOpen`：选中 gift 时置 1；否则占位 NSNull/0
+    /// - `wishlistList` 本次为空数组（愿望单归 H 里程碑）
+    static func beginLiveRoomRaw(
+        settings: [String: Any],
+        liveDescribe: String,
+        coverUrl: String? = nil,
+        gift: (id: Int64, price: Int64)? = nil,
+        wishlist: [[String: Any]] = [],
+        promiseType: Int = 0,
+        promiseTemplateId: Int64? = nil,
+        promiseText: String? = nil
+    ) async throws -> [String: Any] {
         var body = settings
         if !liveDescribe.isEmpty { body["liveDescribe"] = liveDescribe }
-        body["giftId"] = NSNull()
-        body["giftPrice"] = NSNull()
-        body["privateCallOpen"] = 0
-        body["wishlistList"] = []
+        if let coverUrl, !coverUrl.isEmpty { body["backgroundImgUrl"] = coverUrl }
+        if let gift {
+            body["giftId"] = gift.id
+            body["giftPrice"] = gift.price
+            body["privateCallOpen"] = 1
+        } else {
+            body["giftId"] = NSNull()
+            body["giftPrice"] = NSNull()
+            body["privateCallOpen"] = 0
+        }
+        body["wishlistList"] = wishlist
+        body["promiseType"] = promiseType
+        // 对齐 H5 checkCanLive:222-225：templateId 仅 promiseType==common 且 id>0 才下发；text 仅 type>0 才下发
+        if promiseType == 1, let tid = promiseTemplateId, tid > 0 {
+            body["promiseTemplateId"] = tid
+        }
+        if promiseType > 0, let text = promiseText, !text.isEmpty {
+            body["promiseText"] = text
+        }
         let data = try await APIClient.shared.post("/api/agora/live/beginLiveRoom", body: body)
         return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
     }
@@ -56,12 +84,35 @@ enum LiveService {
 
     /// 完整开播：getMyLiveRoom + beginLiveRoom + getAgoraRtmToken。
     /// 频道来自 agoraChannelId，token 来自 getAgoraRtmToken（绑 uid），uid 为 userId。
-    static func startLive(liveDescribe: String) async throws -> LiveRoomInfo {
+    ///
+    /// - parameter coverUrl: 若非空覆盖服务端 default（用户在设置页刚上传的新封面）
+    /// - parameter gift: 私 call 礼物（可选；选中即 privateCallOpen=1）
+    static func startLive(
+        liveDescribe: String,
+        coverUrl: String? = nil,
+        gift: (id: Int64, price: Int64)? = nil,
+        wishlist: [[String: Any]] = [],
+        promiseType: Int = 0,
+        promiseTemplateId: Int64? = nil,
+        promiseText: String? = nil
+    ) async throws -> LiveRoomInfo {
         let settings = try await getMyLiveRoomRaw()
-        guard let cover = settings["backgroundImgUrl"] as? String, !cover.isEmpty else {
+        // v5：优先用调用方传入的 coverUrl（用户新上传）；否则用服务端 default
+        let effectiveCover = (coverUrl?.isEmpty == false) ? coverUrl : (settings["backgroundImgUrl"] as? String)
+        guard let cover = effectiveCover, !cover.isEmpty else {
             throw APIError(code: "-1", message: L10n.liveErrorNoCover)
         }
-        let beginRes = try await beginLiveRoomRaw(settings: settings, liveDescribe: liveDescribe)
+        _ = cover  // 保留 fail-safe，实际由 beginLiveRoomRaw 传给后端
+        let beginRes = try await beginLiveRoomRaw(
+            settings: settings,
+            liveDescribe: liveDescribe,
+            coverUrl: coverUrl,
+            gift: gift,
+            wishlist: wishlist,
+            promiseType: promiseType,
+            promiseTemplateId: promiseTemplateId,
+            promiseText: promiseText
+        )
         var merged = settings
         for (k, v) in beginRes { merged[k] = v }
         let tokenRes = try await getAgoraRtmToken()
