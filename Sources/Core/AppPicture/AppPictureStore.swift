@@ -26,7 +26,10 @@ final class AppPictureStore: ObservableObject {
     @Published private(set) var pictures: [AppPictureType: [AppPictureItem]] = [:]
 
     /// 已加载过的 type 集合（`loadIfNeeded` 幂等依据）。
-    @Published private(set) var loadedTypes: Set<AppPictureType> = []
+    /// **不加 @Published**：仅内部判定用，无外部消费者；若加 @Published，doLoad 每 type 桶
+    /// 会先 fire `pictures[type] = ...` 一次，再 fire `loadedTypes.insert` 一次——订阅 store
+    /// 的 view（如 LiveTabView）会白重算 body 两次。（202607031743 审查建议-3）
+    private(set) var loadedTypes: Set<AppPictureType> = []
 
     private let service: AppPictureServiceProtocol
     private var inflight: Task<Void, Never>?
