@@ -301,6 +301,11 @@
 "wishSetting.ruleAgreeShort"         = "أوافق على";
 "wishSetting.ruleFooter"             = "نتعهد باستخدام الهدايا بإنصاف وصدق، والالتزام بقواعد المنصة.";
 
+// MARK: - 心愿承诺规范弹窗
+"wishRuleModal.title"                = "إرشادات التزام الأمنية";
+"wishRuleModal.check"                = "لقد قرأت ووافقت على الإرشادات أعلاه";
+"wishRuleModal.agree"                = "أوافق وأنشر";
+
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "إذن الكاميرا مطلوب";
 "liveRoom.permissionAlertOK" = "حسنًا";

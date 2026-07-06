@@ -88,6 +88,16 @@ struct LiveSettingsView: View {
             }
         }
         .task { await store.load() }
+        .onAppear {
+            // Bug fix：二次开播按钮转圈——LiveSettings 是 push 而非 dismantle 到 LiveRoomView，
+            // 从 LiveRoomView 下播 pop 回来时 store 仍 .starting + roomInfo != nil + lock 锁定，
+            // tap Start Live 命中 `guard state == .editing` 静默 return → 按钮持续 loading。
+            // 检测"已开播过标志"（roomInfo != nil）→ reset 允许再次开播。
+            if store.roomInfo != nil {
+                store.resetForReuse()
+                goLive = false
+            }
+        }
         .onChange(of: store.roomInfo?.id) { newId in
             if newId != nil { goLive = true }
         }
@@ -107,6 +117,23 @@ struct LiveSettingsView: View {
                 onConfirm: { store.setSelectedGift($0) }
             )
         }
+        // 心愿承诺规范弹窗（对齐 H5 wishlist-rule-modal.vue）—— 首次开播含 wishlist+promise 时弹
+        // 用 ZStack overlay 而非 sheet：H5 是 dialog 视觉（居中 + dim 背景），非 iOS bottom sheet
+        .overlay {
+            if store.showWishRuleModal {
+                ZStack {
+                    Color.black.opacity(0.6).ignoresSafeArea()
+                        .onTapGesture { store.onWishRuleClose() }
+                    WishRuleModal(
+                        onAgree: { await store.onWishRuleAgree() },
+                        onClose: { store.onWishRuleClose() }
+                    )
+                }
+                .transition(.opacity)
+                .zIndex(1000)
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: store.showWishRuleModal)
         .preferredColorScheme(.dark)
     }
 

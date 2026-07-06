@@ -299,6 +299,11 @@
 "wishSetting.ruleAgreeShort"         = "I agree";
 "wishSetting.ruleFooter"             = "We promise to use the gifts fairly and sincerely, and to abide by the platform rules.";
 
+// MARK: - 心愿承诺规范弹窗
+"wishRuleModal.title"                = "Wish Commitment Guidelines";
+"wishRuleModal.check"                = "I have read and agree to the above guidelines";
+"wishRuleModal.agree"                = "Agree and Publish";
+
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "Camera Permission Required";
 "liveRoom.permissionAlertOK" = "OK";

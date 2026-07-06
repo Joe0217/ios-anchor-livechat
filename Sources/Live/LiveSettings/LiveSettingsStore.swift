@@ -42,6 +42,11 @@ final class LiveSettingsStore: ObservableObject {
     @Published var toastMessage: String?
     private var toastClearTask: Task<Void, Never>?
 
+    /// 心愿承诺规范弹窗（对齐 H5 `showWishRuleModal` index.vue:240-248 + wishlist-rule-modal.vue）。
+    /// 触发条件：首次开播 + 有 wishlist + 有 promise + 未同意规范
+    @Published var showWishRuleModal: Bool = false
+    private let wishRuleAgreedKey = "wishRuleAgreed"
+
     /// v5：私 call 礼物最低价格约束（对齐 H5 `liveCallGiftLimit.min = 4999` 硬编码兜底）。
     /// **stage 3 补齐**：接受 getMyLiveRoom 后端下发的 `minGiftPrice` 覆盖（对齐 H5 index.vue:130-135）
     @Published private(set) var privateCallGiftMinPrice: Int64 = 4999
@@ -115,6 +120,17 @@ final class LiveSettingsStore: ObservableObject {
             return
         }
 
+        // 心愿承诺规范弹窗（对齐 H5 index.vue:240-248 showWishRuleModal）：
+        // 首次开播 + 有 wishlist + 有 promise + 未同意规范 → 弹 modal 阻塞开播流程
+        // 用户 Agree 后 onWishRuleAgree 会再次调用 startTapped 走完主流程
+        let wishShared = WishSettingSharedStore.shared
+        if !UserDefaults.standard.bool(forKey: wishRuleAgreedKey),
+           !wishShared.wishlist.isEmpty,
+           wishShared.promiseType != .none {
+            showWishRuleModal = true
+            return
+        }
+
         // 4 项 checkCanLive（顺序对齐 H5 index.vue:191-208 不可改）
         // **stage 3**：改用 toast 展示（对齐 H5 `showToast`）—— state 保持 .editing 不进 error banner
         if let errMsg = checkCanLive() {
@@ -133,7 +149,7 @@ final class LiveSettingsStore: ObservableObject {
         do {
             let giftParam: (id: Int64, price: Int64)? = selectedGift.map { ($0.id, $0.giftPrice) }
             // L-spec：读 WishSettingSharedStore 组装 wishlistList / promiseType / promiseTemplateId / promiseText
-            let wishShared = WishSettingSharedStore.shared
+            // （wishShared 已在函数顶部声明用于合规弹窗检查，此处复用）
             let wishlistPayload: [[String: Any]] = wishShared.wishlist.map {
                 [
                     "id": $0.id,
@@ -240,6 +256,42 @@ final class LiveSettingsStore: ObservableObject {
             guard !Task.isCancelled else { return }
             await MainActor.run { self?.toastMessage = nil }
         }
+    }
+
+    // MARK: - 心愿承诺规范弹窗回调（对齐 H5 onWishRuleAgree / onWishRuleClose index.vue:399-406）
+
+    /// 用户 Agree 心愿承诺规范：调后端 clickAgreement + 本地持久化标志 + 关 modal + 递归调 startTapped 继续主流程
+    /// 后端调用失败静默（对齐 H5 wishlist-rule-modal.vue:19 `catch { silent }`）
+    func onWishRuleAgree() async {
+        // fire-and-forget 后端记录（失败不阻塞用户开播）
+        do {
+            try await LiveService.clickWishAgreement()
+        } catch {
+            logger.warning("clickWishAgreement failed (silent per H5): \(String(describing: error))")
+        }
+        UserDefaults.standard.set(true, forKey: wishRuleAgreedKey)
+        showWishRuleModal = false
+        // 递归调 startTapped 继续开播主流程（此时 wishRuleAgreed=true，跳过 modal 分支）
+        await startTapped()
+    }
+
+    /// 用户 Cancel 关 modal：仅关闭，不持久化，用户下次 tap Start Live 仍弹
+    func onWishRuleClose() {
+        showWishRuleModal = false
+    }
+
+    /// 二次开播复用 store（bug fix：LiveSettings 是 push 而非 dismantle 到 LiveRoomView，pop 回来时 store 仍是 .starting）
+    ///
+    /// **触发场景**：用户 tap Start Live → push LiveRoomView（store.state = .starting, roomInfo != nil, lock 锁定）→ 下播 pop →
+    /// 回到 LiveSettings 但 store 仍是"已开播中"状态 → 再 tap Start Live 命中 `guard state == .editing` 静默 return → 按钮转圈不消失
+    ///
+    /// **调用点**：View `.onAppear` 检测 `roomInfo != nil`（已开播过标志），主动 reset 允许再次开播。
+    /// 保留 title/coverUrl/selectedGift（用户可能相同配置再开播）；仅重置生命周期字段。
+    func resetForReuse() {
+        state = .editing
+        roomInfo = nil
+        lock.unlock()
+        logger.info("resetForReuse: allow re-enter Start Live after pop from LiveRoomView")
     }
 
     // MARK: - v5: Cover 上传

@@ -585,6 +585,10 @@ enum L10n {
     static var wishSettingTypeNoTextSub: String { localize("wishSetting.type.noTextSub", comment: "No text chip 副标题") }
     static var wishSettingRuleAgreeShort: String { localize("wishSetting.ruleAgreeShort", comment: "勾选行 I agree") }
     static var wishSettingRuleFooter: String { localize("wishSetting.ruleFooter", comment: "合规规范尾部承诺") }
+    // 心愿承诺规范弹窗（对齐 H5 wishlist-rule-modal.vue）
+    static var wishRuleModalTitle: String { localize("wishRuleModal.title", comment: "心愿承诺规范弹窗标题") }
+    static var wishRuleModalCheck: String { localize("wishRuleModal.check", comment: "我已阅读并同意上述规范") }
+    static var wishRuleModalAgree: String { localize("wishRuleModal.agree", comment: "同意并发布") }
 
     // MARK: - LiveRoom 直播间
     static var liveRoomPermissionAlertTitle: String { localize("liveRoom.permissionAlertTitle", comment: "相机权限弹窗标题") }

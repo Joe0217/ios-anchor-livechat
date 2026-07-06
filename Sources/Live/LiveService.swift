@@ -158,6 +158,12 @@ enum LiveService {
         _ = try await APIClient.shared.post("/api/agora/live/endLiveRoom", body: ["endType": endType])
     }
 
+    /// 心愿承诺规范同意（对齐 H5 `liveWishfulGiftAgreement` api/live/index.ts:16 + wishlist-rule-modal.vue:16）
+    /// 后端记录用户已同意合规规范；失败不阻塞开播（H5 也是 `catch { silent }`）
+    static func clickWishAgreement() async throws {
+        _ = try await APIClient.shared.post("/api/agora/live/clickAgreement", body: [:])
+    }
+
     /// 获取云信聊天室服务器地址（独立模式 enter 需要；当前未用）。
     static func getChatRoomAddress(roomId: String) async throws -> [String] {
         let data = try await APIClient.shared.post("/api/agora/live/getChatRoomAddress",
