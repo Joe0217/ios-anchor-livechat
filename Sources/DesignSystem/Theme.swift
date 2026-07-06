@@ -44,6 +44,10 @@ enum Theme {
         static let cardFill         = Color(hex: 0x2B213E)
         /// 卡片内细分隔线
         static let divider          = Color(hex: 0x3A3150)
+        /// 朋友圈评论块背景（比 cardFill 更深一档，对齐 H5 `#F5F7F8` 反色语义）
+        static let momentCommentsBackground = Color(hex: 0x1A1428)
+        /// 朋友圈评论昵称色（H5 `text-color-purple`）
+        static let momentCommentNickname    = Color(hex: 0xA961FF)
         /// 主文本（标题 / 收益数字）
         static let textPrimary      = Color.white
         /// 次要文本（caption / 说明）
@@ -193,6 +197,86 @@ enum Theme {
         static let userProfilePlaceholderBg       = Color.white.opacity(0.1)
         /// 菜单 / popup 黑底（H5 CMenuPop 风格）
         static let userProfileMenuBackground      = Color(hex: 0x1F1830)
+
+        // MARK: LiveRoom 直播间（设计稿还原）
+        /// 顶部主播胶囊 / 观众数徽章 / 底部输入框 通用半透明黑底
+        static let liveRoomChipBackground   = Color.black.opacity(0.4)
+        /// 顶部主播胶囊内主播名（14pt medium）
+        static let liveRoomAnchorName       = Color.white
+        /// 顶部主播胶囊内热度 / 时长（10pt）
+        static let liveRoomAnchorMeta       = Color.white.opacity(0.85)
+        /// Task/Diamond/Rank 徽章 row 底色（黑 30%）
+        static let liveRoomBadgeBackground  = Color.black.opacity(0.3)
+        /// 顶部钻石 / 排行 数字色
+        static let liveRoomBadgeNumber      = Color.white
+        /// 顶部 "No.27 >" 数字色（金黄）
+        static let liveRoomRankNumber       = Color(hex: 0xFFD700)
+        /// Underway 徽章底色（红色胶囊）
+        static let liveRoomUnderwayFill     = Color(hex: 0xF43F3F)
+        /// Underway 徽章文字（白）
+        static let liveRoomUnderwayText     = Color.white
+        /// Wishlist 卡片背景（半透黑）
+        static let liveRoomWishlistBg       = Color.black.opacity(0.35)
+        /// Wishlist 数字（金黄）
+        static let liveRoomWishlistNumber   = Color(hex: 0xFFE066)
+        /// Wishlist 进度条底色
+        static let liveRoomWishlistTrack    = Color.white.opacity(0.2)
+        /// Wishlist 进度条填充（金黄）
+        static let liveRoomWishlistProgress = Color(hex: 0xFFE066)
+        /// 公屏消息背景（半透黑胶囊）
+        static let liveRoomChatBackground   = Color.black.opacity(0.35)
+        /// 公屏消息 - 昵称粉（对齐 H5 color-#FD79C1）
+        static let liveRoomChatNickname     = Color(hex: 0xFD79C1)
+        /// 公屏消息 - 昵称高亮绿（贡献 top / to 用户）
+        static let liveRoomChatNicknameHi   = Color(hex: 0x1AFFCD)
+        /// 公屏消息 - 正文白
+        static let liveRoomChatText         = Color.white
+        /// 公屏消息 - 翻译副文（灰白）
+        static let liveRoomChatTranslation  = Color.white.opacity(0.7)
+        /// 公屏消息 - Host 徽章底色（红）
+        static let liveRoomChatHostBadge    = Color(hex: 0xF43F3F)
+        /// 公屏消息 - 等级徽章渐变起（紫）
+        static let liveRoomChatLevelStart   = Color(hex: 0x7C3AED)
+        /// 公屏消息 - 等级徽章渐变止（品红）
+        static let liveRoomChatLevelEnd     = Color(hex: 0xEC4899)
+        /// Pavate Call 按钮文字色（品红 / 与 H5 FD79C1 对齐）
+        static let liveRoomPrivateCallText  = Color(hex: 0xFD79C1)
+        /// 底部工具栏输入框背景（黑 30%）
+        static let liveRoomInputBackground  = Color.black.opacity(0.3)
+        /// 底部工具栏输入框 placeholder 文字（白 50%）
+        static let liveRoomInputPlaceholder = Color.white.opacity(0.5)
+        /// 底部快捷礼物 tile 底色
+        static let liveRoomGiftTileBg       = Color.black.opacity(0.35)
+        /// 底部快捷礼物 tile 文字
+        static let liveRoomGiftTileText     = Color.white
+        /// 底部快捷礼物 "Free" 蓝
+        static let liveRoomGiftFreeColor    = Color(hex: 0x1AFFCD)
+
+        // MARK: Match tab（L 里程碑设计稿还原）
+        /// Match tab 选中态文字（黄，对齐 profileTabActive）
+        static let matchTabSelected     = Color(hex: 0xFFE600)
+        /// Match tab 未选中态文字（白）
+        static let matchTabUnselected   = Color.white
+        /// 跑马灯胶囊左端渐变起点（对齐 H5 c-marquee 内层 90deg #E40132）
+        static let matchMarqueeBgStart  = Color(hex: 0xE40132)
+        /// 跑马灯胶囊右端渐变止点（对齐 H5 90deg #6021BD）
+        static let matchMarqueeBgEnd    = Color(hex: 0x6021BD)
+        /// 跑马灯胶囊描边渐变起（对齐 H5 border-style 90deg #FF0026）
+        static let matchMarqueeBorderStart = Color(hex: 0xFF0026)
+        /// 跑马灯胶囊描边渐变止（对齐 H5 90deg #FF0088）
+        static let matchMarqueeBorderEnd   = Color(hex: 0xFF0088)
+        /// 跑马灯 caller 昵称绿（对齐 H5 text-#15FF3E）
+        static let matchMarqueeCaller   = Color(hex: 0x15FF3E)
+        /// 跑马灯 receiver 昵称黄（对齐 H5 text-#FFE600）
+        static let matchMarqueeReceiver = Color(hex: 0xFFE600)
+        /// 跑马灯正文白
+        static let matchMarqueeText     = Color.white
+        /// 主副标题白
+        static let matchTitle           = Color.white
+        /// 副标描述白 80%
+        static let matchSubtitle        = Color.white.opacity(0.8)
+        /// 页面背景（顶部渐变到 screenBackground）
+        static let matchPageBackground  = screenBackground
     }
 
     // MARK: - 间距
@@ -367,6 +451,96 @@ enum Theme {
         static let userProfilePopupVPadding: CGFloat = 24
         static let userProfilePopupMsgHPadding: CGFloat = 24
         static let userProfilePopupMsgBottomGap: CGFloat = 20
+
+        // MARK: LiveRoom 直播间（设计稿还原）
+        /// 屏幕左右安全边距
+        static let liveRoomScreenHPadding: CGFloat  = 12
+        /// 顶部主播胶囊内 padding
+        static let liveRoomChipHPadding: CGFloat    = 8
+        static let liveRoomChipVPadding: CGFloat    = 6
+        /// 顶部胶囊头像尺寸
+        static let liveRoomChipAvatar: CGFloat      = 28
+        /// 顶部两个 Top 观众头像尺寸
+        static let liveRoomTopViewerSize: CGFloat   = 32
+        /// 顶部观众数徽章尺寸
+        static let liveRoomViewerCountSize: CGFloat = 32
+        /// 关闭 X 按钮尺寸
+        static let liveRoomCloseSize: CGFloat       = 24
+        /// Task/Diamond/Rank 徽章 tile 高度
+        static let liveRoomBadgeHeight: CGFloat     = 28
+        /// Task/Diamond/Rank 徽章 tile 之间 gap
+        static let liveRoomBadgeGap: CGFloat        = 6
+        /// Underway 徽章尺寸（红胶囊）
+        static let liveRoomUnderwayHeight: CGFloat  = 24
+        static let liveRoomUnderwayHPadding: CGFloat = 10
+        /// Wishlist 卡片 padding
+        static let liveRoomWishlistPadding: CGFloat = 8
+        /// Wishlist 内礼物图尺寸
+        static let liveRoomWishlistGiftSize: CGFloat = 32
+        /// Wishlist 进度条高度
+        static let liveRoomWishlistTrackH: CGFloat  = 4
+        /// 公屏消息之间 gap
+        static let liveRoomChatMsgGap: CGFloat      = 4
+        /// 公屏消息内 padding
+        static let liveRoomChatHPadding: CGFloat    = 10
+        static let liveRoomChatVPadding: CGFloat    = 6
+        /// 公屏消息最大宽度占屏幕比
+        static let liveRoomChatMaxWidthRatio: CGFloat = 0.7
+        /// Pavate Call 按钮尺寸
+        static let liveRoomPrivateCallSize: CGFloat = 56
+        /// 底部工具栏 gap
+        static let liveRoomToolbarGap: CGFloat      = 10
+        /// 底部工具栏圆按钮尺寸
+        static let liveRoomToolButtonSize: CGFloat  = 36
+        /// 底部输入框高度
+        static let liveRoomInputHeight: CGFloat     = 36
+        /// 底部输入框 padding
+        static let liveRoomInputHPadding: CGFloat   = 14
+        /// 底部快捷礼物 tile 尺寸
+        static let liveRoomGiftTileSize: CGFloat    = 44
+        /// 底部快捷礼物 row gap
+        static let liveRoomGiftTileGap: CGFloat     = 6
+
+        // MARK: Match tab（L 里程碑设计稿还原）
+        /// 跑马灯胶囊高度（对齐 H5 h-40）
+        static let matchMarqueeHeight: CGFloat  = 40
+        /// 跑马灯胶囊左右内边距（对齐 H5 px-12）
+        static let matchMarqueeHPadding: CGFloat = 12
+        /// 跑马灯胶囊左右外边距（左右预留呼吸空间）
+        static let matchMarqueeHMargin: CGFloat = 20
+        /// 跑马灯 caller/receiver 头像尺寸（对齐 H5 w20 h20）
+        static let matchMarqueeAvatarSize: CGFloat = 20
+        /// 跑马灯 call 图标宽（对齐 H5 w-33 h-10）
+        static let matchMarqueeCallIconWidth: CGFloat = 33
+        static let matchMarqueeCallIconHeight: CGFloat = 10
+        /// 顶部 tab（Live/List/Match/Circle）行高
+        static let matchTopTabBarHeight: CGFloat = 44
+        /// 顶部 tab 之间水平间距
+        static let matchTopTabGap: CGFloat = 20
+        /// 顶部 tab 选中标志（小圆点）尺寸
+        static let matchTabSelectedDot: CGFloat = 6
+        /// 顶部右侧图标（信号/刷新/排行榜）尺寸
+        static let matchTopIconSize: CGFloat = 24
+        /// 顶部右侧图标之间间距
+        static let matchTopIconGap: CGFloat = 12
+        /// 主视觉图高度（对齐 H5 h-410）
+        static let matchHeroHeight: CGFloat = 410
+        /// 主标题（"6 Matches Found!"）字号
+        static let matchTitleSize: CGFloat = 20
+        /// 主标题上下间距
+        static let matchTitleTopGap: CGFloat = 8
+        static let matchTitleBottomGap: CGFloat = 12
+        /// 底部小头像 grid：头像尺寸 + 间距
+        static let matchRecentAvatarSize: CGFloat = 32
+        static let matchRecentAvatarGap: CGFloat  = 8
+        /// 描述文字上下间距
+        static let matchSubtitleTopGap: CGFloat = 8
+        /// 匹配开关按钮尺寸（对齐 H5 h-58 w-58）
+        static let matchButtonSize: CGFloat = 58
+        /// 匹配开关按钮距底部（避开 tab bar，用户体验预留）
+        static let matchButtonBottomInset: CGFloat = 100
+        /// 匹配开关按钮距右侧
+        static let matchButtonTrailingInset: CGFloat = 20
     }
 
     // MARK: - 圆角
@@ -394,6 +568,27 @@ enum Theme {
         // MARK: Profile 页（设计稿还原）
         /// 网格 cell 圆角
         static let profileGridCell: CGFloat = 10
+
+        // MARK: LiveRoom 直播间（设计稿还原）
+        /// 顶部主播胶囊 / 观众数徽章圆角
+        static let liveRoomChip: CGFloat        = 20
+        /// Task/Diamond/Rank 徽章圆角
+        static let liveRoomBadge: CGFloat       = 14
+        /// Underway 徽章圆角
+        static let liveRoomUnderway: CGFloat    = 6
+        /// Wishlist 卡片圆角
+        static let liveRoomWishlist: CGFloat    = 12
+        /// 公屏消息圆角
+        static let liveRoomChatBubble: CGFloat  = 12
+        /// 底部输入框圆角
+        static let liveRoomInput: CGFloat       = 18
+        /// 底部快捷礼物 tile 圆角
+        static let liveRoomGiftTile: CGFloat    = 10
+
+        // MARK: Match tab（L 里程碑设计稿还原）
+        /// 跑马灯胶囊圆角（对齐 H5 rounded-12 = 12pt / 但 h-40 是半高 20 更接近视觉）
+        static let matchMarquee: CGFloat = 20
+        /// 匹配开关按钮不用圆角（直接切图圆形，无需 clip）
     }
 
     // MARK: - 字号
@@ -502,6 +697,36 @@ enum Theme {
         static let userProfilePopupTitle  = Font.system(size: 16, weight: .semibold)
         /// 菜单项 / ActionBar 按钮
         static let userProfileMenuItem    = Font.system(size: 15, weight: .medium)
+
+        // MARK: LiveRoom 直播间（设计稿还原）
+        /// 顶部主播胶囊内主播名
+        static let liveRoomAnchorName    = Font.system(size: 13, weight: .medium)
+        /// 顶部主播胶囊内热度 + 时长
+        static let liveRoomAnchorMeta    = Font.system(size: 10, weight: .regular)
+        /// 顶部观众数徽章数字
+        static let liveRoomViewerCount   = Font.system(size: 10, weight: .bold)
+        /// Task/Diamond/Rank 徽章文字
+        static let liveRoomBadgeText     = Font.system(size: 12, weight: .medium)
+        /// Underway 徽章文字
+        static let liveRoomUnderwayText  = Font.system(size: 11, weight: .semibold)
+        /// Wishlist 卡片数字
+        static let liveRoomWishlistNumber = Font.system(size: 12, weight: .bold)
+        /// Wishlist 卡片进度文字
+        static let liveRoomWishlistProgress = Font.system(size: 10, weight: .regular)
+        /// 公屏消息 - 昵称
+        static let liveRoomChatNickname  = Font.system(size: 12, weight: .semibold)
+        /// 公屏消息 - 正文
+        static let liveRoomChatText      = Font.system(size: 12, weight: .regular)
+        /// 公屏消息 - Host 徽章文字
+        static let liveRoomChatHostBadge = Font.system(size: 9, weight: .bold)
+        /// 公屏消息 - 等级徽章文字
+        static let liveRoomChatLevel     = Font.system(size: 9, weight: .bold)
+        /// Pavate Call 按钮文字
+        static let liveRoomPrivateCall   = Font.system(size: 11, weight: .semibold)
+        /// 底部输入框 placeholder
+        static let liveRoomInputPlaceholder = Font.system(size: 13, weight: .regular)
+        /// 底部快捷礼物 tile 价格
+        static let liveRoomGiftPrice     = Font.system(size: 10, weight: .semibold)
     }
 
     // MARK: - 渐变与段位光谱
@@ -591,6 +816,20 @@ enum Theme {
         /// Invite friends banner 横向渐变（紫→粉）
         static let liveListInviteBanner = LinearGradient(
             colors: [Palette.liveListInviteBgA, Palette.liveListInviteBgB],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+
+        // MARK: Match tab（L 里程碑设计稿还原）
+        /// 跑马灯胶囊背景（对齐 H5 90deg #E40132 → #6021BD）
+        static let matchMarqueeBg = LinearGradient(
+            colors: [Palette.matchMarqueeBgStart, Palette.matchMarqueeBgEnd],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        /// 跑马灯胶囊描边（对齐 H5 border-style 90deg #FF0026 → #FF0088）
+        static let matchMarqueeBorder = LinearGradient(
+            colors: [Palette.matchMarqueeBorderStart, Palette.matchMarqueeBorderEnd],
             startPoint: .leading,
             endPoint: .trailing
         )

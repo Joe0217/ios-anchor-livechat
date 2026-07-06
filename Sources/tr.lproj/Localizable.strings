@@ -307,7 +307,7 @@
 "wishRuleModal.agree"                = "Kabul et ve yayınla";
 "wishRuleModal.content"              = "Bir dilek listesi yayınlayarak, dileği yerine getiren izleyicilere vaat edilen ödülleri vermeyi kabul edersiniz. İhlaller hesabın askıya alınmasına ve yayın haklarının kaybedilmesine neden olabilir.";
 
-// MARK: - 首次开播规则页（严格对齐 H5 locales/tr.json live.* + 7 guideline H5 tr 缺失暂用 tr 翻译）
+// MARK: - 首次开播规则页（严格对齐 H5 locales/tr.json live.* + 7 条 guideline H5 tr 缺失，暂用 en fallback）
 "firstLiveRule.navTitle"         = "";
 "firstLiveRule.beforeStartTitle" = "Başlamadan Önce İlk Olarak";
 "firstLiveRule.beforeStartDesc"  = "Canlı yayın özelliğimiz aracılığıyla bir yayın başlatabilir ve kitlenizle etkileşim kurabilirsiniz. İzleyiciler size sanal hediyeler göndererek destek olabilir, bu da sizin için gelire dönüştürülecektir.\n\nAyrıca, günlük yayın saatlerine ve alınan hediye miktarına dayalı olarak yayıncılara ek ödüller sunuyoruz. Belirli standartları karşılarsanız, ek ödüller almaya hak kazanırsınız. Spesifik detaylar için lütfen acentenize veya yöneticinize danışın.";
@@ -363,6 +363,8 @@
 "liveRoom.comingSoon.privateCall" = "Özel arama yakında";
 "liveRoom.comingSoon.gift"        = "Hediye mağazası yakında";
 "liveRoom.comingSoon.send"        = "Sohbet gönderme yakında";
+"liveRoom.roulette.a11y"          = "Etkileşim çarkı";
+"liveRoom.comingSoon.roulette"    = "Etkileşim çarkı yakında";
 
 /* LiveRoom H5 interaction alignment (2026-07-06 iteration 2) */
 "liveRoom.tool.message"           = "Mesajlar";
@@ -764,3 +766,25 @@
 "beautySettings.recoverConfirm.message"                     = "Current adjustments will be cleared.";
 "beautySettings.recoverConfirm.yes"                         = "Reset";
 "beautySettings.recoverConfirm.no"                          = "Cancel";
+
+// MARK: - Match tab（L 里程碑）
+"match.marquee.callStarted"      = "Görüntülü Arama Başladı.";
+"match.marquee.empty"            = "Daha fazla insanla tanışmak için eşleştirmeye başla";
+"match.marquee.a11y.callFormat"  = "%@, %@'a çağrı yaptı";
+"match.title.matchesFound"       = "%d Eşleşme Bulundu!";
+"match.subtitle.description"     = "Son eşleşmelerin yukarıda. Sohbet etmek için dokun ve seni aramaları için cezbet.";
+"match.userList.empty"           = "Henüz eşleşme yok";
+"match.userCard.videoPrice"      = "%d/dk";
+"match.userCard.close"           = "Kapat";
+"match.button.a11y.turnOn"       = "Eşleştirmeyi aç";
+"match.button.a11y.turnOff"      = "Eşleştirmeyi kapat";
+
+// Match toast
+"match.toast.networkError"       = "Ağ hatası, lütfen tekrar deneyin";
+"match.toast.noFaceDetected"     = "Yüz algılanamadı";
+"match.toast.exceedCount"        = "Günlük eşleşme sınırına ulaşıldı";
+"match.toast.turnOnFailed"       = "Eşleştirme açılamadı";
+"match.toast.turnOnSucceed"      = "Eşleştirme açıldı";
+"match.toast.turnOffSucceed"     = "Eşleştirme kapatıldı";
+"match.toast.cameraStartFailed"  = "Kamera başlatılamadı";
+"match.toast.cameraUnavailable"  = "Kamera kullanılamıyor";

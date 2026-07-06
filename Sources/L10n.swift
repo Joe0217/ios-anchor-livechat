@@ -719,6 +719,10 @@ enum L10n {
     /// Coming soon 提示（公屏发送）
     static var liveRoomComingSoonSend: String { localize("liveRoom.comingSoon.send", comment: "点击 Say hi 发送按钮占位提示") }
 
+    // MARK: LiveRoom 顶部互动转盘（对齐 H5 liveRoomTop.vue rouletteOpen/Close.webp，2026-07-06 补入）
+    static var liveRoomRouletteA11y: String { localize("liveRoom.roulette.a11y", comment: "顶部互动转盘按钮 a11y") }
+    static var liveRoomComingSoonRoulette: String { localize("liveRoom.comingSoon.roulette", comment: "点击转盘按钮占位提示") }
+
     // MARK: - LiveRoom H5 交互对齐（2026-07-06 restore-design iteration 2）
     /// 底部工具栏 4 圆按钮（对齐 H5 msg/gift/setting 3 图标 + PKEntryBtn）
     static var liveRoomToolMessage:  String { localize("liveRoom.tool.message",  comment: "底部消息按钮 a11y") }
@@ -999,5 +1003,38 @@ enum L10n {
     /// 匹配按钮 a11y：关闭匹配
     static var matchButtonA11yTurnOff: String {
         localize("match.button.a11y.turnOff", comment: "关闭匹配 a11y")
+    }
+
+    // MARK: - Match toast（L 里程碑 · MatchStore 状态迁移 toast 文案）
+    static var matchToastNetworkError: String {
+        localize("match.toast.networkError", comment: "网络失败 toast")
+    }
+    static var matchToastNoFaceDetected: String {
+        localize("match.toast.noFaceDetected", comment: "人脸识别失败被封禁 toast")
+    }
+    static var matchToastExceedCount: String {
+        localize("match.toast.exceedCount", comment: "超过匹配次数上限 toast")
+    }
+    static var matchToastTurnOnFailed: String {
+        localize("match.toast.turnOnFailed", comment: "开启匹配失败 toast")
+    }
+    static var matchToastTurnOnSucceed: String {
+        localize("match.toast.turnOnSucceed", comment: "开启匹配成功 toast")
+    }
+    static var matchToastTurnOffSucceed: String {
+        localize("match.toast.turnOffSucceed", comment: "关闭匹配成功 toast")
+    }
+    static var matchToastCameraStartFailed: String {
+        localize("match.toast.cameraStartFailed", comment: "摄像头开启失败 toast")
+    }
+    static var matchToastCameraUnavailable: String {
+        localize("match.toast.cameraUnavailable", comment: "摄像头长时间中断未恢复 toast")
+    }
+    /// 跑马灯 VoiceOver 语义化文案（避免用 "→" 箭头符号，RTL 无歧义）。
+    /// %@ = caller nickname / %@ = receiver nickname
+    static func matchMarqueeA11yCallFormat(caller: String, receiver: String) -> String {
+        String(format: localize("match.marquee.a11y.callFormat",
+                                comment: "跑马灯 VoiceOver: %@ called %@"),
+               caller, receiver)
     }
 }

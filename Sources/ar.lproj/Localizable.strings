@@ -363,6 +363,8 @@
 "liveRoom.comingSoon.privateCall" = "المكالمة الخاصة قريبًا";
 "liveRoom.comingSoon.gift"        = "متجر الهدايا قريبًا";
 "liveRoom.comingSoon.send"        = "إرسال الدردشة قريبًا";
+"liveRoom.roulette.a11y"          = "عجلة التفاعل";
+"liveRoom.comingSoon.roulette"    = "عجلة التفاعل قريبًا";
 
 /* LiveRoom H5 interaction alignment (2026-07-06 iteration 2) */
 "liveRoom.tool.message"           = "الرسائل";
@@ -764,3 +766,25 @@
 "beautySettings.recoverConfirm.message"                     = "Current adjustments will be cleared.";
 "beautySettings.recoverConfirm.yes"                         = "Reset";
 "beautySettings.recoverConfirm.no"                          = "Cancel";
+
+// MARK: - Match tab（L 里程碑）
+"match.marquee.callStarted"      = "بدأت مكالمة الفيديو.";
+"match.marquee.empty"            = "ابدأ المطابقة لمقابلة المزيد من الأشخاص";
+"match.marquee.a11y.callFormat"  = "اتصل %@ بـ %@";
+"match.title.matchesFound"       = "تم العثور على %d مطابقة!";
+"match.subtitle.description"     = "مطابقاتك الأخيرة أعلاه. اضغط للدردشة وجذبهم لمكالمتك.";
+"match.userList.empty"           = "لا توجد مطابقات بعد";
+"match.userCard.videoPrice"      = "%d/دقيقة";
+"match.userCard.close"           = "إغلاق";
+"match.button.a11y.turnOn"       = "تشغيل المطابقة";
+"match.button.a11y.turnOff"      = "إيقاف المطابقة";
+
+// Match toast
+"match.toast.networkError"       = "خطأ في الشبكة، يرجى المحاولة مرة أخرى";
+"match.toast.noFaceDetected"     = "لم يتم اكتشاف الوجه";
+"match.toast.exceedCount"        = "تم الوصول إلى الحد اليومي للمطابقات";
+"match.toast.turnOnFailed"       = "فشل تشغيل المطابقة";
+"match.toast.turnOnSucceed"      = "تم تشغيل المطابقة";
+"match.toast.turnOffSucceed"     = "تم إيقاف المطابقة";
+"match.toast.cameraStartFailed"  = "فشل تشغيل الكاميرا";
+"match.toast.cameraUnavailable"  = "الكاميرا غير متوفرة";
