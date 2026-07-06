@@ -301,10 +301,11 @@
 "wishSetting.ruleAgreeShort"         = "Kabul ediyorum";
 "wishSetting.ruleFooter"             = "Hediyeleri adil ve içten kullanmayı ve platform kurallarına uymayı taahhüt ediyoruz.";
 
-// MARK: - 心愿承诺规范弹窗
-"wishRuleModal.title"                = "Dilek Taahhüt Kuralları";
+// MARK: - 心愿承诺规范弹窗（严格对齐 H5 locales/tr.json live.ruleTitle/ruleContent/ruleCheck + other.agree）
+"wishRuleModal.title"                = "Dilek Listesi Taahhüdü";
+"wishRuleModal.content"              = "Bu dilek listesindeki taahhütleri yerine getirmeyi taahhüt ediyorum ve izleyicileri herhangi bir şekilde hediye göndermeleri için kandırmayacağım veya yanıltmayacağım.";
 "wishRuleModal.check"                = "Yukarıdaki kuralları okudum ve kabul ediyorum";
-"wishRuleModal.agree"                = "Kabul et ve yayınla";
+"wishRuleModal.agree"                = "Kabul Et ve Yayınla";
 
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "Kamera İzni Gerekli";

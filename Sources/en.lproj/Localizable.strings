@@ -299,10 +299,11 @@
 "wishSetting.ruleAgreeShort"         = "I agree";
 "wishSetting.ruleFooter"             = "We promise to use the gifts fairly and sincerely, and to abide by the platform rules.";
 
-// MARK: - 心愿承诺规范弹窗
-"wishRuleModal.title"                = "Wish Commitment Guidelines";
-"wishRuleModal.check"                = "I have read and agree to the above guidelines";
-"wishRuleModal.agree"                = "Agree and Publish";
+// MARK: - 心愿承诺规范弹窗（严格对齐 H5 locales/en.json live.ruleTitle/ruleContent/ruleCheck + other.agree）
+"wishRuleModal.title"                = "Wish List Commitment";
+"wishRuleModal.content"              = "I promise to faithfully fulfill the commitments made in this wish list and will not deceive or mislead viewers into sending gifts in any way. The platform reserves the right to impose penalties for violations.";
+"wishRuleModal.check"                = "I have read and agree to the above rules";
+"wishRuleModal.agree"                = "Agree & Publish";
 
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "Camera Permission Required";

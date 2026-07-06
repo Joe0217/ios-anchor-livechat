@@ -19,7 +19,8 @@ struct WishRuleModal: View {
                 .padding(.top, 20)
 
             ScrollView {
-                Text(L10n.wishSettingRuleDoc)
+                // 严格对齐 H5 live.ruleContent（不复用 wishSetting.ruleDoc，语义与文案都不同）
+                Text(L10n.wishRuleModalContent)
                     .font(.footnote)
                     .foregroundStyle(.white.opacity(0.75))
                     .fixedSize(horizontal: false, vertical: true)
