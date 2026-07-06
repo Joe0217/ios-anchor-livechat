@@ -33,51 +33,14 @@ struct LiveListUserCard: View {
         .accessibilityLabel(accessibilityText)
     }
 
-    /// 圆形头像 + 右下绿色在线圆点。`icon` 走 AsyncImage；nil/失败回退占位渐变 + 系统人像。
+    /// 圆形头像 + 右下绿色在线圆点。走公共 `AvatarView`；nil/失败自动回退用户默认头像。
     private var avatar: some View {
-        ZStack(alignment: .bottomTrailing) {
-            avatarImage
-                .frame(width: Theme.Metric.liveListAvatarSize, height: Theme.Metric.liveListAvatarSize)
-                .clipShape(Circle())
-
-            Circle()
-                .fill(Theme.Palette.liveListOnlineDot)
-                .frame(width: 12, height: 12)
-                .overlay(Circle().strokeBorder(Color.black.opacity(0.3), lineWidth: 1.5))
-                .padding(2)
-        }
-    }
-
-    @ViewBuilder
-    private var avatarImage: some View {
-        if let icon = anchor.icon, let url = URL(string: icon) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                default:
-                    avatarPlaceholder
-                }
-            }
-        } else {
-            avatarPlaceholder
-        }
-    }
-
-    private var avatarPlaceholder: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: 0xE7B5C8), Color(hex: 0x6E3A4A)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-            Image(systemName: "person.fill")
-                .font(.system(size: 26))
-                .foregroundStyle(.white.opacity(0.5))
-        }
+        AvatarView(
+            urlString: anchor.icon,
+            size: Theme.Metric.liveListAvatarSize,
+            kind: .user,
+            showsOnlineDot: true
+        )
     }
 
     private var infoColumn: some View {

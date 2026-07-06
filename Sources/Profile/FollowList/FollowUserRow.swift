@@ -29,21 +29,9 @@ struct FollowUserRow: View {
     }
 
     private var avatar: some View {
-        // 他人头像：persistent=false，view dismount 后即丢，不污染缓存
-        CachedAsyncImage(url: URL(string: user.icon ?? ""), contentMode: .fill, persistent: false) {
-            Color.gray.opacity(0.3)
-                .overlay(
-                    Image(systemName: "person.crop.circle.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .foregroundStyle(.white.opacity(0.6))
-                        .padding(6)
-                )
-        }
-        .frame(width: 48, height: 48)
-        .clipShape(Circle())
-        .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
-        .accessibilityHidden(true)
+        AvatarView(urlString: user.icon, size: 48, kind: .user)
+            .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
+            .accessibilityHidden(true)
     }
 
     private var metaLine: some View {

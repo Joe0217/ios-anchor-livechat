@@ -282,11 +282,9 @@ struct UserProfileView: View {
         ZStack {
             // 三色光环：3 圈 stroke 叠加
             avatarRing
-            // 头像（圆形）
-            avatarImage(icon: detail.icon)
-                .frame(width: Theme.Metric.userProfileAvatarSize,
-                       height: Theme.Metric.userProfileAvatarSize)
-                .clipShape(Circle())
+            AvatarView(urlString: detail.icon,
+                       size: Theme.Metric.userProfileAvatarSize,
+                       kind: .user)
         }
         .frame(width: Theme.Metric.userProfileAvatarSize + 12,
                height: Theme.Metric.userProfileAvatarSize + 12)
@@ -311,33 +309,6 @@ struct UserProfileView: View {
                        + Theme.Metric.userProfileAvatarRingGap * 2,
                    height: Theme.Metric.userProfileAvatarSize
                        + Theme.Metric.userProfileAvatarRingGap * 2)
-    }
-
-    @ViewBuilder
-    private func avatarImage(icon: String?) -> some View {
-        if let s = icon, let url = URL(string: s) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                default:
-                    avatarPlaceholder
-                }
-            }
-        } else {
-            avatarPlaceholder
-        }
-    }
-
-    private var avatarPlaceholder: some View {
-        ZStack {
-            Theme.Palette.blocklistAvatarFallback
-            Image(systemName: "person.crop.circle.fill")
-                .resizable()
-                .scaledToFit()
-                .foregroundColor(.white.opacity(0.4))
-                .padding(8)
-        }
     }
 
     // MARK: - 昵称 + gender icon
@@ -490,11 +461,11 @@ struct UserProfileView: View {
                 let size = proxy.size.width * 0.8
                 Group {
                     if let s = gift.iconUrl, let url = URL(string: s) {
-                        AsyncImage(url: url) { phase in
-                            switch phase {
-                            case .success(let image): image.resizable().scaledToFit()
-                            default:                  giftIconPlaceholder
-                            }
+                        CachedAsyncImage(url: url,
+                                         contentMode: .fit,
+                                         persistent: true,
+                                         cdn: (.gift, .fit)) {
+                            giftIconPlaceholder
                         }
                     } else {
                         giftIconPlaceholder

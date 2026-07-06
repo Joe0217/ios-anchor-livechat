@@ -263,14 +263,7 @@ private struct PKAnchorRow: View {
     }
 
     private var avatar: some View {
-        AsyncImage(url: URL(string: anchor.displayAvatar ?? "")) { phase in
-            switch phase {
-            case .success(let img): img.resizable().scaledToFill()
-            default: Color.white.opacity(0.15)
-            }
-        }
-        .frame(width: 40, height: 40)
-        .clipShape(Circle())
+        AvatarView(urlString: anchor.displayAvatar, size: 40, kind: .anchor)
     }
 }
 

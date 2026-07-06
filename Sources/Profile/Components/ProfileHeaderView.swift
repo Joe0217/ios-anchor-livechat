@@ -58,23 +58,14 @@ struct ProfileHeaderView: View {
 
     private var avatar: some View {
         // 外环 72，内图 64：外圈描边在 72pt 圆上，内图 64pt 圆居中显示，单边间距 4pt
-        // CachedAsyncImage 命中内存缓存时**首次渲染就是最终图**，切 tab 回来无闪烁
-        ZStack {
-            CachedAsyncImage(url: vm.iconURL, contentMode: .fill) {
-                Image(systemName: "person.crop.circle.fill")
-                    .resizable()
-                    .scaledToFill()
-                    .foregroundStyle(.white.opacity(0.6))
-            }
-            .frame(width: Theme.Metric.profileAvatarInner, height: Theme.Metric.profileAvatarInner)
-            .clipShape(Circle())
-        }
-        .frame(width: Theme.Metric.profileAvatarSize, height: Theme.Metric.profileAvatarSize)
-        .overlay(
-            Circle()
-                .strokeBorder(Theme.Gradients.avatarRing, lineWidth: Theme.Metric.profileAvatarRing)
-        )
-        .accessibilityHidden(true)
+        // 本人头像走 persistent=true，NSCache 命中后切 tab 回来无闪烁
+        AvatarView(url: vm.iconURL, size: Theme.Metric.profileAvatarInner, kind: .anchor, persistent: true)
+            .frame(width: Theme.Metric.profileAvatarSize, height: Theme.Metric.profileAvatarSize)
+            .overlay(
+                Circle()
+                    .strokeBorder(Theme.Gradients.avatarRing, lineWidth: Theme.Metric.profileAvatarRing)
+            )
+            .accessibilityHidden(true)
     }
 
     private var nameAndMeta: some View {

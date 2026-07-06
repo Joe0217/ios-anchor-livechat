@@ -34,35 +34,9 @@ struct BlocklistRow: View {
 
     // MARK: - 头像
 
-    @ViewBuilder
     private var avatar: some View {
-        Group {
-            if let s = item.icon, let url = URL(string: s) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        avatarFallback
-                    }
-                }
-            } else {
-                avatarFallback
-            }
-        }
-        .frame(width: Theme.Metric.blocklistAvatarSize, height: Theme.Metric.blocklistAvatarSize)
-        .clipShape(Circle())
-        .accessibilityHidden(true)
-    }
-
-    private var avatarFallback: some View {
-        ZStack {
-            Circle().fill(Theme.Palette.blocklistAvatarFallback)
-            Image(systemName: "person.crop.circle.fill")
-                .resizable()
-                .scaledToFit()
-                .foregroundStyle(.white.opacity(0.5))
-        }
+        AvatarView(urlString: item.icon, size: Theme.Metric.blocklistAvatarSize, kind: .user)
+            .accessibilityHidden(true)
     }
 
     // MARK: - 主信息（昵称 + 位置·年龄）

@@ -88,22 +88,8 @@ struct PartySeatItemView: View {
 
     // MARK: - 子视图
 
-    @ViewBuilder
     private var occupiedContent: some View {
-        if let icon = seat.avatar, !icon.isEmpty, let url = URL(string: icon) {
-            CachedAsyncImage(url: url, persistent: false) {
-                Image(systemName: "person.crop.circle.fill")
-                    .resizable()
-                    .foregroundColor(.gray.opacity(0.4))
-            }
-            .frame(width: 56, height: 56)
-            .clipShape(Circle())
-        } else {
-            Image(systemName: "person.crop.circle.fill")
-                .resizable()
-                .frame(width: 56, height: 56)
-                .foregroundColor(.gray.opacity(0.5))
-        }
+        AvatarView(urlString: seat.avatar, size: 56, kind: .user)
     }
 
     /// 麦克风状态指示（底 trailing，RTL 自动镜像到底 leading 视觉位）

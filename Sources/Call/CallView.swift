@@ -56,7 +56,9 @@ private struct CallWaitingView: View {
             Spacer()
 
             // 对方头像 / 名字
-            RemoteAvatar(icon: store.current.remoteIcon, nickname: store.current.remoteNickname)
+            RemoteAvatar(icon: store.current.remoteIcon,
+                         nickname: store.current.remoteNickname,
+                         headFrame: store.current.remoteHeadFrame)
 
             Text(store.current.remoteNickname.isEmpty ? store.current.remoteUserIdString : store.current.remoteNickname)
                 .font(.title2).foregroundStyle(.white)
@@ -219,29 +221,16 @@ private struct CallFaceTimeView: View {
 private struct RemoteAvatar: View {
     let icon: String
     let nickname: String
+    /// 佩戴的头像框 URL（joinCall.headFrame）；SVGA 后缀当前不渲染，静态图正常显示。
+    /// headwearRatio 1.35 对齐 H5 g-waitingCall.vue（头像 48 / 框 65 ≈ 1.354 外扩）。
+    let headFrame: String
 
     var body: some View {
-        ZStack {
-            Circle().fill(.white.opacity(0.12)).frame(width: 120, height: 120)
-            if let url = URL(string: icon), !icon.isEmpty {
-                AsyncImage(url: url) { img in
-                    img.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    Image(systemName: "person.fill").foregroundStyle(.white.opacity(0.7))
-                }
-                .frame(width: 120, height: 120)
-                .clipShape(Circle())
-            } else {
-                Text(initials(from: nickname))
-                    .font(.system(size: 40, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-        }
-    }
-
-    private func initials(from name: String) -> String {
-        guard let c = name.first else { return "?" }
-        return String(c).uppercased()
+        AvatarView(urlString: icon,
+                   size: 120,
+                   kind: .user,
+                   headwearURL: headFrame,
+                   headwearRatio: 1.35)
     }
 }
 

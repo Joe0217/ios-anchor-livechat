@@ -28,17 +28,27 @@ struct CachedAsyncImage<Placeholder: View>: View {
     init(url: URL?,
          contentMode: ContentMode = .fill,
          persistent: Bool = true,
+         cdn: (size: CDNImageSize, mode: CDNImageMode)? = nil,
          @ViewBuilder placeholder: @escaping () -> Placeholder) {
-        self.url = url
+        // 若指定了 CDN 参数则拼装缩放 URL；缓存 key 也用改造后的 URL，按分档独立缓存
+        // 同时强制 http/https scheme 白名单：URLSession 会响应 file:// / data:// 等,
+        // 后端污染 URL(string: "file:///...") 可读 sandbox 文件并写入 URLCache 磁盘层
+        let finalURL = url.flatMap { u -> URL? in
+            guard let scheme = u.scheme?.lowercased(),
+                  scheme == "http" || scheme == "https" else { return nil }
+            guard let cdn else { return u }
+            return u.cdnScaled(cdn.size, mode: cdn.mode)
+        }
+        self.url = finalURL
         self.contentMode = contentMode
         self.persistent = persistent
         self.placeholder = placeholder
         // 同步预填：无论 persistent 都查 NSCache（读不写）。这样 persistent=false 的
         // 调用方（如他人头像）若 URL 恰好等于本人头像（已被 persistent=true 写入缓存），
         // 仍能复用而非重拉。
-        if let url, let cached = ImageCache.shared.cached(for: url) {
+        if let finalURL, let cached = ImageCache.shared.cached(for: finalURL) {
             _image = State(initialValue: cached)
-            _lastLoadedURL = State(initialValue: url)
+            _lastLoadedURL = State(initialValue: finalURL)
         }
     }
 
