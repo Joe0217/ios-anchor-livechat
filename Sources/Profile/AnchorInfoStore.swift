@@ -49,6 +49,12 @@ final class AnchorInfoStore: ObservableObject {
     private var inflightTask: Task<Void, Never>?
     private var followObserver: NSObjectProtocol?
 
+    /// 代际 token：`clear()` 递增，`performReload` 起点快照，`doReload` 落地前对比。
+    /// A logout 时正在飞的 detached task 完成时 epoch mismatch → 丢弃结果不写 store/keychain，
+    /// 避免"A 老 task 覆盖 B 新数据 + hasLoadedOnce=true 让新 loadIfNeeded 短路"的竞态污染。
+    /// 对齐 `BlocklistViewModel` 同款代际 token 模式。
+    private var reloadEpoch: Int = 0
+
     private init() {
         loadFromDisk()
         followObserver = NotificationCenter.default.addObserver(
@@ -109,6 +115,9 @@ final class AnchorInfoStore: ObservableObject {
 
     /// 登出时清空：SessionStore.logout 调用。
     func clear() {
+        // 先递增 epoch 让已发出的 detached reload 失效：Task.cancel() 只 mark、doReload 不
+        // check isCancelled，唯一可靠的丢弃入口是让 doReload 完成时 guard epoch mismatch。
+        reloadEpoch += 1
         inflightTask?.cancel()
         inflightTask = nil
         info = nil
@@ -118,6 +127,8 @@ final class AnchorInfoStore: ObservableObject {
         followingCount = 0
         followersCount = 0
         friendsCount = 0
+        // P2-16：v2 在 Keychain；v1 残留也一并清（迁移期保险）
+        KeychainStore.remove(for: cacheKey)
         UserDefaults.standard.removeObject(forKey: cacheKey)
         // 防御性双清：SessionStore.logout 也会调 ImageCache.clear()，
         // 这里再补一刀确保任何场景下 clear() 都不残留图片
@@ -127,16 +138,29 @@ final class AnchorInfoStore: ObservableObject {
     // MARK: - 拉取
 
     /// 启动 detached task 隔离请求生命周期：view cancel 不影响请求完成。
+    ///
+    /// **epoch 语义**：捕获当前 `reloadEpoch` 传给 `doReload`；期间 `clear()` 递增 epoch 后
+    /// 老 task 完成时 guard mismatch 直接 discard，避免"A logout 后 A 老 task 覆盖 B 新数据"。
     private func performReload() async {
+        let epoch = reloadEpoch
         let task = Task.detached { @MainActor [self] in
-            await doReload()
+            await doReload(epoch: epoch)
         }
         inflightTask = task
         await task.value
-        inflightTask = nil
+        // 若期间 clear() 递增了 epoch，`inflightTask` 可能已被后续 clear / performReload
+        // 覆盖为 nil 或 B task，盲清会误清别人——用 epoch 对比守卫
+        if epoch == reloadEpoch {
+            inflightTask = nil
+        }
     }
 
-    private func doReload() async {
+    private func doReload(epoch: Int) async {
+        // 起点守卫：detached task 排 MainActor 期间 clear() 已递增 epoch → 整段丢弃不做任何写入
+        guard epoch == self.reloadEpoch else {
+            logger.info("doReload skipped at start: epoch=\(epoch) current=\(self.reloadEpoch)")
+            return
+        }
         loadState = .loading
         do {
             async let anchorTask = ProfileService.getAnchorInfo()
@@ -151,6 +175,14 @@ final class AnchorInfoStore: ObservableObject {
             let anchor = try await anchorTask
             let mineInfo = await mineTask
 
+            // API await 期间可能被 clear() 递增 epoch（用户登出竞态）——丢弃全部写入，
+            // 不写 info/mine/social/loadState/hasLoadedOnce，也不 saveToDisk（否则 keychain 会被 A 数据污染，
+            // 冷启动 loadFromDisk 又恢复 A 让 hasLoadedOnce=true 短路新 loadIfNeeded）
+            guard epoch == self.reloadEpoch else {
+                logger.info("doReload result discarded: epoch=\(epoch) current=\(self.reloadEpoch)")
+                return
+            }
+
             self.info = anchor
             self.mine = mineInfo
 
@@ -164,9 +196,18 @@ final class AnchorInfoStore: ObservableObject {
             saveToDisk()
             logger.info("reload OK userId=\(anchor.userId ?? -1) mineMerged=\(mineInfo != nil)")
         } catch let e as APIError {
+            // 错误状态也要 guard：老 task 的失败结果不应污染新 session 的 loadState
+            guard epoch == self.reloadEpoch else {
+                logger.info("doReload APIError discarded: epoch=\(epoch) current=\(self.reloadEpoch) code=\(e.code)")
+                return
+            }
             loadState = .error(e.message)
             logger.error("reload APIError code=\(e.code) message=\(e.message)")
         } catch {
+            guard epoch == self.reloadEpoch else {
+                logger.info("doReload error discarded: epoch=\(epoch) current=\(self.reloadEpoch)")
+                return
+            }
             let msg = String(format: L10n.profileLoadFailedFormat, error.localizedDescription)
             loadState = .error(msg)
             logger.error("reload error: \(String(describing: error))")
@@ -228,9 +269,34 @@ final class AnchorInfoStore: ObservableObject {
         let friendsCount: Int
     }
 
+    /// P2-16：从 UserDefaults 迁 Keychain（ThisDeviceOnly + Synchronizable=false，
+    /// 与 SessionStore.v2 同款）。AnchorInfo 含 nickname / age / signature / 相册 URL / videos /
+    /// giftList / callPrice 等 PII + 商业字段，明文写 UserDefaults 会被：
+    ///   1) 越狱设备 sandbox bypass 直读
+    ///   2) iTunes/Finder 备份未启用 "Encrypt local backup" 时明文导出
+    ///   3) iCloud 备份恢复到新设备还原（与 ThisDeviceOnly 约定相反）
+    /// 迁移路径：v2 优先；v1 命中时搬迁到 v2 后清空（一次性）。
     private func loadFromDisk() {
-        guard let data = UserDefaults.standard.data(forKey: cacheKey),
-              let snap = try? JSONDecoder().decode(CachedSnapshot.self, from: data) else { return }
+        // v2: Keychain
+        if let data = KeychainStore.getData(for: cacheKey),
+           let snap = try? JSONDecoder().decode(CachedSnapshot.self, from: data) {
+            applySnapshot(snap, source: "keychain")
+            return
+        }
+        // v1 → v2 一次性迁移：必须 verify Keychain 写入成功**后**再删 v1，
+        // 否则 Keychain 写失败（极端：item 超出 Keychain limit / device 异常）会导致
+        // 缓存数据丢失，下次启动冷启动 loading 状态恶化。
+        if let legacy = UserDefaults.standard.data(forKey: cacheKey),
+           let snap = try? JSONDecoder().decode(CachedSnapshot.self, from: legacy) {
+            if KeychainStore.setData(legacy, for: cacheKey) {
+                UserDefaults.standard.removeObject(forKey: cacheKey)
+            }
+            applySnapshot(snap, source: "migrated-from-userdefaults")
+            return
+        }
+    }
+
+    private func applySnapshot(_ snap: CachedSnapshot, source: String) {
         info = snap.info
         mine = snap.mine
         followingCount = snap.followingCount
@@ -239,7 +305,7 @@ final class AnchorInfoStore: ObservableObject {
         if info != nil || mine != nil {
             hasLoadedOnce = true
             loadState = .loaded
-            logger.info("loadFromDisk OK userId=\(self.info?.userId ?? -1)")
+            logger.info("loadFromDisk OK source=\(source, privacy: .public) userId=\(self.info?.userId ?? -1, privacy: .private)")
         }
     }
 
@@ -251,7 +317,7 @@ final class AnchorInfoStore: ObservableObject {
             friendsCount: friendsCount
         )
         if let data = try? JSONEncoder().encode(snap) {
-            UserDefaults.standard.set(data, forKey: cacheKey)
+            KeychainStore.setData(data, for: cacheKey)
         }
     }
 

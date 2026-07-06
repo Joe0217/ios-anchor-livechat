@@ -83,6 +83,11 @@ final class SessionStore: ObservableObject {
             user = result
             isLoggedIn = true
             save()
+            // 登录成功后主动拉最新的主播数据：不依赖 view 层 .onAppear/.task 触发
+            // （view 生命周期存在 keep-alive / identity 复用等隐藏路径，可能漏触发 loadIfNeeded；
+            // clear 只清了旧账号数据，新账号数据源必须显式触发一次）
+            AppLogger.auth.info("[LOGIN OK] userId=\(result.userId ?? -1, privacy: .private) → fire AnchorInfoStore.refresh()")
+            Task { await AnchorInfoStore.shared.refresh() }
         } catch let e as APIError {
             // 1005 = 账号未注册 / token 失效，直接展示后端文案
             errorMessage = e.message
@@ -106,6 +111,16 @@ final class SessionStore: ObservableObject {
         ImageCache.shared.clear()
         // IM 场景闸门清空（防 A 账号场景残留误导 B 账号过滤逻辑）
         IMSceneGate.shared.resetAll()
+        // v5 F-1: P2P 会话列表 store 清空（20s task/sessions/profiles/系统入口/可见集全清 + state=.idle）
+        // 未清则登出后 task 仍 401 循环，新账号登录看到旧账号残留数据（review 报告 F-1）
+        MessageSessionStore.shared.clear()
+        // v5.4 缓存审计补漏（logout 清理漏斗完整性）：
+        // G1: station 已读态跨账号串扰 — 若 A 已读 mail id=X，B 收到同 id 会误判已读永远漏红点
+        UserDefaults.standard.removeObject(forKey: "hily.station.lastReadId")
+        // G2: 客服 yxAccId 缓存 — clear() 方法早已存在但 logout 从未调用，导致 A 客服 imId 泄漏到 B
+        CustomerServiceIdStore.shared.clear()
+        // G3: 在线状态 store — 未清则 A 的 forcedBusy=true / userSetOnline=false 残留到 B 首屏
+        OnlineStatusStore.shared.clear()
     }
 
     // MARK: - H M4：sysMsg 通道入口（spec §3.1 / H 校验清单 §1.1.2 A 表）
