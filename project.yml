@@ -212,6 +212,16 @@ targets:
       - path: Sources/Core/Media/BeautyPipeline/BeautySettingsPersistence.swift
       - path: Sources/Core/Media/BeautyPipeline/BeautySettingsStore.swift
       - path: Sources/Core/Media/BeautyPipeline/BeautyPipelineSharer.swift
+      # L 里程碑（Match step 1a）：纯 Swift 模型 + 状态机 + Service + Persistence（无 SDK 依赖）
+      # 注意：MatchCameraSession 具体实现（step 1b）依赖 CameraManager/AVCaptureSession 不入 tests；
+      # Store 单测通过 protocol 注入 FakeMatchService + FakeMatchCameraSession
+      - path: Sources/Match/MatchModels.swift
+      - path: Sources/Match/MatchPersistedState.swift
+      - path: Sources/Match/MatchService.swift
+      - path: Sources/Match/MatchStore.swift
+      # MatchToast 是纯 enum（不依赖 L10n），供 MatchStore.lastToast 使用；
+      # MatchToast+Localized.swift 在 UI/ 目录，依赖 L10n 不入 test target。
+      - path: Sources/Match/MatchToast.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.anchor.livechat.tests
