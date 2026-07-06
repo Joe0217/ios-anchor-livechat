@@ -97,6 +97,10 @@ private struct DebugLocaleEnvironment: ViewModifier {
                         store.update(l)
                     }
                 }
+                // DEBUG 工具：重置首次开播规则页（方便反复测试 firstLiveRule 10s 页）
+                Button("Reset First Live Rule", role: .destructive) {
+                    FirstLiveTracker.reset()
+                }
             } message: {
                 Text("All text + RTL switch immediately. No app restart required.")
             }
