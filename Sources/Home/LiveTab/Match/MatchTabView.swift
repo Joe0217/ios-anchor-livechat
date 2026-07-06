@@ -13,9 +13,9 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "MatchTa
 /// **交互**：点击用户卡片 → sheet 弹出用户详情（MVP 阶段用 fullScreenCover 前的 sheet 简化）。
 struct MatchTabView: View {
     @StateObject private var vm = MatchTabViewModel()
-    /// 匹配态独立摄像头会话（U1/U2：View 强持有，onAppear attach 到 MatchStore.shared）
-    @StateObject private var cameraSession = MatchCameraSession()
-    @ObservedObject private var matchStore = MatchStore.shared
+
+    // 摄像头会话与匹配预览浮窗 **已提到 MainTabView 层**（跨 tab 全局展示），
+    // 本 View 只负责 tab 内容（跑马灯 / 主图 / 用户列表）
 
     var body: some View {
         VStack(spacing: 0) {
@@ -55,25 +55,7 @@ struct MatchTabView: View {
         )
         .background(Theme.Palette.matchPageBackground)
         .clipped()
-        // U2：MatchTabView 挂载即 attach cameraSession（首次 onAppear 幂等 —— attachCameraSession 内部 weak
-        // → strong 由 spec BL-1 后续修正 → 目前 View 层 @StateObject 提供强持有链）
-        .onAppear { MatchStore.shared.attachCameraSession(cameraSession) }
-        // 匹配态浮层：可拖动 + 关闭按钮（用户反馈：预览要能拖动/有关闭）
-        .overlay {
-            if matchStore.state == .matching {
-                MatchCameraPreviewFloating(
-                    camera: cameraSession.camera,
-                    onClose: {
-                        Task { @MainActor in
-                            await MatchStore.shared.closeMatch()
-                        }
-                    }
-                )
-                .transition(.opacity)
-                .accessibilityLabel(L10n.matchMarqueeCallStarted)
-            }
-        }
-        .animation(.easeInOut(duration: 0.2), value: matchStore.state == .matching)
+        // 摄像头浮窗/attach 已在 MainTabView 层做全局管理
         .task { await vm.loadIfNeeded() }
         .sheet(item: $vm.presentedUser) { user in
             MatchUserCardSheet(user: user)

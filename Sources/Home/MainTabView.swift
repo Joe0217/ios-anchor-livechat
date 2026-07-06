@@ -32,6 +32,26 @@ struct MainTabView: View {
     /// NavigationStack 销毁 → 后端已建房 iOS 无心跳/rtc = 僵尸房间（B-spec-开播设置页 §1.4 🔴#1 🔴#5）
     @ObservedObject private var liveSettingsLock = LiveSettingsLock.shared
 
+    /// L 里程碑：匹配态摄像头会话（全局唯一 owner）。挂在 MainTabView 层让预览浮窗跨 tab 可见：
+    /// - MatchTabView keep-alive 保护，但 overlay 挂 MatchTabView.overlay 时切走 tab 就消失
+    /// - 提升到 MainTabView 后 overlay 在 tab 切换外仍可见；session 唯一实例，attach 一次
+    @StateObject private var matchCameraSession = MatchCameraSession()
+    /// L 里程碑：观察 MatchStore.state 决定浮窗显示；MatchStore.shared 5 个 @Published，
+    /// 但 MainTabView body 本身不高频重算（tab 切换/subpage 才触发），性能可接受（review S-4 同源）
+    @ObservedObject private var matchStore = MatchStore.shared
+
+    /// 直播结束页 back 时切 Work Tab + 清 Home/Work path。
+    /// 两 path 都清：Home QuickGoLive 与 Work Go Live 两个入口都可能把 LiveSettings/LiveRoomView
+    /// 塞进对应 path，切 tab 到 Work 时若不清对方 path，用户回到起始入口 tab 仍能 back 回残留 view。
+    /// LiveRoomView 随 path 清空自然 dismantle → onDisappear 清相机/RTC/NIM/心跳。
+    private var liveTerminationAction: LiveTerminationAction {
+        LiveTerminationAction {
+            selection = .work
+            homePath = NavigationPath()
+            workPath = NavigationPath()
+        }
+    }
+
     /// 派生信号：当前选中 tab 是否在子页（对应 tab 的 path 非空）。
     /// 用单一 Equatable 信号触发 onChange，避免 selection / workPath.count / profilePath.count
     /// 三个独立 onChange 在同一 transaction 内互相 reentrancy 导致动画闪烁。
@@ -78,6 +98,27 @@ struct MainTabView: View {
             // 独立 .task 让两个预热并发起飞（一起 await 也可以；分开更直观）
             await GiftMarqueeStore.shared.loadIfNeeded()
         }
+        .onAppear {
+            // L 里程碑：一次性 attach 全局匹配摄像头会话到 MatchStore.shared
+            MatchStore.shared.attachCameraSession(matchCameraSession)
+        }
+        // L 里程碑：全局匹配预览浮窗（跨 tab 展示）
+        // .overlay 挂在 safeAreaInset 之后 → 覆盖全屏（含 tabbar 区域）
+        .overlay {
+            if matchStore.state == .matching {
+                MatchCameraPreviewFloating(
+                    camera: matchCameraSession.camera,
+                    onClose: {
+                        Task { @MainActor in
+                            await MatchStore.shared.closeMatch()
+                        }
+                    }
+                )
+                .transition(.opacity)
+                .accessibilityLabel(L10n.matchMarqueeCallStarted)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: matchStore.state == .matching)
         .preferredColorScheme(.dark)
     }
 
@@ -119,12 +160,13 @@ struct MainTabView: View {
             .environment(\.isHomeTabActive, selection == .home)
             .environment(\.quickGoLive, QuickGoLiveAction {
                 // 在当前 Home NavigationStack 内 push LiveSettings（对齐用户偏好：
-                // 不切 tab、保持上下文；比 H5 CGoLive 切 tab 更内聚）。
+                // 不切 tab、保持上下文;比 H5 CGoLive 切 tab 更内聚）。
                 // 首次开播 → 先 push firstLiveRule 10s 规则页（对齐 H5 c-goLive.vue:64 isFirstLive 判断）
                 homePath.append(FirstLiveTracker.isFirstLive
                                 ? WorkRoute.firstLiveRule
                                 : WorkRoute.liveSettings)
             })
+            .environment(\.liveTermination, liveTerminationAction)
             .opacity(selection == .home ? 1 : 0)
             .allowsHitTesting(selection == .home)
             .accessibilityHidden(selection != .home)
@@ -159,6 +201,7 @@ struct MainTabView: View {
                             }
                         }
                 }
+                .environment(\.liveTermination, liveTerminationAction)
             } else if selection == .profile {
                 NavigationStack(path: $profilePath) {
                     ProfileView(path: $profilePath)
@@ -297,6 +340,27 @@ extension EnvironmentValues {
     var quickGoLive: QuickGoLiveAction {
         get { self[QuickGoLiveKey.self] }
         set { self[QuickGoLiveKey.self] = newValue }
+    }
+}
+
+/// 直播结束页 back 语义（对齐 H5 liveEnds/index.vue `leavePage` → `initLiveData + router.push('/')`）。
+///
+/// 结果页 back 时通过本 env 通知外壳：切 MainTab 到 home + 清 workPath/homePath；结果页作为
+/// LiveRoomView `.fullScreenCover` 挂载，随 nav 栈自然 dismantle 时 LiveRoomView.onDisappear
+/// 负责摄像头/RTC/NIM 清理。LiveStore.reset() 也在此 action 内调，把状态机拨回 .idle。
+struct LiveTerminationAction {
+    let perform: () -> Void
+    static let noop = LiveTerminationAction(perform: {})
+}
+
+private struct LiveTerminationKey: EnvironmentKey {
+    static let defaultValue: LiveTerminationAction = .noop
+}
+
+extension EnvironmentValues {
+    var liveTermination: LiveTerminationAction {
+        get { self[LiveTerminationKey.self] }
+        set { self[LiveTerminationKey.self] = newValue }
     }
 }
 
