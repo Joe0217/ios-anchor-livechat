@@ -410,7 +410,81 @@ final class CallStore: ObservableObject {
         await endLocally(reason: .localHangUp, rateCategory: .canceled, rateType: .caller, answerTime: 0, abnormal: 0)
     }
 
+    // MARK: - L 里程碑：匹配态自动接听判定 closure（由 App 层注入）
+
+    /// 判断"当前是否处于匹配态"—— handleIncomingVideoCall 据此走自动接听路径。
+    /// 由 RootView.syncSessionDependent 挂载，读 MatchStore.shared.state == .matching。
+    /// 用 closure 而非直接引 MatchStore：避免 CallStore 与 MatchStore 相互依赖 + test target 隔离
+    var isMatchActive: (() -> Bool)?
+
     // MARK: - 被叫：接受 / 拒绝
+
+    /// L 里程碑：匹配态收到 videoCall 时的自动接听入口（对齐 H5 useCallApi.js:437-441）。
+    /// 由 handleIncomingVideoCall 内 `isMatchActive?() == true` 分支调用，不弹浮层。
+    /// 与 acceptIncomingFromLive 的差异：`frontGameType = .direct`（走标准 CallView g-waitingCall→g-faceTime 分支）
+    func acceptIncomingFromMatch(msg: CallMessage) async {
+        guard state == .idle, let signaling else {
+            AppLogger.call.notice("⚠️ [CallStore] acceptIncomingFromMatch 跳过 state=\(self.state.rawValue, privacy: .public)")
+            return
+        }
+        guard let fromRoomId = msg.fromRoomId, !fromRoomId.isEmpty else {
+            AppLogger.call.notice("⚠️ [CallStore] acceptIncomingFromMatch 缺 fromRoomId")
+            return
+        }
+
+        // 1) 初始化 currentCallInfo（被叫 in / frontGameType=.direct，让 CallView 走标准分支）
+        var info = CurrentCallInfo()
+        info.frontGameType = .direct
+        info.inOrOut = .in
+        info.channelId = fromRoomId
+        info.callId = msg.callId
+        info.remoteUserId = msg.fromUserId
+        info.callStartTime = Date().timeIntervalSince1970 * 1000
+        current = info
+        state = .calling
+
+        // 2) 立刻发 Accept
+        let ok = await signaling.publish(buildMessage(action: .accept))
+        guard ok else {
+            lastError = L10n.callErrorAcceptFailed
+            await endLocally(reason: .beginCallError, rateCategory: nil, rateType: .callee, answerTime: 0, abnormal: 1)
+            return
+        }
+        state = .connecting
+
+        // 3) join RTC
+        await joinRtc(channel: fromRoomId, rateType: .callee)
+
+        // 4) 主叫端可能已在频道（同 acceptIncomingFromLive Step 4）
+        if agora.remoteUid != 0, state == .connecting {
+            current.callConnectTime = Date().timeIntervalSince1970 * 1000
+            state = .connected
+            AppLogger.call.info("✅ [CallStore] 匹配自动接听后远端已在频道 → state=connected")
+        }
+
+        // 5) 接通率上报
+        await reportRate(category: .answered, type: .callee,
+                         answerTime: current.sinceStartDuration, abnormal: 0)
+
+        // 6) 异步拉对方资料（joinCall.source 用于 MatchStore 判定 matchV4）
+        Task { @MainActor in
+            do {
+                let r = try await CallService.joinCall(channelId: fromRoomId)
+                self.lastJoinCallSource = r.source
+                guard self.state != .idle, self.current.callId == msg.callId else { return }
+                self.current.remoteYxAccid = r.yxAccid ?? self.current.remoteYxAccid
+                self.current.remoteNickname = r.nickname ?? self.current.remoteNickname
+                self.current.remoteIcon = r.icon ?? self.current.remoteIcon
+                self.current.remoteHeadFrame = r.headFrame ?? self.current.remoteHeadFrame
+                self.current.remoteAge = r.age ?? self.current.remoteAge
+                self.current.remoteCountryCode = r.countryCode ?? self.current.remoteCountryCode
+                self.current.remoteVideoPrice = r.videoPrice ?? self.current.remoteVideoPrice
+            } catch {
+                self.lastJoinCallSource = nil
+                AppLogger.call.notice("⚠️ [CallStore] Match auto-accept joinCall 拉对方资料失败 err=\(error.localizedDescription, privacy: .private)")
+            }
+        }
+    }
 
     /// D 里程碑：直播态私 call 自动接听入口。
     /// 由 LiveStore.pauseForCall 调用，不弹浮层、无 UI 确认；frontGameType 写入 .live 标记本通通话来源。
@@ -741,6 +815,12 @@ extension CallStore: CallSignalingDelegate {
         if let ls = liveStore, ls.state == .living, ls.callState == 0 {
             AppLogger.call.debug("📞 [CallStore] 直播态收到私 call → 委托 LiveStore.pauseForCall")
             await ls.pauseForCall(msg: msg)
+            return
+        }
+        // L 里程碑：匹配态自动接听（对齐 H5 useCallApi.js:437-441 —— matchState=MATCHING_CALLING 直接 callInEnter，不弹浮层）
+        if isMatchActive?() == true {
+            AppLogger.call.debug("📞 [CallStore] 匹配态收到 videoCall → 自动接听")
+            await acceptIncomingFromMatch(msg: msg)
             return
         }
         // G M6 / spec §8.2：PK 期（matching/inviting/invited/starting/inPK/punishing/endingPK）显式 busy reject。
