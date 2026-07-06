@@ -22,6 +22,10 @@ struct CurrentCallInfo {
     /// 远端基本资料（来自 joinCall）
     var remoteNickname: String = ""
     var remoteIcon: String = ""
+    /// 远端头像框 URL（joinCall 返回 headFrame；H5 g-waitingCall 佩戴场景显示）。
+    /// **iOS 局限**：H5 支持 SVGA 动画头像框（`.svga` 后缀），iOS 侧暂只渲染静态图（PNG/WebP）；
+    /// 服务端下发 SVGA 时 CachedAsyncImage 加载失败静默不显示，J 里程碑接入 SVGA 后续支持。
+    var remoteHeadFrame: String = ""
     var remoteAge: Int = 0
     var remoteCountryCode: String = ""
     var remoteVideoPrice: Int = 0
@@ -152,4 +156,7 @@ struct JoinCallResult: Codable {
     let followed: Int?
     let levelName: String?
     let headFrame: String?
+    /// L 里程碑：通话来源标记。'matchV4' → Match 命中；nil / 'liveCall' / 其他 → 非 Match 来源。
+    /// MatchStore 通过 CallStore.$lastJoinCallSource 观察此字段决定 matchState 迁移。
+    let source: String?
 }

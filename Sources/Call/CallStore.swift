@@ -80,6 +80,13 @@ final class CallStore: ObservableObject {
     /// sysMsg -1 远端文字附带的 chatBubble id
     @Published private(set) var callChatBubble: Int = 0
 
+    /// L 里程碑：最近一次 joinCall 返回的 source 字段（'matchV4' / 'liveCall' / nil / 其他）。
+    /// **Single source of truth**：MatchStore 只读订阅此字段，不本地缓存副本。
+    /// - 两处 joinCall 调用（acceptIncomingFromLive Line ~466 + handleIncomingVideoCall Line ~785）成功后 assign
+    /// - joinCall 失败 → 置 nil（fallback）
+    /// - state 转 .idle 时不主动重置（保留最近一次值供 MatchStore 判定"通话结束回 .matching 是否合法"）
+    @Published private(set) var lastJoinCallSource: String?
+
     /// RTC 管理器（CallView 用它做远端渲染 + push 美颜后的帧）
     let agora = AgoraManager()
 
@@ -464,14 +471,20 @@ final class CallStore: ObservableObject {
         Task { @MainActor in
             do {
                 let r = try await CallService.joinCall(channelId: fromRoomId)
+                // L 里程碑：无条件 assign source（不受 state guard 约束）——
+                // MatchStore 订阅此字段实时判定 matchState 迁移。LIVE 私 call 通常 source='liveCall' 或 nil。
+                self.lastJoinCallSource = r.source
                 guard self.state != .idle, self.current.callId == msg.callId else { return }
                 self.current.remoteYxAccid = r.yxAccid ?? self.current.remoteYxAccid
                 self.current.remoteNickname = r.nickname ?? self.current.remoteNickname
                 self.current.remoteIcon = r.icon ?? self.current.remoteIcon
+                self.current.remoteHeadFrame = r.headFrame ?? self.current.remoteHeadFrame
                 self.current.remoteAge = r.age ?? self.current.remoteAge
                 self.current.remoteCountryCode = r.countryCode ?? self.current.remoteCountryCode
                 self.current.remoteVideoPrice = r.videoPrice ?? self.current.remoteVideoPrice
             } catch {
+                // L 里程碑：joinCall 失败 → source 置 nil（MatchStore 保守视为非 matchV4）
+                self.lastJoinCallSource = nil
                 AppLogger.call.notice("⚠️ [CallStore] LIVE joinCall 拉对方资料失败 channel=\(fromRoomId, privacy: .private) err=\(error.localizedDescription, privacy: .private)")
             }
         }
@@ -782,15 +795,21 @@ extension CallStore: CallSignalingDelegate {
         Task { @MainActor in
             do {
                 let r = try await CallService.joinCall(channelId: fromRoomId)
+                // L 里程碑：无条件 assign source —— MatchStore 订阅此字段实时判定 matchState 迁移。
+                // 若 source=='matchV4' → MatchStore 转 .matchingCalling；否则若 .matching → 强制 .ended。
+                self.lastJoinCallSource = r.source
                 guard self.state == .calling, self.current.inOrOut == .in,
                       self.current.channelId == fromRoomId else { return }
                 self.current.remoteYxAccid = r.yxAccid ?? self.current.remoteYxAccid
                 self.current.remoteNickname = r.nickname ?? self.current.remoteNickname
                 self.current.remoteIcon = r.icon ?? self.current.remoteIcon
+                self.current.remoteHeadFrame = r.headFrame ?? self.current.remoteHeadFrame
                 self.current.remoteAge = r.age ?? self.current.remoteAge
                 self.current.remoteCountryCode = r.countryCode ?? self.current.remoteCountryCode
                 self.current.remoteVideoPrice = r.videoPrice ?? self.current.remoteVideoPrice
             } catch {
+                // L 里程碑：joinCall 失败 → source 置 nil（MatchStore 保守视为非 matchV4）
+                self.lastJoinCallSource = nil
                 AppLogger.call.notice("⚠️ [CallStore] joinCall 拉对方资料失败/超时 channel=\(fromRoomId, privacy: .private) err=\(error.localizedDescription, privacy: .private)")
             }
         }

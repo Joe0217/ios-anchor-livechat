@@ -46,6 +46,17 @@ final class CameraManager: NSObject, ObservableObject {
     /// 相机错误回调（LiveRoomView 注入；转发到 LiveStore.onCameraError）
     var onError: ((CameraError) -> Void)?
 
+    /// L 里程碑：AVCaptureSession interruption 累计未恢复时长（秒）。
+    ///
+    /// 从 `handleWasInterrupted` 触发时开始累计（无论前台/后台、无论 reason），
+    /// 到 `handleInterruptionEnded` 或 `start()` 成功 running 时归零。
+    ///
+    /// 用途：MatchStore 订阅此字段，>= 30s 时触发 matchState=.ended（后台长时间未回、真硬件断连等场景）。
+    /// **非** LiveStore 现有 `wasInterrupted` onError 回调的替代品——两者并存，各服务不同业务态。
+    @Published private(set) var interruptionUnrecoveredDuration: TimeInterval = 0
+    private var interruptionStartAt: Date?
+    private var interruptionTickTask: Task<Void, Never>?
+
     /// 订阅每帧（已处理）回调。key 必须在 unsubscribe 时一致；CameraPreview 用 ObjectIdentifier(Coordinator)。
     func subscribe(_ key: ObjectIdentifier, sink: @escaping (CVPixelBuffer) -> Void) {
         subscribersLock.lock()
@@ -201,6 +212,9 @@ final class CameraManager: NSObject, ObservableObject {
     @objc private func handleWasInterrupted(_ note: Notification) {
         let reasonRaw = (note.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int) ?? 0
         logger.warning("AVCaptureSession was interrupted reason=\(reasonRaw)")
+        // L 里程碑：无差别启动累计计时（含 background reason=1/4）。
+        // 目的：MatchStore 观察 >= 30s 时关匹配；不影响 LiveStore 现有 onError 守卫逻辑。
+        DispatchQueue.main.async { [weak self] in self?.startInterruptionTracking() }
         // v5.2：后台类 interruption 静默不上报 LiveStore（避免 20s watcher 误触发 forceEnd(.cameraFailure)）
         // AVCaptureSession.InterruptionReason 枚举：
         //   1 = videoDeviceNotAvailableInBackground (iOS 9+，app 进入后台 — 最常见误触发源)
@@ -227,6 +241,8 @@ final class CameraManager: NSObject, ObservableObject {
 
     @objc private func handleInterruptionEnded(_ note: Notification) {
         logger.info("AVCaptureSession interruption ended; restart session")
+        // L 里程碑：中断已恢复，累计计时归零
+        DispatchQueue.main.async { [weak self] in self?.stopInterruptionTracking() }
         // v5.3.1 review #1 修订：先同步派发 onError 清 watcher，再 start()——
         // 缩小 sessionQueue.startRunning 与 main.async stopWatcher 之间的 race window。
         // 实际 race 仅在 InterruptionEnded 发生在 watcher 启动后 20s+ 触发（reason=1 已过滤，
@@ -259,10 +275,37 @@ final class CameraManager: NSObject, ObservableObject {
         subscribers.removeAll()
         subscribersLock.unlock()
         onError = nil
+        stopInterruptionTracking()
         sessionQueue.async { [weak self] in
             guard let self, self.session.isRunning else { return }
             self.session.stopRunning()
         }
+    }
+
+    // MARK: - L 里程碑：interruption 累计计时（供 MatchStore 观察 >= 30s 关匹配）
+
+    private func startInterruptionTracking() {
+        // 幂等：已在 tracking 则不重启（避免重复 wasInterrupted 通知触发多 timer）
+        guard interruptionStartAt == nil else { return }
+        interruptionStartAt = Date()
+        interruptionUnrecoveredDuration = 0
+        interruptionTickTask?.cancel()
+        interruptionTickTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                // Task.sleep 在 app background 时挂起，回前台后一次性 tick
+                // → duration 突然跳到实际经过时长；这正是 MatchStore 想要的"回前台立即判断是否 >= 30s"语义
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard let self, let start = self.interruptionStartAt else { break }
+                self.interruptionUnrecoveredDuration = Date().timeIntervalSince(start)
+            }
+        }
+    }
+
+    private func stopInterruptionTracking() {
+        interruptionTickTask?.cancel()
+        interruptionTickTask = nil
+        interruptionStartAt = nil
+        interruptionUnrecoveredDuration = 0
     }
 }
 
