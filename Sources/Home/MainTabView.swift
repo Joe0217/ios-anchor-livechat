@@ -40,6 +40,9 @@ struct MainTabView: View {
     /// 但 MainTabView body 本身不高频重算（tab 切换/subpage 才触发），性能可接受（review S-4 同源）
     @ObservedObject private var matchStore = MatchStore.shared
 
+    /// L 里程碑 #3c：10 分钟提示弹窗调度器（跨 tab 全局）
+    @ObservedObject private var matchPopupCoordinator = MatchPopupCoordinator.shared
+
     /// 直播结束页 back 时切 Work Tab + 清 Home/Work path。
     /// 两 path 都清：Home QuickGoLive 与 Work Go Live 两个入口都可能把 LiveSettings/LiveRoomView
     /// 塞进对应 path，切 tab 到 Work 时若不清对方 path，用户回到起始入口 tab 仍能 back 回残留 view。
@@ -101,6 +104,12 @@ struct MainTabView: View {
         .onAppear {
             // L 里程碑：一次性 attach 全局匹配摄像头会话到 MatchStore.shared
             MatchStore.shared.attachCameraSession(matchCameraSession)
+            // L 里程碑 #3c：启动 10 分钟提示弹窗调度
+            matchPopupCoordinator.start()
+        }
+        // 观察 scenePhase 更新 popupCoordinator.appHidden 用于组合态 gate
+        .onChange(of: scenePhase) { newPhase in
+            matchPopupCoordinator.updateAppHidden(newPhase != .active)
         }
         // L 里程碑：全局匹配预览浮窗（跨 tab 展示）
         // .overlay 挂在 safeAreaInset 之后 → 覆盖全屏（含 tabbar 区域）
@@ -119,6 +128,33 @@ struct MainTabView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: matchStore.state == .matching)
+        // L 里程碑 #3c：10 分钟提示弹窗（全局跨 tab）
+        .overlay {
+            if matchPopupCoordinator.isShowing {
+                MatchTipPopup(
+                    onGoMatch: {
+                        matchPopupCoordinator.dismiss()
+                        Task { @MainActor in
+                            if MatchStore.shared.isFirstMatchToday {
+                                // 首日走规则弹窗（CGoMatchButton 内挂载；这里不重复启动）
+                                // 直接切到 Match tab + tip dismiss，等用户主动点开关
+                            } else {
+                                await MatchStore.shared.openMatch()
+                            }
+                        }
+                    },
+                    onNoReminder: {
+                        matchPopupCoordinator.markTodayNoReminder()
+                    },
+                    onClose: {
+                        matchPopupCoordinator.dismiss()
+                    }
+                )
+                .transition(.opacity)
+                .zIndex(50)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: matchPopupCoordinator.isShowing)
         .preferredColorScheme(.dark)
     }
 
