@@ -184,11 +184,13 @@ private struct OfflineConfirmDialog: View {
 
 /// Work 子页路由。
 /// - `.pocDebug`：DEBUG 期 POC 调试台
+/// - `.firstLiveRule`：首次开播规则阅读页（对齐 H5 `/liveRule?type=3`，10s 倒计时）
 /// - `.liveSettings`：开播设置页（B-spec-开播设置页）
 /// - `.wishSetting`：愿望单设置页（L-spec-愿望单设置页）
 /// - `.beautySettings`：美颜设置页（K-spec-美颜设置页）
 enum WorkRoute: Hashable {
     case pocDebug
+    case firstLiveRule
     case liveSettings
     case wishSetting
     case beautySettings

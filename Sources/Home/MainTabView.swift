@@ -107,6 +107,7 @@ struct MainTabView: View {
                     // 换类型需侵入 LiveSettings 源码。
                     .navigationDestination(for: WorkRoute.self) { route in
                         switch route {
+                        case .firstLiveRule:  FirstLiveRuleView(path: $homePath)
                         case .liveSettings:   LiveSettingsView()
                         case .wishSetting:    WishSettingView()
                         case .beautySettings: BeautySettingsView()
@@ -142,6 +143,8 @@ struct MainTabView: View {
                             switch route {
                             case .pocDebug:
                                 POCDebugView()
+                            case .firstLiveRule:
+                                FirstLiveRuleView(path: $workPath)
                             case .liveSettings:
                                 LiveSettingsView()
                             case .wishSetting:

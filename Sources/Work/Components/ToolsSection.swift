@@ -43,7 +43,14 @@ struct ToolsSection: View {
                     let cell = toolCell(icon: tools[i].icon, label: tools[i].label)
                     // Go Live → 开播设置页（B-spec-开播设置页 §1.4；生产入口）
                     if tools[i].icon == "toolGoLive" {
-                        NavigationLink(value: WorkRoute.liveSettings) { cell }
+                        // 首次开播 → firstLiveRule 10s 规则页；已开播过 → 直接 LiveSettings
+                        // 对齐 H5 c-goLive.vue:64 `router.push(userStore.isFirstLive ? '/liveRule?type=3' : '/liveSetting')`
+                        // 用 NavigationLink 静态 value 时，body 未重算会缓存旧 value；改用 tap 时动态求值
+                        NavigationLink(
+                            value: FirstLiveTracker.isFirstLive
+                                ? WorkRoute.firstLiveRule
+                                : WorkRoute.liveSettings
+                        ) { cell }
                             .buttonStyle(.plain)
                     // Beauty → 美颜设置页（K-spec-美颜设置页 §0.4 Q1；生产入口）
                     } else if tools[i].icon == "toolBeauty" {

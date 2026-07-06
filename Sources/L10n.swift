@@ -647,6 +647,21 @@ enum L10n {
     static var wishRuleModalAgree: String { localize("wishRuleModal.agree", comment: "同意并发布") }
     static var wishRuleModalContent: String { localize("wishRuleModal.content", comment: "心愿承诺规范正文（WishRuleModal 内 ScrollView 显示）") }
 
+    // MARK: - 首次开播规则页（严格对齐 H5 views/liveRule/component/firstLiveRule.vue + locales/*.json live.*）
+    static var firstLiveRuleNavTitle: String { localize("firstLiveRule.navTitle", comment: "首次开播规则页 nav title") }
+    static var firstLiveRuleBeforeStartTitle: String { localize("firstLiveRule.beforeStartTitle", comment: "H5 live.'before you start firstly'") }
+    static var firstLiveRuleBeforeStartDesc: String { localize("firstLiveRule.beforeStartDesc", comment: "H5 live.'before you start firstly desc'") }
+    static var firstLiveRuleGuidelinesTitle: String { localize("firstLiveRule.guidelinesTitle", comment: "H5 live.'live streaming guidelines'") }
+    static var firstLiveRuleConfirm: String { localize("firstLiveRule.confirm", comment: "Confirm 按钮（H5 common.confirm）") }
+    /// 7 条规则 title（H5 live.'live streaming guidelines desc <idx>'.title, idx = 1..7）
+    static func firstLiveRuleGuidelineTitle(_ idx: Int) -> String {
+        localize("firstLiveRule.guideline\(idx).title", comment: "Guideline \(idx) title")
+    }
+    /// 7 条规则 content（H5 live.'live streaming guidelines desc <idx>'.content）
+    static func firstLiveRuleGuidelineContent(_ idx: Int) -> String {
+        localize("firstLiveRule.guideline\(idx).content", comment: "Guideline \(idx) content")
+    }
+
     // MARK: - LiveRoom 直播间
     static var liveRoomPermissionAlertTitle: String { localize("liveRoom.permissionAlertTitle", comment: "相机权限弹窗标题") }
     static var liveRoomPermissionAlertOK: String { localize("liveRoom.permissionAlertOK", comment: "相机权限弹窗确定按钮") }

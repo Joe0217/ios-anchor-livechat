@@ -307,6 +307,27 @@
 "wishRuleModal.agree"                = "Kabul et ve yayınla";
 "wishRuleModal.content"              = "Bir dilek listesi yayınlayarak, dileği yerine getiren izleyicilere vaat edilen ödülleri vermeyi kabul edersiniz. İhlaller hesabın askıya alınmasına ve yayın haklarının kaybedilmesine neden olabilir.";
 
+// MARK: - 首次开播规则页（严格对齐 H5 locales/tr.json live.* + 7 guideline H5 tr 缺失暂用 tr 翻译）
+"firstLiveRule.navTitle"         = "";
+"firstLiveRule.beforeStartTitle" = "Başlamadan Önce İlk Olarak";
+"firstLiveRule.beforeStartDesc"  = "Canlı yayın özelliğimiz aracılığıyla bir yayın başlatabilir ve kitlenizle etkileşim kurabilirsiniz. İzleyiciler size sanal hediyeler göndererek destek olabilir, bu da sizin için gelire dönüştürülecektir.\n\nAyrıca, günlük yayın saatlerine ve alınan hediye miktarına dayalı olarak yayıncılara ek ödüller sunuyoruz. Belirli standartları karşılarsanız, ek ödüller almaya hak kazanırsınız. Spesifik detaylar için lütfen acentenize veya yöneticinize danışın.";
+"firstLiveRule.guidelinesTitle"  = "Canlı Yayın Yönergeleri";
+"firstLiveRule.confirm"          = "Onayla";
+"firstLiveRule.guideline1.title" = "1. Yasaklı İçerik:";
+"firstLiveRule.guideline1.content" = "Canlı yayın odalarında şiddet, pornografi, kaba dil veya siyasi konulara izin verilmez.";
+"firstLiveRule.guideline2.title" = "2. Reşit Olmayanların Korunması:";
+"firstLiveRule.guideline2.content" = "Reşit olmayanlar ekranda görünemez; ihlaller cezalarla sonuçlanabilir.";
+"firstLiveRule.guideline3.title" = "3. Medeni Dil:";
+"firstLiveRule.guideline3.content" = "Küfür, hakaret veya tehdit dilinden kaçının; pozitif enerjiyi teşvik edin.";
+"firstLiveRule.guideline4.title" = "4. Kıyafet Kuralları:";
+"firstLiveRule.guideline4.content" = "Yayıncılar açık veya kışkırtıcı kıyafetlerden kaçınmalıdır.";
+"firstLiveRule.guideline5.title" = "5. Kamera Kullanımı:";
+"firstLiveRule.guideline5.content" = "Cezalardan kaçınmak için kameralar açık ve aktif kalmalıdır.";
+"firstLiveRule.guideline6.title" = "6. Kalite Standartları:";
+"firstLiveRule.guideline6.content" = "Net görüntü ve uygun ses seviyelerini koruyun.";
+"firstLiveRule.guideline7.title" = "7. Özel İşlem Yok:";
+"firstLiveRule.guideline7.content" = "Kullanıcıları harici kanallara işlem için yönlendirmek yasaktır. Ciddi ihlaller yayın ayrıcalıklarınızın iptaline yol açabilir.";
+
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "Kamera İzni Gerekli";
 "liveRoom.permissionAlertOK" = "Tamam";

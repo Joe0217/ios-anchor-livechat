@@ -307,6 +307,27 @@
 "wishRuleModal.agree"                = "أوافق وأنشر";
 "wishRuleModal.content"              = "بنشر قائمة الأمنيات، توافق على تقديم المكافآت الموعودة للمشاهدين الذين يحققون الأمنية. قد تؤدي الانتهاكات إلى تعليق الحساب وفقدان حقوق البث.";
 
+// MARK: - 首次开播规则页（严格对齐 H5 locales/ar.json live.*）
+"firstLiveRule.navTitle"         = "";
+"firstLiveRule.beforeStartTitle" = "قبل أن تبدأ أولاً";
+"firstLiveRule.beforeStartDesc"  = "من خلال ميزة البث المباشر لدينا، يمكنك بدء بث والتفاعل مع جمهورك. يمكن للمشاهدين دعمك بإرسال هدايا افتراضية، والتي سيتم تحويلها إلى أرباح لك.\n\nبالإضافة إلى ذلك، نقدم مكافآت إضافية للمذيعين بناءً على ساعات البث اليومية وكمية الهدايا المستلمة. إذا حققت معايير معينة، ستصبح مؤهلاً للحصول على مكافآت إضافية. للحصول على تفاصيل محددة، يرجى استشارة وكيلك أو المسؤول.";
+"firstLiveRule.guidelinesTitle"  = "إرشادات البث المباشر";
+"firstLiveRule.confirm"          = "تأكيد";
+"firstLiveRule.guideline1.title" = "1. المحتوى المحظور:";
+"firstLiveRule.guideline1.content" = "لا يُسمح بالمحتوى العنيف أو الإباحي أو الفاحش أو المواضيع السياسية في غرف البث المباشر.";
+"firstLiveRule.guideline2.title" = "2. حماية القاصرين:";
+"firstLiveRule.guideline2.content" = "لا يمكن للقاصرين الظهور على الشاشة؛ قد تؤدي المخالفات إلى فرض عقوبات.";
+"firstLiveRule.guideline3.title" = "3. اللغة المتحضرة:";
+"firstLiveRule.guideline3.content" = "تجنب اللغة البذيئة أو الإهانات أو الترهيب؛ شجع على الطاقة الإيجابية.";
+"firstLiveRule.guideline4.title" = "4. قواعد الملابس:";
+"firstLiveRule.guideline4.content" = "يجب على المذيعين تجنب الملابس الكاشفة أو الاستفزازية.";
+"firstLiveRule.guideline5.title" = "5. استخدام الكاميرا:";
+"firstLiveRule.guideline5.content" = "يجب أن تظل الكاميرا مراقبة ونشطة لتجنب العقوبات.";
+"firstLiveRule.guideline6.title" = "6. معايير الجودة:";
+"firstLiveRule.guideline6.content" = "حافظ على وضوح الصورة ومستويات الصوت المناسبة.";
+"firstLiveRule.guideline7.title" = "7. لا للمعاملات الخاصة:";
+"firstLiveRule.guideline7.content" = "يُحظر توجيه المستخدمين إلى قنوات خارجية لإجراء المعاملات. المخالفات الجسيمة قد تؤدي إلى إلغاء امتيازات البث الخاصة بك.";
+
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "إذن الكاميرا مطلوب";
 "liveRoom.permissionAlertOK" = "حسنًا";

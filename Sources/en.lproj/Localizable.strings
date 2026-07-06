@@ -305,6 +305,27 @@
 "wishRuleModal.agree"                = "Agree and Publish";
 "wishRuleModal.content"              = "By publishing a wish list, you agree to honor the promised rewards for viewers who fulfill the wish. Violations may result in account suspension and forfeiture of streaming rights.";
 
+// MARK: - 首次开播规则页（严格对齐 H5 locales/en.json live.*）
+"firstLiveRule.navTitle"         = "";
+"firstLiveRule.beforeStartTitle" = "Before You Start Firstly";
+"firstLiveRule.beforeStartDesc"  = "Through our live streaming feature, you can start a broadcast and interact with your audience. Viewers can support you by sending virtual gifts, which will be converted into earnings for you.\n\nAdditionally, we offer additional rewards to broadcasters based on daily streaming hours and the amount of gifts received. If you meet certain standards, you will become eligible for additional rewards. For specific details, please consult your agent or administrator.";
+"firstLiveRule.guidelinesTitle"  = "Live Streaming Guidelines";
+"firstLiveRule.confirm"          = "Confirm";
+"firstLiveRule.guideline1.title" = "1. Prohibited Content:";
+"firstLiveRule.guideline1.content" = "No violence, pornography, vulgarity, or political topics allowed in live rooms.";
+"firstLiveRule.guideline2.title" = "2. Minor Protection:";
+"firstLiveRule.guideline2.content" = "Minors cannot appear on-screen; violations may result in penalties.";
+"firstLiveRule.guideline3.title" = "3. Civilized Language:";
+"firstLiveRule.guideline3.content" = "Avoid foul language, insults,or intimidation; promote positive energy.";
+"firstLiveRule.guideline4.title" = "4. Dress Code:";
+"firstLiveRule.guideline4.content" = "Broadcasters must avoid revealing or provocative clothing.";
+"firstLiveRule.guideline5.title" = "5. Camera Use:";
+"firstLiveRule.guideline5.content" = "Cameras must remain attended and active to avoid penalties.";
+"firstLiveRule.guideline6.title" = "6. Quality Standards:";
+"firstLiveRule.guideline6.content" = "Maintain clear visuals and appropriate sound levels.";
+"firstLiveRule.guideline7.title" = "7. No Private Transactions:";
+"firstLiveRule.guideline7.content" = "Guiding users to external channels for transactions is prohibited.Serious violations could lead to the cancellation of your streaming privileges.";
+
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "Camera Permission Required";
 "liveRoom.permissionAlertOK" = "OK";
