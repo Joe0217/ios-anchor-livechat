@@ -58,20 +58,19 @@ struct MatchTabView: View {
         // U2：MatchTabView 挂载即 attach cameraSession（首次 onAppear 幂等 —— attachCameraSession 内部 weak
         // → strong 由 spec BL-1 后续修正 → 目前 View 层 @StateObject 提供强持有链）
         .onAppear { MatchStore.shared.attachCameraSession(cameraSession) }
-        // 匹配态浮层：右下角小窗预览（对齐 H5 视频小窗口）；.matching 时显示
-        .overlay(alignment: .bottomTrailing) {
+        // 匹配态浮层：可拖动 + 关闭按钮（用户反馈：预览要能拖动/有关闭）
+        .overlay {
             if matchStore.state == .matching {
-                CameraPreview(camera: cameraSession.camera)
-                    .frame(width: 120, height: 160)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(Theme.Palette.matchMarqueeBorderStart, lineWidth: 1.5)
-                    )
-                    .padding(.trailing, 12)
-                    .padding(.bottom, Theme.Metric.matchButtonBottomInset + Theme.Metric.matchButtonSize + 8)
-                    .transition(.opacity)
-                    .accessibilityLabel(L10n.matchMarqueeCallStarted)
+                MatchCameraPreviewFloating(
+                    camera: cameraSession.camera,
+                    onClose: {
+                        Task { @MainActor in
+                            await MatchStore.shared.closeMatch()
+                        }
+                    }
+                )
+                .transition(.opacity)
+                .accessibilityLabel(L10n.matchMarqueeCallStarted)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: matchStore.state == .matching)
