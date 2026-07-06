@@ -53,3 +53,13 @@
 **行动条件**：
 - 遇到"UI 层看起来在变但真机效果没反应"类症状 → 优先怀疑**渲染层降级/fallback 到 no-op 实现**（如 K 期 PassthroughRenderer.apply 空实现）
 - 追下游前先 grep `Renderer` / `Fallback` / `Passthrough` 相关关键字确认真渲染路径生效
+
+## 补充教训 2026-07-06（切账号 profile 显示旧数据）
+
+**"必现"这个信号足以否定竞态假设**——竞态几乎不可能 100% 稳定复现。
+
+本次 bug 用户明确说"必现"，我仍在 detached task 竞态上打了 2 次补丁（clear 加固 + epoch guard），
+第 3 次才转追必然的代码路径（`SessionStore.login` 未主动触发 refresh，view 层 `.task/.onAppear`
+因 keep-alive 隐藏路径漏触发）。教训：**用户报"必现" ≠ "偶发"**，应立即转追缓存 / 短路条件 /
+view 生命周期等**必然路径**，不该继续加竞态保护。加严 §规则 §2 "跳到竞态假设前必须证伪
+非竞态解释"——**用户已经证伪了（"必现"），我却没听**。
