@@ -19,6 +19,9 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "CGoMatc
 struct CGoMatchButton: View {
     @ObservedObject var store: MatchStore
 
+    /// #3b：首日规则弹窗展示态（当日首次开启触发）
+    @State private var showRulePopup: Bool = false
+
     var body: some View {
         // matchingCalling 期间不 render（不依赖 CallView 遮盖）
         if store.state != .matchingCalling {
@@ -34,6 +37,13 @@ struct CGoMatchButton: View {
             .buttonStyle(.plain)
             .contentShape(Rectangle())
             .accessibilityLabel(a11yLabel)
+            .sheet(isPresented: $showRulePopup) {
+                MatchRulePopup(onAgree: {
+                    showRulePopup = false
+                    Task { @MainActor in await store.openMatch() }
+                })
+                .interactiveDismissDisabled(true)
+            }
         }
     }
 
@@ -56,11 +66,16 @@ struct CGoMatchButton: View {
     // MARK: - 点击处理（step 1b MVP 版 —— 规则弹窗 + 10min 提示留后续里程碑）
 
     private func handleTap() {
-        logger.info("CGoMatchButton tap: state=\(String(describing: store.state))")
+        logger.info("CGoMatchButton tap: state=\(String(describing: store.state)) firstToday=\(store.isFirstMatchToday)")
         Task { @MainActor in
             switch store.state {
             case .ended, .blocked:
-                await store.openMatch()
+                // #3b：首次每日开启 → 弹规则弹窗；同意后走 openMatch（对齐 H5 c-goMatch.vue handleMatch）
+                if store.isFirstMatchToday {
+                    showRulePopup = true
+                } else {
+                    await store.openMatch()
+                }
             case .matching:
                 await store.closeMatch()
             case .matchingCalling:

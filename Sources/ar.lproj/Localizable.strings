@@ -49,6 +49,10 @@
 
 "call.reconnect"             = "إعادة الاتصال";
 
+"autoOffline.title"          = "التحقق من النشاط";
+"autoOffline.message"        = "لاحظنا أنك غير نشط لفترة. لمنع فقدان المكالمات الذي يؤثر على تقييمك، تم تغيير حالتك إلى غير متصل. للعودة إلى الاتصال، انقر على الزر أدناه.";
+"autoOffline.goOnline"       = "الاتصال الآن";
+
 "setToBusy.title"            = "تم ضبطك على مشغول اليوم";
 "setToBusy.description"      = "لقد وصلت إلى الحد الأقصى للمكالمات اليوم. تابع عبر البث أو المطابقة.";
 "setToBusy.goLive"           = "بث مباشر";
@@ -306,6 +310,26 @@
 "wishRuleModal.check"                = "لقد قرأت ووافقت على الإرشادات أعلاه";
 "wishRuleModal.agree"                = "أوافق وأنشر";
 "wishRuleModal.content"              = "بنشر قائمة الأمنيات، توافق على تقديم المكافآت الموعودة للمشاهدين الذين يحققون الأمنية. قد تؤدي الانتهاكات إلى تعليق الحساب وفقدان حقوق البث.";
+
+// MARK: - 直播结果页（对齐 H5 locales/ar.json live.*）
+"liveResult.title"               = "انتهى البث المباشر";
+"liveResult.durationLabel"       = "المدة";
+"liveResult.weakNetworkNotice"   = "بسبب جودة الشبكة الخاصة بك غير مرغوب فيها جداً.";
+"liveResult.card.liveData"       = "بيانات مباشرة";
+"liveResult.card.topGifters"     = "أفضل مرسلو الهدايا";
+"liveResult.card.privateCalls"   = "البث إلى الخاصة";
+"liveResult.viewers"             = "المشاهدون";
+"liveResult.followers"           = "المتابعون";
+"liveResult.gifters"             = "المهدون";
+"liveResult.diamonds"            = "الألماس";
+"liveResult.more"                = "المزيد";
+"liveResult.empty"               = "لا توجد بيانات";
+"liveResult.loadFailed"          = "فشل في الحصول على البيانات.";
+"liveResult.retry"               = "إعادة المحاولة";
+"liveResult.back"                = "رجوع";
+"liveResult.follow"              = "متابعة";
+"liveResult.message"             = "رسالة";
+"liveResult.messageComingSoon"   = "قريباً";
 
 // MARK: - 首次开播规则页（严格对齐 H5 locales/ar.json live.*）
 "firstLiveRule.navTitle"         = "";
@@ -767,6 +791,12 @@
 "beautySettings.recoverConfirm.yes"                         = "Reset";
 "beautySettings.recoverConfirm.no"                          = "Cancel";
 
+// X 按钮未保存丢弃弹窗（2026-07-03 对齐 H5 index.vue:199-210 goBack；ar 待 J 期翻译，暂 English fallback）
+"beautySettings.exitConfirm.title"                          = "Unsaved Changes";
+"beautySettings.exitConfirm.message"                        = "Your beauty settings are not saved. Are you sure you want to exit?";
+"beautySettings.exitConfirm.discard"                        = "Exit";
+"beautySettings.exitConfirm.continue"                       = "Continue Editing";
+
 // MARK: - Match tab（L 里程碑）
 "match.marquee.callStarted"      = "بدأت مكالمة الفيديو.";
 "match.marquee.empty"            = "ابدأ المطابقة لمقابلة المزيد من الأشخاص";
@@ -788,3 +818,16 @@
 "match.toast.turnOffSucceed"     = "تم إيقاف المطابقة";
 "match.toast.cameraStartFailed"  = "فشل تشغيل الكاميرا";
 "match.toast.cameraUnavailable"  = "الكاميرا غير متوفرة";
+
+// Match rule 弹窗
+"match.rule.title"               = "قواعد المطابقة";
+"match.rule.detail1"             = "مطابقة فيديو فورية مع مستخدمين يبحثون عن مكالمة.";
+"match.rule.detail2"             = "حافظ على ظهور وجهك أثناء المطابقة لضمان المصداقية.";
+"match.rule.detail3"             = "قد يؤدي المحتوى غير الملائم إلى تعليق المطابقة.";
+"match.rule.detail4"             = "بتفعيلك المطابقة، فإنك توافق على إرشادات المجتمع.";
+"match.rule.agree"               = "موافق";
+
+// Match tip 弹窗
+"match.tip.title"                = "شغّل المطابقة لتلقّي المكالمات بشكل أسرع وكسب المزيد.";
+"match.tip.goMatch"              = "ابدأ المطابقة";
+"match.tip.noReminder"           = "لا تُذكّرني اليوم";

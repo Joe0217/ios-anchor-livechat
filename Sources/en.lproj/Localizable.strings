@@ -47,6 +47,10 @@
 
 "call.reconnect"             = "Reconnect";
 
+"autoOffline.title"          = "Activity Verification";
+"autoOffline.message"        = "We noticed you've been inactive for a while. To prevent missed calls affecting your rating, your status has been changed to offline. To go back online, tap the button below.";
+"autoOffline.goOnline"       = "Go Online";
+
 "setToBusy.title"            = "Set to Busy Today";
 "setToBusy.description"      = "You've reached today's call limit. Continue via Live or Match.";
 "setToBusy.goLive"           = "Go Live";
@@ -744,7 +748,33 @@
 "beautySettings.recoverConfirm.yes"                         = "Reset";
 "beautySettings.recoverConfirm.no"                          = "Cancel";
 
+// X 按钮未保存丢弃弹窗（2026-07-03 对齐 H5 index.vue:199-210 goBack）
+"beautySettings.exitConfirm.title"                          = "Unsaved Changes";
+"beautySettings.exitConfirm.message"                        = "Your beauty settings are not saved. Are you sure you want to exit?";
+"beautySettings.exitConfirm.discard"                        = "Exit";
+"beautySettings.exitConfirm.continue"                       = "Continue Editing";
+
 // MARK: - Match tab（L 里程碑）
+
+// MARK: - 直播结果页（对齐 H5 locales/en.json live.*）
+"liveResult.title"               = "Live Ends";
+"liveResult.durationLabel"       = "Duration";
+"liveResult.weakNetworkNotice"   = "Because your network too poor many times.";
+"liveResult.card.liveData"       = "Live Data";
+"liveResult.card.topGifters"     = "Top Gifters";
+"liveResult.card.privateCalls"   = "Live to Private Calls";
+"liveResult.viewers"             = "Viewers";
+"liveResult.followers"           = "Followers";
+"liveResult.gifters"             = "Gifters";
+"liveResult.diamonds"            = "Diamonds";
+"liveResult.more"                = "More";
+"liveResult.empty"               = "No Data";
+"liveResult.loadFailed"          = "Failed to get data.";
+"liveResult.retry"               = "Retry";
+"liveResult.back"                = "Back";
+"liveResult.follow"              = "Follow";
+"liveResult.message"             = "Message";
+"liveResult.messageComingSoon"   = "Coming soon";
 
 // MARK: - 首次开播规则页（严格对齐 H5 locales/en.json live.*）
 "firstLiveRule.navTitle"         = "";
@@ -786,3 +816,16 @@
 "match.toast.cameraStartFailed"  = "Camera failed to start";
 "match.toast.cameraUnavailable"  = "Camera unavailable";
 "match.marquee.a11y.callFormat"  = "%@ called %@";
+
+// Match rule 弹窗（#3b 首次每日开启匹配的规则同意）
+"match.rule.title"               = "Matching Rules";
+"match.rule.detail1"             = "Real-time video matching with users seeking a call.";
+"match.rule.detail2"             = "Keep your face visible during matching for authenticity.";
+"match.rule.detail3"             = "Inappropriate content may result in matching suspension.";
+"match.rule.detail4"             = "By enabling, you agree to the platform's community guidelines.";
+"match.rule.agree"               = "Agree";
+
+// Match tip 弹窗（#3c 10 分钟未开启匹配提示）
+"match.tip.title"                = "Turn on matching to receive calls faster and earn more.";
+"match.tip.goMatch"              = "Go Match";
+"match.tip.noReminder"           = "Don't remind me today";

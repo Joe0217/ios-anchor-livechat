@@ -49,6 +49,10 @@
 
 "call.reconnect"             = "Yeniden Bağlan";
 
+"autoOffline.title"          = "Etkinlik Doğrulama";
+"autoOffline.message"        = "Bir süredir etkin olmadığınızı fark ettik. Kaçırılan aramaların derecelendirmenizi etkilemesini önlemek için durumunuz çevrimdışı olarak değiştirildi. Yeniden çevrimiçi olmak için aşağıdaki düğmeye dokunun.";
+"autoOffline.goOnline"       = "Çevrimiçi Ol";
+
 "setToBusy.title"            = "Bugün Meşgul Olarak Ayarlandı";
 "setToBusy.description"      = "Bugünkü arama sınırına ulaştınız. Yayın veya Eşleşme üzerinden devam edin.";
 "setToBusy.goLive"           = "Yayına Geç";
@@ -306,6 +310,26 @@
 "wishRuleModal.check"                = "Yukarıdaki kuralları okudum ve kabul ediyorum";
 "wishRuleModal.agree"                = "Kabul et ve yayınla";
 "wishRuleModal.content"              = "Bir dilek listesi yayınlayarak, dileği yerine getiren izleyicilere vaat edilen ödülleri vermeyi kabul edersiniz. İhlaller hesabın askıya alınmasına ve yayın haklarının kaybedilmesine neden olabilir.";
+
+// MARK: - 直播结果页（对齐 H5 locales/tr.json live.* + 部分 key H5 tr 缺失，iOS 侧补齐土耳其翻译）
+"liveResult.title"               = "Canlı Yayın Sona Erdi";
+"liveResult.durationLabel"       = "Süre";
+"liveResult.weakNetworkNotice"   = "Ağınız birçok kez çok kötü olduğu için.";
+"liveResult.card.liveData"       = "Canlı Veriler";
+"liveResult.card.topGifters"     = "En İyi Hediyeciler";
+"liveResult.card.privateCalls"   = "Yayından Özel Aramalara";
+"liveResult.viewers"             = "İzleyiciler";
+"liveResult.followers"           = "Takipçiler";
+"liveResult.gifters"             = "Hediyeciler";
+"liveResult.diamonds"            = "Elmaslar";
+"liveResult.more"                = "Daha Fazla";
+"liveResult.empty"               = "Veri Yok";
+"liveResult.loadFailed"          = "Veri alınamadı.";
+"liveResult.retry"               = "Yeniden Dene";
+"liveResult.back"                = "Geri";
+"liveResult.follow"              = "Takip Et";
+"liveResult.message"             = "Mesaj";
+"liveResult.messageComingSoon"   = "Yakında";
 
 // MARK: - 首次开播规则页（严格对齐 H5 locales/tr.json live.* + 7 条 guideline H5 tr 缺失，暂用 en fallback）
 "firstLiveRule.navTitle"         = "";
@@ -767,6 +791,12 @@
 "beautySettings.recoverConfirm.yes"                         = "Reset";
 "beautySettings.recoverConfirm.no"                          = "Cancel";
 
+// X 按钮未保存丢弃弹窗（2026-07-03 对齐 H5 index.vue:199-210 goBack；tr 待 J 期翻译，暂 English fallback）
+"beautySettings.exitConfirm.title"                          = "Unsaved Changes";
+"beautySettings.exitConfirm.message"                        = "Your beauty settings are not saved. Are you sure you want to exit?";
+"beautySettings.exitConfirm.discard"                        = "Exit";
+"beautySettings.exitConfirm.continue"                       = "Continue Editing";
+
 // MARK: - Match tab（L 里程碑）
 "match.marquee.callStarted"      = "Görüntülü Arama Başladı.";
 "match.marquee.empty"            = "Daha fazla insanla tanışmak için eşleştirmeye başla";
@@ -788,3 +818,16 @@
 "match.toast.turnOffSucceed"     = "Eşleştirme kapatıldı";
 "match.toast.cameraStartFailed"  = "Kamera başlatılamadı";
 "match.toast.cameraUnavailable"  = "Kamera kullanılamıyor";
+
+// Match rule 弹窗
+"match.rule.title"               = "Eşleşme Kuralları";
+"match.rule.detail1"             = "Arama arayan kullanıcılarla gerçek zamanlı görüntülü eşleşme.";
+"match.rule.detail2"             = "Eşleşme sırasında güvenilirlik için yüzünüzü görünür tutun.";
+"match.rule.detail3"             = "Uygunsuz içerik eşleştirmenin askıya alınmasına neden olabilir.";
+"match.rule.detail4"             = "Etkinleştirerek topluluk kurallarını kabul etmiş olursunuz.";
+"match.rule.agree"               = "Kabul Ediyorum";
+
+// Match tip 弹窗
+"match.tip.title"                = "Daha hızlı arama almak ve daha fazla kazanmak için eşleşmeyi açın.";
+"match.tip.goMatch"              = "Eşleş";
+"match.tip.noReminder"           = "Bugün hatırlatma";

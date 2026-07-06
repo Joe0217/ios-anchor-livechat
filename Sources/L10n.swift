@@ -258,6 +258,11 @@ enum L10n {
     // Home 顶部刷新按钮 toast（对齐 H5 tabsNav.vue refreshIMOnline → showToast('call.reconnect')）
     static var callReconnect: String { localize("call.reconnect", comment: "重连 toast") }
 
+    // 长时间无操作自动离线弹窗（对齐 H5 App.vue useDynamicInactivityTimer）
+    static var autoOfflineTitle: String { localize("autoOffline.title", comment: "自动离线弹窗标题：Activity Verification") }
+    static var autoOfflineMessage: String { localize("autoOffline.message", comment: "自动离线弹窗正文：inactive → 已改为离线，可点击恢复") }
+    static var autoOfflineGoOnline: String { localize("autoOffline.goOnline", comment: "自动离线弹窗按钮：Go online") }
+
     // "今日已设为忙碌"弹窗（对齐安卓 SetToBusyDialog）
     static var setToBusyTitle: String { localize("setToBusy.title", comment: "已设为忙碌弹窗标题") }
     static var setToBusyDescription: String { localize("setToBusy.description", comment: "已设为忙碌弹窗描述") }
@@ -647,6 +652,35 @@ enum L10n {
     static var wishRuleModalAgree: String { localize("wishRuleModal.agree", comment: "同意并发布") }
     static var wishRuleModalContent: String { localize("wishRuleModal.content", comment: "心愿承诺规范正文（WishRuleModal 内 ScrollView 显示）") }
 
+    // MARK: - 直播结果页（对齐 H5 views/liveEnds/index.vue + locales/*.json live.*）
+    /// 顶部标题 "Live Ends"（H5 live.'live ends'）
+    static var liveResultTitle: String { localize("liveResult.title", comment: "结果页顶部标题") }
+    /// 时长 label "Duration"（H5 common.duration）
+    static var liveResultDurationLabel: String { localize("liveResult.durationLabel", comment: "时长 label") }
+    /// 弱网强制下播红字提示（H5 live.'Because your network too poor many times'）
+    static var liveResultWeakNetworkNotice: String { localize("liveResult.weakNetworkNotice", comment: "弱网强制下播红字提示") }
+    /// 卡 1 标题 "Live Data"（H5 live.'live data'）
+    static var liveResultCardLiveData: String { localize("liveResult.card.liveData", comment: "卡 1 标题") }
+    /// 卡 2 标题 "Top Gifters"
+    static var liveResultCardTopGifters: String { localize("liveResult.card.topGifters", comment: "卡 2 标题") }
+    /// 卡 3 标题 "Live to Private Calls"
+    static var liveResultCardPrivateCalls: String { localize("liveResult.card.privateCalls", comment: "卡 3 标题") }
+    /// 4 项数据 label
+    static var liveResultViewers: String { localize("liveResult.viewers", comment: "观众数 label") }
+    static var liveResultFollowers: String { localize("liveResult.followers", comment: "新增关注 label") }
+    static var liveResultGifters: String { localize("liveResult.gifters", comment: "送礼人数 label") }
+    static var liveResultDiamonds: String { localize("liveResult.diamonds", comment: "钻石收益 label") }
+    /// "More" / 空态 "No Data" / 加载失败 / Retry / Back
+    static var liveResultMore: String { localize("liveResult.more", comment: "More 按钮") }
+    static var liveResultEmpty: String { localize("liveResult.empty", comment: "空态文本 No Data") }
+    static var liveResultLoadFailed: String { localize("liveResult.loadFailed", comment: "加载失败 banner") }
+    static var liveResultRetry: String { localize("liveResult.retry", comment: "重试按钮") }
+    static var liveResultBack: String { localize("liveResult.back", comment: "顶部 back 按钮 a11y") }
+    /// 关注 / Message / Coming soon
+    static var liveResultFollow: String { localize("liveResult.follow", comment: "关注按钮") }
+    static var liveResultMessage: String { localize("liveResult.message", comment: "私信按钮") }
+    static var liveResultMessageComingSoon: String { localize("liveResult.messageComingSoon", comment: "私信入口占位 toast") }
+
     // MARK: - 首次开播规则页（严格对齐 H5 views/liveRule/component/firstLiveRule.vue + locales/*.json live.*）
     static var firstLiveRuleNavTitle: String { localize("firstLiveRule.navTitle", comment: "首次开播规则页 nav title") }
     static var firstLiveRuleBeforeStartTitle: String { localize("firstLiveRule.beforeStartTitle", comment: "H5 live.'before you start firstly'") }
@@ -939,6 +973,12 @@ enum L10n {
         static var recoverConfirmMessage: String { localize("beautySettings.recoverConfirm.message", comment: "Recover 确认弹窗正文") }
         static var recoverConfirmYes: String     { localize("beautySettings.recoverConfirm.yes", comment: "Recover 确认按钮") }
         static var recoverConfirmNo: String      { localize("beautySettings.recoverConfirm.no", comment: "Recover 取消按钮") }
+
+        // X 按钮未保存丢弃弹窗（2026-07-03 对齐 H5 index.vue:199-210 goBack）
+        static var exitConfirmTitle: String    { localize("beautySettings.exitConfirm.title", comment: "退出未保存弹窗标题") }
+        static var exitConfirmMessage: String  { localize("beautySettings.exitConfirm.message", comment: "退出未保存弹窗正文") }
+        static var exitConfirmDiscard: String  { localize("beautySettings.exitConfirm.discard", comment: "退出未保存 - 丢弃按钮") }
+        static var exitConfirmContinue: String { localize("beautySettings.exitConfirm.continue", comment: "退出未保存 - 继续编辑按钮") }
     }
 
     // MARK: - H-2 私密媒体解锁（Gift Message，对齐 H5 secretMessage）
@@ -1036,5 +1076,36 @@ enum L10n {
         String(format: localize("match.marquee.a11y.callFormat",
                                 comment: "跑马灯 VoiceOver: %@ called %@"),
                caller, receiver)
+    }
+
+    // MARK: - Match rule 弹窗（#3b 首次每日开启匹配的规则同意；对齐 H5 c-goMatch.vue showRulePopup）
+    static var matchRuleTitle: String {
+        localize("match.rule.title", comment: "匹配规则弹窗标题")
+    }
+    static var matchRuleDetail1: String {
+        localize("match.rule.detail1", comment: "匹配规则条款 1")
+    }
+    static var matchRuleDetail2: String {
+        localize("match.rule.detail2", comment: "匹配规则条款 2")
+    }
+    static var matchRuleDetail3: String {
+        localize("match.rule.detail3", comment: "匹配规则条款 3")
+    }
+    static var matchRuleDetail4: String {
+        localize("match.rule.detail4", comment: "匹配规则条款 4")
+    }
+    static var matchRuleAgree: String {
+        localize("match.rule.agree", comment: "匹配规则同意按钮")
+    }
+
+    // MARK: - Match tip 弹窗（#3c 10 分钟未开启匹配提示）
+    static var matchTipTitle: String {
+        localize("match.tip.title", comment: "匹配提示弹窗标题（Turn on matching to receive calls faster）")
+    }
+    static var matchTipGoMatch: String {
+        localize("match.tip.goMatch", comment: "匹配提示确认按钮")
+    }
+    static var matchTipNoReminder: String {
+        localize("match.tip.noReminder", comment: "今日不再提醒 checkbox 文案")
     }
 }
