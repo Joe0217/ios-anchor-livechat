@@ -299,11 +299,11 @@
 "wishSetting.ruleAgreeShort"         = "I agree";
 "wishSetting.ruleFooter"             = "We promise to use the gifts fairly and sincerely, and to abide by the platform rules.";
 
-// MARK: - 心愿承诺规范弹窗（严格对齐 H5 locales/en.json live.ruleTitle/ruleContent/ruleCheck + other.agree）
-"wishRuleModal.title"                = "Wish List Commitment";
-"wishRuleModal.content"              = "I promise to faithfully fulfill the commitments made in this wish list and will not deceive or mislead viewers into sending gifts in any way. The platform reserves the right to impose penalties for violations.";
-"wishRuleModal.check"                = "I have read and agree to the above rules";
-"wishRuleModal.agree"                = "Agree & Publish";
+// MARK: - 心愿承诺规范弹窗
+"wishRuleModal.title"                = "Wish Commitment Guidelines";
+"wishRuleModal.check"                = "I have read and agree to the above guidelines";
+"wishRuleModal.agree"                = "Agree and Publish";
+"wishRuleModal.content"              = "By publishing a wish list, you agree to honor the promised rewards for viewers who fulfill the wish. Violations may result in account suspension and forfeiture of streaming rights.";
 
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "Camera Permission Required";
@@ -340,6 +340,22 @@
 "liveRoom.comingSoon.privateCall" = "Private call coming soon";
 "liveRoom.comingSoon.gift"        = "Gift shop coming soon";
 "liveRoom.comingSoon.send"        = "Chat send coming soon";
+
+/* LiveRoom H5 interaction alignment (2026-07-06 iteration 2) */
+"liveRoom.tool.message"           = "Messages";
+"liveRoom.tool.gift"              = "Gifts";
+"liveRoom.tool.setting"           = "Settings";
+"liveRoom.comingSoon.message"     = "Chat inbox coming soon";
+"liveRoom.setting.beauty"         = "Beauty";
+"liveRoom.setting.endLive"        = "End live";
+"liveRoom.pk.a11y.default"        = "Start PK";
+"liveRoom.pk.a11y.matching"       = "Matching PK opponent";
+"liveRoom.pk.a11y.invited"        = "PK invite received";
+"liveRoom.pk.a11y.inPK"           = "In PK";
+"liveRoom.pk.a11y.punishing"      = "PK punishing";
+"liveRoom.comingSoon.pkInterrupt"  = "PK interrupt confirm coming soon";
+"liveRoom.comingSoon.pkDisconnect" = "PK disconnect confirm coming soon";
+"liveRoom.privateCall.caption"    = "Private call";
 
 // MARK: - Call POC（调试态保留，上线前删除）
 "call.statusWaitingRemote"   = "Waiting for remote";
@@ -452,6 +468,32 @@
 "pk.invite.toast.limit"         = "PK invitation limit reached. Try later";
 "pk.invite.toast.matching"      = "Random matching in progress. Cancel to invite";
 "pk.invite.toast.sent"          = "PK invitation sent";
+
+/* PK popup H5 alignment (2026-07-06 iteration 3) */
+"pk.giveUp.title"               = "Give up the PK?";
+"pk.giveUp.confirm"             = "Confirm to interrupt this PK";
+"pk.giveUp.action"              = "Give Up";
+"pk.continuePK"                 = "Continue PK";
+"pk.pkEnded.title"              = "PK Ended";
+"pk.disconnect.action"          = "Disconnect Live";
+"pk.matchFailed.title"          = "No match found temporarily";
+"pk.matchFailed.hint1"          = "Oops, no equal-strength streamer available now";
+"pk.matchFailed.hint2"          = "Matching off. Go pick a specific streamer for PK";
+"pk.matchFailed.initiate"       = "Initiate PK";
+"pk.inviting.title"             = "Inviting to PK";
+"pk.waitingAcceptance"          = "Waiting PK acceptance";
+"pk.cancelInvitation"           = "Cancel PK Invitation";
+"pk.punish.label"               = "Punish";
+"pk.result.win"                 = "WIN";
+"pk.result.lose"                = "LOSE";
+"pk.result.draw"                = "DRAW";
+"pk.history.title"              = "PK History";
+"pk.rule.title"                 = "PK Rules";
+"pk.rank.title"                 = "PK Ranking";
+"pk.comingSoon"                 = "Coming soon";
+"pk.countdownFormat"            = "%ds";
+"pk.opponent.mute"              = "Mute opponent";
+"pk.opponent.unmute"            = "Unmute opponent";
 
 // MARK: - H IM 完善 错误文案（NIMServiceError.errorDescription）
 "im.error.loginFailedFormat"         = "IM login failed (code=%@) %@";
@@ -699,3 +741,14 @@
 "beautySettings.recoverConfirm.message"                     = "Current adjustments will be cleared.";
 "beautySettings.recoverConfirm.yes"                         = "Reset";
 "beautySettings.recoverConfirm.no"                          = "Cancel";
+
+// MARK: - Match tab（L 里程碑）
+"match.marquee.callStarted"      = "Video Call Started.";
+"match.marquee.empty"            = "Start matching to meet more people";
+"match.title.matchesFound"       = "%d Matches Found!";
+"match.subtitle.description"     = "Your recent matches are above. Tap to chat and charm them into calling you.";
+"match.userList.empty"           = "No matches yet";
+"match.userCard.videoPrice"      = "%d/min";
+"match.userCard.close"           = "Close";
+"match.button.a11y.turnOn"       = "Turn on matching";
+"match.button.a11y.turnOff"      = "Turn off matching";

@@ -4,7 +4,9 @@ import SwiftUI
 /// Invite 图标顶部悬浮"Earn Money"金色渐变角标（H5 style）。
 /// Online 开关已改为 WorkView 悬浮层，不再放本区。
 struct ToolsSection: View {
-    @ObservedObject var vm: WorkViewModel
+    // 无 vm 依赖：tools/columns 全为 let 常量，DEBUG 分支读单例。
+    // 上一版从 header 移除 Online 开关后，vm 参数变成死订阅（触发 WorkViewModel
+    // 任一 @Published 变化都让 12 图标网格重算）。审查报告-202607061550 必修-1。
 
     /// 工具项（图标资源名 + 标签）。顺序与 H5 一致。
     /// 未接入 Newbie/bigR 后端 visible 接口，本次不展示；里程碑 J 补齐。

@@ -105,13 +105,16 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
         task = t
         t.resume()
         startReceiveLoop()
-        // ⚠️ 首包发 currentStatus 不发 .foreground：H5 getOnlineStatus 空闲态返回 CALL_END(10001)，
-        // 后端按此判定"可拨打"。FOREGROUND(10002) 是"刚回到前台"的瞬时状态，长期上报后端会
-        // 拒绝 createCall（1111 "current status unable to make a call"）。
-        // 通话期重连握手时 currentStatus 已是 .calling，确保 D 联动不中断。
-        sendStatus(currentStatus)
-        startPing()
-        connected = true
+        // 注：不再在此处立即 sendStatus / startPing / 置 connected=true。
+        // task.resume() 只是异步提交连接请求，握手（TLS + HTTP 101）尚未完成，
+        // 底层 socket 未 ready，立即 send 会命中 Darwin ENOTCONN (errno 57)
+        // → sendStatus 内 send failure callback 触发 scheduleReconnect
+        // → 5s 后又 connect → 又立即 send → **无限重连循环**（真机观察到 30+ 次 task 循环）。
+        //
+        // 正解：全部挪到 didOpenWithProtocol delegate（HTTP 101 到达信号）里，与握手成功对齐。
+        //   - 首包 sendStatus(currentStatus) — 通话期 .calling / 空闲 .callEnd(10001)
+        //     （对齐 H5 getOnlineStatus，不发 .foreground 避免后端 1111 拒绝 createCall）
+        //   - startPing() — 15s 周期心跳，对齐安卓 VptWebSocketManager
     }
 
     /// `{base}/webSocket?ciphertext={AES_ECB_Hex(JSON({"appToken":uuid}))}`
@@ -140,6 +143,14 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
                                 webSocketTask: URLSessionWebSocketTask,
                                 didOpenWithProtocol p: String?) {
         AppLogger.heartbeat.debug("📡 [WS] didOpen protocol=\(p ?? "nil", privacy: .public)")
+        // 真正握手成功（HTTP 101 Switching Protocols）才置 connected=true + 发首包 + 启 ping。
+        // 之前在 connect() 里 t.resume() 后立即 send 会命中 errno 57 无限重连循环。
+        Task { @MainActor [weak self] in
+            guard let self, !self.disposed else { return }
+            self.connected = true
+            self.sendStatus(self.currentStatus)
+            self.startPing()
+        }
     }
 
     nonisolated func urlSession(_ session: URLSession,
@@ -148,6 +159,14 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
                                 reason: Data?) {
         let reasonStr = reason.flatMap { String(data: $0, encoding: .utf8) } ?? "<nil>"
         AppLogger.heartbeat.debug("📡 [WS] didClose code=\(closeCode.rawValue, privacy: .public) reason=\(reasonStr, privacy: .private)")
+        // 与 didOpen 对称：服务端主动 close frame 时立即置 connected=false 触发重连，
+        // 不用等 receive loop failure 分支（可能滞后）。审查报告-202607061703 必修-1。
+        // 幂等：scheduleReconnect 内 cancelReconnect 自动去重与 receive loop 并发调用无副作用。
+        Task { @MainActor [weak self] in
+            guard let self, !self.disposed else { return }
+            self.connected = false
+            self.scheduleReconnect()
+        }
     }
 
     nonisolated func urlSession(_ session: URLSession,
@@ -156,6 +175,14 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
         let resp = task.response as? HTTPURLResponse
         let body = (task as? URLSessionDataTask).flatMap { _ in "" } ?? ""
         AppLogger.heartbeat.debug("📡 [WS] task didComplete status=\(resp?.statusCode ?? -1, privacy: .public) err=\(error?.localizedDescription ?? "nil", privacy: .private) body=\(body, privacy: .private)")
+        // 覆盖 TLS/DNS/HTTP 4xx 握手失败场景（didOpen 未 fire、receive loop 未启动 → 现有分支无人触发重连 → 卡死）。
+        // 正常关闭 (stop 主动 close) 时 error=nil，前置守卫不触发重连；stop 内已 disposed=true 再兜底一层。
+        guard error != nil else { return }
+        Task { @MainActor [weak self] in
+            guard let self, !self.disposed else { return }
+            self.connected = false
+            self.scheduleReconnect()
+        }
     }
 
     // MARK: - 收 / 发
@@ -295,5 +322,22 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
         currentStatus = next
         sendStatus(next)
         AppLogger.heartbeat.debug("📡 [WS] notifyCallStateChanged callState=\(callState, privacy: .public) → onlineStatus=\(next.rawValue, privacy: .public)")
+    }
+
+    // MARK: - Work 悬浮开关联动（OnlineStatusStore.setUserSetOnline 调用）
+
+    /// 用户手动切换在线态时立即通过 WS 上报，不等下一次 15s ping tick。
+    /// 对齐已有 `notifyCallStateChanged` 模式：变更 currentStatus + 立即 sendStatus。
+    ///
+    /// **优先级**：用户显式意图 → 无条件覆盖 currentStatus。
+    /// - 通话中用户点下线：`.offline` 覆盖 `.calling`（业务上应禁止通话中下线，UI 未做保护）
+    /// - 从下线态恢复上线：置回 `.callEnd`（若期间正好在通话，LiveStore.resumeCall 会通过
+    ///   `notifyCallStateChanged` 再切回 `.calling` 覆盖）
+    func reportManualOnlineStatus(isOnline: Bool) {
+        let next: OnlineStatus = isOnline ? .callEnd : .offline
+        guard currentStatus != next else { return }
+        currentStatus = next
+        sendStatus(next)
+        AppLogger.heartbeat.debug("📡 [WS] reportManualOnlineStatus isOnline=\(isOnline, privacy: .public) → onlineStatus=\(next.rawValue, privacy: .public)")
     }
 }

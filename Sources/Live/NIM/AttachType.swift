@@ -63,6 +63,7 @@ enum AttachType: Equatable {
     case followIncrement          // -4 被关注通知
     case userRechargeSuccess      // 35 用户充值成功（主播端非核心，预留 case）
     case anchorAuditChange        // 58 主播审核状态变更（applyStatus 0=通过/1=拒绝）
+    case forcedOffline            // 37 服务端主动踢下线（安卓 OFFLINE_MSG，触发 hasExceededCallLimit 检查）
     case privateCallEnterAnimation // 83 私 call 进场座驾动画
     case callRechargeReward       // 90 通话充值成功钻石奖励
 
@@ -162,6 +163,7 @@ enum AttachType: Equatable {
         case .followIncrement:            return "-4"
         case .userRechargeSuccess:        return "35"
         case .anchorAuditChange:          return "58"
+        case .forcedOffline:              return "37"
         case .privateCallEnterAnimation:  return "83"
         case .callRechargeReward:         return "90"
         // 直播态扩展
@@ -281,6 +283,7 @@ enum AttachType: Equatable {
         case -4:  return .followIncrement
         case 35:  return .userRechargeSuccess
         case 58:  return .anchorAuditChange
+        case 37:  return .forcedOffline
         case 83:  return .privateCallEnterAnimation
         case 90:  return .callRechargeReward
         // 直播态扩展

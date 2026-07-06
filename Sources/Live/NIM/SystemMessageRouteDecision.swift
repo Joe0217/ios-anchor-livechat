@@ -29,6 +29,11 @@ enum SystemMessageAction: Equatable {
     case followIncrement
     case anchorAuditChange(applyStatus: Int, content: String)
 
+    // MARK: - OnlineStatusStore 动作
+    /// 触发 hasExceededCallLimit 查询（对齐安卓 queryHideState(showToast=false, doAction=true)）：
+    /// 收到 attachType=37 → 服务端主动踢下线 → 查是否达通话上限 → 弹 SetToBusyDialog
+    case checkForcedBusy
+
     /// 非 sysMsg / syncSysMsg 通道或未覆盖 attachType：router 应 `return false` 让链路下游继续。
     case passThrough
 }
@@ -85,6 +90,9 @@ enum SystemMessageRouteDecision {
             let s = (payload["applyStatus"] as? Int) ?? -1
             let c = (payload["content"] as? String) ?? ""
             return .anchorAuditChange(applyStatus: s, content: c)
+        case .forcedOffline:
+            // 对齐安卓 CustomNotificationHandler → LiveEventBus "offline_msg"
+            return .checkForcedBusy
 
         // ===== chatroom 通道（PKNIMRouter / PartyMessageRouter 持有），sysMsg 通道直接放行 =====
 

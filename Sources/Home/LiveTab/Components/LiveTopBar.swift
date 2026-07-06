@@ -1,15 +1,24 @@
 import SwiftUI
 
 /// Live Tab 顶部条：4 个子 tab 切换 + 右侧排行榜 / 刷新 / 在线小圆点。
-/// 设计稿里 "Live" 选中态文字为橙金渐变，下方贴一条 liveTabIndicator 光带。
+///
+/// 刷新按钮 + 在线圆点对齐 H5 `components/tabsNav.vue`：
+/// - 点刷新 → `OnlineStatusStore.refreshOnline()`（强制上线 + 1s 旋转 + reconnect toast）
+/// - 圆点颜色随 `OnlineStatusStore.isOnline` 变化：绿 `#00D592` / 灰
 struct LiveTopBar: View {
-    @Binding var selected: LiveSubTab
+    @Binding var selected: HomeTopTab
+    /// 按主播段位派生的 tab 顺序 (trial #1 A-spec §3.1)。
+    /// S 级：[live, list, match, circle]；非 S 级：[list, match, live, circle]。
+    /// 默认值是 S 级顺序，便于 Preview 和兼容性。
+    let availableOrder: [HomeTopTab]
     let rankCount: String
+
+    @ObservedObject private var onlineStatus = OnlineStatusStore.shared
 
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
             HStack(spacing: Theme.Metric.liveSubTabGap) {
-                ForEach(LiveSubTab.allCases, id: \.self) { tab in
+                ForEach(availableOrder, id: \.self) { tab in
                     LiveSubTabButton(tab: tab, isSelected: selected == tab) {
                         selected = tab
                     }
@@ -31,28 +40,52 @@ struct LiveTopBar: View {
                 .frame(width: 56, height: 28)
                 .accessibilityLabel(L10n.liveRankBadge)
 
-            // 刷新按钮（静态还原期：空 action 无业务响应；不用 .disabled 避免切图被 SwiftUI 灰化）
+            // 刷新按钮：对齐安卓 queryHideState(true, true) —— 1s 旋转 + 查超限 API → 未超限置回上线 + toast / 超限弹 SetToBusyDialog
             Button {
-                // 占位
+                onlineStatus.refreshOnline()
             } label: {
                 Image("liveRefresh")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 28, height: 28)
+                    .rotationEffect(.degrees(onlineStatus.isRefreshing ? 360 : 0))
+                    .animation(
+                        onlineStatus.isRefreshing
+                            ? .linear(duration: 1).repeatForever(autoreverses: false)
+                            : .default,
+                        value: onlineStatus.isRefreshing
+                    )
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.liveRefresh)
 
-            // 在线状态小圆点
+            // 在线圆点：对齐安卓 3 色 —— 🟢 绿 online / 🔘 灰 offline / 🔴 红 forcedBusy
             ZStack {
                 Circle()
                     .fill(Color.black.opacity(0.3))
                     .frame(width: 28, height: 28)
                 Circle()
-                    .fill(Theme.Palette.liveOnlineDot)
+                    .fill(dotColor(onlineStatus.derivedDot))
                     .frame(width: 10, height: 10)
             }
             .accessibilityLabel(L10n.liveOnlineDot)
+            .accessibilityValue(dotA11yValue(onlineStatus.derivedDot))
+        }
+    }
+
+    private func dotColor(_ dot: DotStatus) -> Color {
+        switch dot {
+        case .online:     return Color(hex: 0x00D592)   // H5 --lc-online-status-leisure
+        case .offline:    return Color.gray             // H5 --lc-online-status-off
+        case .forcedBusy: return Color(hex: 0xFF3B30)   // 安卓 forcedBusy 红
+        }
+    }
+
+    private func dotA11yValue(_ dot: DotStatus) -> String {
+        switch dot {
+        case .online:     return L10n.workOnlineOn
+        case .offline:    return L10n.workOnlineOff
+        case .forcedBusy: return L10n.setToBusyTitle
         }
     }
 }
@@ -67,7 +100,7 @@ struct LiveTopBar: View {
 ///    与当前是否选中无关。
 /// 3. 光带 60×26 居中对齐文字，可视觉横向超出文字两侧（background 不参与父布局）。
 struct LiveSubTabButton: View {
-    let tab: LiveSubTab
+    let tab: HomeTopTab
     let isSelected: Bool
     let action: () -> Void
 

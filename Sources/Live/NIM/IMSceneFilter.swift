@@ -49,6 +49,7 @@ enum IMSceneFilter {
         AttachType.banned.raw,              // 62
         AttachType.followIncrement.raw,     // -4
         AttachType.anchorAuditChange.raw,   // 58
+        AttachType.forcedOffline.raw,       // 37 服务端主动踢下线（触发 hasExceededCallLimit）
     ]
 
     /// 决策入口。任意输入安全，缺字段走兜底（不抛错、不 crash）。
@@ -149,7 +150,7 @@ enum IMSceneFilter {
             return false
 
         // ===== mustReceive 已早返 true，此处列出避免 exhaustive switch 漏 case =====
-        case .forceEndLive, .banned, .followIncrement, .anchorAuditChange:
+        case .forceEndLive, .banned, .followIncrement, .anchorAuditChange, .forcedOffline:
             return true
         }
     }

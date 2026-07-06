@@ -301,11 +301,11 @@
 "wishSetting.ruleAgreeShort"         = "أوافق على";
 "wishSetting.ruleFooter"             = "نتعهد باستخدام الهدايا بإنصاف وصدق، والالتزام بقواعد المنصة.";
 
-// MARK: - 心愿承诺规范弹窗（严格对齐 H5 locales/ar.json live.ruleTitle/ruleContent/ruleCheck + other.agree）
-"wishRuleModal.title"                = "التزام قائمة الأمنيات";
-"wishRuleModal.content"              = "أتعهد بالوفاء بالالتزامات الواردة في قائمة الأمنيات هذه ولن أخدع المشاهدين أو أضللهم بأي طريقة لإرسال الهدايا.";
-"wishRuleModal.check"                = "لقد قرأت وأوافق على القواعد المذكورة أعلاه";
-"wishRuleModal.agree"                = "موافقة ونشر";
+// MARK: - 心愿承诺规范弹窗
+"wishRuleModal.title"                = "إرشادات التزام الأمنية";
+"wishRuleModal.check"                = "لقد قرأت ووافقت على الإرشادات أعلاه";
+"wishRuleModal.agree"                = "أوافق وأنشر";
+"wishRuleModal.content"              = "بنشر قائمة الأمنيات، توافق على تقديم المكافآت الموعودة للمشاهدين الذين يحققون الأمنية. قد تؤدي الانتهاكات إلى تعليق الحساب وفقدان حقوق البث.";
 
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "إذن الكاميرا مطلوب";
@@ -342,6 +342,22 @@
 "liveRoom.comingSoon.privateCall" = "المكالمة الخاصة قريبًا";
 "liveRoom.comingSoon.gift"        = "متجر الهدايا قريبًا";
 "liveRoom.comingSoon.send"        = "إرسال الدردشة قريبًا";
+
+/* LiveRoom H5 interaction alignment (2026-07-06 iteration 2) */
+"liveRoom.tool.message"           = "الرسائل";
+"liveRoom.tool.gift"              = "الهدايا";
+"liveRoom.tool.setting"           = "الإعدادات";
+"liveRoom.comingSoon.message"     = "صندوق الرسائل قريبًا";
+"liveRoom.setting.beauty"         = "الفلتر";
+"liveRoom.setting.endLive"        = "إنهاء البث";
+"liveRoom.pk.a11y.default"        = "بدء PK";
+"liveRoom.pk.a11y.matching"       = "جارٍ مطابقة خصم PK";
+"liveRoom.pk.a11y.invited"        = "تم استلام دعوة PK";
+"liveRoom.pk.a11y.inPK"           = "في وضع PK";
+"liveRoom.pk.a11y.punishing"      = "عقوبة PK";
+"liveRoom.comingSoon.pkInterrupt"  = "تأكيد إيقاف PK قريبًا";
+"liveRoom.comingSoon.pkDisconnect" = "تأكيد قطع اتصال PK قريبًا";
+"liveRoom.privateCall.caption"    = "مكالمة خاصة";
 
 // MARK: - Call POC（调试态保留，上线前删除）
 "call.statusWaitingRemote"   = "في انتظار الطرف الآخر";
@@ -454,6 +470,32 @@
 "pk.invite.toast.limit"         = "وصلت الحد الأقصى لدعوات PK";
 "pk.invite.toast.matching"      = "جارٍ المطابقة العشوائية، الإلغاء للدعوة";
 "pk.invite.toast.sent"          = "تم إرسال دعوة PK";
+
+/* PK popup H5 alignment (2026-07-06 iteration 3) */
+"pk.giveUp.title"               = "التخلي عن PK؟";
+"pk.giveUp.confirm"             = "تأكيد إيقاف هذه المباراة";
+"pk.giveUp.action"              = "استسلام";
+"pk.continuePK"                 = "متابعة PK";
+"pk.pkEnded.title"              = "انتهت المباراة";
+"pk.disconnect.action"          = "قطع الاتصال بالبث";
+"pk.matchFailed.title"          = "لم يتم العثور على مباراة مؤقتًا";
+"pk.matchFailed.hint1"          = "عذرًا، لا يوجد بثاث بنفس القوة حاليًا";
+"pk.matchFailed.hint2"          = "إيقاف المطابقة. اختر بثاثًا محددًا لبدء PK";
+"pk.matchFailed.initiate"       = "بدء PK";
+"pk.inviting.title"             = "جاري دعوة PK";
+"pk.waitingAcceptance"          = "بانتظار قبول PK";
+"pk.cancelInvitation"           = "إلغاء دعوة PK";
+"pk.punish.label"               = "عقوبة";
+"pk.result.win"                 = "فوز";
+"pk.result.lose"                = "خسارة";
+"pk.result.draw"                = "تعادل";
+"pk.history.title"              = "سجل PK";
+"pk.rule.title"                 = "قواعد PK";
+"pk.rank.title"                 = "ترتيب PK";
+"pk.comingSoon"                 = "قريبًا";
+"pk.countdownFormat"            = "%dث";
+"pk.opponent.mute"              = "كتم صوت الخصم";
+"pk.opponent.unmute"            = "إلغاء كتم صوت الخصم";
 
 // MARK: - H IM 完善 错误文案（NIMServiceError.errorDescription）
 "im.error.loginFailedFormat"         = "فشل تسجيل دخول الدردشة (code=%@) %@";

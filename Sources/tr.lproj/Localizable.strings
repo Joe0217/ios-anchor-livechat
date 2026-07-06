@@ -301,11 +301,11 @@
 "wishSetting.ruleAgreeShort"         = "Kabul ediyorum";
 "wishSetting.ruleFooter"             = "Hediyeleri adil ve içten kullanmayı ve platform kurallarına uymayı taahhüt ediyoruz.";
 
-// MARK: - 心愿承诺规范弹窗（严格对齐 H5 locales/tr.json live.ruleTitle/ruleContent/ruleCheck + other.agree）
-"wishRuleModal.title"                = "Dilek Listesi Taahhüdü";
-"wishRuleModal.content"              = "Bu dilek listesindeki taahhütleri yerine getirmeyi taahhüt ediyorum ve izleyicileri herhangi bir şekilde hediye göndermeleri için kandırmayacağım veya yanıltmayacağım.";
+// MARK: - 心愿承诺规范弹窗
+"wishRuleModal.title"                = "Dilek Taahhüt Kuralları";
 "wishRuleModal.check"                = "Yukarıdaki kuralları okudum ve kabul ediyorum";
-"wishRuleModal.agree"                = "Kabul Et ve Yayınla";
+"wishRuleModal.agree"                = "Kabul et ve yayınla";
+"wishRuleModal.content"              = "Bir dilek listesi yayınlayarak, dileği yerine getiren izleyicilere vaat edilen ödülleri vermeyi kabul edersiniz. İhlaller hesabın askıya alınmasına ve yayın haklarının kaybedilmesine neden olabilir.";
 
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "Kamera İzni Gerekli";
@@ -342,6 +342,22 @@
 "liveRoom.comingSoon.privateCall" = "Özel arama yakında";
 "liveRoom.comingSoon.gift"        = "Hediye mağazası yakında";
 "liveRoom.comingSoon.send"        = "Sohbet gönderme yakında";
+
+/* LiveRoom H5 interaction alignment (2026-07-06 iteration 2) */
+"liveRoom.tool.message"           = "Mesajlar";
+"liveRoom.tool.gift"              = "Hediyeler";
+"liveRoom.tool.setting"           = "Ayarlar";
+"liveRoom.comingSoon.message"     = "Mesaj kutusu yakında";
+"liveRoom.setting.beauty"         = "Güzellik";
+"liveRoom.setting.endLive"        = "Yayını bitir";
+"liveRoom.pk.a11y.default"        = "PK başlat";
+"liveRoom.pk.a11y.matching"       = "PK rakibi eşleşiyor";
+"liveRoom.pk.a11y.invited"        = "PK daveti alındı";
+"liveRoom.pk.a11y.inPK"           = "PK'da";
+"liveRoom.pk.a11y.punishing"      = "PK cezası";
+"liveRoom.comingSoon.pkInterrupt"  = "PK kesinti onayı yakında";
+"liveRoom.comingSoon.pkDisconnect" = "PK bağlantı kesme onayı yakında";
+"liveRoom.privateCall.caption"    = "Özel arama";
 
 // MARK: - Call POC（调试态保留，上线前删除）
 "call.statusWaitingRemote"   = "Karşı taraf bekleniyor";
@@ -454,6 +470,32 @@
 "pk.invite.toast.limit"         = "PK daveti üst sınırına ulaşıldı";
 "pk.invite.toast.matching"      = "Rastgele eşleşme sürüyor, davet için iptal et";
 "pk.invite.toast.sent"          = "PK daveti gönderildi";
+
+/* PK popup H5 alignment (2026-07-06 iteration 3) */
+"pk.giveUp.title"               = "PK'dan vazgeç?";
+"pk.giveUp.confirm"             = "Bu PK'yı kesmeyi onaylayın";
+"pk.giveUp.action"              = "Vazgeç";
+"pk.continuePK"                 = "PK'ya devam";
+"pk.pkEnded.title"              = "PK Bitti";
+"pk.disconnect.action"          = "Yayın Bağlantısını Kes";
+"pk.matchFailed.title"          = "Şu anda eşleşme bulunamadı";
+"pk.matchFailed.hint1"          = "Şu anda eşit güçte yayıncı yok";
+"pk.matchFailed.hint2"          = "Eşleşme kapalı. Belirli bir yayıncı seçerek PK başlatın";
+"pk.matchFailed.initiate"       = "PK Başlat";
+"pk.inviting.title"             = "PK'ya davet ediliyor";
+"pk.waitingAcceptance"          = "PK kabulü bekleniyor";
+"pk.cancelInvitation"           = "PK Davetini İptal Et";
+"pk.punish.label"               = "Ceza";
+"pk.result.win"                 = "KAZANDIN";
+"pk.result.lose"                = "KAYBETTİN";
+"pk.result.draw"                = "BERABERE";
+"pk.history.title"              = "PK Geçmişi";
+"pk.rule.title"                 = "PK Kuralları";
+"pk.rank.title"                 = "PK Sıralaması";
+"pk.comingSoon"                 = "Yakında";
+"pk.countdownFormat"            = "%dsn";
+"pk.opponent.mute"              = "Rakibi sessize al";
+"pk.opponent.unmute"            = "Rakibi sessizden çıkar";
 
 // MARK: - H IM 完善 错误文案（NIMServiceError.errorDescription）
 "im.error.loginFailedFormat"         = "IM girişi başarısız (code=%@) %@";

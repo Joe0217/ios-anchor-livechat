@@ -66,11 +66,10 @@ struct LiveTabView: View {
                 showReconnectToast = true
             }
             // scenePhase → .active：对齐安卓 onResume 静默检查（showToast=false, doAction=false）
+            // 走 triggerCheckForcedBusy 统一到 activeCheckTask 串行化（审查报告-202607061550 必修-2）
             .onChange(of: scenePhase) { newPhase in
                 guard newPhase == .active, isHomeTabActive else { return }
-                Task { @MainActor in
-                    await onlineStatus.checkForcedBusy(showToast: false, doAction: false)
-                }
+                onlineStatus.triggerCheckForcedBusy(showToast: false, doAction: false)
             }
             .preferredColorScheme(.dark)
             .onAppear {
@@ -182,7 +181,8 @@ struct LiveTabView: View {
                 // isActive 组合两条件：Home tab 被选中 + outer tab 是 .live——切走任一都停 autoplay
                 liveStream(isActive: isHomeTabActive && current == .live).tag(HomeTopTab.live)
                 LiveListView(viewModel: listViewModel).tag(HomeTopTab.list)
-                placeholderTab.tag(HomeTopTab.match)
+                // L 里程碑：Match tab 实装（v3 spec §4.1）。placeholderTab → MatchTabView。
+                MatchTabView().tag(HomeTopTab.match)
                 // CircleView 接收 isActive，在 outer tab 切到 .circle 时才触发 sub store 的 lazy load
                 CircleView(isActive: current == .circle).tag(HomeTopTab.circle)
             }
@@ -202,6 +202,12 @@ struct LiveTabView: View {
             QuickGoLiveButton()
                 .padding(.trailing, 12)
                 .padding(.bottom, 180)
+                .transition(.opacity)
+        } else if current == .match {
+            // L 里程碑：Match tab 浮动开关（v3 spec §4.2）
+            CGoMatchButton(store: MatchStore.shared)
+                .padding(.trailing, Theme.Metric.matchButtonTrailingInset)
+                .padding(.bottom, Theme.Metric.matchButtonBottomInset)
                 .transition(.opacity)
         }
     }

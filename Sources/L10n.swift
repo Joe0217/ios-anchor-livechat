@@ -116,6 +116,62 @@ enum L10n {
         static var inviteToastLimit: String { localize("pk.invite.toast.limit", comment: "邀请已达上限") }
         static var inviteToastMatching: String { localize("pk.invite.toast.matching", comment: "随机匹配中，请先取消") }
         static var inviteToastInviteSent: String { localize("pk.invite.toast.sent", comment: "PK 邀请已发送") }
+
+        // MARK: - H5 pkLive/* popup 对齐（2026-07-06 iteration 3：PK 全套 UI 同步）
+        /// 中断 PK 弹窗标题（H5 pk.Give up the PK）
+        static var giveUpTitle: String { localize("pk.giveUp.title", comment: "中断 PK 弹窗标题") }
+        /// 中断 PK 提示（H5 pk.confirm to interrupt this PK）
+        static var giveUpConfirm: String { localize("pk.giveUp.confirm", comment: "中断 PK 提示") }
+        /// 中断 PK 按钮（H5 pk.Give Up）
+        static var giveUpAction: String { localize("pk.giveUp.action", comment: "中断 PK 按钮 Give Up") }
+        /// 继续 PK 按钮（H5 pk.Continue PK）
+        static var continuePK: String { localize("pk.continuePK", comment: "继续 PK 按钮") }
+
+        /// 断开连线弹窗标题（H5 pk.PK Ended）
+        static var pkEndedTitle: String { localize("pk.pkEnded.title", comment: "断开连线弹窗标题") }
+        /// 断开连线按钮（H5 pk.Disconnect Live）
+        static var disconnectAction: String { localize("pk.disconnect.action", comment: "断开连线按钮") }
+
+        /// 匹配失败标题（H5 match.No match found temporarily）
+        static var matchFailedTitle: String { localize("pk.matchFailed.title", comment: "匹配失败标题") }
+        /// 匹配失败提示 1（H5 pk.Oops, no equal-strength streamer available now）
+        static var matchFailedHint1: String { localize("pk.matchFailed.hint1", comment: "匹配失败提示 1") }
+        /// 匹配失败提示 2（H5 pk.Matching off.Go pick a specific streamer for PK）
+        static var matchFailedHint2: String { localize("pk.matchFailed.hint2", comment: "匹配失败提示 2") }
+        /// 匹配失败发起 PK 按钮（H5 pk.Initiate PK）
+        static var matchFailedInitiate: String { localize("pk.matchFailed.initiate", comment: "匹配失败发起 PK") }
+
+        /// 邀请等待弹窗标题（H5 pk.Inviting to PK）
+        static var invitingTitle: String { localize("pk.inviting.title", comment: "邀请等待弹窗标题") }
+        /// 邀请等待副标题（H5 pk.Waiting PK acceptance）
+        static var waitingAcceptance: String { localize("pk.waitingAcceptance", comment: "等待对方接受") }
+        /// 邀请等待取消按钮（H5 pk.Cancel PK Invitation）
+        static var cancelInvitation: String { localize("pk.cancelInvitation", comment: "取消邀请") }
+
+        /// Battle 惩罚倒计时前缀（H5 Punish 字面量）
+        static var punishLabel: String { localize("pk.punish.label", comment: "惩罚倒计时前缀 Punish") }
+        /// Battle 结果 - Win（H5 pk-result-win 动画对应）
+        static var resultWin: String { localize("pk.result.win", comment: "PK 结果 - 获胜") }
+        /// Battle 结果 - Lose
+        static var resultLose: String { localize("pk.result.lose", comment: "PK 结果 - 失败") }
+        /// Battle 结果 - Draw
+        static var resultDraw: String { localize("pk.result.draw", comment: "PK 结果 - 平局") }
+
+        /// PK 记录弹窗标题
+        static var historyTitle: String { localize("pk.history.title", comment: "PK 记录标题") }
+        /// PK 规则弹窗标题
+        static var ruleTitle: String { localize("pk.rule.title", comment: "PK 规则标题") }
+        /// PK 排行榜标题
+        static var rankTitle: String { localize("pk.rank.title", comment: "PK 排行榜标题") }
+        /// 通用「敬请期待」占位（用于 History/Rule/Rank 视觉占位）
+        static var comingSoon: String { localize("pk.comingSoon", comment: "PK 敬请期待占位") }
+
+        /// 邀请 60s 倒计时后缀（H5 `{{ countdown }}s`）
+        static var countdownSecondsFormat: String { localize("pk.countdownFormat", comment: "%ds 倒计时后缀") }
+
+        /// 对手静音按钮 a11y（PKArenaView 右上角音量按钮）
+        static var opponentMute: String { localize("pk.opponent.mute", comment: "静音对手 a11y") }
+        static var opponentUnmute: String { localize("pk.opponent.unmute", comment: "取消静音对手 a11y") }
     }
 
     // MARK: - E/F 派对房（spec §1.4 + H i18n 收尾）
@@ -585,11 +641,11 @@ enum L10n {
     static var wishSettingTypeNoTextSub: String { localize("wishSetting.type.noTextSub", comment: "No text chip 副标题") }
     static var wishSettingRuleAgreeShort: String { localize("wishSetting.ruleAgreeShort", comment: "勾选行 I agree") }
     static var wishSettingRuleFooter: String { localize("wishSetting.ruleFooter", comment: "合规规范尾部承诺") }
-    // 心愿承诺规范弹窗（对齐 H5 wishlist-rule-modal.vue + H5 locales live.ruleTitle/content/check + other.agree）
-    static var wishRuleModalTitle: String { localize("wishRuleModal.title", comment: "H5 live.ruleTitle 心愿单承诺") }
-    static var wishRuleModalContent: String { localize("wishRuleModal.content", comment: "H5 live.ruleContent 承诺内容") }
-    static var wishRuleModalCheck: String { localize("wishRuleModal.check", comment: "H5 live.ruleCheck 已阅读并同意") }
-    static var wishRuleModalAgree: String { localize("wishRuleModal.agree", comment: "H5 other.agree 同意并发布") }
+    // 心愿承诺规范弹窗（对齐 H5 wishlist-rule-modal.vue）
+    static var wishRuleModalTitle: String { localize("wishRuleModal.title", comment: "心愿承诺规范弹窗标题") }
+    static var wishRuleModalCheck: String { localize("wishRuleModal.check", comment: "我已阅读并同意上述规范") }
+    static var wishRuleModalAgree: String { localize("wishRuleModal.agree", comment: "同意并发布") }
+    static var wishRuleModalContent: String { localize("wishRuleModal.content", comment: "心愿承诺规范正文（WishRuleModal 内 ScrollView 显示）") }
 
     // MARK: - LiveRoom 直播间
     static var liveRoomPermissionAlertTitle: String { localize("liveRoom.permissionAlertTitle", comment: "相机权限弹窗标题") }
@@ -647,6 +703,33 @@ enum L10n {
     static var liveRoomComingSoonGift: String { localize("liveRoom.comingSoon.gift", comment: "点击底部快捷礼物占位提示") }
     /// Coming soon 提示（公屏发送）
     static var liveRoomComingSoonSend: String { localize("liveRoom.comingSoon.send", comment: "点击 Say hi 发送按钮占位提示") }
+
+    // MARK: - LiveRoom H5 交互对齐（2026-07-06 restore-design iteration 2）
+    /// 底部工具栏 4 圆按钮（对齐 H5 msg/gift/setting 3 图标 + PKEntryBtn）
+    static var liveRoomToolMessage:  String { localize("liveRoom.tool.message",  comment: "底部消息按钮 a11y") }
+    static var liveRoomToolGift:     String { localize("liveRoom.tool.gift",     comment: "底部礼物按钮 a11y") }
+    static var liveRoomToolSetting:  String { localize("liveRoom.tool.setting",  comment: "底部设置按钮 a11y（含美颜/结束直播）") }
+    /// 消息按钮点击占位
+    static var liveRoomComingSoonMessage: String { localize("liveRoom.comingSoon.message", comment: "消息按钮占位提示") }
+    /// 设置菜单：美颜项
+    static var liveRoomSettingBeauty:     String { localize("liveRoom.setting.beauty",     comment: "设置菜单：美颜") }
+    /// 设置菜单：结束直播项
+    static var liveRoomSettingEndLive:    String { localize("liveRoom.setting.endLive",    comment: "设置菜单：结束直播") }
+
+    // MARK: PK 入口按钮 5 态 a11y + 中断/断开确认占位（对齐 H5 pkEntryBtn.vue）
+    static var liveRoomPKA11yDefault:   String { localize("liveRoom.pk.a11y.default",   comment: "PK 按钮默认态 a11y") }
+    static var liveRoomPKA11yMatching:  String { localize("liveRoom.pk.a11y.matching",  comment: "PK 按钮匹配中 a11y") }
+    static var liveRoomPKA11yInvited:   String { localize("liveRoom.pk.a11y.invited",   comment: "PK 按钮被邀请中 a11y") }
+    static var liveRoomPKA11yInPK:      String { localize("liveRoom.pk.a11y.inPK",      comment: "PK 按钮 PK 中 a11y") }
+    static var liveRoomPKA11yPunishing: String { localize("liveRoom.pk.a11y.punishing", comment: "PK 按钮惩罚中 a11y") }
+    /// PK 中断确认弹窗占位（B-2 未实现，先 toast）
+    static var liveRoomComingSoonPKInterrupt:  String { localize("liveRoom.comingSoon.pkInterrupt",  comment: "PK 中点击占位") }
+    /// PK 断开确认弹窗占位（B-3 未实现，先 toast）
+    static var liveRoomComingSoonPKDisconnect: String { localize("liveRoom.comingSoon.pkDisconnect", comment: "惩罚中点击占位") }
+
+    // MARK: Private Call 小开关（对齐 H5 van-switch）
+    /// 开关下方文字
+    static var liveRoomPrivateCallCaption:  String { localize("liveRoom.privateCall.caption", comment: "Private call 开关下方文字") }
 
     // MARK: - Call POC（调试态保留，上线前删除）
     static var callStatusWaitingRemote: String { localize("call.statusWaitingRemote", comment: "通话 POC：等待对端") }
@@ -862,5 +945,44 @@ enum L10n {
         static func videoCountFormat(_ current: Int, _ max: Int) -> String {
             String(format: localize("giftMessage.videoCountFormat", comment: "(%d/%d)"), current, max)
         }
+    }
+
+    // MARK: - Match tab（L 里程碑）
+    /// 跑马灯"Video Call Started."
+    static var matchMarqueeCallStarted: String {
+        localize("match.marquee.callStarted", comment: "跑马灯 Video Call Started.")
+    }
+    /// 跑马灯空态占位（H5 主播端跑马灯一直显示，iOS 侧对齐；空 callList 时兜底文案）
+    static var matchMarqueeEmpty: String {
+        localize("match.marquee.empty", comment: "跑马灯空态占位")
+    }
+    /// "N Matches Found!"
+    static func matchTitleMatchesFound(count: Int) -> String {
+        String(format: localize("match.title.matchesFound", comment: "N Matches Found!"), count)
+    }
+    /// 主视觉下方描述
+    static var matchSubtitleDescription: String {
+        localize("match.subtitle.description",
+                 comment: "Your recent matches are above. Tap to chat and charm them into calling you.")
+    }
+    /// 用户列表空态
+    static var matchUserListEmpty: String {
+        localize("match.userList.empty", comment: "暂无匹配用户")
+    }
+    /// 用户卡片 sheet：价格
+    static func matchUserCardVideoPrice(price: Int) -> String {
+        String(format: localize("match.userCard.videoPrice", comment: "%d/min"), price)
+    }
+    /// 用户卡片 sheet：关闭按钮
+    static var matchUserCardClose: String {
+        localize("match.userCard.close", comment: "关闭")
+    }
+    /// 匹配按钮 a11y：开启匹配
+    static var matchButtonA11yTurnOn: String {
+        localize("match.button.a11y.turnOn", comment: "开启匹配 a11y")
+    }
+    /// 匹配按钮 a11y：关闭匹配
+    static var matchButtonA11yTurnOff: String {
+        localize("match.button.a11y.turnOff", comment: "关闭匹配 a11y")
     }
 }

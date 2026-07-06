@@ -1,24 +1,33 @@
 import SwiftUI
 
-/// 三项概览卡：今日通话数 / 好评率 / 周收益。
+/// 三项概览卡：在线时长 / 平均通话时长 / 好评率。对齐 H5 work/index.vue。
 struct StatCardsRow: View {
     @ObservedObject var vm: WorkViewModel
 
     var body: some View {
         HStack(spacing: Theme.Metric.statCardGap) {
-            StatCard(icon: "statCalls",
-                     number: "\(vm.callsToday)",
+            StatCard(icon: "statOnlineTime",
+                     number: Self.timeString(vm.onlineTimeSec),
                      numberColor: Theme.Palette.accentYellow,
-                     caption: L10n.workCallsToday)
+                     caption: L10n.workOnlineTime)
+            StatCard(icon: "statAvgCallDuration",
+                     number: Self.timeString(vm.avgCallDurationSec),
+                     numberColor: Theme.Palette.accentYellow,
+                     caption: L10n.workAvgCallDuration)
             StatCard(icon: "statRating",
                      number: "\(vm.positiveRating)%",
                      numberColor: Theme.Palette.accentGreen,
                      caption: L10n.workPositiveRating)
-            StatCard(icon: "statRevenue",
-                     number: "\(vm.weeklyRevenue)",
-                     numberColor: Theme.Palette.accentYellow,
-                     caption: L10n.workWeeklyRevenue)
         }
+    }
+
+    /// HH:MM:SS（H5 secondsToTime 同格式），秒对齐"padStart(2,'0')"
+    private static func timeString(_ seconds: Int) -> String {
+        let s = max(0, seconds)
+        let h = s / 3600
+        let m = (s % 3600) / 60
+        let sec = s % 60
+        return String(format: "%02d:%02d:%02d", h, m, sec)
     }
 }
 

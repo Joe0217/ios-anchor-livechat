@@ -23,7 +23,7 @@ struct WorkView: View {
                     WeeklyLevelHeader(vm: vm)
                     StatCardsRow(vm: vm)
                     TodayIncomeCard(vm: vm)
-                    ToolsSection(vm: vm)
+                    ToolsSection()
                 }
                 .padding(.horizontal, Theme.Metric.screenMargin)
                 .padding(.top, 8)
