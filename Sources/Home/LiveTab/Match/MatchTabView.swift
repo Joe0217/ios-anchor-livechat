@@ -13,6 +13,9 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "MatchTa
 /// **交互**：点击用户卡片 → sheet 弹出用户详情（MVP 阶段用 fullScreenCover 前的 sheet 简化）。
 struct MatchTabView: View {
     @StateObject private var vm = MatchTabViewModel()
+    /// 匹配态独立摄像头会话（U1/U2：View 强持有，onAppear attach 到 MatchStore.shared）
+    @StateObject private var cameraSession = MatchCameraSession()
+    @ObservedObject private var matchStore = MatchStore.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -52,6 +55,26 @@ struct MatchTabView: View {
         )
         .background(Theme.Palette.matchPageBackground)
         .clipped()
+        // U2：MatchTabView 挂载即 attach cameraSession（首次 onAppear 幂等 —— attachCameraSession 内部 weak
+        // → strong 由 spec BL-1 后续修正 → 目前 View 层 @StateObject 提供强持有链）
+        .onAppear { MatchStore.shared.attachCameraSession(cameraSession) }
+        // 匹配态浮层：右下角小窗预览（对齐 H5 视频小窗口）；.matching 时显示
+        .overlay(alignment: .bottomTrailing) {
+            if matchStore.state == .matching {
+                CameraPreview(camera: cameraSession.camera)
+                    .frame(width: 120, height: 160)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(Theme.Palette.matchMarqueeBorderStart, lineWidth: 1.5)
+                    )
+                    .padding(.trailing, 12)
+                    .padding(.bottom, Theme.Metric.matchButtonBottomInset + Theme.Metric.matchButtonSize + 8)
+                    .transition(.opacity)
+                    .accessibilityLabel(L10n.matchMarqueeCallStarted)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: matchStore.state == .matching)
         .task { await vm.loadIfNeeded() }
         .sheet(item: $vm.presentedUser) { user in
             MatchUserCardSheet(user: user)

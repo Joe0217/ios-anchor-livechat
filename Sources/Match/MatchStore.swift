@@ -4,6 +4,23 @@ import os
 
 private let logger = Logger(subsystem: "com.anchor.livechat", category: "MatchStore")
 
+// MARK: - CallStore observer 抽象（U3：解耦 MatchStore 与具体 CallStore 类型）
+
+/// 供 MatchStore 观察 CallStore 状态 + lastJoinCallSource 的最小抽象。
+/// 生产由 `MatchStore.attachCallStoreBridge(...)` 从 App 层注入（非直接引 CallStore.shared，
+/// 避免 test target 循环依赖）。
+@MainActor
+protocol MatchCallStoreObserving: AnyObject {
+    /// CallStore.$state Combine publisher 快照
+    var stateChangePublisher: AnyPublisher<Bool /* isConnectingOrLater */, Never> { get }
+    /// CallStore.$lastJoinCallSource publisher（'matchV4' / 'liveCall' / nil / 其他）
+    var lastJoinCallSourcePublisher: AnyPublisher<String?, Never> { get }
+    /// CallStore.$state 转 .idle publisher（用于通话结束回 .matching 判定）
+    var stateReturnedToIdlePublisher: AnyPublisher<Void, Never> { get }
+    /// 快照最近一次 lastJoinCallSource（供 idle 时读取）
+    var latestJoinCallSource: String? { get }
+}
+
 // MARK: - 状态机 · Match 4 态 + 独立维度 isMatchBlocked
 
 /// L 里程碑：视频匹配状态机。4 态 + `isMatchBlocked` 持久化维度。
@@ -96,7 +113,9 @@ final class MatchStore: ObservableObject {
     // MARK: - 依赖
 
     private let service: MatchServiceProtocol
-    private weak var cameraSession: MatchCameraSessionProtocol?
+    /// 匹配态摄像头会话（U1/U2 落地后 strong 持有；spec BL-1 review S-7：避免 View dismiss
+    /// 后 weak 立即 nil，摄像头资源需由 Store 主动 collapse 而非依赖 view 生命周期）
+    private var cameraSession: MatchCameraSessionProtocol?
 
     /// 单例（对齐 CallStore.shared / LiveStore.shared / PartyStore.shared 模式）
     static let shared = MatchStore(service: MatchService.shared)
@@ -124,10 +143,80 @@ final class MatchStore: ObservableObject {
         logger.info("loadFromPersistence: state=\(String(describing: self.state)) blocked=\(persisted.isMatchBlocked) firstToday=\(self.isFirstMatchToday) noReminder=\(persisted.todayNoReminderChecked)")
     }
 
-    // MARK: - 摄像头会话注入（step 1b UI 阶段调）
+    // MARK: - 依赖注入 & 事件订阅
 
+    private var cameraCancellables = Set<AnyCancellable>()
+    private var callStoreCancellables = Set<AnyCancellable>()
+    private var nimCancellables = Set<AnyCancellable>()
+
+    /// U1/U2：MatchTabView.onAppear 挂载摄像头会话；同时订阅 timedOut/error publishers 转发到状态机
     func attachCameraSession(_ session: MatchCameraSessionProtocol) {
+        // 幂等：同一 session 重挂 no-op
+        if self.cameraSession === session { return }
         self.cameraSession = session
+        cameraCancellables.removeAll()
+
+        // interruption 累计 >= 30s → R9 关匹配
+        session.timedOutPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.handleCameraInterruptionTimeout()
+            }
+            .store(in: &cameraCancellables)
+
+        // 摄像头错误（permissionDenied / startTimeout / runtimeError）→ R5/R6
+        session.errorPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] err in
+                switch err {
+                case .permissionDenied, .startTimeout:
+                    self?.handleCameraStartTimeout()
+                case .runtimeError:
+                    self?.handleCameraInterruptionTimeout()
+                }
+            }
+            .store(in: &cameraCancellables)
+    }
+
+    /// U4：NIM 长连接掉线观察（disconnected/idle publisher）。App 层构造 bridge 后注入。
+    func attachNIMConnectionBridge(_ disconnectedPublisher: AnyPublisher<Void, Never>) {
+        nimCancellables.removeAll()
+        disconnectedPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.handleIMOffline()
+            }
+            .store(in: &nimCancellables)
+    }
+
+    /// U3：CallStore observer 桥接。App 层构造 bridge 后调此方法注入。
+    func attachCallStoreBridge(_ observer: MatchCallStoreObserving) {
+        callStoreCancellables.removeAll()
+
+        // CallStore.state 转 .connecting/.connected → 无条件 unsubscribe MatchCameraPreview（让 CallView 独占）
+        observer.stateChangePublisher
+            .filter { $0 }  // isConnectingOrLater = true
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.handleCallStoreLeavingIdle()
+            }
+            .store(in: &callStoreCancellables)
+
+        // joinCall.source 到达 → matchV4 → .matchingCalling；非 matchV4 → 强制 .ended
+        observer.lastJoinCallSourcePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] source in
+                self?.handleJoinCallSource(source)
+            }
+            .store(in: &callStoreCancellables)
+
+        // CallStore.state → .idle → 若 lastJoinCallSource=='matchV4' 回 .matching + 重启 camera
+        observer.stateReturnedToIdlePublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self, weak observer] in
+                self?.handleCallStoreReturnedToIdle(lastJoinCallSource: observer?.latestJoinCallSource)
+            }
+            .store(in: &callStoreCancellables)
     }
 
     // MARK: - 主命令：开启 / 关闭

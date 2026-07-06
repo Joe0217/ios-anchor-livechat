@@ -46,6 +46,9 @@ struct RootView: View {
             if let uid = user.userId {
                 await callStore.start(myUserId: uid)
             }
+            // L 里程碑 U3/U4：CallStore + NIM observer bridge 挂载（登录后一次）
+            MatchStore.shared.attachCallStoreBridge(CallStoreMatchBridge.shared)
+            MatchStore.shared.attachNIMConnectionBridge(NIMConnectionMatchBridge.disconnectedPublisher)
         } else {
             WSHeartbeat.shared.stop()
             NIMOnlineKeeper.shared.stop()
