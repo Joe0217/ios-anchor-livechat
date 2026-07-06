@@ -120,7 +120,10 @@ struct MainTabView: View {
             .environment(\.quickGoLive, QuickGoLiveAction {
                 // 在当前 Home NavigationStack 内 push LiveSettings（对齐用户偏好：
                 // 不切 tab、保持上下文；比 H5 CGoLive 切 tab 更内聚）。
-                homePath.append(WorkRoute.liveSettings)
+                // 首次开播 → 先 push firstLiveRule 10s 规则页（对齐 H5 c-goLive.vue:64 isFirstLive 判断）
+                homePath.append(FirstLiveTracker.isFirstLive
+                                ? WorkRoute.firstLiveRule
+                                : WorkRoute.liveSettings)
             })
             .opacity(selection == .home ? 1 : 0)
             .allowsHitTesting(selection == .home)
