@@ -10,7 +10,7 @@ import os
 ///
 /// 协议（与安卓主播端严格对齐，照后端 `WebSocketOnlineUserConfig` 真值）：
 /// - 握手 URL：`{socketBaseURL}/webSocket?ciphertext={AES_ECB_Hex({"appToken":<loginUuid>})}`
-/// - **心跳间隔 15s**（对齐安卓 `VptWebSocketManager.java:43`；上限 `USER_PARTY_ROOM_STATUS` TTL 25s）
+/// - **心跳间隔 10s**（iOS 独立观察调整；上限 `USER_PARTY_ROOM_STATUS` TTL 25s，10s 留 15s 弹性抵抗弱网 + timer 抖动。安卓文档 15s，但用户实测周期性断连 → 缩到 10s）
 /// - **messageType = 1（REPORT_STATUS）**：唯一心跳类型；后端 `MyWebSocketHandler.java:77` 路由到
 ///   `reportStatusHandler(userType=2)` 写主播在线表 + **同时** `partyRoomHeartbeat()` 刷新派对键
 /// - **expandParams 字段**：`{channelId, onlineStatus, roomId?, seatIndex?}` —— `roomId/seatIndex`
@@ -41,9 +41,16 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
     private var reconnectTask: Task<Void, Never>?
     private var loginUuid: String = ""
     private var disposed = true
-    /// 心跳间隔。15s 对齐安卓主播端（`VptWebSocketManager.java:43`）；
-    /// 后端 `USER_PARTY_ROOM_STATUS` TTL 25s + 麦位踢人 30s，间隔须 <25s。
-    private let interval: TimeInterval = 15
+
+    /// 累计重连尝试次数（日志诊断用）。didOpen 成功时重置为 0。
+    /// 用于回溯"连续 errno 57"到底是网络本身、TLS 卡壳还是服务端限流。
+    private var reconnectAttempt: Int = 0
+    /// 首次触发 scheduleReconnect 的时间点，用于打"断开 Xs 后重连成功"日志。
+    private var lastReconnectStartAt: Date?
+    /// 心跳间隔。10s（安卓文档标注 15s，但用户实测周期性断连 → 缩到 10s 增加弹性）。
+    /// 后端 `USER_PARTY_ROOM_STATUS` TTL 25s + 麦位踢人 30s，间隔须 <25s；10s 留 15s 冗余
+    /// 抵抗弱网 RTT + iOS Task.sleep 后台 coalescing 抖动。
+    private let interval: TimeInterval = 10
     private let reconnectDelay: TimeInterval = 5
 
     /// 当前应发的"在线态"状态。startPing/前后台切换/重连握手首包统一读取此值，
@@ -60,7 +67,12 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
     private override init() {
         super.init()
         // delegate=self 用于诊断握手响应（拿 HTTP statusCode），nonisolated 回调内 hop 回 MainActor
-        self.session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+        let cfg = URLSessionConfiguration.default
+        // timeoutIntervalForRequest = 30s：单次 send / receive 卡死 >30s 主动 timeout。
+        // 心跳间隔 10s，30s 给一次心跳 3 倍冗余；比默认 60s 更快让"幽灵连接"暴露 → 尽早触发重连。
+        // ⚠️ timeoutIntervalForResource 保留 default（7 天）——设小值 iOS 会强制关掉长连 WS。
+        cfg.timeoutIntervalForRequest = 30
+        self.session = URLSession(configuration: cfg, delegate: self, delegateQueue: nil)
         NotificationCenter.default.addObserver(
             self, selector: #selector(onForeground),
             name: UIApplication.willEnterForegroundNotification, object: nil)
@@ -89,6 +101,9 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
         task?.cancel(with: .normalClosure, reason: nil)
         task = nil
         connected = false
+        // 重置重连计数：防止下次 start 累计残留（登出→登录 attempt 应从 1 重新开始）
+        reconnectAttempt = 0
+        lastReconnectStartAt = nil
     }
 
     // MARK: - 连接
@@ -147,6 +162,14 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
         // 之前在 connect() 里 t.resume() 后立即 send 会命中 errno 57 无限重连循环。
         Task { @MainActor [weak self] in
             guard let self, !self.disposed else { return }
+            // 打断开→恢复的诊断日志 + 重置计数
+            if self.reconnectAttempt > 0, let startAt = self.lastReconnectStartAt {
+                let elapsed = Date().timeIntervalSince(startAt)
+                AppLogger.heartbeat.notice("📡 [WS] reconnected after attempt=\(self.reconnectAttempt, privacy: .public) elapsed=\(String(format: "%.1f", elapsed), privacy: .public)s")
+            }
+            self.reconnectAttempt = 0
+            self.lastReconnectStartAt = nil
+
             self.connected = true
             self.sendStatus(self.currentStatus)
             self.startPing()
@@ -280,6 +303,10 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
         task?.cancel(with: .abnormalClosure, reason: nil)
         task = nil
         cancelPing()
+        reconnectAttempt += 1
+        if reconnectAttempt == 1 { lastReconnectStartAt = Date() }
+        let attempt = reconnectAttempt
+        AppLogger.heartbeat.notice("📡 [WS] scheduleReconnect attempt=\(attempt, privacy: .public) delay=\(Int(self.reconnectDelay), privacy: .public)s")
         reconnectTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64((self?.reconnectDelay ?? 5) * 1_000_000_000))
             if Task.isCancelled { return }
@@ -298,6 +325,11 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
     @objc private func onForeground() {
         guard !disposed else { return }
         if task == nil {
+            // 若正在 5s reconnectTask 等待中，跳过等待立即 connect（改善后台恢复 UX）
+            if reconnectTask != nil {
+                AppLogger.heartbeat.notice("📡 [WS] onForeground 快进 reconnectTask")
+                cancelReconnect()
+            }
             connect()  // connect() 内会 startPing
         } else {
             sendStatus(currentStatus)  // 通话期 currentStatus=.calling，空闲期=.callEnd
