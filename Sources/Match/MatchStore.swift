@@ -437,9 +437,12 @@ final class MatchStore: ObservableObject {
         MatchPersistedStore.saveTipShownDate(MatchDateHelper.todayString())
     }
 
-    /// 10 分钟提示弹窗是否应该展示（组合态 gate，v3 §5.2 R19）。
-    /// - parameter appHidden: 由 SwiftUI @Environment(\.scenePhase) 观察
-    func shouldShowTipPopup(appHidden: Bool) -> Bool {
+    /// 10 分钟提示弹窗是否应该展示（组合态 gate，v3 §5.2 R19 + v4 subpage 拦截）。
+    /// - parameter appHidden: 由 SwiftUI `@Environment(\.scenePhase)` 观察（app 切后台不弹）
+    /// - parameter blockedByOtherPage: 是否处于 4 tab 根页之外的子页（直播间/通话/详情页等）
+    ///   —— 对齐 H5 语义：`c-goMatch` 组件只挂在 home 页面，子页不挂 → timer 也不 fire。
+    ///   iOS 侧 timer 在 MainTabView 单例常驻，但 gate 补 subpage 判定实现等价效果
+    func shouldShowTipPopup(appHidden: Bool, blockedByOtherPage: Bool = false) -> Bool {
         let today = MatchDateHelper.todayString()
         // 若跨自然日 → 重置 noReminder（对齐 H5 c-goMatch.vue:460-462）
         let noTodayShow = !MatchDateHelper.isFirstToday(savedDate: MatchPersistedStore.load().tipShownDate)
@@ -447,6 +450,7 @@ final class MatchStore: ObservableObject {
 
         _ = today  // 保留以便未来展示日期字段
         return !appHidden
+            && !blockedByOtherPage
             && state == .ended
             && !isMatchBlocked
             && !noTodayShow

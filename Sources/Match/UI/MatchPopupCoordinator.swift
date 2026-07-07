@@ -19,6 +19,8 @@ final class MatchPopupCoordinator: ObservableObject {
 
     @Published var isShowing: Bool = false
     @Published private(set) var appHidden: Bool = false
+    /// 是否处于 4 tab 根页之外的子页（LiveRoom / WishSetting / BeautySettings / UserProfile / Call 等）—— 不弹
+    @Published private(set) var blockedByOtherPage: Bool = false
 
     private var timerTask: Task<Void, Never>?
 
@@ -49,6 +51,16 @@ final class MatchPopupCoordinator: ObservableObject {
         appHidden = hidden
     }
 
+    /// 子页 gate：MainTabView 派生 `isOnSubpage || CallStore.state != .idle` 时置 true
+    /// —— 直播间/通话中/详情页均不弹 tip（对齐 H5 c-goMatch 仅挂 home 页面语义）
+    func updateBlockedByOtherPage(_ blocked: Bool) {
+        blockedByOtherPage = blocked
+        // 已弹的情况下切子页 → 立即关闭
+        if blocked && isShowing {
+            isShowing = false
+        }
+    }
+
     /// 用户勾选"今日不再提醒"—— 立即持久化 + 停止 timer（对齐 H5 handleNoReminders → clearInterval）
     func markTodayNoReminder() {
         MatchStore.shared.markTodayNoReminder()  // 已在 MatchStore 内持久化 todayNoReminderChecked + tipShownDate
@@ -77,12 +89,14 @@ final class MatchPopupCoordinator: ObservableObject {
         }
     }
 
-    /// 组合态检查（对齐 H5 c-goMatch.vue:468 gate）
+    /// 组合态检查（对齐 H5 c-goMatch.vue:468 gate + v4 subpage 拦截）
     private func checkAndShow() {
         let store = MatchStore.shared
-        // MatchStore.shouldShowTipPopup 已封装完整组合态判定
-        let shouldShow = store.shouldShowTipPopup(appHidden: appHidden)
-        logger.debug("checkAndShow: appHidden=\(self.appHidden) shouldShow=\(shouldShow) state=\(String(describing: store.state))")
+        let shouldShow = store.shouldShowTipPopup(
+            appHidden: appHidden,
+            blockedByOtherPage: blockedByOtherPage
+        )
+        logger.debug("checkAndShow: appHidden=\(self.appHidden) blockedByOtherPage=\(self.blockedByOtherPage) shouldShow=\(shouldShow) state=\(String(describing: store.state))")
         if shouldShow {
             isShowing = true
         }

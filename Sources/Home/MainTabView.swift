@@ -84,6 +84,9 @@ struct MainTabView: View {
             withAnimation(.easeInOut(duration: 0.25)) {
                 isOnSubpage = newValue
             }
+            // L 里程碑：子页拦截 tip 弹窗（对齐 H5 c-goMatch 仅挂 home 页面语义 —— 直播间/详情页/开播设置等均不弹）
+            // 通话态由 RootView.CallView zIndex 100 全屏覆盖，tip zIndex 50 视觉上已被盖，无需额外 gate
+            matchPopupCoordinator.updateBlockedByOtherPage(newValue)
         }
         .onChange(of: selection) { _ in
             // 切走 tab 立即清空各 tab 的 path，切回时回到根页
