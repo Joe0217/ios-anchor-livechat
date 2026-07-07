@@ -155,6 +155,24 @@ struct MainTabView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: matchPopupCoordinator.isShowing)
+        // L 里程碑 #3d：未露脸倒计时弹窗（.matching 期间人脸检测未检出触发）
+        .overlay {
+            if matchStore.showNoFacePopup {
+                MatchNoFacePopup(onDismiss: { matchStore.dismissNoFacePopup() })
+                    .transition(.opacity)
+                    .zIndex(60)
+            }
+        }
+        // L 里程碑 #3d：移除匹配弹窗（未露脸倒计时结束 → 已 blocked → 展示确认）
+        .overlay {
+            if matchStore.showExitMatchPopup {
+                MatchExitPopup(onOK: { matchStore.dismissExitMatchPopup() })
+                    .transition(.opacity)
+                    .zIndex(60)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: matchStore.showNoFacePopup)
+        .animation(.easeInOut(duration: 0.2), value: matchStore.showExitMatchPopup)
         .preferredColorScheme(.dark)
     }
 

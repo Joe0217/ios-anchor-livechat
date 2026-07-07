@@ -220,9 +220,13 @@ targets:
       - path: Sources/Match/MatchPersistedState.swift
       - path: Sources/Match/MatchService.swift
       - path: Sources/Match/MatchStore.swift
+      # L #3d：人脸检测 protocol + stub（MatchStore 依赖此文件，pre-existing 遗漏，v5.5 补入）
+      - path: Sources/Match/FaceDetectionService.swift
       # MatchToast 是纯 enum（不依赖 L10n），供 MatchStore.lastToast 使用；
       # MatchToast+Localized.swift 在 UI/ 目录，依赖 L10n 不入 test target。
       - path: Sources/Match/MatchToast.swift
+      # #3d：人脸检测 protocol + stub（纯 protocol，无 FUManager 依赖）
+      - path: Sources/Match/FaceDetectionService.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.anchor.livechat.tests

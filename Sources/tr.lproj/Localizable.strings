@@ -797,6 +797,9 @@
 "beautySettings.exitConfirm.discard"                        = "Exit";
 "beautySettings.exitConfirm.continue"                       = "Continue Editing";
 
+// Save 成功 toast（2026-07-03 对齐 H5 index.vue:155；tr 待 J 期翻译，暂 English fallback）
+"beautySettings.saveSuccess.toast"                          = "Save success!";
+
 // MARK: - Match tab（L 里程碑）
 "match.marquee.callStarted"      = "Görüntülü Arama Başladı.";
 "match.marquee.empty"            = "Daha fazla insanla tanışmak için eşleştirmeye başla";
@@ -831,3 +834,9 @@
 "match.tip.title"                = "Daha hızlı arama almak ve daha fazla kazanmak için eşleşmeyi açın.";
 "match.tip.goMatch"              = "Eşleş";
 "match.tip.noReminder"           = "Bugün hatırlatma";
+
+// Match face check & exit 弹窗（#3d）
+"match.face.notDetected.title"   = "Yüz algılanamadı";
+"match.face.notDetected.content" = "Eşleşme sırasında lütfen yüzünüzü görünür tutun. 5 saniye içinde yüz algılanmazsa eşleşmeden çıkarılacaksınız.";
+"match.exit.title"               = "Eşleşmeden çıkarıldınız";
+"match.exit.content"             = "Kontrol sırasında yüzünüz algılanmadı. Eşleşme havuzundan çıkarıldınız.";

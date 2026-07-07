@@ -110,6 +110,11 @@ final class MatchStore: ObservableObject {
     /// UI 层通过 `MatchToast+Localized` extension 走 L10n 映射到展示文案。
     @Published var lastToast: MatchToast?
 
+    /// #3d：未露脸弹窗（5s 倒计时）—— .matching 期间人脸检测未检出时 UI 层弹此提示
+    @Published var showNoFacePopup: Bool = false
+    /// #3d：移除匹配弹窗 —— 未露脸倒计时结束仍未检测到脸 → 强制 blocked 后展示
+    @Published var showExitMatchPopup: Bool = false
+
     // MARK: - 依赖
 
     private let service: MatchServiceProtocol
@@ -117,12 +122,21 @@ final class MatchStore: ObservableObject {
     /// 后 weak 立即 nil，摄像头资源需由 Store 主动 collapse 而非依赖 view 生命周期）
     private var cameraSession: MatchCameraSessionProtocol?
 
+    /// #3d：人脸检测 service（stub 默认 true，J 里程碑替换真 FUManager 桥）
+    private let faceDetection: FaceDetectionServiceProtocol
+    /// 30s 首次检测 timer + 3 次随机检测 timer 统一取消 task
+    private var faceCheckTask: Task<Void, Never>?
+    /// 5s 未露脸倒计时 task
+    private var noFaceCountdownTask: Task<Void, Never>?
+
     /// 单例（对齐 CallStore.shared / LiveStore.shared / PartyStore.shared 模式）
-    static let shared = MatchStore(service: MatchService.shared)
+    static let shared = MatchStore(service: MatchService.shared, faceDetection: FaceDetectionServiceStub.shared)
 
     /// 依赖注入 init（供单测传 Fake）。生产用 `.shared`。
-    init(service: MatchServiceProtocol) {
+    init(service: MatchServiceProtocol,
+         faceDetection: FaceDetectionServiceProtocol = FaceDetectionServiceStub.shared) {
         self.service = service
+        self.faceDetection = faceDetection
         loadFromPersistence()
     }
 
@@ -285,6 +299,9 @@ final class MatchStore: ObservableObject {
         isFirstMatchToday = false
 
         lastToast = .turnOnSucceed
+
+        // #3d：启动人脸检测（30s 首次 + 3 次随机 2-30s 内）
+        startFaceCheckAfterOpenMatch()
     }
 
     /// 用户主动关匹配。
@@ -294,6 +311,7 @@ final class MatchStore: ObservableObject {
             return
         }
 
+        stopFaceCheck()  // #3d：关匹配同步停人脸检测
         cameraSession?.stop()
         state = .ended
 
@@ -432,5 +450,102 @@ final class MatchStore: ObservableObject {
             && state == .ended
             && !isMatchBlocked
             && !noTodayShow
+    }
+
+    // MARK: - #3d 人脸检测（对齐 H5 c-goMatch.vue checkFace + startRandomFaceCheck + handleFaceCheckException）
+
+    /// H5 useMatch.js 生成 3 个递增随机秒数（首个 2-23s，后续间隔 ≥3s，上限 30s）
+    private func generateRandomCheckSchedule() -> [UInt64] {
+        let first = Int.random(in: 2...23)
+        let second = Int.random(in: (first + 3)...26)
+        let third = Int.random(in: (second + 3)...29)
+        // 首次 checkFace 30s 已经过；随机检测在 30s 后再走 3 次，转换为 sleep 间隔（相对上次）
+        return [first, second - first, third - second].map { UInt64($0) * 1_000_000_000 }
+    }
+
+    /// openMatch 成功后启动：先 30s 首次检测 → 若未露脸走 5s 倒计时；否则进入 3 次随机检测
+    func startFaceCheckAfterOpenMatch() {
+        stopFaceCheck()
+        faceCheckTask = Task { @MainActor [weak self] in
+            // 30s 首次检测（对齐 H5 checkFace）
+            try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
+            guard let self, !Task.isCancelled, self.state == .matching else { return }
+
+            if !self.faceDetection.hasFace() {
+                self.presentNoFacePopup()
+                return
+            }
+
+            // 3 次随机检测
+            let intervals = self.generateRandomCheckSchedule()
+            for interval in intervals {
+                try? await Task.sleep(nanoseconds: interval)
+                // line 472 outer guard 已解包 self；此处只需查 cancel + state
+                guard !Task.isCancelled, self.state == .matching else { return }
+                if !self.faceDetection.hasFace() {
+                    self.handleFaceCheckException(fromRandom: true)
+                    return
+                }
+            }
+            logger.info("faceCheck: all 4 checks passed")
+        }
+    }
+
+    /// 立即停人脸检测（关匹配 / state 迁出 .matching 时调）
+    func stopFaceCheck() {
+        faceCheckTask?.cancel()
+        faceCheckTask = nil
+        noFaceCountdownTask?.cancel()
+        noFaceCountdownTask = nil
+        showNoFacePopup = false
+        // showExitMatchPopup 保留（用户手动 dismiss）
+    }
+
+    /// 30s 首次检测未露脸 → 展示 5s 倒计时弹窗，用户 5s 内露脸可救回；否则走 blocked
+    private func presentNoFacePopup() {
+        showNoFacePopup = true
+        noFaceCountdownTask?.cancel()
+        noFaceCountdownTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 5 * 1_000_000_000)
+            guard let self, !Task.isCancelled, self.showNoFacePopup else { return }
+            self.showNoFacePopup = false
+            // 再次检测：若仍无脸 → blocked
+            if !self.faceDetection.hasFace() {
+                self.handleFaceCheckException(fromRandom: false)
+            }
+        }
+    }
+
+    /// 用户 5s 内检测到脸 → dismiss 弹窗（供 UI 层调用）
+    func dismissNoFacePopup() {
+        noFaceCountdownTask?.cancel()
+        noFaceCountdownTask = nil
+        showNoFacePopup = false
+    }
+
+    /// 未露脸异常收尾（对齐 H5 handleFaceCheckException）
+    /// - 上报 reportNoFace（TODO：J 里程碑接入 OSS 截图 + 真接口）
+    /// - toggleMatch(0, faceCheckStatus:1) 关匹配（本次桶）
+    /// - state → .blocked + isMatchBlocked=true 持久化
+    /// - showExitMatchPopup=true（"移除匹配"弹窗）
+    private func handleFaceCheckException(fromRandom: Bool) {
+        logger.warning("handleFaceCheckException: fromRandom=\(fromRandom) → blocked")
+        stopFaceCheck()
+        cameraSession?.stop()
+        isMatchBlocked = true
+        MatchPersistedStore.saveIsMatchBlocked(true)
+        state = .blocked
+        showExitMatchPopup = true
+        lastToast = .noFaceDetected
+
+        // 服务端上报（faceCheckStatus=1）—— OSS 截图 + reportNoFace 留 spec BL-4 J-合规
+        Task { [service] in
+            _ = try? await service.toggleMatch(status: 0, faceCheckStatus: 1)
+        }
+    }
+
+    /// 用户点"移除匹配弹窗"OK → 只关 UI（state 已在 handleFaceCheckException 转 .blocked）
+    func dismissExitMatchPopup() {
+        showExitMatchPopup = false
     }
 }

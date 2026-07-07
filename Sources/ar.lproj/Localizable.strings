@@ -797,6 +797,9 @@
 "beautySettings.exitConfirm.discard"                        = "Exit";
 "beautySettings.exitConfirm.continue"                       = "Continue Editing";
 
+// Save 成功 toast（2026-07-03 对齐 H5 index.vue:155；ar 待 J 期翻译，暂 English fallback）
+"beautySettings.saveSuccess.toast"                          = "Save success!";
+
 // MARK: - Match tab（L 里程碑）
 "match.marquee.callStarted"      = "بدأت مكالمة الفيديو.";
 "match.marquee.empty"            = "ابدأ المطابقة لمقابلة المزيد من الأشخاص";
@@ -831,3 +834,9 @@
 "match.tip.title"                = "شغّل المطابقة لتلقّي المكالمات بشكل أسرع وكسب المزيد.";
 "match.tip.goMatch"              = "ابدأ المطابقة";
 "match.tip.noReminder"           = "لا تُذكّرني اليوم";
+
+// Match face check & exit 弹窗（#3d）
+"match.face.notDetected.title"   = "لم يتم اكتشاف الوجه";
+"match.face.notDetected.content" = "يرجى إبقاء وجهك ظاهرًا أثناء المطابقة. عدم اكتشاف الوجه خلال 5 ثوانٍ سيؤدي إلى إخراجك من المطابقة.";
+"match.exit.title"               = "تمت إزالتك من المطابقة";
+"match.exit.content"             = "لم يتم اكتشاف وجهك خلال الفحص. لقد تمت إزالتك من مجموعة المطابقة.";

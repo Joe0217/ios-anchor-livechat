@@ -979,6 +979,9 @@ enum L10n {
         static var exitConfirmMessage: String  { localize("beautySettings.exitConfirm.message", comment: "退出未保存弹窗正文") }
         static var exitConfirmDiscard: String  { localize("beautySettings.exitConfirm.discard", comment: "退出未保存 - 丢弃按钮") }
         static var exitConfirmContinue: String { localize("beautySettings.exitConfirm.continue", comment: "退出未保存 - 继续编辑按钮") }
+
+        // Save 成功 toast（2026-07-03 对齐 H5 index.vue:155 showToast('save success!')）
+        static var saveSuccessToast: String    { localize("beautySettings.saveSuccess.toast", comment: "Save 成功后顶部 toast") }
     }
 
     // MARK: - H-2 私密媒体解锁（Gift Message，对齐 H5 secretMessage）
@@ -1107,5 +1110,19 @@ enum L10n {
     }
     static var matchTipNoReminder: String {
         localize("match.tip.noReminder", comment: "今日不再提醒 checkbox 文案")
+    }
+
+    // MARK: - #3d 未露脸弹窗 + 移除匹配弹窗
+    static var matchFaceNotDetectedTitle: String {
+        localize("match.face.notDetected.title", comment: "未检测到人脸标题")
+    }
+    static var matchFaceNotDetectedContent: String {
+        localize("match.face.notDetected.content", comment: "未检测到人脸提示内容")
+    }
+    static var matchExitTitle: String {
+        localize("match.exit.title", comment: "移除匹配弹窗标题")
+    }
+    static var matchExitContent: String {
+        localize("match.exit.content", comment: "移除匹配弹窗内容")
     }
 }

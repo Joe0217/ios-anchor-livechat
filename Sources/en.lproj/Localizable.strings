@@ -754,6 +754,9 @@
 "beautySettings.exitConfirm.discard"                        = "Exit";
 "beautySettings.exitConfirm.continue"                       = "Continue Editing";
 
+// Save 成功 toast（2026-07-03 对齐 H5 index.vue:155）
+"beautySettings.saveSuccess.toast"                          = "Save success!";
+
 // MARK: - Match tab（L 里程碑）
 
 // MARK: - 直播结果页（对齐 H5 locales/en.json live.*）
@@ -829,3 +832,9 @@
 "match.tip.title"                = "Turn on matching to receive calls faster and earn more.";
 "match.tip.goMatch"              = "Go Match";
 "match.tip.noReminder"           = "Don't remind me today";
+
+// Match face check & exit 弹窗（#3d）
+"match.face.notDetected.title"   = "Face not detected";
+"match.face.notDetected.content" = "Please keep your face visible during matching. Face not detected in 5 seconds will remove you from matching.";
+"match.exit.title"               = "Removed from matching";
+"match.exit.content"             = "Your face wasn't detected during the check. You've been removed from the matching pool.";
