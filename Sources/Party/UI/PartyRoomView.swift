@@ -59,6 +59,8 @@ struct PartyRoomView: View {
         // 触发 .task cancellation 导致 URLSession 抛 -999 cancelled（PartyRoomView 是叶子页面，
         // pop 后销毁不会 re-appear，didStartEnter 守卫一次即可）
         .onAppear {
+            // 长时间无操作自动离线：派对房中暂停监测（对齐 H5 isBusy 停 timer）
+            AutoOfflineMonitor.shared.suspend()
             // P2-10：onAppear 同步 cache 一次仅作为"上次会话残留"兜底
             // —— enterRoom() 是同帧异步 Task，首次进入时 store.seatList 通常为 [] → 该行为 no-op；
             // 后续真值靠 .onChange(of: store.seatList) 在 enterRoom 写入后填充
@@ -75,6 +77,8 @@ struct PartyRoomView: View {
             // v5.3.3 真根因双守卫：(1) scenePhase != .background 防切后台误退房（系统 snapshot 也调 onDisappear）；
             // (2) 仅当处于活跃房态时才 leave，避免重复退房。真正退房路径仍走顶栏 ✕ 按钮显式调 leaveRoom。
             guard scenePhase != .background else { return }
+            // 长时间无操作自动离线：与 onAppear.suspend 配对
+            AutoOfflineMonitor.shared.resume()
             if store.roomState == .joined || store.roomState == .entering {
                 Task { await store.leaveRoom() }
             }
