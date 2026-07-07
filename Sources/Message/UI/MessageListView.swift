@@ -1,0 +1,373 @@
+import Combine
+import SwiftUI
+
+/// P2P 会话列表主 view（H-1 MVP，v3 UI 对齐 H5）。
+///
+/// **架构**：
+/// - 顶部自定义 3 tab bar（Flame / Prime / Stranger，标题旁附未读数 badge）
+/// - 内容用 `TabView(.page)` 承载 swipe 手势切换（对齐 H5 v-swiper 手感）
+/// - 长按 row → `.confirmationDialog` bottom sheet 承载 Unpin/Delete（对齐 H5 van-popup）
+/// - 空态：SF Symbol tray 大图 + "No Data" 文案
+/// - Store 订阅 `provider.isConnectedPublisher` 自动等 IM 登录后 load（Step 3 反悔 #1 修复）
+struct MessageListView: View {
+
+    @ObservedObject var store: MessageSessionStore
+    @State private var transientError: String?
+    @State private var longPressedSession: MessageSession?
+
+    var body: some View {
+        VStack(spacing: 0) {
+            categoryTabBar
+            content
+        }
+        .task {
+            if case .idle = store.state {
+                await store.load()
+            }
+        }
+        .overlay(alignment: .top) {
+            if let err = transientError {
+                Text(err)
+                    .font(.caption)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(Color.black.opacity(0.75), in: Capsule())
+                    .foregroundStyle(.white)
+                    .padding(.top, 8)
+                    .transition(.opacity)
+            }
+        }
+        // Bottom sheet：长按会话弹置顶/删除 confirmation
+        .confirmationDialog(
+            longPressedSession?.peerNickname ?? "",
+            isPresented: Binding(
+                get: { longPressedSession != nil },
+                set: { if !$0 { longPressedSession = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let s = longPressedSession {
+                Button(s.isTop ? L10n.messageActionUnstickTop : L10n.messageActionStickTop) {
+                    Task { await handleStickTop(s) }
+                }
+                Button(L10n.messageActionDelete, role: .destructive) {
+                    Task { await handleDelete(s) }
+                }
+                Button(L10n.messageActionCancel, role: .cancel) {}
+            }
+        }
+    }
+
+    // MARK: - 顶部 tab bar（自定义，含未读数 badge）
+
+    private var categoryTabBar: some View {
+        HStack(spacing: 0) {
+            ForEach(MessageSessionCategory.allCases, id: \.self) { cat in
+                tabButton(cat)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(Color.gray.opacity(0.15)).frame(height: 0.5)
+        }
+    }
+
+    private func tabButton(_ cat: MessageSessionCategory) -> some View {
+        let selected = store.selectedCategory == cat
+        let unread = store.unreadCount(in: cat)
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                store.selectedCategory = cat
+            }
+        } label: {
+            VStack(spacing: 4) {
+                HStack(spacing: 4) {
+                    Text(label(for: cat))
+                        .font(.system(size: 14, weight: selected ? .semibold : .regular))
+                        .foregroundStyle(selected ? .primary : .secondary)
+                    if unread > 0 {
+                        Text(unread > 99 ? "99+" : "\(unread)")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Color.red, in: Capsule())
+                    }
+                }
+                Rectangle()
+                    .fill(selected ? Color.accentColor : Color.clear)
+                    .frame(height: 2)
+                    .frame(maxWidth: 40)
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func label(for cat: MessageSessionCategory) -> String {
+        switch cat {
+        case .flame:    return L10n.messageCategoryFlame
+        case .stranger: return L10n.messageCategoryStranger
+        case .prime:    return L10n.messageCategoryPrime
+        }
+    }
+
+    // MARK: - 内容：TabView(.page) swipe
+
+    @ViewBuilder
+    private var content: some View {
+        switch store.state {
+        case .idle, .loading:
+            loadingState
+        case .error(let msg):
+            errorState(msg)
+        case .loaded:
+            pageContent
+        }
+    }
+
+    private var loadingState: some View {
+        VStack {
+            Spacer()
+            ProgressView()
+            Spacer()
+        }
+    }
+
+    private func errorState(_ msg: String) -> some View {
+        VStack(spacing: 12) {
+            Spacer()
+            Image(systemName: "exclamationmark.triangle")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Button(L10n.messageLoadErrorRetry) {
+                Task { await store.retry() }
+            }
+            .buttonStyle(.bordered)
+            Spacer()
+        }
+        .padding()
+        .accessibilityLabel(L10n.messageLoadErrorRetry)
+    }
+
+    private var pageContent: some View {
+        TabView(selection: $store.selectedCategory) {
+            categoryPage(.flame).tag(MessageSessionCategory.flame)
+            categoryPage(.stranger).tag(MessageSessionCategory.stranger)
+            categoryPage(.prime).tag(MessageSessionCategory.prime)
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+    }
+
+    @ViewBuilder
+    private func categoryPage(_ cat: MessageSessionCategory) -> some View {
+        let sessions = store.sessions(in: cat)
+        // Flame page 顶部固定 3 系统消息入口（v4 对齐 H5 list.vue #before slot）
+        // 3 入口本身即内容 → 常规 sessions 空时**不显示**"No hot conversations yet"空态（问题 1 修复）
+        if cat == .flame {
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(store.systemInboxEntries) { entry in
+                        SystemInboxRow(entry: entry) {
+                            handleSystemInboxTap(entry)
+                        }
+                        Divider().padding(.leading, 76)
+                    }
+                    ForEach(sessions) { session in
+                        MessageSessionRow(
+                            session: session,
+                            profile: store.profile(for: session.id)
+                        ) {
+                            longPressedSession = session
+                        }
+                        Divider().padding(.leading, 76)
+                    }
+                }
+            }
+            .refreshable { await store.load() }
+        } else {
+            if sessions.isEmpty {
+                emptyState(for: cat)
+            } else {
+                listView(sessions)
+            }
+        }
+    }
+
+    private func emptyState(for category: MessageSessionCategory) -> some View {
+        let text: String = {
+            switch category {
+            case .flame:    return L10n.messageEmptyFlame
+            case .stranger: return L10n.messageEmptyStranger
+            case .prime:    return L10n.messageEmptyPrime
+            }
+        }()
+        return VStack(spacing: 16) {
+            Spacer()
+            Image(systemName: "tray")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 88, height: 88)
+                .foregroundStyle(.secondary.opacity(0.5))
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func listView(_ sessions: [MessageSession]) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(sessions) { session in
+                    MessageSessionRow(
+                        session: session,
+                        profile: store.profile(for: session.id)
+                    ) {
+                        longPressedSession = session
+                    }
+                    Divider().padding(.leading, 76)
+                }
+            }
+        }
+        .refreshable { await store.load() }
+    }
+
+    // MARK: - Actions
+
+    /// 系统消息入口点击（v4 新增）：详情页留 H-2，点击暂 toast "coming soon"；
+    /// Station 额外标记已读（清 unread badge）。
+    private func handleSystemInboxTap(_ entry: SystemInboxEntry) {
+        if entry.kind == .station {
+            store.markStationRead()
+        }
+        showTransientError(L10n.messageSystemInboxComingSoon)
+    }
+
+    private func handleStickTop(_ session: MessageSession) async {
+        let beforeState = store.state
+        await store.setStickTop(sessionId: session.id, isTop: !session.isTop)
+        if beforeState == store.state {
+            showTransientError(L10n.messageActionFailedToast)
+        }
+    }
+
+    private func handleDelete(_ session: MessageSession) async {
+        await store.delete(sessionId: session.id)
+        if store.currentSessions.contains(where: { $0.id == session.id }) {
+            showTransientError(L10n.messageActionFailedToast)
+        }
+    }
+
+    private func showTransientError(_ text: String) {
+        withAnimation { transientError = text }
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            withAnimation { transientError = nil }
+        }
+    }
+}
+
+// MARK: - Preview
+
+#if DEBUG
+struct MessageListView_Previews: PreviewProvider {
+
+    @MainActor
+    final class PreviewProvider_: MessageSessionProviderProtocol {
+        var stubSessions: [MessageSession] = []
+        var stubError: Error?
+        func fetchAll() async throws -> [MessageSession] {
+            if let e = stubError { throw e }
+            return stubSessions
+        }
+        func setStickTop(sessionId: String, isTop: Bool) async throws {}
+        func delete(sessionId: String) async throws {}
+        func subscribe(_ handler: @MainActor @escaping (MessageSessionEvent) -> Void) {}
+        func unsubscribe() {}
+        var isConnectedPublisher: AnyPublisher<Bool, Never> {
+            Just(true).eraseToAnyPublisher()
+        }
+    }
+
+    @MainActor
+    final class PreviewPrime: PrimeLevelProviderProtocol {
+        var stub: Set<String> = []
+        func fetchPrime(yxAccIds: [String]) async -> Set<String> { stub.intersection(yxAccIds) }
+    }
+
+    @MainActor
+    final class PreviewStation: StationListProviderProtocol {
+        var stubMail: StationMail?
+        func fetchLatest() async -> StationMail? { stubMail }
+        func isUnread(_ mail: StationMail) -> Bool { true }
+        func markRead(_ mail: StationMail) {}
+    }
+
+    @MainActor
+    final class PreviewProfile: ConversationProfileProviderProtocol {
+        var stub: [String: ConversationProfile] = [:]
+        func fetch(yxAccIds: [String]) async -> [String: ConversationProfile] {
+            var out: [String: ConversationProfile] = [:]
+            for id in yxAccIds { if let p = stub[id] { out[id] = p } }
+            return out
+        }
+    }
+
+    @MainActor
+    final class PreviewCustomer: CustomerServiceIdProviderProtocol {
+        private let subject: CurrentValueSubject<String?, Never>
+        init(id: String? = nil) { subject = CurrentValueSubject(id) }
+        var customerYxAccId: String? { subject.value }
+        var customerYxAccIdPublisher: AnyPublisher<String?, Never> { subject.eraseToAnyPublisher() }
+        func refreshIfNeeded() async {}
+        func clear() { subject.send(nil) }
+    }
+
+    @MainActor
+    static func makeStore(sessions: [MessageSession], prime: Set<String> = [], error: Error? = nil,
+                          stationMail: StationMail? = nil) -> MessageSessionStore {
+        let p = PreviewProvider_()
+        p.stubSessions = sessions
+        p.stubError = error
+        let primeP = PreviewPrime()
+        primeP.stub = prime
+        let stationP = PreviewStation()
+        stationP.stubMail = stationMail
+        return MessageSessionStore(
+            provider: p,
+            primeProvider: primeP,
+            stationProvider: stationP,
+            customerServiceStore: PreviewCustomer(),
+            profileProvider: PreviewProfile()
+        )
+    }
+
+    static let sample: [MessageSession] = [
+        .init(id: "flame1", peerNickname: "Alice", peerAvatarURL: nil,
+              lastMessage: "Hi!", lastMessageTimestamp: Int64(Date().timeIntervalSince1970 * 1000),
+              unreadCount: 3, isTop: true,
+              ext: MessageSessionExt(receivedGift: true, called: false, received: false, sended: false)),
+        .init(id: "prime1", peerNickname: "Bob", peerAvatarURL: nil,
+              lastMessage: "[Gift]", lastMessageTimestamp: Int64(Date().timeIntervalSince1970 * 1000) - 3600_000,
+              unreadCount: 0, isTop: false, ext: .empty),
+        .init(id: "str1", peerNickname: "Carol", peerAvatarURL: nil,
+              lastMessage: "hello", lastMessageTimestamp: Int64(Date().timeIntervalSince1970 * 1000) - 86400_000,
+              unreadCount: 99, isTop: false, ext: .empty),
+    ]
+
+    static var previews: some View {
+        Group {
+            MessageListView(store: makeStore(sessions: sample, prime: ["prime1"]))
+                .previewDisplayName("Loaded 3 categories")
+            MessageListView(store: makeStore(sessions: []))
+                .previewDisplayName("Empty (Flame)")
+            MessageListView(store: makeStore(sessions: [], error: NSError(domain: "preview", code: -1)))
+                .previewDisplayName("Error retry")
+        }
+    }
+}
+#endif
