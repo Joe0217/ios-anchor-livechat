@@ -9,18 +9,19 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "BeautyS
 /// 设计要点：
 /// - `@MainActor` + ObservableObject：跨模块单例订阅，SwiftUI 直接 `@ObservedObject`
 /// - `settings` `@Published`：任何 view 直读 + Sharer 层订阅广播到 renderer
-/// - **flushIfDirty 幂等**（红队 A1）：`scenePhase→.background` 与 `onDisappear` 会同时触发；
-///   NSLock + isFlushInProgress guard 防重入。虽然 `@MainActor` 已保证串行，
-///   NSLock 是 defense in depth（若未来改成非-MainActor 也不炸）
+/// - **flushIfDirty 幂等**（红队 A1）：NSLock + isFlushInProgress guard 防重入。
+///   虽然 `@MainActor` 已保证串行，NSLock 是 defense in depth（若未来改成非-MainActor 也不炸）
 /// - **读盘失败兜底默认档**（`.claude/rules/async-state-fallback.md`）：不 crash 不 dead-state
 /// - **reset() 串行**（红队 A4）：Store 内部 mutation + flush 都在 MainActor 上，天然串行
+/// - **revert()**：丢弃 in-memory 未保存修改，恢复到 lastPersisted（磁盘真值）
 ///
 /// 使用：
 /// ```
 /// let store = BeautySettingsStore(persistence: UserDefaultsBeautyPersistence())
-/// store.updateBlur(70)     // 拖滑块
-/// store.flushIfDirty()     // onDisappear / scenePhase→.background 触发
-/// store.reset()            // 恢复默认按钮
+/// store.mutate { $0.blur = 70 }   // 拖滑块 —— 仅改 in-memory
+/// store.flushIfDirty()            // 顶部 Save 按钮显式触发
+/// store.revert()                  // 用户 Exit 丢弃未保存修改
+/// store.reset()                   // Recover 恢复默认档
 /// ```
 @MainActor
 final class BeautySettingsStore: ObservableObject {
@@ -74,10 +75,9 @@ final class BeautySettingsStore: ObservableObject {
     }
 
     // MARK: - flushIfDirty（红队 A1 幂等）
-    /// 触发时机：
-    /// - view.onDisappear
-    /// - scenePhase→.background
-    /// - Store.reset() 内部（reset 后立即 flush）
+    /// 触发时机（2026-07-08 澄清后仅显式路径）：
+    /// - 顶部 `Save` 按钮
+    /// - Store.reset() 内部（reset 后立即写盘，恢复默认档不留 in-memory dirty）
     ///
     /// 幂等策略：若 in-flight 直接 no-op；写盘完成后释放 flag。
     /// 返回 true = 本次真触发写盘；false = no-op（in-flight or !dirty）
@@ -127,5 +127,14 @@ final class BeautySettingsStore: ObservableObject {
     func reset() -> Bool {
         settings = .defaults
         return flushIfDirty()
+    }
+
+    // MARK: - revert 丢弃未保存修改（K spec §2.4 X 按钮 exitConfirm.discard）
+    /// 把 settings 还原为最近一次持久化的值（磁盘上真值），清空 in-memory dirty 状态。
+    /// 用于：用户点"Exit"丢弃未保存修改 / view 真 dismount 时兜底防止 store 残留 dirty state
+    /// 影响下次进入。幂等——settings 已经等于 lastPersisted 时 no-op（无 objectWillChange fire）。
+    func revert() {
+        guard settings != lastPersisted else { return }
+        settings = lastPersisted
     }
 }

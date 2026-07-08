@@ -9,8 +9,14 @@ import SwiftUI
 /// - **单顶部 slider**：绑当前选中参数，位于 sheet 上方；左侧红色 Toggle 是全局开关
 /// - Recover 是 icon row 首位，点击重置本 tab 参数
 ///
+/// **保存语义**（2026-07-08 用户澄清）：
+/// - 拖 slider / 切 filter / 换 sticker / Recover 全部**只改 store in-memory**，不写盘（预览实时更新）
+/// - 顶部 `Save` 按钮才触发 `store.flushIfDirty()` 写盘
+/// - X 按钮：若 `store.isDirty` → 弹 `exitConfirm` 二次确认（`Exit` 丢弃 / `Continue Editing` 返回）
+///   → `Exit` 走 `store.revert()` 恢复磁盘值；不 dirty 则直接 dismiss
+/// - onDisappear（真 dismount）兜底 `store.revert()`：防止未保存 in-memory 状态残留影响下次进入
+///
 /// 关键契约保留：
-/// - flush 双路径（scenePhase→.background + onDisappear，红队 A1）
 /// - Slider 锁 LTR（红队 B3）—— `.environment(\.layoutDirection, .leftToRight)`
 /// - CameraManager 灯熄（红队 E5）—— onDisappear stop
 /// - Sharer attach/detach `.preview` token（红队 B1）
@@ -29,6 +35,8 @@ struct BeautySettingsView: View {
     @State private var selectedShapeParamId: String? = "cheekV"
     /// Recover 确认弹窗目标；nil = 弹窗不显示（需求 2）
     @State private var pendingRecover: RecoverTarget?
+    /// X 按钮触发的 exit confirm 弹窗展示态（dirty 时才弹）
+    @State private var showExitConfirm: Bool = false
 
     enum Tab: Int, Hashable, CaseIterable {
         case skin = 0, shape, filter, sticker
@@ -90,12 +98,12 @@ struct BeautySettingsView: View {
             camera.renderer.apply(store.settings)  // 首帧一致
         }
         .onDisappear {
-            store.flushIfDirty()
+            // v5.3.3 双守卫：切后台 SwiftUI 也会调 onDisappear（snapshot 用），仅在真 dismount 时清理
+            guard scenePhase != .background else { return }
+            // 保存语义：真 dismount 时兜底 revert 未保存修改（若用户绕过 X 按钮走系统 back gesture / 上级 pop）
+            store.revert()
             sharer.detach(camera.renderer as AnyObject & BeautyRenderer)
             camera.stop()
-        }
-        .onChange(of: scenePhase) { newPhase in
-            if newPhase == .background { store.flushIfDirty() }
         }
         // Slider 拖动实时更新 SDK（60ms throttle 直调 renderer.apply）
         .onReceive(
@@ -123,6 +131,19 @@ struct BeautySettingsView: View {
         } message: { _ in
             Text(L10n.BeautySettings.recoverConfirmMessage)
         }
+        // X 按钮 exit confirm：dirty 时弹（对齐 H5 index.vue:199-210 goBack）
+        .alert(
+            L10n.BeautySettings.exitConfirmTitle,
+            isPresented: $showExitConfirm
+        ) {
+            Button(L10n.BeautySettings.exitConfirmDiscard, role: .destructive) {
+                store.revert()   // 恢复磁盘值（onDisappear 兜底再调一次是幂等）
+                dismiss()
+            }
+            Button(L10n.BeautySettings.exitConfirmContinue, role: .cancel) {}
+        } message: {
+            Text(L10n.BeautySettings.exitConfirmMessage)
+        }
     }
 
     // MARK: - 顶部 X + Save
@@ -130,7 +151,12 @@ struct BeautySettingsView: View {
     private var topBar: some View {
         HStack {
             Button {
-                dismiss()
+                // 保存语义：dirty 时弹 exitConfirm；无修改则直接 dismiss（onDisappear 内 revert 是幂等 no-op）
+                if store.isDirty {
+                    showExitConfirm = true
+                } else {
+                    dismiss()
+                }
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 14, weight: .semibold))
