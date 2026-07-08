@@ -26,6 +26,7 @@ enum ProfileRoute: Hashable {
     case settings
     case levelDetail
     case blocklist
+    case editProfile
 }
 
 struct ProfileView: View {

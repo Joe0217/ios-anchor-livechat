@@ -270,6 +270,7 @@ struct MainTabView: View {
                             case .settings:    SettingsView()
                             case .levelDetail: LevelDetailView()
                             case .blocklist:   BlocklistView()
+                            case .editProfile:  EditProfileView(service: EditProfileService.shared)
                             }
                         }
                 }

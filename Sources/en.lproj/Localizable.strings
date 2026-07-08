@@ -838,3 +838,55 @@
 "match.face.notDetected.content" = "Please keep your face visible during matching. Face not detected in 5 seconds will remove you from matching.";
 "match.exit.title"               = "Removed from matching";
 "match.exit.content"             = "Your face wasn't detected during the check. You've been removed from the matching pool.";
+/* EditProfile 用户资料编辑页（I 里程碑，对齐 H5 anchor-livechat-h5/src/views/profile/index.vue） */
+"editProfile.navTitle"                             = "Edit Profile";
+"editProfile.confirm"                              = "Save";
+"editProfile.cancel"                               = "Cancel";
+
+"editProfile.section.basic.title"                  = "Basic Info";
+"editProfile.section.basic.hint"                   = "Complete your profile to attract more viewers";
+"editProfile.section.photos.titleFormat"           = "Photos (%d/9)";
+"editProfile.section.videos.titleFormat"           = "Videos (%d/6)";
+"editProfile.section.callVideo.title"              = "Call Video";
+"editProfile.section.callVideo.hint"               = "Set a video that plays when receiving a call";
+"editProfile.section.greetMsgs.title"              = "Greet Messages";
+"editProfile.section.greetMsgs.hint"               = "Auto-sent to users on call connect";
+"editProfile.section.greetMsgs.reviewingTitle"     = "In Review";
+
+"editProfile.nickname.label"                       = "Nickname";
+"editProfile.nickname.placeholder"                 = "Please Enter...";
+"editProfile.nickname.editTitle"                   = "Nickname";
+"editProfile.nickname.wordCountFormat"             = "%d/15";
+
+"editProfile.bio.label"                            = "Bio";
+"editProfile.bio.placeholder"                      = "Please Enter...";
+"editProfile.bio.wordCountFormat"                  = "%d/200";
+
+"editProfile.greetMsg.addButton"                   = "Add";
+"editProfile.greetMsg.placeholder"                 = "Please Enter...";
+"editProfile.greetMsg.wordCountFormat"             = "%d/50";
+
+"editProfile.badge.inReview"                       = "In Review";
+
+"editProfile.loadError.title"                      = "Failed to load";
+"editProfile.loadError.retry"                      = "Retry";
+"editProfile.success.title"                        = "Submitted for approval, please wait...";
+"editProfile.success.confirm"                      = "Confirm";
+"editProfile.discard.title"                        = "Discard changes?";
+"editProfile.discard.message"                      = "Your unsaved changes will be lost.";
+"editProfile.discard.confirm"                      = "Discard";
+"editProfile.discard.keep"                         = "Keep Editing";
+"editProfile.sizeAlert.title"                      = "Cannot Upload";
+"editProfile.sizeAlert.ok"                         = "OK";
+
+"editProfile.toast.photosLimit"                    = "You can only add up to 9 photos";
+"editProfile.toast.videosLimit"                    = "You can only add up to 6 videos";
+"editProfile.toast.uploading"                      = "uploading...";
+"editProfile.toast.uploadFailed"                   = "some upload failed, please upload again!";
+"editProfile.toast.uploadTimeout"                  = "Upload timeout, please try again";
+"editProfile.toast.imageTooLarge"                  = "The image is too large (max 5MB)";
+"editProfile.toast.videoTooLarge"                  = "The video is too large (max 20MB)";
+"editProfile.toast.videoFormatUnsupported"         = "Video format not supported (only mp4/mov)";
+"editProfile.toast.avatarInReview"                 = "The avatar is in review, please wait...";
+"editProfile.toast.nicknameInReview"               = "Sorry, your profile detail is in review";
+"editProfile.toast.networkError"                   = "Network error, please try again";

@@ -840,3 +840,55 @@
 "match.face.notDetected.content" = "يرجى إبقاء وجهك ظاهرًا أثناء المطابقة. عدم اكتشاف الوجه خلال 5 ثوانٍ سيؤدي إلى إخراجك من المطابقة.";
 "match.exit.title"               = "تمت إزالتك من المطابقة";
 "match.exit.content"             = "لم يتم اكتشاف وجهك خلال الفحص. لقد تمت إزالتك من مجموعة المطابقة.";
+/* EditProfile 用户资料编辑页（I 里程碑） */
+"editProfile.navTitle"                             = "تعديل الملف الشخصي";
+"editProfile.confirm"                              = "حفظ";
+"editProfile.cancel"                               = "إلغاء";
+
+"editProfile.section.basic.title"                  = "المعلومات الأساسية";
+"editProfile.section.basic.hint"                   = "أكمل ملفك الشخصي لجذب المزيد من المشاهدين";
+"editProfile.section.photos.titleFormat"           = "الصور (%d/9)";
+"editProfile.section.videos.titleFormat"           = "الفيديوهات (%d/6)";
+"editProfile.section.callVideo.title"              = "فيديو المكالمة";
+"editProfile.section.callVideo.hint"               = "حدد الفيديو الذي يتم تشغيله عند استقبال المكالمة";
+"editProfile.section.greetMsgs.title"              = "رسائل الترحيب";
+"editProfile.section.greetMsgs.hint"               = "تُرسل تلقائيًا للمستخدمين عند اتصال المكالمة";
+"editProfile.section.greetMsgs.reviewingTitle"     = "قيد المراجعة";
+
+"editProfile.nickname.label"                       = "اللقب";
+"editProfile.nickname.placeholder"                 = "الرجاء الإدخال...";
+"editProfile.nickname.editTitle"                   = "اللقب";
+"editProfile.nickname.wordCountFormat"             = "%d/15";
+
+"editProfile.bio.label"                            = "النبذة الشخصية";
+"editProfile.bio.placeholder"                      = "الرجاء الإدخال...";
+"editProfile.bio.wordCountFormat"                  = "%d/200";
+
+"editProfile.greetMsg.addButton"                   = "إضافة";
+"editProfile.greetMsg.placeholder"                 = "الرجاء الإدخال...";
+"editProfile.greetMsg.wordCountFormat"             = "%d/50";
+
+"editProfile.badge.inReview"                       = "قيد المراجعة";
+
+"editProfile.loadError.title"                      = "فشل التحميل";
+"editProfile.loadError.retry"                      = "إعادة المحاولة";
+"editProfile.success.title"                        = "تم الإرسال للموافقة، يرجى الانتظار...";
+"editProfile.success.confirm"                      = "تأكيد";
+"editProfile.discard.title"                        = "تجاهل التغييرات؟";
+"editProfile.discard.message"                      = "سيتم فقدان التغييرات غير المحفوظة.";
+"editProfile.discard.confirm"                      = "تجاهل";
+"editProfile.discard.keep"                         = "متابعة التعديل";
+"editProfile.sizeAlert.title"                      = "تعذر الرفع";
+"editProfile.sizeAlert.ok"                         = "موافق";
+
+"editProfile.toast.photosLimit"                    = "لا يمكنك إضافة أكثر من 9 صور";
+"editProfile.toast.videosLimit"                    = "لا يمكنك إضافة أكثر من 6 فيديوهات";
+"editProfile.toast.uploading"                      = "جارٍ الرفع...";
+"editProfile.toast.uploadFailed"                   = "فشل بعض الرفع، يرجى إعادة الرفع!";
+"editProfile.toast.uploadTimeout"                  = "انتهت مهلة الرفع، يرجى المحاولة مرة أخرى";
+"editProfile.toast.imageTooLarge"                  = "الصورة كبيرة جدًا (الحد الأقصى 5MB)";
+"editProfile.toast.videoTooLarge"                  = "الفيديو كبير جدًا (الحد الأقصى 20MB)";
+"editProfile.toast.videoFormatUnsupported"         = "صيغة الفيديو غير مدعومة (فقط mp4/mov)";
+"editProfile.toast.avatarInReview"                 = "الصورة الشخصية قيد المراجعة، يرجى الانتظار...";
+"editProfile.toast.nicknameInReview"               = "عذرًا، تفاصيل ملفك الشخصي قيد المراجعة";
+"editProfile.toast.networkError"                   = "خطأ في الشبكة، يرجى المحاولة مرة أخرى";

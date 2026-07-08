@@ -1126,3 +1126,72 @@ enum L10n {
         localize("match.exit.content", comment: "移除匹配弹窗内容")
     }
 }
+    // MARK: - EditProfile 用户资料编辑页（I 里程碑，对齐 H5 anchor-livechat-h5/src/views/profile/index.vue）
+    enum EditProfile {
+        // 顶栏 & 通用
+        static var navTitle: String              { localize("editProfile.navTitle", comment: "编辑页导航标题") }
+        static var confirm: String               { localize("editProfile.confirm", comment: "保存 / Confirm 按钮") }
+        static var cancel: String                { localize("editProfile.cancel", comment: "取消按钮") }
+
+        // Section 标题 & hint
+        static var sectionBasicTitle: String     { localize("editProfile.section.basic.title", comment: "基本信息 section") }
+        static var sectionBasicHint: String      { localize("editProfile.section.basic.hint", comment: "基本信息 section 提示") }
+        static var sectionPhotosTitleFormat: String  { localize("editProfile.section.photos.titleFormat", comment: "Photos (%d/9)") }
+        static var sectionVideosTitleFormat: String  { localize("editProfile.section.videos.titleFormat", comment: "Videos (%d/6)") }
+        static var sectionCallVideoTitle: String { localize("editProfile.section.callVideo.title", comment: "来电视频 section 标题") }
+        static var sectionCallVideoHint: String  { localize("editProfile.section.callVideo.hint", comment: "来电视频 section 提示") }
+        static var sectionGreetMsgsTitle: String { localize("editProfile.section.greetMsgs.title", comment: "问候语 section 标题") }
+        static var sectionGreetMsgsHint: String  { localize("editProfile.section.greetMsgs.hint", comment: "问候语 section 提示") }
+        static var sectionGreetMsgsReviewingTitle: String { localize("editProfile.section.greetMsgs.reviewingTitle", comment: "问候语 - 审核中分组标题") }
+
+        // 昵称
+        static var nicknameLabel: String         { localize("editProfile.nickname.label", comment: "昵称字段标签") }
+        static var nicknamePlaceholder: String   { localize("editProfile.nickname.placeholder", comment: "昵称 sheet 占位") }
+        static var nicknameEditTitle: String     { localize("editProfile.nickname.editTitle", comment: "昵称编辑 sheet 顶部标题") }
+        static func nicknameWordCountFormat(_ count: Int) -> String {
+            String(format: localize("editProfile.nickname.wordCountFormat", comment: "%d/15"), count)
+        }
+
+        // 简介
+        static var bioLabel: String              { localize("editProfile.bio.label", comment: "简介标签") }
+        static var bioPlaceholder: String        { localize("editProfile.bio.placeholder", comment: "简介占位") }
+        static func bioWordCountFormat(_ count: Int) -> String {
+            String(format: localize("editProfile.bio.wordCountFormat", comment: "%d/200"), count)
+        }
+
+        // 问候语
+        static var greetMsgAddButton: String     { localize("editProfile.greetMsg.addButton", comment: "问候语添加按钮") }
+        static var greetMsgPlaceholder: String   { localize("editProfile.greetMsg.placeholder", comment: "问候语输入占位") }
+        static func greetMsgWordCountFormat(_ count: Int) -> String {
+            String(format: localize("editProfile.greetMsg.wordCountFormat", comment: "%d/50"), count)
+        }
+
+        // 审核中徽章
+        static var badgeInReview: String         { localize("editProfile.badge.inReview", comment: "In Review 胶囊") }
+
+        // Load error / Success / Discard / SizeAlert
+        static var loadErrorTitle: String        { localize("editProfile.loadError.title", comment: "加载失败标题") }
+        static var loadErrorRetry: String        { localize("editProfile.loadError.retry", comment: "加载失败重试按钮") }
+        static var successDialogTitle: String    { localize("editProfile.success.title", comment: "保存成功提示（提交审核）") }
+        static var successDialogConfirm: String  { localize("editProfile.success.confirm", comment: "成功弹窗确认按钮") }
+        static var discardTitle: String          { localize("editProfile.discard.title", comment: "放弃编辑弹窗标题") }
+        static var discardMessage: String        { localize("editProfile.discard.message", comment: "放弃编辑弹窗内容") }
+        static var discardConfirm: String        { localize("editProfile.discard.confirm", comment: "放弃编辑 - Discard 按钮") }
+        static var discardKeep: String           { localize("editProfile.discard.keep", comment: "放弃编辑 - 继续编辑按钮") }
+        static var sizeAlertTitle: String        { localize("editProfile.sizeAlert.title", comment: "上传大小错误标题") }
+        static var sizeAlertOK: String           { localize("editProfile.sizeAlert.ok", comment: "上传大小错误 OK 按钮") }
+
+        // Toasts
+        static var toastPhotosLimit: String      { localize("editProfile.toast.photosLimit", comment: "相册达上限") }
+        static var toastVideosLimit: String      { localize("editProfile.toast.videosLimit", comment: "视频达上限") }
+        static var toastUploading: String        { localize("editProfile.toast.uploading", comment: "上传中 toast") }
+        static var toastUploadFailed: String     { localize("editProfile.toast.uploadFailed", comment: "上传失败 toast") }
+        static var toastUploadTimeout: String    { localize("editProfile.toast.uploadTimeout", comment: "上传超时 toast") }
+        static var toastImageTooLarge: String    { localize("editProfile.toast.imageTooLarge", comment: "图片过大 toast") }
+        static var toastVideoTooLarge: String    { localize("editProfile.toast.videoTooLarge", comment: "视频过大 toast") }
+        static var toastVideoFormatUnsupported: String { localize("editProfile.toast.videoFormatUnsupported", comment: "视频格式不支持 toast") }
+        static var toastAvatarInReview: String   { localize("editProfile.toast.avatarInReview", comment: "头像审核中点击 toast") }
+        static var toastNicknameInReview: String { localize("editProfile.toast.nicknameInReview", comment: "昵称/资料审核中点击 toast") }
+        static var toastNetworkError: String     { localize("editProfile.toast.networkError", comment: "网络错误 toast") }
+    }
+

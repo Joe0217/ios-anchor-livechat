@@ -840,3 +840,55 @@
 "match.face.notDetected.content" = "Eşleşme sırasında lütfen yüzünüzü görünür tutun. 5 saniye içinde yüz algılanmazsa eşleşmeden çıkarılacaksınız.";
 "match.exit.title"               = "Eşleşmeden çıkarıldınız";
 "match.exit.content"             = "Kontrol sırasında yüzünüz algılanmadı. Eşleşme havuzundan çıkarıldınız.";
+/* EditProfile 用户资料编辑页（I 里程碑） */
+"editProfile.navTitle"                             = "Profili Düzenle";
+"editProfile.confirm"                              = "Kaydet";
+"editProfile.cancel"                               = "İptal";
+
+"editProfile.section.basic.title"                  = "Temel Bilgiler";
+"editProfile.section.basic.hint"                   = "Daha fazla izleyici çekmek için profilini tamamla";
+"editProfile.section.photos.titleFormat"           = "Fotoğraflar (%d/9)";
+"editProfile.section.videos.titleFormat"           = "Videolar (%d/6)";
+"editProfile.section.callVideo.title"              = "Arama Videosu";
+"editProfile.section.callVideo.hint"               = "Arama alınırken oynatılacak videoyu ayarla";
+"editProfile.section.greetMsgs.title"              = "Karşılama Mesajları";
+"editProfile.section.greetMsgs.hint"               = "Arama bağlandığında kullanıcılara otomatik gönderilir";
+"editProfile.section.greetMsgs.reviewingTitle"     = "İncelemede";
+
+"editProfile.nickname.label"                       = "Takma Ad";
+"editProfile.nickname.placeholder"                 = "Lütfen Giriniz...";
+"editProfile.nickname.editTitle"                   = "Takma Ad";
+"editProfile.nickname.wordCountFormat"             = "%d/15";
+
+"editProfile.bio.label"                            = "Biyografi";
+"editProfile.bio.placeholder"                      = "Lütfen Giriniz...";
+"editProfile.bio.wordCountFormat"                  = "%d/200";
+
+"editProfile.greetMsg.addButton"                   = "Ekle";
+"editProfile.greetMsg.placeholder"                 = "Lütfen Giriniz...";
+"editProfile.greetMsg.wordCountFormat"             = "%d/50";
+
+"editProfile.badge.inReview"                       = "İncelemede";
+
+"editProfile.loadError.title"                      = "Yüklenemedi";
+"editProfile.loadError.retry"                      = "Yeniden Dene";
+"editProfile.success.title"                        = "Onay için gönderildi, lütfen bekleyin...";
+"editProfile.success.confirm"                      = "Tamam";
+"editProfile.discard.title"                        = "Değişiklikleri iptal et?";
+"editProfile.discard.message"                      = "Kaydedilmemiş değişiklikleriniz kaybolacak.";
+"editProfile.discard.confirm"                      = "İptal Et";
+"editProfile.discard.keep"                         = "Düzenlemeye Devam Et";
+"editProfile.sizeAlert.title"                      = "Yüklenemiyor";
+"editProfile.sizeAlert.ok"                         = "Tamam";
+
+"editProfile.toast.photosLimit"                    = "En fazla 9 fotoğraf ekleyebilirsin";
+"editProfile.toast.videosLimit"                    = "En fazla 6 video ekleyebilirsin";
+"editProfile.toast.uploading"                      = "yükleniyor...";
+"editProfile.toast.uploadFailed"                   = "bazıları yüklenemedi, lütfen tekrar yükleyin!";
+"editProfile.toast.uploadTimeout"                  = "Yükleme zaman aşımı, lütfen tekrar deneyin";
+"editProfile.toast.imageTooLarge"                  = "Görsel çok büyük (maks. 5MB)";
+"editProfile.toast.videoTooLarge"                  = "Video çok büyük (maks. 20MB)";
+"editProfile.toast.videoFormatUnsupported"         = "Video formatı desteklenmiyor (yalnızca mp4/mov)";
+"editProfile.toast.avatarInReview"                 = "Profil fotoğrafı incelemede, lütfen bekleyin...";
+"editProfile.toast.nicknameInReview"               = "Üzgünüz, profil bilgileriniz incelemede";
+"editProfile.toast.networkError"                   = "Ağ hatası, lütfen tekrar deneyin";
