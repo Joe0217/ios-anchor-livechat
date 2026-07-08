@@ -57,6 +57,7 @@ struct BeautyParamIconRow: View {
 
     private func paramCell(_ p: BeautyParamEntry) -> some View {
         let selected = selectedParamId == p.id
+        let iconColor = selected ? Theme.Palette.brandPinkA : Color.white.opacity(0.85)
         return Button {
             selectedParamId = p.id
         } label: {
@@ -65,11 +66,7 @@ struct BeautyParamIconRow: View {
                     .stroke(selected ? Theme.Palette.brandPinkA : Color.white.opacity(0.35),
                             lineWidth: selected ? 2 : 1.2)
                     .frame(width: 44, height: 44)
-                    .overlay(
-                        Image(systemName: p.icon)
-                            .font(.system(size: 18))
-                            .foregroundStyle(selected ? Theme.Palette.brandPinkA : Color.white.opacity(0.85))
-                    )
+                    .overlay(paramIcon(p, color: iconColor))
                 Text(p.label)
                     .font(.system(size: 11, weight: selected ? .semibold : .regular))
                     .foregroundStyle(selected ? Theme.Palette.brandPinkA : Color.white.opacity(0.8))
@@ -80,6 +77,24 @@ struct BeautyParamIconRow: View {
             .contentShape(Rectangle())  // 热区覆盖全 cell
         }
         .buttonStyle(.plain)
+    }
+
+    /// 分派渲染 asset image（H5 官方 Mob 图标）vs SF Symbol（iOS 独有的 4 项 shape 参数兜底）。
+    /// asset 走 `.renderingMode(.template)` + `.foregroundStyle` 让 png 跟随选中态染色（与 SF Symbol 视觉一致）。
+    @ViewBuilder
+    private func paramIcon(_ p: BeautyParamEntry, color: Color) -> some View {
+        if p.isAssetIcon {
+            Image(p.icon)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 26, height: 26)
+                .foregroundStyle(color)
+        } else {
+            Image(systemName: p.icon)
+                .font(.system(size: 18))
+                .foregroundStyle(color)
+        }
     }
 }
 
