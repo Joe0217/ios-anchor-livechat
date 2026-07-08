@@ -37,6 +37,8 @@ struct BeautySettingsView: View {
     @State private var pendingRecover: RecoverTarget?
     /// X 按钮触发的 exit confirm 弹窗展示态（dirty 时才弹）
     @State private var showExitConfirm: Bool = false
+    /// Save 按钮写盘失败时的 error alert 展示态（防 silent data loss，对齐 error-handling.md）
+    @State private var showSaveError: Bool = false
 
     enum Tab: Int, Hashable, CaseIterable {
         case skin = 0, shape, filter, sticker
@@ -144,6 +146,15 @@ struct BeautySettingsView: View {
         } message: {
             Text(L10n.BeautySettings.exitConfirmMessage)
         }
+        // Save 写盘失败 error alert（防 silent data loss；SwiftUI 空 actions 会自动加本地化 OK 按钮）
+        .alert(
+            L10n.BeautySettings.errorPersistenceWriteFailed,
+            isPresented: $showSaveError
+        ) {} message: {
+            if let error = store.lastPersistenceError {
+                Text(String(describing: error))
+            }
+        }
     }
 
     // MARK: - 顶部 X + Save
@@ -170,8 +181,14 @@ struct BeautySettingsView: View {
             Spacer()
 
             Button {
-                store.flushIfDirty()
-                dismiss()
+                // Save 语义：显式检查写盘错误，避免用户改动因磁盘写失败被静默丢弃
+                // （store.lastPersistenceError 由 flushIfDirty catch 分支设置，成功清 nil）
+                _ = store.flushIfDirty()
+                if store.lastPersistenceError != nil {
+                    showSaveError = true   // 停在页面，让用户看到失败反馈
+                } else {
+                    dismiss()
+                }
             } label: {
                 Text(L10n.BeautySettings.save)
                     .font(.system(size: 15, weight: .semibold))

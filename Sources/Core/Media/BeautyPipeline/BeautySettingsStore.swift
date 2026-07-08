@@ -18,10 +18,10 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "BeautyS
 /// 使用：
 /// ```
 /// let store = BeautySettingsStore(persistence: UserDefaultsBeautyPersistence())
-/// store.mutate { $0.blur = 70 }   // 拖滑块 —— 仅改 in-memory
+/// store.mutate { $0.blur = 70 }   // 拖滑块 / Recover —— 仅改 in-memory
 /// store.flushIfDirty()            // 顶部 Save 按钮显式触发
 /// store.revert()                  // 用户 Exit 丢弃未保存修改
-/// store.reset()                   // Recover 恢复默认档
+/// // store.reset() —— 一步 defaults + 写盘的 API，生产暂无调用（Recover 走 view 层局部 mutate + 用户显式 Save）
 /// ```
 @MainActor
 final class BeautySettingsStore: ObservableObject {
@@ -120,8 +120,9 @@ final class BeautySettingsStore: ObservableObject {
         }
     }
 
-    // MARK: - reset 恢复默认（K spec §2.4 D8 + 红队 A4）
-    /// 重置到业务默认档 + 立即写盘（不等 onDisappear）。
+    // MARK: - reset 恢复默认（K spec §2.4 D8 + 红队 A4；生产暂无调用点，保留供未来"恢复出厂设置"入口）
+    /// 一步式：settings = .defaults 并立即写盘。
+    /// **当前 Recover 按钮不走这里** —— 走 view 层局部 mutate（只改 skin 或 shape 那一组）+ 用户显式 Save 触发写盘。
     /// 串行保证：MainActor + flushIfDirty 幂等锁，reset 中的 flush 与并发 flush 不双写。
     @discardableResult
     func reset() -> Bool {
