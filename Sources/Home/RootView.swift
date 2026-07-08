@@ -36,9 +36,14 @@ struct RootView: View {
         .animation(.easeInOut(duration: 0.2), value: callStore.state)
         .animation(.easeInOut(duration: 0.15), value: autoOffline.showDialog)
         // 全局交互兜底：任何 tap / drag 都视为活动信号
-        // simultaneousGesture 不拦截业务手势，只做观察
+        // simultaneousGesture 不拦截业务手势，只做观察。
+        // ⚠️ **minimumDistance 必须 >0**（2026-07-08 真根因）：minDist=0 让 DragGesture 在 touch-down
+        // 立即 recognize，SwiftUI gesture arbitration 会让下层业务 Slider / DragGesture / UIKit UISlider
+        // tracking 全部被这个 root-level "greedy" gesture 抢先——app 里**所有 pan 手势全废**（tap 幸存
+        // 因 TapGesture 是独立类型）。minDist=10 让 Slider 内部 gesture（touch-down 立即 recognize）
+        // 先声明优先权；用户拖动 >10pt 才算 activity（业务语义正确，微小抖动不算）。
         .simultaneousGesture(TapGesture().onEnded { autoOffline.pokeActivity() })
-        .simultaneousGesture(DragGesture(minimumDistance: 0).onEnded { _ in autoOffline.pokeActivity() })
+        .simultaneousGesture(DragGesture(minimumDistance: 10).onEnded { _ in autoOffline.pokeActivity() })
         .onChange(of: scenePhase) { newPhase in
             if newPhase == .active { autoOffline.pokeActivity() }
         }
@@ -71,6 +76,8 @@ struct RootView: View {
             // L 里程碑 U3/U4：CallStore + NIM observer bridge 挂载（登录后一次）
             MatchStore.shared.attachCallStoreBridge(CallStoreMatchBridge.shared)
             MatchStore.shared.attachNIMConnectionBridge(NIMConnectionMatchBridge.disconnectedPublisher)
+            // Gap-2：openMatch 前置 IM 在线 gate（对齐 H5 c-goMatch.vue:394-395）
+            MatchStore.shared.nimOnlineProvider = { NIMService.shared.connectionState == .connected }
 
             // 长时间无操作自动离线：拉配置后启动（服务端 max_no_use_app_reminder_time > 0 才启用）
             let minutes = await AppConfigService.fetchAutoOfflineReminderMinutes()
