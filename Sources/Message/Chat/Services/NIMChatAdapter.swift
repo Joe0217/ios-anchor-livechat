@@ -319,8 +319,13 @@ extension NIMChatAdapter: NIMChatManagerDelegate {
                 guard let raw = nim.rawAttachContent,
                       let data = raw.data(using: .utf8),
                       let attach = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
-                if (attach["attachType"] as? String) == "SEND_GIFT" {
-                    GiftEffectIntake.ingest(scene: .chat, scopeId: self.peerYxAccId, payload: attach, mineYxAccid: mineYxAccid)
+                // 2026-07-09 review 反悔加固：attachType 双形态兼容（字符串 "SEND_GIFT" or 数字 1）
+                // 对齐 AttachType.sendGift 定义；ios-decode-userid-compat 精神
+                let atStr = attach["attachType"] as? String
+                let atNum = (attach["attachType"] as? NSNumber)?.intValue
+                if atStr == "SEND_GIFT" || atNum == 1 {
+                    chatLogger.debug("[Chat] SEND_GIFT intake peer=\(self.peerYxAccid, privacy: .public) keys=\(attach.keys.joined(separator: ","), privacy: .public)")
+                    GiftEffectIntake.ingest(scene: .chat, scopeId: self.peerYxAccid, payload: attach, mineYxAccid: mineYxAccid)
                 }
             }
             guard !converted.isEmpty else { return }

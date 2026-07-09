@@ -126,6 +126,11 @@ public enum GiftEffectPayloadDecoder {
         // 兼容后端多种字段名（真机实测 attachType=50 payload 里是 sendYxAccid）
         if let s = payload["senderYxAccid"] as? String, !s.isEmpty { return s }
         if let s = payload["sendYxAccid"] as? String, !s.isEmpty { return s }
+        // Party 场景 2049 payload 结构 sender 可能嵌在 sendUser 里（待真机验证；见
+        // .claude/rules/im-payload-real-log-over-code-assumption 精神——防御性 fallback，
+        // 若真机 party me-sent 插队不生效需按 log 补 sendUser 里的实际字段名）
+        if let dict = payload["sendUser"] as? [String: Any],
+           let s = dict["yxAccid"] as? String, !s.isEmpty { return s }
         if let dict = payload["senderInfo"] as? [String: Any],
            let s = dict["yxAccid"] as? String, !s.isEmpty { return s }
         if let s = payload["fromAccid"] as? String, !s.isEmpty { return s }

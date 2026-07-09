@@ -14,6 +14,11 @@ final class SVGAAnimationPlayer: NSObject, GiftAnimationPlayer, SVGAPlayerDelega
     private var player: SVGAPlayer?
     private var parser: SVGAParser?
     private var currentFinish: (() -> Void)?
+    /// generation 计数器（2026-07-09 code-review P1 修复）：
+    /// SVGAParser.parse 是**异步**网络+解压，若 play(A) parse 中途 → stop() 或 play(B) → parse A
+    /// 迟到 fire 会：(a) A stop 后仍 startAnimation 播几帧 A；(b) B 已经 startAnimation 时用 A 的
+    /// videoItem 覆盖 → 视觉播 A 而非 B。用 gen 让 parse 闭包 fire 时对比自己那次的 gen，不匹配丢弃。
+    private var currentGen: Int = 0
 
     override init() { super.init() }
 
@@ -31,6 +36,8 @@ final class SVGAAnimationPlayer: NSObject, GiftAnimationPlayer, SVGAPlayerDelega
         }
         // 保证前一段 onFinish 若未 fire，此刻先 fire 一次防漏
         fireFinishOnce()
+        currentGen &+= 1
+        let gen = currentGen
         currentFinish = onFinish
 
         let p = ensurePlayer(in: host)
@@ -39,6 +46,12 @@ final class SVGAAnimationPlayer: NSObject, GiftAnimationPlayer, SVGAPlayerDelega
         parser.parse(with: url) { [weak self, weak p] videoItem in
             guard let self, let p, let videoItem else {
                 self?.fireFinishOnce()
+                return
+            }
+            // parse 是异步：若 gen 不匹配说明期间已 stop/替换 → 丢弃本次 parse 结果，
+            // 避免 (a) 播已 stop 的 item；(b) 用旧 videoItem 覆盖新 item 的画面
+            guard self.currentGen == gen else {
+                logger.info("SVGA parse stale gen (current=\(self.currentGen, privacy: .public) my=\(gen, privacy: .public)), drop")
                 return
             }
             p.videoItem = videoItem
@@ -54,6 +67,7 @@ final class SVGAAnimationPlayer: NSObject, GiftAnimationPlayer, SVGAPlayerDelega
     func stop() {
         player?.stopAnimation()
         player?.clear()
+        currentGen &+= 1   // 让所有 in-flight parse callback 失效
         fireFinishOnce()
     }
 
@@ -63,6 +77,7 @@ final class SVGAAnimationPlayer: NSObject, GiftAnimationPlayer, SVGAPlayerDelega
         player = nil
         parser = nil
         currentFinish = nil
+        currentGen &+= 1
     }
 
     // MARK: - private
@@ -95,7 +110,9 @@ final class SVGAAnimationPlayer: NSObject, GiftAnimationPlayer, SVGAPlayerDelega
 
     // MARK: - SVGAPlayerDelegate
 
-    func svgaPlayerDidFinishedAnimation(_ player: SVGAPlayer!) {
+    // OC 协议签名带 IUO；改为 optional 与 Swift override 兼容且防 SDK 边界值传 nil 时 unwrap crash
+    // （函数体不使用 player 参数，语义上就是无害的 optional）
+    func svgaPlayerDidFinishedAnimation(_ player: SVGAPlayer?) {
         fireFinishOnce()
     }
 }

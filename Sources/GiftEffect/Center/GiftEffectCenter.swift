@@ -23,6 +23,13 @@ public final class GiftEffectCenter: ObservableObject {
     private var playerRouter: GiftPlayerRouting
     private weak var hostView: UIView?
 
+    /// 硬中断标志位（2026-07-09 code-review P0 修复）：
+    /// stopCurrentImmediately() 内 playerRouter.stopAll() 是**同步**fire onFinish 链路
+    /// → Router closure → onPlayerFinished → playNextIfIdle → **若 pending 未清则会取下一条播**。
+    /// 用 isTearingDown 让 playNextIfIdle 短路，配合 4 个入口后续 pending.removeAll，
+    /// 保证切场景 / leave / memoryWarning / reset 时队尾 pending 不会跨场景/跨 teardown 意外触发。
+    private var isTearingDown = false
+
     private static let queueLimit = 30
 
     public init(playerRouter: GiftPlayerRouting) {
@@ -121,11 +128,18 @@ public final class GiftEffectCenter: ObservableObject {
     @objc private func handleMemoryWarningNoti() { handleMemoryWarning() }
 
     private func stopCurrentImmediately() {
+        // 标志位包裹整个 stopAll 同步链路：SVGA/YYEVA/Fake router 的 stop() 都会同步 fire
+        // onFinish → Center.onPlayerFinished → playNextIfIdle 尝试消费 pending。
+        // 若不 short-circuit，切场景瞬间会把当前场景 pending 队尾提前播（可能已跨到新场景 window）。
+        isTearingDown = true
         playerRouter.stopAll()
         current = nil
+        isTearingDown = false
     }
 
     private func playNextIfIdle() {
+        // 硬中断进行中：不消费 pending（详见 isTearingDown 字段注释）
+        guard !isTearingDown else { return }
         guard current == nil, !pending.isEmpty else { return }
         let next = pending.removeFirst()
         current = next

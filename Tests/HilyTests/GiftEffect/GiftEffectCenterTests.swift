@@ -98,11 +98,16 @@ final class GiftEffectCenterTests: XCTestCase {
         center.enqueue(item(key: liveKey, name: "A"))
         center.enqueue(item(key: liveKey, name: "B"))
         XCTAssertNotNil(center.current)
+        XCTAssertEqual(router.playHistory.count, 1)   // A 已 play；B 在 pending
         center.setActiveScene(partyKey)
         XCTAssertEqual(router.stopAllCount, 1)
         XCTAssertNil(center.current)
+        // code-review P0：stopAll 同步 fire finish 时 pending 若未 clear 会误播 B。
+        // 修复后：stopAll 期间 isTearingDown short-circuit playNextIfIdle → B 不入 playHistory
+        XCTAssertEqual(router.playHistory.count, 1)   // 仍是 1（只有 A），B 未被误播
         center.enqueue(item(key: partyKey, name: "P1"))
         XCTAssertEqual(center.current?.giftName, "P1")
+        XCTAssertEqual(router.playHistory.count, 2)   // 新场景 P1 正常播
     }
 
     // 8：leaveScene 硬中断
@@ -110,9 +115,13 @@ final class GiftEffectCenterTests: XCTestCase {
         center.setActiveScene(liveKey)
         router.manualFinish = true
         center.enqueue(item(key: liveKey, name: "A"))
+        center.enqueue(item(key: liveKey, name: "B"))
+        XCTAssertEqual(router.playHistory.count, 1)   // A 播中，B 在 pending
         center.leaveScene(liveKey)
         XCTAssertEqual(router.stopAllCount, 1)
         XCTAssertNil(center.current)
+        // code-review P0：B 不应被误播（leaveScene 硬中断保护）
+        XCTAssertEqual(router.playHistory.count, 1)
     }
 
     // 9：leaveScene key 不匹配无操作
@@ -150,11 +159,14 @@ final class GiftEffectCenterTests: XCTestCase {
         router.manualFinish = true
         center.enqueue(item(key: liveKey, name: "A"))
         center.enqueue(item(key: liveKey, name: "B"))
+        XCTAssertEqual(router.playHistory.count, 1)
         center.handleMemoryWarning()
         XCTAssertEqual(router.stopAllCount, 1)
         XCTAssertNil(center.current)
+        XCTAssertEqual(router.playHistory.count, 1)   // code-review P0：B 不误播
         center.enqueue(item(key: liveKey, name: "C"))
         XCTAssertEqual(center.current?.giftName, "C")
+        XCTAssertEqual(router.playHistory.count, 2)
     }
 
     // 13：reset 完整清 + tearDown players
@@ -162,12 +174,15 @@ final class GiftEffectCenterTests: XCTestCase {
         center.setActiveScene(liveKey)
         router.manualFinish = true
         center.enqueue(item(key: liveKey, name: "A"))
+        center.enqueue(item(key: liveKey, name: "B"))
+        XCTAssertEqual(router.playHistory.count, 1)
         center.reset()
         XCTAssertEqual(router.stopAllCount, 1)
         XCTAssertEqual(router.tearDownCount, 1)
         XCTAssertNil(center.current)
-        center.enqueue(item(key: liveKey, name: "B"))
-        XCTAssertNil(center.current)
+        XCTAssertEqual(router.playHistory.count, 1)   // code-review P0：B 不误播
+        center.enqueue(item(key: liveKey, name: "C"))
+        XCTAssertNil(center.current)   // reset 后 activeKey nil，enqueue 直接 rejected
     }
 
     // 14：setActiveScene 幂等（同 key 不触发 stop）
