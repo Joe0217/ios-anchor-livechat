@@ -21,13 +21,24 @@ final class MatchPopupCoordinator: ObservableObject {
     @Published private(set) var appHidden: Bool = false
     /// 是否处于 4 tab 根页之外的子页（LiveRoom / WishSetting / BeautySettings / UserProfile / Call 等）—— 不弹
     @Published private(set) var blockedByOtherPage: Bool = false
+    /// 用户是否在线（跟随 OnlineStatusStore.userSetOnline）；不在线时不弹 tip，避免与 AutoOfflineDialog 重叠
+    @Published private(set) var userOnline: Bool = true
 
     private var timerTask: Task<Void, Never>?
+    private var cancellables = Set<AnyCancellable>()
 
     /// 10 分钟（H5 MATCH_POPUP_SHOW_TIME = 10 * 60 * 1000）
     private static let interval: UInt64 = 10 * 60 * 1_000_000_000
 
-    private init() {}
+    private init() {
+        // 订阅 userSetOnline：goOffline / AutoOffline 触发时 tip 不弹 + 立即关已弹的窗
+        OnlineStatusStore.shared.$userSetOnline
+            .removeDuplicates()
+            .sink { [weak self] online in
+                self?.updateUserOnline(online)
+            }
+            .store(in: &cancellables)
+    }
 
     // MARK: - 生命周期
 
@@ -61,6 +72,15 @@ final class MatchPopupCoordinator: ObservableObject {
         }
     }
 
+    /// 在线态 gate（由 OnlineStatusStore.$userSetOnline sink 转发）：
+    /// 不在线时不弹 tip；避免与 AutoOfflineDialog 视觉重叠。
+    private func updateUserOnline(_ online: Bool) {
+        userOnline = online
+        if !online && isShowing {
+            isShowing = false
+        }
+    }
+
     /// 用户勾选"今日不再提醒"—— 立即持久化 + 停止 timer（对齐 H5 handleNoReminders → clearInterval）
     func markTodayNoReminder() {
         MatchStore.shared.markTodayNoReminder()  // 已在 MatchStore 内持久化 todayNoReminderChecked + tipShownDate
@@ -89,14 +109,15 @@ final class MatchPopupCoordinator: ObservableObject {
         }
     }
 
-    /// 组合态检查（对齐 H5 c-goMatch.vue:468 gate + v4 subpage 拦截）
+    /// 组合态检查（对齐 H5 c-goMatch.vue:468 gate + v4 subpage 拦截 + v5 online gate）
     private func checkAndShow() {
         let store = MatchStore.shared
         let shouldShow = store.shouldShowTipPopup(
             appHidden: appHidden,
-            blockedByOtherPage: blockedByOtherPage
+            blockedByOtherPage: blockedByOtherPage,
+            userOnline: userOnline
         )
-        logger.debug("checkAndShow: appHidden=\(self.appHidden) blockedByOtherPage=\(self.blockedByOtherPage) shouldShow=\(shouldShow) state=\(String(describing: store.state))")
+        logger.debug("checkAndShow: appHidden=\(self.appHidden) blockedByOtherPage=\(self.blockedByOtherPage) userOnline=\(self.userOnline) shouldShow=\(shouldShow) state=\(String(describing: store.state))")
         if shouldShow {
             isShowing = true
         }

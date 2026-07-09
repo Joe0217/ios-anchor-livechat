@@ -2,7 +2,7 @@ import Foundation
 
 /// L 里程碑：MatchToast → L10n 展示文案映射。
 ///
-/// **仅 UI 层引用**：本文件不入 test target sources（依赖 `L10n`，而 L10n 又依赖 `DebugLocaleStore`
+/// **仅 UI 层引用**：本文件不入 test target sources（依赖 `L10n`，而 L10n 又依赖 `AppLocaleStore`
 /// SwiftUI 环境栈）。MatchStore 层的 `@Published var lastToast: MatchToast?` 是纯 enum，UI 端 render
 /// 时调用 `toast.localized` 转具体文案。
 extension MatchToast {
@@ -17,6 +17,7 @@ extension MatchToast {
         case .turnOffSucceed:    return L10n.matchToastTurnOffSucceed
         case .cameraStartFailed: return L10n.matchToastCameraStartFailed
         case .cameraUnavailable: return L10n.matchToastCameraUnavailable
+        case .imOffline:         return L10n.matchToastImOffline
         }
     }
 }

@@ -42,6 +42,38 @@ struct PartyRoomView: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
 
     var body: some View {
+        // Task 10：SwiftUI type-check 减压 —— body 已含 20+ modifier，直接挂 .giftEffectScene 触发 timeout；
+        // 抽 sceneBody computed property 后 body 层级只剩两层，通过
+        sceneBody
+            .giftEffectScene(.party, scopeId: store.roomInfo?.id ?? roomId)
+    }
+
+    // 2026-07-09 再修：sceneBody 内 10+ modifier + 嵌套 closure 仍触发 type-check timeout
+    // ——把 closure 内容全部抽 property/method，sceneBody 里只留符号引用，编译器 tuple/generic 推导减负
+    private var sceneBody: some View {
+        contentStack
+            .navigationBarBackButtonHidden(true)
+            .toolbar { ToolbarItem(placement: .navigationBarLeading) { EmptyView() } }
+            .onAppear(perform: handleAppear)
+            .onChange(of: store.seatList, perform: handleSeatListChange)
+            .onDisappear(perform: handleDisappear)
+            .alert(L10n.Party.inviteTitle, isPresented: invitePresented) {
+                inviteAlertButtons
+            } message: {
+                inviteAlertMessage
+            }
+            .alert(L10n.Party.alertTitle, isPresented: $showError) {
+                Button(L10n.Party.ok) { store.clearLastError() }
+            } message: {
+                Text(store.lastError?.errorDescription ?? "")
+            }
+            .onChange(of: store.lastError?.errorDescription ?? "", perform: handleLastErrorChange)
+            .confirmationDialog(L10n.Party.selfActionsTitle, isPresented: $showSelfActions) {
+                selfActionsButtons
+            }
+    }
+
+    private var contentStack: some View {
         VStack(spacing: 0) {
             header
             seatGrid
@@ -53,73 +85,80 @@ struct PartyRoomView: View {
             PartyMessageListView(chat: store.chat, lastGiftEvent: store.lastGiftEvent)
             inputBar
         }
-        .navigationBarBackButtonHidden(true)
-        .toolbar { ToolbarItem(placement: .navigationBarLeading) { EmptyView() } }
-        // 用 .onAppear + 独立 Task（脱离 view lifecycle），避免父 view re-evaluate
-        // 触发 .task cancellation 导致 URLSession 抛 -999 cancelled（PartyRoomView 是叶子页面，
-        // pop 后销毁不会 re-appear，didStartEnter 守卫一次即可）
-        .onAppear {
-            // 长时间无操作自动离线：派对房中暂停监测（对齐 H5 isBusy 停 timer）
-            AutoOfflineMonitor.shared.suspend()
-            // P2-10：onAppear 同步 cache 一次仅作为"上次会话残留"兜底
-            // —— enterRoom() 是同帧异步 Task，首次进入时 store.seatList 通常为 [] → 该行为 no-op；
-            // 后续真值靠 .onChange(of: store.seatList) 在 enterRoom 写入后填充
-            sortedSeatsCache = store.seatList.sorted { ($0.seatIndex ?? 0) < ($1.seatIndex ?? 0) }
-            guard !didStartEnter else { return }
-            didStartEnter = true
-            Task { await ensureEntered() }
+    }
+
+    // MARK: - body 内 modifier closure 抽取（编译器泛型推导减负）
+
+    /// 用 .onAppear + 独立 Task（脱离 view lifecycle），避免父 view re-evaluate
+    /// 触发 .task cancellation 导致 URLSession 抛 -999 cancelled（PartyRoomView 是叶子页面，
+    /// pop 后销毁不会 re-appear，didStartEnter 守卫一次即可）
+    private func handleAppear() {
+        // 长时间无操作自动离线：派对房中暂停监测（对齐 H5 isBusy 停 timer）
+        AutoOfflineMonitor.shared.suspend()
+        // 用户诉求 2026-07-09：进派对房 = 独占摄像头，若匹配中先静默关匹配
+        // 否则 MatchCameraSession 与 PartyRTC 抢摄像头 → 离房后残留 running
+        if MatchStore.shared.state == .matching {
+            Task { await MatchStore.shared.closeMatch(silent: true) }
         }
-        // P2-10：seatList 变化时一次性重排，避免 body 重算时每次都 O(n log n) 排序
-        .onChange(of: store.seatList) { newList in
-            sortedSeatsCache = newList.sorted { ($0.seatIndex ?? 0) < ($1.seatIndex ?? 0) }
+        // P2-10：onAppear 同步 cache 一次仅作为"上次会话残留"兜底
+        // —— enterRoom() 是同帧异步 Task，首次进入时 store.seatList 通常为 [] → 该行为 no-op；
+        // 后续真值靠 .onChange(of: store.seatList) 在 enterRoom 写入后填充
+        sortedSeatsCache = store.seatList.sorted { ($0.seatIndex ?? 0) < ($1.seatIndex ?? 0) }
+        guard !didStartEnter else { return }
+        didStartEnter = true
+        Task { await ensureEntered() }
+    }
+
+    /// v5.3.3 真根因双守卫：(1) scenePhase != .background 防切后台误退房（系统 snapshot 也调 onDisappear）；
+    /// (2) 仅当处于活跃房态时才 leave，避免重复退房。真正退房路径仍走顶栏 ✕ 按钮显式调 leaveRoom。
+    private func handleDisappear() {
+        guard scenePhase != .background else { return }
+        // 长时间无操作自动离线：与 onAppear.suspend 配对
+        AutoOfflineMonitor.shared.resume()
+        if store.roomState == .joined || store.roomState == .entering {
+            Task { await store.leaveRoom() }
         }
-        .onDisappear {
-            // v5.3.3 真根因双守卫：(1) scenePhase != .background 防切后台误退房（系统 snapshot 也调 onDisappear）；
-            // (2) 仅当处于活跃房态时才 leave，避免重复退房。真正退房路径仍走顶栏 ✕ 按钮显式调 leaveRoom。
-            guard scenePhase != .background else { return }
-            // 长时间无操作自动离线：与 onAppear.suspend 配对
-            AutoOfflineMonitor.shared.resume()
-            if store.roomState == .joined || store.roomState == .entering {
-                Task { await store.leaveRoom() }
+    }
+
+    /// P2-10：seatList 变化时一次性重排，避免 body 重算时每次都 O(n log n) 排序
+    private func handleSeatListChange(_ newList: [PartyRoomSeat]) {
+        sortedSeatsCache = newList.sorted { ($0.seatIndex ?? 0) < ($1.seatIndex ?? 0) }
+    }
+
+    private func handleLastErrorChange(_ msg: String) {
+        showError = !msg.isEmpty
+    }
+
+    /// 视频位邀请弹窗（spec §1.4.4 仅接被邀响应）
+    @ViewBuilder private var inviteAlertButtons: some View {
+        Button(L10n.Party.inviteAccept) { Task { await store.acceptVideoSeatInvite() } }
+        Button(L10n.Party.inviteReject, role: .cancel) { Task { await store.rejectVideoSeatInvite() } }
+    }
+
+    @ViewBuilder private var inviteAlertMessage: some View {
+        if let i = store.pendingVideoSeatInvite {
+            Text(String(format: L10n.Party.inviteMessageFormat, i.fromNickname ?? L10n.Party.defaultUser, i.seatIndex))
+        }
+    }
+
+    /// 自己点麦位 sheet
+    @ViewBuilder private var selfActionsButtons: some View {
+        if let me = store.selfSeat {
+            let micOn = (me.microphoneEnabled ?? 0) == 1 && (me.seatMicrophoneEnabled ?? 0) == 1
+            Button(micOn ? L10n.Party.selfMicOff : L10n.Party.selfMicOn) {
+                Task { await store.toggleSelfMedia(type: 1, enable: !micOn) }
+            }
+            if me.seatType == 1 {
+                let camOn = (me.cameraEnabled ?? 0) == 1
+                Button(camOn ? L10n.Party.selfCamOff : L10n.Party.selfCamOn) {
+                    Task { await store.toggleSelfMedia(type: 2, enable: !camOn) }
+                }
+            }
+            Button(L10n.Party.selfLeaveSeat, role: .destructive) {
+                Task { await store.requestDownSeat() }
             }
         }
-        // 视频位邀请弹窗（spec §1.4.4 仅接被邀响应）
-        .alert(L10n.Party.inviteTitle, isPresented: invitePresented) {
-            Button(L10n.Party.inviteAccept) { Task { await store.acceptVideoSeatInvite() } }
-            Button(L10n.Party.inviteReject, role: .cancel) { Task { await store.rejectVideoSeatInvite() } }
-        } message: {
-            if let i = store.pendingVideoSeatInvite {
-                Text(String(format: L10n.Party.inviteMessageFormat, i.fromNickname ?? L10n.Party.defaultUser, i.seatIndex))
-            }
-        }
-        // 错误 toast
-        .alert(L10n.Party.alertTitle, isPresented: $showError) {
-            Button(L10n.Party.ok) { store.clearLastError() }
-        } message: {
-            Text(store.lastError?.errorDescription ?? "")
-        }
-        .onChange(of: store.lastError?.errorDescription ?? "") { msg in
-            showError = !msg.isEmpty
-        }
-        // 自己点麦位 sheet
-        .confirmationDialog(L10n.Party.selfActionsTitle, isPresented: $showSelfActions) {
-            if let me = store.selfSeat {
-                let micOn = (me.microphoneEnabled ?? 0) == 1 && (me.seatMicrophoneEnabled ?? 0) == 1
-                Button(micOn ? L10n.Party.selfMicOff : L10n.Party.selfMicOn) {
-                    Task { await store.toggleSelfMedia(type: 1, enable: !micOn) }
-                }
-                if me.seatType == 1 {
-                    let camOn = (me.cameraEnabled ?? 0) == 1
-                    Button(camOn ? L10n.Party.selfCamOff : L10n.Party.selfCamOn) {
-                        Task { await store.toggleSelfMedia(type: 2, enable: !camOn) }
-                    }
-                }
-                Button(L10n.Party.selfLeaveSeat, role: .destructive) {
-                    Task { await store.requestDownSeat() }
-                }
-            }
-            Button(L10n.Party.cancel, role: .cancel) {}
-        }
+        Button(L10n.Party.cancel, role: .cancel) {}
     }
 
     // MARK: - 顶栏

@@ -46,5 +46,15 @@ final class CallStoreMatchBridge: MatchCallStoreObserving {
             .eraseToAnyPublisher()
     }
 
+    /// Gap-5：CallStore.state 进入 .connected 的边（每次接通触发一次）
+    var enteredConnectedPublisher: AnyPublisher<Void, Never> {
+        callStore.$state
+            .removeDuplicates()
+            .compactMap { state -> Void? in
+                state == .connected ? () : nil
+            }
+            .eraseToAnyPublisher()
+    }
+
     private init() {}
 }

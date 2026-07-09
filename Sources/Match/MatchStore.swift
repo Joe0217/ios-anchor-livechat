@@ -17,6 +17,8 @@ protocol MatchCallStoreObserving: AnyObject {
     var lastJoinCallSourcePublisher: AnyPublisher<String?, Never> { get }
     /// CallStore.$state 转 .idle publisher（用于通话结束回 .matching 判定）
     var stateReturnedToIdlePublisher: AnyPublisher<Void, Never> { get }
+    /// Gap-5：CallStore.$state 进入 .connected 的边（用于 wasConnectedInCall 打标）
+    var enteredConnectedPublisher: AnyPublisher<Void, Never> { get }
     /// 快照最近一次 lastJoinCallSource（供 idle 时读取）
     var latestJoinCallSource: String? { get }
 }
@@ -36,6 +38,12 @@ enum MatchState: Equatable {
     /// 被封禁（超次数 / 人脸识别失败）。isMatchBlocked=true UserDefaults 持久化。
     /// 出口边：用户主动点击 → isOpen 返 1 才清 blocked → .matching。
     case blocked
+    /// Gap-5：匹配中收到**非** matchV4 来电时的暂停态（对齐 H5 MATCHING_LEFT 但语义更精细）。
+    /// - 摄像头已关、服务端 toggleMatch(0) 已上报（退池）
+    /// - 保留"用户曾在匹配"意图 —— 通话结束时按分支恢复：
+    ///     - 用户直接拒绝（未接通 = `wasConnectedInCall==false`）→ 自动 openMatch
+    ///     - 用户接通后挂断（`wasConnectedInCall==true`）→ 弹 Resume Match Alert，用户确认后 openMatch
+    case matchingSuspended
 }
 
 // MARK: - MatchCameraSession protocol · step 1b 具体实现
@@ -115,6 +123,15 @@ final class MatchStore: ObservableObject {
     /// #3d：移除匹配弹窗 —— 未露脸倒计时结束仍未检测到脸 → 强制 blocked 后展示
     @Published var showExitMatchPopup: Bool = false
 
+    /// Gap-5：Resume Match 确认 Alert 展示态。
+    /// 触发：`.matchingSuspended` 期间用户接通过（wasConnectedInCall=true）→ 通话结束时置 true；UI 层观察展示 Alert
+    @Published var showResumeMatchAlert: Bool = false
+
+    /// Gap-5：本轮"暂停期"通话是否曾进入 .connected（区分"直接拒绝" vs "接通后挂断"）
+    /// - `false`：CallStore 从 .calling/.incoming 直接归 .idle（用户点拒绝 / 主叫取消 / 超时）→ 通话结束自动 openMatch
+    /// - `true`：CallStore 经过 .connected → 弹 Resume Match Alert 由用户确认
+    private var wasConnectedInCall: Bool = false
+
     // MARK: - 依赖
 
     private let service: MatchServiceProtocol
@@ -162,6 +179,18 @@ final class MatchStore: ObservableObject {
     private var cameraCancellables = Set<AnyCancellable>()
     private var callStoreCancellables = Set<AnyCancellable>()
     private var nimCancellables = Set<AnyCancellable>()
+
+    /// Gap-2：openMatch 前置 IM 在线 gate。app 层注入 `{ NIMService.shared.connectionState == .connected }`；
+    /// nil = 未注入（test 场景）时默认放行。对齐 H5 c-goMatch.vue:394-395 语义（iOS 无 setIMOnline API，只 gate）
+    var nimOnlineProvider: (() -> Bool)?
+
+    /// 用户诉求 2026-07-08：openMatch 起手若用户处于 offline（`OnlineStatusStore.userSetOnline == false`）
+    /// → 自动上线，无需用户先手动切在线。
+    /// **返回值**：`true` 表示刚从 offline 切到 online（用户明确意图）；openMatch 据此 skip IM gate
+    /// —— 用户既然主动 tap 匹配 + hook 已切在线，即便 NIMSDK 短暂未连（自动重连中）也应让 toggleMatch(1)
+    /// 走完，避免"我切在线了但匹配没开"的困惑。
+    /// nil = 未注入（test 场景）时视作 no-op（返 false，不 skip gate）。
+    var ensureUserOnlineHook: (() -> Bool)?
 
     /// U1/U2：MatchTabView.onAppear 挂载摄像头会话；同时订阅 timedOut/error publishers 转发到状态机
     func attachCameraSession(_ session: MatchCameraSessionProtocol) {
@@ -231,6 +260,15 @@ final class MatchStore: ObservableObject {
                 self?.handleCallStoreReturnedToIdle(lastJoinCallSource: observer?.latestJoinCallSource)
             }
             .store(in: &callStoreCancellables)
+
+        // Gap-5：CallStore 进入 .connected 边 → 打 wasConnectedInCall 标（用于 suspended → alert 分流）
+        observer.enteredConnectedPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                guard let self, self.state == .matchingSuspended else { return }
+                self.wasConnectedInCall = true
+            }
+            .store(in: &callStoreCancellables)
     }
 
     // MARK: - 主命令：开启 / 关闭
@@ -240,11 +278,20 @@ final class MatchStore: ObservableObject {
     /// v3 §5.1 F3 修正后的顺序（**删除 beauty pre-check**，见 RA21）：
     /// `isOpen 返 1 → toggleMatch(1) 返 1 → cameraSession.start() → matchState=.matching`
     func openMatch() async {
-        // 只有 .ended / .blocked 允许发起（.matching / .matchingCalling 期间按钮不 render，理论到不了这里）
+        // 只有 .ended / .blocked 允许发起（.matching / .matchingCalling 期间按钮不 render,理论到不了这里）
         guard state == .ended || state == .blocked else {
             logger.warning("openMatch called in unexpected state=\(String(describing: self.state))")
             return
         }
+
+        // 用户诉求 2026-07-08：offline 时自动上线（对齐 H5 !IMOnline && setIMOnline(true) 语义）
+        // 用户主动开匹配 = 想接来电 → 自动切在线；比 gate 后要求"先手动上线"体验更好
+        _ = ensureUserOnlineHook?()
+
+        // 2026-07-09 修：删掉 IM connectionState gate。原 gate 只放行 .connected，误伤 .connecting/.reconnecting
+        // 中间态导致用户点匹配看到 "Reconnecting, please try again" 无法开启。
+        // 对齐 H5 语义：H5 无此 gate（仅 setIMOnline(true) 主动上线）；NIMSDK 自动重连很快，
+        // toggleMatch(1) 服务端接单后即便 NIM 短暂未连也不影响；nimOnlineProvider 保留供未来其他 caller 复用。
 
         // 1) isOpen 前置校验
         let canOpen: MatchCanOpenResult
@@ -305,7 +352,9 @@ final class MatchStore: ObservableObject {
     }
 
     /// 用户主动关匹配。
-    func closeMatch() async {
+    /// - Parameter silent: `true` 时不展示 `turnOffSucceed` toast —— 用于"进直播/派对房/通话前自动关"这类
+    ///   隐式关匹配场景（用户已明确进入其他业务，不需要再看"匹配已关"提示）。默认 `false` 兼容现有 UI。
+    func closeMatch(silent: Bool = false) async {
         guard state == .matching else {
             logger.warning("closeMatch called in unexpected state=\(String(describing: self.state))")
             return
@@ -319,13 +368,13 @@ final class MatchStore: ObservableObject {
         Task { [service] in
             do {
                 _ = try await service.toggleMatch(status: 0, faceCheckStatus: nil)
-                logger.info("closeMatch: server toggleMatch(0) success")
+                logger.info("closeMatch: server toggleMatch(0) success (silent=\(silent))")
             } catch {
                 logger.warning("closeMatch: server toggleMatch(0) failed: \(String(describing: error))")
             }
         }
 
-        lastToast = .turnOffSucceed
+        if !silent { lastToast = .turnOffSucceed }
     }
 
     // MARK: - 被动关匹配路径
@@ -401,11 +450,14 @@ final class MatchStore: ObservableObject {
             state = .matchingCalling
             logger.info("handleJoinCallSource: matchV4 → state=.matchingCalling")
         } else {
-            // 非匹配来源来电 → 强制关匹配（对齐 H5 useCallApi.js:485-488 语义）
-            logger.warning("handleJoinCallSource: non-matchV4 (\(source ?? "nil")) → force .ended")
+            // Gap-5：非 matchV4 来源 → 暂停匹配（对齐 H5 useCallApi.js:485-486 MATCHING_LEFT 语义）。
+            // 保留"恢复"意图，通话结束时按 wasConnectedInCall 分流：接通过弹 Alert；直接拒绝自动 openMatch
+            logger.info("handleJoinCallSource: non-matchV4 (\(source ?? "nil")) → state=.matchingSuspended")
+            stopFaceCheck()
             cameraSession?.stop()
-            state = .ended
-            // 补发 toggleMatch(0) 回滚服务端匹配池
+            state = .matchingSuspended
+            wasConnectedInCall = false
+            // 补发 toggleMatch(0) 退池（服务端不派新匹配来电）
             Task { [service] in
                 _ = try? await service.toggleMatch(status: 0, faceCheckStatus: nil)
             }
@@ -413,19 +465,53 @@ final class MatchStore: ObservableObject {
     }
 
     /// CallStore.state 转 .idle（通话完全结束）触发。
-    /// v3 §2.2：仅当 lastJoinCallSource=='matchV4' 时回 .matching；其他来源不影响。
+    /// v3 §2.2 + Gap-5：分三个入口态处理：
+    /// - `.matchingCalling`（matchV4 匹配通话）→ 通话结束回 `.matching` 重启 faceCheck
+    /// - `.matchingSuspended`（非 matchV4 暂停期）→ 按 `wasConnectedInCall` 分流：
+    ///     - true（接通过）→ 弹 Resume Match Alert
+    ///     - false（未接通 / 直接拒绝）→ 自动 openMatch
+    /// - 其他态 → 不管
     func handleCallStoreReturnedToIdle(lastJoinCallSource: String?) {
-        guard state == .matchingCalling else {
-            logger.info("handleCallStoreReturnedToIdle: ignored, state=\(String(describing: self.state))")
+        if state == .matchingCalling {
+            if lastJoinCallSource == "matchV4" {
+                state = .matching
+                cameraSession?.start()  // 重新起 camera（Match 独立 session）
+                // Gap-1b：通话结束回 matching 时重启人脸检测（对齐 H5 handleReopenVideoWindow line 160 `checkFace()`）
+                startFaceCheckAfterOpenMatch()
+                logger.info("handleCallStoreReturnedToIdle: matchV4 → state=.matching, camera restart, faceCheck restart")
+            } else {
+                logger.info("handleCallStoreReturnedToIdle: non-matchV4 (\(lastJoinCallSource ?? "nil")) in matchingCalling → state unchanged")
+            }
             return
         }
-        if lastJoinCallSource == "matchV4" {
-            state = .matching
-            cameraSession?.start()  // 重新起 camera（Match 独立 session）
-            logger.info("handleCallStoreReturnedToIdle: matchV4 → state=.matching, camera restart")
-        } else {
-            logger.info("handleCallStoreReturnedToIdle: non-matchV4 → state unchanged")
+        if state == .matchingSuspended {
+            let connected = wasConnectedInCall
+            wasConnectedInCall = false
+            if connected {
+                // 接通过 → 弹 Resume Match Alert；用户选 Resume → openMatch，选 Cancel → 保持 .ended
+                showResumeMatchAlert = true
+                state = .ended
+                logger.info("handleCallStoreReturnedToIdle: suspended + connected → showResumeMatchAlert")
+            } else {
+                // 直接拒绝 / 未接通 → 自动 openMatch
+                state = .ended
+                logger.info("handleCallStoreReturnedToIdle: suspended + not-connected → auto openMatch")
+                Task { [weak self] in await self?.openMatch() }
+            }
+            return
         }
+        logger.info("handleCallStoreReturnedToIdle: ignored, state=\(String(describing: self.state))")
+    }
+
+    /// Gap-5：用户点 Resume Match Alert "Resume" 按钮
+    func confirmResumeMatch() {
+        showResumeMatchAlert = false
+        Task { [weak self] in await self?.openMatch() }
+    }
+
+    /// Gap-5：用户点 Resume Match Alert "Cancel" 按钮（保持 .ended）
+    func dismissResumeMatchAlert() {
+        showResumeMatchAlert = false
     }
 
     // MARK: - 10 分钟提示弹窗辅助
@@ -437,12 +523,29 @@ final class MatchStore: ObservableObject {
         MatchPersistedStore.saveTipShownDate(MatchDateHelper.todayString())
     }
 
-    /// 10 分钟提示弹窗是否应该展示（组合态 gate，v3 §5.2 R19 + v4 subpage 拦截）。
+    /// Bug 1 fix：首日规则弹窗 Agree 那一刻立即存日期（对齐 H5 c-goMatch.vue:290-293
+    /// `showFirstMatchRule() → saveTodayDate()`）。避免"Agree → openMatch 前置失败 → 日期未存 →
+    /// 下次点仍 isFirstMatchToday=true 又弹规则"的重复烦扰。
+    /// openMatch 内的 saveRuleAgreedDate 保留幂等（成功后二次写同值 no-op）。
+    func markRuleAgreedToday() {
+        let today = MatchDateHelper.todayString()
+        MatchPersistedStore.saveRuleAgreedDate(today)
+        isFirstMatchToday = false
+        logger.info("markRuleAgreedToday: date=\(today)")
+    }
+
+    /// View 消费 lastToast 后清（UI overlay `.task(id:)` 展示 2s 后调用）
+    func clearLastToast() {
+        lastToast = nil
+    }
+
+    /// 10 分钟提示弹窗是否应该展示（组合态 gate，v3 §5.2 R19 + v4 subpage 拦截 + v5 online gate）。
     /// - parameter appHidden: 由 SwiftUI `@Environment(\.scenePhase)` 观察（app 切后台不弹）
     /// - parameter blockedByOtherPage: 是否处于 4 tab 根页之外的子页（直播间/通话/详情页等）
     ///   —— 对齐 H5 语义：`c-goMatch` 组件只挂在 home 页面，子页不挂 → timer 也不 fire。
     ///   iOS 侧 timer 在 MainTabView 单例常驻，但 gate 补 subpage 判定实现等价效果
-    func shouldShowTipPopup(appHidden: Bool, blockedByOtherPage: Bool = false) -> Bool {
+    /// - parameter userOnline: 用户是否在线（OnlineStatusStore.userSetOnline）；不在线时不弹，避免与 AutoOfflineDialog 重叠
+    func shouldShowTipPopup(appHidden: Bool, blockedByOtherPage: Bool = false, userOnline: Bool = true) -> Bool {
         let today = MatchDateHelper.todayString()
         // 若跨自然日 → 重置 noReminder（对齐 H5 c-goMatch.vue:460-462）
         let noTodayShow = !MatchDateHelper.isFirstToday(savedDate: MatchPersistedStore.load().tipShownDate)
@@ -451,6 +554,7 @@ final class MatchStore: ObservableObject {
         _ = today  // 保留以便未来展示日期字段
         return !appHidden
             && !blockedByOtherPage
+            && userOnline
             && state == .ended
             && !isMatchBlocked
             && !noTodayShow

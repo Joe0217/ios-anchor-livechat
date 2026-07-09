@@ -50,9 +50,9 @@ struct RootView: View {
         .task(id: session.isLoggedIn) {
             await syncSessionDependent()
         }
-        #if DEBUG
-        .debugLocaleSwitcher()
-        #endif
+        // App 级语言环境注入（Settings → Language 切换后立即生效）；
+        // DEBUG 版额外含 Work Hi 按钮触发的 confirmationDialog（`AppLocaleStore.shared.showSheet = true`）
+        .appLocaleEnvironment()
     }
 
     /// 登录态相关的全局连接同步：
@@ -61,6 +61,17 @@ struct RootView: View {
     /// - CallStore RTM：1v1 通话信令通道
     private func syncSessionDependent() async {
         if session.isLoggedIn, let user = session.user {
+            // GiftEffect 引擎冷启：Window + install 生产 router + 5s 后 warmup SVGA parser
+            if let scene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene }).first {
+                GiftEffectOverlayWindow.shared.show(on: scene)
+            }
+            GiftEffectCenter.shared.installPlayerRouter(GiftPlayerRouter())
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                GiftEffectCenter.shared.warmupSVGA()
+            }
+
             if let uuid = user.loginUuid, !uuid.isEmpty {
                 WSHeartbeat.shared.start(loginUuid: uuid)
             }
@@ -78,6 +89,15 @@ struct RootView: View {
             MatchStore.shared.attachNIMConnectionBridge(NIMConnectionMatchBridge.disconnectedPublisher)
             // Gap-2：openMatch 前置 IM 在线 gate（对齐 H5 c-goMatch.vue:394-395）
             MatchStore.shared.nimOnlineProvider = { NIMService.shared.connectionState == .connected }
+            // 用户诉求 2026-07-08：openMatch 时若 offline 自动上线（对齐 H5 !IMOnline 时 setIMOnline(true) 语义）
+            // 返 true 表示"刚从 offline 切到 online"——openMatch 据此 skip IM gate（用户明确意图 → 强开匹配）
+            MatchStore.shared.ensureUserOnlineHook = {
+                if !OnlineStatusStore.shared.userSetOnline {
+                    OnlineStatusStore.shared.setUserSetOnline(true)
+                    return true
+                }
+                return false
+            }
 
             // 长时间无操作自动离线：拉配置后启动（服务端 max_no_use_app_reminder_time > 0 才启用）
             let minutes = await AppConfigService.fetchAutoOfflineReminderMinutes()
@@ -87,6 +107,9 @@ struct RootView: View {
             NIMOnlineKeeper.shared.stop()
             await callStore.stop()
             AutoOfflineMonitor.shared.stop()
+            // GiftEffect 引擎清理：stop current + clear pending + tearDown players + hide Window
+            GiftEffectCenter.shared.reset()
+            GiftEffectOverlayWindow.shared.hide()
         }
     }
 }

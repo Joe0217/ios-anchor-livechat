@@ -40,6 +40,9 @@ struct CGoMatchButton: View {
             .sheet(isPresented: $showRulePopup) {
                 MatchRulePopup(onAgree: {
                     showRulePopup = false
+                    // Bug 1 fix：Agree 那一刻立即存日期（对齐 H5 saveTodayDate），
+                    // 避免 openMatch 前置失败时下次点仍弹规则
+                    store.markRuleAgreedToday()
                     Task { @MainActor in await store.openMatch() }
                 })
                 .interactiveDismissDisabled(true)
@@ -52,14 +55,14 @@ struct CGoMatchButton: View {
     private var buttonImageName: String {
         switch store.state {
         case .matching: return "matchButtonOn"
-        case .ended, .blocked, .matchingCalling: return "matchButtonOff"
+        case .ended, .blocked, .matchingCalling, .matchingSuspended: return "matchButtonOff"
         }
     }
 
     private var a11yLabel: String {
         switch store.state {
         case .matching: return L10n.matchButtonA11yTurnOff
-        case .ended, .blocked, .matchingCalling: return L10n.matchButtonA11yTurnOn
+        case .ended, .blocked, .matchingCalling, .matchingSuspended: return L10n.matchButtonA11yTurnOn
         }
     }
 
@@ -78,8 +81,8 @@ struct CGoMatchButton: View {
                 }
             case .matching:
                 await store.closeMatch()
-            case .matchingCalling:
-                break // view 已不 render，防御分支
+            case .matchingCalling, .matchingSuspended:
+                break // view 已不 render / 通话中，防御分支
             }
         }
     }

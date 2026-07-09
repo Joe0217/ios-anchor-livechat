@@ -5,7 +5,7 @@ import Foundation
 /// **纯数据 enum**，不依赖 L10n —— MatchStore（属 test target sources）可直接引用；
 /// UI 层通过 `MatchToast+Localized` extension 走 L10n 映射到具体展示文案。
 ///
-/// 这是为了绕过 test target 独立 module 的限制：test target 不导入 L10n / DebugLocaleStore
+/// 这是为了绕过 test target 独立 module 的限制：test target 不导入 L10n / AppLocaleStore
 /// SwiftUI 环境栈，因此 Store 层不能直接 `L10n.matchToastXxx`；enum 语义化 + View 层
 /// mapping 是标准解耦模式（对齐工程内 `BlocklistViewModel+Runtime` 拆分思路）。
 enum MatchToast: Equatable {
@@ -25,4 +25,7 @@ enum MatchToast: Equatable {
     case cameraStartFailed
     /// R9：cameraSession interruption >= 30s 未恢复
     case cameraUnavailable
+    /// Gap-2：openMatch 前置 IM 在线检查（对齐 H5 c-goMatch.vue:394-395）。
+    /// H5 侧有 `setIMOnline(true)` 主动上线；iOS 侧无此显式 API（NIMSDK 自动重连），只做 gate + toast
+    case imOffline
 }

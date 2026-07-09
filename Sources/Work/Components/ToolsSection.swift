@@ -2,28 +2,43 @@ import SwiftUI
 
 /// 工具区：标题行 + 4 列工具图标网格。对齐 H5 work/index.vue workspaceItems。
 /// Invite 图标顶部悬浮"Earn Money"金色渐变角标（H5 style）。
+/// Newbie / BigR 由 visibility 接口控制显示（value 参数传入，非 @ObservedObject，避免 vm 死订阅）。
 /// Online 开关已改为 WorkView 悬浮层，不再放本区。
 struct ToolsSection: View {
-    // 无 vm 依赖：tools/columns 全为 let 常量，DEBUG 分支读单例。
-    // 上一版从 header 移除 Online 开关后，vm 参数变成死订阅（触发 WorkViewModel
-    // 任一 @Published 变化都让 12 图标网格重算）。审查报告-202607061550 必修-1。
+    // Newbie / bigR 由 WorkViewModel.showNewbie / showBigR 拉取后传入。
+    // 用 value 而非 @ObservedObject vm：只在这两个 Bool 变化时 diff 重算，
+    // 不订阅 vm 的其他 @Published（避免 onlineTimeSec / callIncomes 变化时 12+ 图标网格重算 —— 审查报告-202607061550 必修-1）。
+    let showNewbie: Bool
+    let showBigR: Bool
 
-    /// 工具项（图标资源名 + 标签）。顺序与 H5 一致。
-    /// 未接入 Newbie/bigR 后端 visible 接口，本次不展示；里程碑 J 补齐。
-    private let tools: [(icon: String, label: String)] = [
-        ("toolHi", L10n.toolHi),
-        ("toolGoLive", L10n.toolGoLive),
-        ("toolMatch", L10n.toolMatch),
-        ("toolTask", L10n.toolTask),
-        ("toolBeauty", L10n.toolBeauty),
-        ("toolPoints", L10n.toolPoints),
-        ("toolGiftMessage", L10n.toolGiftMessage),
-        ("toolProfileUpdate", L10n.toolProfileUpdate),
-        ("toolInvite", L10n.toolInvite),
-        ("toolWorkingGuide", L10n.toolWorkingGuide),
-        ("toolBackpack", L10n.toolBackpack),
-        ("toolLiveData", L10n.toolLiveData),
-    ]
+    /// 由 MainTabView 注入：Match 图标 tap 切到 Home + Match top tab（对齐首页 Match 入口）
+    @Environment(\.openHomeMatch) private var openHomeMatch
+
+    /// 工具项（图标资源名 + 标签）。顺序与 H5 workspaceItems 一致。
+    /// Newbie 插在 Task 之后（H5 位置）、bigR 插在 Invite 之后。
+    private var tools: [(icon: String, label: String)] {
+        var arr: [(icon: String, label: String)] = [
+            ("toolHi", L10n.toolHi),
+            ("toolGoLive", L10n.toolGoLive),
+            ("toolMatch", L10n.toolMatch),
+            ("toolTask", L10n.toolTask),
+        ]
+        if showNewbie { arr.append(("toolNewbie", L10n.toolNewbie)) }
+        arr.append(contentsOf: [
+            ("toolBeauty", L10n.toolBeauty),
+            ("toolPoints", L10n.toolPoints),
+            ("toolGiftMessage", L10n.toolGiftMessage),
+            ("toolProfileUpdate", L10n.toolProfileUpdate),
+            ("toolInvite", L10n.toolInvite),
+        ])
+        if showBigR { arr.append(("toolBigR", L10n.toolBigR)) }
+        arr.append(contentsOf: [
+            ("toolWorkingGuide", L10n.toolWorkingGuide),
+            ("toolBackpack", L10n.toolBackpack),
+            ("toolLiveData", L10n.toolLiveData),
+        ])
+        return arr
+    }
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8),
                                 count: 4)
@@ -60,13 +75,24 @@ struct ToolsSection: View {
                     } else if tools[i].icon == "toolGiftMessage" {
                         NavigationLink(value: WorkRoute.giftMessage) { cell }
                             .buttonStyle(.plain)
+                    // Match → 切到 Home + Match top tab（对齐首页 Match 入口，与 CGoMatchButton 同一入口）
+                    } else if tools[i].icon == "toolMatch" {
+                        Button { openHomeMatch.perform() } label: { cell }
+                            .buttonStyle(.plain)
+                    // Newbie / bigR → 占位（页面本身留 J 里程碑落地；对齐 H5 visibility=true 时显示入口）
+                    } else if tools[i].icon == "toolNewbie" {
+                        NavigationLink(value: WorkRoute.newbie) { cell }
+                            .buttonStyle(.plain)
+                    } else if tools[i].icon == "toolBigR" {
+                        NavigationLink(value: WorkRoute.bigR) { cell }
+                            .buttonStyle(.plain)
                     } else {
                         #if DEBUG
                         // DEBUG 临时入口（Release 不存在）：
                         //   Hi     → locale 切换 sheet（i18n 任务）
                         //   Invite → push POC 调试台（沿用 WorkView 的 NavigationStack）
                         if tools[i].icon == "toolHi" {
-                            Button { DebugLocaleStore.shared.showSheet = true } label: { cell }
+                            Button { AppLocaleStore.shared.showSheet = true } label: { cell }
                                 .buttonStyle(.plain)
                         } else if tools[i].icon == "toolInvite" {
                             NavigationLink(value: WorkRoute.pocDebug) { cell }

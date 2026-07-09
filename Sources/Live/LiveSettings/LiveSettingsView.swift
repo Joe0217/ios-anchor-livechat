@@ -90,12 +90,21 @@ struct LiveSettingsView: View {
         .task { await store.load() }
         .onAppear {
             // Bug fix：二次开播按钮转圈——LiveSettings 是 push 而非 dismantle 到 LiveRoomView，
-            // 从 LiveRoomView 下播 pop 回来时 store 仍 .starting + roomInfo != nil + lock 锁定，
+            // 从 LiveRoomView 下播 pop 回来时 store 仍 .starting + roomInfo != nil + lock 锁定,
             // tap Start Live 命中 `guard state == .editing` 静默 return → 按钮持续 loading。
             // 检测"已开播过标志"（roomInfo != nil）→ reset 允许再次开播。
             if store.roomInfo != nil {
                 store.resetForReuse()
                 goLive = false
+            }
+            // 用户诉求 2026-07-08：进入开播设置页 = 准备开播，offline 时自动上线（免除用户先手动切在线）
+            if !OnlineStatusStore.shared.userSetOnline {
+                OnlineStatusStore.shared.setUserSetOnline(true)
+            }
+            // 用户诉求 2026-07-09：进直播 = 独占摄像头，若匹配中先静默关匹配
+            // 否则 MatchCameraSession 与直播 CameraManager 抢摄像头 → 直播结束后残留 running
+            if MatchStore.shared.state == .matching {
+                Task { await MatchStore.shared.closeMatch(silent: true) }
             }
         }
         .onChange(of: store.roomInfo?.id) { newId in
@@ -111,11 +120,15 @@ struct LiveSettingsView: View {
             }
         }
         .sheet(isPresented: $showGiftPicker) {
-            GiftPickerSheet(
+            // H-4 迁移：私 call 门槛 gift picker → CommonGiftPanel（tabs=[.popular], footer=.confirm, minPrice=..., stepper=.hidden）
+            CommonGiftPanel(config: .callGate(
                 minPrice: store.privateCallGiftMinPrice,
                 initialSelection: store.selectedGift,
                 onConfirm: { store.setSelectedGift($0) }
-            )
+            ))
+            .sheetTopInset()
+            .presentationDetents([.fraction(0.5), .large])
+            .presentationDragIndicator(.visible)
         }
         // 心愿承诺规范弹窗（对齐 H5 wishlist-rule-modal.vue）—— 首次开播含 wishlist+promise 时弹
         // 用 ZStack overlay 而非 sheet：H5 是 dialog 视觉（居中 + dim 背景），非 iOS bottom sheet
@@ -171,9 +184,10 @@ struct LiveSettingsView: View {
                 ) {
                     ZStack {
                         if let url = store.coverUrl, let u = URL(string: url) {
-                            AsyncImage(url: u) { img in
-                                img.resizable().scaledToFill()
-                            } placeholder: {
+                            CachedAsyncImage(url: u,
+                                             contentMode: .fill,
+                                             persistent: true,
+                                             cdn: (.custom(width: 300), .fit)) {
                                 Color.white.opacity(0.06)
                             }
                             .frame(width: 88, height: 88)
@@ -230,9 +244,10 @@ struct LiveSettingsView: View {
                 Color.black.opacity(0.6)
                     .frame(width: 60, height: 60)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
-                AsyncImage(url: URL(string: gift.giftSmallImg.isEmpty ? gift.giftImg : gift.giftSmallImg)) { img in
-                    img.resizable().scaledToFit()
-                } placeholder: {
+                CachedAsyncImage(url: URL(string: gift.giftSmallImg.isEmpty ? gift.giftImg : gift.giftSmallImg),
+                                 contentMode: .fit,
+                                 persistent: true,
+                                 cdn: (.gift, .fit)) {
                     Color.clear
                 }
                 .frame(width: 50, height: 50)
@@ -328,9 +343,12 @@ struct LiveSettingsView: View {
                 Color.black.opacity(0.6)
                     .frame(width: 50, height: 50)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
-                AsyncImage(url: URL(string: g.giftSmallImg)) { img in
-                    img.resizable().scaledToFit()
-                } placeholder: { Color.clear }
+                CachedAsyncImage(url: URL(string: g.giftSmallImg),
+                                 contentMode: .fit,
+                                 persistent: true,
+                                 cdn: (.gift, .fit)) {
+                    Color.clear
+                }
                 .frame(width: 42, height: 42).padding(4)
                 if g.giftNum > 1 {
                     Text("x\(g.giftNum)")

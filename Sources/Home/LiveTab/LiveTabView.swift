@@ -39,6 +39,9 @@ struct LiveTabView: View {
     @State private var showReconnectToast: Bool = false
     @ObservedObject private var onlineStatus = OnlineStatusStore.shared
 
+    /// Home 4 tab 跨模块导航总线（Work Match 点击时切 Match top tab 用）
+    @ObservedObject private var navBus = HomeNavigationBus.shared
+
     /// scenePhase 用于"onResume 静默检查"（对齐安卓 HomeHomeFragment.onResume）。
     @Environment(\.scenePhase) private var scenePhase
 
@@ -64,6 +67,12 @@ struct LiveTabView: View {
             .onChange(of: onlineStatus.refreshToastTick) { tick in
                 guard tick != nil else { return }
                 showReconnectToast = true
+            }
+            // Work toolMatch 请求切到 Home Match top tab（对齐首页 Match 入口）
+            .onChange(of: navBus.pendingTopTab) { pending in
+                guard let tab = pending else { return }
+                homeStore.tapOuter(tab)
+                navBus.pendingTopTab = nil
             }
             // scenePhase → .active：对齐安卓 onResume 静默检查（showToast=false, doAction=false）
             // 走 triggerCheckForcedBusy 统一到 activeCheckTask 串行化（审查报告-202607061550 必修-2）

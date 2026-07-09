@@ -17,10 +17,9 @@ struct MatchCameraPreviewFloating: View {
     /// 浮窗尺寸
     private let width: CGFloat = 120
     private let height: CGFloat = 160
-    /// 初始 inset（右下角，避开底部 CGoMatchButton + tabbar）
+    /// 初始 inset（右上角，避开顶部 status bar / Dynamic Island）
     private let initialTrailingInset: CGFloat = 12
-    private let initialBottomInset: CGFloat = Theme.Metric.matchButtonBottomInset
-        + Theme.Metric.matchButtonSize + 8
+    private let initialTopInset: CGFloat = 12
 
     /// 累计位置（相对 container，用 CGPoint 表 view 中心）；nil 表使用初始位置
     @State private var position: CGPoint?
@@ -44,10 +43,6 @@ struct MatchCameraPreviewFloating: View {
             CameraPreview(camera: camera)
                 .frame(width: width, height: height)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Theme.Palette.matchMarqueeBorderStart, lineWidth: 1.5)
-                )
 
             Button(action: onClose) {
                 Image(systemName: "xmark.circle.fill")
@@ -90,7 +85,7 @@ struct MatchCameraPreviewFloating: View {
         if let p = position { return p }
         return CGPoint(
             x: size.width - initialTrailingInset - width / 2,
-            y: size.height - initialBottomInset - height / 2
+            y: initialTopInset + height / 2
         )
     }
 
