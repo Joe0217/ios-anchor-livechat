@@ -276,8 +276,16 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                 NIMService.shared.dispatch(at, payload: payload, context: .liveChatroom(roomId: roomId))
 
                 // 公屏文本副作用：-9 pkChatNotice 的 content 直接展示
+                // v22 Phase 1（2026-07-10）：改用 .pkNotify 变体渲染暗红 D33901/30 气泡（H5 L519-521），
+                // 不再用 isSystem: true → 系统黄底样式（视觉与 PK 通知不符）
                 if at == .pkChatNotice, let txt = payload["content"] as? String, !txt.isEmpty {
-                    items.append(PublicChatMessage(text: txt, isSystem: true))
+                    items.append(PublicChatMessage(
+                        text: txt,
+                        isSystem: false,
+                        senderNickname: nil, senderAvatar: nil,
+                        userLevel: nil, isHost: false, isVip: false,
+                        messageType: .pkNotify
+                    ))
                     continue
                 }
                 // v11 礼物副作用桥接（H 期 GiftMessageRouter 落地前的直连方案）：
@@ -599,14 +607,49 @@ final class NIMChatroomManager: NSObject, ObservableObject {
             case .notification:
                 // v19 对齐 H5 handleNotificationMessage（live.js:927-1007）：
                 // memberEnter/memberExit 时**过滤主播本人**（`account !== yxAccid`）后 delta +/-1
+                //
+                // v22 Phase 1（2026-07-10）：enter 事件改用 .enterRoom 变体渲染（tier 渐变胶囊气泡）
+                // 从 content.ext（NIMChatroomNotificationContent.ext）解 remoteExt JSON 拿用户信息
+                // （对齐 H5 notification.ext 提取 nickname/userLevel/isVip 供 messageScroller 渲染）
                 if let obj = m.messageObject as? NIMNotificationObject,
                    let content = obj.content as? NIMChatroomNotificationContent {
                     // 通知目标账号：content.targets 数组第一个即触发事件的用户
                     let evtUserId: String = content.targets?.first?.userId ?? ""
                     let isAnchorSelf = !evtUserId.isEmpty && evtUserId == anchorYxAccount
                     if content.eventType == .enter {
-                        if !isAnchorSelf { delta += 1 }   // v19 过滤主播本人
-                        items.append(PublicChatMessage(text: L10n.userJoined, isSystem: true))
+                        if !isAnchorSelf {
+                            delta += 1   // v19 过滤主播本人
+                            // 尝试从 notification.ext（如有）拿用户信息；无则用 targets nick 兜底
+                            var nickname: String? = content.targets?.first?.nick
+                            var userLevel: Int? = nil
+                            var isVip = false
+                            var vehicleImg: String? = nil
+                            if let extRaw = content.ext {
+                                var extDict: [String: Any]? = extRaw as? [String: Any]
+                                if extDict == nil, let s = extRaw as? String,
+                                   let d = s.data(using: .utf8) {
+                                    extDict = try? JSONSerialization.jsonObject(with: d) as? [String: Any]
+                                }
+                                if let ext = extDict {
+                                    if let n = ext["fromNick"] as? String, !n.isEmpty { nickname = n }
+                                    else if let n = ext["nickname"] as? String, !n.isEmpty { nickname = n }
+                                    userLevel = (ext["userLevel"] as? Int) ?? (ext["level"] as? Int)
+                                    isVip = (ext["isVip"] as? Bool) ?? false
+                                    vehicleImg = (ext["vehicleImg"] as? String) ?? (ext["itemSmallImg"] as? String)
+                                }
+                            }
+                            items.append(PublicChatMessage(
+                                text: "",
+                                isSystem: false,
+                                senderNickname: nickname ?? evtUserId,
+                                senderAvatar: nil,
+                                userLevel: userLevel,
+                                isHost: false,
+                                isVip: isVip,
+                                messageType: .enterRoom
+                            ))
+                            _ = vehicleImg   // .enterRoom 变体当前 associated value 不含 vehicleImg；adapter 侧统一置 nil
+                        }
                     } else if content.eventType == .exit {
                         if !isAnchorSelf && presenceStore.onlineCount + delta > 0 {
                             delta -= 1   // v19 过滤主播 + 避免负数
