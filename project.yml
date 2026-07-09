@@ -203,6 +203,11 @@ targets:
       - path: Sources/PublicChat/Model/UnifiedPublicChatMessage.swift
       - path: Sources/PublicChat/Store/UnifiedPublicChatFeed.swift
       - path: Sources/PublicChat/Utils/LevelTierResolver.swift
+      # Phase 1 T8：抽出的 PublicChatMessage struct（原在 NIMChatroomManager.swift，纯 Foundation）
+      - path: Sources/Live/PublicScreen/LivePublicChatPayload.swift
+      # Phase 1 T9：adapter 读 messageType → 派 PublicChatVariant
+      - path: Sources/Live/PublicScreen/PublicChatMessageType.swift
+      - path: Sources/PublicChat/Adapters/LivePublicChatAdapter.swift
       # H 里程碑 M3：派对房 attachType 枚举（纯 Int rawValue，无 NIMSDK 依赖）
       - path: Sources/Party/Models/PartyAttachType.swift
       - path: Sources/Party/Models/PartyMsgType.swift

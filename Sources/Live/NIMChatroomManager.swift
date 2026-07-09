@@ -2,40 +2,7 @@ import Foundation
 import NIMSDK
 import os
 
-/// 公屏一条消息（v8 扩展：对齐 H5 messageScroller.vue 结构化字段）。
-///
-/// **v7 遗留**：`isSystem` 保留兼容旧构造点；新代码使用 `messageType` discriminator。
-/// **v8 新增**：`senderNickname/senderAvatar/userLevel/isHost/isVip/messageType` 供 Row 视觉分派
-struct PublicChatMessage: Identifiable {
-    let id = UUID()
-    let text: String
-    let isSystem: Bool
-    // v8 结构化扩展（可选，向后兼容旧调用点）
-    let senderNickname: String?
-    let senderAvatar: String?
-    let userLevel: Int?
-    let isHost: Bool
-    let isVip: Bool
-    let messageType: PublicChatMessageType
-
-    init(text: String,
-         isSystem: Bool,
-         senderNickname: String? = nil,
-         senderAvatar: String? = nil,
-         userLevel: Int? = nil,
-         isHost: Bool = false,
-         isVip: Bool = false,
-         messageType: PublicChatMessageType = .regular) {
-        self.text = text
-        self.isSystem = isSystem
-        self.senderNickname = senderNickname
-        self.senderAvatar = senderAvatar
-        self.userLevel = userLevel
-        self.isHost = isHost
-        self.isVip = isVip
-        self.messageType = messageType
-    }
-}
+// PublicChatMessage / LiveRawPayload 结构定义已迁到 `Sources/Live/PublicScreen/LivePublicChatPayload.swift`（Phase 1 T8）
 
 /// 公屏消息独立 ObservableObject：与 LiveStore.networkDebugStore 同模式。
 /// 让 `NIMChatroomManager.objectWillChange` 不因每条公屏消息发射，避免 LiveRoomView 整树重渲染
