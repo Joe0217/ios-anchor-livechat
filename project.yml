@@ -25,6 +25,9 @@ targets:
       # iOS 17+ 提审：声明使用到的必备 API（UserDefaults）+ 采集数据类别
       - path: Sources/PrivacyInfo.xcprivacy
         buildPhase: resources
+      # v17: GIF 动图资源（钻石收益等 —— Assets.xcassets imageset 不支持 gif，走 bundle resource）
+      - path: Sources/Assets/GIFs
+        buildPhase: resources
       - Vendor/FaceUnity/FUManager.h
       - Vendor/FaceUnity/FUManager.m
       - Vendor/FaceUnity/FUBeautyRenderer.swift
@@ -77,6 +80,8 @@ targets:
         NSCameraUsageDescription: Used for real-time beauty preview and live streaming
         # 麦克风权限（声网通话音频必需）
         NSMicrophoneUsageDescription: Used for real-time audio/video calls
+        # 相册读取权限（A-2 注册流程：头像 + 6 张 profile photos 走 PhotosPicker）
+        NSPhotoLibraryUsageDescription: Access to your photo library is required to upload your avatar and profile photos during registration.
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -116,6 +121,10 @@ targets:
       - path: Sources/Core/KeychainStore.swift
       - path: Sources/Networking/APIClient.swift
       - path: Sources/Networking/NetworkReachability.swift
+      # H-3 Step 1a-1：AppConfigStore 横断基建（依赖 AppConfigService，纯 Foundation + Combine，零 SDK 依赖）
+      - path: Sources/Networking/AppConfigService.swift
+      - path: Sources/Core/AppConfigStore.swift
+      - path: Sources/Core/CallAuthLogic.swift
       # G 里程碑 M1：PK 数据契约 + NIM AttachType（仅纯数据/解析层，零 SDK 依赖）
       - path: Sources/Live/NIM/AttachType.swift
       - path: Sources/PK/PKModels.swift
@@ -139,6 +148,8 @@ targets:
       # H-1 Step 1c：Prime 拉取 service + Codable model（分批 ≤50 + 部分批失败仅该批不进；APIClient 已入）
       - path: Sources/Message/Services/PrimeLevelModels.swift
       - path: Sources/Message/Services/PrimeLevelService.swift
+      # H-2 v2：Flame 通道 B 关注列表 service（对齐 H5 useFollowUserList；24h 缓存 + APIClient）
+      - path: Sources/Message/Services/FollowUserListService.swift
       # H-1c v4：Flame 顶部 3 系统消息入口（Station HTTP / Notification P2P / Admin P2P）
       - path: Sources/Message/Models/SystemInboxEntry.swift
       - path: Sources/Message/Services/StationListModels.swift
@@ -148,6 +159,42 @@ targets:
       - path: Sources/Message/Services/ConversationProfileService.swift
       # H-1e v4：在线状态常量表（对齐 H5 LIVE_STATUS_NUMBER；纯 Int 常量）
       - path: Sources/Message/Models/AnchorOnlineStatus.swift
+      # I 里程碑资料编辑（pre-existing test 引用但白名单遗漏，补入）
+      - path: Sources/Profile/ProfileModels.swift
+      - path: Sources/Profile/EditProfile/EditProfileServiceProtocol.swift
+      - path: Sources/Profile/EditProfile/EditProfileStore.swift
+      - path: Sources/Profile/EditProfile/Models/EditProfileModels.swift
+      - path: Sources/Profile/EditProfile/Models/CheckUserInfoResponse.swift
+      - path: Sources/Profile/EditProfile/Models/UpdateUserInfoRequest.swift
+      - path: Sources/Profile/EditProfile/Models/UserInfoWithReviewResponse.swift
+      - path: Sources/Profile/EditProfile/Models/LatestIconAndCallVideo.swift
+      # EditProfileServiceProtocol 参数类型（Foundation only，无 SDK 依赖）
+      - path: Sources/Core/Upload/ImageCompressionPreset.swift
+      # H-2 P2P 私聊页 step 1a：Chat 模块纯 Swift 层（Models + State + Store，零 SDK 依赖）
+      - path: Sources/Message/Chat/Models/ChatMessage.swift
+      - path: Sources/Message/Chat/Models/ChatMessageContent.swift
+      - path: Sources/Message/Chat/Models/ChatMessageStatus.swift
+      - path: Sources/Message/Chat/Models/AnchorMediaItem.swift
+      - path: Sources/Message/Chat/Models/MessageAttachParser.swift
+      # H-3 step 1a-2：私密消息 / tip / 会话类型 enum（纯 Foundation，ChatMessageContent 硬依赖）
+      - path: Sources/Message/Chat/Models/PrivateLockStatus.swift
+      - path: Sources/Message/Chat/Models/ChatTipKind.swift
+      - path: Sources/Message/Chat/Models/ChatType.swift
+      # H-3 step 1a-3：ReplyPointsStore + Service protocol + Bridge conform（依赖 AppConfigStore/APIClient 已入）
+      - path: Sources/Core/ReplyPointsConfigBridge.swift
+      - path: Sources/Message/Chat/Models/ReplyPointsModels.swift
+      - path: Sources/Message/Chat/Services/ReplyPointsService.swift
+      - path: Sources/Message/Chat/ReplyPointsStore.swift
+      # H-3 step 1a-4：Translate / CheckPrivateInfo / ChatTypeResolver / CallCooldownGuard 纯静态解析 + protocol
+      - path: Sources/Message/Chat/Services/TranslateService.swift
+      - path: Sources/Message/Chat/Services/CheckPrivateInfoService.swift
+      - path: Sources/Message/Chat/Services/ChatTypeResolver.swift
+      - path: Sources/Call/CallCooldownGuard.swift
+      # H-3 step 1a-5：SendPrivateInfoService + PrivateMediaSelection（P2PChatStore.sendPrivate 依赖）
+      - path: Sources/Message/Chat/Services/SendPrivateInfoService.swift
+      - path: Sources/Message/Chat/P2PChatState.swift
+      - path: Sources/Message/Chat/P2PChatProviders.swift
+      - path: Sources/Message/Chat/P2PChatStore.swift
       # H 里程碑 M3：派对房 attachType 枚举（纯 Int rawValue，无 NIMSDK 依赖）
       - path: Sources/Party/Models/PartyAttachType.swift
       - path: Sources/Party/Models/PartyMsgType.swift
@@ -227,12 +274,34 @@ targets:
       - path: Sources/Match/MatchToast.swift
       # #3d：人脸检测 protocol + stub（纯 protocol，无 FUManager 依赖）
       - path: Sources/Match/FaceDetectionService.swift
+      # H-4 里程碑（公共礼物面板 step 1）：纯逻辑层 Store + Config + DataSource protocol + BalanceSource protocol
+      # 注意：Config.swift preset factories / DataSource.swift DefaultGiftDataSource+IMGiftDataSource 依赖
+      #      GiftMessageServiceProtocol/GiftService/L10n，用 #if !HILY_TESTS 屏蔽；tests 只覆盖纯逻辑层。
+      #      Store 单测通过 FakeDataSource（Tests/HilyTests/CommonGiftPanelStoreTests.swift 内定义）注入。
+      # GiftService.swift 入 tests：R19 parseGroupedGiftListResponse 混合形态单测需要（无 SDK 依赖，纯 Foundation + APIClient）
+      - path: Sources/Gift/GiftModel.swift
+      - path: Sources/Gift/GiftService.swift
+      - path: Sources/Gift/Panel/DataSource.swift
+      - path: Sources/Gift/Panel/BalanceSource.swift
+      - path: Sources/Gift/Panel/Config.swift
+      - path: Sources/Gift/Panel/Store.swift
+      # GiftEffect Models（H 里程碑跨场景礼物特效引擎 Task 2）：纯 Foundation model + decoder，零 SDK 依赖
+      - path: Sources/GiftEffect/Models/GiftEffectScene.swift
+      - path: Sources/GiftEffect/Models/GiftEffectItem.swift
+      - path: Sources/GiftEffect/Models/MicroToastItem.swift
+      # Task 3：GiftEffect Center + Player protocol（依赖 @MainActor + Combine + os + UIKit，zero SDK 依赖）
+      - path: Sources/GiftEffect/Center/GiftEffectCenter.swift
+      - path: Sources/GiftEffect/Players/GiftAnimationPlayer.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.anchor.livechat.tests
         GENERATE_INFOPLIST_FILE: YES
         # logic test bundle：无宿主 app，xcodebuild test 直接在模拟器跑
         CODE_SIGNING_ALLOWED: NO
+        # H-2：让代码用 `#if HILY_TESTS` 条件编译屏蔽 test target 不可见的依赖
+        # （如 MessageSessionStore.shared / L10n / NIMSDK 等在 test target sources 白名单外）
+        # ⚠️ 必须保留 DEBUG（BeautyPipelineSharer 的 testForceSetupState 等 DEBUG-only test hook 依赖此 flag）
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG HILY_TESTS"
 schemes:
   # Hily app scheme：日常开发/真机调试用。
   # ⚠️ test action 故意不带 HilyTests——一旦 build action 拉 Hily.app，模拟器会链接 FURenderKit(arm64 device-only) 失败。
