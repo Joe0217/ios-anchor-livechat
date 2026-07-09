@@ -4,6 +4,7 @@ import Combine
 import Network
 import UIKit  // C-4 Wave2 gap-critic-005：UIApplication.didEnterBackgroundNotification
 import os
+import NIMSDK  // sendCallText 走 P2P NIMCustomObject attachType=-1
 
 // MARK: - D 里程碑：CallStore 状态变化观察者协议
 //
@@ -42,7 +43,7 @@ final class CallStore: ObservableObject {
             // C-4 Wave1 gap-009：私 call 首次转 .connected 时初始化 300s 收益横幅倒计时。
             // frontGameType 在 callOut/handleIncomingVideoCall/acceptIncomingFromLive 时已置定。
             if state == .connected, oldValue != .connected, current.frontGameType == .live {
-                // [5min-DEBUG-DISABLED] liveCallCountdown = 300  // 暂时禁用 5 分钟倒计时初始化做对照实验
+                liveCallCountdown = 300
                 // C-4 Wave4 A1 gap-008：私 call 首次接通触发双头像会合动画（H5 livingCallAnimation.vue 1s 旋转 + 2s 消失）
                 livingCallIntroToken = UUID()
             }
@@ -101,6 +102,16 @@ final class CallStore: ObservableObject {
     @Published private(set) var callRecentRemoteText: String?
     /// sysMsg -1 远端文字附带的 chatBubble id
     @Published private(set) var callChatBubble: Int = 0
+
+    /// 公屏消息历史队列（对齐 H5 `homeStore.talkListInCall[]`）。上限 50 防增长；追加即修剪。
+    /// - 消费者：CallMessageScroller（通话中控条上方 300×270 反向滚动区域）
+    /// - 生产者：
+    ///   - handleRemoteText（sysMsg -1）→ 追加对方 text
+    ///   - GiftEffectSysMsgRouter（sysMsg 4 liveCallGift）→ 追加对方 gift
+    ///   - sendCallText / echoLocalChatText → 主播自己发送后本地回显
+    ///   - appendWaitBonus 可选追加 bonus（当前未启用，等 UI 决定）
+    @Published private(set) var callChatMessages: [CallChatMessage] = []
+    private let callChatMessagesLimit = 50
 
     // MARK: - C-5 充值锁定流程（gap-011+012+017+critic-013）
 
@@ -744,11 +755,11 @@ final class CallStore: ObservableObject {
     /// 直播私 call 前 5 分钟锁定期主播不能挂断（liveCallCountdown > 0 期间）；用户可挂断不受此约束。
     func hangup() async {
         guard state == .connecting || state == .connected else { return }
-        // [5min-DEBUG-DISABLED] 直播私 call 锁定期 guard 暂时禁用做对照实验
-        // if current.frontGameType == .live, liveCallCountdown > 0 {
-        //     AppLogger.call.notice("🔒 [hangup] 直播私 call 锁定期 (剩余 \(self.liveCallCountdown, privacy: .public)s) → 拒绝主播挂断")
-        //     return
-        // }
+        // 直播私 call 锁定期 guard：主播 5 分钟内不允许挂断（H5 v-if="!privateCallTips" 规则）
+        if current.frontGameType == .live, liveCallCountdown > 0 {
+            AppLogger.call.notice("🔒 [hangup] 直播私 call 锁定期 (剩余 \(self.liveCallCountdown, privacy: .public)s) → 拒绝主播挂断")
+            return
+        }
         if let signaling {
             _ = await signaling.publish(buildMessage(action: .hangup))
         }
@@ -845,9 +856,8 @@ final class CallStore: ObservableObject {
     /// startElapsedTask 每秒 tick 后调；仅 .connected 且 frontGameType==.live 时递减。
     /// 从 300 → 0，归 0 后不再触发（liveCallBanner 分档显示静态文案）。
     private func tickLiveCallCountdownIfNeeded() {
-        // [5min-DEBUG-DISABLED] 5 分钟倒计时递减暂时禁用做对照实验
-        // guard state == .connected, current.frontGameType == .live, liveCallCountdown > 0 else { return }
-        // liveCallCountdown -= 1
+        guard state == .connected, current.frontGameType == .live, liveCallCountdown > 0 else { return }
+        liveCallCountdown -= 1
     }
 
     // MARK: - C-4 Wave2 gap-critic-005 app 切后台/前台推流管理
@@ -1275,10 +1285,10 @@ extension CallStore: CallSignalingDelegate {
                 self.callElapsed += 1
                 // C-3 每秒 tick 后自检异常（内部 elapsed%10 门控 + state guard + alerted 保护）
                 self.checkAbnormalIfNeeded()
-                // [5min-DEBUG-DISABLED] 5 分钟倒计时 tick 暂时禁用做对照实验
-                // self.tickLiveCallCountdownIfNeeded()
-                // [5min-DEBUG-DISABLED] EmptyRoomDetector 10s 心跳暂时禁用做对照实验（保险起见排除所有 5 分钟相关）
-                // self.tickEmptyRoomDetectorIfNeeded()
+                // C-4 Wave1 gap-009：私 call 300s 收益横幅倒计时（内部 state + frontGameType 守卫）
+                self.tickLiveCallCountdownIfNeeded()
+                // DM-20260616-003：黑屏空房间检测 10s 心跳（对齐 H5 topBar.vue tenSecondsCB）
+                self.tickEmptyRoomDetectorIfNeeded()
             }
         }
     }
@@ -1307,12 +1317,78 @@ extension CallStore {
 
     /// sysMsg -1：通话内远端文字消息（含翻译 + chatBubble）。
     /// H5 message.js:636-665 解码 `unescape(content)` + 调 translateText API；
-    /// iOS H 阶段仅落 store 字段，翻译 / 气泡 UI 留 C 期 backlog。
+    /// iOS H 阶段落 callRecentRemoteText + 追加 callChatMessages 历史队列（Wave 6+ 完整）。
     func handleRemoteText(_ text: String, chatBubble: Int? = nil) {
         guard !text.isEmpty else { return }
         callRecentRemoteText = text
         if let cb = chatBubble { callChatBubble = cb }
+        // 追加历史队列供公屏 CallMessageScroller 消费（对齐 H5 talkListInCall.unshift）。
+        // Wave 6 backlog：translation 字段接翻译 API 结果；level/isVip 接远端 ext.userLevel 字段。
+        let sender = CallChatMessage.Sender(
+            nickname: current.remoteNickname.isEmpty ? current.remoteUserIdString : current.remoteNickname,
+            level: nil,
+            isVip: false,
+            isSpecial: false,
+            chatBubble: chatBubble.map(String.init),
+            nicknameColor: .default
+        )
+        appendChatMessage(.text(sender: sender, content: text, translation: nil))
         AppLogger.call.info("[CallStore] handleRemoteText len=\(text.count, privacy: .public) bubble=\(chatBubble ?? -1, privacy: .public)")
+    }
+
+    // MARK: - 公屏消息队列 append helper（Phase A3）
+
+    /// 追加公屏消息 + 上限修剪（>callChatMessagesLimit 时 pop 头部）。
+    func appendChatMessage(_ msg: CallChatMessage) {
+        callChatMessages.append(msg)
+        if callChatMessages.count > callChatMessagesLimit {
+            callChatMessages.removeFirst(callChatMessages.count - callChatMessagesLimit)
+        }
+    }
+
+    /// 主播本地回显（对齐 H5 sendMessage `talkListInCall.unshift({user:'my', ...})`）。
+    /// 不区分远端 vs 本地 sender —— UI 用 sender.nickname == 主播 nickname 判断左/右侧对齐或色彩差异（当前无此差异）。
+    func echoLocalChatText(_ text: String) {
+        guard !text.isEmpty else { return }
+        let mine = AnchorInfoStore.shared.mine
+        let sender = CallChatMessage.Sender(
+            nickname: mine?.nickname ?? "",
+            level: mine?.level,
+            isVip: false,
+            isSpecial: false,
+            chatBubble: mine?.chatBubble,
+            nicknameColor: .her   // 主播端视角本端消息用 H5 "her" 语义橙色
+        )
+        appendChatMessage(.text(sender: sender, content: text, translation: nil))
+    }
+
+    /// sysMsg 4 liveCallGift payload 消费：追加礼物 cell 到公屏（Phase A4）。
+    /// payload 已被 GiftEffectSysMsgRouter 解 data 层；本方法接收 raw dict，兼容 giftSmallImg 优先 + giftImg 兜底。
+    func appendChatGiftFromPayload(_ data: [String: Any]) {
+        // 图片：H5 messageScroller line 11 优先 giftSmallImg，缺则 giftImg
+        let img = (data["giftSmallImg"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+              ?? (data["giftImg"] as? String)
+              ?? (data["smallImg"] as? String)
+              ?? ""
+        guard !img.isEmpty else { return }
+        // 数量兼容 Int / String
+        let num: Int = {
+            if let n = data["giftNum"] as? Int { return max(1, n) }
+            if let s = data["giftNum"] as? String, let n = Int(s) { return max(1, n) }
+            return 1
+        }()
+        let nickname = (data["senderNickname"] as? String)
+            ?? (data["nickName"] as? String)
+            ?? current.remoteNickname
+        let sender = CallChatMessage.Sender(
+            nickname: nickname,
+            level: nil,
+            isVip: false,
+            isSpecial: false,
+            chatBubble: nil,
+            nicknameColor: .default
+        )
+        appendChatMessage(.gift(sender: sender, imageURL: img, count: num))
     }
 
     /// sysMsg -6：通话充值等待状态变更（type 1/2/3/4）。
@@ -1408,6 +1484,53 @@ extension CallStore {
         guard num > 0 else { return }
         callWaitBonus += num
         AppLogger.call.info("[CallStore] appendWaitBonus +\(num, privacy: .public) total=\(self.callWaitBonus, privacy: .public)")
+    }
+
+    /// 主播发送公屏文字消息（Phase C：对齐 H5 g-faceTime/index.vue:122-153 sendMessage）。
+    /// 双动作：
+    /// 1. 立即本地 echo（`echoLocalChatText`，对齐 H5 `talkListInCall.unshift`——不等 NIM 回执）
+    /// 2. P2P NIMCustomObject attachType=-1 发送到 `current.remoteYxAccid`，携带 ext.userLevel/fromNickName/chatBubble
+    ///    （对齐 H5 sendImMsg 参数结构，供对端 msgItem 用来渲染气泡背景 + nav 徽章）
+    /// 发送失败仅日志、不 rollback echo（H5 同款语义；Wave 6 补 send fail toast）。
+    func sendCallText(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let peer = current.remoteYxAccid
+        guard !peer.isEmpty else {
+            AppLogger.call.warning("[CallStore] sendCallText skip: remoteYxAccid empty")
+            return
+        }
+        // 1. 本地回显（先做，UI 即时反馈）
+        echoLocalChatText(trimmed)
+        // 2. NIM P2P 自定义消息 fire-and-forget
+        let mine = AnchorInfoStore.shared.mine
+        let payload: [String: Any] = [
+            "attachType": -1,
+            "content": trimmed,
+            "ext": [
+                "userLevel": mine?.level ?? 0,
+                "fromNickName": mine?.nickname ?? "",
+                "chatBubble": mine?.chatBubble ?? ""
+            ]
+        ]
+        guard JSONSerialization.isValidJSONObject(payload),
+              let jsonData = try? JSONSerialization.data(withJSONObject: payload),
+              let jsonStr = String(data: jsonData, encoding: .utf8) else {
+            AppLogger.call.warning("[CallStore] sendCallText JSON encode failed")
+            return
+        }
+        let attachment = GenericCustomAttachment(rawDict: payload, rawJSON: jsonStr)
+        let customObject = NIMCustomObject()
+        customObject.attachment = attachment
+        let msg = NIMMessage()
+        msg.messageObject = customObject
+        let session = NIMSession(peer, type: .P2P)
+        do {
+            try NIMSDK.shared().chatManager.send(msg, to: session)
+            AppLogger.call.info("[CallStore] sendCallText OK peer=\(peer, privacy: .private) len=\(trimmed.count, privacy: .public)")
+        } catch {
+            AppLogger.call.error("[CallStore] sendCallText FAIL peer=\(peer, privacy: .private) err=\(error.localizedDescription, privacy: .public)")
+        }
     }
 }
 
