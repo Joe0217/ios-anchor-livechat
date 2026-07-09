@@ -354,6 +354,39 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                     // v16 兜底：额外调 apiSendRank(rankType='now') 更新 Top2（不依赖 msg[] 解析成功）
                     Task { [weak self] in await self?.topRankStore.refresh() }
 
+                    // v22 Phase 1（2026-07-10）：attachType 50 含 gift 明细，追加公屏 gift row
+                    // （im-payload-real-log-over-code-assumption：后端真实通道，attachType 1 从未发过）
+                    // rankUpdateOnly(56) 无 giftId → 跳过，避免误 append 空 row
+                    if at == .liveGiftRankUpdate {
+                        let giftIcon = (data["smallImg"] as? String) ?? (data["giftImg"] as? String) ?? (data["giftIcon"] as? String)
+                        let giftName = (data["giftName"] as? String) ?? (data["name"] as? String) ?? ""
+                        let giftNum: Int64 = Self.readInt64(data["giftNum"]) ?? 1
+                        let hasGift = (giftIcon != nil) || !giftName.isEmpty
+                        if hasGift {
+                            let nickname: String? = (m.senderName?.isEmpty == false ? m.senderName : nil)
+                                ?? (data["fromNick"] as? String)
+                                ?? (data["nickname"] as? String)
+                            let avatar = (data["fromAvatar"] as? String) ?? (data["icon"] as? String)
+                            let userLevel = (data["userLevel"] as? Int) ?? (data["level"] as? Int)
+                            let isVip = (data["isVip"] as? Bool) ?? false
+                            let isHost = (data["isHost"] as? Bool) ?? false
+                            let totalReward: Int64 = Self.readInt64(data["totalReward"]) ?? 0
+                            let msgType: PublicChatMessageType = totalReward > 0
+                                ? .luckyGift(giftIconUrl: giftIcon, count: Int(giftNum), totalReward: totalReward)
+                                : .gift(giftIconUrl: giftIcon, giftName: giftName, count: Int(giftNum))
+                            items.append(PublicChatMessage(
+                                text: "",
+                                isSystem: false,
+                                senderNickname: nickname,
+                                senderAvatar: avatar,
+                                userLevel: userLevel,
+                                isHost: isHost,
+                                isVip: isVip,
+                                messageType: msgType
+                            ))
+                        }
+                    }
+
                 case .sendGift, .liveCallGift:
                     // Task 9：接入跨场景礼物特效引擎（中央大动画 / MicroToast 二选一，与既有 contribution/topRank/公屏 side effect 解耦）
                     GiftEffectIntake.ingest(
