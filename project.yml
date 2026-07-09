@@ -195,6 +195,14 @@ targets:
       - path: Sources/Message/Chat/P2PChatState.swift
       - path: Sources/Message/Chat/P2PChatProviders.swift
       - path: Sources/Message/Chat/P2PChatStore.swift
+      # 统一公屏组件 Phase 1：Model + Store + Adapter（pure Swift + SwiftUI Apple 框架依赖，无三方 SDK）
+      - path: Sources/PublicChat/Model/Enums.swift
+      - path: Sources/PublicChat/Model/RichSegment.swift
+      - path: Sources/PublicChat/Model/SenderProfile.swift
+      - path: Sources/PublicChat/Model/PublicChatVariant.swift
+      - path: Sources/PublicChat/Model/UnifiedPublicChatMessage.swift
+      - path: Sources/PublicChat/Store/UnifiedPublicChatFeed.swift
+      - path: Sources/PublicChat/Utils/LevelTierResolver.swift
       # H 里程碑 M3：派对房 attachType 枚举（纯 Int rawValue，无 NIMSDK 依赖）
       - path: Sources/Party/Models/PartyAttachType.swift
       - path: Sources/Party/Models/PartyMsgType.swift
