@@ -7,14 +7,18 @@ import SwiftUI
 ///
 /// 接入：MainTabView .home case NavigationStack 注册 `navigationDestination(for: UserProfileRoute.self)`
 /// → 各入口 `NavigationLink(value: UserProfileRoute.userId(...))` 推入此 View。
+/// 消息按钮 push 私聊页：父 NavigationStack 需同时注册 `navigationDestination(for: String.self)`
+/// → `ChatDetailContainer(peerYxAccId:, selfYxAccId:)`（home/work/LiveResult sheet 均已注册）。
 struct UserProfileView: View {
     @StateObject private var vm: UserProfileViewModel
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
     @State private var showingMenu: Bool = false
-    @State private var showingComingSoonToast: Bool = false
+    // Report sheet 显隐 + 成功 toast（对齐 H5 c-feedbackPopup 交互）
+    @State private var showingReportSheet: Bool = false
+    @State private var reportSuccessToast: Bool = false
     /// 每次触发递增的 token，让 `.task(id:)` 自动取消上一次 sleep（review 建议-5）。
-    @State private var comingSoonToken: Int = 0
+    @State private var reportSuccessToken: Int = 0
 
     init(userId: String, service: UserProfileServiceProtocol? = nil) {
         let svc = service ?? UserProfileService.shared
@@ -59,6 +63,18 @@ struct UserProfileView: View {
         }
         // 拉黑二次确认 popup
         .userProfileBlockConfirmDialog(vm: vm)
+        // 举报 sheet（半屏，H5 van-popup position="bottom" 对齐）
+        .sheet(isPresented: $showingReportSheet) {
+            ReportUserSheet(
+                userId: vm.userId,
+                onSubmitSuccess: {
+                    showingReportSheet = false
+                    reportSuccessToast = true
+                    reportSuccessToken &+= 1
+                }
+            )
+            .presentationDetents([.medium, .large])
+        }
         // 菜单弹起
         .confirmationDialog("", isPresented: $showingMenu, titleVisibility: .hidden) {
             // 仅在 isBlocked != 1 + yxAccid 非 nil 时显示 Block 项（spec §1.4 / R-22）
@@ -67,7 +83,7 @@ struct UserProfileView: View {
                     vm.openBlockConfirm()
                 }
             }
-            Button(L10n.userProfileMenuReport, action: triggerComingSoonToast)
+            Button(L10n.userProfileMenuReport) { showingReportSheet = true }
             Button(L10n.userProfileBlockConfirmCancel, role: .cancel) {}
         }
     }
@@ -215,12 +231,10 @@ struct UserProfileView: View {
             Spacer(minLength: 0)
             // 右：CommunicationBtns（H5 btn-size="h-40 w-40" 圆形）
             HStack(spacing: 12) {
-                // 消息：占位 toast（H 里程碑 IM 完善时接入）
-                communicationButton(
-                    systemImage: "bubble.left.fill",
-                    a11yLabel: L10n.userProfileActionMessage,
-                    action: triggerComingSoonToast
-                )
+                // 消息：push ChatDetailContainer（复用父 NavigationStack 已注册的
+                // navigationDestination(for: String.self) —— 与 LiveResultView:328 同款）；
+                // yxAccid 缺失时 disabled + 半透明视觉降级，不隐藏避免布局跳变
+                messageButton(detail: detail)
                 // 拨打：接 CallStore.shared.callOut（trial #3 step 3 反悔 #10）
                 communicationButton(
                     systemImage: "phone.fill",
@@ -234,21 +248,36 @@ struct UserProfileView: View {
     private func communicationButton(systemImage: String, a11yLabel: String,
                                      action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            ZStack {
-                Circle().fill(Theme.Palette.userProfilePlaceholderBg)
-                Image(systemName: systemImage)
-                    .font(.system(size: 16))
-                    .foregroundColor(.white)
-            }
-            .frame(width: 40, height: 40)
+            communicationButtonLabel(systemImage: systemImage)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(a11yLabel)
     }
 
-    private func triggerComingSoonToast() {
-        showingComingSoonToast = true
-        comingSoonToken &+= 1   // 触发 .task(id:) 重启，自动 cancel 上次 sleep
+    @ViewBuilder
+    private func messageButton(detail: UserDetail) -> some View {
+        if let yx = detail.yxAccid, !yx.isEmpty {
+            NavigationLink(value: yx) {
+                communicationButtonLabel(systemImage: "bubble.left.fill")
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.userProfileActionMessage)
+        } else {
+            communicationButtonLabel(systemImage: "bubble.left.fill")
+                .opacity(Theme.Metric.blocklistButtonDisabledOpacity)
+                .accessibilityLabel(L10n.userProfileActionMessage)
+                .accessibilityAddTraits(.isButton)
+        }
+    }
+
+    private func communicationButtonLabel(systemImage: String) -> some View {
+        ZStack {
+            Circle().fill(Theme.Palette.userProfilePlaceholderBg)
+            Image(systemName: systemImage)
+                .font(.system(size: 16))
+                .foregroundColor(.white)
+        }
+        .frame(width: 40, height: 40)
     }
 
     // MARK: - 拨打通话（接入 CallStore，参 POCDebugView.dial 同款）
@@ -555,8 +584,8 @@ struct UserProfileView: View {
                         }
                     }
             }
-            if showingComingSoonToast {
-                Text(L10n.commonComingSoon)
+            if reportSuccessToast {
+                Text(L10n.reportSuccessToast)
                     .font(Theme.Typography.blocklistToast)
                     .foregroundColor(.white)
                     .padding(.horizontal, Theme.Metric.blocklistToastHPadding)
@@ -564,12 +593,11 @@ struct UserProfileView: View {
                     .background(Theme.Palette.blocklistToastBackground, in: Capsule())
                     .padding(.top, Theme.Metric.blocklistToastTopPadding)
                     .transition(.opacity)
-                    .task(id: comingSoonToken) {
-                        // .task(id:) 自动在新 token 到来 / view 消失时 cancel 上一轮（建议-5）
+                    .task(id: reportSuccessToken) {
                         do {
                             try await Task.sleep(nanoseconds: 2_000_000_000)
                             try Task.checkCancellation()
-                            showingComingSoonToast = false
+                            reportSuccessToast = false
                         } catch {
                             return
                         }
