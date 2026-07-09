@@ -324,8 +324,11 @@ extension NIMChatAdapter: NIMChatManagerDelegate {
                 let atStr = attach["attachType"] as? String
                 let atNum = (attach["attachType"] as? NSNumber)?.intValue
                 if atStr == "SEND_GIFT" || atNum == 1 {
-                    chatLogger.debug("[Chat] SEND_GIFT intake peer=\(self.peerYxAccid, privacy: .public) keys=\(attach.keys.joined(separator: ","), privacy: .public)")
-                    GiftEffectIntake.ingest(scene: .chat, scopeId: self.peerYxAccid, payload: attach, mineYxAccid: mineYxAccid)
+                    // 2026-07-09 fix pre-existing：NIMChatAdapter 无 self.peerYxAccid 字段；
+                    // 从 NIMMessage.session.sessionId 取（P2P 场景 sessionId 即对端 yxAccid）。
+                    let peer = nim.session?.sessionId ?? ""
+                    chatLogger.debug("[Chat] SEND_GIFT intake peer=\(peer, privacy: .public) keys=\(attach.keys.joined(separator: ","), privacy: .public)")
+                    GiftEffectIntake.ingest(scene: .chat, scopeId: peer, payload: attach, mineYxAccid: mineYxAccid)
                 }
             }
             guard !converted.isEmpty else { return }

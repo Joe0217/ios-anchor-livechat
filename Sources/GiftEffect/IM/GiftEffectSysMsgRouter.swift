@@ -43,6 +43,9 @@ final class GiftEffectSysMsgRouter: MessageRouter {
         let mineYxAccid = SessionStore.shared.user?.yxAccid ?? ""
         GiftEffectIntake.ingest(scene: .call, scopeId: scopeId,
                                  payload: data, mineYxAccid: mineYxAccid)
+        // 同步追加到通话公屏历史队列（对齐 H5 messageScroller line 10-13 gift cell）。
+        // 独立职责：Intake 走中央大动画 / MicroToast；此路径走左下方消息滚动区。
+        CallStore.shared.appendChatGiftFromPayload(data)
 
         // 返 false：让 SystemMessageRouter / 其他下游继续接收（不独占）——本 router 只做特效侧副作用
         return false

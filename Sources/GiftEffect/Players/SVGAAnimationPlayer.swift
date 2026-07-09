@@ -44,14 +44,15 @@ final class SVGAAnimationPlayer: NSObject, GiftAnimationPlayer, SVGAPlayerDelega
         let parser = ensureParser()
 
         parser.parse(with: url) { [weak self, weak p] videoItem in
-            guard let self, let p, let videoItem else {
-                self?.fireFinishOnce()
-                return
-            }
-            // parse 是异步：若 gen 不匹配说明期间已 stop/替换 → 丢弃本次 parse 结果，
-            // 避免 (a) 播已 stop 的 item；(b) 用旧 videoItem 覆盖新 item 的画面
+            guard let self else { return }
+            // parse 是异步：若 gen 不匹配说明期间已 stop/替换 → 丢弃本次 parse 结果（无论 success/failure）
+            // 避免 (a) 播已 stop 的 item；(b) 用旧 videoItem 覆盖新 item；(c) 迟到的 videoItem=nil 误 fire 下一段 onFinish
             guard self.currentGen == gen else {
                 logger.info("SVGA parse stale gen (current=\(self.currentGen, privacy: .public) my=\(gen, privacy: .public)), drop")
+                return
+            }
+            guard let p, let videoItem else {
+                self.fireFinishOnce()
                 return
             }
             p.videoItem = videoItem
@@ -59,8 +60,9 @@ final class SVGAAnimationPlayer: NSObject, GiftAnimationPlayer, SVGAPlayerDelega
             p.clearsAfterStop = true
             p.startAnimation()
         } failureBlock: { [weak self] err in
+            guard let self, self.currentGen == gen else { return }   // 迟到的失败不误 fire 当前 onFinish
             logger.warning("SVGA parse fail url=\(url.absoluteString, privacy: .public) err=\(err?.localizedDescription ?? "nil", privacy: .public)")
-            self?.fireFinishOnce()
+            self.fireFinishOnce()
         }
     }
 
