@@ -90,8 +90,10 @@ public enum GiftEffectPayloadDecoder {
         let rawIconUrl = decodeString(payload["giftIcon"] ?? payload["giftImg"])?.nilIfEmpty
         let animationUrl = normalizeAnimationUrl(rawIconUrl)
 
-        // staticImgUrl：优先小图，备用大图
-        let staticImg = decodeString(payload["giftSmallImg"] ?? payload["giftImg"])?.nilIfEmpty
+        // staticImgUrl：优先小图（兼容后端字段 giftSmallImg / smallImg / giftImg）
+        let staticImg = decodeString(
+            payload["giftSmallImg"] ?? payload["smallImg"] ?? payload["giftImg"]
+        )?.nilIfEmpty
 
         return GiftEffectItem(
             sceneKey: sceneKey,
@@ -121,7 +123,9 @@ public enum GiftEffectPayloadDecoder {
 
     /// 多字段 fallback 解析 senderYxAccid
     private static func decodeSender(_ payload: [String: Any]) -> String? {
+        // 兼容后端多种字段名（真机实测 attachType=50 payload 里是 sendYxAccid）
         if let s = payload["senderYxAccid"] as? String, !s.isEmpty { return s }
+        if let s = payload["sendYxAccid"] as? String, !s.isEmpty { return s }
         if let dict = payload["senderInfo"] as? [String: Any],
            let s = dict["yxAccid"] as? String, !s.isEmpty { return s }
         if let s = payload["fromAccid"] as? String, !s.isEmpty { return s }

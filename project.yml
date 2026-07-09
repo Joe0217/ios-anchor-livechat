@@ -292,6 +292,8 @@ targets:
       # Task 3：GiftEffect Center + Player protocol（依赖 @MainActor + Combine + os + UIKit，zero SDK 依赖）
       - path: Sources/GiftEffect/Center/GiftEffectCenter.swift
       - path: Sources/GiftEffect/Players/GiftAnimationPlayer.swift
+      # Task 8：GiftEffectIntake（4 场景 IM payload 统一入口，纯 Foundation + Center 依赖）
+      - path: Sources/GiftEffect/IM/GiftEffectIntake.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.anchor.livechat.tests

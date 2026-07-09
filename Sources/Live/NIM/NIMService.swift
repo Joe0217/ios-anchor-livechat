@@ -41,6 +41,16 @@ final class NIMService: NSObject, ObservableObject {
     /// 长连接状态（UI 可订阅）
     @Published private(set) var connectionState: NIMConnectionState = .idle
 
+    /// SDK 会话/消息 sync 是否完成（对应 `NIMLoginStep.syncOK` delegate，值 8）。
+    ///
+    /// **与 `connectionState` 的区别**：`connectionState=.connected` 只表示 IM 通道 login OK
+    /// （步骤 5），但 SDK 还有 `syncing`(7) → `syncOK`(8) 阶段，此期间 `allRecentSessions()` 可能返空。
+    ///
+    /// **消费者**：`MessageSessionStore` 订阅本信号触发 fetchAll（Step 3 反悔 #1 v2 修复：
+    /// 冷启动 auto-login 时 SDK login 早于 sync，若用 `connectionState=.connected` 触发 fetch
+    /// 会拿到空 sessions → 用户重启后消息丢失）。
+    @Published private(set) var isSessionSyncOK: Bool = false
+
     /// 是否已登录 IM。优先读 SDK 实时态，避免本地缓存与 SDK 状态分裂。
     var isLogined: Bool {
         NIMSDK.shared().loginManager.isLogined()
@@ -78,6 +88,9 @@ final class NIMService: NSObject, ObservableObject {
             sysRouter.callStore = CallStore.shared
             sysRouter.sessionStore = SessionStore.shared
             NIMService.shared.registerRouter(sysRouter)
+            // GiftEffect Call 场景 sysMsg 通道礼物 attachType=4 router（return false 不独占，
+            // 保证 SystemMessageRouter 等下游仍能处理别的 sysMsg 副作用）
+            NIMService.shared.registerRouter(GiftEffectSysMsgRouter.shared)
         }
 
         logger.info("🟢 [NIMService] setupOnce: appKey=\(AppConfig.nimAppKey, privacy: .private)")
@@ -92,7 +105,10 @@ final class NIMService: NSObject, ObservableObject {
             // 同步 connectionState：极少数路径下 NIMLoginManagerDelegate.onLogin(.loginOK) 早于本 helper 调用，
             // 但本地 @Published 状态仍可能在 .idle / .connecting；显式刷新避免 UI 显示分裂。
             connectionState = .connected
-            Self.logger.info("🟢 [NIMService] 已登录，跳过 login")
+            // SDK auto-login 场景：进程重启时 SDK isLogined=true 但不 fire delegate → 主动设 syncOK=true
+            // 假设：SDK isLogined 意味着之前 login 完整走完 → sessions 已 sync（v2 修复：MessageStore fetchAll 门 gate）
+            isSessionSyncOK = true
+            Self.logger.info("🟢 [NIMService] 已登录，跳过 login (isSessionSyncOK=true)")
             return
         }
         connectionState = .connecting
@@ -112,10 +128,10 @@ final class NIMService: NSObject, ObservableObject {
                         cont.resume(throwing: mapped)
                     } else {
                         self.connectionState = .connected
-                        // 防御性双保险：一般 SDK 先触发 onLogin(.loginOK) delegate 再回调 completion（那里已开 grace），
-                        // 但契约不保证顺序；此处再开一次保证 login 成功路径 backlog 窗口一定生效。openBacklogGrace 幂等安全。
-                        IMSceneGate.shared.openBacklogGrace()
-                        Self.logger.info("✅ [NIMService] login 成功 account=\(account, privacy: .private)")
+                        // v2 修复：不在 login 成功 continuation 内设 isSessionSyncOK / openBacklogGrace，
+                        // 等 SDK delegate .syncOK 触发。SDK 契约：login 成功后依次 syncing → syncOK。
+                        // 早于 syncOK 触发 grace 会让 backlog push 期间的 sysMsg 被误 drop（不在 grace window 内）。
+                        Self.logger.info("✅ [NIMService] login 成功 account=\(account, privacy: .private) (waiting .syncOK)")
                         cont.resume()
                     }
                 }
@@ -317,15 +333,24 @@ extension NIMService: NIMLoginManagerDelegate {
             switch step {
             case .linkFailed, .loseConnection:
                 self.connectionState = .disconnected
+                self.isSessionSyncOK = false
             case .linking, .logining, .syncing:
                 self.connectionState = .connecting
             case .loginOK:
                 self.connectionState = .connected
+                // .loginOK 只表示 login 通道 OK；sessions 待 .syncOK 完成 (v2 修复)
+            case .syncOK:
+                // Sessions/漫游消息 sync 完成 —— MessageSessionStore 订阅此信号触发 fetchAll
+                // + backlog grace 也移到此处（backlog 逐条 push 在 sync 阶段进行）
+                self.isSessionSyncOK = true
                 IMSceneGate.shared.openBacklogGrace()
+            case .logout:
+                self.connectionState = .idle
+                self.isSessionSyncOK = false
             default:
                 break
             }
-            Self.logger.info("[NIMService] onLogin step=\(step.rawValue, privacy: .public) state=\(self.connectionState.rawValue, privacy: .public)")
+            Self.logger.info("[NIMService] onLogin step=\(step.rawValue, privacy: .public) state=\(self.connectionState.rawValue, privacy: .public) syncOK=\(self.isSessionSyncOK, privacy: .public)")
         }
     }
 

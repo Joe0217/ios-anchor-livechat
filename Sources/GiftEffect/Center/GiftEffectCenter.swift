@@ -18,7 +18,9 @@ public final class GiftEffectCenter: ObservableObject {
 
     private var pending: [GiftEffectItem] = []
     private var activeKey: GiftEffectSceneKey?
-    private let playerRouter: GiftPlayerRouting
+    /// var（而非 let）—— 让 HilyApp 冷启后 installPlayerRouter 替换成真 GiftPlayerRouter；
+    /// 这样 Center.swift 自身与 SVGA/YYEVA SDK 完全解耦（能留 HilyTests 白名单）
+    private var playerRouter: GiftPlayerRouting
     private weak var hostView: UIView?
 
     private static let queueLimit = 30
@@ -29,6 +31,15 @@ public final class GiftEffectCenter: ObservableObject {
             self, selector: #selector(handleMemoryWarningNoti),
             name: UIApplication.didReceiveMemoryWarningNotification, object: nil
         )
+    }
+
+    /// 用生产 router 替换默认 NoopGiftPlayerRouter；HilyApp 冷启完成时调（Task 7）。
+    /// 幂等：多次调用后一次生效；替换前会 stopAll 释放当前动画。
+    public func installPlayerRouter(_ router: GiftPlayerRouting) {
+        playerRouter.stopAll()
+        playerRouter.tearDownPlayers()
+        playerRouter = router
+        logger.info("installPlayerRouter: replaced with production router")
     }
 
     public func registerHostView(_ view: UIView) { hostView = view }
@@ -58,7 +69,10 @@ public final class GiftEffectCenter: ObservableObject {
 
     public func enqueue(_ item: GiftEffectItem) {
         guard let active = activeKey, active == item.sceneKey else {
-            logger.warning("enqueue rejected: item=\(item.sceneKey.scene.rawValue, privacy: .public) active=\(self.activeKey?.scene.rawValue ?? "nil", privacy: .public)")
+            // log 含 scene+scopeId 双字段，方便 debug key 不匹配（如业务 roomId vs 云信 yxRoomId 混用）
+            let itemDesc = "\(item.sceneKey.scene.rawValue):\(item.sceneKey.scopeId)"
+            let activeDesc = self.activeKey.map { "\($0.scene.rawValue):\($0.scopeId)" } ?? "nil"
+            logger.warning("enqueue rejected: item=\(itemDesc, privacy: .public) active=\(activeDesc, privacy: .public)")
             return
         }
         if item.sceneKey.scene == .party && item.isSelfSent {

@@ -664,6 +664,18 @@ extension PartyStore: PartyRoomChatManagerDelegate {
             timestampMs: Int64(raw.timestamp * 1000)
         )
         lastGiftEvent = event
+
+        // Task 10：接入跨场景礼物特效引擎。payload 可能含 `gifts` 数组（compressed 批量）或单条；
+        // GiftEffectIntake.ingest 内部按 giftId 校验，无效字段直接返 false 不打扰。
+        let scopeId = roomInfo?.id ?? ""
+        let mineYxAccid = SessionStore.shared.user?.yxAccid ?? ""
+        if let gifts = payload["gifts"] as? [[String: Any]] {
+            for gift in gifts {
+                GiftEffectIntake.ingest(scene: .party, scopeId: scopeId, payload: gift, mineYxAccid: mineYxAccid)
+            }
+        } else {
+            GiftEffectIntake.ingest(scene: .party, scopeId: scopeId, payload: payload, mineYxAccid: mineYxAccid)
+        }
     }
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveVideoSeatInvite invite: PartyVideoSeatInvite) {
