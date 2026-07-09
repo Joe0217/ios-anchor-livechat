@@ -222,8 +222,9 @@ private struct CallFaceTimeView: View {
             // C-4 Wave1 gap-001：chrome 层挂 opacity 由 isChromeVisible 控制（点屏切显隐）
             // .allowsHitTesting(isChromeVisible) 隐时按钮不响应，root tap 直穿 → 恢复 chrome
             VStack(spacing: 0) {
-                // D 里程碑：直播私 call 顶部提示条（仅 frontGameType=.live 时显示）
-                if store.current.frontGameType == .live {
+                // D 里程碑：直播私 call 顶部提示条（对齐 H5 index.vue:53 `privateCallTips = isLivingCall && streamerCountdown > 0`）
+                // 归 0 后 banner 完全消失（H5 v-if="privateCallTips"），主播端只在 5 分钟锁定期内看到收益倒计时提示
+                if store.current.frontGameType == .live, store.liveCallCountdown > 0 {
                     liveCallBanner.padding(.top, 12).padding(.horizontal, 16)
                 }
                 topBar.padding(.top, 12).padding(.horizontal, 16)
