@@ -11,6 +11,14 @@ import os
 /// **M3 待接入**：NIM 公屏 attachType 分发；M4 完整 startLive 三接口串行。
 @MainActor
 final class LiveStore: ObservableObject {
+    /// 单例（H-2 refactor uncommitted 已引用 [MainTabView.swift:55](../Home/MainTabView.swift#L55) `LiveStore.shared.reset()`）。
+    ///
+    /// **注意** — LiveRoomView 目前仍用 `@StateObject private var store = LiveStore()` 各自创建实例，
+    /// 与本 shared 单例**不同实例**。H-2 refactor 会话需决定：是否把 LiveRoomView 改用 `LiveStore.shared`
+    /// （对齐 session-scoped-store-refresh rule 模式）+ SessionStore.logout 挂 clear。本处仅补 shared
+    /// 让 build 通过，不做 wiring 变更（避免越界改架构）
+    static let shared = LiveStore()
+
     // ─── 状态 ───────────────────────────────────────
     @Published private(set) var state: LiveState = .idle {
         didSet {
@@ -61,6 +69,14 @@ final class LiveStore: ObservableObject {
     // ─── D 里程碑：通话挂断后回直播倒计时（15s，对齐 H5 liveRoom.vue:220）─
     @Published private(set) var isWaitingReturnLive: Bool = false
     @Published private(set) var returnLiveCountdown: Int = 0
+
+    // ─── 结果页 spec §2.4：本场直播的起止时间戳（毫秒），传给 queryLiveStat
+    //  - attachLiving 时写 begin（每次新开播覆盖）
+    //  - endLive / forceEnd 尾部（state=.ended 之后）写 end
+    //  - pauseForCall / resumeCall 不改（通话不算真下播）
+    //  - LiveResultView 消费一次后由 reset() 清；否则下一场开播 begin 覆盖即可
+    @Published private(set) var beginTimestamp: Int64?
+    @Published private(set) var endTimestamp: Int64?
 
     // ─── 监控内部状态 ────────────────────────────
     private var cameraFailureStartedAt: Date?
@@ -116,6 +132,9 @@ extension LiveStore {
         self.rtcToken = roomInfo.rtcToken
         self.yxRoomId = roomInfo.yxRoomId
         self.state = .living
+        // 结果页 spec §2.4：记开播时间戳（毫秒）；覆盖上一场（reset 兜底）
+        self.beginTimestamp = Int64(Date().timeIntervalSince1970 * 1000)
+        self.endTimestamp = nil
         heartbeat.start()
         monitor.start()
         backgroundMonitor.start()
@@ -154,7 +173,30 @@ extension LiveStore {
         await teardown()
         state = .ended
         endType = 1
+        endTimestamp = Int64(Date().timeIntervalSince1970 * 1000)   // 结果页 spec §2.4
         UserDefaults.standard.set(Date(), forKey: LastEndLiveTracker.key)  // §8.3 用
+    }
+
+    /// 重置状态（LiveResultView back 时调用，切 Home Tab 前清干净）。
+    /// - 状态机：`.ended` → `.idle`
+    /// - 字段：begin/endTimestamp、endType、roomId 等房间上下文清空
+    /// - **不**主动 leave RTC / NIM / 停心跳：LiveRoomView.onDisappear 已负责
+    func reset() {
+        guard state == .ended else {
+            logger.warning("reset ignored in state=\(String(describing: self.state))")
+            return
+        }
+        beginTimestamp = nil
+        endTimestamp = nil
+        endType = nil
+        roomId = nil
+        agoraChannelId = nil
+        rtcToken = nil
+        yxRoomId = nil
+        callState = 0
+        inFlightEnd = false
+        state = .idle
+        logger.info("LiveStore reset → idle")
     }
 }
 
@@ -163,7 +205,9 @@ extension LiveStore {
 extension LiveStore {
     func forceEnd(reason: ForceEndReason, subSource: String? = nil) async {
         let sub = subSource ?? "-"
-        logger.info("forceEnd request reason=\(String(describing: reason)) sub=\(sub)")
+        // 【归因日志】直播被强制结束入口统一记录：搜索 🛑 [forceEnd] 一眼看到 reason + 触发路径栈
+        // callState=1 时命中 = 通话中被下播（异常）；isWaitingReturnLive=true 时命中 = 通话结束返回直播路径中
+        logger.notice("🛑 [forceEnd] reason=\(String(describing: reason)) sub=\(sub) state=\(String(describing: self.state)) callState=\(self.callState) isWaitingReturnLive=\(self.isWaitingReturnLive)")
         guard tryEnterForceEnding(reason) else { return }
         do {
             try await LiveService.endLiveRoom(endType: reason.code)
@@ -173,6 +217,7 @@ extension LiveStore {
         await teardown()
         state = .ended
         endType = reason.code
+        endTimestamp = Int64(Date().timeIntervalSince1970 * 1000)   // 结果页 spec §2.4
         UserDefaults.standard.set(Date(), forKey: LastEndLiveTracker.key)  // 60s 冷却对齐 endLive（LiveSettings §1.3）
     }
 
@@ -269,7 +314,7 @@ extension LiveStore {
             logger.warning("pauseForCall 跳过 state=\(String(describing: self.state)) callState=\(self.callState)")
             return
         }
-        logger.info("pauseForCall: 暂停直播 → 接听 from=\(msg.fromUserId)")
+        logger.notice("🟢 [pauseForCall] 直播 → 私 call 起点 from=\(msg.fromUserId) roomId=\(msg.fromRoomId ?? "-") liveState=\(String(describing: self.state)) callState_before=\(self.callState)")
 
         // 1) 提前切换 callState 闸门（BackgroundMonitor 检查此字段，避免 leave await 期间用户切后台
         //    时被误计入 backgroundCount；红队 🟠-4 修复）。
@@ -281,6 +326,9 @@ extension LiveStore {
         heartbeat.stop()
         monitor.stop()
         elapsedTimerStore.stop()
+        // 直播转私 call 回归修复双保险：若 pauseForCall 前已有 20s watcher 在跑
+        // （相机 runtimeError 与 pauseForCall 时序竞争），强制清 watcher 避免通话中 fire forceEnd 下播。
+        stopCameraFailureWatcher()
 
         // 3) RTC leave 直播频道（保留 roomId/agoraChannelId/rtcToken 字段以备 resumeCall 回 join）
         //    agora 是 weak 引用，nil 时静默跳过（防御性）。
@@ -308,6 +356,16 @@ extension LiveStore {
             permissionDeniedAlert = true
             if case .starting = state { state = .idle }
         case .sessionRuntimeError, .wasInterrupted:
+            // 直播转私 call 回归修复：通话/PK/派对房场景（callState != 0）不启动 20s watcher。
+            // 声网 SDK 切 channelProfile (.liveBroadcasting → .communication) 触发 AVCaptureSession
+            // 内部 reconfigure → sessionRuntimeError → 若无守卫会误触 forceEnd(.cameraFailure) 下播。
+            // 对齐 BackgroundMonitor / HeartbeatController 通话中 stop 的语义。
+            // 【归因日志】相机异常入口 —— sessionRuntimeError / wasInterrupted 都走这里
+            logger.notice("🎥 [onCameraError] err=\(String(describing: error)) callState=\(self.callState) liveState=\(String(describing: self.state)) isWaitingReturnLive=\(self.isWaitingReturnLive)")
+            guard callState == 0 else {
+                logger.notice("🎥 [onCameraError] SKIP watcher: callState=\(self.callState) (in call/pk/match)")
+                return
+            }
             startCameraFailureWatcher()
         case .interruptionEnded:
             stopCameraFailureWatcher()
@@ -341,6 +399,7 @@ extension LiveStore {
                 }
                 self.cameraFailureStartedAt = nil
                 self.cameraFailureWatcher = nil
+                logger.notice("🛑 [cameraWatcher] 20s 已到 + app 前台 + state=\(String(describing: self.state)) callState=\(self.callState) → forceEnd(.cameraFailure)")
                 Task { await self.forceEnd(reason: .cameraFailure, subSource: "camera_runtime_20s") }
             }
         }
@@ -375,10 +434,16 @@ extension LiveStore {
     /// 对齐 H5 liveSetting/components/liveRoom.vue:218-227（returnLiveCountdown=15 + setInterval 1s）。
     /// 详见 `docs/plan/D-直播转私call状态机-spec-202606201400.md` §3.3。
     func resumeCall() async {
-        guard callState == 1 else { return }
-        guard !isWaitingReturnLive else { return }  // 防重复触发（CallStoreObserver 多次回调时幂等）
+        guard callState == 1 else {
+            logger.notice("🟢 [resumeCall] 跳过：callState=\(self.callState) != 1")
+            return
+        }
+        guard !isWaitingReturnLive else {
+            logger.notice("🟢 [resumeCall] 跳过：isWaitingReturnLive=true（幂等保护）")
+            return
+        }
 
-        logger.info("resumeCall: 启动 15s 倒计时回直播")
+        logger.notice("🟢 [resumeCall] 启动 15s 倒计时回直播 liveState=\(String(describing: self.state))")
         isWaitingReturnLive = true
         returnLiveCountdown = 15
 
@@ -441,10 +506,12 @@ extension LiveStore {
 extension LiveStore: CallStoreObserver {
     /// 仅关心"通话态 → 结束态"的转换；只在直播私 call（callState=1）期间触发 resumeCall。
     func callStore(_ store: CallStore, stateDidChange newState: CallState, previous: CallState) {
+        // 【归因日志】所有 CallStore state 迁移的观察点（无论是否触发 resumeCall）
+        logger.info("🔍 [Observer] CallState \(previous.rawValue) → \(newState.rawValue) (liveState=\(String(describing: self.state)) callState=\(self.callState) isWaitingReturnLive=\(self.isWaitingReturnLive))")
         let wasInCall = (previous == .calling || previous == .connecting || previous == .connected)
         let nowEnded = (newState == .ended || newState == .idle)
         guard wasInCall, nowEnded, callState == 1 else { return }
-        logger.info("CallStore 通话结束 (\(String(describing: previous)) → \(String(describing: newState))) → 启动 resumeCall")
+        logger.notice("🟢 [Observer] 私 call 结束 (\(previous.rawValue) → \(newState.rawValue)) → 启动 resumeCall 15s 倒计时回直播")
         Task { await resumeCall() }
     }
 }
