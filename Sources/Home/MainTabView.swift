@@ -428,10 +428,20 @@ struct MainTabView: View {
     /// 即使 tabbar 视觉上因子页坍缩为 0 高度，isOnSubpage=true 时它已不响应；`.starting`
     /// 状态下 LiveSettingsView 仍在栈内（isOnSubpage=true），tabbar 已经拦截，本 lock 兜底
     /// 覆盖"子页突然消失"边界（B 档保守）。
+    ///
+    /// **背景延伸到 home indicator 安全区**（2026-07-09 修）：
+    /// `tabBar` 内部 `.background(screenBackground)` 只覆盖自身 52pt 帧，下方 34pt home indicator
+    /// 区裸露；ScrollView 内容（如 Profile 的 Photos 网格）会 rubber-band 进入该区域，视觉上
+    /// 表现为"tabbar 和底部安全区没连在一起、内容透出"。故在 clipped 之后再挂一层带
+    /// `ignoresSafeArea(.bottom)` 的同色底，随 opacity 一起隐显，不影响子页坍缩动画。
     private var tabBarHostContainer: some View {
         ZStack { tabBar }
             .frame(height: isOnSubpage ? 0 : Theme.Metric.tabBarHeight)
             .clipped()
+            .background {
+                Theme.Palette.screenBackground
+                    .ignoresSafeArea(edges: .bottom)
+            }
             .opacity(isOnSubpage ? 0 : 1)
             .allowsHitTesting(!isOnSubpage && !liveSettingsLock.isLocked)
             .accessibilityHidden(isOnSubpage)

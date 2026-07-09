@@ -82,6 +82,13 @@ struct ProfileView: View {
         }
         // Profile 主页设计稿无系统标题栏；FollowList/Settings/LevelDetail 子页内部自行配置 toolbar
         .toolbar(.hidden, for: .navigationBar)
+        // iOS 16 已知：`.toolbar(.hidden, for: .navigationBar)` 会截断外层 `.safeAreaInset(edge: .bottom)`
+        // 的传播（MainTabView 挂的 tabBarHostContainer 52pt inset 到不了这里）→ ScrollView 内容延伸到
+        // system safe area 顶端 → 底部内容被 tabbar 覆盖。此处补一层本地 safeAreaInset 兜底。
+        // 未来 root tab view 若隐藏 nav bar，同款套路补一层。
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear.frame(height: Theme.Metric.tabBarHeight)
+        }
         .fullScreenCover(item: $previewContext) { ctx in
             MediaPreviewView(item: ctx.asset, isVideo: ctx.isVideo) {
                 previewContext = nil
