@@ -181,11 +181,29 @@
 "settings.language"            = "اللغة";
 "settings.feedback"            = "التعليقات";
 "settings.version"             = "الإصدار";
-"settings.tos"                 = "شروط الخدمة";
+"settings.tos"                 = "اتفاقية المستخدم";
 "settings.privacy"             = "سياسة الخصوصية";
 "settings.logout"              = "تسجيل الخروج";
 "settings.logoutConfirm"       = "تسجيل الخروج من هذا الحساب؟";
 "settings.cancel"              = "إلغاء";
+"settings.confirm"             = "تأكيد";
+"settings.anchorPolicy"        = "عرض سياسة المذيع";
+"settings.clearCache"          = "مسح ذاكرة التخزين المؤقت";
+"settings.clearCacheConfirm"   = "هل أنت متأكد من مسح ذاكرة التخزين المؤقت؟";
+"settings.clearCacheDone"      = "تم مسح ذاكرة التخزين المؤقت";
+"settings.selectLanguage"      = "اختر اللغة";
+"settings.feedbackComingSoon"  = "قريباً";
+
+// MARK: - Feedback 反馈表单页
+"feedback.type.appError"       = "خطأ في التطبيق";
+"feedback.type.accountError"   = "خطأ في الحساب";
+"feedback.type.suggestion"     = "اقتراح";
+"feedback.type.other"          = "أخرى";
+"feedback.messagePlaceholder"  = "الرجاء الإدخال";
+"feedback.emailPlaceholder"    = "يرجى ترك بريدك الإلكتروني";
+"feedback.wrongEmail"          = "عنوان البريد الإلكتروني غير صحيح";
+"feedback.submitSuccess"       = "تم بنجاح";
+"feedback.submitFailed"        = "فشل الإرسال، حاول مرة أخرى";
 
 // MARK: - LevelDetail 段位详情页
 "level.title"                  = "تفاصيل المستوى";
@@ -267,6 +285,8 @@
 "giftPicker.confirm"                 = "تأكيد";
 "giftPicker.retry"                   = "إعادة المحاولة";
 "giftPicker.empty"                   = "لا توجد هدايا متاحة";
+"giftPicker.send"                    = "أرسل";
+"giftPicker.all"                     = "الكل";
 
 // MARK: - L-spec-愿望单设置页 v1
 "wishSetting.navTitle"               = "إعدادات قائمة الأمنيات";
@@ -330,6 +350,7 @@
 "liveResult.follow"              = "متابعة";
 "liveResult.message"             = "رسالة";
 "liveResult.messageComingSoon"   = "قريباً";
+"liveResult.followSuccess"       = "تمت المتابعة";
 
 // MARK: - 首次开播规则页（严格对齐 H5 locales/ar.json live.*）
 "firstLiveRule.navTitle"         = "";
@@ -376,6 +397,54 @@
 "liveRoom.rankFormat"             = "رقم %d";
 "liveRoom.rankUnlisted"           = "الترتيب";
 "liveRoom.rank.a11y"              = "الترتيب الأسبوعي";
+"liveRoom.rank.tab.thisWeek"      = "هذا الأسبوع";
+"liveRoom.rank.tab.lastWeek"      = "الأسبوع الماضي";
+"liveRoom.rank.tab.viewers"       = "المشاهدون";
+"liveRoom.rank.tab.topGifter"     = "أفضل مُقدِّم هدايا";
+"liveRoom.rank.viewers.empty"     = "لا يوجد مشاهدون بعد";
+"liveRoom.rank.sheet.title"       = "الترتيب";
+"liveRoom.rank.empty"             = "لا توجد بيانات ترتيب بعد";
+"liveRoom.rank.errorRetry"        = "فشل التحميل. انقر لإعادة المحاولة.";
+"liveRoom.rank.ownMe"             = "أنا";
+"liveRoom.rank.diffFormat"        = "%@ 💎 للوصول إلى المرتبة التالية";
+"liveRoom.retry"                  = "إعادة المحاولة";
+"liveRoom.rank.tab.now"           = "الآن";
+"liveRoom.rank.tab.today"         = "اليوم";
+"liveRoom.rank.tab.week"          = "الأسبوع";
+"liveRoom.rank.girlBanner"        = "تصنيف الهدايا الأسبوعي";
+"liveRoom.contribution.sheet.title"       = "المساهمة";
+"liveRoom.contribution.tab.ranking"       = "الترتيب";
+"liveRoom.contribution.tab.record"        = "سجلات الهدايا";
+"liveRoom.contribution.currentLiveIncome" = "دخل البث الحالي";
+"liveRoom.contribution.empty.ranking"     = "لا توجد بيانات مساهمة بعد";
+"liveRoom.contribution.empty.record"      = "لا توجد سجلات هدايا بعد";
+"liveRoom.contribution.errorRetry"        = "فشل التحميل. انقر لإعادة المحاولة.";
+"liveRoom.contribution.last90dFormat"     = "%@ (آخر 90 يوماً)";
+"liveRoom.contribution.sentAction"        = "أرسل";
+"liveRoom.setting.effect"                 = "المؤثرات";
+"liveRoom.setting.announcement"           = "الإعلان";
+"announcement.popup.title"                = "إدارة الإعلانات";
+"announcement.popup.placeholder"          = "أدخل إعلان البث (حتى 120 حرفًا)";
+"announcement.popup.save"                 = "حفظ";
+"announcement.popup.saveSuccess"          = "تم الحفظ بنجاح";
+"announcement.popup.sensitiveWord"        = "تم اكتشاف كلمات حساسة: %@";
+"announcement.popup.saving"               = "جارٍ الحفظ...";
+"liveRoom.setting.sheet.title"            = "الإعدادات";
+"publicScreen.translate"                  = "ترجمة";
+"publicScreen.translating"                = "جارٍ الترجمة...";
+"publicScreen.sentAction"                 = "أرسل";
+"publicScreen.enteredRoom"                = "دخل الغرفة";
+"publicScreen.luckyWin"                   = "فاز بـ";
+"publicScreen.luckyBySending"             = "بإرسال هدية محظوظة";
+"publicScreen.wheelHit"                   = "أصاب";
+"publicScreen.wheelOnTheWheel"            = "على العجلة";
+"publicScreen.rpsWin"                     = "فاز في RPS";
+"publicScreen.rpsGet"                     = "احصل على";
+"publicScreen.wishlistTop1"               = "أصبح المُقدِّم رقم 1!";
+"publicScreen.diamondBoxSend"             = "أرسل صندوق ماس";
+"publicScreen.diamondBoxClaim"            = "جمع";
+"publicScreen.diamondBoxSettled"          = "أعلى مشارك";
+"publicScreen.diamondBoxExpired"          = "انتهت صلاحية صندوق الماس، استرداد";
 "liveRoom.underway.label"         = "جاري البث";
 "liveRoom.privateCall.label"      = "مكالمة خاصة";
 "liveRoom.tool.pkDebug"           = "تصحيح PK";
@@ -428,7 +497,12 @@
 "call.error.acceptFailed"      = "تعذّر إرسال إشارة القبول";
 "call.error.rtcTokenFailed"    = "تعذّر جلب رمز RTC";
 "call.error.rtcTokenFormat"    = "رمز RTC: %@";
+"call.action.chatInput"        = "دردشة";
+"call.action.feedback"         = "التعليقات";
+"call.emptyRoom.hangupTip"     = "المكالمة غير طبيعية، سيتم الإنهاء تلقائيًا";
 "call.error.remoteRejected"    = "تم رفض المكالمة";
+"call.error.remoteNoAnswer"    = "لا يرد";
+"call.error.remoteBusy"        = "المستخدم مشغول";
 "auth.sessionExpired"          = "انتهت صلاحية الجلسة، يرجى تسجيل الدخول مرة أخرى";
 
 // MARK: - Call 1v1 真实通话视图（CallView.swift）
@@ -439,7 +513,41 @@
 "call.action.accept"         = "قبول";
 "call.action.hangupBackToLive" = "إنهاء والعودة للبث";
 "call.action.hangup"         = "إنهاء";
+// C-1 通话中控制按钮
+"call.action.micMute"                  = "كتم";
+"call.action.micUnmute"                = "إلغاء الكتم";
+"call.action.switchCamera"             = "تبديل الكاميرا";
+"call.networkQuality.weak"             = "شبكة ضعيفة — قد تتأثر جودة المكالمة";
+// C-3 通话异常自检 alert
+"call.abnormal.userOffline.title"      = "المستخدم غير متصل";
+"call.abnormal.userOffline.message"    = "قد يكون الطرف الآخر قطع الاتصال. هل تريد إنهاء المكالمة؟";
+"call.abnormal.networkUnstable.title"  = "شبكة غير مستقرة";
+"call.abnormal.networkUnstable.message" = "شبكتك غير مستقرة. تم إيقاف احتساب الفاتورة مؤقتًا.";
+"call.abnormal.incomeZero.title"       = "لا دخل";
+"call.abnormal.incomeZero.message"     = "استمرت هذه المكالمة أكثر من دقيقتين دون تلقي أي دخل.";
+"call.abnormal.endCall"                = "إنهاء المكالمة";
+"call.abnormal.continue"               = "متابعة";
+// C-4 Wave1 直播私call 300s 横幅 + 挂断确认
+"call.liveBanner.countdownFormat"      = "بعد حوالي %d ثانية، سيصبح دخل مكالمتك في الدقيقة مساويًا لسعر المكالمة.";
+"call.hangupConfirm.title"             = "إنهاء هذه المكالمة؟";
+"call.hangupConfirm.cancel"            = "إلغاء";
+// C-5 充值锁定流程
+"call.waitRecharge.bonusFormat"        = "احصل على %d 💎 مكافأة";
+"call.waitRecharge.countdownFormat"    = "%02dث";
+"call.congrats.title"                  = "تهانينا!";
+"call.congrats.messageFormat"          = "قام المستخدم بالشحن — احصل على %d 💎 مكافأة";
+"call.congrats.ok"                     = "حسنًا";
+// C-4 Wave4 UI 布局对齐
+"call.action.askForGift"     = "اطلب هدية";
+"call.action.more"           = "المزيد";
+"call.action.comingSoon"     = "قريبًا";
+"call.remoteCameraOff"       = "الكاميرا مغلقة";
 "call.liveBanner"            = "مكالمة خاصة · أنهِ المكالمة للعودة للبث";
+
+/* 设计稿主播端.png 对齐（2026-07-09） */
+"call.signal.label.you"                = "أنت";
+"call.signal.label.user"               = "المستخدم";
+"call.waitState.rechargingFormat"      = "المستخدم يشحن، يُرجى الانتظار %d ثانية.";
 
 // MARK: - Call HUD（H M4 sysMsg 写入 5 publishers 的可视化）
 "call.hud.incomeFormat"      = "💰 %d";
@@ -593,6 +701,13 @@
 "message.systemInbox.notification"      = "معلومات النظام";
 "message.systemInbox.admin"             = "المسؤول";
 "message.systemInbox.comingSoon"        = "التفاصيل قريباً";
+
+// Batch 6.1 回复积分 4 tip 文案（guideTip / stimulateTip H5 蓝本硬编码英文,未翻译,ar 兼容显英文）
+"chat.guideTip"        = "Chat to earn rewards – start chatting now!";
+"chat.stimulateTip"    = "More messages from him – Unlock extra diamonds!";
+"chat.replyFastTip"    = "رد بسرعة للحصول على نقاط مضاعفة! مرة واحدة فقط.";
+"chat.replyRemindTip"  = "النظام: لم ترد منذ أكثر من 15 دقيقة. الأهم: الردود الأسرع = المزيد من النقاط. رد خلال 12 ساعة لكسب النقاط. 1 ساعة → 2x, 30 دقيقة → 3x, 15 دقيقة → 4x نقاط!";
+
 // v5 F-3 消息 preview 归一化
 "message.preview.image"                 = "[صورة]";
 "message.preview.voice"                 = "[رسالة صوتية]";
@@ -600,6 +715,9 @@
 "message.preview.location"              = "[موقع]";
 "message.preview.gift"                  = "[هدية]";
 "message.preview.unknown"               = "[رسالة غير معروفة]";
+"message.preview.privatePhoto"          = "[صورة خاصة]";
+"message.preview.privateVideo"          = "[فيديو خاص]";
+"chat.refusedTip"                       = "تم إرسال الرسالة، ولكن الطرف الآخر رفضها";
 "message.preview.callMissed"            = "مكالمة فائتة";
 "message.preview.callRejected"          = "مرفوضة";
 "message.preview.callCancelled"         = "أُلغيت";
@@ -706,6 +824,17 @@
 "userProfile.a11y.avatar"                = "الصورة الرمزية";
 "userProfile.a11y.menu"                  = "المزيد من الخيارات";
 "userProfile.a11y.giftFallback"          = "هدية";
+
+// Report sheet
+"report.title"                           = "إبلاغ";
+"report.reason.incorrect"                = "معلومات غير صحيحة";
+"report.reason.sexual"                   = "محتوى جنسي";
+"report.reason.harassment"               = "تحرش أو لغة مسيئة";
+"report.reason.unreasonable"             = "طلبات غير معقولة";
+"report.description.label"               = "وصف تفصيلي";
+"report.description.placeholder"         = "صِف المشكلة التي واجهتها";
+"report.success.toast"                   = "تم إرسال الملاحظات بنجاح.";
+"common.other"                           = "أخرى";
 
 // MARK: - K 里程碑 美颜设置页（en 英文兜底，J 里程碑翻译团队补齐 ar）
 "beautySettings.pageTitle"                                  = "Beauty";
@@ -821,13 +950,18 @@
 "match.toast.turnOffSucceed"     = "تم إيقاف المطابقة";
 "match.toast.cameraStartFailed"  = "فشل تشغيل الكاميرا";
 "match.toast.cameraUnavailable"  = "الكاميرا غير متوفرة";
+"match.toast.imOffline"          = "جارٍ إعادة الاتصال، يرجى المحاولة مرة أخرى";
+"match.resumeAlert.title"        = "استئناف المطابقة؟";
+"match.resumeAlert.message"      = "هل تريد استئناف المطابقة؟";
+"match.resumeAlert.confirm"      = "استئناف";
+"match.resumeAlert.cancel"       = "إلغاء";
 
 // Match rule 弹窗
 "match.rule.title"               = "قواعد المطابقة";
-"match.rule.detail1"             = "مطابقة فيديو فورية مع مستخدمين يبحثون عن مكالمة.";
-"match.rule.detail2"             = "حافظ على ظهور وجهك أثناء المطابقة لضمان المصداقية.";
-"match.rule.detail3"             = "قد يؤدي المحتوى غير الملائم إلى تعليق المطابقة.";
-"match.rule.detail4"             = "بتفعيلك المطابقة، فإنك توافق على إرشادات المجتمع.";
+"match.rule.detail1"             = "1. تتضمن كل مكالمة كشفًا للوجه. يجب أن يكون الوجه مرئيًا للمطابقة. إذا لم يتم اكتشاف وجه، سيتم إيقاف امتيازات المطابقة مؤقتًا لعدة دقائق. تجاوز عدد معين من المخالفات يؤدي إلى حظر من المطابقة لمدة يوم.";
+"match.rule.detail2"             = "2. بالنسبة للمكالمات المتطابقة، أول 20 ثانية مجانية. بعد 20 ثانية، يتم تطبيق الرسوم بناءً على سعر مكالمتك.";
+"match.rule.detail3"             = "3. بعد عدة مطابقات، يمكنك المطالبة بمكافآت الماس تحت \"المهام\".";
+"match.rule.detail4"             = "4. بينما الطرف الآخر يعيد الشحن، ستظل المكالمة متصلة لمدة 30 ثانية؛ بمجرد نجاح إعادة شحنهم، سيستمر الفواتير بمعدلك لكل دقيقة.";
 "match.rule.agree"               = "موافق";
 
 // Match tip 弹窗
@@ -840,6 +974,15 @@
 "match.face.notDetected.content" = "يرجى إبقاء وجهك ظاهرًا أثناء المطابقة. عدم اكتشاف الوجه خلال 5 ثوانٍ سيؤدي إلى إخراجك من المطابقة.";
 "match.exit.title"               = "تمت إزالتك من المطابقة";
 "match.exit.content"             = "لم يتم اكتشاف وجهك خلال الفحص. لقد تمت إزالتك من مجموعة المطابقة.";
+
+/* v10 (2026-07-08) Wishlist + 心愿达成飘屏 */
+"wishlist.progress.complete"     = "مكتمل";
+"wishlist.panel.title"           = "قائمة أمنيات %@ لهذه الجولة";
+"wishlist.panel.subtitle"        = "ساعد المذيع على تحقيق أمنياته واحصل على مكافآت!";
+"wishlist.panel.top6Title"       = "أفضل المهدين";
+"wishlist.panel.top6Empty"       = "يتم عرض أفضل 6 حسب قيمة الهدية فقط";
+"wishlist.achieved.title"        = "تحققت الأمنية!";
+
 /* EditProfile 用户资料编辑页（I 里程碑） */
 "editProfile.navTitle"                             = "تعديل الملف الشخصي";
 "editProfile.confirm"                              = "حفظ";

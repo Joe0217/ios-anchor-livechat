@@ -46,28 +46,114 @@ struct LiveRoomView: View {
     /// G M3：邀请发起 sheet 显示状态
     @State private var showInviteSheet = false
 
+    /// 底部 Say hi 输入框绑定（NIMChatroomManager 暂无主播 sendText API，本次为视觉占位；
+    /// H 里程碑接入后本 state 由本地写入 → nim.send(text) 回落公屏）
+    @State private var inputText: String = ""
+
+    /// "Coming soon" toast（快捷礼物 / 私 call 主动发起 / task / 排行 等占位入口点击提示）
+    @State private var comingSoonToast: String? = nil
+
+    /// Private Call 开关（对齐 H5 privateCall = ref(true) 默认开）
+    /// 待接后端 updatePrivateCall API（H 里程碑），当前 toggle 只本地 + toast 占位
+    @State private var privateCallOn: Bool = true
+
+    /// 设置按钮 confirmationDialog 显隐（含美颜 / 结束直播两项，对齐 H5 底部 setting 按钮）
+    @State private var showSettingSheet: Bool = false
+
+    /// B spec v7：直播结束 → 通过 `\.liveResultTransition` env 切 tab + 重建 path 到 `[liveResult]`
+    /// LiveRoomView 随 path 替换自然 dismount，onDisappear 触发正常清资源（不再需 onChange 主动清）
+    @Environment(\.liveResultTransition) private var liveResultTransition
+
+    // MARK: - PK 4 popup 显隐（对齐 H5 pkLive/*Popup.vue：iteration 3 PK 全套 UI 同步）
+    /// B-2 中断 PK 确认（inPK 态点击 PKEntryButton 触发）
+    @State private var showPKInterruptConfirm: Bool = false
+    /// B-3 断开连线确认（punishing 态点击 PKEntryButton 触发）
+    @State private var showPKDisconnectConfirm: Bool = false
+    /// B-4 匹配失败（state 从 .matching → .idle/.failed 时自动触发）
+    @State private var showPKMatchFailed: Bool = false
+    /// B-5 邀请等待（state == .inviting 且有邀请时挂载）
+    @State private var showPKInviteWaiting: Bool = false
+    /// 追踪上一次 PK state（用于 matching → idle/failed 判定匹配失败）
+    @State private var lastPKState: PKStateMain = .idle
+
+    // MARK: - 顶部按钮 popup / sheet 显隐
+    /// **v7 分层**（2026-07-07）：Task / Audience 保持 placeholder popup；Contribution / Rank / Roulette
+    /// 已迁到独立 sheet 对齐 H5 真交互（Sources/Live/{Contribution,Rank,Roulette}/）
+    @State private var showTaskPopup: Bool = false
+    // v11: audience popup 已删（tap → showRankSheet），保留 @State 以兼容 Modifier 编译（binding 未被读；linter 若清理可删）
+    @State private var showAudiencePopup: Bool = false
+    @State private var showContributionSheet: Bool = false
+    @State private var showRankSheet: Bool = false
+    /// v13 遗留（v16 后不再使用；保留 struct 兼容 Modifier 参数编译，见 TopSheetsModifier 已删该参数）
+    @State private var rankSheetInitialTopTab: RankSheetTopTab = .topGifter
+    /// v16：观众数字 tap → 弹独立 UserWeeklyRankSheet（对齐 H5 userWeeklyRank.vue）
+    @State private var showUserWeeklyRankSheet: Bool = false
+    /// Roulette 分两态：intro 首次引导（overlay 中心 modal）+ setting 转盘设置（sheet 底部）
+    @State private var showRouletteIntro: Bool = false
+    @State private var showRouletteSetting: Bool = false
+
+    // MARK: - v9 新增 State
+    /// 虚拟道具特效开关 store（UserDefaults persist）
+    @StateObject private var virtualPropsStore = VirtualPropsStore()
+    /// v9 4 popup/sheet 显隐
+    @State private var showEffectSwitchPopup: Bool = false
+    @State private var showAnnouncementPopup: Bool = false
+    @State private var showGiftPicker: Bool = false
+    /// UserCard tap 头像触发 → nil = 隐藏，非 nil = 该 userId 的 popup 显示
+    @State private var userCardUserId: String? = nil
+    /// v10 心愿单半屏面板显隐
+    @State private var showWishlistPanel: Bool = false
+
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+        let isPKActive = pkStore.state == .starting || pkStore.state == .inPK || pkStore.state == .punishing
+
+        return ZStack {
+            // 底层背景：Live 页深紫黑（对齐 Theme.Palette.liveBottomDark #0B0010）；
+            // PK 中 CameraPreview 缩小到左半视频窗后，上/下/右半均露出此底色
+            Theme.Palette.liveBottomDark.ignoresSafeArea()
             if authorized {
-                CameraPreview(camera: camera, agora: agora).ignoresSafeArea()
+                if isPKActive {
+                    // PK 中：CameraPreview **真正缩小**到左半 videoHeight 区域（对齐 H5 pkBattleView `h-374`）
+                    // 不再用"上下黑遮罩"假缩小；改为限制 UIView 实际 frame，MTKView 自然响应尺寸变化
+                    // 2026-07-07 v4 架构级根治：对方视频 PKOppositeContainer 与本端 CameraPreview 放
+                    // 同一 HStack 直接兄弟位置 → SwiftUI 保证严格共坐标系，本端与对方视频 100% 齐平
+                    // （原方案分离到 PKArenaView 独立 GeometryReader，两个 sibling GR 无法保证 pixel 级对齐）
+                    GeometryReader { geo in
+                        VStack(spacing: 0) {
+                            Spacer().frame(height: PKArenaLayout.topOffset)
+                            HStack(spacing: 0) {
+                                CameraPreview(camera: camera, agora: agora)
+                                    .frame(width: geo.size.width / 2,
+                                           height: PKArenaLayout.videoHeight)
+                                    .clipped()
+                                PKOppositeContainer(view: agora.oppositeRemoteView)
+                                    .frame(width: geo.size.width / 2,
+                                           height: PKArenaLayout.videoHeight)
+                                    .clipped()
+                            }
+                            Spacer(minLength: 0)
+                        }
+                    }
+                    .ignoresSafeArea()
+                } else {
+                    CameraPreview(camera: camera, agora: agora).ignoresSafeArea()
+                }
             }
             // G M3 / spec §6.1：PKArenaView 跨 .starting/.inPK/.punishing 三态用 if 链承载（铁律 §1）；
             // .id("pkArena") 锁 identity 避免 dismantleUIView 反复触发 → AgoraRtcVideoCanvas.view 黑屏。
-            // 本端 CameraPreview 不在内重建（铁律 §3）；PKArenaView 仅占右半边盖对手画面。
-            if pkStore.state == .starting || pkStore.state == .inPK || pkStore.state == .punishing {
+            if isPKActive {
                 PKArenaView(store: pkStore, agora: agora)
                     .id("pkArena")
                     .ignoresSafeArea()
                     .transition(.opacity)
             }
-            VStack(spacing: 12) {
-                topBar
-                #if DEBUG
-                // 独立 ObservableObject，仅本子 view 订阅；高频（2s/次）写不波及 LiveRoomView 整树
-                // release 不带（避免审核侧看到内部弱网降级阈值 / fps 档位等实现细节，与 pkDebugPanel 同款处理）
-                DebugNetworkPanel(debugStore: store.networkDebugStore)
-                #endif
+            VStack(spacing: 8) {
+                // v11 fix: LiveRoomHeroTopArea 15+ 参数调用 inline 触发 SwiftUI type-check timeout，
+                // 抽到 computed property `heroTopArea` 减轻 body 类型推导复杂度
+                heroTopArea
+                // DEBUG NetworkPanel 之前挂在此处影响真机视觉（2026-07-06 用户反馈"去掉网络监控展示"）；
+                // struct 定义仍保留于文件底部供开发调试临时接入，不再默认挂载
+
                 if !store.beautyAvailable {
                     Text(L10n.beautyUnavailableHint)
                         .font(.caption2)
@@ -81,28 +167,191 @@ struct LiveRoomView: View {
                 if let toast = store.warningToast {
                     warningBanner(toast)
                 }
-                publicScreen
+                if let toast = comingSoonToast {
+                    comingSoonBanner(toast)
+                }
                 Spacer()
-                bottomBar
+                // 公屏消息 + 右侧 Private Call 小开关（对齐 H5 liveRoom.vue:639-679：左公屏 flex-1 + 右操作列 van-switch）
+                HStack(alignment: .bottom, spacing: 8) {
+                    LiveRoomChatList(store: nim.messagesStore)
+                        #if DEBUG
+                        // v19 DEBUG 三连击注入 15 类 mock 消息，验证 iOS 各 row 视觉
+                        .onTapGesture(count: 3) {
+                            PublicChatDebugInjector.injectAll(into: nim.messagesStore)
+                        }
+                        #endif
+                    LiveRoomPrivateCallSwitch(isOn: $privateCallOn, onToggle: { _ in
+                        // TODO: H 里程碑接 updatePrivateCall API；当前仅本地 state + toast 占位
+                        comingSoonToast = L10n.liveRoomComingSoonPrivateCall
+                    })
+                    .padding(.bottom, 60)   // 让开底部工具栏 + gift row 高度，与 H5 pb-60 对齐
+                }
+                // 2026-07-07 v7：快捷礼物栏完全移除（用户明示"主播端没有快捷送礼"）——
+                // 原以为 H5 有此栏但 PK 中隐藏，实测 H5 主播端从未显示此栏（LiveRoomGiftList 是观众端组件）。
+                // 送礼入口仍由底部工具栏 gift 圆按钮承担（H 里程碑接入真礼物列表）
+                // 底部工具栏 4 圆按钮（对齐 H5 liveRoom.vue:686-738：Input + PkEntryBtn + Msg + Gift + Setting）
+                // - PKEntryButton 从原 .overlay(bottomTrailing) 迁到此处（对齐 H5 单入口，5 态视觉切换）
+                // - Setting 按钮弹 confirmationDialog 承载「美颜 / 结束直播」（H 里程碑接入完整设置弹窗前的过渡）
+                // - 移除原 DEBUG PK 按钮（PKEntryButton 5 态已覆盖入口）+ 原「结束直播」大红按钮（迁到 Setting 菜单 & 顶部 X）
+                HStack(spacing: Theme.Metric.liveRoomToolbarGap) {
+                    LiveRoomInputRow(text: $inputText, onSend: {
+                        // H 里程碑：NIMChatroomManager 加 sendText API 后接入。当前视觉占位
+                        guard !inputText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                        inputText = ""
+                        comingSoonToast = L10n.liveRoomComingSoonSend
+                    })
+                    PKEntryButton(store: pkStore,
+                                  showInviteSheet: $showInviteSheet,
+                                  onInterruptTap:  { showPKInterruptConfirm = true },
+                                  onDisconnectTap: { showPKDisconnectConfirm = true })
+                    LiveRoomToolButton(systemName: nil,
+                                       imageName: "liveRoomToolMessageBadge",
+                                       a11y: L10n.liveRoomToolMessage,
+                                       action: { comingSoonToast = L10n.liveRoomComingSoonMessage })
+                    LiveRoomToolButton(systemName: nil,
+                                       imageName: "liveRoomToolGiftBadge",
+                                       a11y: L10n.liveRoomToolGift,
+                                       action: { showGiftPicker = true })   // 接入 CommonGiftPanel（.liveDisplayOnly，直播中纯展示）
+                    LiveRoomToolButton(systemName: nil,
+                                       imageName: "liveRoomToolSettingBadge",
+                                       a11y: L10n.liveRoomToolSetting,
+                                       action: { showSettingSheet = true })
+                }
             }
-            .padding()
+            .padding(.horizontal, Theme.Metric.liveRoomScreenHPadding)
+            .padding(.top, 8)
+            .padding(.bottom, 8)
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
-        .sheet(isPresented: $showBeauty) { beautyPanel }
+        .sheet(isPresented: $showBeauty) {
+            beautyPanel
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
         #if DEBUG
-        .sheet(isPresented: $showPKDebug) { pkDebugPanel }   // M0 调试入口（仅 DEBUG）
+        .sheet(isPresented: $showPKDebug) { pkDebugPanel }   // M0 调试入口（仅 DEBUG，不限高）
         #endif
         .sheet(isPresented: $showInviteSheet) {
             PKInviteSheet(store: pkStore, isPresented: $showInviteSheet)
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
         }
         // G M3 / spec §6.1：PK 各态 overlay 合并为单一 PKOverlayHost，避免 5 层 _OverlayModifier
         // 链路 layout pass + 多 overlay 同时订阅 pkStore 触发 body 重算。
         .overlay { PKOverlayHost(pkStore: pkStore, resultBridge: pkResultBridge) }
-        .overlay(alignment: .bottomTrailing) {
-            PKEntryButton(store: pkStore, showInviteSheet: $showInviteSheet)
-                .padding(.trailing, 12)
-                .padding(.bottom, 110)        // 让出 bottomBar 高度
+        // PK 4 popup（iteration 3 全套 UI 同步）挂在 PKOverlayHost 之上（z 序更高）
+        .overlay {
+            PKInterruptConfirmPopup(isPresented: $showPKInterruptConfirm, store: pkStore)
+        }
+        .overlay {
+            PKDisconnectConfirmPopup(isPresented: $showPKDisconnectConfirm, store: pkStore)
+        }
+        .overlay {
+            PKMatchFailedPopup(isPresented: $showPKMatchFailed, onInitiate: {
+                showInviteSheet = true   // 匹配失败 → 弹发起 PK 邀请弹窗
+            })
+        }
+        .overlay {
+            PKInviteWaitingPopup(store: pkStore, isPresented: $showPKInviteWaiting)
+        }
+        // v7 顶部 2 个 placeholder popup（Task / Audience）；Contribution/Rank/Roulette 已迁独立 sheet
+        .modifier(TopPlaceholderPopupsModifier(showTask: $showTaskPopup,
+                                                showAudience: $showAudiencePopup))
+        // v8/v9/v10 5 层 overlay（送礼动画 / 进场飘屏 / 钻石盲盒飘屏 / 付费弹幕飘屏 / 心愿达成飘屏）
+        .modifier(LiveOverlayHost(giftQueue: nim.giftAnimationQueue,
+                                   enterRoomQueue: nim.enterRoomQueue,
+                                   diamondQueue: nim.diamondGiftQueue,
+                                   paidBulletQueue: nim.paidBulletQueue,
+                                   wishAchievedQueue: nim.wishAchievedQueue,
+                                   isHost: true))
+        // v9/v10 5 新 sheet/popup（虚拟道具开关 / 公告 / UserCard / Gift picker / 心愿单半屏面板）
+        .modifier(LiveRoomExtraOverlaysModifier(
+            virtualPropsStore: virtualPropsStore,
+            showEffectSwitchPopup: $showEffectSwitchPopup,
+            showAnnouncementPopup: $showAnnouncementPopup,
+            userCardUserId: $userCardUserId,
+            showGiftPicker: $showGiftPicker,
+            roomIdStr: "\(roomInfo.id ?? 0)",
+            wishlistStore: nim.wishlistStore,
+            showWishlistPanel: $showWishlistPanel,
+            liveRecordId: "\(roomInfo.id ?? 0)",
+            // v20 公告保存成功后：立即往公屏插入 announcement 消息（对齐 H5 pushRoomAnnouncementMsg）
+            onAnnouncementSaved: { [weak nim = nim] content in
+                let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                nim?.messagesStore.append(PublicChatMessage(
+                    text: trimmed,
+                    isSystem: false,
+                    senderNickname: nil,
+                    senderAvatar: nil,
+                    userLevel: nil,
+                    isHost: false,
+                    isVip: false,
+                    messageType: .announcement
+                ))
+            }
+        ))
+        .onAppear {
+            // v10/v11 触发 4 个 store 初始化拉取（进房时）
+            nim.contributionStore.loadInitial()
+            nim.anchorRankStore.loadInitial()
+            // v16 topRankStore 需要 dbId (roomId) 才能调 apiSendRank(rankType='now', dbId:)
+            nim.topRankStore.setRoomId(roomInfo.id)
+            nim.topRankStore.loadInitial()
+            nim.wishlistStore.loadInitial(
+                anchorUserId: SessionStore.shared.user?.userId.map(String.init) ?? "",
+                anchorNickname: SessionStore.shared.user?.nickname ?? title
+            )
+        }
+        // v7 Contribution / Rank / Roulette 独立 sheet（对齐 H5 真交互）
+        .modifier(TopSheetsModifier(
+            uidStr: SessionStore.shared.user?.userId.map(String.init) ?? "",
+            roomIdStr: "\(roomInfo.id ?? 0)",
+            showContribution: $showContributionSheet,
+            showRank: $showRankSheet,                                  // v16 girlWeeklyRank
+            showUserWeeklyRank: $showUserWeeklyRankSheet,              // v16 userWeeklyRank
+            // v14 Q3 sheet load 完成后回填顶部 rank 徽章（对齐 H5 "无推送→查看后更新"）
+            onRankUpdate: { [weak nim = nim] rank in nim?.anchorRankStore.setRank(rank) },
+            showRouletteSetting: $showRouletteSetting,
+            showRouletteIntro: $showRouletteIntro
+        ))
+        // 依 pkStore.state 转换自动挂载 InviteWaiting / MatchFailed
+        // - inviting：发出邀请后自动挂载 InviteWaiting（对齐 H5 pkInviteWaitingPopup）
+        // - matching → idle/failed：视为匹配失败，自动挂载 MatchFailed（对齐 H5 pkMatchFailedPopup）
+        .onChange(of: pkStore.state) { newState in
+            defer { lastPKState = newState }
+            switch newState {
+            case .inviting:
+                if !pkStore.invitedAnchors.isEmpty { showPKInviteWaiting = true }
+            case .idle, .failed:
+                // 上一态是 matching → 未进 starting/inPK 就回到 idle/failed，视为匹配失败
+                if lastPKState == .matching { showPKMatchFailed = true }
+                // PK 结束 / 邀请超时清理相关 popup
+                showPKInviteWaiting = false
+                showPKInterruptConfirm = false
+                showPKDisconnectConfirm = false
+            case .starting, .inPK, .punishing:
+                // 一旦进入 PK 流程，取消匹配失败提示（防误触）
+                showPKMatchFailed = false
+                showPKInviteWaiting = false
+            default:
+                break
+            }
+        }
+        // v17 设置弹窗改 Bottom Sheet + 3 列 Grid（对齐 H5 liveSettingPopup.vue）
+        .sheet(isPresented: $showSettingSheet) {
+            LiveSettingBottomSheet(
+                isPresented: $showSettingSheet,
+                beautyAvailable: store.beautyAvailable,
+                onOpenBeauty:       { showBeauty = true },
+                onOpenEffects:      { showEffectSwitchPopup = true },
+                onOpenAnnouncement: { showAnnouncementPopup = true },
+                onEndLive:          { Task { await store.endLive() } }
+            )
+            .sheetTopInset()
+            .presentationDetents([.fraction(0.32)])
+            .presentationDragIndicator(.visible)
         }
         .animation(.easeInOut(duration: 0.2), value: pkStore.state)
         .alert(L10n.liveRoomPermissionAlertTitle, isPresented: $store.permissionDeniedAlert) {
@@ -111,6 +360,8 @@ struct LiveRoomView: View {
             Text(L10n.liveRoomPermissionAlertMessage)
         }
         .onAppear {
+            // 长时间无操作自动离线：直播中暂停监测（对齐 H5 isBusy 停 timer）
+            AutoOfflineMonitor.shared.suspend()
             camera.renderer.updateParameters(beauty)
             // K 里程碑 P0-2 fix（2026-07-03 review 202607030426）：接入 Sharer `.live` token，
             // 让用户在美颜设置页调过的 25+ 参数 + 贴纸广播到直播 renderer。首帧 apply 保证
@@ -184,24 +435,9 @@ struct LiveRoomView: View {
             // 字典让每个 CameraPreview 独立注销，仍以"真正 dismiss 才清理"为正路径）。
             // 场景 A（切后台）：guard 短路，资源保留等待回前台
             guard scenePhase != .background else { return }
-            // 场景 B（真 dismiss）：无论 .living / .forceEnding / .ending / .ended 都清资源
-            //
-            // 复查 202607012202 S-7：原实现 guard `state == .ended` 会跳过 forceEnding 中途 dismiss
-            // 的清理（用户物理返回 / 系统触发 dismiss），导致摄像头持续采集 + 声网频道持续推流。
-            // 各清理调用均幂等：camera.tearDown 已 stop 时无副作用；agora.leave 内 guard engine
-            // 幂等；nim.leave / observer 解绑同幂等。
-            // K 里程碑 P0-2 fix：detach Sharer 订阅（camera.tearDown 前，确保栈顶变化及时）
-            BeautyPipelineSharer.shared.detach(camera.renderer as AnyObject & BeautyRenderer)
-            camera.tearDown()
-            // D 里程碑修复（v5.4）：agora.leave 改 async，onDisappear 不是 async 上下文，
-            // 包 Task 让出；nim.leave 与 camera.stop 同步走，不依赖 agora 完成。
-            Task { await agora.leave() }
-            nim.leave()
-            camera.stop()
-            NIMService.shared.unregisterRouter(pkStore.router)
-            SystemMessageRouter.shared.liveStore = nil
-            // G M3：PKStore teardown 取消倒计时 / 解 NQM 订阅 / 清字段；setCallState 内部 guard 会拦 ended 态调用
-            Task { await pkStore.teardown() }
+            // 场景 B（真 dismiss）：无论 .living / .forceEnding / .ending / .ended 都清资源。
+            // 各清理调用均幂等（review 202607071524 F4 抽 helper 去重）。
+            performLiveTeardown()
             // 非 .ended 追加 endLiveRoom 兜底，避免僵尸房间（tryEnterEnding 内已 guard inFlightEnd
             // + state==.living，forceEnding 已在 flight 会被拦、无重复请求）
             if store.state != .ended {
@@ -209,7 +445,12 @@ struct LiveRoomView: View {
             }
         }
         .onChange(of: store.state) { newState in
-            if newState == .ended { dismiss() }
+            // B spec v7：直播结束 → env action 切 Work Tab + workPath 重建为 [liveResult]。
+            // LiveRoomView 随 path 替换自然 dismount → onDisappear 触发正常清资源；
+            // 无 fullScreenCover 层，用户从结果页 back 走标准 pop，swipe-back 原生支持。
+            if newState == .ended {
+                liveResultTransition.perform(store.beginTimestamp, store.endTimestamp, store.endType)
+            }
         }
         // v5.8：本体 CameraPreview 的帧 sink 由 CameraManager.subscribers 字典持有，
         // 与 PIP CameraPreview 的 sink 独立共存；PIP 在 dismantleUIView 时精准注销自己那一格，
@@ -238,6 +479,31 @@ struct LiveRoomView: View {
         .animation(.easeInOut(duration: 0.2), value: callState)
         .onReceive(callStore.$state) { newState in callState = newState }
         .animation(.easeInOut(duration: 0.2), value: store.isWaitingReturnLive)
+        // Task 9：声明本 view 属于 GiftEffect .live 场景 —— onAppear 时 setActiveScene，onDisappear 时 leaveScene（硬中断+清队列）
+        // ⚠️ scopeId 必须用 **yxRoomId**（云信房间 id），与 NIMChatroomManager.enter(roomId:) + IM handler intake.ingest(scopeId:) 完全一致；
+        // 用业务 roomId (store.roomId) 会导致 Center.activeKey ≠ item.sceneKey → enqueue rejected（2026-07-09 真机反悔真根因）
+        .giftEffectScene(.live, scopeId: roomInfo.yxRoomId ?? "")
+    }
+
+    /// 直播资源清理（review 202607071524 F4 抽 helper 去重）。
+    /// 两个触发点等价调用：
+    /// - `onChange(store.state == .ended)`：直播结束后立即清（fullScreenCover 覆盖不触发 onDisappear）
+    /// - `onDisappear`（非 background）：真 dismount 兜底
+    /// 所有子操作均幂等——重复调用无副作用。
+    private func performLiveTeardown() {
+        AutoOfflineMonitor.shared.resume()
+        // K 里程碑 P0-2 fix：detach Sharer 订阅（camera.tearDown 前，确保栈顶变化及时）
+        BeautyPipelineSharer.shared.detach(camera.renderer as AnyObject & BeautyRenderer)
+        camera.tearDown()
+        // D 里程碑修复（v5.4）：agora.leave 改 async，非 async 上下文包 Task 让出；
+        // nim.leave 与 camera.stop 同步走，不依赖 agora 完成。
+        Task { await agora.leave() }
+        nim.leave()
+        camera.stop()
+        NIMService.shared.unregisterRouter(pkStore.router)
+        SystemMessageRouter.shared.liveStore = nil
+        // G M3：PKStore teardown 取消倒计时 / 解 NQM 订阅 / 清字段
+        Task { await pkStore.teardown() }
     }
 
     // MARK: - D 里程碑：挂断后回直播倒计时覆盖层
@@ -264,35 +530,6 @@ struct LiveRoomView: View {
         }
     }
 
-    // MARK: - 顶部主播信息栏
-
-    private var topBar: some View {
-        HStack(spacing: 10) {
-            AvatarView(urlString: nil, size: 40, kind: .anchor)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.subheadline).bold().foregroundStyle(.white).lineLimit(1)
-                // 复查 202607012202 S-8：agora.message/state 变化只让本子 view 重算，
-                // 不再触发 LiveRoomView 整树重算（含 CameraPreview / PKArenaView / publicScreen）
-                AgoraStatusText(agora: agora)
-            }
-            Spacer()
-            // 复查 S-8：同样隔离 agora.state 的 joined 判定，避免弱网 didOccurError 频发时整树重算
-            AgoraConnectingCapsule(agora: agora, timerStore: store.elapsedTimerStore)
-            HStack(spacing: 4) {
-                Image(systemName: "person.2.fill").font(.caption2)
-                    .accessibilityHidden(true)
-                // review 202606260029 P1-1：onlineCount 抽到子 view 内观测，
-                // 避免本体 LiveRoomView 因 .enter/.exit 通知频繁重算（含 CameraPreview / RemoteVideoView）。
-                OnlineCountText(store: nim.presenceStore)
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(.black.opacity(0.4), in: Capsule())
-            .accessibilityElement(children: .combine)
-        }
-    }
-
     // MARK: - 合规警告条幅（NIM attachType=61 触发，3s 自动消失）
 
     private func warningBanner(_ text: String) -> some View {
@@ -303,6 +540,21 @@ struct LiveRoomView: View {
             .background(.orange.opacity(0.9), in: RoundedRectangle(cornerRadius: 10))
             .frame(maxWidth: .infinity, alignment: .center)
             .transition(.move(edge: .top).combined(with: .opacity))
+    }
+
+    // MARK: - "Coming soon" 占位提示 banner（点击设计稿里 H/I 里程碑未接入的入口时显示，3s 自消）
+
+    private func comingSoonBanner(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(Color.black.opacity(0.7), in: Capsule())
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .task(id: text) {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                withAnimation { comingSoonToast = nil }
+            }
     }
 
     // MARK: - 网络弱网降级条幅（NetworkQualityMonitor 触发，恢复时自动消失）
@@ -319,33 +571,6 @@ struct LiveRoomView: View {
         .frame(maxWidth: .infinity, alignment: .center)
         .transition(.move(edge: .top).combined(with: .opacity))
         .accessibilityElement(children: .combine)
-    }
-
-    // MARK: - 公屏消息
-
-    private var publicScreen: some View {
-        PublicScreenList(store: nim.messagesStore)
-    }
-
-    // MARK: - 底部工具栏
-
-    private var bottomBar: some View {
-        HStack(spacing: 16) {
-            Button { showBeauty = true } label: { toolButton(L10n.liveRoomToolBeauty, system: "wand.and.stars") }
-                .disabled(!store.beautyAvailable)
-            #if DEBUG
-            // G 里程碑 M0 临时入口（仅 DEBUG，release 不带）
-            Button { showPKDebug = true } label: { toolButton("PK", system: "person.2.fill") }
-            #endif
-            Spacer()
-            Button {
-                Task { await store.endLive() }
-            } label: {
-                Text(L10n.liveRoomEndLive).font(.headline).foregroundStyle(.white)
-                    .padding(.horizontal, 22).padding(.vertical, 12)
-                    .background(Color.red, in: Capsule())
-            }
-        }
     }
 
     // MARK: - G 里程碑 M0 调试面板（仅 DEBUG 构建）
@@ -416,25 +641,50 @@ struct LiveRoomView: View {
     }
     #endif
 
-    private func toolButton(_ t: String, system: String) -> some View {
-        VStack(spacing: 4) {
-            Image(systemName: system).font(.title3)
-                .accessibilityHidden(true)
-            Text(t).font(.caption2)
-        }
-        .foregroundStyle(.white)
-        .frame(width: 56, height: 56)
-        .background(.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 14))
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-    }
-
     // MARK: - 美颜面板
 
     private var beautyPanel: some View {
         BeautyPanel(beauty: beauty, camera: camera)
     }
 
+    // MARK: - v11 抽 LiveRoomHeroTopArea 到 computed property（缓解 SwiftUI type-check timeout）
+
+    private var heroTopArea: some View {
+        LiveRoomHeroTopArea(
+            anchorIconURL: SessionStore.shared.user?.icon,
+            anchorName: title,
+            hotScore: roomInfo.hotScore ?? 0,
+            agora: agora,
+            presence: nim.presenceStore,
+            timerStore: store.elapsedTimerStore,
+            isPKActive: pkStore.state == .starting
+                        || pkStore.state == .inPK
+                        || pkStore.state == .punishing,
+            onClose: { Task { await store.endLive() } },
+            onTaskTap:         { showTaskPopup = true },
+            onContributionTap: { showContributionSheet = true },
+            // v16 入口分派：Rank 徽章 → RankSheetView（girlWeeklyRank）；观众数 → UserWeeklyRankSheet（userWeeklyRank）
+            onRankTap:         { showRankSheet = true },
+            onAudienceTap:     { showUserWeeklyRankSheet = true },
+            onRouletteTap:     handleRouletteTap,
+            contributionStore: nim.contributionStore,
+            anchorRankStore: nim.anchorRankStore,
+            wishlistStore: nim.wishlistStore,
+            onWishlistTap: { showWishlistPanel = true },
+            topRankStore: nim.topRankStore
+        )
+    }
+
+    /// Roulette tap 路由（对齐 H5 首次引导 localStorage 按 userId scope）
+    private func handleRouletteTap() {
+        let uidStr = SessionStore.shared.user?.userId.map(String.init) ?? ""
+        let key = RouletteStore.introShownKey(userId: uidStr)
+        if UserDefaults.standard.bool(forKey: key) {
+            showRouletteSetting = true
+        } else {
+            showRouletteIntro = true
+        }
+    }
 }
 
 // MARK: - BeautyPanel：sheet 内独立 @ObservedObject，throttle 60ms 调 renderer
@@ -601,7 +851,7 @@ private struct PKOverlayHost: View {
 // 本 view 直接订阅 messagesStore，消息 publish 仅触发本子 view 重算，topBar / PKOverlayHost /
 // CameraPreview / DebugNetworkPanel 等兄弟子树不受影响（review P1-3）。
 private struct PublicScreenList: View {
-    @ObservedObject var store: ChatMessagesStore
+    @ObservedObject var store: PublicChatMessagesStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -624,5 +874,710 @@ private struct OnlineCountText: View {
 
     var body: some View {
         Text("\(store.onlineCount)").font(.caption)
+    }
+}
+
+// MARK: - 设计稿还原：顶部主播胶囊
+//
+// 视觉：黑色 40% 半透胶囊内 [头像 + 名字 + (热度火 + 数字) + (直播状态点 + 时长)]。
+// 时长走独立子 view 订阅 timerStore（1Hz 变化不波及本 view 主 body）。
+fileprivate struct LiveRoomAnchorPill: View {
+    let anchorIconURL: String?
+    let anchorName: String
+    let hotScore: Int
+    @ObservedObject var agora: AgoraManager
+    let timerStore: LiveTimerStore
+
+    var body: some View {
+        HStack(spacing: 6) {
+            AvatarView(urlString: anchorIconURL, size: Theme.Metric.liveRoomChipAvatar, kind: .anchor)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(anchorName)
+                    .font(Theme.Typography.liveRoomAnchorName)
+                    .foregroundColor(Theme.Palette.liveRoomAnchorName)
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    HStack(spacing: 3) {
+                        Image("liveRoomHotIcon")
+                            .resizable().frame(width: 10, height: 10)
+                            .accessibilityHidden(true)
+                        // 走 FormatStyle 按 Locale.current 渲染（review 202607031955 P2-3，
+                        // 对齐 BlocklistRow.swift `Text(age, format: .number)` 先例）
+                        Text(hotScore, format: .number)
+                            .font(Theme.Typography.liveRoomAnchorMeta)
+                            .foregroundColor(Theme.Palette.liveRoomAnchorMeta)
+                    }
+                    if agora.state == .joined {
+                        LiveRoomAnchorElapsed(timerStore: timerStore)
+                    } else {
+                        Text(L10n.liveRoomStatusConnecting)
+                            .font(Theme.Typography.liveRoomAnchorMeta)
+                            .foregroundColor(Theme.Palette.liveRoomAnchorMeta)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, Theme.Metric.liveRoomChipHPadding)
+        .padding(.vertical, Theme.Metric.liveRoomChipVPadding)
+        .background(Theme.Palette.liveRoomChipBackground, in: Capsule())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// 独立订阅 timerStore：1Hz 更新不波及 LiveRoomAnchorPill 主体（agora.state 变时才刷）。
+fileprivate struct LiveRoomAnchorElapsed: View {
+    @ObservedObject var timerStore: LiveTimerStore
+
+    var body: some View {
+        let secs = timerStore.elapsedSeconds
+        HStack(spacing: 3) {
+            Circle().fill(Color.red).frame(width: 6, height: 6)
+                .accessibilityHidden(true)
+            Text(String(format: "%d:%02d:%02d", secs / 3600, (secs / 60) % 60, secs % 60))
+                .font(Theme.Typography.liveRoomAnchorMeta)
+                .monospacedDigit()
+                .foregroundColor(Theme.Palette.liveRoomAnchorMeta)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - 设计稿还原：顶部右侧（Top 观众头像叠 + 观众数徽章 + 关闭 X）
+
+fileprivate struct LiveRoomTopActions: View {
+    @ObservedObject var presence: ChatPresenceStore
+    /// v11 顶部右侧 Top2 送礼头像 store（对齐 H5 liveStore.topRankList）
+    @ObservedObject var topRankStore: LiveTopRankStore
+    /// v11 tap 观众数字 → 弹送礼周榜（对齐 H5 rankPopup）；上层直接 set showRankSheet=true
+    let onAudienceTap: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        HStack(spacing: Theme.Metric.liveRoomBadgeGap) {
+            // v11 Top2 送礼头像 —— 从固定切图升级为 store 驱动 + 金/紫边框 + 皇冠角标
+            top2Avatars
+                .accessibilityHidden(true)
+
+            // 观众数徽章 v6 改可点击（tap → 观众 popup）
+            // v19 Q3 根治：对齐 H5 audienceNum（live.js:121-137 getAudienceList）：
+            //   presence.onlineCount 现在由 NIMChatroomManager.syncAudienceNumFromMembers 提供，
+            //   走 NIM fetchChatroomMembers + 过滤主播 + 30s 定时纠错，直接是真实观众数（不含主播）
+            //   对齐 H5 `v-if="!!audienceNum"`：0 不显示徽章数字
+            Button(action: onAudienceTap) {
+                ZStack(alignment: .topTrailing) {
+                    Image("liveRoomViewerCountIcon")
+                        .resizable()
+                        .frame(width: Theme.Metric.liveRoomViewerCountSize,
+                               height: Theme.Metric.liveRoomViewerCountSize)
+                    if presence.onlineCount > 0 {
+                        Text(formatOnlineCount(presence.onlineCount))
+                            .font(Theme.Typography.liveRoomViewerCount)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(Color.black.opacity(0.6), in: Capsule())
+                            .offset(x: 4, y: -4)
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(L10n.liveRoomViewerCountA11y))
+
+            // 关闭 X
+            Button(action: onClose) {
+                Image("liveRoomCloseButton")
+                    .resizable()
+                    .frame(width: Theme.Metric.liveRoomCloseSize,
+                           height: Theme.Metric.liveRoomCloseSize)
+            }
+            .accessibilityLabel(Text(L10n.liveRoomCloseA11y))
+        }
+    }
+
+    /// v11 Top2 头像叠 —— 对齐 H5 `v-if="topRankList.length && topRankList[0]?.cost > 1"`：
+    /// 无送礼数据（items 为空）时不渲染，只保留观众数徽章 + 关闭按钮
+    @ViewBuilder
+    private var top2Avatars: some View {
+        if !topRankStore.items.isEmpty {
+            HStack(spacing: -6) {
+                ForEach(topRankStore.items) { item in
+                    ZStack(alignment: .topTrailing) {
+                        AvatarView(urlString: item.avatarUrl,
+                                   size: Theme.Metric.liveRoomTopViewerSize,
+                                   kind: .user)
+                            .overlay(
+                                Circle().stroke(topRankBorderColor(item.rank), lineWidth: 1.5)
+                            )
+                        // 皇冠角标（对齐 H5 live-crown-1/2.webp 偏右上）
+                        Image(systemName: "crown.fill")
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(topRankBorderColor(item.rank))
+                            .shadow(color: .black.opacity(0.3), radius: 1)
+                            .offset(x: 2, y: -4)
+                    }
+                }
+            }
+        }
+    }
+
+    /// H5 Rank 1 金色 #FFC33A / Rank 2 紫色 #C2CCEC
+    private func topRankBorderColor(_ rank: Int) -> Color {
+        rank == 1 ? Color(hex: 0xFFC33A) : Color(hex: 0xC2CCEC)
+    }
+}
+
+/// v11 观众数 "k+" 格式化（对齐 H5 `(num / 1000) >> 0` 整除截取）
+fileprivate func formatOnlineCount(_ n: Int) -> String {
+    n < 1000 ? "\(n)" : "\(n / 1000)k+"
+}
+
+// MARK: - 设计稿还原：Task / Diamond / Rank 徽章 row
+//
+// H5 对齐：liveRoomTop.vue Task icon + AnimatedNumber (贡献值) + LiveRoomTopAnchorRank。
+// 本次为视觉占位，点击回调交给父组件（当前 no-op；H/I 里程碑接入真数据）。
+fileprivate struct LiveRoomBadgeRow: View {
+    let contributionValue: Int      // 顶部钻石累计（当场直播贡献值）
+    let rankPosition: Int?          // 收礼周榜位次（nil = 未上榜）
+    let onTaskTap: () -> Void
+    let onContributionTap: () -> Void
+    let onRankTap: () -> Void
+
+    var body: some View {
+        HStack(spacing: Theme.Metric.liveRoomBadgeGap) {
+            Button(action: onTaskTap) {
+                Image("liveRoomTaskBadge")
+                    .resizable()
+                    .frame(width: Theme.Metric.liveRoomBadgeHeight,
+                           height: Theme.Metric.liveRoomBadgeHeight)
+            }
+            .accessibilityLabel(Text(L10n.liveRoomTaskA11y))
+
+            Button(action: onContributionTap) {
+                HStack(spacing: 4) {
+                    // v17 钻石动图（对齐 H5 diamond-yellow-gif.gif）—— 从 Bundle 加载 gif 帧动画
+                    // v21 用户明示 30pt（v20 6pt 因 UIImageView intrinsicContentSize=56 未被 frame 约束视觉溢出）
+                    // AnimatedGIFView v21 修 hugging/compression low 让 SwiftUI frame 真生效
+                    AnimatedGIFView(name: "diamond-yellow")
+                        .frame(width: 30, height: 30)
+                        .accessibilityHidden(true)
+                    Text("\(contributionValue)")
+                        .font(Theme.Typography.liveRoomBadgeText)
+                        .foregroundColor(Theme.Palette.liveRoomBadgeNumber)
+                }
+                .padding(.horizontal, 8)
+                .frame(height: Theme.Metric.liveRoomBadgeHeight)
+                .background(Theme.Palette.liveRoomBadgeBackground,
+                            in: RoundedRectangle(cornerRadius: Theme.Radius.liveRoomBadge))
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(Text(L10n.liveRoomContributionA11y))
+
+            Button(action: onRankTap) {
+                HStack(spacing: 4) {
+                    Image("liveRoomRankIcon")
+                        .resizable()
+                        .frame(width: 18, height: 18)
+                        .accessibilityHidden(true)
+                    if let rank = rankPosition {
+                        Text(String(format: L10n.liveRoomRankFormat, rank))
+                            .font(Theme.Typography.liveRoomBadgeText)
+                            .foregroundColor(Theme.Palette.liveRoomRankNumber)
+                    } else {
+                        Text(L10n.liveRoomRankUnlisted)
+                            .font(Theme.Typography.liveRoomBadgeText)
+                            .foregroundColor(Theme.Palette.liveRoomBadgeNumber)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(Theme.Palette.liveRoomBadgeNumber)
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, 8)
+                .frame(height: Theme.Metric.liveRoomBadgeHeight)
+                .background(Theme.Palette.liveRoomBadgeBackground,
+                            in: RoundedRectangle(cornerRadius: Theme.Radius.liveRoomBadge))
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(Text(L10n.liveRoomRankA11y))
+        }
+    }
+}
+
+// MARK: - 设计稿还原：Underway 红色徽章（右侧）
+//
+// 视觉占位：单纯的红色胶囊 + 白色 "Underway" 文字，表示"直播进行中"贴纸。
+fileprivate struct LiveRoomUnderwayBadge: View {
+    var body: some View {
+        Text(L10n.liveRoomUnderwayLabel)
+            .font(Theme.Typography.liveRoomUnderwayText)
+            .foregroundColor(Theme.Palette.liveRoomUnderwayText)
+            .padding(.horizontal, Theme.Metric.liveRoomUnderwayHPadding)
+            .frame(height: Theme.Metric.liveRoomUnderwayHeight)
+            .background(Theme.Palette.liveRoomUnderwayFill,
+                        in: RoundedRectangle(cornerRadius: Theme.Radius.liveRoomUnderway))
+            .accessibilityLabel(Text(L10n.liveRoomUnderwayLabel))
+    }
+}
+
+// MARK: - 设计稿还原：Wishlist 卡片
+//
+// 视觉：半透黑卡片 + 礼物图 + 主播端货币 + 数字 + 进度条 + 分数文字。
+// 数据为占位（totalCoin/currentCoin/targetCoin），未来接 wishStore（L 里程碑）。
+/// v10 顶部心愿单小卡 —— 从硬编码 3 参数升级为 store 驱动 + 4s 轮播 + 完成态 + tap 打开半屏面板
+fileprivate struct LiveRoomWishlistCard: View {
+    @ObservedObject var store: WishlistStore
+    let onTap: () -> Void
+    @State private var currentIndex: Int = 0
+
+    /// 对齐 H5 wishlist.vue L62-122：卡片尺寸 80×108pt 竖排布局 + van-swipe autoplay 4s + 手动滑动
+    var body: some View {
+        Group {
+            if store.items.isEmpty {
+                Button(action: onTap) { emptyCard }
+                    .buttonStyle(.plain)
+            } else if store.items.count == 1 {
+                // 单条不需要 TabView（避免 SwiftUI TabView 单页 warning + 无必要的 gesture 挂载）
+                Button(action: onTap) { cardContent(store.items[0]) }
+                    .buttonStyle(.plain)
+            } else {
+                // TabView(.page) 原生支持手动 swipe；currentIndex 双向绑定 → autoplay Timer 递增即触发翻页动画
+                TabView(selection: $currentIndex) {
+                    ForEach(Array(store.items.enumerated()), id: \.offset) { idx, item in
+                        Button(action: onTap) { cardContent(item) }
+                            .buttonStyle(.plain)
+                            .tag(idx)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .frame(width: 80, height: 108)
+            }
+        }
+        .frame(width: 80, height: 108)
+        .onReceive(Timer.publish(every: 4.0, on: .main, in: .common).autoconnect()) { _ in
+            guard store.items.count > 1 else { return }
+            withAnimation(.easeInOut(duration: 0.3)) {
+                currentIndex = (currentIndex + 1) % store.items.count
+            }
+        }
+    }
+
+    /// 空态：仅心愿单标签（对齐 H5 wishlist.vue v-if 无卡片时不渲染；本处保留可点击兜底容错）
+    private var emptyCard: some View {
+        VStack(spacing: 4) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 22))
+                .foregroundColor(.white.opacity(0.4))
+            Text("Wishlist")
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.6))
+        }
+        .frame(width: 80, height: 108)
+        .background(Color.black.opacity(0.3),
+                    in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    /// 单张卡片（对齐 H5 wishlist.vue L86-118 竖排布局）：
+    /// 承诺文案(2行截断) / 礼物名 → 礼物图 44×44 → 钻石数(未完成) → 进度条 + 完成态标签
+    private func cardContent(_ item: WishlistItem) -> some View {
+        // v22 修：对齐 H5 wishlist.vue L31 `promiseText = fullList[0]?.promiseText` —— 多礼物共享首条 promise，
+        // 而非每张卡各自的 promise（原实现读 item.promiseText 会导致 Crown 卡无 promise 时回落 giftName，
+        // 与 Rose/Star 卡展示样式不一致，H5 上所有卡均展示同一条 promise）
+        let sharedPromise = store.items.first?.promiseText
+        return VStack(spacing: 2) {
+            // v21 严格对齐 H5 wishlist.vue L88-93 h-24 固定高：
+            // 有 promiseText → promise 两行截断（font-9 leading-12 bold text-center）
+            // 否则         → giftName 一行 truncate（font-12 bold text-center）
+            Group {
+                if let promise = sharedPromise, !promise.isEmpty {
+                    Text(promise)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .lineSpacing(1)
+                } else {
+                    Text(item.giftName)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+            .frame(width: 72, height: 24)
+
+            // v17 礼物图 44×44 —— 从 item.giftIconUrl 加载（对齐 H5 wishlist.vue L94 item.giftSmallImg）
+            wishlistGiftIcon(item: item)
+
+            // 钻石价格（仅未完成态展示，对齐 H5 v-if="!isItemComplete"）
+            if !item.isCompleted {
+                HStack(spacing: 2) {
+                    Image("liveRoomWishlistCoin")
+                        .resizable().frame(width: 10, height: 10)
+                        .accessibilityHidden(true)
+                    Text("\(item.giftPrice)")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+            }
+
+            // 进度条 + 状态文字（H5 完成态分两行 / 未完成态同行数字）
+            if item.isCompleted {
+                VStack(spacing: 2) {
+                    progressBar(ratio: 1, width: 62)
+                    HStack(spacing: 2) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 8))
+                            .foregroundColor(Color(hex: 0x1AFFCD))
+                        Text(L10n.wishlistProgressComplete)
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                }
+            } else {
+                HStack(spacing: 4) {
+                    progressBar(ratio: item.progress, width: 42)
+                    Text("\(item.completedCount) / \(item.targetCount)")
+                        .font(.system(size: 8, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+            }
+        }
+        .padding(.horizontal, 4).padding(.top, 6).padding(.bottom, 4)
+        .frame(width: 80, height: 108)
+        .background(Color.black.opacity(0.3),
+                    in: RoundedRectangle(cornerRadius: 8))
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+
+    /// v17/v21 心愿单礼物图 —— 优先真图 URL（对齐 H5 item.giftSmallImg），nil/失败时**按 giftName 分派不同 SF Symbol**
+    ///
+    /// **v21 修**：Fakes 阶段后端未返回 URL 时，根据 giftName（Rose/Star/Crown 等）匹配对应 SF Symbol，
+    /// 用户在 Fakes 阶段能看到**3 张不同**的礼物图标（不再是同一张黄色 gift.fill 或灰色占位）
+    @ViewBuilder
+    private func wishlistGiftIcon(item: WishlistItem) -> some View {
+        if let s = item.giftIconUrl, !s.isEmpty, let u = URL(string: s) {
+            AsyncImage(url: u) { phase in
+                switch phase {
+                case .success(let img):
+                    img.resizable().aspectRatio(contentMode: .fit)
+                default:
+                    giftSymbolFallback(for: item.giftName)
+                }
+            }
+            .frame(width: 44, height: 44)
+        } else {
+            giftSymbolFallback(for: item.giftName).frame(width: 44, height: 44)
+        }
+    }
+
+    /// v21 按 giftName 分派 SF Symbol + 主题色（Rose/Star/Crown 3 种视觉可区分）
+    @ViewBuilder
+    private func giftSymbolFallback(for name: String) -> some View {
+        let (symbol, tint): (String, Color) = {
+            let lower = name.lowercased()
+            if lower.contains("rose") || lower.contains("heart") || lower.contains("flower") {
+                return ("heart.fill", Color(hex: 0xFF3D8E))     // 粉玫瑰
+            } else if lower.contains("star") {
+                return ("star.fill", Color(hex: 0xFFE600))       // 黄星
+            } else if lower.contains("crown") || lower.contains("king") {
+                return ("crown.fill", Color(hex: 0xFFBB02))      // 金皇冠
+            } else if lower.contains("diamond") {
+                return ("diamond.fill", Color(hex: 0x66E5FF))    // 冰蓝钻石
+            }
+            return ("gift.fill", Color(hex: 0xFFE600))            // 兜底黄礼物
+        }()
+        Image(systemName: symbol)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .foregroundColor(tint)
+            .padding(4)
+            .accessibilityHidden(true)
+    }
+
+    /// H5 进度条通用绘制（渐变填充色对齐 H5 --lc-primary-color-1/2/3 粉紫渐变）
+    private func progressBar(ratio: Double, width: CGFloat) -> some View {
+        ZStack(alignment: .leading) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Color.white.opacity(0.2))
+                .frame(width: width, height: 4)
+            RoundedRectangle(cornerRadius: 2)
+                .fill(
+                    LinearGradient(colors: [Color(hex: 0xFF9438), Color(hex: 0xFF0090), Color(hex: 0xFE00DE)],
+                                   startPoint: .leading, endPoint: .trailing)
+                )
+                .frame(width: max(0, min(1, ratio)) * width, height: 4)
+        }
+        .frame(width: width, height: 4)
+    }
+}
+
+/// safe subscript for Array
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
+}
+
+// MARK: - 设计稿还原：顶部整体组合区（主播胶囊 + 顶部右侧 + 徽章 row + Underway + Wishlist）
+
+fileprivate struct LiveRoomHeroTopArea: View {
+    let anchorIconURL: String?
+    let anchorName: String
+    let hotScore: Int
+    // 本 view body 不直读 agora/presence 任一字段，只把引用透传给已自订阅的子 view
+    // (LiveRoomAnchorPill / LiveRoomTopActions)。用 `let` 而非 @ObservedObject 避免
+    // 本层订阅 agora.state/message/remoteUid 与 presence.onlineCount 高频变更 →
+    // 触发 Hero 层 5 个子 view 全量重算（review 202607031955 P2-4，命中
+    // .claude/rules/swiftui-keepalive-publisher-isolation.md 规则 1）。
+    let agora: AgoraManager
+    let presence: ChatPresenceStore
+    let timerStore: LiveTimerStore
+    /// PK 中（starting/inPK/punishing）隐藏 Wishlist 卡片 —— 对齐 H5 pkBattleView.vue
+    /// `v-if="!pkStore.isShowPkBattleView"` 语义。父 LiveRoomView 已订阅 pkStore.state，
+    /// 只传布尔避免 Hero 层引入 pkStore 订阅。
+    let isPKActive: Bool
+    let onClose: () -> Void
+    let onTaskTap: () -> Void
+    let onContributionTap: () -> Void
+    let onRankTap: () -> Void
+    /// 观众徽章点击（v6 观众 popup）
+    let onAudienceTap: () -> Void
+    /// 顶部互动转盘按钮点击（对齐 H5 liveRoomTop.vue L256-273 rouletteButton）
+    let onRouletteTap: () -> Void
+    // v10 数据源接入
+    @ObservedObject var contributionStore: LiveContributionStore
+    @ObservedObject var anchorRankStore: LiveAnchorRankStore
+    @ObservedObject var wishlistStore: WishlistStore
+    let onWishlistTap: () -> Void
+    /// v11 顶部右侧 Top2 送礼头像 store
+    @ObservedObject var topRankStore: LiveTopRankStore
+
+    var body: some View {
+        // v22：顶部内间距 -10pt（用户反馈"直播间顶部内间距减 10pt"），三行元素（Avatar / Badges / Wishlist）
+        // 之间的 VStack spacing 由 10 → 0；padding.top 保持外层 VStack 的 8pt 不动
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .center) {
+                LiveRoomAnchorPill(anchorIconURL: anchorIconURL,
+                                    anchorName: anchorName,
+                                    hotScore: hotScore,
+                                    agora: agora,
+                                    timerStore: timerStore)
+                // v11 反悔 v6：H5 无 Underway 徽章（校验 liveRoomTop.vue 无此元素），删除对齐
+                Spacer()
+                LiveRoomTopActions(presence: presence,
+                                   topRankStore: topRankStore,
+                                   onAudienceTap: onAudienceTap,
+                                   onClose: onClose)
+            }
+            HStack(alignment: .top) {
+                LiveRoomBadgeRow(contributionValue: Int(contributionStore.currentLiveIncome),   // v10 动态
+                                 rankPosition: anchorRankStore.currentRank,                       // v10 动态
+                                 onTaskTap: onTaskTap,
+                                 onContributionTap: onContributionTap,
+                                 onRankTap: onRankTap)
+                Spacer()
+                Button(action: onRouletteTap) {
+                    Image("pkBattleTop1Crown")
+                        .resizable()
+                        .frame(width: 28, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(Text(L10n.liveRoomRouletteA11y))
+            }
+            // PK 中隐藏 Wishlist（对齐 H5 pkBattleView 布局）
+            if !isPKActive {
+                HStack(alignment: .top) {
+                    LiveRoomWishlistCard(store: wishlistStore, onTap: onWishlistTap)
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - 设计稿还原：公屏消息单行
+//
+// H5 对齐 messageScroller.vue：等级徽章 + Host 徽章(可选) + 昵称(粉/绿) + " " + 正文 + (换行) 翻译。
+fileprivate struct LiveRoomChatRow: View {
+    let message: PublicChatMessage
+
+    /// v18 pattern-based dispatch —— 按 messageType.discriminator 分派到独立 subview
+    var body: some View {
+        switch message.messageType.discriminator {
+        case .anchor, .regular:
+            ChatRowRegular(message: message)
+        case .gift:
+            ChatRowGift(message: message)
+        case .luckyGift:
+            ChatRowLuckyGift(message: message)
+        case .enterRoom:
+            ChatRowEnterRoom(message: message)
+        case .officialBoostEnter:
+            ChatRowOfficialBoostEnter(message: message)
+        case .pkNotify:
+            ChatRowPKNotify(message: message)
+        case .announcement:
+            ChatRowAnnouncement(message: message)
+        case .rpsWin:
+            ChatRowRpsWin(message: message)
+        case .wheelRes:
+            ChatRowWheelRes(message: message)
+        case .winnerBroadcast:
+            ChatRowWinnerBroadcast(message: message)
+        case .wishlistEffect:
+            ChatRowWishlistEffect(message: message)
+        case .diamondGift:
+            ChatRowDiamondGift(message: message)
+        }
+    }
+
+    /// 保留 v7 legacy view builder 供 fallback 引用（当前不再走此路径，可清理）
+    private var legacyBody: some View {
+        if message.isSystem {
+            return AnyView(
+                Text(message.text)
+                    .font(Theme.Typography.liveRoomChatText)
+                    .foregroundColor(Color.yellow.opacity(0.9))
+                    .padding(.horizontal, Theme.Metric.liveRoomChatHPadding)
+                    .padding(.vertical, Theme.Metric.liveRoomChatVPadding)
+                    .background(Theme.Palette.liveRoomChatBackground,
+                                in: RoundedRectangle(cornerRadius: Theme.Radius.liveRoomChatBubble))
+            )
+        } else {
+            return AnyView(userMessageBubble)
+        }
+    }
+
+    // 目前 ChatMessage 无结构化字段（发送者昵称/等级/是否主播/翻译），
+    // 直接把 text 整体作为正文渲染；将来 H 里程碑扩展 ChatMessage 后可拆昵称/翻译。
+    private var userMessageBubble: some View {
+        Text(message.text)
+            .font(Theme.Typography.liveRoomChatText)
+            .foregroundColor(Theme.Palette.liveRoomChatText)
+            .padding(.horizontal, Theme.Metric.liveRoomChatHPadding)
+            .padding(.vertical, Theme.Metric.liveRoomChatVPadding)
+            .background(Theme.Palette.liveRoomChatBackground,
+                        in: RoundedRectangle(cornerRadius: Theme.Radius.liveRoomChatBubble))
+    }
+}
+
+/// 设计稿还原后的公屏消息列表（替代旧 PublicScreenList 视觉）。
+fileprivate struct LiveRoomChatList: View {
+    @ObservedObject var store: PublicChatMessagesStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Metric.liveRoomChatMsgGap) {
+            ForEach(store.messages.suffix(6)) { msg in
+                LiveRoomChatRow(message: msg)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// MARK: - 设计稿还原：Private Call 小开关（对齐 H5 liveRoom.vue:658-678 van-switch）
+//
+// H5 视觉：19x19 圆形 switch node（活动态 #FD79C1 粉色 / 非活动态 #898989 灰）+ 下方 12pt "Private call" 文字。
+// 显示条件（H5 `v-if="roomInfo.giftId && shouldShowPrivateCall"`）在 iOS 侧未接入 gift 前先无条件显示，
+// 由父 view 决定是否放到 chat area 右侧列。
+fileprivate struct LiveRoomPrivateCallSwitch: View {
+    @Binding var isOn: Bool
+    let onToggle: (Bool) -> Void
+
+    var body: some View {
+        VStack(spacing: 6) {
+            ZStack(alignment: isOn ? .trailing : .leading) {
+                Capsule()
+                    .fill(isOn ? Theme.Palette.liveRoomPrivateCallText : Color(hex: 0x898989))
+                    .frame(width: 34, height: 20)
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 16, height: 16)
+                    .padding(2)
+                    .shadow(color: .black.opacity(0.2), radius: 1, y: 1)
+            }
+            .animation(.easeInOut(duration: 0.18), value: isOn)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityValue(Text(isOn ? "on" : "off"))
+
+            Text(L10n.liveRoomPrivateCallCaption)
+                .font(Theme.Typography.liveRoomPrivateCall)
+                .foregroundColor(Theme.Palette.liveRoomPrivateCallText)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            let next = !isOn
+            isOn = next
+            onToggle(next)
+        }
+        .accessibilityLabel(Text(L10n.liveRoomPrivateCallCaption))
+    }
+}
+
+// MARK: - 设计稿还原：底部工具栏（Say hi 输入 + 圆按钮）
+//
+// 2026-07-07 v7：LiveRoomGiftQuickTile + LiveRoomGiftQuickRow 已完全移除
+// —— 用户明示"主播端没有快捷送礼"，H5 主播端此栏本就不存在（旧实现对齐错误）。
+// Theme token `liveRoomGiftTile*` / `liveRoomGiftPrice` 保留供未来 gift picker 复用
+
+fileprivate struct LiveRoomToolButton: View {
+    let systemName: String?      // 非 nil 走 SF Symbol
+    let imageName: String?       // 非 nil 走 Asset
+    let a11y: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Group {
+                if let sys = systemName {
+                    // SF Symbol：套黑圆背景保持圆按钮视觉
+                    Image(systemName: sys)
+                        .font(.system(size: 16, weight: .regular))
+                        .foregroundColor(.white)
+                        .frame(width: Theme.Metric.liveRoomToolButtonSize,
+                               height: Theme.Metric.liveRoomToolButtonSize)
+                        .background(Theme.Palette.liveRoomChipBackground, in: Circle())
+                } else if let img = imageName {
+                    // Asset 切图：本身已含灰底+icon（对齐设计稿"编组 29/5/27"），**不**再套背景
+                    Image(img)
+                        .resizable()
+                        .frame(width: Theme.Metric.liveRoomToolButtonSize,
+                               height: Theme.Metric.liveRoomToolButtonSize)
+                }
+            }
+            .contentShape(Circle())
+        }
+        .accessibilityLabel(Text(a11y))
+    }
+}
+
+fileprivate struct LiveRoomInputRow: View {
+    @Binding var text: String
+    let onSend: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            TextField(L10n.liveRoomInputPlaceholder, text: $text)
+                .font(Theme.Typography.liveRoomInputPlaceholder)
+                .foregroundStyle(.white)
+                .tint(.white)
+                .submitLabel(.send)
+                .onSubmit(onSend)
+                .padding(.leading, Theme.Metric.liveRoomInputHPadding)
+                .frame(height: Theme.Metric.liveRoomInputHeight)
+            Button(action: onSend) {
+                Image("liveRoomSendButton")
+                    .resizable()
+                    .frame(width: 24, height: 24)
+                    .padding(.trailing, 8)
+            }
+            .accessibilityLabel(Text(L10n.liveRoomInputSendA11y))
+        }
+        .frame(height: Theme.Metric.liveRoomInputHeight)
+        .background(Theme.Palette.liveRoomInputBackground,
+                    in: RoundedRectangle(cornerRadius: Theme.Radius.liveRoomInput))
     }
 }

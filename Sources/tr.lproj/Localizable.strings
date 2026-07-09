@@ -181,11 +181,29 @@
 "settings.language"            = "Dil";
 "settings.feedback"            = "Geri bildirim";
 "settings.version"             = "Sürüm";
-"settings.tos"                 = "Kullanım Şartları";
+"settings.tos"                 = "Kullanıcı Sözleşmesi";
 "settings.privacy"             = "Gizlilik Politikası";
 "settings.logout"              = "Çıkış Yap";
 "settings.logoutConfirm"       = "Bu hesaptan çıkış yapılsın mı?";
 "settings.cancel"              = "İptal";
+"settings.confirm"             = "Onayla";
+"settings.anchorPolicy"        = "Yayıncı Politikasını Görüntüle";
+"settings.clearCache"          = "Önbelleği Temizle";
+"settings.clearCacheConfirm"   = "Önbelleği temizlemek istediğinize emin misiniz?";
+"settings.clearCacheDone"      = "Önbellek temizlendi";
+"settings.selectLanguage"      = "Dil Seçin";
+"settings.feedbackComingSoon"  = "Yakında";
+
+// MARK: - Feedback 反馈表单页
+"feedback.type.appError"       = "Uygulama Hatası";
+"feedback.type.accountError"   = "Hesap Hatası";
+"feedback.type.suggestion"     = "Öneri";
+"feedback.type.other"          = "Diğer";
+"feedback.messagePlaceholder"  = "Lütfen girin";
+"feedback.emailPlaceholder"    = "Lütfen e-postanızı bırakın";
+"feedback.wrongEmail"          = "Geçersiz e-posta adresi";
+"feedback.submitSuccess"       = "Başarılı";
+"feedback.submitFailed"        = "Gönderim başarısız, tekrar deneyin";
 
 // MARK: - LevelDetail 段位详情页
 "level.title"                  = "Seviye Detayı";
@@ -267,6 +285,8 @@
 "giftPicker.confirm"                 = "Onayla";
 "giftPicker.retry"                   = "Tekrar dene";
 "giftPicker.empty"                   = "Kullanılabilir hediye yok";
+"giftPicker.send"                    = "Gönder";
+"giftPicker.all"                     = "Tümü";
 
 // MARK: - L-spec-愿望单设置页 v1
 "wishSetting.navTitle"               = "Dilek Ayarları";
@@ -330,6 +350,7 @@
 "liveResult.follow"              = "Takip Et";
 "liveResult.message"             = "Mesaj";
 "liveResult.messageComingSoon"   = "Yakında";
+"liveResult.followSuccess"       = "Takip edildi";
 
 // MARK: - 首次开播规则页（严格对齐 H5 locales/tr.json live.* + 7 条 guideline H5 tr 缺失，暂用 en fallback）
 "firstLiveRule.navTitle"         = "";
@@ -376,6 +397,54 @@
 "liveRoom.rankFormat"             = "No.%d";
 "liveRoom.rankUnlisted"           = "Sıralama";
 "liveRoom.rank.a11y"              = "Haftalık sıralama";
+"liveRoom.rank.tab.thisWeek"      = "Bu Hafta";
+"liveRoom.rank.tab.lastWeek"      = "Geçen Hafta";
+"liveRoom.rank.tab.viewers"       = "İzleyiciler";
+"liveRoom.rank.tab.topGifter"     = "En İyi Hediye Gönderen";
+"liveRoom.rank.viewers.empty"     = "Henüz izleyici yok";
+"liveRoom.rank.sheet.title"       = "Sıralama";
+"liveRoom.rank.empty"             = "Henüz sıralama verisi yok";
+"liveRoom.rank.errorRetry"        = "Yükleme başarısız. Tekrar denemek için dokunun.";
+"liveRoom.rank.ownMe"             = "Ben";
+"liveRoom.rank.diffFormat"        = "Sonraki sıralamaya %@ 💎";
+"liveRoom.retry"                  = "Tekrar dene";
+"liveRoom.rank.tab.now"           = "Şimdi";
+"liveRoom.rank.tab.today"         = "Bugün";
+"liveRoom.rank.tab.week"          = "Hafta";
+"liveRoom.rank.girlBanner"        = "Haftalık Hediye Sıralaması";
+"liveRoom.contribution.sheet.title"       = "Katkı";
+"liveRoom.contribution.tab.ranking"       = "Sıralama";
+"liveRoom.contribution.tab.record"        = "Hediye Kayıtları";
+"liveRoom.contribution.currentLiveIncome" = "Mevcut Yayın Geliri";
+"liveRoom.contribution.empty.ranking"     = "Henüz katkı verisi yok";
+"liveRoom.contribution.empty.record"      = "Henüz hediye kaydı yok";
+"liveRoom.contribution.errorRetry"        = "Yükleme başarısız. Tekrar denemek için dokunun.";
+"liveRoom.contribution.last90dFormat"     = "%@ (son 90 gün)";
+"liveRoom.contribution.sentAction"        = "gönderdi";
+"liveRoom.setting.effect"                 = "Efektler";
+"liveRoom.setting.announcement"           = "Duyuru";
+"announcement.popup.title"                = "Duyuru Yönetimi";
+"announcement.popup.placeholder"          = "Yayın duyurusunu girin (en fazla 120 karakter)";
+"announcement.popup.save"                 = "Kaydet";
+"announcement.popup.saveSuccess"          = "Başarıyla kaydedildi";
+"announcement.popup.sensitiveWord"        = "Hassas kelimeler algılandı: %@";
+"announcement.popup.saving"               = "Kaydediliyor...";
+"liveRoom.setting.sheet.title"            = "Ayarlar";
+"publicScreen.translate"                  = "Çevir";
+"publicScreen.translating"                = "Çevriliyor...";
+"publicScreen.sentAction"                 = "gönderdi";
+"publicScreen.enteredRoom"                = "odaya girdi";
+"publicScreen.luckyWin"                   = "kazandı";
+"publicScreen.luckyBySending"             = "şanslı hediye göndererek";
+"publicScreen.wheelHit"                   = "vurdu";
+"publicScreen.wheelOnTheWheel"            = "çarkta";
+"publicScreen.rpsWin"                     = "RPS'yi kazandı";
+"publicScreen.rpsGet"                     = "aldı";
+"publicScreen.wishlistTop1"               = "TOP1 hediye gönderen oldu!";
+"publicScreen.diamondBoxSend"             = "elmas kutusu gönderdi";
+"publicScreen.diamondBoxClaim"            = "aldı";
+"publicScreen.diamondBoxSettled"          = "en yüksek pay sahibi";
+"publicScreen.diamondBoxExpired"          = "elmas kutusunun süresi doldu, iade";
 "liveRoom.underway.label"         = "Yayında";
 "liveRoom.privateCall.label"      = "Özel Arama";
 "liveRoom.tool.pkDebug"           = "PK Hata Ayıklama";
@@ -428,7 +497,12 @@
 "call.error.acceptFailed"      = "Kabul sinyali gönderilemedi";
 "call.error.rtcTokenFailed"    = "RTC token alınamadı";
 "call.error.rtcTokenFormat"    = "RTC token: %@";
+"call.action.chatInput"        = "Sohbet";
+"call.action.feedback"         = "Geri Bildirim";
+"call.emptyRoom.hangupTip"     = "Arama anormal, otomatik olarak sonlandırılacak";
 "call.error.remoteRejected"    = "Arama reddedildi";
+"call.error.remoteNoAnswer"    = "Cevap yok";
+"call.error.remoteBusy"        = "Kullanıcı meşgul";
 "auth.sessionExpired"          = "Oturum süresi doldu, lütfen tekrar giriş yapın";
 
 // MARK: - Call 1v1 真实通话视图（CallView.swift）
@@ -439,7 +513,41 @@
 "call.action.accept"         = "Kabul Et";
 "call.action.hangupBackToLive" = "Kapat ve yayına dön";
 "call.action.hangup"         = "Kapat";
+// C-1 通话中控制按钮
+"call.action.micMute"                  = "Sessize al";
+"call.action.micUnmute"                = "Sesi aç";
+"call.action.switchCamera"             = "Kamerayı çevir";
+"call.networkQuality.weak"             = "Zayıf ağ — arama kalitesi etkilenebilir";
+// C-3 通话异常自检 alert
+"call.abnormal.userOffline.title"      = "Kullanıcı çevrimdışı";
+"call.abnormal.userOffline.message"    = "Diğer kullanıcı bağlantıyı kesmiş olabilir. Aramayı sonlandırmak ister misiniz?";
+"call.abnormal.networkUnstable.title"  = "Kararsız ağ";
+"call.abnormal.networkUnstable.message" = "Ağınız kararsız. Faturalandırma duraklatıldı.";
+"call.abnormal.incomeZero.title"       = "Gelir yok";
+"call.abnormal.incomeZero.message"     = "Bu arama 2 dakikayı aştı ancak gelir alınmadı.";
+"call.abnormal.endCall"                = "Aramayı sonlandır";
+"call.abnormal.continue"               = "Devam et";
+// C-4 Wave1 直播私call 300s 横幅 + 挂断确认
+"call.liveBanner.countdownFormat"      = "Yaklaşık %d saniye sonra, dakika başına arama geliriniz arama fiyatınıza eşit olacak.";
+"call.hangupConfirm.title"             = "Bu aramayı sonlandırmak istiyor musunuz?";
+"call.hangupConfirm.cancel"            = "İptal";
+// C-5 充值锁定流程
+"call.waitRecharge.bonusFormat"        = "%d 💎 bonus kazan";
+"call.waitRecharge.countdownFormat"    = "%02dsn";
+"call.congrats.title"                  = "Tebrikler!";
+"call.congrats.messageFormat"          = "Kullanıcı yükleme yaptı — %d 💎 bonusunuzu alın";
+"call.congrats.ok"                     = "Tamam";
+// C-4 Wave4 UI 布局对齐
+"call.action.askForGift"     = "Hediye iste";
+"call.action.more"           = "Daha fazla";
+"call.action.comingSoon"     = "Yakında";
+"call.remoteCameraOff"       = "Kamera kapalı";
 "call.liveBanner"            = "Özel arama · Yayına dönmek için kapatın";
+
+/* 设计稿主播端.png 对齐（2026-07-09） */
+"call.signal.label.you"                = "Sen";
+"call.signal.label.user"               = "Kullanıcı";
+"call.waitState.rechargingFormat"      = "Kullanıcı şarj ediyor, lütfen %d saniye bekleyin.";
 
 // MARK: - Call HUD（H M4 sysMsg 写入 5 publishers 的可视化）
 "call.hud.incomeFormat"      = "💰 %d";
@@ -593,6 +701,13 @@
 "message.systemInbox.notification"      = "Sistem Bilgileri";
 "message.systemInbox.admin"             = "Yönetici";
 "message.systemInbox.comingSoon"        = "Ayrıntılar yakında";
+
+// Batch 6.1 回复积分 4 tip 文案（guideTip / stimulateTip H5 蓝本硬编码英文,未翻译,tr 兼容显英文）
+"chat.guideTip"        = "Chat to earn rewards – start chatting now!";
+"chat.stimulateTip"    = "More messages from him – Unlock extra diamonds!";
+"chat.replyFastTip"    = "Çift puan için hızlı yanıtla! Sadece bir kez.";
+"chat.replyRemindTip"  = "Sistem: 15 dakikadan fazla yanıt vermediniz. En önemlisi: daha hızlı yanıtlar = daha fazla puan. Puan kazanmak için 12 saat içinde yanıt verin. 1 saat → 2x, 30 dk → 3x, 15 dk → 4x puan!";
+
 // v5 F-3 消息 preview 归一化
 "message.preview.image"                 = "[Resim]";
 "message.preview.voice"                 = "[Sesli mesaj]";
@@ -600,6 +715,9 @@
 "message.preview.location"              = "[Konum]";
 "message.preview.gift"                  = "[Hediye]";
 "message.preview.unknown"               = "[Bilinmeyen mesaj]";
+"message.preview.privatePhoto"          = "[Özel Fotoğraf]";
+"message.preview.privateVideo"          = "[Özel Video]";
+"chat.refusedTip"                       = "Mesaj gönderildi, ancak diğer taraf reddetti";
 "message.preview.callMissed"            = "Cevapsız";
 "message.preview.callRejected"          = "Reddedildi";
 "message.preview.callCancelled"         = "İptal edildi";
@@ -706,6 +824,17 @@
 "userProfile.a11y.avatar"                = "Avatar";
 "userProfile.a11y.menu"                  = "Daha fazla seçenek";
 "userProfile.a11y.giftFallback"          = "Hediye";
+
+// Report sheet
+"report.title"                           = "Bildir";
+"report.reason.incorrect"                = "Yanlış bilgi";
+"report.reason.sexual"                   = "Cinsel içerik";
+"report.reason.harassment"               = "Taciz veya rahatsız edici dil";
+"report.reason.unreasonable"             = "Makul olmayan talepler";
+"report.description.label"               = "Ayrıntılı açıklama";
+"report.description.placeholder"         = "Karşılaşılan sorunu açıklayın";
+"report.success.toast"                   = "Geri bildirim başarılı.";
+"common.other"                           = "Diğer";
 
 // MARK: - K 里程碑 美颜设置页（en 英文兜底，J 里程碑翻译团队补齐 tr）
 "beautySettings.pageTitle"                                  = "Beauty";
@@ -821,13 +950,18 @@
 "match.toast.turnOffSucceed"     = "Eşleştirme kapatıldı";
 "match.toast.cameraStartFailed"  = "Kamera başlatılamadı";
 "match.toast.cameraUnavailable"  = "Kamera kullanılamıyor";
+"match.toast.imOffline"          = "Yeniden bağlanılıyor, lütfen tekrar deneyin";
+"match.resumeAlert.title"        = "Eşleştirmeyi Sürdürmek İster misiniz?";
+"match.resumeAlert.message"      = "Eşleştirmeyi yeniden başlatmak istiyor musunuz?";
+"match.resumeAlert.confirm"      = "Sürdür";
+"match.resumeAlert.cancel"       = "İptal";
 
 // Match rule 弹窗
 "match.rule.title"               = "Eşleşme Kuralları";
-"match.rule.detail1"             = "Arama arayan kullanıcılarla gerçek zamanlı görüntülü eşleşme.";
-"match.rule.detail2"             = "Eşleşme sırasında güvenilirlik için yüzünüzü görünür tutun.";
-"match.rule.detail3"             = "Uygunsuz içerik eşleştirmenin askıya alınmasına neden olabilir.";
-"match.rule.detail4"             = "Etkinleştirerek topluluk kurallarını kabul etmiş olursunuz.";
+"match.rule.detail1"             = "1. Her arama yüz algılaması içerir. Eşleştirme için yüz görünür olmalıdır. Yüz algılanmazsa, eşleştirme ayrıcalıkları birkaç dakika için geçici olarak askıya alınır. Belirli sayıda ihlalin aşılması, eşleştirmeden bir günlük yasakla sonuçlanır.";
+"match.rule.detail2"             = "2. Eşleşen aramalar için ilk 20 saniye ücretsizdir. 20 saniyeden sonra, arama fiyatınıza göre ücretler uygulanır.";
+"match.rule.detail3"             = "3. Birkaç eşleşmeden sonra, \"Görevler\" altından elmas ödüllerini talep edebilirsiniz.";
+"match.rule.detail4"             = "4. Karşı taraf yeniden yükleme yaparken, arama 30 saniye bağlı kalacaktır; yeniden yüklemeleri başarılı olduğunda, faturalandırma dakika başına oranınızla devam edecektir.";
 "match.rule.agree"               = "Kabul Ediyorum";
 
 // Match tip 弹窗
@@ -840,6 +974,15 @@
 "match.face.notDetected.content" = "Eşleşme sırasında lütfen yüzünüzü görünür tutun. 5 saniye içinde yüz algılanmazsa eşleşmeden çıkarılacaksınız.";
 "match.exit.title"               = "Eşleşmeden çıkarıldınız";
 "match.exit.content"             = "Kontrol sırasında yüzünüz algılanmadı. Eşleşme havuzundan çıkarıldınız.";
+
+/* v10 (2026-07-08) Wishlist + 心愿达成飘屏 */
+"wishlist.progress.complete"     = "Tamamlandı";
+"wishlist.panel.title"           = "%@'in bu turdaki dilek listesi";
+"wishlist.panel.subtitle"        = "Yayıncının küçük dileğini gerçekleştirmesine yardım et, ödüller kazan!";
+"wishlist.panel.top6Title"       = "En İyi Bağışçılar";
+"wishlist.panel.top6Empty"       = "Sadece hediye değerine göre en iyi 6 gösterilir";
+"wishlist.achieved.title"        = "Dilek Gerçekleşti!";
+
 /* EditProfile 用户资料编辑页（I 里程碑） */
 "editProfile.navTitle"                             = "Profili Düzenle";
 "editProfile.confirm"                              = "Kaydet";

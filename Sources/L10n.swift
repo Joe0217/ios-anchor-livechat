@@ -2,18 +2,16 @@ import Foundation
 
 /// 本地化查表入口。
 ///
-/// - Release：走标准 `NSLocalizedString`，按 Bundle.main.preferredLocalizations 解析（系统语言）
-/// - DEBUG：若 `DebugLocaleStore.shared.current != .system`，从对应 `.lproj` sub-bundle 直接查表
-///   —— 这样运行时切换语言无需重启 app，文案立即更新（配合 DebugLocaleEnvironment 的 .id() 触发子树重建）。
+/// - `AppLocaleStore.shared.current != .system` 时：从对应 `.lproj` sub-bundle 直接查表 ——
+///   用户在 Settings → Language 切换语言时立即生效无需重启（配合 AppLocaleEnvironmentModifier `.id()` 触发子树重建）。
+/// - `.system` 或 sub-bundle 未命中时：fallback 到标准 `NSLocalizedString`，按系统语言解析。
 ///
 /// 所有 L10n 字段是 computed property（每次访问重新查表），切语言后 View 重绘时自动取到新文案。
 fileprivate func localize(_ key: String, comment: String = "") -> String {
-    #if DEBUG
-    if let sub = DebugLocaleStore.shared.subBundle {
+    if let sub = AppLocaleStore.shared.subBundle {
         let value = sub.localizedString(forKey: key, value: "__MISSING__", table: nil)
         if value != "__MISSING__" { return value }
     }
-    #endif
     return NSLocalizedString(key, comment: comment)
 }
 
@@ -301,6 +299,8 @@ enum L10n {
     static var toolWorkingGuide: String { localize("work.tool.workingGuide", comment: "工作指南") }
     static var toolBackpack: String { localize("work.tool.backpack", comment: "背包") }
     static var toolLiveData: String { localize("work.tool.liveData", comment: "直播数据") }
+    static var toolNewbie: String { localize("work.tool.newbie", comment: "新手") }
+    static var toolBigR: String { localize("work.tool.bigR", comment: "大R") }
 
     // Invite 角标（H5 style: 金红渐变 "Earn Money"）
     static var inviteEarnMoney: String { localize("work.invite.earnMoney", comment: "邀请赚钱角标") }
@@ -426,6 +426,24 @@ enum L10n {
     static var settingsLogout: String          { localize("settings.logout", comment: "退出登录按钮") }
     static var settingsLogoutConfirm: String   { localize("settings.logoutConfirm", comment: "退出登录确认") }
     static var settingsCancel: String          { localize("settings.cancel", comment: "取消") }
+    static var settingsConfirm: String         { localize("settings.confirm", comment: "确认") }
+    static var settingsAnchorPolicy: String    { localize("settings.anchorPolicy", comment: "主播规范条目") }
+    static var settingsClearCache: String      { localize("settings.clearCache", comment: "清除缓存条目") }
+    static var settingsClearCacheConfirm: String { localize("settings.clearCacheConfirm", comment: "清除缓存二次确认") }
+    static var settingsClearCacheDone: String  { localize("settings.clearCacheDone", comment: "清除缓存完成 toast") }
+    static var settingsSelectLanguage: String  { localize("settings.selectLanguage", comment: "语言选择页标题") }
+    static var settingsFeedbackComingSoon: String { localize("settings.feedbackComingSoon", comment: "反馈占位 toast（保留兼容，本轮已启用真反馈页）") }
+
+    // MARK: - Feedback 反馈表单页
+    static var feedbackTypeAppError: String     { localize("feedback.type.appError", comment: "App Error 类型") }
+    static var feedbackTypeAccountError: String { localize("feedback.type.accountError", comment: "Account Error 类型") }
+    static var feedbackTypeSuggestion: String   { localize("feedback.type.suggestion", comment: "Suggestion 类型") }
+    static var feedbackTypeOther: String        { localize("feedback.type.other", comment: "Other 类型") }
+    static var feedbackMessagePlaceholder: String { localize("feedback.messagePlaceholder", comment: "message textarea placeholder") }
+    static var feedbackEmailPlaceholder: String { localize("feedback.emailPlaceholder", comment: "email 输入框 placeholder") }
+    static var feedbackWrongEmail: String       { localize("feedback.wrongEmail", comment: "邮箱格式错误 toast") }
+    static var feedbackSubmitSuccess: String    { localize("feedback.submitSuccess", comment: "提交成功 toast") }
+    static var feedbackSubmitFailed: String     { localize("feedback.submitFailed", comment: "提交失败 toast") }
 
     // MARK: - Blocklist 黑名单列表（I-1，spec §10.3）
     static var blocklistTitle: String              { localize("blocklist.title", comment: "黑名单列表页标题") }
@@ -472,6 +490,12 @@ enum L10n {
     static var messageSystemInboxAdmin: String         { localize("message.systemInbox.admin", comment: "Flame 顶部 Admin 客服入口标题") }
     static var messageSystemInboxComingSoon: String    { localize("message.systemInbox.comingSoon", comment: "3 入口详情页留 H-2 未开放 toast") }
 
+    // MARK: - Batch 6.1 回复积分 4 tip 文案（H5 蓝本 en.json:820-821 + chat/index.vue:43-44 硬编码）
+    static var chatGuideTip: String        { localize("chat.guideTip",       comment: "初次进入付费聊天页引导") }
+    static var chatStimulateTip: String    { localize("chat.stimulateTip",   comment: "用户连发 ≥10 条付费消息激励主播") }
+    static var chatReplyFastTip: String    { localize("chat.replyFastTip",   comment: "回复积分快速回复引导") }
+    static var chatReplyRemindTip: String  { localize("chat.replyRemindTip", comment: "主播 15 分钟未回复提醒") }
+
     // MARK: - Message 消息 preview 归一化（v5 F-3 i18n）
     static var messagePreviewImage: String          { localize("message.preview.image", comment: "会话预览：图片") }
     static var messagePreviewVoice: String          { localize("message.preview.voice", comment: "会话预览：语音") }
@@ -479,6 +503,13 @@ enum L10n {
     static var messagePreviewLocation: String       { localize("message.preview.location", comment: "会话预览：位置") }
     static var messagePreviewGift: String           { localize("message.preview.gift", comment: "会话预览：礼物") }
     static var messagePreviewUnknown: String        { localize("message.preview.unknown", comment: "会话预览：未知消息") }
+    // H-3 新增（私密媒体展示）
+    static var messagePreviewPrivatePhoto: String   { localize("message.preview.privatePhoto", comment: "会话预览：私密图片") }
+    static var messagePreviewPrivateVideo: String   { localize("message.preview.privateVideo", comment: "会话预览：私密视频") }
+
+    // H-3 新增（私聊页 UI 文案，spec §6.5；ar/tr 走 en 兜底待产品补 Q9）
+    static var chatRefusedTip: String               { localize("chat.refusedTip", comment: "被拒消息灰底整行 tip 文案") }
+
     static var messagePreviewCallMissed: String     { localize("message.preview.callMissed", comment: "会话预览：未接来电") }
     static var messagePreviewCallRejected: String   { localize("message.preview.callRejected", comment: "会话预览：拒接") }
     static var messagePreviewCallCancelled: String  { localize("message.preview.callCancelled", comment: "会话预览：已取消") }
@@ -607,6 +638,10 @@ enum L10n {
     static var giftPickerConfirm: String { localize("giftPicker.confirm", comment: "确认") }
     static var giftPickerRetry: String { localize("giftPicker.retry", comment: "重试") }
     static var giftPickerEmpty: String { localize("giftPicker.empty", comment: "空态") }
+    /// H-4 公共礼物面板：Send 主按钮（派对房送礼场景；本轮 factory 声明未 wire）
+    static var giftPickerSend: String { localize("giftPicker.send", comment: "派对房送礼 Send 按钮") }
+    /// H-4 公共礼物面板：All 全选按钮（派对房受者头像行）
+    static var giftPickerAll: String { localize("giftPicker.all", comment: "All 全选按钮") }
 
     // MARK: - L-spec-愿望单设置页 v1
     static var wishSettingNavTitle: String { localize("wishSetting.navTitle", comment: "Wish Setting 页顶部") }
@@ -680,6 +715,8 @@ enum L10n {
     static var liveResultFollow: String { localize("liveResult.follow", comment: "关注按钮") }
     static var liveResultMessage: String { localize("liveResult.message", comment: "私信按钮") }
     static var liveResultMessageComingSoon: String { localize("liveResult.messageComingSoon", comment: "私信入口占位 toast") }
+    /// 关注成功 toast（对齐 H5 CFollowButton 关注后弹 vant showToast）
+    static var liveResultFollowSuccess: String { localize("liveResult.followSuccess", comment: "关注成功 toast") }
 
     // MARK: - 首次开播规则页（严格对齐 H5 views/liveRule/component/firstLiveRule.vue + locales/*.json live.*）
     static var firstLiveRuleNavTitle: String { localize("firstLiveRule.navTitle", comment: "首次开播规则页 nav title") }
@@ -757,6 +794,93 @@ enum L10n {
     static var liveRoomRouletteA11y: String { localize("liveRoom.roulette.a11y", comment: "顶部互动转盘按钮 a11y") }
     static var liveRoomComingSoonRoulette: String { localize("liveRoom.comingSoon.roulette", comment: "点击转盘按钮占位提示") }
 
+    // MARK: v7 LiveRoom Rank sheet + Contribution sheet + Roulette intro/setting（linter 曾清空，v10 补回）
+    static var liveRoomRankSheetTitle: String { localize("liveRoom.rank.sheet.title", comment: "Rank sheet 标题") }
+    static var liveRoomRankTabThisWeek: String { localize("liveRoom.rank.tab.thisWeek", comment: "本周 Tab") }
+    static var liveRoomRankTabLastWeek: String { localize("liveRoom.rank.tab.lastWeek", comment: "上周 Tab") }
+    /// v13 顶层 Tab：观众列表
+    static var liveRoomRankTabViewers: String { localize("liveRoom.rank.tab.viewers", comment: "顶层 Viewers Tab") }
+    /// v13 顶层 Tab：送礼周榜
+    static var liveRoomRankTabTopGifter: String { localize("liveRoom.rank.tab.topGifter", comment: "顶层 Top Gifter Tab") }
+    /// v13 Viewers Tab 空态提示（H 期接 apiViewers 前的占位）
+    static var liveRoomRankViewersEmpty: String { localize("liveRoom.rank.viewers.empty", comment: "Viewers 空态") }
+    /// v14 Top Gifter 内层 Now/Today/Week 3 子 Tab（对齐 H5 apiSendRank 3 时间维度）
+    static var liveRoomRankTabNow: String { localize("liveRoom.rank.tab.now", comment: "Top Gifter Now Tab") }
+    static var liveRoomRankTabToday: String { localize("liveRoom.rank.tab.today", comment: "Top Gifter Today Tab") }
+    static var liveRoomRankTabWeek: String { localize("liveRoom.rank.tab.week", comment: "Top Gifter Week Tab") }
+    /// v16 girlWeeklyRank banner 标题（对齐 H5 liveGirlRankEn.webp / liveGirlRankAr.png 主播周榜文字）
+    static var liveRoomGirlRankBanner: String { localize("liveRoom.rank.girlBanner", comment: "girlWeeklyRank banner 装饰文字") }
+    static var liveRoomRankEmpty: String { localize("liveRoom.rank.empty", comment: "Rank 空态") }
+    static var liveRoomRankErrorRetry: String { localize("liveRoom.rank.errorRetry", comment: "加载失败重试") }
+    static var liveRoomRankOwnMe: String { localize("liveRoom.rank.ownMe", comment: "自己 fallback 昵称") }
+    static var liveRoomRankDiffFormat: String { localize("liveRoom.rank.diffFormat", comment: "距上一名格式") }
+    static var liveRoomContributionSheetTitle: String { localize("liveRoom.contribution.sheet.title", comment: "钻石收益 sheet 标题") }
+    static var liveRoomContributionTabRanking: String { localize("liveRoom.contribution.tab.ranking", comment: "贡献榜 Tab") }
+    static var liveRoomContributionTabRecord: String { localize("liveRoom.contribution.tab.record", comment: "礼物记录 Tab") }
+    static var liveRoomContributionCurrentLiveIncome: String { localize("liveRoom.contribution.currentLiveIncome", comment: "本场收入") }
+    static var liveRoomContributionEmptyRanking: String { localize("liveRoom.contribution.empty.ranking", comment: "贡献榜空态") }
+    static var liveRoomContributionEmptyRecord: String { localize("liveRoom.contribution.empty.record", comment: "礼物记录空态") }
+    static var liveRoomContributionErrorRetry: String { localize("liveRoom.contribution.errorRetry", comment: "加载失败重试") }
+    static var liveRoomContribution90dFormat: String { localize("liveRoom.contribution.last90dFormat", comment: "90天格式") }
+    static var liveRoomContributionSentAction: String { localize("liveRoom.contribution.sentAction", comment: "送出动作") }
+    static var liveRoomRouletteIntroCard1Title: String { localize("liveRoom.roulette.intro.card1.title", comment: "引导卡1标题") }
+    static var liveRoomRouletteIntroCard1Body: String { localize("liveRoom.roulette.intro.card1.body", comment: "引导卡1正文") }
+    static var liveRoomRouletteIntroCard2Title: String { localize("liveRoom.roulette.intro.card2.title", comment: "引导卡2标题") }
+    static var liveRoomRouletteIntroCard2Body: String { localize("liveRoom.roulette.intro.card2.body", comment: "引导卡2正文") }
+    static var liveRoomRouletteIntroCard3Title: String { localize("liveRoom.roulette.intro.card3.title", comment: "引导卡3标题") }
+    static var liveRoomRouletteIntroCard3Body: String { localize("liveRoom.roulette.intro.card3.body", comment: "引导卡3正文") }
+    static var liveRoomRouletteIntroNext: String { localize("liveRoom.roulette.intro.next", comment: "下一步") }
+    static var liveRoomRouletteIntroStart: String { localize("liveRoom.roulette.intro.start", comment: "开始") }
+    static var liveRoomRouletteSettingTitle: String { localize("liveRoom.roulette.setting.title", comment: "转盘设置标题") }
+    static var liveRoomRouletteEnable: String { localize("liveRoom.roulette.enable", comment: "启用转盘") }
+    static var liveRoomRoulettePrice: String { localize("liveRoom.roulette.price", comment: "转盘价格") }
+    static var liveRoomRouletteSectors: String { localize("liveRoom.roulette.sectors", comment: "奖项列表") }
+    static var liveRoomRouletteSectorsEmpty: String { localize("liveRoom.roulette.sectors.empty", comment: "奖项空态") }
+    static var liveRoomRouletteEdit: String { localize("liveRoom.roulette.edit", comment: "编辑") }
+    static var liveRoomRouletteRules: String { localize("liveRoom.roulette.rules", comment: "规则") }
+    static var liveRoomRouletteErrorRetry: String { localize("liveRoom.roulette.errorRetry", comment: "加载失败重试") }
+    static var liveRoomRetry: String { localize("liveRoom.retry", comment: "通用重试") }
+
+    // MARK: v6-v9 keys (linter 曾清空，v10 补回)
+    static var liveRoomAudienceA11y: String { localize("liveRoom.audience.a11y", comment: "观众 popup 标题") }
+    static var liveRoomComingSoonAudience: String { localize("liveRoom.comingSoon.audience", comment: "观众列表占位") }
+    static var publicScreenTranslate: String { localize("publicScreen.translate", comment: "翻译按钮 a11y") }
+    static var publicScreenTranslating: String { localize("publicScreen.translating", comment: "翻译中提示") }
+    static var publicScreenSentAction: String { localize("publicScreen.sentAction", comment: "送礼动作词") }
+    static var publicScreenEnteredRoom: String { localize("publicScreen.enteredRoom", comment: "进入房间") }
+    /// v18 幸运礼物 / 转盘 / 猜拳 / 心愿单 / 钻石盲盒 公屏文案
+    static var publicScreenLuckyWin: String { localize("publicScreen.luckyWin", comment: "幸运礼物 wins") }
+    static var publicScreenLuckyBySending: String { localize("publicScreen.luckyBySending", comment: "幸运礼物 by sending lucky") }
+    static var publicScreenWheelHit: String { localize("publicScreen.wheelHit", comment: "转盘 hit") }
+    static var publicScreenWheelOnTheWheel: String { localize("publicScreen.wheelOnTheWheel", comment: "转盘 on the wheel") }
+    static var publicScreenRpsWin: String { localize("publicScreen.rpsWin", comment: "猜拳 wins RPS") }
+    static var publicScreenRpsGet: String { localize("publicScreen.rpsGet", comment: "猜拳 get medal") }
+    static var publicScreenWishlistTop1: String { localize("publicScreen.wishlistTop1", comment: "心愿单登顶") }
+    static var publicScreenDiamondBoxSend: String { localize("publicScreen.diamondBoxSend", comment: "钻石盲盒发包") }
+    static var publicScreenDiamondBoxClaim: String { localize("publicScreen.diamondBoxClaim", comment: "钻石盲盒瓜分") }
+    static var publicScreenDiamondBoxSettled: String { localize("publicScreen.diamondBoxSettled", comment: "钻石盲盒结算") }
+    static var publicScreenDiamondBoxExpired: String { localize("publicScreen.diamondBoxExpired", comment: "钻石盲盒过期退回") }
+    static var virtualPropsEffectSwitchTitle: String { localize("virtualProps.effectSwitch.title", comment: "虚拟道具开关标题") }
+    static var virtualPropsEffectSwitchDescription: String { localize("virtualProps.effectSwitch.description", comment: "虚拟道具开关说明") }
+    static var virtualPropsEffectEnable: String { localize("virtualProps.effectEnable", comment: "启用效果") }
+    static var announcementPopupTitle: String { localize("announcement.popup.title", comment: "公告标题") }
+    static var announcementPlaceholder: String { localize("announcement.popup.placeholder", comment: "公告输入提示") }
+    static var announcementSave: String { localize("announcement.popup.save", comment: "保存") }
+    static var announcementSaveSuccess: String { localize("announcement.popup.saveSuccess", comment: "保存成功") }
+    static var announcementSensitiveWord: String { localize("announcement.popup.sensitiveWord", comment: "敏感词 %@") }
+    /// v20 保存中文案（3 语已补齐）
+    static var announcementSaving: String { localize("announcement.popup.saving", comment: "保存中") }
+    static var userCardTitle: String { localize("userCard.title", comment: "名片卡标题") }
+    static var userCardFollow: String { localize("userCard.follow", comment: "关注") }
+    static var userCardUnfollow: String { localize("userCard.unfollow", comment: "取关") }
+    static var userCardBlock: String { localize("userCard.block", comment: "拉黑") }
+    static var userCardUnblock: String { localize("userCard.unblock", comment: "取消拉黑") }
+    static var userCardFollowers: String { localize("userCard.followers", comment: "粉丝") }
+    static var userCardFollowing: String { localize("userCard.following", comment: "关注数") }
+    static var userCardGiftWall: String { localize("userCard.giftWall", comment: "礼物墙") }
+    static var userCardErrorRetry: String { localize("userCard.errorRetry", comment: "名片卡加载失败") }
+    static var paidBulletDislike: String { localize("paidBullet.dislike", comment: "不喜欢") }
+
     // MARK: - LiveRoom H5 交互对齐（2026-07-06 restore-design iteration 2）
     /// 底部工具栏 4 圆按钮（对齐 H5 msg/gift/setting 3 图标 + PKEntryBtn）
     static var liveRoomToolMessage:  String { localize("liveRoom.tool.message",  comment: "底部消息按钮 a11y") }
@@ -768,6 +892,12 @@ enum L10n {
     static var liveRoomSettingBeauty:     String { localize("liveRoom.setting.beauty",     comment: "设置菜单：美颜") }
     /// 设置菜单：结束直播项
     static var liveRoomSettingEndLive:    String { localize("liveRoom.setting.endLive",    comment: "设置菜单：结束直播") }
+    /// v17 设置菜单：虚拟道具特效（对齐 H5 liveSettingPopup effect-toggle）
+    static var liveRoomSettingEffect:     String { localize("liveRoom.setting.effect",     comment: "设置菜单：虚拟道具特效") }
+    /// v17 设置菜单：公告管理（对齐 H5 liveSettingPopup 📢 announcement）
+    static var liveRoomSettingAnnouncement: String { localize("liveRoom.setting.announcement", comment: "设置菜单：公告管理") }
+    /// v17 设置弹窗标题
+    static var liveRoomSettingSheetTitle: String { localize("liveRoom.setting.sheet.title", comment: "设置弹窗标题") }
 
     // MARK: PK 入口按钮 5 态 a11y + 中断/断开确认占位（对齐 H5 pkEntryBtn.vue）
     static var liveRoomPKA11yDefault:   String { localize("liveRoom.pk.a11y.default",   comment: "PK 按钮默认态 a11y") }
@@ -809,6 +939,10 @@ enum L10n {
     /// "rtcToken: %@" 错误格式（%@ 为底层错误消息）
     static var callErrorRtcTokenFormat: String     { localize("call.error.rtcTokenFormat", comment: "RTC token 错误格式") }
     static var callErrorRemoteRejected: String     { localize("call.error.remoteRejected", comment: "对方已拒绝") }
+    static var callErrorRemoteNoAnswer: String     { localize("call.error.remoteNoAnswer", comment: "对方无应答（30s 主叫超时）") }
+    static var callErrorRemoteBusy: String         { localize("call.error.remoteBusy", comment: "对方正忙（rejectReason=busy）") }
+    /// 黑屏空房间检测倒计时弹窗文案（DM-20260616-003；对齐 H5 emptyRoomCountdownPop.vue）
+    static var callEmptyRoomHangupTip: String      { localize("call.emptyRoom.hangupTip", comment: "通话异常将自动挂断（10s 倒计时）") }
     /// 通用：会话已过期 / 未登录提示
     static var sessionExpiredError: String         { localize("auth.sessionExpired", comment: "未登录 / 会话已过期") }
 
@@ -820,7 +954,46 @@ enum L10n {
     static var callActionAccept: String { localize("call.action.accept", comment: "1v1：接听按钮") }
     static var callActionHangupBackToLive: String { localize("call.action.hangupBackToLive", comment: "1v1：挂断回直播（直播私 call）") }
     static var callActionHangup: String { localize("call.action.hangup", comment: "1v1：挂断按钮") }
+    // C-1 通话中控制按钮 UI（Wave 1）
+    static var callActionMicMute: String { localize("call.action.micMute", comment: "C-1：静音麦克风按钮 label") }
+    static var callActionMicUnmute: String { localize("call.action.micUnmute", comment: "C-1：取消静音按钮 label") }
+    static var callActionSwitchCamera: String { localize("call.action.switchCamera", comment: "C-1：切换前后置摄像头按钮 label") }
+    static var callNetworkQualityWeak: String { localize("call.networkQuality.weak", comment: "C-1：弱网 toast（连续 30 次质量差触发）") }
+    // C-3 通话异常自检 alert（tenSecondsCB + secondsToZero）
+    static var callAbnormalUserOfflineTitle: String { localize("call.abnormal.userOffline.title", comment: "C-3：对方离线 alert 标题") }
+    static var callAbnormalUserOfflineMessage: String { localize("call.abnormal.userOffline.message", comment: "C-3：对方离线 alert 副标题") }
+    static var callAbnormalNetworkUnstableTitle: String { localize("call.abnormal.networkUnstable.title", comment: "C-3：网络不稳定 alert 标题") }
+    static var callAbnormalNetworkUnstableMessage: String { localize("call.abnormal.networkUnstable.message", comment: "C-3：网络不稳定 alert 副标题（不计费）") }
+    static var callAbnormalIncomeZeroTitle: String { localize("call.abnormal.incomeZero.title", comment: "C-3：收入异常 alert 标题") }
+    static var callAbnormalIncomeZeroMessage: String { localize("call.abnormal.incomeZero.message", comment: "C-3：收入异常 alert 副标题（>120s 无收入）") }
+    static var callAbnormalEndCall: String { localize("call.abnormal.endCall", comment: "C-3：异常 alert End Call 按钮（destructive）") }
+    static var callAbnormalContinue: String { localize("call.abnormal.continue", comment: "C-3：异常 alert Continue 按钮（继续通话）") }
+    // C-4 Wave1 UI 补齐（gap-009 直播私 call 300s 收益横幅 + gap-018 挂断二次确认）
+    static var callLiveBannerCountdownFormat: String { localize("call.liveBanner.countdownFormat", comment: "C-4 gap-009：直播私 call 300s 收益横幅（%d 秒）") }
+    static var callHangupConfirmTitle: String { localize("call.hangupConfirm.title", comment: "C-4 gap-018：顶部 X 按钮挂断二次确认标题") }
+    static var callHangupConfirmCancel: String { localize("call.hangupConfirm.cancel", comment: "C-4 gap-018：挂断二次确认取消按钮") }
+    // C-5 充值锁定流程（gap-011/012）
+    static var callWaitRechargeBonusFormat: String { localize("call.waitRecharge.bonusFormat", comment: "C-5 gap-011：充值锁定顶部提示 bonus 胶囊（%d 钻石）") }
+    static var callWaitRechargeCountdownFormat: String { localize("call.waitRecharge.countdownFormat", comment: "C-5 gap-011：充值锁定倒计时（%d 秒）") }
+    static var callCongratsTitle: String { localize("call.congrats.title", comment: "C-5 gap-012：充值成功 Congrats 弹窗标题") }
+    static var callCongratsMessageFormat: String { localize("call.congrats.messageFormat", comment: "C-5 gap-012：充值成功副标题（%d 钻石）") }
+    static var callCongratsOK: String { localize("call.congrats.ok", comment: "C-5 gap-012：充值成功 OK 按钮") }
+    // C-4 Wave4 UI 布局对齐（gap-004 占位 + gap-005 占位）
+    static var callActionAskForGift: String { localize("call.action.askForGift", comment: "1v1：索要礼物按钮（H5 g-faceTime askForGift）") }
+    static var callActionMore: String { localize("call.action.more", comment: "1v1：更多菜单按钮（打开反馈/举报 sheet）") }
+    /// 底部第 1 键：聊天输入（H5 icon-chat-btn；点击展开公屏输入框，Wave 6 依赖 NIM 通话通道）
+    static var callActionChatInput: String { localize("call.action.chatInput", comment: "1v1：聊天输入按钮（发公屏消息）") }
+    /// 底部第 3 键：反馈（H5 icon-more-btn；打开 feedback sheet type='call'）
+    static var callActionFeedback: String { localize("call.action.feedback", comment: "1v1：反馈按钮（打开反馈 sheet）") }
+    static var callActionComingSoon: String { localize("call.action.comingSoon", comment: "1v1：占位实现的按钮 Coming Soon toast") }
+    // C-4 Wave4 C 组 gap-010：远端摄像头 off fallback
+    static var callRemoteCameraOff: String { localize("call.remoteCameraOff", comment: "C-gap010：对方关摄像头时占位文案") }
     static var callLiveBanner: String { localize("call.liveBanner", comment: "1v1：直播私 call 顶部 banner") }
+
+    // 设计稿主播端.png 对齐（2026-07-09）：顶部信息卡装饰性信号条 + waitState 内联粉色 tag
+    static var callSignalLabelYou: String { localize("call.signal.label.you", comment: "顶部信息卡 You 信号条标签（装饰性 UI，非真实网络质量）") }
+    static var callSignalLabelUser: String { localize("call.signal.label.user", comment: "顶部信息卡 User 信号条标签（装饰性 UI）") }
+    static var callWaitStateRechargingFormat: String { localize("call.waitState.rechargingFormat", comment: "顶部信息卡粉色 tag：User recharging, please wait %ds.") }
 
     // MARK: - C 1v1 通话（HUD）
     enum Call {
@@ -886,6 +1059,17 @@ enum L10n {
     static var userProfileA11yAvatar: String        { localize("userProfile.a11y.avatar", comment: "无障碍：头像 label") }
     static var userProfileA11yMenu: String          { localize("userProfile.a11y.menu", comment: "无障碍：菜单按钮 label") }
     static var userProfileA11yGiftFallback: String  { localize("userProfile.a11y.giftFallback", comment: "无障碍：礼物 name 为 nil 时兜底") }
+
+    // Report sheet（对齐 H5 c-feedbackPopup type='userProfile' 分支）
+    static var reportTitle: String                  { localize("report.title", comment: "举报 sheet 标题 + 提交按钮") }
+    static var reportReasonIncorrect: String        { localize("report.reason.incorrect", comment: "原因：信息不准") }
+    static var reportReasonSexual: String           { localize("report.reason.sexual", comment: "原因：色情内容") }
+    static var reportReasonHarassment: String       { localize("report.reason.harassment", comment: "原因：骚扰/恶意言语") }
+    static var reportReasonUnreasonable: String     { localize("report.reason.unreasonable", comment: "原因：不合理要求") }
+    static var reportDescriptionLabel: String       { localize("report.description.label", comment: "描述输入区 label") }
+    static var reportDescriptionPlaceholder: String { localize("report.description.placeholder", comment: "描述输入区 placeholder") }
+    static var reportSuccessToast: String           { localize("report.success.toast", comment: "举报成功 toast") }
+    static var commonOther: String                  { localize("common.other", comment: "通用：其他") }
 
     // MARK: - K 里程碑 美颜设置页（对照 H5 beautySettings/index.vue；spec §4）
     enum BeautySettings {
@@ -1009,123 +1193,6 @@ enum L10n {
         }
     }
 
-    // MARK: - Match tab（L 里程碑）
-    /// 跑马灯"Video Call Started."
-    static var matchMarqueeCallStarted: String {
-        localize("match.marquee.callStarted", comment: "跑马灯 Video Call Started.")
-    }
-    /// 跑马灯空态占位（H5 主播端跑马灯一直显示，iOS 侧对齐；空 callList 时兜底文案）
-    static var matchMarqueeEmpty: String {
-        localize("match.marquee.empty", comment: "跑马灯空态占位")
-    }
-    /// "N Matches Found!"
-    static func matchTitleMatchesFound(count: Int) -> String {
-        String(format: localize("match.title.matchesFound", comment: "N Matches Found!"), count)
-    }
-    /// 主视觉下方描述
-    static var matchSubtitleDescription: String {
-        localize("match.subtitle.description",
-                 comment: "Your recent matches are above. Tap to chat and charm them into calling you.")
-    }
-    /// 用户列表空态
-    static var matchUserListEmpty: String {
-        localize("match.userList.empty", comment: "暂无匹配用户")
-    }
-    /// 用户卡片 sheet：价格
-    static func matchUserCardVideoPrice(price: Int) -> String {
-        String(format: localize("match.userCard.videoPrice", comment: "%d/min"), price)
-    }
-    /// 用户卡片 sheet：关闭按钮
-    static var matchUserCardClose: String {
-        localize("match.userCard.close", comment: "关闭")
-    }
-    /// 匹配按钮 a11y：开启匹配
-    static var matchButtonA11yTurnOn: String {
-        localize("match.button.a11y.turnOn", comment: "开启匹配 a11y")
-    }
-    /// 匹配按钮 a11y：关闭匹配
-    static var matchButtonA11yTurnOff: String {
-        localize("match.button.a11y.turnOff", comment: "关闭匹配 a11y")
-    }
-
-    // MARK: - Match toast（L 里程碑 · MatchStore 状态迁移 toast 文案）
-    static var matchToastNetworkError: String {
-        localize("match.toast.networkError", comment: "网络失败 toast")
-    }
-    static var matchToastNoFaceDetected: String {
-        localize("match.toast.noFaceDetected", comment: "人脸识别失败被封禁 toast")
-    }
-    static var matchToastExceedCount: String {
-        localize("match.toast.exceedCount", comment: "超过匹配次数上限 toast")
-    }
-    static var matchToastTurnOnFailed: String {
-        localize("match.toast.turnOnFailed", comment: "开启匹配失败 toast")
-    }
-    static var matchToastTurnOnSucceed: String {
-        localize("match.toast.turnOnSucceed", comment: "开启匹配成功 toast")
-    }
-    static var matchToastTurnOffSucceed: String {
-        localize("match.toast.turnOffSucceed", comment: "关闭匹配成功 toast")
-    }
-    static var matchToastCameraStartFailed: String {
-        localize("match.toast.cameraStartFailed", comment: "摄像头开启失败 toast")
-    }
-    static var matchToastCameraUnavailable: String {
-        localize("match.toast.cameraUnavailable", comment: "摄像头长时间中断未恢复 toast")
-    }
-    /// 跑马灯 VoiceOver 语义化文案（避免用 "→" 箭头符号，RTL 无歧义）。
-    /// %@ = caller nickname / %@ = receiver nickname
-    static func matchMarqueeA11yCallFormat(caller: String, receiver: String) -> String {
-        String(format: localize("match.marquee.a11y.callFormat",
-                                comment: "跑马灯 VoiceOver: %@ called %@"),
-               caller, receiver)
-    }
-
-    // MARK: - Match rule 弹窗（#3b 首次每日开启匹配的规则同意；对齐 H5 c-goMatch.vue showRulePopup）
-    static var matchRuleTitle: String {
-        localize("match.rule.title", comment: "匹配规则弹窗标题")
-    }
-    static var matchRuleDetail1: String {
-        localize("match.rule.detail1", comment: "匹配规则条款 1")
-    }
-    static var matchRuleDetail2: String {
-        localize("match.rule.detail2", comment: "匹配规则条款 2")
-    }
-    static var matchRuleDetail3: String {
-        localize("match.rule.detail3", comment: "匹配规则条款 3")
-    }
-    static var matchRuleDetail4: String {
-        localize("match.rule.detail4", comment: "匹配规则条款 4")
-    }
-    static var matchRuleAgree: String {
-        localize("match.rule.agree", comment: "匹配规则同意按钮")
-    }
-
-    // MARK: - Match tip 弹窗（#3c 10 分钟未开启匹配提示）
-    static var matchTipTitle: String {
-        localize("match.tip.title", comment: "匹配提示弹窗标题（Turn on matching to receive calls faster）")
-    }
-    static var matchTipGoMatch: String {
-        localize("match.tip.goMatch", comment: "匹配提示确认按钮")
-    }
-    static var matchTipNoReminder: String {
-        localize("match.tip.noReminder", comment: "今日不再提醒 checkbox 文案")
-    }
-
-    // MARK: - #3d 未露脸弹窗 + 移除匹配弹窗
-    static var matchFaceNotDetectedTitle: String {
-        localize("match.face.notDetected.title", comment: "未检测到人脸标题")
-    }
-    static var matchFaceNotDetectedContent: String {
-        localize("match.face.notDetected.content", comment: "未检测到人脸提示内容")
-    }
-    static var matchExitTitle: String {
-        localize("match.exit.title", comment: "移除匹配弹窗标题")
-    }
-    static var matchExitContent: String {
-        localize("match.exit.content", comment: "移除匹配弹窗内容")
-    }
-}
     // MARK: - EditProfile 用户资料编辑页（I 里程碑，对齐 H5 anchor-livechat-h5/src/views/profile/index.vue）
     enum EditProfile {
         // 顶栏 & 通用
@@ -1195,3 +1262,201 @@ enum L10n {
         static var toastNetworkError: String     { localize("editProfile.toast.networkError", comment: "网络错误 toast") }
     }
 
+    // MARK: - Match tab（L 里程碑）
+    /// 跑马灯"Video Call Started."
+    static var matchMarqueeCallStarted: String {
+        localize("match.marquee.callStarted", comment: "跑马灯 Video Call Started.")
+    }
+    /// 跑马灯空态占位（H5 主播端跑马灯一直显示，iOS 侧对齐；空 callList 时兜底文案）
+    static var matchMarqueeEmpty: String {
+        localize("match.marquee.empty", comment: "跑马灯空态占位")
+    }
+    /// "N Matches Found!"
+    static func matchTitleMatchesFound(count: Int) -> String {
+        String(format: localize("match.title.matchesFound", comment: "N Matches Found!"), count)
+    }
+    /// 主视觉下方描述
+    static var matchSubtitleDescription: String {
+        localize("match.subtitle.description",
+                 comment: "Your recent matches are above. Tap to chat and charm them into calling you.")
+    }
+    /// 用户列表空态
+    static var matchUserListEmpty: String {
+        localize("match.userList.empty", comment: "暂无匹配用户")
+    }
+    /// 用户卡片 sheet：价格
+    static func matchUserCardVideoPrice(price: Int) -> String {
+        String(format: localize("match.userCard.videoPrice", comment: "%d/min"), price)
+    }
+    /// 用户卡片 sheet：关闭按钮
+    static var matchUserCardClose: String {
+        localize("match.userCard.close", comment: "关闭")
+    }
+    /// 匹配按钮 a11y：开启匹配
+    static var matchButtonA11yTurnOn: String {
+        localize("match.button.a11y.turnOn", comment: "开启匹配 a11y")
+    }
+    /// 匹配按钮 a11y：关闭匹配
+    static var matchButtonA11yTurnOff: String {
+        localize("match.button.a11y.turnOff", comment: "关闭匹配 a11y")
+    }
+
+    // MARK: - Match toast（L 里程碑 · MatchStore 状态迁移 toast 文案）
+    static var matchToastNetworkError: String {
+        localize("match.toast.networkError", comment: "网络失败 toast")
+    }
+    static var matchToastNoFaceDetected: String {
+        localize("match.toast.noFaceDetected", comment: "人脸识别失败被封禁 toast")
+    }
+    static var matchToastExceedCount: String {
+        localize("match.toast.exceedCount", comment: "超过匹配次数上限 toast")
+    }
+    static var matchToastTurnOnFailed: String {
+        localize("match.toast.turnOnFailed", comment: "开启匹配失败 toast")
+    }
+    static var matchToastTurnOnSucceed: String {
+        localize("match.toast.turnOnSucceed", comment: "开启匹配成功 toast")
+    }
+    static var matchToastTurnOffSucceed: String {
+        localize("match.toast.turnOffSucceed", comment: "关闭匹配成功 toast")
+    }
+    static var matchToastCameraStartFailed: String {
+        localize("match.toast.cameraStartFailed", comment: "摄像头开启失败 toast")
+    }
+    static var matchToastCameraUnavailable: String {
+        localize("match.toast.cameraUnavailable", comment: "摄像头长时间中断未恢复 toast")
+    }
+    static var matchToastImOffline: String {
+        localize("match.toast.imOffline", comment: "IM 离线 toast")
+    }
+    /// Gap-5：非匹配来电接通挂断后的 Resume Match 确认 Alert
+    static var matchResumeAlertTitle: String {
+        localize("match.resumeAlert.title", comment: "Resume Match Alert 标题")
+    }
+    static var matchResumeAlertMessage: String {
+        localize("match.resumeAlert.message", comment: "Resume Match Alert 正文")
+    }
+    static var matchResumeAlertConfirm: String {
+        localize("match.resumeAlert.confirm", comment: "Resume Match Alert 确认按钮")
+    }
+    static var matchResumeAlertCancel: String {
+        localize("match.resumeAlert.cancel", comment: "Resume Match Alert 取消按钮")
+    }
+    /// 跑马灯 VoiceOver 语义化文案（避免用 "→" 箭头符号，RTL 无歧义）。
+    /// %@ = caller nickname / %@ = receiver nickname
+    static func matchMarqueeA11yCallFormat(caller: String, receiver: String) -> String {
+        String(format: localize("match.marquee.a11y.callFormat",
+                                comment: "跑马灯 VoiceOver: %@ called %@"),
+               caller, receiver)
+    }
+
+    // MARK: - Match rule 弹窗（#3b 首次每日开启匹配的规则同意；对齐 H5 c-goMatch.vue showRulePopup）
+    static var matchRuleTitle: String {
+        localize("match.rule.title", comment: "匹配规则弹窗标题")
+    }
+    static var matchRuleDetail1: String {
+        localize("match.rule.detail1", comment: "匹配规则条款 1")
+    }
+    static var matchRuleDetail2: String {
+        localize("match.rule.detail2", comment: "匹配规则条款 2")
+    }
+    static var matchRuleDetail3: String {
+        localize("match.rule.detail3", comment: "匹配规则条款 3")
+    }
+    static var matchRuleDetail4: String {
+        localize("match.rule.detail4", comment: "匹配规则条款 4")
+    }
+    static var matchRuleAgree: String {
+        localize("match.rule.agree", comment: "匹配规则同意按钮")
+    }
+
+    // MARK: - Match tip 弹窗（#3c 10 分钟未开启匹配提示）
+    static var matchTipTitle: String {
+        localize("match.tip.title", comment: "匹配提示弹窗标题（Turn on matching to receive calls faster）")
+    }
+    static var matchTipGoMatch: String {
+        localize("match.tip.goMatch", comment: "匹配提示确认按钮")
+    }
+    static var matchTipNoReminder: String {
+        localize("match.tip.noReminder", comment: "今日不再提醒 checkbox 文案")
+    }
+
+    // MARK: - #3d 未露脸弹窗 + 移除匹配弹窗
+    static var matchFaceNotDetectedTitle: String {
+        localize("match.face.notDetected.title", comment: "未检测到人脸标题")
+    }
+    static var matchFaceNotDetectedContent: String {
+        localize("match.face.notDetected.content", comment: "未检测到人脸提示内容")
+    }
+    static var matchExitTitle: String {
+        localize("match.exit.title", comment: "移除匹配弹窗标题")
+    }
+    static var matchExitContent: String {
+        localize("match.exit.content", comment: "移除匹配弹窗内容")
+    }
+
+    // MARK: v10 Wishlist 全套 + 心愿达成飘屏（2026-07-08 —— 对齐 H5 wishlist/wishlist-anchor-panel）
+    static var wishlistProgressComplete: String { localize("wishlist.progress.complete", comment: "心愿达成态文案 Complete") }
+    /// %@ 主播昵称
+    static var wishlistPanelTitle: String { localize("wishlist.panel.title", comment: "面板标题 %@'s wish list for this round") }
+    static var wishlistPanelSubtitle: String { localize("wishlist.panel.subtitle", comment: "面板副标题") }
+    static var wishlistTop6Title: String { localize("wishlist.panel.top6Title", comment: "Top Gifters 标题") }
+    static var wishlistTop6Empty: String { localize("wishlist.panel.top6Empty", comment: "Top6 说明文案") }
+    static var wishlistAchievedTitle: String { localize("wishlist.achieved.title", comment: "心愿达成飘屏标题") }
+
+    // MARK: - A-2 新主播注册流程一期（en；ar/tr Step 4 by /i18n translate）
+    enum Register {
+        // 标题
+        static var titleBasicInfo: String { localize("register.title.basicInfo", comment: "P1 顶部标题 基本资料") }
+        static var titleRequired: String { localize("register.title.required", comment: "P2 顶部标题 必填资料") }
+        static var titleVideoGuide: String { localize("register.title.videoGuide", comment: "视频录制引导弹窗标题") }
+        // 字段 label
+        static var fieldNickname: String { localize("register.field.nickname", comment: "昵称字段 placeholder") }
+        static var fieldBirthday: String { localize("register.field.birthday", comment: "生日字段") }
+        static var fieldCountry: String { localize("register.field.country", comment: "国家字段") }
+        static var fieldInviteCode: String { localize("register.field.inviteCode", comment: "邀请码字段") }
+        static var fieldInviteCodeOptional: String { localize("register.field.inviteCodeOptional", comment: "邀请码可选提示") }
+        static var fieldRequiredFields: String { localize("register.field.requiredFields", comment: "Page 1 进入必填资料 row 文案") }
+        static var fieldYourLanguage: String { localize("register.field.yourLanguage", comment: "Page 2 语言标题") }
+        static var fieldSelectLanguage: String { localize("register.field.selectLanguage", comment: "语言 field placeholder") }
+        static func fieldYourPhotos(_ minCount: Int) -> String {
+            String(format: localize("register.field.yourPhotos", comment: "Photos 标题带 min N"), minCount)
+        }
+        static var fieldTakeVideo: String { localize("register.field.takeVideo", comment: "视频卡片标题") }
+        // 操作按钮
+        static var actionSignUp: String { localize("register.action.signUp", comment: "Page 1 底部按钮") }
+        static var actionUpload: String { localize("register.action.upload", comment: "Page 2 底部按钮 未上传态") }
+        static var actionEdit: String { localize("register.action.edit", comment: "Page 2 底部按钮 已上传态") }
+        static var actionRerecord: String { localize("register.action.rerecord", comment: "预览页重录按钮") }
+        static var actionGoToRecord: String { localize("register.action.goToRecord", comment: "视频引导弹窗按钮") }
+        static func actionConfirmN(_ n: Int) -> String {
+            String(format: localize("register.action.confirmN", comment: "Confirm(N) 按钮"), n)
+        }
+        static var actionCancel: String { localize("register.action.cancel", comment: "取消") }
+        static var actionLanguageTitle: String { localize("register.action.languageTitle", comment: "语言弹窗顶部 title") }
+        // 视频引导文案
+        static func videoGuideBody(_ seconds: Int) -> String {
+            String(format: localize("register.video.guideBody", comment: "视频引导长文案 %d 秒"), seconds)
+        }
+        static var videoDiscardConfirm: String { localize("register.video.discardConfirm", comment: "录制中 back 二次确认") }
+        // 错误文案（toast / alert）
+        static var errorAvatarRequired: String { localize("register.error.avatarRequired", comment: "缺头像") }
+        static var errorNicknameRequired: String { localize("register.error.nicknameRequired", comment: "缺昵称") }
+        static var errorBirthdayRequired: String { localize("register.error.birthdayRequired", comment: "缺生日") }
+        static var errorCountryRequired: String { localize("register.error.countryRequired", comment: "缺国家") }
+        static var errorLanguageRequired: String { localize("register.error.languageRequired", comment: "缺语言") }
+        static var errorLanguageMax: String { localize("register.error.languageMax", comment: "语言超上限 4") }
+        static func errorPhotosMin(_ minCount: Int) -> String {
+            String(format: localize("register.error.photosMin", comment: "照片少于 %d"), minCount)
+        }
+        static var errorVideoRequired: String { localize("register.error.videoRequired", comment: "缺视频") }
+        static var errorCameraDenied: String { localize("register.error.cameraDenied", comment: "相机权限拒") }
+        static var errorMicDenied: String { localize("register.error.micDenied", comment: "麦克风权限拒") }
+        static var errorRecordInterrupted: String { localize("register.error.recordInterrupted", comment: "录制中断") }
+        static var errorCompressFailed: String { localize("register.error.compressFailed", comment: "视频压缩失败") }
+        static var errorUploadFailed: String { localize("register.error.uploadFailed", comment: "上传失败通用") }
+        static func errorImageTooLarge(_ maxMB: Int) -> String {
+            String(format: localize("register.error.imageTooLarge", comment: "图片超原图硬顶 %d MB"), maxMB)
+        }
+    }
+}

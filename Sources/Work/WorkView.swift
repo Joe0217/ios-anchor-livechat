@@ -23,7 +23,7 @@ struct WorkView: View {
                     WeeklyLevelHeader(vm: vm)
                     StatCardsRow(vm: vm)
                     TodayIncomeCard(vm: vm)
-                    ToolsSection()
+                    ToolsSection(showNewbie: vm.showNewbie, showBigR: vm.showBigR)
                 }
                 .padding(.horizontal, Theme.Metric.screenMargin)
                 .padding(.top, 8)
@@ -188,6 +188,8 @@ private struct OfflineConfirmDialog: View {
 /// - `.liveSettings`：开播设置页（B-spec-开播设置页）
 /// - `.wishSetting`：愿望单设置页（L-spec-愿望单设置页）
 /// - `.beautySettings`：美颜设置页（K-spec-美颜设置页）
+/// - `.giftMessage`：私密媒体解锁（H-2）
+/// - `.newbie` / `.bigR`：入口对齐 H5，页面 J 里程碑落地（当前占位）
 enum WorkRoute: Hashable {
     case pocDebug
     case firstLiveRule
@@ -195,6 +197,35 @@ enum WorkRoute: Hashable {
     case wishSetting
     case beautySettings
     case giftMessage        // H-2 私密媒体解锁
+    case newbie             // J 里程碑：新手任务
+    case bigR               // J 里程碑：Star User 大 R 名单
+    /// 直播结果页（B spec v7 从 fullScreenCover 改为 push 页面；LiveRoomView state=.ended 触发切 tab + path 重建）。
+    /// 关联字段：begin/endTimestamp（毫秒）+ endType（强制下播原因；nil 表示用户主动 endLive）
+    case liveResult(begin: Int64, end: Int64, endType: Int?)
+}
+
+/// Work 里 J 里程碑未落地页面的占位视图（保持 H5 视觉入口对齐）。
+struct WorkComingSoonView: View {
+    let title: String
+
+    var body: some View {
+        ZStack {
+            Theme.Palette.screenBackground.ignoresSafeArea()
+            VStack(spacing: 12) {
+                Image(systemName: "hourglass")
+                    .font(.system(size: 48, weight: .light))
+                    .foregroundStyle(.white.opacity(0.7))
+                Text(title)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text("Coming Soon")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+        }
+        .navigationTitle(title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
 }
 
 #Preview {

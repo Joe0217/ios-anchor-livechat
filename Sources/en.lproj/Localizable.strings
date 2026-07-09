@@ -179,11 +179,29 @@
 "settings.language"            = "Language";
 "settings.feedback"            = "Feedback";
 "settings.version"             = "Version";
-"settings.tos"                 = "Terms of Service";
+"settings.tos"                 = "User Agreement";
 "settings.privacy"             = "Privacy Policy";
 "settings.logout"              = "Log Out";
 "settings.logoutConfirm"       = "Log out of this account?";
 "settings.cancel"              = "Cancel";
+"settings.confirm"             = "Confirm";
+"settings.anchorPolicy"        = "View Anchor Policy";
+"settings.clearCache"          = "Clear Cache";
+"settings.clearCacheConfirm"   = "Are you sure to clear cache?";
+"settings.clearCacheDone"      = "Cache cleared";
+"settings.selectLanguage"      = "Select Language";
+"settings.feedbackComingSoon"  = "Coming soon";
+
+// MARK: - Feedback 反馈表单页
+"feedback.type.appError"       = "App Error";
+"feedback.type.accountError"   = "Account Error";
+"feedback.type.suggestion"     = "Suggestion";
+"feedback.type.other"          = "Other";
+"feedback.messagePlaceholder"  = "Please enter";
+"feedback.emailPlaceholder"    = "Please leave your email";
+"feedback.wrongEmail"          = "Wrong email address";
+"feedback.submitSuccess"       = "Succeed";
+"feedback.submitFailed"        = "Submit failed, please try again";
 
 // MARK: - LevelDetail 段位详情页
 "level.title"                  = "Level Detail";
@@ -265,6 +283,8 @@
 "giftPicker.confirm"                 = "Confirm";
 "giftPicker.retry"                   = "Retry";
 "giftPicker.empty"                   = "No gifts available";
+"giftPicker.send"                    = "Send";
+"giftPicker.all"                     = "All";
 
 // MARK: - L-spec-愿望单设置页 v1（对齐 H5 wishSetting）
 "wishSetting.navTitle"               = "Wish Setting";
@@ -333,6 +353,54 @@
 "liveRoom.rankFormat"             = "No.%d";
 "liveRoom.rankUnlisted"           = "Rank";
 "liveRoom.rank.a11y"              = "Weekly rank";
+"liveRoom.rank.tab.thisWeek"      = "This Week";
+"liveRoom.rank.tab.lastWeek"      = "Last Week";
+"liveRoom.rank.tab.viewers"       = "Viewers";
+"liveRoom.rank.tab.topGifter"     = "Top Gifter";
+"liveRoom.rank.viewers.empty"     = "No viewers yet";
+"liveRoom.rank.sheet.title"       = "Ranking";
+"liveRoom.rank.empty"             = "No ranking data yet";
+"liveRoom.rank.errorRetry"        = "Failed to load. Tap to retry.";
+"liveRoom.rank.ownMe"             = "Me";
+"liveRoom.rank.diffFormat"        = "%@ 💎 to next rank";
+"liveRoom.retry"                  = "Retry";
+"liveRoom.rank.tab.now"           = "Now";
+"liveRoom.rank.tab.today"         = "Today";
+"liveRoom.rank.tab.week"          = "Week";
+"liveRoom.rank.girlBanner"        = "Weekly Gift Ranking";
+"liveRoom.contribution.sheet.title"       = "Contribution";
+"liveRoom.contribution.tab.ranking"       = "Ranking";
+"liveRoom.contribution.tab.record"        = "Gift Records";
+"liveRoom.contribution.currentLiveIncome" = "Current Live Income";
+"liveRoom.contribution.empty.ranking"     = "No contribution data yet";
+"liveRoom.contribution.empty.record"      = "No gift records yet";
+"liveRoom.contribution.errorRetry"        = "Failed to load. Tap to retry.";
+"liveRoom.contribution.last90dFormat"     = "%@ (last 90d)";
+"liveRoom.contribution.sentAction"        = "sent";
+"liveRoom.setting.effect"                 = "Effects";
+"liveRoom.setting.announcement"           = "Announcement";
+"announcement.popup.title"                = "Announcement Management";
+"announcement.popup.placeholder"          = "Enter your live announcement (up to 120 characters)";
+"announcement.popup.save"                 = "Save";
+"announcement.popup.saveSuccess"          = "Saved successfully";
+"announcement.popup.sensitiveWord"        = "Sensitive words detected: %@";
+"announcement.popup.saving"               = "Saving...";
+"liveRoom.setting.sheet.title"            = "Settings";
+"publicScreen.translate"                  = "Translate";
+"publicScreen.translating"                = "Translating...";
+"publicScreen.sentAction"                 = "Send";
+"publicScreen.enteredRoom"                = "entered the room";
+"publicScreen.luckyWin"                   = "wins";
+"publicScreen.luckyBySending"             = "by sending lucky";
+"publicScreen.wheelHit"                   = "hit";
+"publicScreen.wheelOnTheWheel"            = "on the wheel";
+"publicScreen.rpsWin"                     = "wins RPS";
+"publicScreen.rpsGet"                     = "get";
+"publicScreen.wishlistTop1"               = "became TOP1 gifter!";
+"publicScreen.diamondBoxSend"             = "sent a diamond box";
+"publicScreen.diamondBoxClaim"            = "claimed";
+"publicScreen.diamondBoxSettled"          = "top-shared";
+"publicScreen.diamondBoxExpired"          = "diamond box expired, refund";
 "liveRoom.underway.label"         = "Underway";
 "liveRoom.privateCall.label"      = "Private Call";
 "liveRoom.tool.pkDebug"           = "PK debug";
@@ -385,7 +453,12 @@
 "call.error.acceptFailed"      = "Failed to send accept signal";
 "call.error.rtcTokenFailed"    = "Failed to fetch RTC token";
 "call.error.rtcTokenFormat"    = "RTC token: %@";
+"call.action.chatInput"        = "Chat";
+"call.action.feedback"         = "Feedback";
+"call.emptyRoom.hangupTip"     = "Call abnormal, will auto hangup";
 "call.error.remoteRejected"    = "The call was declined";
+"call.error.remoteNoAnswer"    = "No answer";
+"call.error.remoteBusy"        = "User is busy";
 "auth.sessionExpired"          = "Session expired, please sign in again";
 
 // MARK: - Call 1v1 真实通话视图（CallView.swift）
@@ -396,7 +469,41 @@
 "call.action.accept"         = "Accept";
 "call.action.hangupBackToLive" = "Hang up & back to live";
 "call.action.hangup"         = "Hang Up";
+// C-1 通话中控制按钮
+"call.action.micMute"                  = "Mute";
+"call.action.micUnmute"                = "Unmute";
+"call.action.switchCamera"             = "Flip";
+"call.networkQuality.weak"             = "Poor network — call quality may be affected";
+// C-3 通话异常自检 alert
+"call.abnormal.userOffline.title"      = "User Offline";
+"call.abnormal.userOffline.message"    = "The other user may have disconnected. Do you want to end the call?";
+"call.abnormal.networkUnstable.title"  = "Unstable Network";
+"call.abnormal.networkUnstable.message" = "Your network is unstable. Billing has been paused.";
+"call.abnormal.incomeZero.title"       = "No Income";
+"call.abnormal.incomeZero.message"     = "This call has lasted over 2 minutes with no income received.";
+"call.abnormal.endCall"                = "End Call";
+"call.abnormal.continue"               = "Continue";
+// C-4 Wave1 直播私call 300s 横幅 + 挂断确认
+"call.liveBanner.countdownFormat"      = "After about %d seconds, your call income per minute will equal your call price.";
+"call.hangupConfirm.title"             = "End this call?";
+"call.hangupConfirm.cancel"            = "Cancel";
+// C-5 充值锁定流程
+"call.waitRecharge.bonusFormat"        = "Get %d 💎 bonus";
+"call.waitRecharge.countdownFormat"    = "%02ds";
+"call.congrats.title"                  = "Congrats!";
+"call.congrats.messageFormat"          = "User recharged — grab your %d 💎 bonus";
+"call.congrats.ok"                     = "OK";
+// C-4 Wave4 UI 布局对齐
+"call.action.askForGift"     = "Ask for Gift";
+"call.action.more"           = "More";
+"call.action.comingSoon"     = "Coming soon";
+"call.remoteCameraOff"       = "Camera off";
 "call.liveBanner"            = "Private call · Hang up to return to live";
+
+/* 设计稿主播端.png 对齐（2026-07-09） */
+"call.signal.label.you"                = "You";
+"call.signal.label.user"               = "User";
+"call.waitState.rechargingFormat"      = "User recharging, please wait %ds.";
 
 // MARK: - Call HUD（H M4 sysMsg 写入 5 publishers 的可视化）
 "call.hud.incomeFormat"      = "💰 %d";
@@ -550,6 +657,13 @@
 "message.systemInbox.notification"      = "System Information";
 "message.systemInbox.admin"             = "Administrator";
 "message.systemInbox.comingSoon"        = "Details coming soon";
+
+// Batch 6.1 回复积分 4 tip 文案（H5 蓝本 en.json:820-821 + chat/index.vue:43-44 硬编码）
+"chat.guideTip"        = "Chat to earn rewards – start chatting now!";
+"chat.stimulateTip"    = "More messages from him – Unlock extra diamonds!";
+"chat.replyFastTip"    = "Reply fast for double points! One time only.";
+"chat.replyRemindTip"  = "System: You haven't replied in over 15 minutes. Most importantly: faster replies = more points. Reply within 12h to earn points. 1h → 2x, 30min → 3x, 15min → 4x points!";
+
 // v5 F-3 消息 preview 归一化
 "message.preview.image"                 = "[Image]";
 "message.preview.voice"                 = "[Voice]";
@@ -557,6 +671,9 @@
 "message.preview.location"              = "[Location]";
 "message.preview.gift"                  = "[Gift]";
 "message.preview.unknown"               = "[Unknown]";
+"message.preview.privatePhoto"          = "[Private Photo]";
+"message.preview.privateVideo"          = "[Private Video]";
+"chat.refusedTip"                       = "The message has been sent, but the other party rejected it";
 "message.preview.callMissed"            = "Missed";
 "message.preview.callRejected"          = "Rejected";
 "message.preview.callCancelled"         = "Cancelled";
@@ -663,6 +780,17 @@
 "userProfile.a11y.avatar"                = "Avatar";
 "userProfile.a11y.menu"                  = "More options";
 "userProfile.a11y.giftFallback"          = "Gift";
+
+// Report sheet (对齐 H5 c-feedbackPopup type='userProfile' 分支)
+"report.title"                           = "Report";
+"report.reason.incorrect"                = "Incorrect information";
+"report.reason.sexual"                   = "Sexual content";
+"report.reason.harassment"               = "Harassment or repulsive language";
+"report.reason.unreasonable"             = "Unreasonable demands";
+"report.description.label"               = "Detailed description";
+"report.description.placeholder"         = "Describe the problem encountered";
+"report.success.toast"                   = "Feedback success.";
+"common.other"                           = "Other";
 
 // MARK: - K 里程碑 美颜设置页
 "beautySettings.pageTitle"                                  = "Beauty";
@@ -778,6 +906,7 @@
 "liveResult.follow"              = "Follow";
 "liveResult.message"             = "Message";
 "liveResult.messageComingSoon"   = "Coming soon";
+"liveResult.followSuccess"       = "Followed";
 
 // MARK: - 首次开播规则页（严格对齐 H5 locales/en.json live.*）
 "firstLiveRule.navTitle"         = "";
@@ -818,14 +947,19 @@
 "match.toast.turnOffSucceed"     = "Matching turned off";
 "match.toast.cameraStartFailed"  = "Camera failed to start";
 "match.toast.cameraUnavailable"  = "Camera unavailable";
+"match.toast.imOffline"          = "Reconnecting, please try again";
+"match.resumeAlert.title"        = "Resume Match?";
+"match.resumeAlert.message"      = "Do you want to resume matching?";
+"match.resumeAlert.confirm"      = "Resume";
+"match.resumeAlert.cancel"       = "Cancel";
 "match.marquee.a11y.callFormat"  = "%@ called %@";
 
 // Match rule 弹窗（#3b 首次每日开启匹配的规则同意）
 "match.rule.title"               = "Matching Rules";
-"match.rule.detail1"             = "Real-time video matching with users seeking a call.";
-"match.rule.detail2"             = "Keep your face visible during matching for authenticity.";
-"match.rule.detail3"             = "Inappropriate content may result in matching suspension.";
-"match.rule.detail4"             = "By enabling, you agree to the platform's community guidelines.";
+"match.rule.detail1"             = "1. Each call includes face detection. Violations lead to a day-long ban from matching. A visible face is required to match. Not detecting one will result in a 10-minute pause of matching privileges.";
+"match.rule.detail2"             = "2. For matched calls, the first 20 seconds are FREE. After 20 seconds, charges apply based on your call price.";
+"match.rule.detail3"             = "3. After several matches, you can claim diamond rewards under 'Task'.";
+"match.rule.detail4"             = "4. While the other party is recharging, the call will remain connected for 30 seconds; once their recharge succeeds, billing will continue at your per-minute rate.";
 "match.rule.agree"               = "Agree";
 
 // Match tip 弹窗（#3c 10 分钟未开启匹配提示）
@@ -838,6 +972,15 @@
 "match.face.notDetected.content" = "Please keep your face visible during matching. Face not detected in 5 seconds will remove you from matching.";
 "match.exit.title"               = "Removed from matching";
 "match.exit.content"             = "Your face wasn't detected during the check. You've been removed from the matching pool.";
+
+/* v10 (2026-07-08) Wishlist + 心愿达成飘屏 */
+"wishlist.progress.complete"     = "Complete";
+"wishlist.panel.title"           = "%@'s wish list for this round";
+"wishlist.panel.subtitle"        = "Help the live streamer achieve their small wish and get rewards!";
+"wishlist.panel.top6Title"       = "Top Gifters";
+"wishlist.panel.top6Empty"       = "Only the top 6 by gift value are shown";
+"wishlist.achieved.title"        = "Wish Achieved!";
+
 /* EditProfile 用户资料编辑页（I 里程碑，对齐 H5 anchor-livechat-h5/src/views/profile/index.vue） */
 "editProfile.navTitle"                             = "Edit Profile";
 "editProfile.confirm"                              = "Save";
@@ -890,3 +1033,42 @@
 "editProfile.toast.avatarInReview"                 = "The avatar is in review, please wait...";
 "editProfile.toast.nicknameInReview"               = "Sorry, your profile detail is in review";
 "editProfile.toast.networkError"                   = "Network error, please try again";
+
+// MARK: - A-2 新主播注册流程一期（en；ar/tr Step 4 by /i18n translate）
+"register.title.basicInfo"                          = "Complete your basic profile";
+"register.title.required"                           = "Required fields";
+"register.title.videoGuide"                         = "Take a Review Video";
+"register.field.nickname"                           = "Nickname";
+"register.field.birthday"                           = "Birthday";
+"register.field.country"                            = "Country";
+"register.field.inviteCode"                         = "Invitation code";
+"register.field.inviteCodeOptional"                 = "optional";
+"register.field.requiredFields"                     = "Required fields";
+"register.field.yourLanguage"                       = "Your Language (Multi-select allowed)";
+"register.field.selectLanguage"                     = "Select your working language";
+"register.field.yourPhotos"                         = "Your Profile Photos (At least %d)";
+"register.field.takeVideo"                          = "Take a Review Video";
+"register.action.signUp"                            = "Sign Up";
+"register.action.upload"                            = "Upload";
+"register.action.edit"                              = "Edit";
+"register.action.rerecord"                          = "Re-record";
+"register.action.goToRecord"                        = "Go to Record";
+"register.action.confirmN"                          = "Confirm ( %d )";
+"register.action.cancel"                            = "Cancel";
+"register.action.languageTitle"                     = "Language";
+"register.video.guideBody"                          = "You're shooting a video for residency approval here. The video will only be provided for official review and will not be shown to clients. We will protect your privacy, so feel at ease.\n\nYou need to record a %ds video. You can greetus up or introduce anything you like. Please make sure to clearly show your face. Thank you for your cooperation.";
+"register.video.discardConfirm"                     = "Discard recording? Recording will be lost.";
+"register.error.avatarRequired"                     = "Please upload your avatar";
+"register.error.nicknameRequired"                   = "Please enter your nickname";
+"register.error.birthdayRequired"                   = "Please select your birthday";
+"register.error.countryRequired"                    = "Please select your country";
+"register.error.languageRequired"                   = "Please select your language";
+"register.error.languageMax"                        = "You can only choose four";
+"register.error.photosMin"                          = "Please upload at least %d profile photos";
+"register.error.videoRequired"                      = "Please upload your video.";
+"register.error.cameraDenied"                       = "Camera access required. Please enable it in Settings.";
+"register.error.micDenied"                          = "Microphone access required. Please enable it in Settings.";
+"register.error.recordInterrupted"                  = "Recording interrupted. Please retry.";
+"register.error.compressFailed"                     = "Video processing failed. Please re-record.";
+"register.error.uploadFailed"                       = "Upload failed. Please retry.";
+"register.error.imageTooLarge"                      = "The image is too large (max %dMB). Please choose a smaller one.";

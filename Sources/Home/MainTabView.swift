@@ -24,6 +24,8 @@ struct MainTabView: View {
     @State private var selection: MainTab = .home
     @State private var homePath: NavigationPath = NavigationPath()
     @State private var workPath: NavigationPath = NavigationPath()
+    /// H-2 spec §4.1：Messages tab 加 NavigationStack path 支持 push ChatDetailView（对齐 homePath 模式）
+    @State private var messagesPath: NavigationPath = NavigationPath()
     @State private var profilePath: NavigationPath = NavigationPath()
     @State private var isOnSubpage: Bool = false
     @Environment(\.scenePhase) private var scenePhase
@@ -31,6 +33,12 @@ struct MainTabView: View {
     /// `.starting` 期间锁 tabbar 拦截触摸，防止 push 到 LiveRoomView 前 tab 切换导致
     /// NavigationStack 销毁 → 后端已建房 iOS 无心跳/rtc = 僵尸房间（B-spec-开播设置页 §1.4 🔴#1 🔴#5）
     @ObservedObject private var liveSettingsLock = LiveSettingsLock.shared
+
+    /// 程序驱动 tab 切换时抑制 `onChange(of: selection)` 清 path 逻辑。
+    /// 场景：`liveResultTransitionAction` 从 Home 入口切 Work Tab 时同帧设 `workPath = [.liveResult]`；
+    /// 若不抑制，`onChange(of: selection)` 会把 workPath 立即重置为 `NavigationPath()`，结果页 push 丢失。
+    /// 生命周期：action 内 `true` → 下个 runloop `false`；只影响这一次程序驱动切换。
+    @State private var suppressPathClearOnTabChange: Bool = false
 
     /// L 里程碑：匹配态摄像头会话（全局唯一 owner）。挂在 MainTabView 层让预览浮窗跨 tab 可见：
     /// - MatchTabView keep-alive 保护，但 overlay 挂 MatchTabView.overlay 时切走 tab 就消失
@@ -49,9 +57,56 @@ struct MainTabView: View {
     /// LiveRoomView 随 path 清空自然 dismantle → onDisappear 清相机/RTC/NIM/心跳。
     private var liveTerminationAction: LiveTerminationAction {
         LiveTerminationAction {
+            // LiveStore 非单例（LiveRoomView @StateObject），随 view dismount 自然释放；
+            // 下一场开播由 attachLiving 重置 begin/endTimestamp/endType，无需外层显式 reset
             selection = .work
             homePath = NavigationPath()
             workPath = NavigationPath()
+        }
+    }
+
+    /// Work Match 图标点击 → 切 Home Tab + 请求 LiveTabView 切 Match top tab（对齐首页 Match 入口）。
+    private var openHomeMatchAction: OpenHomeMatchAction {
+        OpenHomeMatchAction {
+            selection = .home
+            HomeNavigationBus.shared.requestTopTab(.match)
+        }
+    }
+
+    /// 跨 tab 打开私聊页 action：切 Messages Tab + 清 home/work path + push peerYxAccId 到 messagesPath。
+    /// 从直播结果页 Message 按钮触发时，LiveRoomView 已随 state=.ended 主动清资源；path 清空后 dismount 幂等兜底。
+    private var openChatAction: OpenChatAction {
+        OpenChatAction { peerYxAccId in
+            guard !peerYxAccId.isEmpty else { return }
+            selection = .messages
+            homePath = NavigationPath()
+            workPath = NavigationPath()
+            messagesPath = NavigationPath([peerYxAccId])
+        }
+    }
+
+    /// 直播结束 → 切 Work Tab + workPath 重建为单层 `[liveResult]`（B spec v7 push 架构）。
+    /// LiveRoomView + LiveSettings dismount 触发 onDisappear 正常清资源；结果页作为新根出现。
+    ///
+    /// **必须抑制 onChange(of: selection) 清 path**（review 202607091438 P1）：
+    /// 从 Home 入口开播时 selection 从 .home → .work 会触发 onChange 清 workPath，
+    /// 把我们刚设的 `[liveResult]` 立即覆盖为空 → 结果页无法显示。
+    private var liveResultTransitionAction: LiveResultTransitionAction {
+        LiveResultTransitionAction { begin, end, endType in
+            guard let begin, let end else {
+                // 时间戳缺失（异常路径）：不构造 route，直接切 Work 根
+                suppressPathClearOnTabChange = true
+                selection = .work
+                homePath = NavigationPath()
+                workPath = NavigationPath()
+                DispatchQueue.main.async { suppressPathClearOnTabChange = false }
+                return
+            }
+            suppressPathClearOnTabChange = true
+            selection = .work
+            homePath = NavigationPath()
+            workPath = NavigationPath([WorkRoute.liveResult(begin: begin, end: end, endType: endType)])
+            DispatchQueue.main.async { suppressPathClearOnTabChange = false }
         }
     }
 
@@ -60,10 +115,11 @@ struct MainTabView: View {
     /// 三个独立 onChange 在同一 transaction 内互相 reentrancy 导致动画闪烁。
     private var isOnSubpageSignal: Bool {
         switch selection {
-        case .home:    return !homePath.isEmpty    // H-0：用户详情页等多入口共享 UserProfileRoute
-        case .work:    return !workPath.isEmpty
-        case .profile: return !profilePath.isEmpty
-        default:       return false
+        case .home:     return !homePath.isEmpty    // H-0：用户详情页等多入口共享 UserProfileRoute
+        case .work:     return !workPath.isEmpty
+        case .messages: return !messagesPath.isEmpty   // H-2：私聊页 push 后隐藏 tabbar 避免遮挡输入栏
+        case .profile:  return !profilePath.isEmpty
+        default:        return false
         }
     }
 
@@ -89,9 +145,13 @@ struct MainTabView: View {
             matchPopupCoordinator.updateBlockedByOtherPage(newValue)
         }
         .onChange(of: selection) { _ in
+            // 程序驱动切换（如 liveResultTransition 结束直播切 Work + 重建 workPath 为 [.liveResult]）
+            // 必须跳过清 path，避免覆盖 action 内同帧刚设置的路径（review 202607091438 P1）
+            guard !suppressPathClearOnTabChange else { return }
             // 切走 tab 立即清空各 tab 的 path，切回时回到根页
             homePath = NavigationPath()
             workPath = NavigationPath()
+            messagesPath = NavigationPath()   // H-2：Messages tab 切走时也回根页
             profilePath = NavigationPath()
         }
         .task {
@@ -176,6 +236,37 @@ struct MainTabView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: matchStore.showNoFacePopup)
         .animation(.easeInOut(duration: 0.2), value: matchStore.showExitMatchPopup)
+        // Match toast 全局展示（用户 tap 匹配 → openMatch 各失败/成功分支的 UI 反馈）
+        // 之前 lastToast 有 11 处写入但 0 UI 消费 → 用户看不到"为什么没开启" —— 现补 overlay
+        .overlay(alignment: .top) {
+            if let toast = matchStore.lastToast {
+                Text(toast.localized)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(Color.black.opacity(0.8), in: Capsule())
+                    .padding(.top, 12)
+                    .transition(.opacity)
+                    .task(id: toast) {
+                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        matchStore.clearLastToast()
+                    }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: matchStore.lastToast)
+        // L Gap-5：非匹配来电接通后挂断的"是否恢复匹配"确认 Alert（跨 tab 全局）
+        .alert(
+            L10n.matchResumeAlertTitle,
+            isPresented: Binding(
+                get: { matchStore.showResumeMatchAlert },
+                set: { if !$0 { matchStore.dismissResumeMatchAlert() } }
+            )
+        ) {
+            Button(L10n.matchResumeAlertConfirm) { matchStore.confirmResumeMatch() }
+            Button(L10n.matchResumeAlertCancel, role: .cancel) { matchStore.dismissResumeMatchAlert() }
+        } message: {
+            Text(L10n.matchResumeAlertMessage)
+        }
         .preferredColorScheme(.dark)
     }
 
@@ -211,10 +302,20 @@ struct MainTabView: View {
                         case .beautySettings: BeautySettingsView()
                         case .giftMessage:    GiftMessageView()
                         case .pocDebug:       POCDebugView()
+                        case .newbie:         WorkComingSoonView(title: L10n.toolNewbie)
+                        case .bigR:           WorkComingSoonView(title: L10n.toolBigR)
+                        case .liveResult(let begin, let end, let endType):
+                            LiveResultView(range: (begin, end), endType: endType, hostPath: $homePath)
                         }
+                    }
+                    // 结果页 push 私聊页（LiveResultView 从 homePath push String type peerYxAccId）
+                    .navigationDestination(for: String.self) { peerYxAccId in
+                        let selfYxAccId = SessionStore.shared.user?.yxAccid ?? ""
+                        ChatDetailContainer(peerYxAccId: peerYxAccId, selfYxAccId: selfYxAccId)
                     }
             }
             .environment(\.isHomeTabActive, selection == .home)
+            .environment(\.liveResultTransition, liveResultTransitionAction)
             .environment(\.quickGoLive, QuickGoLiveAction {
                 // 在当前 Home NavigationStack 内 push LiveSettings（对齐用户偏好：
                 // 不切 tab、保持上下文;比 H5 CGoLive 切 tab 更内聚）。
@@ -224,6 +325,7 @@ struct MainTabView: View {
                                 : WorkRoute.liveSettings)
             })
             .environment(\.liveTermination, liveTerminationAction)
+            .environment(\.openChat, openChatAction)
             .opacity(selection == .home ? 1 : 0)
             .allowsHitTesting(selection == .home)
             .accessibilityHidden(selection != .home)
@@ -231,10 +333,23 @@ struct MainTabView: View {
             // —— Messages：永久持有 ——
             // H-1 MVP：P2P 会话列表 shared 单例 + keep-alive；切走再回来保留 selectedCategory /
             // sessions / delegate 订阅。详见 [MessageSessionStoreShared.swift](../Message/MessageSessionStoreShared.swift)
-            MessageListView(store: MessageSessionStore.shared)
-                .opacity(selection == .messages ? 1 : 0)
-                .allowsHitTesting(selection == .messages)
-                .accessibilityHidden(selection != .messages)
+            //
+            // H-2：包 NavigationStack path 支持 push 到 ChatDetailContainer（tap row 触发）
+            NavigationStack(path: $messagesPath) {
+                MessageListView(store: MessageSessionStore.shared, messagesPath: $messagesPath)
+                    .navigationDestination(for: String.self) { pathValue in
+                        // Batch 3.8：sentinel `__station_list__` → StationListView（独立 HTTP 列表页）
+                        if pathValue == MessageListView.stationSentinel {
+                            StationListView()
+                        } else {
+                            let selfYxAccId = SessionStore.shared.user?.yxAccid ?? ""
+                            ChatDetailContainer(peerYxAccId: pathValue, selfYxAccId: selfYxAccId)
+                        }
+                    }
+            }
+            .opacity(selection == .messages ? 1 : 0)
+            .allowsHitTesting(selection == .messages)
+            .accessibilityHidden(selection != .messages)
 
             // —— Work / Profile：if 切换销毁重建 ——
             // 用户接受重新加载；不长持 NavigationStack + WorkView/ProfileView 内的资源。
@@ -253,12 +368,31 @@ struct MainTabView: View {
                                 WishSettingView()
                             case .beautySettings:
                                 BeautySettingsView()
+                            case .newbie:
+                                WorkComingSoonView(title: L10n.toolNewbie)
+                            case .bigR:
+                                WorkComingSoonView(title: L10n.toolBigR)
                             case .giftMessage:
                                 GiftMessageView()
+                            case .liveResult(let begin, let end, let endType):
+                                LiveResultView(range: (begin, end), endType: endType, hostPath: $workPath)
+                            }
+                        }
+                        // 结果页 push 私聊/详情：Work stack 需要 String + UserProfileRoute destination
+                        .navigationDestination(for: String.self) { peerYxAccId in
+                            let selfYxAccId = SessionStore.shared.user?.yxAccid ?? ""
+                            ChatDetailContainer(peerYxAccId: peerYxAccId, selfYxAccId: selfYxAccId)
+                        }
+                        .navigationDestination(for: UserProfileRoute.self) { route in
+                            if case let .userId(uid) = route {
+                                UserProfileView(userId: uid)
                             }
                         }
                 }
+                .environment(\.liveResultTransition, liveResultTransitionAction)
                 .environment(\.liveTermination, liveTerminationAction)
+            .environment(\.openChat, openChatAction)
+            .environment(\.openHomeMatch, openHomeMatchAction)
             } else if selection == .profile {
                 NavigationStack(path: $profilePath) {
                     ProfileView(path: $profilePath)
@@ -267,10 +401,13 @@ struct MainTabView: View {
                         }
                         .navigationDestination(for: ProfileRoute.self) { route in
                             switch route {
-                            case .settings:    SettingsView()
-                            case .levelDetail: LevelDetailView()
-                            case .blocklist:   BlocklistView()
+                            case .settings:     SettingsView(path: $profilePath)
+                            case .levelDetail:  LevelDetailView()
+                            case .blocklist:    BlocklistView()
                             case .editProfile:  EditProfileView(service: EditProfileService.shared)
+                            case .anchorPolicy: AnchorPolicyView()
+                            case .language:     LanguageView()
+                            case .feedback:     FeedbackView(path: $profilePath)
                             }
                         }
                 }
@@ -401,6 +538,50 @@ extension EnvironmentValues {
     }
 }
 
+/// 跨 tab 打开 P2P 私聊页（对齐 H5 CGoToChat 全局跳转）。
+///
+/// **使用场景**：直播结果页（TopGifter / PrivateCall / GifterFull）点 Message 按钮 → 跳私聊。
+/// 未来 LiveList / Profile 侧栏等入口按同 pattern 接入。
+///
+/// **实现动作**（同 LiveTerminationAction 精神）：切 tab 到 .messages + 清 homePath/workPath +
+/// 用 `[peerYxAccId]` 重建 messagesPath 让 NavigationStack 直达 ChatDetailContainer。
+struct OpenChatAction {
+    let perform: (_ peerYxAccId: String) -> Void
+    static let noop = OpenChatAction(perform: { _ in })
+}
+
+private struct OpenChatKey: EnvironmentKey {
+    static let defaultValue: OpenChatAction = .noop
+}
+
+extension EnvironmentValues {
+    var openChat: OpenChatAction {
+        get { self[OpenChatKey.self] }
+        set { self[OpenChatKey.self] = newValue }
+    }
+}
+
+/// 直播结束 → 结果页显示 action（**B spec v7 push 架构**：从 fullScreenCover 改为 push 页面）。
+///
+/// LiveRoomView state=.ended 时触发；MainTabView 内闭包切 Work tab + 把当前活跃 path 重建为
+/// `[WorkRoute.liveResult(...)]` 单层 —— LiveRoomView + LiveSettings 全 dismount，结果页作为新根出现。
+/// 用户从结果页 back → pop 到 Work 根；swipe-back 原生支持；无 modal 覆盖语义。
+struct LiveResultTransitionAction {
+    let perform: (_ begin: Int64?, _ end: Int64?, _ endType: Int?) -> Void
+    static let noop = LiveResultTransitionAction(perform: { _, _, _ in })
+}
+
+private struct LiveResultTransitionKey: EnvironmentKey {
+    static let defaultValue: LiveResultTransitionAction = .noop
+}
+
+extension EnvironmentValues {
+    var liveResultTransition: LiveResultTransitionAction {
+        get { self[LiveResultTransitionKey.self] }
+        set { self[LiveResultTransitionKey.self] = newValue }
+    }
+}
+
 /// 直播结束页 back 语义（对齐 H5 liveEnds/index.vue `leavePage` → `initLiveData + router.push('/')`）。
 ///
 /// 结果页 back 时通过本 env 通知外壳：切 MainTab 到 home + 清 workPath/homePath；结果页作为
@@ -419,6 +600,26 @@ extension EnvironmentValues {
     var liveTermination: LiveTerminationAction {
         get { self[LiveTerminationKey.self] }
         set { self[LiveTerminationKey.self] = newValue }
+    }
+}
+
+/// Work `ToolsSection` Match 图标点击 → 切 Home tab + 请求 LiveTabView 切 Match top tab。
+///
+/// **动机**：Work Match 图标之前只是装饰（无 tap action）。业务上应对齐首页 Match 入口。
+/// 用 env action + `HomeNavigationBus` 消息总线避免 hoisting `HomeTopTabStore`。
+struct OpenHomeMatchAction {
+    let perform: () -> Void
+    static let noop = OpenHomeMatchAction(perform: {})
+}
+
+private struct OpenHomeMatchKey: EnvironmentKey {
+    static let defaultValue: OpenHomeMatchAction = .noop
+}
+
+extension EnvironmentValues {
+    var openHomeMatch: OpenHomeMatchAction {
+        get { self[OpenHomeMatchKey.self] }
+        set { self[OpenHomeMatchKey.self] = newValue }
     }
 }
 
