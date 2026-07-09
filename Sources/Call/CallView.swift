@@ -811,6 +811,86 @@ private struct CallFaceTimeView: View {
                 CallHaptics.impact(.light)
             }
     }
+
+    /// PIP 累计偏移（拖动中 + 已 commit 之和）——只在 view 是 PIP 时应用（VideoLayoutModifier 内判定）
+    private var pipTotalOffset: CGSize {
+        CGSize(width: pipDragOffset.width + pipDragTranslation.width,
+               height: pipDragOffset.height + pipDragTranslation.height)
+    }
+
+    /// 本地相机预览的锁定态 dim overlay（仅 PIP + isCallWaitLocked 时生效；main 全屏时不 dim）
+    @ViewBuilder
+    private var cameraPreviewLockOverlay: some View {
+        if !isLocalMain, store.isCallWaitLocked {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14).fill(.black.opacity(0.5))
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+            .transition(.opacity)
+        }
+    }
+
+    /// tap remote：main 时切 chrome / PIP 时切主副
+    private func handleRemoteTap() {
+        if isLocalMain {
+            // remote 现在是 PIP —— tap 触发主副对换（切回 remote 全屏）
+            swapMainView()
+        } else {
+            // remote 是全屏背景 —— tap 切 chrome 显隐
+            toggleChromeVisible()
+        }
+    }
+
+    /// tap local：main 时不响应（避免误触；用户切 chrome 走 remote 背景）/ PIP 时切主副
+    private func handleLocalTap() {
+        guard !isLocalMain else { return }
+        swapMainView()
+    }
+
+    /// 主副视频对换（极简版：只 frame/padding/offset/zIndex 参数变化，UIViewRepresentable 不 dismantle）
+    private func swapMainView() {
+        CallHaptics.impact(.light)
+        withAnimation(.easeInOut(duration: 0.25)) {
+            isLocalMain.toggle()
+        }
+    }
+}
+
+// MARK: - 视频布局 modifier（主副视频共用，isMain 参数化 frame/padding/offset）
+
+/// 通话视频 layout modifier：main 时全屏 + `.ignoresSafeArea()`；PIP 时 110×160 topRight + offset。
+/// - modifier chain 结构不变，仅参数条件 → SwiftUI 走 `.updateUIView` 而非 dismantle（rule swiftui-camera-preview.md §2）
+/// - main 时 pipOffset 不应用（.zero）；PIP 时应用（累计拖动偏移）
+private struct VideoLayoutModifier: ViewModifier {
+    let isMain: Bool
+    let pipOffset: CGSize
+
+    private let pipWidth: CGFloat = 110
+    private let pipHeight: CGFloat = 160
+    private let pipTrailing: CGFloat = 16
+    private let pipTop: CGFloat = 60
+    private let pipCornerRadius: CGFloat = 14
+    private let pipBorderWidth: CGFloat = 1
+
+    func body(content: Content) -> some View {
+        content
+            .frame(width: isMain ? nil : pipWidth,
+                   height: isMain ? nil : pipHeight)
+            .clipShape(RoundedRectangle(cornerRadius: isMain ? 0 : pipCornerRadius, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: pipCornerRadius, style: .continuous)
+                    .stroke(Color.white.opacity(isMain ? 0 : 0.35), lineWidth: pipBorderWidth)
+            )
+            .padding(.trailing, isMain ? 0 : pipTrailing)
+            .padding(.top, isMain ? 0 : pipTop)
+            .offset(x: isMain ? 0 : pipOffset.width,
+                    y: isMain ? 0 : pipOffset.height)
+            .frame(maxWidth: .infinity, maxHeight: .infinity,
+                   alignment: isMain ? .center : .topTrailing)
+            .ignoresSafeArea()
+    }
 }
 
 // MARK: - 小组件
