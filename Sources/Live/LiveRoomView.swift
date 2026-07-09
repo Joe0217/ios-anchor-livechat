@@ -16,6 +16,8 @@ struct LiveRoomView: View {
     @StateObject private var camera = CameraManager()
     @StateObject private var agora = AgoraManager()
     @StateObject private var nim = NIMChatroomManager()
+    /// 统一公屏组件 Phase 1：Live 场景 feed（订阅 nim.messagesStore.$messages → adapt → replace）
+    @StateObject private var publicChatFeed = UnifiedPublicChatFeed(limit: 200)
     /// G 里程碑 M3：PK 主态状态机；onAppear weak 注入 store/agora/nim/observer/networkMonitor
     @StateObject private var pkStore = PKStore()
     /// G 里程碑 M3：PK 结束后 didEndPK observer 桥到 UI 弹结果窗
@@ -280,7 +282,11 @@ struct LiveRoomView: View {
                 Spacer()
                 // 公屏消息 + 右侧 Private Call 小开关（对齐 H5 liveRoom.vue:639-679：左公屏 flex-1 + 右操作列 van-switch）
                 HStack(alignment: .bottom, spacing: 8) {
-                    LiveRoomChatList(store: nim.messagesStore)
+                    PublicChatListView(feed: publicChatFeed, theme: .live)
+                        .frame(maxHeight: 260)
+                        .onReceive(nim.messagesStore.$messages) { messages in
+                            publicChatFeed.replace(messages.map(LivePublicChatAdapter.adapt))
+                        }
                         #if DEBUG
                         // v19 DEBUG 三连击注入 15 类 mock 消息，验证 iOS 各 row 视觉
                         .onTapGesture(count: 3) {
