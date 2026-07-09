@@ -36,9 +36,19 @@ enum RegisterVideoCompressor {
         )
         reader.add(videoOutput)
 
+        // Bug fix 2026-07-10：audio reader outputSettings 必须指定 uncompressed LPCM，
+        // 因为 audio writer input 有 outputSettings (AAC 编码)，AVAssetWriter 要求 append 的 sample buffer 为 uncompressed；
+        // 原 `outputSettings: nil` → reader 直接输出 AAC compressed samples → append 抛
+        //   NSInvalidArgumentException "Input buffer must be in an uncompressed format when outputSettings is not nil"
         var audioOutput: AVAssetReaderTrackOutput?
         if let audioTrack {
-            let out = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: nil)
+            let out = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: [
+                AVFormatIDKey: kAudioFormatLinearPCM,
+                AVLinearPCMBitDepthKey: 16,
+                AVLinearPCMIsBigEndianKey: false,
+                AVLinearPCMIsFloatKey: false,
+                AVLinearPCMIsNonInterleaved: false
+            ])
             reader.add(out)
             audioOutput = out
         }
