@@ -196,7 +196,8 @@ private struct CallFaceTimeView: View {
             RemoteVideoView(manager: store.agora)
                 .modifier(VideoLayoutModifier(isMain: !isLocalMain,
                                               pipOffset: pipTotalOffset))
-                .contentShape(Rectangle())
+                // contentShape 已在 modifier 内 apply（锁定在 PIP 内容 frame），不要在外层再挂
+                // Rectangle 覆盖 —— 否则外层全屏 frame 的 hit shape 会让 tap main 区域也命中 PIP。
                 .onTapGesture(perform: handleRemoteTap)
                 .zIndex(isLocalMain ? 1 : 0)
 
@@ -241,7 +242,7 @@ private struct CallFaceTimeView: View {
                 .overlay(cameraPreviewLockOverlay)
                 .modifier(VideoLayoutModifier(isMain: isLocalMain,
                                               pipOffset: pipTotalOffset))
-                .contentShape(Rectangle())
+                // contentShape 由 modifier 内 apply —— tap 只在 PIP 内容区（110×160）命中，main 时命中全屏
                 .onTapGesture(perform: handleLocalTap)
                 .gesture(pipDragGesture)
                 .zIndex(isLocalMain ? 0 : 1)
@@ -377,7 +378,7 @@ private struct CallFaceTimeView: View {
     @ViewBuilder
     private var giftPickerSheet: some View {
         CommonGiftPanel(config: .callAskFor(onAsk: handleAskForGift))
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.fraction(0.4)])
             .preferredColorScheme(.dark)
     }
 
@@ -387,7 +388,7 @@ private struct CallFaceTimeView: View {
             userId: store.current.remoteUserIdString,
             onSubmitSuccess: { showReportSheet = false }
         )
-        .presentationDetents([.medium])
+        .presentationDetents([.fraction(0.4)])
     }
 
     /// 对齐 H5 index.vue:203-215 askForGift 完整链路：关 sheet + 起 15s 冷却 + 调后端 API + 本地回显。
@@ -843,10 +844,13 @@ private struct CallFaceTimeView: View {
         }
     }
 
-    /// tap local：main 时不响应（避免误触；用户切 chrome 走 remote 背景）/ PIP 时切主副
+    /// tap local：main 时切 chrome / PIP 时切主副（与 handleRemoteTap 对称，用户 UX 一致）
     private func handleLocalTap() {
-        guard !isLocalMain else { return }
-        swapMainView()
+        if isLocalMain {
+            toggleChromeVisible()
+        } else {
+            swapMainView()
+        }
     }
 
     /// 主副视频对换（极简版：只 frame/padding/offset/zIndex 参数变化，UIViewRepresentable 不 dismantle）
@@ -883,6 +887,11 @@ private struct VideoLayoutModifier: ViewModifier {
                 RoundedRectangle(cornerRadius: pipCornerRadius, style: .continuous)
                     .stroke(Color.white.opacity(isMain ? 0 : 0.35), lineWidth: pipBorderWidth)
             )
+            // hit shape 锁定在 PIP 内容尺寸（110×160）—— 用户 tap 只在小窗内命中；
+            // main 状态 hit shape 也是内容 frame（全屏 = 相当于命中背景，与 remote main tap = chrome toggle 一致）。
+            // 若把 contentShape 放在最外层 `.frame(maxWidth: .infinity)` 之后，会让 hit shape 扩大到全屏 →
+            // 用户 tap main 区域也会命中 PIP view 触发 swap（bug）。
+            .contentShape(RoundedRectangle(cornerRadius: isMain ? 0 : pipCornerRadius, style: .continuous))
             .padding(.trailing, isMain ? 0 : pipTrailing)
             .padding(.top, isMain ? 0 : pipTop)
             .offset(x: isMain ? 0 : pipOffset.width,
