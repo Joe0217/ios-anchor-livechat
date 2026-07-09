@@ -870,27 +870,9 @@ private struct PKOverlayHost: View {
     }
 }
 
-// MARK: - PublicScreenList：独立订阅 ChatMessagesStore，append 不波及 LiveRoomView
-//
-// LiveRoomView 顶层 `@StateObject nim` 仍存在，但 messages 字段已迁出到 ChatMessagesStore；
-// 本 view 直接订阅 messagesStore，消息 publish 仅触发本子 view 重算，topBar / PKOverlayHost /
-// CameraPreview / DebugNetworkPanel 等兄弟子树不受影响（review P1-3）。
-private struct PublicScreenList: View {
-    @ObservedObject var store: PublicChatMessagesStore
+// PublicScreenList / LiveRoomChatList / LiveRoomChatRow 已迁移到 Sources/PublicChat/UI/PublicChatListView.swift
+// （Phase 1 T7/T10）。本文件不再自持公屏 UI 分派逻辑。
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(store.messages.suffix(6)) { msg in
-                Text(msg.text)
-                    .font(.caption)
-                    .foregroundStyle(msg.isSystem ? .yellow.opacity(0.9) : .white)
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 12))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
 
 /// review 202606260029 P1-1：onlineCount 子 view 内观测。
 /// 父 view 顶层不读 `nim.presenceStore.onlineCount`，避免 .enter/.exit 通知触发整树重算。
@@ -1429,85 +1411,8 @@ fileprivate struct LiveRoomHeroTopArea: View {
     }
 }
 
-// MARK: - 设计稿还原：公屏消息单行
-//
-// H5 对齐 messageScroller.vue：等级徽章 + Host 徽章(可选) + 昵称(粉/绿) + " " + 正文 + (换行) 翻译。
-fileprivate struct LiveRoomChatRow: View {
-    let message: PublicChatMessage
-
-    /// v18 pattern-based dispatch —— 按 messageType.discriminator 分派到独立 subview
-    var body: some View {
-        switch message.messageType.discriminator {
-        case .anchor, .regular:
-            ChatRowRegular(message: message)
-        case .gift:
-            ChatRowGift(message: message)
-        case .luckyGift:
-            ChatRowLuckyGift(message: message)
-        case .enterRoom:
-            ChatRowEnterRoom(message: message)
-        case .officialBoostEnter:
-            ChatRowOfficialBoostEnter(message: message)
-        case .pkNotify:
-            ChatRowPKNotify(message: message)
-        case .announcement:
-            ChatRowAnnouncement(message: message)
-        case .rpsWin:
-            ChatRowRpsWin(message: message)
-        case .wheelRes:
-            ChatRowWheelRes(message: message)
-        case .winnerBroadcast:
-            ChatRowWinnerBroadcast(message: message)
-        case .wishlistEffect:
-            ChatRowWishlistEffect(message: message)
-        case .diamondGift:
-            ChatRowDiamondGift(message: message)
-        }
-    }
-
-    /// 保留 v7 legacy view builder 供 fallback 引用（当前不再走此路径，可清理）
-    private var legacyBody: some View {
-        if message.isSystem {
-            return AnyView(
-                Text(message.text)
-                    .font(Theme.Typography.liveRoomChatText)
-                    .foregroundColor(Color.yellow.opacity(0.9))
-                    .padding(.horizontal, Theme.Metric.liveRoomChatHPadding)
-                    .padding(.vertical, Theme.Metric.liveRoomChatVPadding)
-                    .background(Theme.Palette.liveRoomChatBackground,
-                                in: RoundedRectangle(cornerRadius: Theme.Radius.liveRoomChatBubble))
-            )
-        } else {
-            return AnyView(userMessageBubble)
-        }
-    }
-
-    // 目前 ChatMessage 无结构化字段（发送者昵称/等级/是否主播/翻译），
-    // 直接把 text 整体作为正文渲染；将来 H 里程碑扩展 ChatMessage 后可拆昵称/翻译。
-    private var userMessageBubble: some View {
-        Text(message.text)
-            .font(Theme.Typography.liveRoomChatText)
-            .foregroundColor(Theme.Palette.liveRoomChatText)
-            .padding(.horizontal, Theme.Metric.liveRoomChatHPadding)
-            .padding(.vertical, Theme.Metric.liveRoomChatVPadding)
-            .background(Theme.Palette.liveRoomChatBackground,
-                        in: RoundedRectangle(cornerRadius: Theme.Radius.liveRoomChatBubble))
-    }
-}
-
-/// 设计稿还原后的公屏消息列表（替代旧 PublicScreenList 视觉）。
-fileprivate struct LiveRoomChatList: View {
-    @ObservedObject var store: PublicChatMessagesStore
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Metric.liveRoomChatMsgGap) {
-            ForEach(store.messages.suffix(6)) { msg in
-                LiveRoomChatRow(message: msg)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
+// LiveRoomChatRow / LiveRoomChatList 已迁移到 Sources/PublicChat/UI/PublicChatListView.swift + PublicChatRow.swift（Phase 1 T7/T10）
+// 旧 ChatRowXXX 结构定义在 Sources/Live/PublicScreen/UI/ChatRowSubviews.swift 已由 T11 删除
 
 // MARK: - 设计稿还原：Private Call 小开关（对齐 H5 liveRoom.vue:658-678 van-switch）
 //

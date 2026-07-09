@@ -37,8 +37,8 @@ struct EnterRoomFloat: View {
     private func content(_ item: EnterRoomFloatQueue.Item) -> some View {
         HStack(spacing: 8) {
             AvatarView(urlString: item.avatarUrl, size: 32, kind: .user)
-            LevelBadge(level: item.userLevel)
-            if item.isVip { VipBadge() }
+            PublicChatLevelBadge(level: item.userLevel)
+            if item.isVip { PublicChatVipBadge() }
             Text(item.nickname)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Color(hex: 0x1AFFCD))

@@ -36,7 +36,7 @@ struct UserCardPopup: View {
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.white)
                     .lineLimit(1)
-                if info.isVip { VipBadge() }
+                if info.isVip { PublicChatVipBadge() }
             }
 
             // 性别 / 年龄 / 国家 / level 徽章
@@ -54,7 +54,7 @@ struct UserCardPopup: View {
                 if let flag = info.countryEmoji {
                     Text(flag).font(.system(size: 13))
                 }
-                LevelBadge(level: info.level)
+                PublicChatLevelBadge(level: info.level)
             }
 
             // 关注 / 粉丝数

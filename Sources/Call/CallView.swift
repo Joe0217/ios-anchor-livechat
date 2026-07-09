@@ -1377,10 +1377,10 @@ private struct CallMessageScroller: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .center, spacing: 4) {
                 if let level = sender.level {
-                    LevelBadge(level: level)
+                    PublicChatLevelBadge(level: level)
                 }
                 if sender.isVip {
-                    VipBadge()
+                    PublicChatVipBadge()
                 }
                 if sender.isSpecial {
                     Image("CallAnchorBadgeSS")
