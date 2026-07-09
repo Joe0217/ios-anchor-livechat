@@ -46,3 +46,19 @@ protocol PrimeLevelProviderProtocol: AnyObject {
     /// - 全部批失败 → 返回空 Set（对齐 H5 增量拉取失败保留旧值语义）
     func fetchPrime(yxAccIds: [String]) async -> Set<String>
 }
+
+// MARK: - 关注列表拉取（Flame 通道 B，对齐 H5 `use/useFollowUserList.js`）
+
+@MainActor
+protocol FollowUserListProviderProtocol: AnyObject {
+    /// 拉取主播关注的用户 yxAccid 集合（`POST /api/user/userFriend` body `{type: 3}`）。
+    ///
+    /// **缓存合约**（对齐 H5 `FOLLOW_LIST_CACHE_TIME` = 24h）：
+    /// - 24h 内命中缓存直接返回
+    /// - 首次请求 or 缓存过期时打网 `getFriends({type:3})`
+    /// - 请求失败保留旧缓存（H5 `useFollowUserList.js:53-57` 同款降级）
+    func fetch() async -> Set<String>
+
+    /// 登出/切账号时清缓存（`SessionStore.logout` 调）
+    func clear()
+}

@@ -33,18 +33,40 @@ final class MessageSessionStore: ObservableObject {
         sessions(in: selectedCategory)
     }
 
-    /// 派生：按分类过滤（Flame > Prime 互斥，Stranger 兜底）；**排除 notification/admin session**（v4）。
+    /// 派生：按分类过滤（H-2 v2 对齐 H5 filter 独立语义 —— Prime 与 Flame 可重叠）；
+    /// **排除 notification/admin session**（v4）。
     /// 排序规则：`isTop desc` 先，`lastMessageTimestamp desc` 次
     func sessions(in category: MessageSessionCategory) -> [MessageSession] {
         guard case .loaded(let all) = state else { return [] }
         let excludedIds = excludedSystemIds()
         return all
             .filter { !excludedIds.contains($0.id) }
-            .filter { MessageSessionClassifier.classify($0, primeUidSet: primeUidSet) == category }
+            .filter { session in
+                let activeTycoon = conversationProfiles[session.id]?.activeTycoon ?? false
+                switch category {
+                case .flame:
+                    return MessageSessionClassifier.isFlame(session,
+                                                            flameUserIdSet: flameUserIdSet,
+                                                            profileActiveTycoon: activeTycoon)
+                case .prime:
+                    return MessageSessionClassifier.isPrime(session, primeUidSet: primeUidSet)
+                case .stranger:
+                    return MessageSessionClassifier.isStranger(session,
+                                                               flameUserIdSet: flameUserIdSet,
+                                                               profileActiveTycoon: activeTycoon)
+                }
+            }
             .sorted { lhs, rhs in
                 if lhs.isTop != rhs.isTop { return lhs.isTop }
                 return lhs.lastMessageTimestamp > rhs.lastMessageTimestamp
             }
+    }
+
+    /// 按 peerYxAccId 查找现有 session（H-2 spec §4.2：chat store 发送成功后主动 emit .update 需先取现有 session 做字段合并）。
+    /// 未加载或找不到返回 nil。
+    func session(byPeerId peerId: String) -> MessageSession? {
+        guard case .loaded(let all) = state else { return nil }
+        return all.first { $0.id == peerId }
     }
 
     /// 每分类未读数聚合（H5 index.vue calculateUnreadCount 对齐）。tab 标题旁 badge 显示用。
@@ -64,6 +86,7 @@ final class MessageSessionStore: ObservableObject {
     private let stationProvider: StationListProviderProtocol
     private let customerServiceStore: CustomerServiceIdProviderProtocol
     private let profileProvider: ConversationProfileProviderProtocol
+    private let followProvider: FollowUserListProviderProtocol
 
     /// 对端 yxAccId → profile 的缓存（v4: 批量拉 apiBatchQueryYxStat 后覆盖 sessions 的 nickname/avatar）。
     /// 增量事件 add 时也追加拉取。
@@ -80,6 +103,9 @@ final class MessageSessionStore: ObservableObject {
     private var pendingUpdates: [MessageSessionEvent] = []
     /// Prime uid 集合（拉取结果；失败降级为空集，Flame/Stranger 不受影响 —— R-1）
     private(set) var primeUidSet: Set<String> = []
+    /// Flame 通道 B：关注列表 yxAccid 集合（H-2 v2 对齐 H5 `sessionFlameUserIdList`）。
+    /// 拉取失败保留旧值（H5 同款降级）。
+    private(set) var flameUserIdSet: Set<String> = []
 
     /// **internal**（非 private）以便 `MessageSessionStore+IdleCleanup.swift` extension 挂 sink
     /// （extension 位于同 module 不同文件，`private` 会阻断访问）
@@ -102,6 +128,11 @@ final class MessageSessionStore: ObservableObject {
     /// v5.5 清理任务重入 guard：AutoOffline sink 短时间多次触发也只执行一次
     private var isCleaningUp: Bool = false
 
+    /// IM sessions/漫游消息是否已 sync（真轨映射 `NIMService.$isSessionSyncOK`）。
+    /// 冷启动 auto-login sync 阶段 fetchAll 返空是"未就绪假空"——load() 判 empty 分支时用它
+    /// 决定是否保留 .loading 等 publisher sink 触发 reload，避免直接切 .loaded([]) 让用户见空态。
+    private var isIMSynced: Bool = false
+
     private let logger = Logger(subsystem: "com.anchor.livechat", category: "MessageSessionStore")
 
     // MARK: - init / teardown
@@ -110,12 +141,14 @@ final class MessageSessionStore: ObservableObject {
          primeProvider: PrimeLevelProviderProtocol,
          stationProvider: StationListProviderProtocol = StationListService.shared,
          customerServiceStore: CustomerServiceIdProviderProtocol = CustomerServiceIdStore.shared,
-         profileProvider: ConversationProfileProviderProtocol = ConversationProfileService.shared) {
+         profileProvider: ConversationProfileProviderProtocol = ConversationProfileService.shared,
+         followProvider: FollowUserListProviderProtocol = FollowUserListService.shared) {
         self.provider = provider
         self.primeProvider = primeProvider
         self.stationProvider = stationProvider
         self.customerServiceStore = customerServiceStore
         self.profileProvider = profileProvider
+        self.followProvider = followProvider
 
         // 订阅 delegate 增量事件（Adapter 保证 @MainActor 回调）
         provider.subscribe { [weak self] event in
@@ -133,7 +166,10 @@ final class MessageSessionStore: ObservableObject {
             .removeDuplicates()
             .sink { [weak self] isConnected in
                 Task { @MainActor [weak self] in
-                    guard let self, isConnected else { return }
+                    guard let self else { return }
+                    // 无条件更新本地 sync 标记（load() 空返守卫用；断连时置回 false）
+                    self.isIMSynced = isConnected
+                    guard isConnected else { return }
                     self.logger.info("🟢 [MessageStore] isConnected=true → reload (无条件覆盖 stale cache)")
                     await self.load()
                 }
@@ -189,20 +225,33 @@ final class MessageSessionStore: ObservableObject {
             // → 视为"IM 未就绪的假空"（allRecentSessions() 在 SDK 未登录时会返空），保留旧数据
             // 不覆盖。真空账号从 .idle/.error 走覆盖路径；断连恢复由下次 syncOK sink 触发 load
             // 拉到真数据覆盖。避免下拉刷新在断连时清空整个消息列表。
+            //
+            // v5.6 补冷启动路径：IM 未 syncOK 时 fetchAll 返空是"未就绪假空"（现有 loaded 保护
+            // 覆盖不到冷启的 .loading 状态）。保持 .loading 让 UI 显 ProgressView，等 publisher
+            // sink 触发下一轮 load 拉到真数据；避免用户看空态误以为"没消息"要下拉刷新才有。
             if all.isEmpty {
                 if case .loaded(let current) = state, !current.isEmpty {
                     logger.notice("🟠 [MessageStore] fetchAll returned empty but cache has \(current.count, privacy: .public) sessions — preserving (likely IM disconnected)")
                     return
                 }
+                if !isIMSynced {
+                    logger.notice("🟠 [MessageStore] fetchAll returned empty + IM not synced — keep loading, wait for sync")
+                    // state 保持 .loading（进入本函数时已切）；publisher sink 会在 syncOK 触发下一轮 load
+                    return
+                }
             }
 
-            // Prime + Profile 并发拉取（排除 notification/admin session id）
+            // Prime + Profile + FollowList 并发拉取（排除 notification/admin session id）
             let excludedIds = excludedSystemIds()
             let uidsForBatch = all.map(\.id).filter { !excludedIds.contains($0) }
             async let primesTask = primeProvider.fetchPrime(yxAccIds: uidsForBatch)
             async let profilesTask = profileProvider.fetch(yxAccIds: uidsForBatch)
+            // H-2 v2 · Flame 通道 B：拉关注列表（对齐 H5 `updateFlameUserList` + `useFollowUserList`）
+            // 首次拉 → 打网；后续 24h 内命中缓存；失败保留旧值（H5 同款）
+            async let followTask = followProvider.fetch()
             let newPrimes = await primesTask
             let newProfiles = await profilesTask
+            let newFollowSet = await followTask
 
             // v5.3 修复（Q4 Prime 分类丢失）：primeUidSet 拉到空且原本非空 → 保留旧值。
             // 原因：PrimeLevelService.fetchPrime 全批失败降级为空 Set（spec R-1）；直接覆盖赋值会
@@ -214,8 +263,14 @@ final class MessageSessionStore: ObservableObject {
             } else {
                 logger.notice("🟠 [MessageStore] prime fetched empty but cache has \(self.primeUidSet.count, privacy: .public) — preserving")
             }
+            // 关注列表同款保护：拉到空且原本非空 → 保留旧值（H5 `useFollowUserList.js:53-57` 失败保留缓存）
+            if !newFollowSet.isEmpty || flameUserIdSet.isEmpty {
+                flameUserIdSet = newFollowSet
+            } else {
+                logger.notice("🟠 [MessageStore] followList fetched empty but cache has \(self.flameUserIdSet.count, privacy: .public) — preserving")
+            }
             for (k, v) in newProfiles { conversationProfiles[k] = v }
-            logger.info("🟢 [MessageStore] prime=\(self.primeUidSet.count, privacy: .public) profiles=\(newProfiles.count, privacy: .public)")
+            logger.info("🟢 [MessageStore] prime=\(self.primeUidSet.count, privacy: .public) profiles=\(newProfiles.count, privacy: .public) followList=\(self.flameUserIdSet.count, privacy: .public)")
 
             // 应用 loading 期间累积的 delegate 事件（R-3）
             let merged = pendingUpdates.mergedByLastTerminal()
@@ -223,6 +278,28 @@ final class MessageSessionStore: ObservableObject {
 
             let applied = applyEvents(merged, to: all)
             let finalSessions = applyProfiles(to: applied)   // v4d: nickname/avatar 覆盖
+            // v7 · 分类分布诊断（对齐安卓 3 通道 Flame）
+            let excluded = excludedSystemIds()
+            let visible = finalSessions.filter { !excluded.contains($0.id) }
+            let profs = conversationProfiles
+            let flameCount = visible.filter {
+                MessageSessionClassifier.isFlame($0,
+                                                 flameUserIdSet: flameUserIdSet,
+                                                 profileActiveTycoon: profs[$0.id]?.activeTycoon ?? false)
+            }.count
+            let primeCount = visible.filter { MessageSessionClassifier.isPrime($0, primeUidSet: primeUidSet) }.count
+            let strangerCount = visible.filter {
+                MessageSessionClassifier.isStranger($0,
+                                                    flameUserIdSet: flameUserIdSet,
+                                                    profileActiveTycoon: profs[$0.id]?.activeTycoon ?? false)
+            }.count
+            let overlapFlamePrime = visible.filter {
+                MessageSessionClassifier.isFlame($0,
+                                                 flameUserIdSet: flameUserIdSet,
+                                                 profileActiveTycoon: profs[$0.id]?.activeTycoon ?? false)
+                    && MessageSessionClassifier.isPrime($0, primeUidSet: primeUidSet)
+            }.count
+            logger.info("🟢 [MessageStore] classify total=\(visible.count, privacy: .public) flame=\(flameCount, privacy: .public) prime=\(primeCount, privacy: .public) stranger=\(strangerCount, privacy: .public) flame∩prime=\(overlapFlamePrime, privacy: .public)")
             state = .loaded(finalSessions)
             recomputeSystemInbox()
             startOnlineStatusRefresh()   // v4e: 启动 20s 周期在线状态刷新
@@ -517,6 +594,7 @@ final class MessageSessionStore: ObservableObject {
         detachBackgroundObservers()
         conversationProfiles.removeAll()
         primeUidSet.removeAll()
+        flameUserIdSet.removeAll()   // H-2 v2: 清 Flame 通道 B（跨账号 followList 缓存）
         stationMail = nil
         systemInboxEntries = []
         pendingUpdates.removeAll()

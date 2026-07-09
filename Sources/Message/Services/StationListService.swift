@@ -45,6 +45,13 @@ final class StationListService: StationListProviderProtocol {
         }
     }
 
+    /// Batch 3.8：分页拉全量列表（Station 详情列表页用）。对齐 H5 `stationMsg.vue:10-26`。
+    func fetchList(page: Int, pageSize: Int = 20) async throws -> [StationMail] {
+        let body: [String: Any] = ["pageSize": pageSize, "currentPage": page]
+        let data = try await APIClient.shared.post("/api/sysmail/loadList", body: body)
+        return try JSONDecoder().decode([StationMail].self, from: data)
+    }
+
     /// 该 stationMail.id 是否未读（新到达且用户未点过）。
     func isUnread(_ mail: StationMail) -> Bool {
         let lastRead = UserDefaults.standard.string(forKey: Self.readIdUserDefaultsKey) ?? ""

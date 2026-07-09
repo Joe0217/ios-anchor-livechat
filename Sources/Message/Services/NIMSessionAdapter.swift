@@ -38,26 +38,31 @@ final class NIMSessionAdapter: NSObject, MessageSessionProviderProtocol {
 
     // MARK: - fetchAll（hop background 避免卡主线程）
 
+    /// **v6 对齐 H5**：数据源用 `allRecentSessions()`（对齐 H5 `nim.session.getSessions`，
+    /// 云信 SDK 本地缓存，跨端已同步）。
+    ///
+    /// **关键过滤**（对齐 H5 `session.js:293`）：
+    /// - `lastMessage` 必须非 nil 且 `timestamp > 0` —— 排除"无会话时间"的僵尸会话
+    /// - `sessionType == .P2P` —— 排除群/超大群等其他类型
+    ///
+    /// **上限**（对齐 H5 `maxSessionCount = 200`）：只取时间倒序 top 200
     func fetchAll() async throws -> [MessageSession] {
         logger.info("🟡 [Adapter] fetchAll() start — SDK isLogined=\(NIMSDK.shared().loginManager.isLogined(), privacy: .public)")
         let recentSessions: [NIMRecentSession] = await withCheckedContinuation { cont in
-            // hop background queue 避免 SDK 内部大数据量卡主线程（`NIMConversationManagerProtocol.h:801-805`）
             DispatchQueue.global(qos: .userInitiated).async {
                 let all = NIMSDK.shared().conversationManager.allRecentSessions() ?? []
                 cont.resume(returning: all)
             }
         }
         logger.info("🟡 [Adapter] fetchAll rawCount=\(recentSessions.count, privacy: .public)")
-        // 前 5 条 raw session 详情（诊断用）
-        for (i, s) in recentSessions.prefix(5).enumerated() {
-            let sid = s.session?.sessionId ?? "nil"
-            let type = s.session?.sessionType.rawValue ?? -1
-            let unread = s.unreadCount
-            let lastType = s.lastMessage?.messageType.rawValue ?? -1
-            logger.info("🟡 [Adapter] raw[\(i, privacy: .public)] sid=\(sid, privacy: .private) type=\(type, privacy: .public) unread=\(unread, privacy: .public) lastMsgType=\(lastType, privacy: .public)")
-        }
-        let mapped = recentSessions.compactMap(mapToBusiness)
-        logger.info("🟡 [Adapter] mapped P2P count=\(mapped.count, privacy: .public) (raw=\(recentSessions.count, privacy: .public), filtered=\(recentSessions.count - mapped.count, privacy: .public))")
+
+        // 时间倒序 top 200（对齐 H5 maxSessionCount + slice(0, maxSessionCount)）
+        let sorted = recentSessions
+            .sorted { ($0.lastMessage?.timestamp ?? 0) > ($1.lastMessage?.timestamp ?? 0) }
+            .prefix(200)
+
+        let mapped = sorted.compactMap(mapToBusiness)
+        logger.info("🟡 [Adapter] mapped P2P count=\(mapped.count, privacy: .public) (raw=\(recentSessions.count, privacy: .public), dropped=\(recentSessions.count - mapped.count, privacy: .public))")
         return mapped
     }
 
@@ -135,34 +140,32 @@ final class NIMSessionAdapter: NSObject, MessageSessionProviderProtocol {
 
     /// `NIMRecentSession` → 业务 `MessageSession`。
     ///
-    /// **ext 字段**（H5 `session.js` 语义）：本 MVP 通道 A 仅依据 SDK 已有回调推导，
-    /// 具体来源 H-2 期补：`receivedGift/called/received/sended` 目前**全部返 false**——
-    /// 触发 R-6 明示的"关注/好友归 Stranger"缺口（等 H-2 补 `apiBatchQueryYxStat` 通道 B）。
+    /// **过滤（对齐 H5 `session.js:293`）**：
+    /// - `lastMessage != nil && timestamp > 0` —— 排除"无会话时间"的僵尸会话（H5 明确 filter）
+    /// - `sessionType == .P2P` —— 排除群/超大群
     private func mapToBusiness(_ recent: NIMRecentSession) -> MessageSession? {
         guard let session = recent.session else {
-            logger.notice("🟠 [Adapter] mapToBusiness: session=nil, skip")
             return nil
         }
         guard session.sessionType == .P2P else {
-            logger.notice("🟠 [Adapter] mapToBusiness: sessionType=\(session.sessionType.rawValue, privacy: .public) not P2P, skip sid=\(session.sessionId, privacy: .private)")
+            return nil
+        }
+        // H5 `session.js:293-297` 明确：无 lastMsg 或 updateTime 的会话不入列表
+        guard let lastMsg = recent.lastMessage, lastMsg.timestamp > 0 else {
             return nil
         }
         let sessionId = session.sessionId
 
-        let lastMessage = summarize(recent.lastMessage)
-        let timestamp = Int64((recent.lastMessage?.timestamp ?? 0) * 1000)
+        let lastMessage = summarize(lastMsg)
+        let timestamp = Int64(lastMsg.timestamp * 1000)
 
-        // peer nickname / avatar：优先 NIM user info，缺时 fallback sessionId
+        // peer nickname / avatar：优先 NIM user info
         let userInfo = NIMSDK.shared().userManager.userInfo(sessionId)
         let nickname = userInfo?.userInfo?.nickName ?? sessionId
         let avatar = userInfo?.userInfo?.avatarUrl
 
-        // v3 修复（Flame 空态 bug）：通道 A ext 从 SDK `serverExt` 解析（H5 `session.extra`，
-        // 云信 SDK 跨端同步字段）。H5 `session.js:34-48` boolean AND 语义。
+        // ext 通道 A —— serverExt 跨端同步（H5 session.extra 等价）
         let ext = parseServerExt(recent.serverExt)
-        if ext.isFlameByExt {
-            logger.info("🟣 [Adapter] session sid=\(sessionId, privacy: .private) is Flame (ext=\(String(describing: ext), privacy: .public))")
-        }
 
         return MessageSession(
             id: sessionId,
@@ -171,7 +174,7 @@ final class NIMSessionAdapter: NSObject, MessageSessionProviderProtocol {
             lastMessage: lastMessage,
             lastMessageTimestamp: timestamp,
             unreadCount: recent.unreadCount,
-            isTop: false,           // 置顶态 H-2 从 `stickTopInfoForSession` 派生
+            isTop: false,
             ext: ext
         )
     }
@@ -179,6 +182,10 @@ final class NIMSessionAdapter: NSObject, MessageSessionProviderProtocol {
     /// 解析 `NIMRecentSession.serverExt`（对齐 H5 `session.extra` 云端同步字段）。
     ///
     /// serverExt 是 JSON string；缺失/异常时返 `.empty`（该 session 归 Stranger）。
+    ///
+    /// **类型兼容**：4 字段全部走 Bool/Int/String 三兼容
+    /// （对齐 [.claude/rules/ios-decode-userid-compat.md](../../.claude/rules/ios-decode-userid-compat.md)
+    /// 精神——H5 JS 弱类型 `=== true`，但云信 server ext 在跨端存储时字段可能落地为 Number 1/0 或 "true"/"false"）
     private func parseServerExt(_ serverExt: String?) -> MessageSessionExt {
         guard let json = serverExt, !json.isEmpty,
               let data = json.data(using: .utf8),
@@ -186,11 +193,25 @@ final class NIMSessionAdapter: NSObject, MessageSessionProviderProtocol {
             return .empty
         }
         return MessageSessionExt(
-            receivedGift: dict["receivedGift"] as? Bool ?? false,
-            called: dict["called"] as? Bool ?? false,
-            received: dict["received"] as? Bool ?? false,
-            sended: dict["sended"] as? Bool ?? false
+            receivedGift: parseBoolCompat(dict["receivedGift"]),
+            called: parseBoolCompat(dict["called"]),
+            received: parseBoolCompat(dict["received"]),
+            sended: parseBoolCompat(dict["sended"]),
+            activeTycoon: parseBoolCompat(dict["activeTycoon"])
         )
+    }
+
+    /// Bool/Int/String 三兼容 —— H5 `=== true` 严格但云信跨端存储字段类型不可控
+    private func parseBoolCompat(_ any: Any?) -> Bool {
+        if let b = any as? Bool { return b }
+        if let n = any as? NSNumber {
+            // NSNumber 桥接安全：objCType "c"/"B" = Bool，已在上面 as? Bool 捕获；此处按 int 取值
+            return n.intValue != 0
+        }
+        if let s = any as? String {
+            return s == "true" || s == "1"
+        }
+        return false
     }
 
     /// NIM 消息 → 文本摘要（v3 spec §1.4b #3 归一化对齐 H5 `message/list.vue` getMessagePreview + attach 分类）。

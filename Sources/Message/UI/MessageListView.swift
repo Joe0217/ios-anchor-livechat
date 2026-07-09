@@ -12,6 +12,8 @@ import SwiftUI
 struct MessageListView: View {
 
     @ObservedObject var store: MessageSessionStore
+    /// H-2 spec §4.1：短按 row 时把 peerYxAccId 追加到 path 触发 push；由 MainTabView 上抬持有
+    @Binding var messagesPath: NavigationPath
     @State private var transientError: String?
     @State private var longPressedSession: MessageSession?
 
@@ -152,10 +154,11 @@ struct MessageListView: View {
     }
 
     private var pageContent: some View {
+        // Tab 顺序对齐 H5 list.vue：Flame → Prime → Stranger（H5 news/message/index.vue tab 定义顺序）
         TabView(selection: $store.selectedCategory) {
             categoryPage(.flame).tag(MessageSessionCategory.flame)
-            categoryPage(.stranger).tag(MessageSessionCategory.stranger)
             categoryPage(.prime).tag(MessageSessionCategory.prime)
+            categoryPage(.stranger).tag(MessageSessionCategory.stranger)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
     }
@@ -177,10 +180,10 @@ struct MessageListView: View {
                     ForEach(sessions) { session in
                         MessageSessionRow(
                             session: session,
-                            profile: store.profile(for: session.id)
-                        ) {
-                            longPressedSession = session
-                        }
+                            profile: store.profile(for: session.id),
+                            onLongPress: { longPressedSession = session },
+                            onTap: { messagesPath.append(session.id) }
+                        )
                         Divider().padding(.leading, 76)
                     }
                 }
@@ -225,10 +228,10 @@ struct MessageListView: View {
                 ForEach(sessions) { session in
                     MessageSessionRow(
                         session: session,
-                        profile: store.profile(for: session.id)
-                    ) {
-                        longPressedSession = session
-                    }
+                        profile: store.profile(for: session.id),
+                        onLongPress: { longPressedSession = session },
+                        onTap: { messagesPath.append(session.id) }
+                    )
                     Divider().padding(.leading, 76)
                 }
             }
@@ -238,14 +241,28 @@ struct MessageListView: View {
 
     // MARK: - Actions
 
-    /// 系统消息入口点击（v4 新增）：详情页留 H-2，点击暂 toast "coming soon"；
-    /// Station 额外标记已读（清 unread badge）。
+    /// 系统消息 3 入口点击：
+    /// - `.station` HTTP 独立列表页 → push StationListView（用 sentinel string 走 MainTabView 分支）
+    /// - `.notification` P2P 会话 → push messagesPath（yxAccId = AppConfig.notificationYxAccId）
+    /// - `.admin` P2P 会话 → push messagesPath（yxAccId = CustomerServiceIdStore.customerYxAccId）
     private func handleSystemInboxTap(_ entry: SystemInboxEntry) {
-        if entry.kind == .station {
+        switch entry.kind {
+        case .station:
             store.markStationRead()
+            messagesPath.append(MessageListView.stationSentinel)
+        case .notification:
+            messagesPath.append(AppConfig.notificationYxAccId)
+        case .admin:
+            guard let cid = CustomerServiceIdStore.shared.customerYxAccId, !cid.isEmpty else {
+                showTransientError(L10n.messageSystemInboxComingSoon)
+                return
+            }
+            messagesPath.append(cid)
         }
-        showTransientError(L10n.messageSystemInboxComingSoon)
     }
+
+    /// Batch 3.8：Station 详情页 sentinel（MainTabView.navigationDestination 分支识别）
+    static let stationSentinel = "__station_list__"
 
     private func handleStickTop(_ session: MessageSession) async {
         let beforeState = store.state
@@ -361,11 +378,11 @@ struct MessageListView_Previews: PreviewProvider {
 
     static var previews: some View {
         Group {
-            MessageListView(store: makeStore(sessions: sample, prime: ["prime1"]))
+            MessageListView(store: makeStore(sessions: sample, prime: ["prime1"]), messagesPath: .constant(NavigationPath()))
                 .previewDisplayName("Loaded 3 categories")
-            MessageListView(store: makeStore(sessions: []))
+            MessageListView(store: makeStore(sessions: []), messagesPath: .constant(NavigationPath()))
                 .previewDisplayName("Empty (Flame)")
-            MessageListView(store: makeStore(sessions: [], error: NSError(domain: "preview", code: -1)))
+            MessageListView(store: makeStore(sessions: [], error: NSError(domain: "preview", code: -1)), messagesPath: .constant(NavigationPath()))
                 .previewDisplayName("Error retry")
         }
     }

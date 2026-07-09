@@ -26,7 +26,8 @@ final class MessageSessionStoreTests: XCTestCase {
             primeProvider: primeProvider,
             stationProvider: FakeStationListProvider(),
             customerServiceStore: FakeCustomerServiceIdStore(),
-            profileProvider: FakeConversationProfileProvider()
+            profileProvider: FakeConversationProfileProvider(),
+            followProvider: FakeFollowUserListProvider()
         )
         return (store, provider, primeProvider)
     }
@@ -143,7 +144,8 @@ final class MessageSessionStoreTests: XCTestCase {
             primeProvider: primeProvider,
             stationProvider: FakeStationListProvider(),
             customerServiceStore: FakeCustomerServiceIdStore(),
-            profileProvider: FakeConversationProfileProvider()
+            profileProvider: FakeConversationProfileProvider(),
+            followProvider: FakeFollowUserListProvider()
         )
 
         // 初始 idle
@@ -172,7 +174,8 @@ final class MessageSessionStoreTests: XCTestCase {
             primeProvider: FakePrimeLevelProvider(),
             stationProvider: FakeStationListProvider(),
             customerServiceStore: FakeCustomerServiceIdStore(),
-            profileProvider: FakeConversationProfileProvider()
+            profileProvider: FakeConversationProfileProvider(),
+            followProvider: FakeFollowUserListProvider()
         )
         await store.load()
         guard case .loaded(let first) = store.state, first.map(\.id) == ["u1"] else {
@@ -215,7 +218,8 @@ final class MessageSessionStoreTests: XCTestCase {
             primeProvider: prime,
             stationProvider: FakeStationListProvider(),
             customerServiceStore: FakeCustomerServiceIdStore(),
-            profileProvider: FakeConversationProfileProvider()
+            profileProvider: FakeConversationProfileProvider(),
+            followProvider: FakeFollowUserListProvider()
         )
         await store.load()
         XCTAssertEqual(store.primeUidSet, ["u1"], "初始 primeUidSet 应含 u1")
@@ -240,7 +244,8 @@ final class MessageSessionStoreTests: XCTestCase {
             primeProvider: FakePrimeLevelProvider(),
             stationProvider: FakeStationListProvider(),
             customerServiceStore: FakeCustomerServiceIdStore(),
-            profileProvider: FakeConversationProfileProvider()
+            profileProvider: FakeConversationProfileProvider(),
+            followProvider: FakeFollowUserListProvider()
         )
         await store.load()
         guard case .loaded(let first) = store.state, first.map(\.id) == ["u1"] else {
@@ -280,7 +285,8 @@ final class MessageSessionStoreTests: XCTestCase {
             primeProvider: prime,
             stationProvider: FakeStationListProvider(),
             customerServiceStore: FakeCustomerServiceIdStore(),
-            profileProvider: profile
+            profileProvider: profile,
+            followProvider: FakeFollowUserListProvider()
         )
         await store.load()
         // 前置断言：u1 的 profile + prime 都在
@@ -397,7 +403,8 @@ final class MessageSessionStoreTests: XCTestCase {
             primeProvider: FakePrimeLevelProvider(),
             stationProvider: FakeStationListProvider(),
             customerServiceStore: FakeCustomerServiceIdStore(),
-            profileProvider: FakeConversationProfileProvider()
+            profileProvider: FakeConversationProfileProvider(),
+            followProvider: FakeFollowUserListProvider()
         )
         await store.load()
 
@@ -438,7 +445,8 @@ final class MessageSessionStoreTests: XCTestCase {
             primeProvider: prime,
             stationProvider: FakeStationListProvider(),
             customerServiceStore: customerStore,
-            profileProvider: FakeConversationProfileProvider()
+            profileProvider: FakeConversationProfileProvider(),
+            followProvider: FakeFollowUserListProvider()
         )
         await store.load()
 
@@ -467,7 +475,8 @@ final class MessageSessionStoreTests: XCTestCase {
             primeProvider: FakePrimeLevelProvider(),
             stationProvider: FakeStationListProvider(),
             customerServiceStore: FakeCustomerServiceIdStore(),
-            profileProvider: FakeConversationProfileProvider()
+            profileProvider: FakeConversationProfileProvider(),
+            followProvider: FakeFollowUserListProvider()
         )
         await store.load()
 

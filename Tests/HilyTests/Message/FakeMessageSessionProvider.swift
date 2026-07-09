@@ -90,6 +90,23 @@ final class FakePrimeLevelProvider: PrimeLevelProviderProtocol {
     }
 }
 
+@MainActor
+final class FakeFollowUserListProvider: FollowUserListProviderProtocol {
+    var stubFollowSet: Set<String> = []
+    private(set) var fetchCalls: Int = 0
+    private(set) var clearCalls: Int = 0
+
+    func fetch() async -> Set<String> {
+        fetchCalls += 1
+        return stubFollowSet
+    }
+
+    func clear() {
+        clearCalls += 1
+        stubFollowSet.removeAll()
+    }
+}
+
 // MARK: - v4 系统消息 3 入口 Fakes
 
 @MainActor

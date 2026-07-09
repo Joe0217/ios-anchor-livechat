@@ -82,6 +82,11 @@ struct ChatDetailView: View {
     @State private var lastRealBottomId: String? = nil
     /// Batch 6.4：loadMore 前捕获当前视觉最顶消息 stableId,加载完 scrollTo(anchor:.top) 保持视口位置
     @State private var savedTopMessageId: String? = nil
+    /// 用户当前是否在消息列表底部 —— bottom sentinel `.onAppear/.onDisappear` 驱动。
+    /// - true = 底部锚点在渲染窗口内(收新消息自动滚底 + 清 pendingBottomBadge)
+    /// - false = 用户在上翻历史(收新消息只累加 badge,不打断浏览)
+    /// 初值 true 对齐"进入页面即滚到底部"语义。
+    @State private var isAtBottom: Bool = true
     /// 键盘管理（H-2 键盘管理精细化）：
     /// - `.scrollDismissesKeyboard(.interactively)` — 用户拖列表时键盘自然滑走（iM 惯例）
     /// - 键盘弹出 → 自动滚到底部（`onChange(of: isInputFocused)` 处理）
@@ -387,14 +392,21 @@ struct ChatDetailView: View {
 
     /// Batch 6.4 bottomAnchor 变化处理:
     /// - 我方发消息（isOutgoing=true）→ 无条件滚底
-    /// - 对方消息 + 用户在底部（pendingBottomBadge==0）→ 滚底
-    /// - 对方消息 + 用户浏览历史 → 不滚（让 P2PChatStore.handleReceived 累加 pendingBottomBadge 显示"N new" badge）
+    /// - 对方消息 + 用户在底部（isAtBottom=true）→ 滚底 + 清 badge(store.handleReceived 已累加,滚到底后立即清)
+    /// - 对方消息 + 用户浏览历史(isAtBottom=false）→ 不滚,让 badge 展示"N new"
     /// **无 withAnimation**——对齐 H5 直接跳到底部
+    ///
+    /// 用 isAtBottom 而非 pendingBottomBadge==0 判定"用户在底部":
+    /// store 收到消息 badge 立即 +1,view 侧读到时已>0,pendingBottomBadge 无法反映"before-this-message"状态。
     private func handleBottomAnchorChange(_ new: BottomAnchor?, proxy: ScrollViewProxy) {
         guard let new, new.stableId != lastRealBottomId else { return }
         lastRealBottomId = new.stableId
-        if new.isOutgoing || store.pendingBottomBadge == 0 {
+        if new.isOutgoing || isAtBottom {
             proxy.scrollTo("BOTTOM", anchor: .bottom)
+            // 我方发/对方消息-且-用户在底部:滚底后 badge 应清(handleReceived 已累加,现视觉已到底)
+            if store.pendingBottomBadge > 0 {
+                store.markBottomReached()
+            }
         }
     }
 
@@ -434,8 +446,21 @@ struct ChatDetailView: View {
                         .id(msg.stableId)   // scrollTo anchor 与 ForEach id 一致
                     }
 
-                    // 底部锚点用于自动滚
-                    Color.clear.frame(height: 1).id("BOTTOM")
+                    // 底部锚点用于自动滚 + 感知"用户在底部"状态。
+                    // .onAppear = 底部进入渲染窗口(用户滚到底 or 首次 layout 完成) → isAtBottom=true + 清 badge
+                    // .onDisappear = 底部离开渲染窗口(用户上翻历史) → isAtBottom=false
+                    Color.clear
+                        .frame(height: 1)
+                        .id("BOTTOM")
+                        .onAppear {
+                            isAtBottom = true
+                            if store.pendingBottomBadge > 0 {
+                                store.markBottomReached()
+                            }
+                        }
+                        .onDisappear {
+                            isAtBottom = false
+                        }
                 }
             }
             .scrollDismissesKeyboard(.interactively)
@@ -447,10 +472,24 @@ struct ChatDetailView: View {
             .onChange(of: bottomAnchorSignal) { newSignal in
                 handleBottomAnchorChange(newSignal, proxy: proxy)
             }
-            // 键盘弹出时跳到底部（键盘遮挡输入框应立即让最新消息可见）—— 无动画（对齐 H5）
+            // 键盘弹出时跳到底部让最新消息紧贴输入框(对齐 iM 惯例)。
+            // 键盘动画 ~250ms;多帧兜底(0/100/300ms)覆盖动画全程,无 withAnimation(避免与键盘曲线叠加"跳动")。
             .onChange(of: isInputFocused) { focused in
-                if focused {
-                    proxy.scrollTo("BOTTOM", anchor: .bottom)
+                guard focused else { return }
+                let lastId = messages.last?.stableId
+                let scrollBottom: () -> Void = {
+                    if let id = lastId {
+                        proxy.scrollTo(id, anchor: .bottom)
+                    } else {
+                        proxy.scrollTo("BOTTOM", anchor: .bottom)
+                    }
+                }
+                scrollBottom()
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                    scrollBottom()
+                    try? await Task.sleep(nanoseconds: 200_000_000)
+                    scrollBottom()
                 }
             }
             // Batch 6.4：loadMore 完成后 scrollTo(savedTopMessageId, anchor: .top) 保持视口位置

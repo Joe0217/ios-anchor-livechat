@@ -79,15 +79,26 @@ struct ConversationProfile: Decodable, Equatable {
     let activeTycoon: Bool?
     /// 在线状态数值（H5 `LIVE_STATUS_NUMBER`；`AnchorOnlineStatus.isOnlineForCall` 判绿点）
     let onlineGroupStatus: Int?
+    /// 业务 userId（H2 spec §4 通话入口用；H5 `userProfiles[yxAccid].userId` 见 session.js:738）
+    /// **String/Int 双兼容**（对齐 [ios-decode-userid-compat.md](../../.claude/rules/ios-decode-userid-compat.md)）
+    let userId: Int?
 
     enum CodingKeys: String, CodingKey {
-        case nickname, icon, userLevelName, vipExpireTime, activeTycoon, onlineGroupStatus
+        case nickname, icon, userLevelName, vipExpireTime, activeTycoon, onlineGroupStatus, userId
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.nickname = (try? c.decodeIfPresent(String.self, forKey: .nickname)) ?? nil
         self.icon     = (try? c.decodeIfPresent(String.self, forKey: .icon)) ?? nil
+        // userId 后端 __NSCFNumber 或 String 混发（H5 type.ts 声明不可信）
+        if let i = try? c.decode(Int.self, forKey: .userId) {
+            self.userId = i
+        } else if let s = try? c.decode(String.self, forKey: .userId), let i = Int(s) {
+            self.userId = i
+        } else {
+            self.userId = nil
+        }
         // userLevelName 后端可能 String/Int 混发，一律收 String
         if let s = try? c.decode(String.self, forKey: .userLevelName), !s.isEmpty {
             self.userLevelName = s
@@ -110,13 +121,15 @@ struct ConversationProfile: Decodable, Equatable {
 
     /// 便利初始化（测试用）
     init(nickname: String?, icon: String?, userLevelName: String? = nil,
-         vipExpireTime: Int64? = nil, activeTycoon: Bool? = nil, onlineGroupStatus: Int? = nil) {
+         vipExpireTime: Int64? = nil, activeTycoon: Bool? = nil, onlineGroupStatus: Int? = nil,
+         userId: Int? = nil) {
         self.nickname = nickname
         self.icon = icon
         self.userLevelName = userLevelName
         self.vipExpireTime = vipExpireTime
         self.activeTycoon = activeTycoon
         self.onlineGroupStatus = onlineGroupStatus
+        self.userId = userId
     }
 
     /// VIP 是否有效（H5 `vipExpireTime > Date.now()`）

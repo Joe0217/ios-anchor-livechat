@@ -18,23 +18,35 @@ struct MessageSession: Identifiable, Equatable, Hashable {
     let ext: MessageSessionExt
 }
 
-/// 会话业务扩展字段（`session.ext`）。H5 `session.js` 的 `ext` 结构逐字对齐。
+/// 会话业务扩展字段（`session.ext`）。对齐安卓 `MsgMainFragment.isFlame()` + H5 `session.js`。
 ///
-/// **boolean 语义**（v2 修订，red team C-1）：
-/// - `received` / `sended` 是 **Bool 不是 Int**（H5 源码 `session.js:34-48`）
-/// - Flame 通道 A：`receivedGift || called || (received && sended)`—— 双向消息互动是 AND 不是 OR
+/// **Flame 通道 A**（安卓 #6-9）：
+/// - `receivedGift == true` （安卓 #7）
+/// - `called == true` （安卓 #8）
+/// - `received && sended` （安卓 #9，双向互动 boolean AND）
+/// - `activeTycoon == true` （安卓 #6，profile 为空时的 ext 兜底）
 struct MessageSessionExt: Equatable, Hashable {
     let receivedGift: Bool
     let called: Bool
     let received: Bool
     let sended: Bool
+    /// 活跃神豪 ext 兜底（安卓 #6：`extension["activeTycoon"] == true`）
+    let activeTycoon: Bool
 
-    /// H5 `checkSessionExtraIsFlame` 通道 A 判定。
-    /// **不含**通道 B（flameUserIdList）——scope 排除留 H-2，见 spec §1.2 + R-6。
+    /// 显式 init 让 `activeTycoon` 有默认值 false（兼容旧调用点未指定 activeTycoon 的场景）
+    init(receivedGift: Bool, called: Bool, received: Bool, sended: Bool, activeTycoon: Bool = false) {
+        self.receivedGift = receivedGift
+        self.called = called
+        self.received = received
+        self.sended = sended
+        self.activeTycoon = activeTycoon
+    }
+
+    /// Flame 通道 A 判定：任一 ext 字段命中即 Flame（对齐安卓 MsgMainFragment.isFlame #6-9）
     var isFlameByExt: Bool {
-        receivedGift || called || (received && sended)
+        receivedGift || called || (received && sended) || activeTycoon
     }
 
     /// 空 ext 兜底（新 session 尚无任何互动标记）
-    static let empty = MessageSessionExt(receivedGift: false, called: false, received: false, sended: false)
+    static let empty = MessageSessionExt(receivedGift: false, called: false, received: false, sended: false, activeTycoon: false)
 }

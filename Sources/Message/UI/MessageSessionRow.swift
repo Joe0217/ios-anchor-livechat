@@ -11,6 +11,8 @@ struct MessageSessionRow: View {
     /// v4e：对端画像（等级/VIP/活跃大 R）；view 层从 store.profile(for:) 传入，缺则不显示对应 badge
     let profile: ConversationProfile?
     let onLongPress: () -> Void
+    /// H-2 spec §4.1：短按 push chat detail；nil 时不响应（如系统入口 row 复用）
+    var onTap: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -22,7 +24,10 @@ struct MessageSessionRow: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .contentShape(Rectangle())
+        // longPress 优先注册，避免 tap 抢占；SwiftUI 的 .onTapGesture + .onLongPressGesture
+        // 一起用需要 longPress 靠前 SwiftUI 才能同时识别
         .onLongPressGesture(minimumDuration: 0.4, perform: onLongPress)
+        .onTapGesture { onTap?() }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(a11yLabel)
     }
