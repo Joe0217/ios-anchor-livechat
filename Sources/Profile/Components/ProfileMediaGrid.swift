@@ -64,7 +64,7 @@ struct ProfileMediaGrid: View {
 
         return ZStack {
             // 远端图：缓存版 AsyncImage，切 tab 回来无重新加载
-            CachedAsyncImage(url: imageURL, contentMode: .fill) {
+            CachedAsyncImage(url: imageURL, contentMode: .fill, cdn: (.custom(width: 320), .fill)) {
                 Theme.Palette.profileGridPlaceholder
             }
 

@@ -1,0 +1,9 @@
+# /review loop 累积的中间产物，不入库
+# - loop-findings.md: 每轮新增追加，建议人工 merge 回 docs/plan/ 后清理
+# - loop-state.json: M2 实现的角度跟踪状态（当前版未启用）
+loop-findings.md
+loop-state.json
+*.tmp
+
+# 保留 .gitignore 自身
+!.gitignore

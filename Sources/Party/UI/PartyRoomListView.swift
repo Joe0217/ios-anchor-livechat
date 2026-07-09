@@ -90,7 +90,7 @@ struct PartyRoomListView: View {
         HStack(spacing: 12) {
             // 房间头像占位
             if let icon = room.roomAvatar, !icon.isEmpty, let url = URL(string: icon) {
-                CachedAsyncImage(url: url, persistent: false) {
+                CachedAsyncImage(url: url, persistent: true, cdn: (.avatarSmall, .fill)) {
                     Color.gray.opacity(0.2)
                 }
                 .frame(width: 48, height: 48)

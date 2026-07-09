@@ -32,17 +32,66 @@ struct AnchorInfo: Codable {
     let friendsNum: Int?       // 朋友数 Friends
 
     // 相册视频（先按数组接，待真机校验元素结构）
+    // ⚠️ 真接口返 picList 单一数组（mediaType 1=图 2=视频），这两个字段实测**永远为 nil**；
+    // 保留仅供极端 fallback，photos/videos UI 派生优先从 picList 分流（见 AnchorInfoStore）
     let pictures: [MediaAsset]?
     let videos: [MediaAsset]?
 
+    // H5 蓝本 mine/index.vue:259 `mineInfo.picList` —— getAnchorInfo 真实返的相册字段
+    // 元素结构对齐 UserInfoWithReviewResponse.PicListItem（EditProfile 已用同款）
+    // 独立命名 `AnchorPicItem` 避免与他处 PicListItem 混淆
+    let picList: [AnchorPicItem]?
+
     // 主播专属（H5 蓝本 08 §3.4 / 09 §90）
-    let greetMsgs: [String]?       // 问候语，≤50字/条
+    let greetMsgs: [GreetMsg]?     // 问候语（含 id 支持编辑页删除 diff），≤50字/条
     let callVideoUrl: String?      // 来电视频
     let giftList: [GiftItem]?      // 礼物墙（userProfile 也用此字段）
+
+    // H-3 新增（对齐 H5 私聊页深化）
+    let chatBubble: String?        // 主播穿戴的气泡装扮 URL（H5 `mineInfo.chatBubble`，来自虚拟道具 itemType=4）
+    let activeTycoon: Bool?        // 主播自己是否大R（发送消息时 remoteExt 透传给对端，让对端 nav 显徽章）
+
+    // A-2 新增（v3 BLOCK-2 修：供注册被拒重录 hydrate 回填；H5 `type.ts` L67/78/115/195 等多处 mineInfo 类型声明字段名推）
+    // ⚠️ 未真机抓包 verify；H5 type.ts birthday 有 number 有 string，先用 String? 覆盖 "yyyy-MM-dd" 情况；若接口实际返 number 后期改 Codable init(from:) 用 String/Int 兼容 decode（对齐 rule ios-decode-userid-compat.md）
+    let email: String?             // 注册用邮箱；H5 `type.ts:67` `email?: string` / L195 `email: string`
+    let birthday: String?          // "yyyy-MM-dd"；H5 混发 number/string，一期先 String
+    let phone: String?             // 手机号；H5 `type.ts:68`
+    let inviteCode: String?        // 邀请码；对齐 H5 register `formData.inviteCode`
+    let language: String?          // 已学语言 逗号 join（对齐 H5 register `formData.language`）
+    let countryId: String?         // ⚠️ 与 countryCode（ISO 两字母）不同：H5 register formData.countryId 是 en 名（"Spain"）或 locale，抓包定；先 String?
+}
+
+/// 问候语单条（I-spec-用户资料编辑页 §2.2）。
+///
+/// H5 蓝本 `greetMsgBtn.vue:45` `item.contentDetail` 反推真实结构含 id + contentDetail
+/// 对象数组（H5 `type.ts:106` 声明 `string[]` 是撒谎，对齐 rule ios-decode-userid-compat 精神）。
+/// 编辑页删除 diff 依赖 id；新增时 addGreetList 只传 contentDetail。
+///
+/// 命名沿用 `MediaAsset` / `GiftItem` 模式：接口字段名 "id" 解到本地 `serverId`
+/// 避开 `Identifiable.id` 协议名冲突。
+struct GreetMsg: Codable, Identifiable, Hashable {
+    let serverId: Int?         // 接口字段：id（老 v1 缓存无此字段则为 nil）
+    let contentDetail: String?
+
+    /// Identifiable.id：优先接口 id，缺则用 content 兜底
+    var id: String { "\(serverId ?? -1)-\(contentDetail ?? "")" }
+
+    enum CodingKeys: String, CodingKey {
+        case serverId = "id"
+        case contentDetail
+    }
 }
 
 /// 礼物墙单项（蓝本 08 §3.4「礼物墙 giftList」）。
-/// 字段全 Optional：H5 字段名为 H5 推测；真机校验后迭代。
+///
+/// 字段名双兼容（对齐 H5 mine/components/gifts.vue L21/24/27）：
+/// - 图 URL：`giftImg` || `icon` || `iconUrl`
+/// - 名字：`giftName` || `name`
+/// - 数量：`giftCount` || `num` || `count`
+/// - 主键：`giftId` || `id`
+///
+/// 来源接口：`/api/anchor/getGiftWallList`（独立于 getAnchorInfo；H5 mine/index.vue:92）；
+/// UserProfile 详情 `giftList` 走用户接口返 `giftId`+`num` 简版。
 struct GiftItem: Codable, Identifiable, Hashable {
     let giftId: Int?
     let name: String?
@@ -51,9 +100,67 @@ struct GiftItem: Codable, Identifiable, Hashable {
 
     var id: String { "\(giftId ?? -1)-\(name ?? "")" }
 
+    init(giftId: Int?, name: String?, iconUrl: String?, count: Int?) {
+        self.giftId = giftId
+        self.name = name
+        self.iconUrl = iconUrl
+        self.count = count
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case giftId, id
+        case name, giftName
+        case iconUrl, giftImg, icon
+        case count, giftCount, num
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // giftId：接口给 Int，兼容 String
+        if let i = try? c.decode(Int.self, forKey: .giftId) { giftId = i }
+        else if let s = try? c.decode(String.self, forKey: .giftId) { giftId = Int(s) }
+        else if let i = try? c.decode(Int.self, forKey: .id) { giftId = i }
+        else if let s = try? c.decode(String.self, forKey: .id) { giftId = Int(s) }
+        else { giftId = nil }
+        // 名字
+        name = (try? c.decode(String.self, forKey: .giftName))
+            ?? (try? c.decode(String.self, forKey: .name))
+        // 图 URL：H5 gifts.vue `giftImg || icon`；有些接口用 iconUrl
+        iconUrl = (try? c.decode(String.self, forKey: .giftImg))
+            ?? (try? c.decode(String.self, forKey: .icon))
+            ?? (try? c.decode(String.self, forKey: .iconUrl))
+        // 数量：giftCount / num / count 三选一
+        if let n = try? c.decode(Int.self, forKey: .giftCount) { count = n }
+        else if let n = try? c.decode(Int.self, forKey: .num) { count = n }
+        else if let n = try? c.decode(Int.self, forKey: .count) { count = n }
+        else { count = nil }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(giftId, forKey: .giftId)
+        try c.encodeIfPresent(name, forKey: .name)
+        try c.encodeIfPresent(iconUrl, forKey: .iconUrl)
+        try c.encodeIfPresent(count, forKey: .count)
+    }
+}
+
+/// 主播个人主页相册项（getAnchorInfo 响应 `picList` 元素）。
+///
+/// 字段对齐 H5 `PicListData`（src/api/user/type.ts:184）+ EditProfile 侧 `UserInfoWithReviewResponse.PicListItem`。
+/// Codable 双向（Encodable 供 AnchorInfoStore CachedSnapshot 持久化）。
+struct AnchorPicItem: Codable, Identifiable, Hashable {
+    let assetId: Int?          // 接口字段：id
+    let mediaUrl: String?      // 图 or 视频 URL
+    let mediaType: Int?        // 1=图 2=视频
+    let videoCover: String?    // 视频封面（图片项 nil）
+    let vaild: Int?            // 1=有效 2=审核中 3=被拒（沿用 H5 拼写）
+
+    var id: String { "\(assetId ?? -1)-\(mediaUrl ?? "")" }
+
     enum CodingKeys: String, CodingKey {
-        case giftId = "id"
-        case name, iconUrl, count
+        case assetId = "id"
+        case mediaUrl, mediaType, videoCover, vaild
     }
 }
 

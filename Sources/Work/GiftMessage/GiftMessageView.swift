@@ -11,7 +11,7 @@ struct GiftMessageView: View {
     @State private var pickerImageItem: PhotosPickerItem?
     /// 视频 PhotosPicker
     @State private var pickerVideoItem: PhotosPickerItem?
-    /// 依赖注入的 service（GiftMessagePickerSheet 需要拉礼物列表）
+    /// 依赖注入的 service（CommonGiftPanel `.imBind` factory 需要拉礼物列表）
     private let service: GiftMessageServiceProtocol
     /// submit 成功 → 对齐 H5 `router.back()` 立刻 pop 回退（step 3 反悔 #2 修复重复提交）
     @Environment(\.dismiss) private var dismiss
@@ -104,13 +104,16 @@ struct GiftMessageView: View {
                 pickerVideoItem = nil
             }
         }
-        // GiftPicker sheet
+        // H-4 迁移：IM 场景 → CommonGiftPanel（tabs=[.popular], footer=.instantSelect tap 即选中 + dismiss；未选择关闭 → onCancel）
         .sheet(isPresented: $vm.showingGiftPicker) {
-            GiftMessagePickerSheet(
+            CommonGiftPanel(config: .imBind(
                 service: service,
                 onSelect: { vm.bindGift($0) },
                 onCancel: { vm.cancelGiftBinding() }
-            )
+            ))
+            .sheetTopInset()
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .overlay(alignment: .top) { transientErrorToast }
         // 上传中全屏遮罩（对齐 H5 showLoadingToast forbidClick=true）

@@ -75,7 +75,6 @@ grep -rnE "maxRetries\s*=\s*[0-9]" Sources
 
 | 阈值 | 位置 | 立于 | 假设 | 触发重估条件 |
 |---|---|---|---|---|
-| ~~FUBeautyRenderer.init 500ms setup timeout~~ | ~~Vendor/FaceUnity/FUBeautyRenderer.swift~~ | B 期 | 4 参数 setup | **K 期已废弃 timeout throw**（改 warning）|
 | 60ms slider throttle | LiveRoomView.BeautyPanel / BeautySettingsView | B 期 | 单参数拖动 | K spec Spike Task 已 planned 但未真机跑，K 期沿用；未来若加参数或帧率关键场景需 Instruments 验证 |
 | 心跳 10s / 失败 >3 次 forceEnd | HeartbeatController | B 期 | 直播心跳链路 | PK / 派对房共用；若加通话心跳并发需重估 |
 | 弱网 ≥10 次质量 ≤5 降帧 / ≥30 次强制下播 | NetworkQualityMonitor | B v5 | 直播弱网 | PK / 派对房沿用；若加通话质量监控需重估 |

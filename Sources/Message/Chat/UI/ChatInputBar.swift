@@ -65,6 +65,12 @@ struct ChatInputBar: View {
             .focused(textFieldFocus)
             .submitLabel(.send)
             .onSubmit(onSend)
+            // 500 字符上限对齐 H5 `van-field maxlength="500"`——超长时静默截断,不弹提示(H5 同款)
+            .onChange(of: text) { newValue in
+                if newValue.count > 500 {
+                    text = String(newValue.prefix(500))
+                }
+            }
     }
 
     /// 语音"按住说话"按钮 —— 用 DragGesture minimumDistance:0 实现按住 + 上滑取消

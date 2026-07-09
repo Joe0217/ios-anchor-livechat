@@ -44,8 +44,19 @@ final class AnchorInfoStore: ObservableObject {
     @Published var followersCount: Int = 0
     @Published var friendsCount: Int = 0
 
+    /// 主播礼物墙（H5 mine/index.vue:92 独立接口 `/api/anchor/getGiftWallList`）。
+    /// 拉取失败为非致命——空数组即触发 UI 空态；不阻塞 hasLoadedOnce。
+    @Published private(set) var giftWallList: [GiftItem] = []
+
     // MARK: - 持久化 & 并发控制
-    private let cacheKey = "anchorInfoStore.v1"
+    /// v3（2026-07-09 Profile Album/Gifts 对齐）：CachedSnapshot 加 `picList` + `giftWallList`。
+    /// 老 v2 缓存 decode 到新 schema 会整个失败（picList 缺 → optional 兼容；giftWallList 缺 → decodeIfPresent）
+    /// —— **实际不需要升 key** 也能兼容（optional + decodeIfPresent 自然回落 nil/[]）；但 giftWallList 若从 v2
+    /// 恢复会永远空数组，须走一次 refresh 补 → 升 key 让冷启动强制 loading→refresh 更彻底一致。
+    /// v2（2026-07-07 I-spec-用户资料编辑页 §2.2）：`AnchorInfo.greetMsgs` schema 从 `[String]?`
+    /// 升级为 `[GreetMsg]?` 含 id 支持编辑页删除 diff。老 v1 缓存 decode 到新 schema 会整个
+    /// CachedSnapshot decode 失败 → 升 key 让老快照自然废弃，冷启动闪一次 loading 后 refresh。
+    private let cacheKey = "anchorInfoStore.v3"
     private var inflightTask: Task<Void, Never>?
     private var followObserver: NSObjectProtocol?
 
@@ -108,6 +119,7 @@ final class AnchorInfoStore: ObservableObject {
         urls.append(contentsOf: photos.compactMap { $0.url.flatMap(URL.init(string:)) })
         urls.append(contentsOf: videos.compactMap { ($0.coverUrl ?? $0.url).flatMap(URL.init(string:)) })
         urls.append(contentsOf: giftList.compactMap { $0.iconUrl.flatMap(URL.init(string:)) })
+        urls.append(contentsOf: giftWallList.compactMap { $0.iconUrl.flatMap(URL.init(string:)) })
         guard !urls.isEmpty else { return }
         ImageCache.shared.invalidate(urls)
         logger.info("invalidated \(urls.count) image cache entries")
@@ -127,6 +139,7 @@ final class AnchorInfoStore: ObservableObject {
         followingCount = 0
         followersCount = 0
         friendsCount = 0
+        giftWallList = []
         // P2-16：v2 在 Keychain；v1 残留也一并清（迁移期保险）
         KeychainStore.remove(for: cacheKey)
         UserDefaults.standard.removeObject(forKey: cacheKey)
@@ -171,9 +184,18 @@ final class AnchorInfoStore: ObservableObject {
                     return nil
                 }
             }()
+            // 礼物墙独立接口（H5 mine/index.vue:92）；失败不阻塞主流程 → 空数组 UI 走空态
+            async let giftTask: [GiftItem] = {
+                do { return try await ProfileService.getGiftWallList() }
+                catch {
+                    logger.warning("getGiftWallList failed (non-fatal): \(String(describing: error))")
+                    return []
+                }
+            }()
 
             let anchor = try await anchorTask
             let mineInfo = await mineTask
+            let giftWall = await giftTask
 
             // API await 期间可能被 clear() 递增 epoch（用户登出竞态）——丢弃全部写入，
             // 不写 info/mine/social/loadState/hasLoadedOnce，也不 saveToDisk（否则 keychain 会被 A 数据污染，
@@ -185,6 +207,7 @@ final class AnchorInfoStore: ObservableObject {
 
             self.info = anchor
             self.mine = mineInfo
+            self.giftWallList = giftWall
 
             // 社交数从接口字段直接写入（覆盖；用户操作的增减在 Notification 收到时再叠加）
             if let n = anchor.upsNum    ?? mineInfo?.upsNum    { self.followingCount = n }
@@ -194,7 +217,7 @@ final class AnchorInfoStore: ObservableObject {
             loadState = .loaded
             hasLoadedOnce = true
             saveToDisk()
-            logger.info("reload OK userId=\(anchor.userId ?? -1) mineMerged=\(mineInfo != nil)")
+            logger.info("reload OK userId=\(anchor.userId ?? -1) mineMerged=\(mineInfo != nil) giftWall=\(giftWall.count)")
         } catch let e as APIError {
             // 错误状态也要 guard：老 task 的失败结果不应污染新 session 的 loadState
             guard epoch == self.reloadEpoch else {
@@ -255,9 +278,37 @@ final class AnchorInfoStore: ObservableObject {
         Self.firstNonEmpty(info?.signature, mine?.signature) ?? ""
     }
 
-    var photos: [MediaAsset] { info?.pictures ?? mine?.pictures ?? [] }
-    var videos: [MediaAsset] { info?.videos ?? mine?.videos ?? [] }
-    var giftList: [GiftItem] { info?.giftList ?? mine?.giftList ?? [] }
+    /// 相册照片：真接口用 `picList` 单一数组（mediaType 1=图 2=视频）分流；
+    /// `pictures`/`videos` 是 iOS 侧臆想字段实测不返，保留仅作 legacy fallback（H5 蓝本 mine/index.vue:259）。
+    var photos: [MediaAsset] {
+        let list = info?.picList ?? mine?.picList ?? []
+        let fromPicList = list.filter { $0.mediaType == 1 }.map(Self.mediaAsset(from:))
+        if !fromPicList.isEmpty { return fromPicList }
+        return info?.pictures ?? mine?.pictures ?? []
+    }
+    var videos: [MediaAsset] {
+        let list = info?.picList ?? mine?.picList ?? []
+        let fromPicList = list.filter { $0.mediaType == 2 }.map(Self.mediaAsset(from:))
+        if !fromPicList.isEmpty { return fromPicList }
+        return info?.videos ?? mine?.videos ?? []
+    }
+    /// 礼物墙：优先独立接口 `giftWallList`（H5 mine/index.vue:92）；
+    /// 兜底 anchor/mine 里可能夹带的 giftList（后端偶尔混发时不丢）。
+    var giftList: [GiftItem] {
+        !giftWallList.isEmpty ? giftWallList
+            : (info?.giftList ?? mine?.giftList ?? [])
+    }
+
+    /// AnchorPicItem → MediaAsset 桥接（视频取 videoCover 作 coverUrl，图片 nil）
+    private static func mediaAsset(from item: AnchorPicItem) -> MediaAsset {
+        MediaAsset(
+            assetId: item.assetId,
+            url: item.mediaUrl,
+            coverUrl: item.mediaType == 2 ? item.videoCover : nil,
+            vaild: item.vaild,
+            createTime: nil
+        )
+    }
 
     // MARK: - 持久化
 
@@ -267,6 +318,7 @@ final class AnchorInfoStore: ObservableObject {
         let followingCount: Int
         let followersCount: Int
         let friendsCount: Int
+        let giftWallList: [GiftItem]?     // v3 加；老快照 decode 时缺此字段 → nil，applySnapshot 落 []
     }
 
     /// P2-16：从 UserDefaults 迁 Keychain（ThisDeviceOnly + Synchronizable=false，
@@ -302,6 +354,7 @@ final class AnchorInfoStore: ObservableObject {
         followingCount = snap.followingCount
         followersCount = snap.followersCount
         friendsCount = snap.friendsCount
+        giftWallList = snap.giftWallList ?? []
         if info != nil || mine != nil {
             hasLoadedOnce = true
             loadState = .loaded
@@ -314,7 +367,8 @@ final class AnchorInfoStore: ObservableObject {
             info: info, mine: mine,
             followingCount: followingCount,
             followersCount: followersCount,
-            friendsCount: friendsCount
+            friendsCount: friendsCount,
+            giftWallList: giftWallList
         )
         if let data = try? JSONEncoder().encode(snap) {
             KeychainStore.setData(data, for: cacheKey)

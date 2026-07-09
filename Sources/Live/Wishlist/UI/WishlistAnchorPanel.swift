@@ -1,0 +1,62 @@
+import SwiftUI
+
+/// 心愿单半屏面板（对齐 H5 wishlist-anchor-panel.vue）
+///
+/// 结构（自上而下）：
+/// - 标题：`<主播昵称> 's wish list for this round`
+/// - 副标题
+/// - 礼物卡 3 列 grid
+/// - Top6 贡献者头像榜（30s 轮询）
+struct WishlistAnchorPanel: View {
+    @ObservedObject var store: WishlistStore
+    @Binding var isPresented: Bool
+    let liveRecordId: String
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8),
+    ]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            ScrollView {
+                VStack(spacing: 16) {
+                    // 礼物卡 grid
+                    LazyVGrid(columns: columns, spacing: 12) {
+                        ForEach(store.items) { item in
+                            WishGiftCell(item: item)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    Divider().background(Color.white.opacity(0.1))
+                    // Top6
+                    WishTop6Row(gifters: store.topGifters)
+                        .padding(.horizontal, 16).padding(.bottom, 16)
+                }
+                .padding(.top, 12)
+            }
+        }
+        .background(Color(hex: 0x1A0033).ignoresSafeArea())
+        .onAppear { store.onPanelAppear(liveRecordId: liveRecordId) }
+        .onDisappear { store.onPanelDisappear() }
+    }
+
+    /// v2 修订（2026-07-09）：删顶部右 X 关闭按钮 —— 用户反馈"sheet 顶部关闭按钮误触"。
+    /// 关闭走 sheet drag indicator + swipe down 手势（LiveRoomExtraOverlays sheet 挂载已 `.presentationDragIndicator(.visible)`）。
+    private var header: some View {
+        VStack(spacing: 4) {
+            Text(String(format: L10n.wishlistPanelTitle, store.anchorNickname))
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+            Text(L10n.wishlistPanelSubtitle)
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.5))
+                .padding(.horizontal, 24).padding(.bottom, 8)
+        }
+        .padding(.top, 8)
+    }
+}

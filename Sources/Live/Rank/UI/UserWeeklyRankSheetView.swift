@@ -1,0 +1,483 @@
+import SwiftUI
+
+/// v16 UserWeeklyRankSheet 对齐 H5 **userWeeklyRank.vue** 语义：观众列表 + 送礼榜
+///
+/// **入口**：顶部观众数字 icon tap → 打开本 sheet
+///
+/// **UI 结构完整对齐 H5**：
+/// - **无 banner**（区别于 RankSheetView 的主播周榜 banner）
+/// - **顶层双 Tab**：Viewers / Top Gifter
+///   - **Viewers Tab**（apiViewers）：观众列表，row = avatar + nickname + [BIG R badge] + [Level badge] + [VIP badge] + 位置
+///   - **Top Gifter Tab**（apiSendRank）：3 内层子 Tab **Now / Today / Week**
+///     - Now/Today：普通列表（rank badge + avatar + nickname + costNum）
+///     - Week：**头部前 3 名大卡片区**（h160 渐变金/银/铜，第 2 名向上偏移 -20），4+ 普通行
+/// - **无主播悬浮**（主播不参与 Top Gifter 排名，H5 userWeeklyRank 无 anchor bar）
+///
+/// **v16 行为**：`.interactiveDismissDisabled(true)` + 列表 `.refreshable`
+struct UserWeeklyRankSheetView: View {
+    @Binding var isPresented: Bool
+    let anchorUserId: Int
+    let dbId: Int
+
+    @State private var topTab: RankSheetTopTab = .viewers
+    @State private var subTab: SendRankType = .now
+    @State private var viewersList: [ViewerEntry] = []
+    @State private var viewersLoading = true
+    @State private var rankLists: [SendRankType: [SendRankEntry]] = [:]
+    @State private var rankLoading: SendRankType? = nil
+
+    private let viewersService: ViewersServiceProtocol
+    private let rankService: SendRankServiceProtocol
+
+    init(isPresented: Binding<Bool>, anchorUserId: Int, dbId: Int,
+         viewersService: ViewersServiceProtocol = ViewersServiceReal(),
+         rankService: SendRankServiceProtocol = SendRankServiceReal()) {
+        self._isPresented = isPresented
+        self.anchorUserId = anchorUserId
+        self.dbId = dbId
+        self.viewersService = viewersService
+        self.rankService = rankService
+    }
+
+    var body: some View {
+        // v20: 移除 closeBar（关闭走系统下拉手势）
+        VStack(spacing: 0) {
+            topLevelTabBar
+            if topTab == .viewers {
+                viewersContent
+            } else {
+                subTabBar
+                topGifterContent
+            }
+        }
+        .background(Color(hex: 0x1A0033).ignoresSafeArea())
+        .onAppear {
+            Task { await loadViewers() }
+            Task { await loadRank(.now) }
+        }
+    }
+
+    // MARK: - Top level Tab bar (Viewers / Top Gifter)
+
+    private var topLevelTabBar: some View {
+        HStack(spacing: 0) {
+            topTabButton(tab: .viewers,   label: L10n.liveRoomRankTabViewers)
+            topTabButton(tab: .topGifter, label: L10n.liveRoomRankTabTopGifter)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 8)
+    }
+
+    private func topTabButton(tab: RankSheetTopTab, label: String) -> some View {
+        Button { topTab = tab } label: {
+            VStack(spacing: 4) {
+                Text(label)
+                    .font(.system(size: 16, weight: topTab == tab ? .bold : .medium))
+                    .foregroundColor(topTab == tab ? .white : .white.opacity(0.5))
+                Rectangle()
+                    .fill(topTab == tab ? Color(hex: 0xFE00DE) : .clear)
+                    .frame(width: 24, height: 3)
+                    .cornerRadius(1.5)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Sub Tab bar (Now / Today / Week for Top Gifter)
+
+    private var subTabBar: some View {
+        HStack(spacing: 0) {
+            subTabButton(.now,   label: L10n.liveRoomRankTabNow)
+            subTabButton(.today, label: L10n.liveRoomRankTabToday)
+            subTabButton(.week,  label: L10n.liveRoomRankTabWeek)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+        .padding(.bottom, 12)
+    }
+
+    private func subTabButton(_ tab: SendRankType, label: String) -> some View {
+        Button {
+            subTab = tab
+            if rankLists[tab] == nil {
+                Task { await loadRank(tab) }
+            }
+        } label: {
+            VStack(spacing: 4) {
+                Text(label)
+                    .font(.system(size: 14, weight: subTab == tab ? .bold : .regular))
+                    .foregroundColor(subTab == tab ? .white : .white.opacity(0.55))
+                Rectangle()
+                    .fill(subTab == tab ? Color(hex: 0xFFBB02) : .clear)
+                    .frame(height: 2)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Viewers Tab content
+
+    private var viewersContent: some View {
+        Group {
+            if viewersLoading && viewersList.isEmpty {
+                ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if viewersList.isEmpty {
+                emptyView(text: L10n.liveRoomRankViewersEmpty, icon: "person.3.fill")
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(viewersList) { viewer in
+                            ViewerRow(viewer: viewer)
+                            Divider().background(Color.white.opacity(0.06))
+                        }
+                    }
+                    .padding(.top, 4)
+                }
+                .refreshable {
+                    await loadViewers()
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Top Gifter Tab content (含 Week 前 3 大卡)
+
+    private var topGifterContent: some View {
+        Group {
+            let list = rankLists[subTab] ?? []
+            if rankLoading == subTab && list.isEmpty {
+                ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if list.isEmpty {
+                emptyView(text: L10n.liveRoomRankEmpty, icon: "trophy")
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        if subTab == .week {
+                            // Week Tab 头部前 3 名大卡片（对齐 H5 userWeeklyRank L372-439）
+                            WeekTopThreeCards(top3: Array(list.prefix(3)))
+                                .padding(.vertical, 8)
+                            ForEach(Array(list.dropFirst(3))) { entry in
+                                sendRankRow(entry)
+                                Divider().background(Color.white.opacity(0.06))
+                            }
+                        } else {
+                            // Now / Today 普通列表
+                            ForEach(list) { entry in
+                                sendRankRow(entry)
+                                Divider().background(Color.white.opacity(0.06))
+                            }
+                        }
+                    }
+                }
+                .refreshable {
+                    await loadRank(subTab)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func sendRankRow(_ entry: SendRankEntry) -> some View {
+        HStack(spacing: 12) {
+            rankBadge(entry.rank)
+            AvatarView(urlString: entry.avatarUrl, size: 40, kind: .user)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entry.nickname)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    if entry.isActiveTycoon { bigRBadge }
+                    if entry.level > 0 { levelBadge(entry.level) }
+                    if entry.isVip { vipBadge }
+                }
+            }
+            Spacer(minLength: 8)
+            HStack(spacing: 4) {
+                Image(systemName: "diamond.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(hex: 0xFFE000))
+                Text(formatDiamond(entry.costNum))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+    }
+
+    @ViewBuilder
+    private func rankBadge(_ rank: Int) -> some View {
+        Group {
+            switch rank {
+            case 1: Image(systemName: "crown.fill").foregroundColor(Color(hex: 0xFFBB02)).font(.system(size: 20))
+            case 2: Image(systemName: "crown.fill").foregroundColor(Color(hex: 0xC0C0C0)).font(.system(size: 18))
+            case 3: Image(systemName: "crown.fill").foregroundColor(Color(hex: 0xCD7F32)).font(.system(size: 16))
+            default:
+                Text("\(rank)")
+                    .foregroundColor(Color(hex: 0xA56FF8))
+                    .font(.system(size: 16, weight: .heavy))
+            }
+        }
+        .frame(width: 24, alignment: .center)
+    }
+
+    // MARK: - Badges
+
+    private var bigRBadge: some View {
+        Text("BIG R")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 4).padding(.vertical, 1)
+            .background(
+                LinearGradient(colors: [Color(hex: 0xFF6B00), Color(hex: 0xFF3D00)],
+                               startPoint: .leading, endPoint: .trailing),
+                in: Capsule()
+            )
+    }
+
+    private func levelBadge(_ level: Int) -> some View {
+        HStack(spacing: 2) {
+            Image(systemName: "diamond.fill").font(.system(size: 8)).foregroundColor(.white)
+            Text("Lv.\(level)").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
+        }
+        .padding(.horizontal, 4).padding(.vertical, 1)
+        .background(levelColor(level), in: Capsule())
+    }
+
+    private var vipBadge: some View {
+        Text("VIP")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 3).padding(.vertical, 1)
+            .background(Color(hex: 0xFFBB02), in: RoundedRectangle(cornerRadius: 3))
+    }
+
+    private func levelColor(_ level: Int) -> Color {
+        switch level {
+        case 0..<10:  return Color(hex: 0x808080)
+        case 10..<30: return Color(hex: 0x00A5FF)
+        case 30..<50: return Color(hex: 0x9817CA)
+        case 50..<70: return Color(hex: 0xFFBB02)
+        default:      return Color(hex: 0xFF0090)
+        }
+    }
+
+    private func formatDiamond(_ n: Int64) -> String {
+        if n >= 1000 {
+            let k = Double(n / 100) / 10.0
+            return String(format: "%.1fk", k)
+        }
+        return "\(n)"
+    }
+
+    // MARK: - Empty state
+
+    private func emptyView(text: String, icon: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 40))
+                .foregroundColor(.white.opacity(0.25))
+            Text(text)
+                .font(.system(size: 14))
+                .foregroundColor(.white.opacity(0.5))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Data loading
+
+    private func loadViewers() async {
+        viewersLoading = true
+        do {
+            let list = try await viewersService.fetchViewers(anchorUserId: anchorUserId)
+            // v18 Q2: 过滤当前主播自己（对齐 H5：apiViewers 后端返回列表可能含主播，前端不展示自己）
+            let anchorId = String(anchorUserId)
+            viewersList = list.filter { $0.userId != anchorId }
+        } catch {
+            // 保持现有列表，避免闪空
+        }
+        viewersLoading = false
+    }
+
+    private func loadRank(_ tab: SendRankType) async {
+        rankLoading = tab
+        do {
+            let list = try await rankService.fetchSendRank(rankType: tab, dbId: dbId)
+            rankLists[tab] = list
+        } catch {
+            // 保持现有
+        }
+        rankLoading = nil
+    }
+}
+
+/// v16 Week Tab 前 3 名大卡片（对齐 H5 userWeeklyRank L372-439：h160 渐变 + 第 2 名向上偏移 -20）
+private struct WeekTopThreeCards: View {
+    let top3: [SendRankEntry]
+
+    var body: some View {
+        // H5 顺序：[1 (top1 居中), 0 (top2 左), 2 (top3 右)]，第 2 名向上偏移 -20
+        HStack(alignment: .top, spacing: 8) {
+            if top3.count > 1 {
+                topCard(entry: top3[1], rank: 2, offsetY: -20)
+            } else {
+                Spacer().frame(width: 100)
+            }
+            if !top3.isEmpty {
+                topCard(entry: top3[0], rank: 1, offsetY: 0)
+            } else {
+                Spacer().frame(width: 100)
+            }
+            if top3.count > 2 {
+                topCard(entry: top3[2], rank: 3, offsetY: -20)
+            } else {
+                Spacer().frame(width: 100)
+            }
+        }
+        .frame(height: 180)   // v18 Q4: 155 内容 + 20 二三名向上偏移 + 5 padding = 180
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 8)
+    }
+
+    private func topCard(entry: SendRankEntry, rank: Int, offsetY: CGFloat) -> some View {
+        VStack(spacing: 5) {
+            Image(systemName: "crown.fill")
+                .font(.system(size: 20))
+                .foregroundColor(crownColor(rank))
+            ZStack(alignment: .bottom) {
+                AvatarView(urlString: entry.avatarUrl, size: 48, kind: .user)
+                    .overlay(Circle().stroke(crownColor(rank), lineWidth: 2))
+                // v18 Q4: Week 前 3 名等级徽章（对齐 H5 userWeeklyRank Week Tab Top3 level badge h18 z-3）
+                if entry.level > 0 {
+                    HStack(spacing: 2) {
+                        Image(systemName: "diamond.fill").font(.system(size: 7)).foregroundColor(.white)
+                        Text("Lv.\(entry.level)")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    .padding(.horizontal, 4).padding(.vertical, 1)
+                    .background(levelColor(entry.level), in: Capsule())
+                    .offset(y: 6)   // 半覆盖 avatar 底沿
+                }
+            }
+            .frame(height: 54)   // avatar 48 + level badge overflow 6
+            Text(entry.nickname)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+            // v18 Q4: 钻石图标（对齐 H5 diamond-yellow.webp h14 w14）
+            HStack(spacing: 3) {
+                Image(systemName: "diamond.fill")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(hex: 0xFFE000))
+                Text(formatDiamondCard(entry.costNum))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
+        .frame(width: 100, height: 155)
+        .background(
+            LinearGradient(colors: [crownColor(rank).opacity(0.6), crownColor(rank).opacity(0)],
+                           startPoint: .top, endPoint: .bottom),
+            in: RoundedRectangle(cornerRadius: 12)
+        )
+        .offset(y: offsetY)
+    }
+
+    /// v18 Week 前 3 名等级徽章色档（对齐 H5 messageScroller setLevelBg 6 档）
+    private func levelColor(_ level: Int) -> Color {
+        switch level {
+        case 0..<10:  return Color(hex: 0x808080)
+        case 10..<30: return Color(hex: 0x00A5FF)
+        case 30..<50: return Color(hex: 0x9817CA)
+        case 50..<70: return Color(hex: 0xFFBB02)
+        default:      return Color(hex: 0xFF0090)
+        }
+    }
+
+    private func crownColor(_ rank: Int) -> Color {
+        switch rank {
+        case 1: return Color(hex: 0xF3DF68)  // 金
+        case 2: return Color(hex: 0xEAD9D9)  // 银
+        default: return Color(hex: 0xDFA159) // 铜
+        }
+    }
+
+    private func formatDiamondCard(_ n: Int64) -> String {
+        if n >= 1000 {
+            let k = Double(n / 100) / 10.0
+            return String(format: "%.1fk", k)
+        }
+        return "\(n)"
+    }
+}
+
+/// v16 观众列表 row（对齐 H5 userWeeklyRank L358-411 Viewers Tab）
+private struct ViewerRow: View {
+    let viewer: ViewerEntry
+
+    var body: some View {
+        HStack(spacing: 12) {
+            AvatarView(urlString: viewer.avatarUrl, size: 40, kind: .user)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(viewer.nickname)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    if viewer.isActiveTycoon {
+                        Text("BIG R")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(
+                                LinearGradient(colors: [Color(hex: 0xFF6B00), Color(hex: 0xFF3D00)],
+                                               startPoint: .leading, endPoint: .trailing),
+                                in: Capsule()
+                            )
+                    }
+                    if viewer.level > 0 {
+                        HStack(spacing: 2) {
+                            Image(systemName: "diamond.fill").font(.system(size: 8)).foregroundColor(.white)
+                            Text("Lv.\(viewer.level)").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
+                        }
+                        .padding(.horizontal, 4).padding(.vertical, 1)
+                        .background(levelColor(viewer.level), in: Capsule())
+                    }
+                    if viewer.isVip {
+                        Text("VIP")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 3).padding(.vertical, 1)
+                            .background(Color(hex: 0xFFBB02), in: RoundedRectangle(cornerRadius: 3))
+                    }
+                    if let country = viewer.countryId, !country.isEmpty {
+                        HStack(spacing: 2) {
+                            Image(systemName: "location.fill").font(.system(size: 9))
+                            Text(country).font(.system(size: 11))
+                        }
+                        .foregroundColor(.white.opacity(0.5))
+                    }
+                }
+            }
+            Spacer(minLength: 8)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+    }
+
+    private func levelColor(_ level: Int) -> Color {
+        switch level {
+        case 0..<10:  return Color(hex: 0x808080)
+        case 10..<30: return Color(hex: 0x00A5FF)
+        case 30..<50: return Color(hex: 0x9817CA)
+        case 50..<70: return Color(hex: 0xFFBB02)
+        default:      return Color(hex: 0xFF0090)
+        }
+    }
+}

@@ -472,6 +472,7 @@ enum L10n {
     }
 
     // MARK: - Message P2P 会话列表（H-1 MVP，spec §1.2 三分类）
+    static var messageNewsTitle: String         { localize("message.news.title", comment: "消息列表顶部大标题 News") }
     static var messageCategoryFlame: String     { localize("message.category.flame", comment: "会话分类 Flame") }
     static var messageCategoryStranger: String  { localize("message.category.stranger", comment: "会话分类 Stranger") }
     static var messageCategoryPrime: String     { localize("message.category.prime", comment: "会话分类 Prime") }
@@ -495,6 +496,13 @@ enum L10n {
     static var chatStimulateTip: String    { localize("chat.stimulateTip",   comment: "用户连发 ≥10 条付费消息激励主播") }
     static var chatReplyFastTip: String    { localize("chat.replyFastTip",   comment: "回复积分快速回复引导") }
     static var chatReplyRemindTip: String  { localize("chat.replyRemindTip", comment: "主播 15 分钟未回复提醒") }
+
+    // 首次进入私聊页 2 步引导（H5 guidance.vue，对齐 chat.New feature/Learn more details）
+    static var chatIntroStep1: String      { localize("chat.intro.step1",    comment: "第 1 步：宝箱条介绍") }
+    static var chatIntroStep2: String      { localize("chat.intro.step2",    comment: "第 2 步：奖励记录按钮") }
+
+    // 云端历史拉空后过期提示（对齐 H5 new.chat history expired）
+    static var chatHistoryExpired: String  { localize("chat.historyExpired", comment: "云端历史拉空时的一次性 toast") }
 
     // MARK: - Message 消息 preview 归一化（v5 F-3 i18n）
     static var messagePreviewImage: String          { localize("message.preview.image", comment: "会话预览：图片") }
@@ -989,11 +997,18 @@ enum L10n {
     // C-4 Wave4 C 组 gap-010：远端摄像头 off fallback
     static var callRemoteCameraOff: String { localize("call.remoteCameraOff", comment: "C-gap010：对方关摄像头时占位文案") }
     static var callLiveBanner: String { localize("call.liveBanner", comment: "1v1：直播私 call 顶部 banner") }
+    /// 通话结束回直播弹窗（D 里程碑 resumeCall；对齐 H5 returnLivePopup.vue）
+    static var liveReturnAutoFormat: String { localize("live.returnPopup.autoFormat", comment: "%d seconds later it will automatically return to live") }
+    static var liveReturnButton: String { localize("live.returnPopup.button", comment: "Return to live 立刻回直播按钮") }
 
     // 设计稿主播端.png 对齐（2026-07-09）：顶部信息卡装饰性信号条 + waitState 内联粉色 tag
     static var callSignalLabelYou: String { localize("call.signal.label.you", comment: "顶部信息卡 You 信号条标签（装饰性 UI，非真实网络质量）") }
     static var callSignalLabelUser: String { localize("call.signal.label.user", comment: "顶部信息卡 User 信号条标签（装饰性 UI）") }
     static var callWaitStateRechargingFormat: String { localize("call.waitState.rechargingFormat", comment: "顶部信息卡粉色 tag：User recharging, please wait %ds.") }
+
+    // Phase C 通话内公屏输入框（对齐 H5 g-faceTime showInput）
+    static var callChatInputPlaceholder: String { localize("call.chat.input.placeholder", comment: "通话中公屏输入框占位文案") }
+    static var callChatInputSend: String { localize("call.chat.input.send", comment: "通话中公屏输入框发送按钮") }
 
     // MARK: - C 1v1 通话（HUD）
     enum Call {

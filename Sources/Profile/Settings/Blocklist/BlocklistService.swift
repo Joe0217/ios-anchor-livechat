@@ -82,8 +82,9 @@ final class BlocklistService: BlocklistServiceProtocol {
         }
 
         // 5. 完全无法解析
+        // P2-17：响应明文含 nickname/icon/userId 等 PII，preview 走 .private 防 sysdiagnose 泄漏
         let preview = String(data: data.prefix(120), encoding: .utf8) ?? "<binary>"
-        logger.error("decodeItems: cannot parse, preview=\(preview)")
+        logger.error("decodeItems: cannot parse, bytes=\(data.count, privacy: .public) preview=\(preview, privacy: .private)")
         return []
     }
 }

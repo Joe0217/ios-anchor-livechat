@@ -44,7 +44,7 @@ final class NIMChatAdapter: NSObject, P2PChatProviderProtocol {
 
         // Batch 3.9：我方历史消息需补上当前穿戴的 chatBubble（MainActor 内取好，capture 到 SDK 回调闭包）
         let selfChatBubble = Self.currentSelfChatBubble()
-        return await withCheckedContinuation { [selfYxAccId, selfChatBubble] cont in
+        let localMessages: [ChatMessage] = await withCheckedContinuation { [selfYxAccId, selfChatBubble] cont in
             NIMSDK.shared().conversationManager.messages(
                 in: session, message: anchorMsg, limit: limit
             ) { error, messages in
@@ -56,6 +56,41 @@ final class NIMChatAdapter: NSObject, P2PChatProviderProtocol {
                 }
                 let converted = (messages ?? []).compactMap { nimMsg in
                     ChatMessageMapper.map(nimMsg, selfYxAccId: selfYxAccId, selfChatBubble: selfChatBubble)
+                }
+                cont.resume(returning: converted)
+            }
+        }
+
+        // 首屏(anchor==nil)本地空 → 尝试云端拉 —— 对齐 H5 `messageStore.loadHistoryMsgs(to)`。
+        // SDK 本地 db 可能因低磁盘 / 迁移 / 首次装机导致空,云端 fallback 保证老会话仍可见。
+        // sync=true 让 SDK 把拉到的消息插入本地 db(下次进入直接命中,不再重复走云端)。
+        if anchor == nil, localMessages.isEmpty {
+            return await fetchCloudHistory(session: session, limit: limit, selfChatBubble: selfChatBubble)
+        }
+        return localMessages
+    }
+
+    /// 从服务器拉取会话历史消息(H5 shim)。空/失败返回 []。
+    private func fetchCloudHistory(session: NIMSession, limit: Int, selfChatBubble: URL?) async -> [ChatMessage] {
+        let option = NIMHistoryMessageSearchOption()
+        option.limit = UInt(limit)
+        option.startTime = 0
+        option.endTime = 0
+        option.sync = true   // 拉到的消息插入本地 db,下次不重复走云端
+        option.order = .desc   // 时间倒序(最新在前),map 层不敏感
+
+        let selfYxAccId = self.selfYxAccId
+        return await withCheckedContinuation { cont in
+            NIMSDK.shared().conversationManager.fetchMessageHistory(session, option: option) { error, messages in
+                if let error {
+                    chatLogger.notice("fetchCloudHistory failed \(String(describing: error), privacy: .public)")
+                    cont.resume(returning: [])
+                    return
+                }
+                // 云端返回按时间倒序,map 后按时间升序(caller 假设升序展示)
+                let sorted = (messages ?? []).sorted { $0.timestamp < $1.timestamp }
+                let converted = sorted.compactMap { nim in
+                    ChatMessageMapper.map(nim, selfYxAccId: selfYxAccId, selfChatBubble: selfChatBubble)
                 }
                 cont.resume(returning: converted)
             }

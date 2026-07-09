@@ -33,6 +33,8 @@ final class PartyAPIClient {
     }
 
     private func send(path: String, body: [String: Any]?, isRetry: Bool) async throws -> Data {
+        // 首次冷启动前等到系统「允许使用无线数据」权限对话框通过再发请求(10s 超时兜底走原错误路径)
+        await NetworkReachability.shared.waitUntilReachable()
         guard let url = URL(string: AppConfig.sapiBaseURL + path) else {
             throw PartyAPIError.invalidURL
         }
@@ -72,7 +74,15 @@ final class PartyAPIClient {
         AppLogger.party.debug("POST \(path, privacy: .public) auth_token=\(tkInfo, privacy: .private) retry=\(isRetry, privacy: .public)")
         #endif
 
-        let (data, response) = try await session.data(for: req)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: req)
+        } catch {
+            // session.data 抛错（多为 URLError 网络层错误）—— 单独打日志便于排查"发请求即失败"
+            AppLogger.party.error("[PartyAPI] session.data threw for \(path, privacy: .public): \(String(describing: error), privacy: .public)")
+            throw PartyAPIError.networkError
+        }
         guard let http = response as? HTTPURLResponse else {
             throw PartyAPIError.networkError
         }

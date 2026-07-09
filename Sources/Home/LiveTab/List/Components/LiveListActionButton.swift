@@ -1,13 +1,27 @@
 import SwiftUI
 
+/// 用户卡片右侧操作按钮类型。设计稿展示 4 种态，对应 H5 `CCommunicationBtns` 的按钮组：
+/// - chat: 绿青聊天泡（默认私聊入口）
+/// - liveAction: 圆形粉橙摄像机（用户当前在直播）
+/// - matchAction: 粉色心形 Match
+/// - offlineToggle: 紫粉胶囊"Offline"（在线状态切换）
+///
+/// 接口接入阶段所有卡片暂用 `.chat` 默认态；其他态由用户业务状态推断（待 H 里程碑接入）。
+enum LiveListUserAction: Hashable {
+    case chat
+    case liveAction
+    case matchAction
+    case offlineToggle
+}
+
 /// 用户卡片右侧的操作按钮。统一处理 4 种态：chat / liveAction / matchAction / offlineToggle。
-/// 全部用切图（艺术嵌在 PNG 内），本期点击无业务响应。
+/// 全部用切图（艺术嵌在 PNG 内），接口接入阶段点击无业务响应（待 H 里程碑接入私聊/视频通话/Match 跳转）。
 struct LiveListActionButton: View {
     let action: LiveListUserAction
 
     var body: some View {
         Button {
-            // 占位：静态还原期无业务响应
+            // 占位：业务跳转待 H 里程碑
         } label: {
             content
         }

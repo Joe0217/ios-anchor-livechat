@@ -25,6 +25,18 @@ final class SapiTokenStore {
     /// 续接进行中的 Task（用于合并并发 401）
     private var inflightExchange: Task<String, Error>?
 
+    /// P2-10：exchange 请求专用 ephemeral session，避免：
+    /// - URLCache 默认按 URL 缓存响应（含 sapi tokenValue 即便加密也会落 Cache.db）
+    /// - 与主 APIClient/PartyAPIClient 共享 shared cookie storage 跨接口串污染
+    /// - .reloadIgnoringLocalCacheData 双保险，强制 always-fresh
+    private static let exchangeSession: URLSession = {
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.httpCookieStorage = nil
+        cfg.urlCache = nil
+        cfg.requestCachePolicy = .reloadIgnoringLocalCacheData
+        return URLSession(configuration: cfg)
+    }()
+
     private init() {}
 
     /// 当前持久化的 auth_token；初始 / 登出后 nil
@@ -76,6 +88,8 @@ final class SapiTokenStore {
         guard let loginUuid = SessionStore.shared.user?.loginUuid, !loginUuid.isEmpty else {
             throw SapiTokenError.missingLoginUuid
         }
+        // 首次冷启动前等到系统「允许使用无线数据」权限对话框通过再发请求(10s 超时兜底走原错误路径)
+        await NetworkReachability.shared.waitUntilReachable()
         AppLogger.party.info("[SapiTokenStore] exchange begin")
 
         guard let url = URL(string: AppConfig.sapiBaseURL + "/sapi/auth/v1/client/auth/exchangeToken") else {
@@ -98,7 +112,7 @@ final class SapiTokenStore {
         }
         req.httpBody = Data(encrypted.utf8)
 
-        let (data, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await Self.exchangeSession.data(for: req)
         guard let http = response as? HTTPURLResponse else { throw SapiTokenError.networkError }
         guard http.statusCode == 200 else {
             AppLogger.party.error("[SapiTokenStore] exchange HTTP \(http.statusCode, privacy: .public)")

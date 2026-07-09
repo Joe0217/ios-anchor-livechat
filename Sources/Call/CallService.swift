@@ -56,6 +56,33 @@ enum CallService {
         }
     }
 
+    // MARK: - 黑屏空房间检测（DM-20260616-003，对齐 H5 apiChannelUserCount）
+
+    /// POST /api/agora/live/channelUserCount —— 接通后每 10s 心跳查询"通话是否正常"。
+    /// 后端查通话记录判定；主播端持续调用让服务端知道主播活跃。
+    ///
+    /// **回归修复关键**：iOS 主播端不调 → 服务端认为主播端异常 → 用户端 EmptyRoomDetector
+    /// 连续 3 次 isNormal=false → 弹倒计时 → 5min 自动 hangup（用户实测复现）。
+    ///
+    /// 返回 nil 视为"请求失败/网络异常"，由 detector 状态机清零（不计为异常，避免误挂断）。
+    /// 对齐 H5 `useEmptyRoomDetector.js:52-67` catch 分支 abnormalCount=0 语义。
+    static func channelUserCount(channelId: String) async -> ChannelUserCountResult? {
+        AppLogger.call.notice("🩺 [CallService] channelUserCount → POST channel=\(channelId, privacy: .public)")
+        let body: [String: Any] = ["channelId": channelId]
+        do {
+            let data = try await APIClient.shared.post("/api/agora/live/channelUserCount", body: body)
+            let res = try JSONDecoder().decode(ChannelUserCountResult.self, from: data)
+            AppLogger.call.notice("🩺 [CallService] channelUserCount ← isNormal=\(res.isNormal ?? false, privacy: .public)")
+            return res
+        } catch let e as APIError {
+            AppLogger.call.notice("⚠️ [CallService] channelUserCount 失败 channel=\(channelId, privacy: .public) code=\(e.code, privacy: .public) msg=\(e.message, privacy: .private)")
+            return nil
+        } catch {
+            AppLogger.call.notice("⚠️ [CallService] channelUserCount 异常 error=\(error.localizedDescription, privacy: .private)")
+            return nil
+        }
+    }
+
     // MARK: - 接通率上报（四节点）
 
     /// POST /api/chat/callRate —— 接听率统计上报。answered/rejected/timeout/canceled 各调一次。

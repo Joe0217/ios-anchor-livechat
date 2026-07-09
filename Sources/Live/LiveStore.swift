@@ -322,8 +322,13 @@ extension LiveStore {
         //    这与 D 里程碑通话期 callState=1 语义一致，服务端接受。
         callState = 1
 
-        // 2) 停心跳 + 网络监控（B 已落地的 stop/start；stop 内自动重置 failureCount=0）+ 暂停直播时长计时
-        heartbeat.stop()
+        // 2) 【真根因修复 v5】通话中**不停 heartbeat**（对齐 H5 anchor-livechat-h5/src/views/liveSetting/index.vue:266-271
+        //    keepLiving 6s 一直发送，只在 handleLiveEnd 主动下播时 clearHeartBeatTimer）。
+        //    HeartbeatController.tick 内会读 store.callState 动态字段，callState=1 时 liveHeartBeatV2
+        //    上报 callState=1 让服务端知道"主播端活跃，通话正常"。
+        //    之前 stop heartbeat 导致服务端 5 分钟未收到主播心跳 → 判定异常 → 服务端下发 sysMsg
+        //    通知用户端触发 hangup（每次精确 297s = 服务端 300s 上限 - 主播端接通耗时）。
+        // heartbeat.stop()   ← 移除：通话中继续发心跳保持服务端认可
         monitor.stop()
         elapsedTimerStore.stop()
         // 直播转私 call 回归修复双保险：若 pauseForCall 前已有 20s watcher 在跑
@@ -457,17 +462,36 @@ extension LiveStore {
                 if Task.isCancelled { return }
                 if self.returnLiveCountdown > 0 { self.returnLiveCountdown -= 1 }
             }
-
-            // 倒计时归 0：rejoin 直播频道 + 恢复心跳/监控
-            await self.rejoinLiveChannel()
-            self.heartbeat.start()   // start 内会先 stop 再启动，failureCount 重置为 0
-            self.monitor.start()
-            self.elapsedTimerStore.start()   // 恢复直播时长计时（保留已累加值，继续累加）
-            self.callState = 0
-            self.isWaitingReturnLive = false
-            WSHeartbeat.shared.notifyCallStateChanged(callState: 0)
-            self.logger.info("已恢复直播 channelId=\(self.agoraChannelId ?? "-")")
+            // 倒计时归 0 自动回直播
+            await self.finishReturnLive()
         }
+    }
+
+    /// 用户点弹窗"Return to live"按钮：跳过剩余倒计时，立刻回直播。
+    /// 对齐 H5 [liveSetting/components/liveRoom.vue:245-251](anchor-livechat-h5) `returnLive()`：
+    /// 清定时器 + beginLiveOpen + emit returnLive。
+    func returnLiveNow() async {
+        guard isWaitingReturnLive else {
+            logger.notice("🟢 [returnLiveNow] 跳过：isWaitingReturnLive=false")
+            return
+        }
+        logger.notice("🟢 [returnLiveNow] 用户点按钮立刻回直播 (剩余倒计时=\(self.returnLiveCountdown)s)")
+        returnLiveTask?.cancel()
+        returnLiveTask = nil
+        await finishReturnLive()
+    }
+
+    /// resumeCall 倒计时归 0 or returnLiveNow 手动触发时的收尾：rejoin + 恢复网络监控 + 状态复位。
+    /// 【真根因修复 v5】heartbeat 通话中未 stop，callState 从 1 → 0 后 tick 自动上报 callState=0，无需 restart。
+    private func finishReturnLive() async {
+        await rejoinLiveChannel()
+        monitor.start()
+        elapsedTimerStore.start()   // 恢复直播时长计时（保留已累加值，继续累加）
+        callState = 0
+        isWaitingReturnLive = false
+        returnLiveCountdown = 0
+        WSHeartbeat.shared.notifyCallStateChanged(callState: 0)
+        logger.info("已恢复直播 channelId=\(self.agoraChannelId ?? "-")")
     }
 
     /// 用保留的 channelId + rtcToken 重新 join 直播 RTC 频道。

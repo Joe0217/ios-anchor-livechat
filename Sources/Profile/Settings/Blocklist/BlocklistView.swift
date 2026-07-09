@@ -2,8 +2,8 @@ import SwiftUI
 
 /// 黑名单列表页（I-1 spec §6.D）。
 ///
-/// 接入：通过 `NavigationLink(value: ProfileRoute.blocklist)`（SettingsView 入口）
-/// + MainTabView `navigationDestination(for: ProfileRoute.self)` 推入。
+/// 接入：SettingsView 内 Button `path.append(ProfileRoute.blocklist)`（原 NavigationLink(value:)
+/// 因 iOS 16 List 内失效改 programmatic push）+ MainTabView `navigationDestination(for: ProfileRoute.self)` 推入。
 ///
 /// 状态机：见 `BlocklistViewModel` + spec §3。
 struct BlocklistView: View {

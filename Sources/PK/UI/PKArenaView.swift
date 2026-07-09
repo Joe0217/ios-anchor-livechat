@@ -1,139 +1,171 @@
 import SwiftUI
 
-/// G 里程碑 spec §6 / M3-5：PK 对战分屏容器（屏幕右半边对手画面 + 顶部分数条 + Top3 + 倒计时 + End PK）。
+/// PK Arena 布局常量（LiveRoomView 需要读取以对 CameraPreview 定尺寸，故 public）。
 ///
-/// **铁律 §3**：本端 CameraPreview 不在此 view 内重建（由 LiveRoomView 主层全屏渲染）；
-/// 本端预览自然透过左半边显示，PKArenaView 只接管右半边的对手画面挂载位 + 上层 UI 装饰。
+/// 对齐 H5 [pkBattleView.vue:633](../../../.././anchor-livechat-h5/src/views/liveSetting/components/pkLive/pkBattleView.vue) `h-374 w-full` —— PK 视频区**固定高度**，不是全屏。
+enum PKArenaLayout {
+    /// 视频区顶部起始 y（让开 LiveRoomHeroTopArea：safe area top + 主播胶囊 + 徽章 row ≈ 130pt）。
+    /// 2026-07-07 v2：从 200 下调 140 —— 用户反馈"视频容器应与 progressBar 同一水平线"，
+    /// progressBar 移到 videoContainer 顶部作 overlay，视频从更靠上位置开始
+    static let topOffset: CGFloat = 144
+    /// 视频区高度（对齐 H5 h-374；iOS pt 约 300）
+    static let videoHeight: CGFloat = 300
+}
+
+/// G 里程碑 spec §6 / M3-5：PK 对战 overlay（分屏右半对手 canvas + 顶部/底部装饰）。
 ///
-/// **铁律 §1**：本 view 在 LiveRoomView 内必须用 if 链跨 `.starting/.inPK/.punishing` 三态承载 +
-/// `.id("pkArena")` 锁 identity，避免 dismantleUIView 反复触发让 AgoraRtcVideoCanvas.view 黑屏。
+/// **架构分工**（2026-07-06 用户反馈"视频画面截小"根因修正）：
+/// - **LiveRoomView** 负责 CameraPreview 尺寸控制（PK 中缩到左半 videoHeight）+ 底层背景色
+/// - **PKArenaView** 只叠加：右半对手 canvas + progressBar + countdown + Top3 + 静音/nickname + 结果动画
+/// - 不再在本 view 内做"上下黑遮罩"—— 底色由 LiveRoomView 底层 `Theme.Palette.liveBottomDark` 承担
+///
+/// 【铁律 §3】本端 CameraPreview 由 LiveRoomView 渲染；【铁律 §1】外层 if 链 + `.id("pkArena")` 锁 identity。
 struct PKArenaView: View {
     @ObservedObject var store: PKStore
     let agora: AgoraManager
 
+    @State private var isOpponentMuted: Bool = false
+
     var body: some View {
         GeometryReader { geo in
-            let half = geo.size.width / 2
             ZStack(alignment: .top) {
-                // 屏幕右半 对手画面挂载位（覆盖在本端 CameraPreview 之上）
-                HStack(spacing: 0) {
-                    Color.clear.frame(width: half)
-                    PKOppositeContainer(view: agora.oppositeRemoteView)
-                        .frame(width: half)
-                }
+                // 2026-07-07 v4：对手视频容器已迁到 LiveRoomView 与本端 CameraPreview 同一 HStack
+                // （追证据链头：两 sibling GeometryReader 无法保证坐标系严格一致→架构级根治齐平问题）
+                // 本 view 只保留 6 个 overlay 装饰：progressBar / countdown / 静音按钮 / nickname 胶囊 / Top3 / 结果动画
 
+                // 1) 静音按钮独立 overlay（贴对方视频右上，对齐 H5 inset-ie-12 top-32）
+                opponentMuteButton
+                    .padding(.trailing, 12)
+                    .padding(.top, PKArenaLayout.topOffset + 32)
+                    .frame(width: geo.size.width, height: geo.size.height, alignment: .topTrailing)
+
+                // 2) progressBar 与视频顶齐平 + countdown 紧贴 bar 底沿（对齐 H5 pkBattleView.vue L395-417
+                //    `absolute top-0` overlay + `absolute top-20` countdown 语义）
+                //    2026-07-07 v3：padding.top: topOffset - 20 → topOffset（progressBar container 顶 = video 顶 y）;
+                //    PKBattleProgressBar 外框由 handshakeSize(28) 改回 barHeight(20)，handshake 用 position 悬出
+                //    上下 4pt overflow 不占布局空间 → Countdown 紧贴 bar 底沿真无 gap
                 VStack(spacing: 0) {
-                    Spacer().frame(height: 96)
-                    scoreBar(myScore: store.scores?.pkCounter ?? 0,
-                             oppositeScore: store.scores?.oppositePkCounter ?? 0)
-                        .padding(.horizontal, 12)
-                    HStack(alignment: .top, spacing: 0) {
-                        topUsers(store.scores?.top3Users ?? [], align: .leading)
-                            .frame(width: half)
-                        topUsers(store.scores?.oppositeTop3Users ?? [], align: .trailing)
-                            .frame(width: half)
-                    }
-                    .padding(.top, 8)
-                    Spacer()
+                    PKBattleProgressBar(myPkValue: store.scores?.pkCounter ?? 0,
+                                        opponentPkValue: store.scores?.oppositePkCounter ?? 0)
+                        .padding(.horizontal, 16)
                     if store.state == .inPK {
-                        countdownChip
-                        endPKButton
-                            .padding(.top, 12)
-                            .padding(.bottom, 32)
+                        PKBattleCountdown(remainingSeconds: store.pkRemainingSeconds,
+                                          isPunishment: false)
+                    } else if store.state == .punishing {
+                        PKBattleCountdown(remainingSeconds: store.punishRemainingSeconds,
+                                          isPunishment: true)
                     }
+                    Spacer(minLength: 0)
                 }
-                .frame(width: geo.size.width)
-            }
-        }
-        .ignoresSafeArea(.keyboard)
-    }
+                .padding(.top, PKArenaLayout.topOffset)
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
 
-    private func scoreBar(myScore: Int, oppositeScore: Int) -> some View {
-        let total = max(1, myScore + oppositeScore)
-        let myRatio = CGFloat(myScore) / CGFloat(total)
-        return ZStack(alignment: .leading) {
-            GeometryReader { g in
-                Capsule().fill(.gray.opacity(0.4))
-                Capsule()
-                    .fill(LinearGradient(colors: [.pink, .red],
-                                         startPoint: .leading, endPoint: .trailing))
-                    .frame(width: g.size.width * myRatio)
-                HStack {
-                    Text("\(myScore)").font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white).padding(.leading, 10)
-                    Spacer()
-                    Text("\(oppositeScore)").font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(.white).padding(.trailing, 10)
-                }
-            }
-        }
-        .frame(height: 22)
-    }
-
-    private func topUsers(_ users: [PKTopUser], align: HorizontalAlignment) -> some View {
-        HStack(spacing: 4) {
-            if align == .trailing { Spacer() }
-            ForEach(Array(users.prefix(3).enumerated()), id: \.offset) { _, u in
-                AsyncImage(url: URL(string: u.displayAvatar ?? "")) { phase in
-                    if let img = phase.image {
-                        img.resizable().scaledToFill()
-                    } else {
-                        Circle().fill(.white.opacity(0.2))
+                // 3) 对手 nickname 胶囊（贴对手视频右下外侧，H5 `absolute inset-ie-0 bottom-8`）
+                if let nickname = store.ctx?.oppositeNickname, !nickname.isEmpty {
+                    HStack {
+                        Spacer(minLength: 0)
+                        opponentNicknameChip(nickname: nickname)
+                            // trailing padding = 0，胶囊右缘贴屏幕右边（对齐 H5 `inset-ie-0`）
                     }
+                    // 胶囊 24pt 高 + 距视频底 8pt = 顶偏 32pt
+                    .padding(.top, PKArenaLayout.topOffset + PKArenaLayout.videoHeight - 32)
+                    .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
                 }
-                .frame(width: 24, height: 24)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(.white, lineWidth: 1))
+
+                // 4) 视频区正下方 Top3 贡献榜
+                VStack(spacing: 0) {
+                    Spacer().frame(height: PKArenaLayout.topOffset + PKArenaLayout.videoHeight + 4)
+                    PKBattleTop3Contributors(myTop3: store.scores?.top3Users ?? [],
+                                             opponentTop3: store.scores?.oppositeTop3Users ?? [])
+                        .frame(height: 32)
+                    Spacer(minLength: 0)
+                }
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+
+                // 5) 惩罚开始 WIN/LOSE/DRAW 弹跳动画（居中于视频区）
+                VStack {
+                    Spacer().frame(height: PKArenaLayout.topOffset + (PKArenaLayout.videoHeight - 105) / 2)
+                    PKBattleResultAnimation(store: store)
+                    Spacer(minLength: 0)
+                }
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
             }
-            if align == .leading { Spacer() }
         }
-        .padding(.horizontal, 12)
+        // 2026-07-07 v3 修 Q4 对方视频与本端未齐平根因：
+        // 原 `.ignoresSafeArea(.keyboard)` 仅忽略键盘 safe area，导致 GeometryReader.size 减去 top safe area (~47pt)，
+        // 而 LiveRoomView 的 GeometryReader 用外层 `.ignoresSafeArea()` 全忽略 → 两 view 基准差 47pt → 对方视频比本端低 47pt
+        // 改为无参数 `.ignoresSafeArea()` 让 PKArenaView 内部 GeometryReader 与 LiveRoomView 走完全相同尺寸基准
+        .ignoresSafeArea()
     }
 
-    private var countdownChip: some View {
-        Text(formatTime(store.pkRemainingSeconds))
-            .font(.system(size: 14, weight: .bold, design: .monospaced))
-            .foregroundStyle(store.pkRemainingSeconds <= 5 ? .red : .white)
-            .padding(.horizontal, 14).padding(.vertical, 6)
-            .background(.black.opacity(0.5), in: Capsule())
-    }
+    // MARK: - 对手静音按钮
 
-    private var endPKButton: some View {
+    private var opponentMuteButton: some View {
         Button {
-            Task { await store.endPKActive() }
+            isOpponentMuted.toggle()
+            // 2026-07-07 v6：接入真 API（原 TODO 消化）。PKStore.handleMute 内部已 guard state==.inPK；
+            // 非 PK 态点击 no-op 无副作用。API 失败已在 handleMute 内 catch logger.warning 兜底，UI 状态不回滚
+            Task { await store.handleMute(isOpponentMuted) }
         } label: {
-            Text(L10n.PK.arenaEndPK)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 22).padding(.vertical, 10)
-                .background(.red.opacity(0.85), in: Capsule())
+            Group {
+                if isOpponentMuted {
+                    Image("pkBattleMuteIcon")
+                        .resizable()
+                        .frame(width: 28, height: 28)
+                } else {
+                    Image(systemName: "speaker.wave.2.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white)
+                        .frame(width: 28, height: 28)
+                        .background(Color.black.opacity(0.4), in: Circle())
+                }
+            }
+            .contentShape(Circle())
         }
+        .accessibilityLabel(Text(isOpponentMuted ? L10n.PK.opponentUnmute : L10n.PK.opponentMute))
     }
 
-    private func formatTime(_ s: Int) -> String {
-        String(format: "%02d:%02d", s / 60, s % 60)
+    // MARK: - 对手 nickname 胶囊
+
+    /// 对齐 H5 pkBattleView.vue L354-367：`w-118 rounded-is-20 bg-black/40 p-4 backdrop-blur-10`
+    /// LTR 下 `rounded-is-20` = 左半圆角 20pt（右侧接屏幕右边）
+    private func opponentNicknameChip(nickname: String) -> some View {
+        HStack(spacing: 6) {
+            AvatarView(urlString: nil, size: 24, kind: .user)
+            Text(nickname)
+                .font(.system(size: 13))
+                .foregroundColor(.white)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 4).padding(.vertical, 4)
+        .frame(width: 118, alignment: .leading)   // H5 `w-118`
+        .background(
+            UnevenRoundedRectangle(cornerRadii: .init(topLeading: 20,
+                                                      bottomLeading: 20))
+                .fill(Color.black.opacity(0.4))
+        )
+        .accessibilityElement(children: .combine)
     }
 }
 
-/// 把 AgoraManager.oppositeRemoteView（UIView 单例）桥到 SwiftUI；不在内重建实例。
-private struct PKOppositeContainer: UIViewRepresentable {
+/// AgoraManager.oppositeRemoteView 桥到 SwiftUI（铁律 §2 稳定单例 UIView）。
+///
+/// **2026-07-07 反悔**：原方案包一层 container UIView + Auto Layout 约束把 oppositeRemoteView
+/// 铺满 container，看似合理但**破坏了 SDK 的 frame-based 渲染子 view 布局**——
+/// SDK `setupRemoteVideoEx` 内部向 canvas.view (=oppositeRemoteView) 添加 frame-based 渲染子视图，
+/// 这些子视图**不响应** Auto Layout resize；当 SwiftUI 重建 container 时子视图 frame 保留旧值 →
+/// 用户看到"对手画面只显示右下一小块"。
+///
+/// 正解**对齐 1v1 通话 [RemoteVideoView](../../Agora/RemoteVideoView.swift)** 模式：
+/// makeUIView 直接返回单例 oppositeRemoteView，SwiftUI 直接控制其 frame，
+/// SDK 渲染子视图随单例 UIView 布局自然 layout（autoresizesSubviews 默认 true）。
+///
+/// **2026-07-07 v4 可见性**：private → internal —— LiveRoomView 需在 PK 分屏 HStack 中直接使用，
+/// 让对方视频与本端 CameraPreview 位于同一 HStack sibling，SwiftUI 保证严格共坐标系。
+struct PKOppositeContainer: UIViewRepresentable {
     let view: UIView
 
-    func makeUIView(context: Context) -> UIView {
-        let container = UIView()
-        container.backgroundColor = .black
-        container.addSubview(view)
-        view.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            view.topAnchor.constraint(equalTo: container.topAnchor),
-            view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-        ])
-        return container
-    }
+    func makeUIView(context: Context) -> UIView { view }
 
-    func updateUIView(_ uiView: UIView, context: Context) {
-        // oppositeRemoteView 是 AgoraManager 内单例，不需要每次 update
-    }
+    func updateUIView(_ uiView: UIView, context: Context) {}
 }

@@ -19,6 +19,18 @@ struct MessageListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // 顶部大标题（对齐设计稿 `消息列表-未读已读.png` 左上"News"）
+            HStack {
+                Text(L10n.messageNewsTitle)
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(.white)
+                Spacer()
+                // 右上角占位 icon 位（日程 / 礼盒）—— 具体功能未接（关联 CP Task / Mass Texting 独立业务）
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+
             categoryTabBar
             content
         }
@@ -59,21 +71,22 @@ struct MessageListView: View {
         }
     }
 
-    // MARK: - 顶部 tab bar（自定义，含未读数 badge）
+    // MARK: - 顶部 tab bar（对齐设计稿 `消息列表-未读已读.png` 彩色胶囊 + 99+ badge overlay）
 
     private var categoryTabBar: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 10) {
             ForEach(MessageSessionCategory.allCases, id: \.self) { cat in
                 tabButton(cat)
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(Color.gray.opacity(0.15)).frame(height: 0.5)
-        }
+        .padding(.vertical, 10)
     }
 
+    /// 设计稿:
+    /// - selected: 紫粉渐变胶囊 + 白粗字（黄字 Flame）
+    /// - unselected: 深紫底 + 白 50% opacity 字
+    /// - 未读 99+ badge: 橙红胶囊 overlay 到右上角
     private func tabButton(_ cat: MessageSessionCategory) -> some View {
         let selected = store.selectedCategory == cat
         let unread = store.unreadCount(in: cat)
@@ -82,25 +95,36 @@ struct MessageListView: View {
                 store.selectedCategory = cat
             }
         } label: {
-            VStack(spacing: 4) {
-                HStack(spacing: 4) {
-                    Text(label(for: cat))
-                        .font(.system(size: 14, weight: selected ? .semibold : .regular))
-                        .foregroundStyle(selected ? .primary : .secondary)
-                    if unread > 0 {
-                        Text(unread > 99 ? "99+" : "\(unread)")
-                            .font(.system(size: 10, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(Color.red, in: Capsule())
+            ZStack(alignment: .topTrailing) {
+                Text(label(for: cat))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(selected ? Color(hex: 0xFFE24C) : Color.white.opacity(0.5))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 40)
+                    .background {
+                        if selected {
+                            Capsule().fill(
+                                LinearGradient(colors: [Color(hex: 0x8515FF), Color(hex: 0xE40132)],
+                                               startPoint: .leading, endPoint: .trailing)
+                            )
+                        } else {
+                            Capsule().fill(Color(hex: 0x3B2B58).opacity(0.6))
+                        }
                     }
+
+                if unread > 0 {
+                    Text(unread > 99 ? "99+" : "\(unread)")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(
+                            LinearGradient(colors: [Color(hex: 0xFF9826), Color(hex: 0xFE6828)],
+                                           startPoint: .leading, endPoint: .trailing),
+                            in: Capsule()
+                        )
+                        .offset(x: 4, y: -6)
                 }
-                Rectangle()
-                    .fill(selected ? Color.accentColor : Color.clear)
-                    .frame(height: 2)
-                    .frame(maxWidth: 40)
             }
-            .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)

@@ -13,8 +13,9 @@ enum LevelService {
         do {
             return try JSONDecoder().decode(LevelInfo.self, from: data)
         } catch {
-            let raw = String(data: data, encoding: .utf8)?.prefix(500) ?? "<非文本>"
-            logger.error("getUserLevel decode failed: \(String(describing: error)) | raw=\(raw)")
+            // P2-17：响应体含等级 / 经验值等用户字段，privacy:.private + 截短到 120 字节
+            let raw = String(data: data.prefix(120), encoding: .utf8) ?? "<非文本>"
+            logger.error("getUserLevel decode failed: \(String(describing: error), privacy: .private) | raw=\(raw, privacy: .private)")
             throw error
         }
     }

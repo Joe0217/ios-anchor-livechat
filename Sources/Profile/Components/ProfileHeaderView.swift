@@ -76,7 +76,7 @@ struct ProfileHeaderView: View {
                     Text(vm.displayName)
                         .font(Theme.Typography.profileName)
                         .foregroundColor(Theme.Palette.profileName)
-                    Button(action: { /* 编辑昵称：占位 */ }) {
+                    NavigationLink(value: ProfileRoute.editProfile) {
                         Image("profileEditIcon")
                             .resizable()
                             .scaledToFit()

@@ -13,7 +13,38 @@
 			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
 			<key>NSPrivacyAccessedAPITypeReasons</key>
 			<array>
-				<string>CA92.1</string>
+				<!-- 1C8F.1: Access info previously set by your app on the same device
+				     （session.user.v1 历史迁移残留 + lastEndAt 时间戳；本 app 无 app group） -->
+				<string>1C8F.1</string>
+			</array>
+		</dict>
+		<!-- 2024-05 起 Apple ITMS-91053 必备 API 声明：以下 4 类由依赖 SDK（NIMSDK / AgoraRtcKit /
+		     URLSession / FaceUnity / KeychainStore / SwiftUI 文件 IO）普遍触发，未声明会触发审核警告并最终被拒 -->
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryFileTimestamp</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<!-- C617.1: Inside app container, app group, or temp/cache (本 app 操作自身缓存/图片) -->
+				<string>C617.1</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<!-- 35F9.1: Calculate time intervals between user events (心跳计时 / 通话时长) -->
+				<string>35F9.1</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryDiskSpace</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<!-- E174.1: Display to user the space available on disk (媒体上传前空间预检) -->
+				<string>E174.1</string>
 			</array>
 		</dict>
 	</array>
@@ -82,6 +113,19 @@
 		<dict>
 			<key>NSPrivacyCollectedDataType</key>
 			<string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+			<key>NSPrivacyCollectedDataTypeLinked</key>
+			<true/>
+			<key>NSPrivacyCollectedDataTypeTracking</key>
+			<false/>
+			<key>NSPrivacyCollectedDataTypePurposes</key>
+			<array>
+				<string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+			</array>
+		</dict>
+		<!-- nickname / display name 上传：NIM remoteExt + 后端 user profile（含派对房公屏） -->
+		<dict>
+			<key>NSPrivacyCollectedDataType</key>
+			<string>NSPrivacyCollectedDataTypeName</string>
 			<key>NSPrivacyCollectedDataTypeLinked</key>
 			<true/>
 			<key>NSPrivacyCollectedDataTypeTracking</key>

@@ -87,6 +87,15 @@ struct ChatDetailView: View {
     /// - false = 用户在上翻历史(收新消息只累加 badge,不打断浏览)
     /// 初值 true 对齐"进入页面即滚到底部"语义。
     @State private var isAtBottom: Bool = true
+    /// 首次进入私聊页 2 步引导:step 1/2 = 显示对应步骤;0 = 隐藏。
+    /// 触发条件在 body 内综合判定(chatType/isOpenPaidMessage/chatIntroSeen)。
+    @State private var introStep: Int = 0
+    /// 引导是否已看过 —— `@AppStorage` 持久化跨账号(引导本身是 iOS 端首次体验)
+    @AppStorage("hily.chatIntroSeen") private var chatIntroSeen: Bool = false
+    /// 云端历史拉空 + 会话在列表中已存在 → 一次性 toast(对齐 H5 loadHistoryMsgs 'empty' + isExistingSession)
+    @State private var showHistoryExpiredToast: Bool = false
+    /// 防重放:load() 首次完成时判定一次,后续状态变化不再触发
+    @State private var didCheckHistoryExpired: Bool = false
     /// 键盘管理（H-2 键盘管理精细化）：
     /// - `.scrollDismissesKeyboard(.interactively)` — 用户拖列表时键盘自然滑走（iM 惯例）
     /// - 键盘弹出 → 自动滚到底部（`onChange(of: isInputFocused)` 处理）
@@ -139,6 +148,41 @@ struct ChatDetailView: View {
             }
 
             VoiceRecordingOverlay(state: voiceState)
+
+            // 首次进入 2 步引导:regular chat + 宝箱条已显示 + 未看过。
+            // introStep 0 = 隐藏;1/2 = 显示对应步骤。tap 推进 step,>2 时置 chatIntroSeen 隐藏。
+            if introStep > 0 {
+                ChatIntroOverlay(step: introStep) {
+                    let next = introStep + 1
+                    if next > 2 {
+                        chatIntroSeen = true
+                        introStep = 0
+                    } else {
+                        introStep = next
+                    }
+                }
+                .transition(.opacity)
+                .zIndex(300)   // 最上层(高于 DiaReceivePopup 200 / RewardRecords 100)
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: introStep)
+        // 引导触发:chat 页 body 内监听宝箱条是否已开(需等 beginSession fetch 完成)。
+        // 仅 chatType == .regular + isOpenPaidMessage + !chatIntroSeen 才触发。
+        .onChange(of: replyPointsStore.isOpenPaidMessage(peer: store.peerYxAccId)) { isOpen in
+            if isOpen, chatType == .regular, !chatIntroSeen, introStep == 0 {
+                introStep = 1
+            }
+        }
+        // 云端历史拉空 + 会话在列表中已存在 → 一次性 toast(对齐 H5 loadHistoryMsgs)
+        // 触发点:store.state 首次进 .empty 时判定,后续 didCheckHistoryExpired 短路
+        .onChange(of: isStateEmpty) { isEmpty in
+            guard isEmpty, !didCheckHistoryExpired else { return }
+            didCheckHistoryExpired = true
+            // 会话在 MessageSessionStore 中存在 = 老会话(H5 sessionStore.orderedSessions.some)
+            let existed = MessageSessionStore.shared.session(byPeerId: store.peerYxAccId) != nil
+            if existed {
+                showHistoryExpiredToast = true
+            }
         }
         .task {
             await store.load()
@@ -228,6 +272,24 @@ struct ChatDetailView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: callToastShow)
+        // 云端历史 fallback 也返空 + 会话老会话 → toast 提示(对齐 H5 loadHistoryMsgs 'empty' + 'chat history expired')
+        .overlay(alignment: .top) {
+            if showHistoryExpiredToast {
+                Text(L10n.chatHistoryExpired)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.black.opacity(0.85), in: Capsule())
+                    .padding(.top, 60)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .task {
+                        try? await Task.sleep(nanoseconds: 2_500_000_000)
+                        withAnimation { showHistoryExpiredToast = false }
+                    }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: showHistoryExpiredToast)
         // Batch 3.8：客服会话 photo 按钮 → 系统 iOS 相册选图 → 上传 CDN → send
         .photosPicker(isPresented: $showSystemPhotoPicker,
                       selection: $systemPhotoPickerItems,
@@ -384,6 +446,12 @@ struct ChatDetailView: View {
         return msgs.last?.stableId
     }
 
+    /// store.state == .empty 派生信号 —— .onChange 触发历史过期 toast 检测
+    private var isStateEmpty: Bool {
+        if case .empty = store.state { return true }
+        return false
+    }
+
     /// 当前顶部真实消息 stableId（topSentinel loadMore 前捕获用）
     private var currentTopStableId: String? {
         guard case .loaded(let msgs) = store.state else { return nil }
@@ -435,6 +503,7 @@ struct ChatDetailView: View {
                             message: msg,
                             myAvatarURL: myAvatarURL,
                             peerAvatarURL: peerAvatarURL,
+                            peerUserId: peerUserId,
                             playingAudioClientId: audioPlayer.playingKey,
                             onTapAudio: handleTapAudio,
                             onTapVideo: handleTapVideo,
@@ -781,6 +850,90 @@ struct ChatDetailView: View {
         // 当前先用系统 alert 兜底（用户能看到提示）
         callToastMessage = text
         callToastShow = true
+    }
+}
+
+// MARK: - 首次进入 2 步引导 overlay（对齐 H5 chat/components/guidance.vue + rewardProgress.vue driver.js）
+
+/// **触发条件**（在 [ChatDetailView] 中判定）：
+/// - `chatType == .regular`（客服/系统会话不出现）
+/// - `replyPointsStore.isOpenPaidMessage(peer:)` == true（宝箱条已显示）
+/// - `!chatIntroSeen`（`@AppStorage` 持久化,跨会话/账号有效——引导本身是"iOS 端首次"体验）
+///
+/// **交互**：全屏 tap layer 拦截；tap → step += 1；step > 2 → 置 `chatIntroSeen = true` + 隐藏。
+///
+/// **布局**（对齐 H5 fixed 定位 + top-16%/14%）：
+/// - Step 1：宝箱条中间下方竖线 + 紫红渐变卡片 "New feature! ..."
+/// - Step 2：右上角奖励记录按钮下方竖线 + 紫红渐变卡片 "Learn more details"
+private struct ChatIntroOverlay: View {
+    let step: Int
+    let onTap: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            // 透明 tap-catcher —— H5 用 pointer-events: auto 不 dim 底层内容
+            Color.black.opacity(0.001)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onTap)
+
+            // Y 偏移 = nav 44 + 顶部 padding 12 + 宝箱条 64 + 少量 spacing = ~124pt
+            if step == 1 {
+                step1Guide
+                    .padding(.top, 124)
+            } else if step == 2 {
+                step2Guide
+                    .padding(.top, 124)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.trailing, 8)
+            }
+        }
+        .allowsHitTesting(true)
+    }
+
+    private var step1Guide: some View {
+        VStack(spacing: 10) {
+            verticalHint
+            tooltipCard(text: L10n.chatIntroStep1, width: 328)
+        }
+    }
+
+    private var step2Guide: some View {
+        VStack(alignment: .trailing, spacing: 10) {
+            verticalHint
+                .padding(.trailing, 24)   // 对齐奖励记录按钮中心
+            tooltipCard(text: L10n.chatIntroStep2, width: 200)
+        }
+    }
+
+    private var verticalHint: some View {
+        Rectangle()
+            .fill(
+                LinearGradient(
+                    colors: [.white, .white.opacity(0.5)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .frame(width: 1, height: 62)
+    }
+
+    private func tooltipCard(text: String, width: CGFloat) -> some View {
+        Text(text)
+            .font(.system(size: 15, weight: .medium))
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 20)
+            .frame(width: width, alignment: .center)
+            .frame(minHeight: 52)
+            .background(
+                LinearGradient(
+                    colors: [Color(hex: 0x8515FF), Color(hex: 0xE40132)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ),
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
     }
 }
 

@@ -45,6 +45,12 @@ final class MetalPreviewView: MTKView {
         isPaused = true                  // 按帧驱动，不用内部 60fps 循环
         enableSetNeedsDisplay = true
         contentMode = .scaleAspectFill
+        // aspectFit 触发时上下留出的区域用 liveBottomDark（#0B0010 近黑紫）填充，
+        // 与 LiveRoomView 底色一致 → PK 缩小场景视觉融合，避免明显黑边割裂
+        clearColor = MTLClearColor(red: 0x0B / 255.0, green: 0x00 / 255.0,
+                                   blue: 0x10 / 255.0, alpha: 1)
+        layer.backgroundColor = UIColor(red: 0x0B / 255.0, green: 0x00 / 255.0,
+                                        blue: 0x10 / 255.0, alpha: 1).cgColor
         addLifecycleObservers()
     }
 
@@ -111,8 +117,25 @@ final class MetalPreviewView: MTKView {
               let buffer = commandQueue.makeCommandBuffer() else { return }
 
         let size = drawableSize
-        // aspectFill：等比放大铺满并居中
-        let scale = max(size.width / image.extent.width, size.height / image.extent.height)
+        // aspectFill / aspectFit 自适应（2026-07-06 修 PK 半屏视频画面裁剪根因）：
+        // 当 drawable 宽高比与原图偏差 >50% 时切 aspectFit（保留完整帧），否则 aspectFill 铺满。
+        // 触发场景：PK 中 SwiftUI `.frame(width: 187, height: 300)` 让 drawable 变小，
+        // 原始 1280×720 帧按 aspectFill 会大幅裁剪显示"半个人头" → 阈值切 fit 后完整显示。
+        // aspectFit 上下留出区域由 layer.backgroundColor (liveBottomDark) 填充，与整体背景融合。
+        //
+        // ⚠️ **隐式假设** (2026-07-07 code review 建议-2 沉淀)：本阈值 0.5 依赖 CameraManager 输出
+        //   pixel buffer 是**竖屏 orientation**（约 720×1280，imgAspect ≈ 0.56）。当前验证：
+        //   - 非 PK 全屏 iPhone (390×844, drawAspect 0.46) vs pixel buffer (720×1280) → delta ~22% <50% → aspectFill 无黑边 ✓
+        //   - PK 半屏 (187×300, drawAspect 0.62) vs pixel buffer (720×1280) → delta ~65% >50% → 触发 aspectFit ✓
+        //   **若未来 CameraManager refactor 改为横屏输出**（1280×720, imgAspect ≈ 1.78），全屏场景 delta
+        //   会剧增到 285% → 误触发 aspectFit → 全屏出现大面积背景色（视觉回归）。**需回归验证**。
+        let imgAspect = image.extent.width / image.extent.height
+        let drawAspect = size.width / size.height
+        let aspectDelta = abs(imgAspect - drawAspect) / min(imgAspect, drawAspect)
+        let useFit = aspectDelta > 0.5
+        let scale = useFit
+            ? min(size.width / image.extent.width, size.height / image.extent.height)  // aspectFit 留背景色
+            : max(size.width / image.extent.width, size.height / image.extent.height)  // aspectFill 铺满
         let scaled = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         let tx = (size.width - scaled.extent.width) / 2 - scaled.extent.origin.x
         let ty = (size.height - scaled.extent.height) / 2 - scaled.extent.origin.y

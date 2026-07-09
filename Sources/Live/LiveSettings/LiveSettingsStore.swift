@@ -318,10 +318,10 @@ final class LiveSettingsStore: ObservableObject {
 
     // MARK: - v5: 私 call 礼物选择
 
-    /// GiftPickerSheet 返回时调用；nil = 用户取消或选择"移除"。
+    /// CommonGiftPanel `.callGate` factory 回调；nil = 用户 confirm 但无选中（"移除"语义）。
     func setSelectedGift(_ gift: GiftListData?) {
         if case .error = state { state = .editing }
-        // 硬性守护：低于 min 直接拒绝（GiftPickerSheet 已过滤，此处为二重保险）
+        // 硬性守护：低于 min 直接拒绝（Panel 已过滤，此处为二重保险）
         if let g = gift, g.giftPrice < privateCallGiftMinPrice {
             selectedGift = nil
             return

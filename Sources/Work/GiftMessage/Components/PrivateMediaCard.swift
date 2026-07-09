@@ -75,13 +75,11 @@ struct PrivateMediaCard: View {
     private var thumbnail: some View {
         if item.isVideo, let s = item.signedUrl, let url = URL(string: s) {
             ZStack {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        thumbnailPlaceholder(systemImage: "video.fill")
-                    }
+                CachedAsyncImage(url: url,
+                                 contentMode: .fill,
+                                 persistent: false,
+                                 cdn: (.custom(width: 800), .fill)) {
+                    thumbnailPlaceholder(systemImage: "video.fill")
                 }
                 // 视频角标
                 Image(systemName: "play.circle.fill")
@@ -89,13 +87,11 @@ struct PrivateMediaCard: View {
                     .foregroundStyle(.white, .black.opacity(0.5))
             }
         } else if let url = URL(string: item.originalUrl), !item.originalUrl.isEmpty {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                default:
-                    thumbnailPlaceholder(systemImage: item.isImage ? "photo" : "video.fill")
-                }
+            CachedAsyncImage(url: url,
+                             contentMode: .fill,
+                             persistent: false,
+                             cdn: (.custom(width: 800), .fill)) {
+                thumbnailPlaceholder(systemImage: item.isImage ? "photo" : "video.fill")
             }
         } else {
             thumbnailPlaceholder(systemImage: item.isImage ? "photo" : "video.fill")

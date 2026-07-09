@@ -18,16 +18,80 @@ enum GiftService {
         case wish = "WISH"      // 心愿单场景
     }
 
-    /// 拉取指定场景的礼物列表（v3 endpoint）。
+    /// 拉取指定场景的礼物列表（v3 endpoint）—— flatten 版。
     ///
     /// 请求：`POST /api/gift/v3/getGiftList` body `{"searchValue": "CALL"}`
     /// 响应结构：`result = { giftList: { <groupName>: [GiftListData], ... } }`
     /// 例如 `giftList.Popular / giftList.Luxury / giftList.Combo` 等分组
-    /// —— 本方法 flatten 所有分组 + 按 id 去重后返回单一数组供 GiftPickerSheet 单选。
+    /// —— 本方法 flatten 所有分组 + 按 id 去重后返回单一数组。
+    ///
+    /// **调用者约束**（H-4 spec §1.5）：仅剩 2 处非-picker 调用（`LiveSettingsStore.restorePrivateCallGift` id→gift 反查、
+    /// `GiftMessageService.fetchGifts` IM item 转换）。其他 UI 场景请用 [getGroupedGiftList] + `CommonGiftPanel`。
     static func getGiftList(scene: Scene = .call) async throws -> [GiftListData] {
         let data = try await APIClient.shared.post("/api/gift/v3/getGiftList",
                                                     body: ["searchValue": scene.rawValue])
         return try parseGiftListResponse(data)
+    }
+
+    /// 拉取指定场景的礼物列表（v3 endpoint）—— 保留分组版。
+    ///
+    /// 返回 `[groupName: [GiftListData]]`（如 `["Popular": [...], "Exclusive": [...]]`），
+    /// 供 `CommonGiftPanel` 按 tab 映射（`GiftPanelTab.fromGroupName` 硬编码表）。
+    /// 未知 group name 由调用方决定 drop / merge（本 service 不做 tab 语义判断，只保留原名）。
+    ///
+    /// 响应形态：仅识别 v3 grouped `{giftList: {group: [gift]}}`；老形态数组 / 单 giftList 数组走 fallback 单 group "Popular"。
+    static func getGroupedGiftList(scene: Scene = .call) async throws -> [String: [GiftListData]] {
+        let data = try await APIClient.shared.post("/api/gift/v3/getGiftList",
+                                                    body: ["searchValue": scene.rawValue])
+        return try parseGroupedGiftListResponse(data)
+    }
+
+    /// 内部：解析保留 group name 的响应；三种形态兜底同 [parseGiftListResponse]，但**不 flatten**。
+    /// - v3 grouped dict → 保留 group name 与顺序
+    /// - 数组 / 数组内嵌 → 归到单 group "Popular"
+    /// - 非法 shape → throw APIError
+    static func parseGroupedGiftListResponse(_ data: Data) throws -> [String: [GiftListData]] {
+        // 形态 1：直接数组 → 单 group Popular
+        if let arr = try? JSONDecoder().decode([GiftListData].self, from: data), !arr.isEmpty {
+            logger.info("getGroupedGiftList ok (array form → single Popular group) count=\(arr.count)")
+            return ["Popular": arr]
+        }
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            logger.error("getGroupedGiftList unparseable (not object)")
+            throw APIError(code: "-1", message: "gift list unparseable")
+        }
+        // 形态 2：giftList 是数组 → 单 group Popular
+        if let list = obj["giftList"] as? [[String: Any]] {
+            let listData = try JSONSerialization.data(withJSONObject: list)
+            let arr = try JSONDecoder().decode([GiftListData].self, from: listData)
+            logger.info("getGroupedGiftList ok (object.giftList array → single Popular group) count=\(arr.count)")
+            return ["Popular": arr]
+        }
+        // 形态 3：giftList 是 group dict —— v3 真实形态
+        if let groups = obj["giftList"] as? [String: Any] {
+            var result: [String: [GiftListData]] = [:]
+            for (name, raw) in groups {
+                // 单 group 内允许 [[String:Any]] 或空数组；非法 shape 静默 drop（R19：混合形态不炸）
+                guard let list = raw as? [[String: Any]] else {
+                    logger.info("getGroupedGiftList group \(name, privacy: .public) not [[String:Any]] shape; dropping")
+                    continue
+                }
+                if list.isEmpty {
+                    result[name] = []
+                    continue
+                }
+                if let listData = try? JSONSerialization.data(withJSONObject: list),
+                   let arr = try? JSONDecoder().decode([GiftListData].self, from: listData) {
+                    result[name] = arr
+                } else {
+                    logger.info("getGroupedGiftList group \(name, privacy: .public) decode failed; dropping")
+                }
+            }
+            logger.info("getGroupedGiftList ok (v3 grouped) groups=\(result.count)")
+            return result
+        }
+        logger.error("getGroupedGiftList unparseable (unknown giftList shape)")
+        throw APIError(code: "-1", message: "gift list unparseable")
     }
 
     /// 内部：兼容三种形态（后端历史多样）：
@@ -69,5 +133,18 @@ enum GiftService {
         }
         logger.error("getGiftList unparseable (unknown giftList shape)")
         throw APIError(code: "-1", message: "gift list unparseable")
+    }
+
+    /// 1v1 通话内主播索要礼物（对齐 H5 `src/api/gift/index.ts:30` + `g-faceTime/index.vue:203-215` askFor）。
+    ///
+    /// 请求：`POST /api/gift/askFor` body `{beAskYxAccid: <对方 yxAccid>, giftId: <礼物 id>}`
+    /// 响应：`{result: null}`——无实际业务数据，成功即完成（对齐 H5 `http.post<null>`）
+    ///
+    /// 调用侧（`CallFaceTimeView` gift 按钮）自行做 15s 冷却 + 本地 toast。
+    static func askFor(beAskYxAccid: String, giftId: Int64) async throws {
+        _ = try await APIClient.shared.post("/api/gift/askFor",
+                                             body: ["beAskYxAccid": beAskYxAccid,
+                                                    "giftId": giftId])
+        logger.info("askFor OK peer=… giftId=\(giftId, privacy: .public)")
     }
 }

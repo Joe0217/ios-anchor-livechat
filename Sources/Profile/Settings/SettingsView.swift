@@ -1,13 +1,24 @@
 import SwiftUI
+import UIKit
 
-/// 设置页：账号 / 通知 / 黑名单 / 语言 / 反馈 / 关于（版本号）/ 用户协议 / 隐私政策 / 退出登录。
+/// 设置页：账号 / 通用 / 关于 / 退出登录。
 ///
-/// L18 阶段实装：版本号显示 + 退出登录；其他条目仅作渲染占位（点击 no-op + 注释 TODO），
-/// 后续里程碑（L19+）按需补完。蓝本 09 §86-98。
+/// **对齐 H5 蓝本**（`anchor-livechat-h5/src/views/settings/config.js`）9 项内容，保留 iOS 4 section 分组：
+/// - Account: View Anchor Policy + Blocklist
+/// - General: Language + Feedback（占位 toast）+ Clear Cache
+/// - About: Version（rightText）+ Terms of Service（外链）+ Privacy Policy（外链）
+/// - Logout: Sign Out
+///
+/// **交互统一**：iOS 16 List 内 `NavigationLink(value:)` 与祖先 destination 交互失效，
+/// 所有 push 均走 `path.append(ProfileRoute.xxx)` programmatic navigation（含 Blocklist）。
 struct SettingsView: View {
     @EnvironmentObject private var session: SessionStore
     @Environment(\.dismiss) private var dismiss
     @State private var showLogoutConfirm = false
+    @State private var showClearCacheConfirm = false
+    @State private var toastMessage: String?
+    /// 子页路由 push 用（Blocklist / AnchorPolicy / Language）
+    @Binding var path: NavigationPath
 
     var body: some View {
         ZStack {
@@ -35,14 +46,26 @@ struct SettingsView: View {
             }
             Button(L10n.settingsCancel, role: .cancel) {}
         }
+        .confirmationDialog(L10n.settingsClearCacheConfirm,
+                            isPresented: $showClearCacheConfirm,
+                            titleVisibility: .visible) {
+            Button(L10n.settingsConfirm) {
+                clearCache()
+            }
+            Button(L10n.settingsCancel, role: .cancel) {}
+        }
+        .overlay(alignment: .top) { toastOverlay }
     }
+
+    // MARK: - Sections
 
     private var accountSection: some View {
         Section(L10n.settingsSectionAccount) {
-            // I-1：黑名单列表。用 NavigationLink(value:) 沿 MainTabView 注册的
-            // navigationDestination(for: ProfileRoute.self) 路由（spec §6.D）。
-            NavigationLink(value: ProfileRoute.blocklist) {
-                settingsRowContent(icon: "person.text.rectangle", title: L10n.settingsBlocklist)
+            settingsRow(icon: "doc.text.magnifyingglass", title: L10n.settingsAnchorPolicy) {
+                path.append(ProfileRoute.anchorPolicy)
+            }
+            settingsRow(icon: "person.text.rectangle", title: L10n.settingsBlocklist) {
+                path.append(ProfileRoute.blocklist)
             }
         }
         .listRowBackground(Theme.Palette.cardFill.opacity(0.6))
@@ -50,8 +73,15 @@ struct SettingsView: View {
 
     private var generalSection: some View {
         Section(L10n.settingsSectionGeneral) {
-            settingsRow(icon: "globe", title: L10n.settingsLanguage) { /* L20 */ }
-            settingsRow(icon: "envelope", title: L10n.settingsFeedback) { /* L21 */ }
+            settingsRow(icon: "globe", title: L10n.settingsLanguage) {
+                path.append(ProfileRoute.language)
+            }
+            settingsRow(icon: "envelope", title: L10n.settingsFeedback) {
+                path.append(ProfileRoute.feedback)
+            }
+            settingsRow(icon: "trash", title: L10n.settingsClearCache) {
+                showClearCacheConfirm = true
+            }
         }
         .listRowBackground(Theme.Palette.cardFill.opacity(0.6))
     }
@@ -69,8 +99,12 @@ struct SettingsView: View {
                     .foregroundColor(.white.opacity(0.5))
                     .font(.system(size: 13))
             }
-            settingsRow(icon: "doc.text", title: L10n.settingsTermsOfService) { /* TODO 外链 */ }
-            settingsRow(icon: "lock.shield", title: L10n.settingsPrivacyPolicy) { /* TODO 外链 */ }
+            settingsRow(icon: "doc.text", title: L10n.settingsTermsOfService) {
+                openExternal(AppConfig.termsOfServiceURL)
+            }
+            settingsRow(icon: "lock.shield", title: L10n.settingsPrivacyPolicy) {
+                openExternal(AppConfig.privacyPolicyURL)
+            }
         }
         .listRowBackground(Theme.Palette.cardFill.opacity(0.6))
     }
@@ -93,18 +127,17 @@ struct SettingsView: View {
         .listRowBackground(Theme.Palette.cardFill.opacity(0.6))
     }
 
+    // MARK: - Row builder
+
     private func settingsRow(icon: String, title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            settingsRowContent(icon: icon, title: title, showChevron: true)
+            settingsRowContent(icon: icon, title: title)
         }
         .buttonStyle(.plain)
     }
 
-    /// Row 内部视觉内容（图标 + 标题 + 可选 chevron）。
-    /// NavigationLink(value:) 自带 disclosure chevron，调用 showChevron=false（默认）；
-    /// Button 路径（旧入口）调用 showChevron=true 手动追加，保持视觉一致（review #19）。
     @ViewBuilder
-    private func settingsRowContent(icon: String, title: String, showChevron: Bool = false) -> some View {
+    private func settingsRowContent(icon: String, title: String) -> some View {
         HStack {
             Image(systemName: icon)
                 .foregroundStyle(.white.opacity(0.7))
@@ -112,11 +145,51 @@ struct SettingsView: View {
             Text(title)
                 .foregroundColor(.white)
             Spacer()
-            if showChevron {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.3))
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.3))
+        }
+        .contentShape(Rectangle())
+    }
+
+    // MARK: - Actions
+
+    /// 打开外部链接（对齐 H5 `window.open`）；用系统 Safari 打开，跳出 App。
+    private func openExternal(_ urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+        UIApplication.shared.open(url)
+    }
+
+    /// 清缓存：内存 NSCache + URLCache 磁盘（H5 场景 iOS 天然不存在的 cacheVersion 语义已替换为清网络图缓存）。
+    private func clearCache() {
+        ImageCache.shared.clear()
+        URLCache.shared.removeAllCachedResponses()
+        showToast(L10n.settingsClearCacheDone)
+    }
+
+    // MARK: - Toast
+
+    private func showToast(_ msg: String) {
+        toastMessage = msg
+        Task {
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            await MainActor.run {
+                if toastMessage == msg { toastMessage = nil }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var toastOverlay: some View {
+        if let msg = toastMessage {
+            Text(msg)
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color.black.opacity(0.75), in: Capsule())
+                .padding(.top, 60)
+                .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
 

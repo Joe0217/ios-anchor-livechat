@@ -28,11 +28,11 @@ struct LiveStreamCard: View {
             .accessibilityLabel(accessibilityText)
     }
 
-    /// 背景层：封面图（他人主播，`persistent=false` 不占持久缓存）+ 顶部渐变蒙层增强角标可读性。
+    /// 背景层：封面图（走 ImageCache 持久缓存，避免滚回来重新加载）+ 顶部渐变蒙层增强角标可读性。
     /// Image.resizable + aspectRatio(.fill) 会向 host 中心溢出，加 `.clipped()` 拦掉溢出。
     private var coverBackground: some View {
         ZStack {
-            CachedAsyncImage(url: anchor.backgroundImgURL, contentMode: .fill, persistent: false) {
+            CachedAsyncImage(url: anchor.backgroundImgURL, contentMode: .fill, persistent: true, cdn: (.custom(width: 800), .fill)) {
                 placeholderGradient
             }
             // 底部渐变蒙层：H5 `list-grid-item` 同款 linear-gradient(rgba(0,0,0,0)→rgba(0,0,0,0.3))

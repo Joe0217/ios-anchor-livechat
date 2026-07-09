@@ -30,8 +30,11 @@ struct AvatarView: View {
     var headwearRatio: CGFloat = 1.0
     /// 是否显示右下在线绿点（Live 列表用法）
     var showsOnlineDot: Bool = false
-    /// 是否写入持久缓存。默认 false（列表他人头像场景），本人头像等场景传 true
-    var persistent: Bool = false
+    /// 是否写入持久缓存。默认 true（用户切账号时由 SessionStore.logout → ImageCache.clear 兜底清理，
+    /// 见 [session-scoped-store-refresh.md](../.claude/rules/session-scoped-store-refresh.md)）。
+    /// **默认 true 的原因**：直播列表 / 消息列表 / 私聊气泡等场景，同一用户头像跨 view 高频复用，
+    /// 若不持久化每次进入都会重新下载，是本工程主要流量与加载慢的根因。
+    var persistent: Bool = true
 
     init(url: URL?,
          size: CGFloat,
@@ -39,7 +42,7 @@ struct AvatarView: View {
          headwearURL: URL? = nil,
          headwearRatio: CGFloat = 1.0,
          showsOnlineDot: Bool = false,
-         persistent: Bool = false) {
+         persistent: Bool = true) {
         self.url = url
         self.size = size
         self.kind = kind
@@ -56,7 +59,7 @@ struct AvatarView: View {
          headwearURL: String? = nil,
          headwearRatio: CGFloat = 1.0,
          showsOnlineDot: Bool = false,
-         persistent: Bool = false) {
+         persistent: Bool = true) {
         self.init(
             url: urlString.flatMap { $0.isEmpty ? nil : URL(string: $0) },
             size: size,
@@ -80,7 +83,7 @@ struct AvatarView: View {
                     .clipShape(Circle())
 
                 if let headwearURL {
-                    CachedAsyncImage(url: headwearURL, contentMode: .fit, persistent: false, cdn: (headwearCDNSize, .fit)) {
+                    CachedAsyncImage(url: headwearURL, contentMode: .fit, persistent: true, cdn: (headwearCDNSize, .fit)) {
                         Color.clear
                     }
                     .frame(width: size * headwearRatio, height: size * headwearRatio)

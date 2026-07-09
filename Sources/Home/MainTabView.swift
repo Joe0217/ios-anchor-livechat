@@ -346,6 +346,12 @@ struct MainTabView: View {
                             ChatDetailContainer(peerYxAccId: pathValue, selfYxAccId: selfYxAccId)
                         }
                     }
+                    // 私聊页 tap 对方头像跳详情页 —— ChatMessageRow 内 NavigationLink(value:) 会走这里
+                    .navigationDestination(for: UserProfileRoute.self) { route in
+                        if case let .userId(uid) = route {
+                            UserProfileView(userId: uid)
+                        }
+                    }
             }
             .opacity(selection == .messages ? 1 : 0)
             .allowsHitTesting(selection == .messages)

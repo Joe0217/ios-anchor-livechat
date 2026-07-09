@@ -40,7 +40,7 @@ private final class FakePreviewService: EditProfileServiceProtocol, @unchecked S
                 countryCode: "US", signature: "", signatureVaild: 1,
                 level: 1, levelName: "SS", callPrice: 100,
                 upsNum: 0, fansNum: 0, friendsNum: 0,
-                pictures: nil, videos: nil, greetMsgs: nil,
+                pictures: nil, videos: nil, picList: nil, greetMsgs: nil,
                 callVideoUrl: nil, giftList: nil,
                 chatBubble: nil, activeTycoon: nil,
                 email: nil, birthday: nil, phone: nil, inviteCode: nil, language: nil, countryId: nil

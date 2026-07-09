@@ -28,7 +28,7 @@ struct ProfileGiftsTabView: View {
 
     private func cell(for gift: GiftItem) -> some View {
         VStack(spacing: 6) {
-            CachedAsyncImage(url: URL(string: gift.iconUrl ?? ""), contentMode: .fit) {
+            CachedAsyncImage(url: URL(string: gift.iconUrl ?? ""), contentMode: .fit, cdn: (.gift, .fit)) {
                 Image(systemName: "gift")
                     .resizable()
                     .scaledToFit()

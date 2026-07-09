@@ -11,6 +11,8 @@ struct ChatMessageRow: View {
     let message: ChatMessage
     let myAvatarURL: URL?
     let peerAvatarURL: URL?
+    /// 对端业务 userId（非 yxAccId）—— tap 对方头像跳详情页用；nil 时头像不可 tap（对齐 H5 `msgItem.vue` handelClickUserAvatar 逻辑）
+    var peerUserId: Int? = nil
     /// 音频播放的 clientMsgId（nil 表示无播放中）
     let playingAudioClientId: String?
     let onTapAudio: (ChatMessage) -> Void
@@ -49,8 +51,10 @@ struct ChatMessageRow: View {
                         // 我方 = 主播端主播自己（kind: .anchor）
                         AvatarView(url: myAvatarURL, size: ChatConstants.listAvatarSize, kind: .anchor)
                     } else {
-                        // 对方 = 用户（kind: .user）；后续如接入 headwear 字段可补
-                        AvatarView(url: peerAvatarURL, size: ChatConstants.listAvatarSize, kind: .user)
+                        // 对方 = 用户（kind: .user）；tap 头像跳详情页(对齐 H5 msgItem.vue handelClickUserAvatar)。
+                        // peerUserId 由 caller(ChatDetailView) 从 ConversationProfile 派生;nil 时降级不响应
+                        // 而非 NavigationLink 空 value(避免路径污染)。
+                        peerAvatarButton
                         bubbleView
                         Spacer(minLength: 40)
                     }
@@ -62,6 +66,20 @@ struct ChatMessageRow: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
+        }
+    }
+
+    /// 对方头像:有 peerUserId → NavigationLink 走 UserProfileRoute(祖先 NavigationStack 接管);
+    /// 无 → 静态 AvatarView 不响应 tap(profile 未拉齐场景)。
+    @ViewBuilder
+    private var peerAvatarButton: some View {
+        if let uid = peerUserId {
+            NavigationLink(value: UserProfileRoute.userId(String(uid))) {
+                AvatarView(url: peerAvatarURL, size: ChatConstants.listAvatarSize, kind: .user)
+            }
+            .buttonStyle(.plain)
+        } else {
+            AvatarView(url: peerAvatarURL, size: ChatConstants.listAvatarSize, kind: .user)
         }
     }
 

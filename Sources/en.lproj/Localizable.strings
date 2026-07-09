@@ -456,6 +456,8 @@
 "call.action.chatInput"        = "Chat";
 "call.action.feedback"         = "Feedback";
 "call.emptyRoom.hangupTip"     = "Call abnormal, will auto hangup";
+"live.returnPopup.autoFormat"  = "%d seconds later it will automatically return to live";
+"live.returnPopup.button"      = "Return to live";
 "call.error.remoteRejected"    = "The call was declined";
 "call.error.remoteNoAnswer"    = "No answer";
 "call.error.remoteBusy"        = "User is busy";
@@ -504,6 +506,8 @@
 "call.signal.label.you"                = "You";
 "call.signal.label.user"               = "User";
 "call.waitState.rechargingFormat"      = "User recharging, please wait %ds.";
+"call.chat.input.placeholder"          = "Type a message...";
+"call.chat.input.send"                 = "Send";
 
 // MARK: - Call HUD（H M4 sysMsg 写入 5 publishers 的可视化）
 "call.hud.incomeFormat"      = "💰 %d";
@@ -642,6 +646,7 @@
 "blocklist.loadError.retryFormat"       = "%1$@ · %2$@";
 
 // MARK: - Message P2P 会话列表（H-1 MVP）
+"message.news.title"                    = "News";
 "message.category.flame"                = "Flame";
 "message.category.stranger"             = "Stranger";
 "message.category.prime"                = "Prime";
@@ -663,6 +668,12 @@
 "chat.stimulateTip"    = "More messages from him – Unlock extra diamonds!";
 "chat.replyFastTip"    = "Reply fast for double points! One time only.";
 "chat.replyRemindTip"  = "System: You haven't replied in over 15 minutes. Most importantly: faster replies = more points. Reply within 12h to earn points. 1h → 2x, 30min → 3x, 15min → 4x points!";
+
+// 首次进入私聊页 2 步引导（H5 guidance.vue）
+"chat.intro.step1"     = "New feature! Chat with users and earn diamonds";
+"chat.intro.step2"     = "Learn more details";
+// 云端历史拉空 toast
+"chat.historyExpired"  = "This chat history has expired.";
 
 // v5 F-3 消息 preview 归一化
 "message.preview.image"                 = "[Image]";

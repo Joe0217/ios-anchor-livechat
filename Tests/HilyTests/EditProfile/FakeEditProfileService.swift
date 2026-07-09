@@ -91,11 +91,18 @@ final class FakeEditProfileService: EditProfileServiceProtocol, @unchecked Senda
         friendsNum: 0,
         pictures: nil,
         videos: nil,
+        picList: nil,
         greetMsgs: nil,
         callVideoUrl: nil,
         giftList: nil,
         chatBubble: nil,
-        activeTycoon: nil
+        activeTycoon: nil,
+        email: nil,
+        birthday: nil,
+        phone: nil,
+        inviteCode: nil,
+        language: nil,
+        countryId: nil
     )
 
     /// 完整数据 fixture（loading 后 draft 有全部字段）
@@ -125,11 +132,18 @@ final class FakeEditProfileService: EditProfileServiceProtocol, @unchecked Senda
             friendsNum: 0,
             pictures: pictures,
             videos: videos,
+            picList: nil,
             greetMsgs: greetMsgs,
             callVideoUrl: callVideoUrl,
             giftList: nil,
             chatBubble: nil,
-            activeTycoon: nil
+            activeTycoon: nil,
+            email: nil,
+            birthday: nil,
+            phone: nil,
+            inviteCode: nil,
+            language: nil,
+            countryId: nil
         )
     }
 

@@ -121,6 +121,13 @@ struct MediaPickerSheet: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 }
 
+                // 左下：私密相册 giftPrice 徽章（Batch 4，对齐 H5 albumPopup 私密项显示解锁价）
+                if showLockIcon, let price = item.giftPrice, price > 0 {
+                    giftPriceBadge(price: price)
+                        .padding(6)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                }
+
                 // 中心：私密锁 icon（H5 albumPopup type=2 album-lock.png）
                 if showLockIcon {
                     Image(systemName: "lock.fill")
@@ -147,13 +154,16 @@ struct MediaPickerSheet: View {
 
     @ViewBuilder
     private func thumbnail(_ item: AnchorMediaItem) -> some View {
-        // 视频无 coverUrl 时用视频占位（相册接口未返 coverUrl；避免 CachedAsyncImage 拉 mp4 当图片 decode 失败显灰色）
+        // Batch 4：视频无 coverUrl 时走 VideoThumbnailImage 异步提取首帧（AVAssetImageGenerator + 内存 cache）
+        // 加载中/失败 → 视频占位（灰底 + 大 video icon）
         if item.kind == .video && item.coverUrl == nil {
-            ZStack {
-                ChatPalette.cardBackground
-                Image(systemName: "video.fill")
-                    .font(.system(size: 28))
-                    .foregroundStyle(.white.opacity(0.35))
+            VideoThumbnailImage(url: item.mediaUrl) {
+                ZStack {
+                    ChatPalette.cardBackground
+                    Image(systemName: "video.fill")
+                        .font(.system(size: 28))
+                        .foregroundStyle(.white.opacity(0.35))
+                }
             }
         } else {
             let url = item.coverUrl ?? item.mediaUrl
@@ -161,6 +171,20 @@ struct MediaPickerSheet: View {
                 ChatPalette.cardBackground
             }
         }
+    }
+
+    /// Batch 4：giftPrice 徽章（私密相册 cell 左下角显解锁钻石价）
+    private func giftPriceBadge(price: Int) -> some View {
+        HStack(spacing: 2) {
+            Image(systemName: "diamond.fill")
+                .font(.system(size: 8))
+                .foregroundStyle(Color(hex: 0x66CCFF))
+            Text("\(price)")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 5).padding(.vertical, 2)
+        .background(.black.opacity(0.6), in: Capsule())
     }
 
     private func selectionMark(isSelected: Bool) -> some View {

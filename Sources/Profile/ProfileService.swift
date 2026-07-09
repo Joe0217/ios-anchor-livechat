@@ -25,9 +25,11 @@ enum ProfileService {
             logger.info("getAnchorInfo decoded userId=\(info.userId ?? -1) nickname=\(info.nickname ?? "nil")")
             return info
         } catch {
-            // 解码失败时打印原始 JSON 便于排错（字段类型/名称不匹配最常见）
-            let raw = String(data: data, encoding: .utf8)?.prefix(500) ?? "<非文本>"
-            logger.error("getAnchorInfo decode failed: \(String(describing: error)) | raw=\(raw)")
+            // 解码失败时打印原始 JSON 便于排错（字段类型/名称不匹配最常见）。
+            // P2-17：响应体含 PII（nickname/age/相册 URL/giftList），privacy:.private 防
+            // 进 sysdiagnose / USB Console 截图泄漏；截短到 120 字节足够定位 schema 不匹配。
+            let raw = String(data: data.prefix(120), encoding: .utf8) ?? "<非文本>"
+            logger.error("getAnchorInfo decode failed: \(String(describing: error), privacy: .private) | raw=\(raw, privacy: .private)")
             throw error
         }
     }
@@ -43,8 +45,9 @@ enum ProfileService {
             logger.info("getMineInfo decoded userId=\(info.userId ?? -1) nickname=\(info.nickname ?? "nil")")
             return info
         } catch {
-            let raw = String(data: data, encoding: .utf8)?.prefix(500) ?? "<非文本>"
-            logger.error("getMineInfo decode failed: \(String(describing: error)) | raw=\(raw)")
+            // P2-17：同 getAnchorInfo 防 PII 泄漏
+            let raw = String(data: data.prefix(120), encoding: .utf8) ?? "<非文本>"
+            logger.error("getMineInfo decode failed: \(String(describing: error), privacy: .private) | raw=\(raw, privacy: .private)")
             throw error
         }
     }
@@ -52,5 +55,21 @@ enum ProfileService {
     static func getMineInfoRaw() async throws -> [String: Any] {
         let data = try await APIClient.shared.post("/api/user/getUserInfo")
         return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
+    }
+
+    /// 主播礼物墙（H5 mine/index.vue:92-98 独立于 getAnchorInfo 拉取）。
+    /// 后端字段：`giftId` + `giftImg||icon` + `giftName` + `giftCount||num`；GiftItem 已双兼容。
+    /// 接口: POST `/api/anchor/getGiftWallList`（H5 src/api/profile/index.ts:27）；body 空对象。
+    static func getGiftWallList() async throws -> [GiftItem] {
+        let data = try await APIClient.shared.post("/api/anchor/getGiftWallList")
+        do {
+            let list = try JSONDecoder().decode([GiftItem].self, from: data)
+            logger.info("getGiftWallList decoded count=\(list.count)")
+            return list
+        } catch {
+            let raw = String(data: data.prefix(200), encoding: .utf8) ?? "<非文本>"
+            logger.error("getGiftWallList decode failed: \(String(describing: error), privacy: .private) | raw=\(raw, privacy: .private)")
+            throw error
+        }
     }
 }

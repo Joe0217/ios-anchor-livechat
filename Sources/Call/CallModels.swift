@@ -142,6 +142,12 @@ struct CreateCallResult: Codable {
     let levelName: String?
 }
 
+/// POST /api/agora/live/channelUserCount 解密后的 result（DM-20260616-003）
+/// isNormal: true = 后端存在该 channelId 的通话记录（通话正常）；false = 异常（黑屏空房间）
+struct ChannelUserCountResult: Codable {
+    let isNormal: Bool?
+}
+
 /// POST /api/call/record/v2/joinCall 解密后的 result
 struct JoinCallResult: Codable {
     let channelId: String?

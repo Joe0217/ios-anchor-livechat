@@ -21,7 +21,9 @@ final class ImageCache {
 
     private let memCache: NSCache<NSURL, UIImage> = {
         let c = NSCache<NSURL, UIImage>()
-        c.totalCostLimit = 50 * 1024 * 1024  // 50MB by estimated bytes
+        // 150MB by estimated bytes：NSCache 有 LRU + iOS 内存告警自动 flush，撑得下上千头像 + 数百封面。
+        // 上限提升源于：直播卡/头像多次进入不重新加载，是本工程主要流量痛点。
+        c.totalCostLimit = 150 * 1024 * 1024
         return c
     }()
 

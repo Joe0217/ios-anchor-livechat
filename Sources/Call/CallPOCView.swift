@@ -54,7 +54,7 @@ struct CallPOCView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 6) {
                 beautyBanner
-                Text(agora.message.isEmpty ? agora.state.rawValue : "\(agora.state.rawValue) · \(agora.message)")
+                Text(agora.message.isEmpty ? agora.state.label : "\(agora.state.label) · \(agora.message)")
                     .font(.caption2)
                     .foregroundStyle(.white.opacity(0.85))
                     .padding(.horizontal, 10).padding(.vertical, 4)

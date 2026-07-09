@@ -22,18 +22,25 @@ final class APIClient {
 
     /// POST 请求。body 会被 JSON 序列化 → AES → Base64 作为原始 body 发送。
     /// 返回解密后的 result JSON 数据（供 Codable 解码）；非 0000 抛 APIError。
-    func post(_ path: String, body: [String: Any]? = nil, token: String? = nil) async throws -> Data {
-        try await postJSON(path, jsonBody: body, token: token)
+    ///
+    /// - parameter suppressCodes: 对指定错误码**不** post `.apiSessionInvalidated` 通知
+    ///   （对齐 A-2 spec §1.3 v3：login 挂 code=1005 用于跳注册页时须传 `["1005"]`，
+    ///   否则 SessionStore observer 会先跑 logout 拦截分流；仅 login path 需传，其它场景 default []）
+    func post(_ path: String, body: [String: Any]? = nil, token: String? = nil, suppressCodes: Set<String> = []) async throws -> Data {
+        try await postJSON(path, jsonBody: body, token: token, suppressCodes: suppressCodes)
     }
 
     /// POST 请求（array body 版）。对齐 H5 `http.post(path, arrayData)` — uploadPrivateInfo 等接口用。
     /// 加密链路与 dict 版完全一致（`JSONSerialization` 对 array/dict 都是 valid JSON object）。
-    func post(_ path: String, arrayBody: [Any], token: String? = nil) async throws -> Data {
-        try await postJSON(path, jsonBody: arrayBody, token: token)
+    func post(_ path: String, arrayBody: [Any], token: String? = nil, suppressCodes: Set<String> = []) async throws -> Data {
+        try await postJSON(path, jsonBody: arrayBody, token: token, suppressCodes: suppressCodes)
     }
 
     /// dict / array 共用的加密 + 发送内核。
-    private func postJSON(_ path: String, jsonBody: Any?, token: String?) async throws -> Data {
+    private func postJSON(_ path: String, jsonBody: Any?, token: String?, suppressCodes: Set<String>) async throws -> Data {
+        // 首次冷启动前若系统权限对话框「允许使用无线数据」尚未通过,
+        // URLSession 会立即失败 —— 让请求等到网络真正可达再发出(10s 超时兜底走原错误路径)
+        await NetworkReachability.shared.waitUntilReachable()
         guard let url = URL(string: AppConfig.apiBaseURL + path) else {
             throw APIError(code: "-1", message: "非法 URL")
         }
@@ -76,7 +83,8 @@ final class APIClient {
             // A 收尾：1004 挤下线 / 1005 token 失效集中分流。
             // 单点 throw 前 post 通知，SessionStore 监听后统一 logout + 弹 UI 提示，
             // 业务层 catch APIError 仍可拿到原始 code/message（兼容现有错误处理代码）。
-            if code == "1004" || code == "1005" {
+            // A-2 spec v3 BLOCK-1：login path 传 suppressCodes: ["1005"] 让"未注册跳注册"分流走 catch 而非 observer logout。
+            if (code == "1004" || code == "1005"), !suppressCodes.contains(code) {
                 NotificationCenter.default.post(
                     name: .apiSessionInvalidated,
                     object: nil,
@@ -105,7 +113,8 @@ final class APIClient {
     ///
     /// **接入 wishlist 后端时的诊断**：后端严格 method 校验；POST 请求会返
     /// `{"code":"1111","message":"Please check your method type, Maybe it's GET"}`。
-    func get(_ path: String, query: [String: Any]? = nil, token: String? = nil) async throws -> Data {
+    func get(_ path: String, query: [String: Any]? = nil, token: String? = nil, suppressCodes: Set<String> = []) async throws -> Data {
+        await NetworkReachability.shared.waitUntilReachable()
         var components = URLComponents(string: AppConfig.apiBaseURL + path)
         if let query, !query.isEmpty {
             components?.queryItems = query.map { URLQueryItem(name: $0.key, value: "\($0.value)") }
@@ -129,12 +138,13 @@ final class APIClient {
         AppLogger.net.debug("RESP \(path, privacy: .public) body=\(String(respPreview), privacy: .private)")
         #endif
 
-        return try decodeEnvelope(data, path: path)
+        return try decodeEnvelope(data, path: path, suppressCodes: suppressCodes)
     }
 
     /// DELETE 请求。id 走 URL path（对齐 H5 `http.delete(<path>/<id>)`），无请求体，响应处理同 POST。
     /// **stage 3 接入**：wishlist `deleteWishPromiseItem(id)` 走此方法。
-    func delete(_ path: String, token: String? = nil) async throws -> Data {
+    func delete(_ path: String, token: String? = nil, suppressCodes: Set<String> = []) async throws -> Data {
+        await NetworkReachability.shared.waitUntilReachable()
         guard let url = URL(string: AppConfig.apiBaseURL + path) else {
             throw APIError(code: "-1", message: "非法 URL")
         }
@@ -154,12 +164,14 @@ final class APIClient {
         AppLogger.net.debug("RESP \(path, privacy: .public) body=\(String(respPreview), privacy: .private)")
         #endif
 
-        return try decodeEnvelope(data, path: path)
+        return try decodeEnvelope(data, path: path, suppressCodes: suppressCodes)
     }
 
     /// Envelope 解析 + 1004/1005 分流 + result Hex 解密。POST/GET/DELETE 三个 method 共用。
     /// 抽出为 private helper 避免代码重复（原 POST 内联相同逻辑保留不动，防止意外破坏稳定路径）。
-    private func decodeEnvelope(_ data: Data, path: String) throws -> Data {
+    ///
+    /// - parameter suppressCodes: 对指定错误码不 post `.apiSessionInvalidated` 通知（A-2 spec v3 BLOCK-1）
+    private func decodeEnvelope(_ data: Data, path: String, suppressCodes: Set<String> = []) throws -> Data {
         guard let env = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw APIError(code: "-1", message: "响应解析失败")
         }
@@ -167,7 +179,7 @@ final class APIClient {
         let message = env["message"] as? String ?? ""
 
         guard code == "0000" else {
-            if code == "1004" || code == "1005" {
+            if (code == "1004" || code == "1005"), !suppressCodes.contains(code) {
                 NotificationCenter.default.post(
                     name: .apiSessionInvalidated,
                     object: nil,

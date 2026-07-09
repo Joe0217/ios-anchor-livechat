@@ -131,4 +131,22 @@ enum CallTuning {
     static let rtmTokenRenewAhead: TimeInterval = 30
     /// SAME_UID_LOGIN 触发 logout 的延迟（给埋点 flush 留窗口，与 H5 一致）
     static let sameUidLogoutDelayMs: Int = 500
+    /// C-3 通话异常自检 tenSecondsCB 周期（H5 topBar.vue 每 10s 检查）
+    static let abnormalCheckPeriodSeconds: Int = 10
+    /// C-3 secondsToZero 阈值（H5 通话 >120s 且收入=0 判定收入异常）
+    static let incomeZeroThresholdSeconds: Int = 120
+}
+
+// MARK: - C-3 通话异常自检（H5 g-faceTime/topBar.vue tenSecondsCB + secondsToZero）
+//
+// H5 语义映射（详见 C-spec-通话异常自检topBar-202607071742.md §0.4）：
+// - userOffline     → H5 checkRemoteIsJoined 失败       → iOS agora.remoteUid == 0
+// - networkUnstable → H5 connectionStateIsConnected 失败 → iOS agora.state != .joined
+// - incomeZero      → H5 secondsToZero                  → iOS elapsed>120 && callIncome==0
+enum CallAbnormalReason: String, Identifiable, CaseIterable {
+    case userOffline
+    case networkUnstable
+    case incomeZero
+
+    var id: String { rawValue }
 }

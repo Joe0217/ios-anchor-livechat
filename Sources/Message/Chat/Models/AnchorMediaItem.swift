@@ -13,6 +13,8 @@ struct AnchorMediaItem: Identifiable, Equatable, Hashable {
     let coverUrl: URL?                // video 的 poster；image 传 nil
     let kind: MediaKind
     let dur: Int?                     // video 秒数（image 传 nil）
+    /// Batch 4：私密相册项的解锁钻石价（对齐 H5 albumPopup 显示）；普通相册 nil
+    var giftPrice: Int? = nil
 }
 
 enum MediaKind: String, Equatable, Hashable {
@@ -84,7 +86,8 @@ extension AnchorMediaItem {
             mediaUrl: url,
             coverUrl: nil,
             kind: p.isVideo ? .video : .image,
-            dur: nil
+            dur: nil,
+            giftPrice: p.giftPrice   // Batch 4：透传解锁钻石价（H5 albumPopup 显示）
         )
     }
 

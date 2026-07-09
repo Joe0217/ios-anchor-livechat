@@ -59,6 +59,7 @@ struct MatchTabView: View {
         .task { await vm.loadIfNeeded() }
         .sheet(item: $vm.presentedUser) { user in
             MatchUserCardSheet(user: user)
+                .sheetTopInset()
                 .presentationDetents([.medium])
         }
         .preferredColorScheme(.dark)

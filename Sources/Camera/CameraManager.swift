@@ -80,7 +80,11 @@ final class CameraManager: NSObject, ObservableObject {
     private let videoOutput = AVCaptureVideoDataOutput()
     private let sessionQueue = DispatchQueue(label: "com.anchor.livechat.session")
     private let videoQueue = DispatchQueue(label: "com.anchor.livechat.video")
-    private let position: AVCaptureDevice.Position = .front
+    /// C 里程碑：从 `let` 改 `var` 支持前后置切换；读写严格串行到 sessionQueue（configureIfNeeded /
+    /// switchCameraPosition 均在此 queue 内）。UI 层不直读本字段，通过 CallStore.isUsingFrontCamera 派生。
+    private var position: AVCaptureDevice.Position = .front
+    /// 当前视频 device input；`switchCameraPosition` 移除旧 input 前需要引用它。
+    private var currentVideoInput: AVCaptureDeviceInput?
     private var configured = false
 
     override init() {
@@ -116,6 +120,44 @@ final class CameraManager: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - C 里程碑：前后置切换
+
+    /// 切换前后置摄像头。sessionQueue 串行执行 beginConfiguration → 换 input → 反转 mirror → commit。
+    /// - 幂等：目标 position 无设备（如 iPad 无后置）静默不切
+    /// - 失败回滚：新 input canAddInput 失败时回退旧 input，避免 session 空 input 崩预览
+    /// - 直播私 call 场景严禁调用（CallStore.switchCamera 已 guard；此 API 本身不 guard 业务态）
+    func switchCameraPosition() {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            let newPosition: AVCaptureDevice.Position = (self.position == .front) ? .back : .front
+            guard let newDevice = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: newPosition),
+                  let newInput = try? AVCaptureDeviceInput(device: newDevice) else {
+                logger.warning("switchCameraPosition: no device at position raw=\(newPosition.rawValue); skip")
+                return
+            }
+            self.session.beginConfiguration()
+            let oldInput = self.currentVideoInput
+            if let old = oldInput { self.session.removeInput(old) }
+            if self.session.canAddInput(newInput) {
+                self.session.addInput(newInput)
+                self.currentVideoInput = newInput
+                self.position = newPosition
+                if let conn = self.videoOutput.connection(with: .video) {
+                    if conn.isVideoOrientationSupported { conn.videoOrientation = .portrait }
+                    if conn.isVideoMirroringSupported { conn.isVideoMirrored = (newPosition == .front) }
+                }
+                logger.info("switchCameraPosition: → \(newPosition == .front ? "front" : "back")")
+            } else {
+                // 回滚：新 input 不可加，恢复旧 input 保持预览连续
+                if let old = oldInput, self.session.canAddInput(old) {
+                    self.session.addInput(old)
+                }
+                logger.error("switchCameraPosition: canAddInput failed for raw=\(newPosition.rawValue); rolled back")
+            }
+            self.session.commitConfiguration()
+        }
+    }
+
     // MARK: - 生命周期
 
     func start() {
@@ -144,6 +186,7 @@ final class CameraManager: NSObject, ObservableObject {
            let input = try? AVCaptureDeviceInput(device: device),
            session.canAddInput(input) {
             session.addInput(input)
+            self.currentVideoInput = input
         }
 
         videoOutput.videoSettings = [

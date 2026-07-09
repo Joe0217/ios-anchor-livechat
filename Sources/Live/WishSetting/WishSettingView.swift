@@ -62,9 +62,13 @@ struct WishSettingView: View {
         .navigationTitle(L10n.wishSettingNavTitle)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showGiftPicker) {
-            WishGiftPickerSheet { gift, count in
+            // H-4 迁移：心愿单 gift+count picker → CommonGiftPanel（tabs=[.popular], footer=.confirm, stepper=.visible(1...99)）
+            CommonGiftPanel(config: .wishGift(onConfirm: { gift, count in
                 store.addGift(gift, count: count)
-            }
+            }))
+            .sheetTopInset()
+            .presentationDetents([.fraction(0.5), .large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $store.showRuleDoc) {
             ruleDocSheet
@@ -354,9 +358,10 @@ struct WishSettingView: View {
     /// 礼物行横向 layout（对齐设计稿）：图 + 名 + 价 + 数量输入 + ✕
     private func wishGiftRow(_ g: WishGift) -> some View {
         HStack(spacing: 12) {
-            AsyncImage(url: URL(string: g.giftSmallImg)) { img in
-                img.resizable().scaledToFit()
-            } placeholder: {
+            CachedAsyncImage(url: URL(string: g.giftSmallImg),
+                             contentMode: .fit,
+                             persistent: true,
+                             cdn: (.gift, .fit)) {
                 Color.white.opacity(0.06)
             }
             .frame(width: 40, height: 40)

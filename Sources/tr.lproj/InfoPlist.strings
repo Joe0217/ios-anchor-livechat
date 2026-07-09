@@ -3,3 +3,4 @@
  */
 "NSCameraUsageDescription"     = "Gerçek zamanlı güzelleştirme önizlemesi ve canlı yayın için kullanılır";
 "NSMicrophoneUsageDescription" = "Gerçek zamanlı sesli/görüntülü aramalar için kullanılır";
+"NSPhotoLibraryUsageDescription" = "Kayıt sırasında profil resminizi ve profil fotoğraflarınızı yüklemek için fotoğraf kitaplığına erişim gereklidir.";

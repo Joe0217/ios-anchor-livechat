@@ -55,10 +55,10 @@ docs/plan/                    # 接入技术文档、开发计划、功能审查
 - **鉴权头**：token 放 `loginToken`+`anchorToken`（值相同），`appid: 20735424`，`Ocp-Apim-Subscription-Key: 9ec52f6d03cd4d5985a6a2c8bb1ce5ee`，外加 deviceId 等。无请求签名
 - **dev 域名**：`https://anchor.cphub.link`（/api）。登录 `/api/login/v4/login`，密码=两次大写 MD5：`MD5(MD5(pwd+appId))`
 - **开播 token 来源**：主播加入声网的 rtcToken 来自 `/api/index/getAgoraRtmToken`（绑 uid、与 channel 无关），**不是** beginLiveRoom 返回的；频道用 beginLiveRoom/getMyLiveRoom 的 `agoraChannelId`。声网 dev AppID `4af61c7a92f447d3a582308b5817dbd2`。import 仍是 `AgoraRtcKit`
-- **心跳 6s**（H5 源码 `setInterval(keepLiving, 6000)`，"10秒"是过时注释）。⚠️ **iOS 实现取 10s / 失败 >3 次**（对齐安卓，详见 `B-LiveStore状态机-spec-*.md` §3）。`callState`：0直播/1通话/2匹配/3PK，阶段一恒为 0
-- **强制下播 5 原因（H5 历史字符串编码）**：`'3'`系统强制(心跳 code 1992/1006 封禁)、`'4'`断连(连续心跳失败 >6 次)、`'5'`网络差(连续 ≥30 次质量≥5；≥10 次上报埋点)、`'99'`相机错误、正常结束。⚠️ **iOS 实现按路线图 §三 B 升级为数字编码 4/2/5/6/7**（对齐安卓；阈值 10s/>3）。⚠️ **弱网阈值 v5 反悔为分层 10/30（"连续"语义，中间任一次质量 ≤4 即清零重计）**：连续 10 次（≈20s）降帧率 30→15fps + toast；连续 30 次（≈60s）才 forceEnd endType=7；降级期连续 5 次质量好恢复 normal。详见 `docs/plan/B-LiveStore状态机-spec-*.md` §11 + §4.5
+- **心跳 6s**（H5 源码 `setInterval(keepLiving, 6000)`，"10秒"是过时注释）。⚠️ **iOS 实现取 10s / 失败 >3 次**（对齐安卓，详见 `docs/plan/archive/B-LiveStore状态机-spec-*.md` §3）。`callState`：0直播/1通话/2匹配/3PK，阶段一恒为 0
+- **强制下播 5 原因（H5 历史字符串编码）**：`'3'`系统强制(心跳 code 1992/1006 封禁)、`'4'`断连(连续心跳失败 >6 次)、`'5'`网络差(连续 ≥30 次质量≥5；≥10 次上报埋点)、`'99'`相机错误、正常结束。⚠️ **iOS 实现按路线图 §三 B 升级为数字编码 4/2/5/6/7**（对齐安卓；阈值 10s/>3）。⚠️ **弱网阈值 v5 反悔为分层 10/30（"连续"语义，中间任一次质量 ≤4 即清零重计）**：连续 10 次（≈20s）降帧率 30→15fps + toast；连续 30 次（≈60s）才 forceEnd endType=7；降级期连续 5 次质量好恢复 normal。详见 `docs/plan/archive/B-LiveStore状态机-spec-*.md` §11 + §4.5
 - **token 策略**：存 Keychain（非 UserDefaults）；主 token + bagshop `auth_token`（用 `loginUuid` 换、401 自动续）。双 token 拼接是给 webview 传参的，**原生不需要**
-- **公屏**：走 IM 登录 + 聊天室普通模式（复用 IM 长连接，非独立模式）；自定义消息 `attachType` 是**数字编码**。⚠️ **常见误区**：50 在双端均无证据（B 不识别）、61=**合规警告**（不下播，仅 toast）、62=封禁下播、63=**进折扣池 BoostingExposure**、44=强制下播——**非礼物**；礼物真编号是 `'SEND_GIFT'`(字符串) + 数字 1/4/15/18（见 `B-spec-H5安卓代码二次校验-*.md` §1.1）
+- **公屏**：走 IM 登录 + 聊天室普通模式（复用 IM 长连接，非独立模式）；自定义消息 `attachType` 是**数字编码**。⚠️ **常见误区**：50 在双端均无证据（B 不识别）、61=**合规警告**（不下播，仅 toast）、62=封禁下播、63=**进折扣池 BoostingExposure**、44=强制下播——**非礼物**；礼物真编号是 `'SEND_GIFT'`(字符串) + 数字 1/4/15/18（见 `docs/plan/archive/B-spec-H5安卓代码二次校验-*.md` §1.1）
 - **签名**：免费个人团队，真实 Team ID `8J6JP98FM3`（证书 OU；括号里 L624PPWDN5 是证书 ID，非 Team ID）
 
 ## 已知坑
@@ -103,12 +103,11 @@ docs/plan/                    # 接入技术文档、开发计划、功能审查
 - `docs/plan/原生iOS接入技术文档-*.md` — 声网/云信/相芯接入参数、密钥、API 端点、待确认项
 
 **功能蓝本（必读）**
-- `docs/plan/iOS重建-功能梳理-20260616/README.md` + `modules/01-09.md` — H5 视角 9 模块详档，**第 4/7/8 节为复刻关键**
-- `docs/plan/安卓主播端梳理/02-01~02-12.md` — 安卓视角 12 模块梳理，**02-04 派对房是 E/F 里程碑唯一蓝本**
+- `docs/plan/iOS重建-功能梳理-20260616/README.md` + `modules/01-09.md` — H5 视角 9 模块详档，**除派对房外全部以 H5 为准**
+- `docs/plan/安卓主播端梳理/02-04-派对房.md` — 派对房唯一蓝本（H5 无派对房代码）
 - `docs/plan/安卓主播端梳理/04-iOS对齐安卓-派对房+机器人转盘+心跳-决策规格.md` — 派对房/机器人/转盘/心跳决策源头
 
-**历史阶段一计划**
-- `docs/plan/iOS原生主播端-开发计划-阶段一基建与直播闭环-*.md` — M0–M5 拆解 + §6 9 项确认清单仍有效；其余被路线图覆盖（已加 ⚠️）
+> ⚠️ **安卓其他模块梳理已迁出项目**（2026-07-07）：直播/1v1/PK/IM/变现/任务/数据/账号/美颜/社交/长尾/差异分析共 14 份迁至 `~/Documents/claudeDocs/Hily-安卓主播端梳理-归档-202607072000/`。除派对房外其他功能一律以 H5 为准；如需查历史决策的安卓信源，去归档目录查。
 
 ## Git 规范
 - Commit 格式：`<type>: [scope] <description>`（type：feat/fix/docs/refactor/perf/chore/build 等，全局用 `[*]`）

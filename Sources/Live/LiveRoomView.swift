@@ -537,25 +537,16 @@ struct LiveRoomView: View {
     // MARK: - D 里程碑：挂断后回直播倒计时覆盖层
 
     /// v5.6 修订（用户反馈"返回直播后画面卡住"）：
-    /// 原全屏黑色 70% 遮罩会盖住本端 CameraPreview，体感等同"画面冻结 15s"。
-    /// 改为顶部胶囊提示条：本端摄像头持续可见（CameraManager 一直采集 + render），
-    /// 业务上 15s 仍不推流（liveAgora.state=.idle → pushFrame guard 拦截），观众端断流窗口不变。
+    /// 通话结束回直播中央弹窗（对齐 H5 anchor-livechat-h5/src/views/liveSetting/components/returnLivePopup.vue）：
+    /// - 旋转圆环 + 大数字倒计时
+    /// - 提示文案 "X seconds later it will automatically return to live"
+    /// - "Return to live" 按钮立刻触发 rejoin（无需等 15s 倒计时归 0）
+    /// - 蒙层屏蔽底层交互（不可点关，对齐 CThemePopup close-on-click-overlay=false）
     private var returnLiveCountdownOverlay: some View {
-        VStack {
-            HStack(spacing: 8) {
-                Image(systemName: "dot.radiowaves.left.and.right").font(.caption)
-                    .accessibilityHidden(true)
-                Text(L10n.liveRoomCallEndedTitle).font(.caption).bold()
-                Text(String(format: L10n.liveRoomReturnCountdownFormat, store.returnLiveCountdown))
-                    .font(.caption).monospacedDigit()
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 14).padding(.vertical, 8)
-            .background(.pink.opacity(0.85), in: Capsule())
-            .padding(.top, 80)
-            .accessibilityElement(children: .combine)
-            Spacer()
-        }
+        ReturnLivePopup(
+            countdown: store.returnLiveCountdown,
+            onReturn: { Task { await store.returnLiveNow() } }
+        )
     }
 
     // MARK: - 合规警告条幅（NIM attachType=61 触发，3s 自动消失）

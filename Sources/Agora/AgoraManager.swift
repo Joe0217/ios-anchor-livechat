@@ -53,6 +53,16 @@ final class AgoraManager: NSObject, ObservableObject {
     @Published var state: State = .idle
     @Published var remoteUid: UInt = 0
     @Published var message: String = ""
+    /// C-4 Wave4 C 组 gap-010：远端主动关摄像头（.remoteMuted）时 true → CallView 叠占位（对方头像 + "Camera off"）。
+    /// 远端离开（didOfflineOfUid）/ leave() 时 reset false（不是关摄语义）。
+    @Published var isRemoteVideoOff: Bool = false
+
+    /// 本地/远端网络质量（AgoraNetworkQuality raw：0 unknown / 1 excellent / 2 good / 3 poor / 4 bad / 5 vBad / 6 down）
+    /// 由 `rtcEngine.networkQuality` delegate 每 ~2s 上报。UI 层（CallFaceTimeView.signalColumn）消费展示 You/User 双向条形。
+    /// 弱网降级链路（NetworkQualityMonitor + callNetworkQualityHandler）**仅**消费 localSignalLevel 派生的 worst=max(tx,rx)，
+    /// 与 UI 展示的原始 tx/rx 语义分离。
+    @Published var localSignalLevel: Int = 0
+    @Published var remoteSignalLevel: Int = 0
 
     /// 远端画面渲染目标（交给声网 setupRemoteVideo）
     let remoteView = UIView()
@@ -61,6 +71,11 @@ final class AgoraManager: NSObject, ObservableObject {
     weak var liveStore: LiveStore?
     /// 网络监控（M2 注入；networkQuality 回调转发）
     weak var networkMonitor: NetworkQualityMonitor?
+
+    /// C 里程碑：通话侧独立弱网观察 closure。CallStore.init 挂 / stop 清；参数 = max(tx.rawValue, rx.rawValue) 0-6。
+    /// 与直播侧 `networkMonitor` 独立计数不干扰：LiveStore .living 时两者同时累计各自计数是合理的
+    /// （通话中若 LiveStore=.living 则是直播私 call 场景，两侧观察的是同一 RTC 通道质量）。
+    @MainActor var callNetworkQualityHandler: ((Int) -> Void)?
 
     private var engine: AgoraRtcEngineKit?
     private let externalTrackId: UInt = 0
@@ -164,6 +179,32 @@ final class AgoraManager: NSObject, ObservableObject {
         engine.pushExternalVideoFrame(frame, videoTrackId: externalTrackId)
     }
 
+    // MARK: - C 里程碑通话中控制
+
+    /// 静音/取消静音本端麦克风（对应 H5 `toggleAudioMute`）。
+    /// - 幂等：engine 未 join 时 no-op；重复相同 mute 值 no-op（SDK 内部也幂等，此处仅日志抑制）。
+    /// - 不同于 `updateChannel(publishMicrophoneTrack:)`：muteLocalAudioStream 保持 track publish 但停发音频帧，
+    ///   对端仍认为通话在线（不会误判掉线），仅"听不到声音"。切回 unmute 无需 restart channel。
+    func muteLocalAudio(_ mute: Bool) {
+        guard let engine else { return }
+        engine.muteLocalAudioStream(mute)
+        logger.info("muteLocalAudio: \(mute)")
+    }
+
+    /// C-4 Wave2 gap-critic-005：切后台/前台时暂停/恢复视频推流，音频始终保留。
+    /// - iOS 限制 app 后台无法访问相机 → 主动 publishCustomVideoTrack=false 避免推黑帧
+    /// - 音频 track 保持 publish=true（配合 Info.plist UIBackgroundModes=audio 与 AVAudioSession），
+    ///   保证切后台通话不断音
+    /// - engine 未 join 时 no-op；publishMicrophoneTrack 恒 true 不动
+    func updateChannelPublishVideo(_ publish: Bool) {
+        guard let engine else { return }
+        let option = AgoraRtcChannelMediaOptions()
+        option.publishCustomVideoTrack = publish
+        option.publishMicrophoneTrack = true
+        engine.updateChannel(with: option)
+        logger.info("updateChannelPublishVideo: \(publish)")
+    }
+
     // MARK: - 离开
 
     /// D 里程碑修复（v5.4）：改 async，等 `didLeaveChannelWith` 回调到达再返回。
@@ -205,6 +246,7 @@ final class AgoraManager: NSObject, ObservableObject {
         self.engine = nil
         state = .idle
         remoteUid = 0
+        isRemoteVideoOff = false  // C-4 Wave4 C 组 gap-010：leave 时 reset
         message = ""
         renewFailureCount = 0
         currentQuality = .normal
@@ -252,6 +294,11 @@ final class AgoraManager: NSObject, ObservableObject {
         conn.localUid = ownUid
 
         let delegate = PKChannelDelegate(owner: self, channel: channel, oppositeUid: oppositeUid)
+        // M3 遗漏修复（2026-07-06 real-machine bug）：给 delegate 注入对手画面渲染 UIView。
+        // PKChannelDelegate.didJoinedOfUid 内 `guard let view = self.oppositeView` 依赖此注入；
+        // 之前从未赋值 → setupRemoteVideoEx 永不执行 → 对方视频黑屏（骨架 M0 注释「M3 接入」被遗漏至今）。
+        // oppositeRemoteView 是 AgoraManager `let` 强持有的单例 UIView，weak reference 有效。
+        delegate.oppositeView = self.oppositeRemoteView
 
         let option = AgoraRtcChannelMediaOptions()
         option.clientRoleType = .audience          // PK 对手频道我们仅观看
@@ -469,13 +516,41 @@ extension AgoraManager: AgoraRtcEngineDelegate {
     }
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didOfflineOfUid uid: UInt, reason: AgoraUserOfflineReason) {
+        // 【归因日志】远端离开 RTC 频道：reason=0 (quit) / 1 (dropped) / 2 (becomeAudience)
+        // 用户主动挂断 = 0；网络断连=1；1v1 场景不会出现 2
+        logger.notice("🔴 [Agora] didOfflineOfUid uid=\(uid) reason=\(reason.rawValue) currentRemoteUid=\(self.remoteUid)")
         DispatchQueue.main.async { [weak self] in
             guard let self, self.remoteUid == uid else { return }
             self.remoteUid = 0
+            // C-4 Wave4 C 组 gap-010：远端离开 reset isRemoteVideoOff（离开是挂断链路，不是关摄）
+            self.isRemoteVideoOff = false
             let canvas = AgoraRtcVideoCanvas()
             canvas.uid = uid
             canvas.view = nil
             engine.setupRemoteVideo(canvas)
+        }
+    }
+
+    /// C-4 Wave4 C 组 gap-010 + gap-critic-003：远端视频状态变化（对方关/开摄像头）。
+    /// - state == .stopped → 关摄像头 → CallView 叠占位（远端头像 + "Camera off"）
+    /// - state 恢复非 stopped → 关摄状态解除
+    /// - 只关心当前会话的远端 uid（PK 频道等其他 uid 走独立 delegate）
+    ///
+    /// **判据**：SDK state 4 值（stopped=0/starting=1/decoding=2/frozen=3/failed=4）；
+    /// 保守取 .stopped 作为"关摄"判据（reason.remoteMuted 是理想信号但不同 SDK 版本触发条件有差异）。
+    /// frozen 是弱网卡帧不是关摄，不算 off。
+    func rtcEngine(_ engine: AgoraRtcEngineKit,
+                   remoteVideoStateChangedOfUid uid: UInt,
+                   state: AgoraVideoRemoteState,
+                   reason: AgoraVideoRemoteReason,
+                   elapsed: Int) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.remoteUid == uid, uid > 0 else { return }
+            let off = (state == .stopped)
+            if self.isRemoteVideoOff != off {
+                self.isRemoteVideoOff = off
+                logger.info("remote video state=\(state.rawValue) reason=\(reason.rawValue) uid=\(uid, privacy: .private) → isRemoteVideoOff=\(off)")
+            }
         }
     }
 
@@ -499,14 +574,24 @@ extension AgoraManager: AgoraRtcEngineDelegate {
         }
     }
 
-    /// 网络质量回调转发到 NetworkQualityMonitor（spec §4.1）
+    /// 网络质量回调（spec §4.1 + C 里程碑通话 UI signalColumn）：
+    /// - `uid == 0` = 本地：派 NetworkQualityMonitor.report（弱网降级）+ callNetworkQualityHandler（CallStore）+ 派 UI localSignalLevel
+    /// - `uid != 0` = 远端：仅派 UI remoteSignalLevel（不参与弱网降级）
+    /// 每 ~2s 触发一次；raw 值越大越差（0 unknown / 1 excellent / … / 6 down）
     func rtcEngine(_ engine: AgoraRtcEngineKit,
                    networkQuality uid: UInt,
                    txQuality: AgoraNetworkQuality,
                    rxQuality: AgoraNetworkQuality) {
-        guard uid == 0 else { return }  // 0 表示本地
+        let worst = max(Int(txQuality.rawValue), Int(rxQuality.rawValue))
         Task { @MainActor [weak self] in
-            self?.networkMonitor?.report(tx: txQuality, rx: rxQuality)
+            guard let self else { return }
+            if uid == 0 {
+                self.localSignalLevel = worst
+                self.networkMonitor?.report(tx: txQuality, rx: rxQuality)
+                self.callNetworkQualityHandler?(worst)
+            } else {
+                self.remoteSignalLevel = worst
+            }
         }
     }
 

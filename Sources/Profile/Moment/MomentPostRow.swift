@@ -95,7 +95,7 @@ struct MomentPostRow: View {
                     if MomentPost.isVideo(url: url) {
                         videoCellPlaceholder
                     } else {
-                        CachedAsyncImage(url: URL(string: url), contentMode: .fill) {
+                        CachedAsyncImage(url: URL(string: url), contentMode: .fill, cdn: (.custom(width: 320), .fill)) {
                             Theme.Palette.profileGridPlaceholder
                         }
                     }

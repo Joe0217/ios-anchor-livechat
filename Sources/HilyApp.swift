@@ -7,12 +7,12 @@ struct HilyApp: App {
     @StateObject private var session = SessionStore.shared
 
     init() {
-        // 全局 URLCache：内存 20MB + 磁盘 100MB。
-        // 与 ImageCache（NSCache 内存层）协同：URLCache 给 URLSession 用，
-        // 远端图片切 tab 再回来不重新下载。
+        // 全局 URLCache：内存 50MB + 磁盘 500MB。
+        // 与 ImageCache（NSCache 内存层）协同：URLCache 给 URLSession 用，远端图片切 tab / 跨启动都不重下。
+        // 磁盘 500MB：iOS 内建 LRU 淘汰，跨启动持久化 —— 治用户"每次看完都要重新加载"痛点。
         URLCache.shared = URLCache(
-            memoryCapacity: 20 * 1024 * 1024,
-            diskCapacity: 100 * 1024 * 1024
+            memoryCapacity: 50 * 1024 * 1024,
+            diskCapacity: 500 * 1024 * 1024
         )
 
         Self.configureNavigationBarAppearance()

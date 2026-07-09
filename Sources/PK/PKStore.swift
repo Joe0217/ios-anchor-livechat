@@ -80,6 +80,8 @@ final class PKStore: ObservableObject {
     private var hasShownResult: Bool = false
     /// G M5-3：前台监听 + 500ms 防抖的 reconcile task
     private var foregroundCancellable: AnyCancellable?
+    /// NIM 长连重连成功监听（对齐 H5 `onConnect → syncPkStateAfterReconnect`）
+    private var nimConnectCancellable: AnyCancellable?
     private var reconcileDebounceTask: Task<Void, Never>?
     /// G #1 修复：匹配 QUICK 15s 超时切 RETRY；RETRY 5min 超时回 idle（对齐 H5 PK_TIME.QUICK_MATCH/RETRY_MATCH）
     private var matchingQuickTask: Task<Void, Never>?
@@ -111,6 +113,16 @@ final class PKStore: ObservableObject {
         foregroundCancellable = NotificationCenter.default
             .publisher(for: UIApplication.willEnterForegroundNotification)
             .sink { [weak self] _ in
+                Task { @MainActor in self?.scheduleReconcile() }
+            }
+        // 对齐 H5 `onConnect → syncPkStateAfterReconnect`：NIM 长连重连成功后调度 reconcile。
+        // dropFirst 忽略订阅当下的初值（避免冷启动 auto-login 触发一次多余的 reconcile；
+        // 冷启动进房逻辑独立触发一次；且 reconcile 入口 state guard 会拦截 idle 态无害化）。
+        nimConnectCancellable = NIMService.shared.$connectionState
+            .dropFirst()
+            .removeDuplicates()
+            .sink { [weak self] state in
+                guard state == .connected else { return }
                 Task { @MainActor in self?.scheduleReconcile() }
             }
     }
@@ -724,20 +736,33 @@ final class PKStore: ObservableObject {
 
     // MARK: - 中断重连（M5；本期留接口）
 
-    /// G M5-3：500ms 防抖调度一次 `reconcileOnReconnect`，避免前台 + 弱网恢复短时间多次触发。
+    /// G M5-3：500ms 防抖调度一次 `reconcileOnReconnect`，避免前台 / 弱网恢复 / NIM 重连三入口
+    /// 短时间齐发时重复触发。
+    ///
+    /// **cancel 语义**：`try? await Task.sleep` 被 cancel 时 CancellationError 被 try? 吞掉，
+    /// 控制流仍会继续走到 `reconcileOnReconnect`——必须显式 `Task.isCancelled` 短路，否则
+    /// 500ms 内多入口齐发会导致旧 task 立即执行 + 新 task 500ms 后执行 = 重复 API 打点。
     func scheduleReconcile() {
         reconcileDebounceTask?.cancel()
         reconcileDebounceTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: 500_000_000)
-            guard let self else { return }
+            guard !Task.isCancelled, let self else { return }
             await self.reconcileOnReconnect()
         }
     }
 
-    /// 进房 / 前后台恢复 / 弱网恢复时调用，校验远端 PK 是否仍在。
+    /// 前后台恢复 / 弱网恢复 / NIM 长连重连成功时调用，校验远端 PK 是否仍在。
     /// H5 行为：getPkStatus 返回 'INPK' / 'PUNISHING' / null；与本地 state 校验，不一致以远端为准。
     /// 本地 ctx 缺失（进程被杀）时直接当 PK 已退，让用户重新发起。
+    ///
+    /// **前置守卫**（对齐 H5 `syncPkStateAfterReconnect` line 962-966 `isInPkOrPunishing`）：
+    /// 仅当本地处于 `.inPK / .punishing` 时才发起校验；其他状态（含 idle/matching/inviting/invited/starting/endingPK）
+    /// 直接返回不发接口，避免直播期间每次前后台/弱网/NIM 重连都无条件打点 getPkStatus。
     func reconcileOnReconnect() async {
+        guard state == .inPK || state == .punishing else {
+            logger.info("reconcile: skipped, local state=\(self.state.rawValue) not in PK/punishing")
+            return
+        }
         do {
             let remote = try await PKService.getPkStatus()
             switch (remote, state) {
@@ -746,7 +771,7 @@ final class PKStore: ObservableObject {
             case (.inPK, _) where ctx != nil:
                 logger.info("reconcile: remote in PK, local out → can't rebuild ctx fully; staying idle")
                 // ctx 内存还在则 align 到 inPK，否则保持 idle（H5 同行为）
-            case (nil, .inPK), (nil, .punishing), (nil, .starting):
+            case (nil, .inPK), (nil, .punishing):
                 logger.warning("reconcile: remote NOT in PK while local thought yes → tear down")
                 await exitToIdle(finalScores: scores)
             default:
