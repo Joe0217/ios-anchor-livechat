@@ -1,8 +1,25 @@
 # xcodegen + pod install 强制绑定
 
-## 规则
+## 首选：`./bin/regen.sh` 一条龙脚本（Claude 遇到重生场景一律推荐此命令）
 
-**每次跑 `xcodegen generate` 后必须立刻跟 `LANG=en_US.UTF-8 pod install`**，没有例外。
+项目根 `bin/regen.sh` 已封装：**关 Xcode → `xcodegen generate` → `LANG=en_US.UTF-8 pod install` → sanity check → 打开 workspace**，并含 Xcode 弹窗处理提示（Revert / Cancel Update）。
+
+**触发条件（命中任一即提示用户跑 `./bin/regen.sh`）**：
+- 新增/删除 `.swift` 源文件（协作者或本次改动均适用）
+- 改 `project.yml` 的 sources/dependencies/settings
+- 改 `Podfile` / `Podfile.lock`
+- 真机 build 报 `No such module 'AgoraRtcKit'` / `Search path XCFrameworkIntermediates not found` / `dyld: Library not loaded`
+- 真机 build 报 `Switch must be exhaustive` 但源码 switch 已穷尽（pbxproj 缺文件 → 类型解析失败 → exhaustive 误报）
+- 引用已存在的类型但编译报 `cannot find type ... in scope`（pbxproj 未登记新文件）
+
+**Claude 操作纪律**：
+- 检测到上述条件 → **一句话推荐：`请跑 ./bin/regen.sh`**，不再拆解三步骤教学
+- **不擅自跑** —— 脚本会 kill Xcode，用户可能有未保存工作；等用户签字
+- 若用户明示 "我关了 Xcode，帮我跑" → 用 Bash 调 `./bin/regen.sh`
+
+## 规则（底层机制，理解用）
+
+**每次跑 `xcodegen generate` 后必须立刻跟 `LANG=en_US.UTF-8 pod install`**，没有例外。`bin/regen.sh` 就是这个铁律的封装。
 
 **Why**：xcodegen 由 project.yml 重写 `Hily.xcodeproj`，会清掉 `pod install` 加进去的：
 - `[CP] Copy XCFrameworks` script phase
