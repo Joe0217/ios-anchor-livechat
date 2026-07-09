@@ -192,6 +192,15 @@ enum L10n {
         static var listErrorLoadFailedFormat: String { localize("party.list.error.loadFailedFormat", comment: "加载失败：%@") }
         static var listErrorDecodeFormat: String { localize("party.list.error.decodeFormat", comment: "解码失败：%@") }
 
+        // 大厅新版（1b 设计稿还原）
+        static var listCreateRoom: String { localize("party.list.createRoom", comment: "Create Room 按钮文案") }
+        static var listEmpty: String { localize("party.list.empty", comment: "空态引导文案") }
+        static var listErrorRetry: String { localize("party.list.error.retry", comment: "错误态 retry") }
+        static var listWelcomeFallback: String { localize("party.list.welcomeFallback", comment: "房间欢迎语 fallback") }
+        static var listPillLiveVoice: String { localize("party.list.pill.liveVoice", comment: "视觉占位 pill 1：Live+Voice") }
+        static var listPillVoice: String { localize("party.list.pill.voice", comment: "视觉占位 pill 2：Voice") }
+        static var listPillLanguageFallback: String { localize("party.list.pill.languageFallback", comment: "语言 pill fallback：English") }
+
         // 创建房（PartyCreateRoomView）
         static var createNavTitle: String { localize("party.create.navTitle", comment: "创建派对房") }
         static var createSubmit: String { localize("party.create.submit", comment: "创建房间") }
@@ -313,6 +322,7 @@ enum L10n {
     // 底部 tab 标签
     static var tabHome: String { localize("tab.home", comment: "首页") }
     static var tabMessages: String { localize("tab.messages", comment: "消息") }
+    static var tabParty: String { localize("tab.party", comment: "派对") }
     static var tabWork: String { localize("tab.work", comment: "工作台") }
     static var tabProfile: String { localize("tab.profile", comment: "我的") }
 
@@ -473,6 +483,9 @@ enum L10n {
 
     // MARK: - Message P2P 会话列表（H-1 MVP，spec §1.2 三分类）
     static var messageNewsTitle: String         { localize("message.news.title", comment: "消息列表顶部大标题 News") }
+    /// 顶部右 icon 清空当前 tab 会话确认对话框标题（对齐 H5 news/index.vue:showEmpty clearDialogTitle）
+    static var messageClearTabTitle: String     { localize("message.clear.tabTitle", comment: "清空当前 tab 会话列表确认标题") }
+    static var messageClearTabConfirm: String   { localize("message.clear.tabConfirm", comment: "清空当前 tab 确认按钮") }
     static var messageCategoryFlame: String     { localize("message.category.flame", comment: "会话分类 Flame") }
     static var messageCategoryStranger: String  { localize("message.category.stranger", comment: "会话分类 Stranger") }
     static var messageCategoryPrime: String     { localize("message.category.prime", comment: "会话分类 Prime") }
@@ -503,6 +516,9 @@ enum L10n {
 
     // 云端历史拉空后过期提示（对齐 H5 new.chat history expired）
     static var chatHistoryExpired: String  { localize("chat.historyExpired", comment: "云端历史拉空时的一次性 toast") }
+
+    // 对方消息气泡内可见"翻译"按钮（对齐 H5 msgItem.vue CTranslate label="Translate"）
+    static var chatTranslate: String       { localize("chat.translate", comment: "文字气泡内翻译按钮 label") }
 
     // MARK: - Message 消息 preview 归一化（v5 F-3 i18n）
     static var messagePreviewImage: String          { localize("message.preview.image", comment: "会话预览：图片") }

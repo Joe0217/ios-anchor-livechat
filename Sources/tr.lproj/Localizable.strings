@@ -100,6 +100,7 @@
 // 底部 tab 标签
 "tab.home"                   = "Ana Sayfa";
 "tab.messages"               = "Mesajlar";
+"tab.party"                  = "Parti";
 "tab.work"                   = "İş";
 "tab.profile"                = "Profil";
 
@@ -544,7 +545,7 @@
 "call.action.more"           = "Daha fazla";
 "call.action.comingSoon"     = "Yakında";
 "call.remoteCameraOff"       = "Kamera kapalı";
-"call.liveBanner"            = "Özel arama · Yayına dönmek için kapatın";
+"call.liveBanner"            = "Yayın sırasında özel arama";
 
 /* 设计稿主播端.png 对齐（2026-07-09） */
 "call.signal.label.you"                = "Sen";
@@ -691,6 +692,8 @@
 
 // MARK: - Message P2P 会话列表（H-1 MVP）
 "message.news.title"                    = "Haberler";
+"message.clear.tabTitle"                = "Bu sekmedeki tüm sohbetler silinsin mi?";
+"message.clear.tabConfirm"              = "Temizle";
 "message.category.flame"                = "Ateşli";
 "message.category.stranger"             = "Yabancı";
 "message.category.prime"                = "Elit";
@@ -718,6 +721,8 @@
 "chat.intro.step2"     = "Daha fazla ayrıntı öğrenin";
 // 云端历史拉空 toast
 "chat.historyExpired"  = "Sohbet geçmişinin süresi doldu.";
+// 文字气泡内翻译按钮
+"chat.translate"       = "Çevir";
 
 // v5 F-3 消息 preview 归一化
 "message.preview.image"                 = "[Resim]";
@@ -761,6 +766,13 @@
 "party.list.unnamed"                     = "Adsız Oda";
 "party.list.error.loadFailedFormat"      = "Yükleme başarısız: %@";
 "party.list.error.decodeFormat"          = "Çözümleme başarısız: %@";
+"party.list.createRoom"                  = "Oda Oluştur";
+"party.list.empty"                       = "Henüz parti odası yok";
+"party.list.error.retry"                 = "Tekrar dene";
+"party.list.welcomeFallback"             = "Odama hoş geldin, hadi eğlenelim!";
+"party.list.pill.liveVoice"              = "Canlı+Ses";
+"party.list.pill.voice"                  = "Ses";
+"party.list.pill.languageFallback"       = "İngilizce";
 
 "party.create.navTitle"                  = "Parti Odası Oluştur";
 "party.create.submit"                    = "Oda Oluştur";

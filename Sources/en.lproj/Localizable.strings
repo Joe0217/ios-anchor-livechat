@@ -98,6 +98,7 @@
 // 底部 tab 标签
 "tab.home"                   = "Home";
 "tab.messages"               = "Messages";
+"tab.party"                  = "Party";
 "tab.work"                   = "Work";
 "tab.profile"                = "Profile";
 
@@ -500,7 +501,7 @@
 "call.action.more"           = "More";
 "call.action.comingSoon"     = "Coming soon";
 "call.remoteCameraOff"       = "Camera off";
-"call.liveBanner"            = "Private call · Hang up to return to live";
+"call.liveBanner"            = "Live private call in progress";
 
 /* 设计稿主播端.png 对齐（2026-07-09） */
 "call.signal.label.you"                = "You";
@@ -647,6 +648,8 @@
 
 // MARK: - Message P2P 会话列表（H-1 MVP）
 "message.news.title"                    = "News";
+"message.clear.tabTitle"                = "Clear all conversations in this tab?";
+"message.clear.tabConfirm"              = "Clear";
 "message.category.flame"                = "Flame";
 "message.category.stranger"             = "Stranger";
 "message.category.prime"                = "Prime";
@@ -674,6 +677,8 @@
 "chat.intro.step2"     = "Learn more details";
 // 云端历史拉空 toast
 "chat.historyExpired"  = "This chat history has expired.";
+// 文字气泡内翻译按钮
+"chat.translate"       = "Translate";
 
 // v5 F-3 消息 preview 归一化
 "message.preview.image"                 = "[Image]";
@@ -717,6 +722,13 @@
 "party.list.unnamed"                     = "Unnamed Room";
 "party.list.error.loadFailedFormat"      = "Load failed: %@";
 "party.list.error.decodeFormat"          = "Decode failed: %@";
+"party.list.createRoom"                  = "Create Room";
+"party.list.empty"                       = "No party rooms yet";
+"party.list.error.retry"                 = "Retry";
+"party.list.welcomeFallback"             = "Welcome to my room, let's have fun!";
+"party.list.pill.liveVoice"              = "Live+Voice";
+"party.list.pill.voice"                  = "Voice";
+"party.list.pill.languageFallback"       = "English";
 
 "party.create.navTitle"                  = "Create Party Room";
 "party.create.submit"                    = "Create Room";

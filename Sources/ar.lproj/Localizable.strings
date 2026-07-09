@@ -100,6 +100,7 @@
 // 底部 tab 标签
 "tab.home"                   = "الرئيسية";
 "tab.messages"               = "الرسائل";
+"tab.party"                  = "حفلة";
 "tab.work"                   = "العمل";
 "tab.profile"                = "ملفي";
 
@@ -544,7 +545,7 @@
 "call.action.more"           = "المزيد";
 "call.action.comingSoon"     = "قريبًا";
 "call.remoteCameraOff"       = "الكاميرا مغلقة";
-"call.liveBanner"            = "مكالمة خاصة · أنهِ المكالمة للعودة للبث";
+"call.liveBanner"            = "مكالمة خاصة أثناء البث";
 
 /* 设计稿主播端.png 对齐（2026-07-09） */
 "call.signal.label.you"                = "أنت";
@@ -691,6 +692,8 @@
 
 // MARK: - Message P2P 会话列表（H-1 MVP）
 "message.news.title"                    = "الأخبار";
+"message.clear.tabTitle"                = "هل تريد مسح كل المحادثات في هذا التبويب؟";
+"message.clear.tabConfirm"              = "مسح";
 "message.category.flame"                = "المفضلة";
 "message.category.stranger"             = "غرباء";
 "message.category.prime"                = "المميّزون";
@@ -718,6 +721,8 @@
 "chat.intro.step2"     = "تعرّف على المزيد";
 // 云端历史拉空 toast
 "chat.historyExpired"  = "انتهت صلاحية سجل المحادثة.";
+// 文字气泡内翻译按钮
+"chat.translate"       = "ترجم";
 
 // v5 F-3 消息 preview 归一化
 "message.preview.image"                 = "[صورة]";
@@ -761,6 +766,13 @@
 "party.list.unnamed"                     = "غرفة بدون اسم";
 "party.list.error.loadFailedFormat"      = "فشل التحميل: %@";
 "party.list.error.decodeFormat"          = "فشل فك التشفير: %@";
+"party.list.createRoom"                  = "إنشاء غرفة";
+"party.list.empty"                       = "لا توجد غرف حفلات بعد";
+"party.list.error.retry"                 = "إعادة المحاولة";
+"party.list.welcomeFallback"             = "مرحبًا بكم في غرفتي، لنمرح!";
+"party.list.pill.liveVoice"              = "فيديو+صوت";
+"party.list.pill.voice"                  = "صوت";
+"party.list.pill.languageFallback"       = "الإنجليزية";
 
 "party.create.navTitle"                  = "إنشاء غرفة حفلات";
 "party.create.submit"                    = "إنشاء الغرفة";

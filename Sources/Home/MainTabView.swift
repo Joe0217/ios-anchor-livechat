@@ -26,6 +26,8 @@ struct MainTabView: View {
     @State private var workPath: NavigationPath = NavigationPath()
     /// H-2 spec §4.1：Messages tab 加 NavigationStack path 支持 push ChatDetailView（对齐 homePath 模式）
     @State private var messagesPath: NavigationPath = NavigationPath()
+    /// E-spec §0.2：Party tab 独立 NavigationPath（消除 v1 借宿 workPath 技术债）
+    @State private var partyPath: NavigationPath = NavigationPath()
     @State private var profilePath: NavigationPath = NavigationPath()
     @State private var isOnSubpage: Bool = false
     @Environment(\.scenePhase) private var scenePhase
@@ -118,8 +120,8 @@ struct MainTabView: View {
         case .home:     return !homePath.isEmpty    // H-0：用户详情页等多入口共享 UserProfileRoute
         case .work:     return !workPath.isEmpty
         case .messages: return !messagesPath.isEmpty   // H-2：私聊页 push 后隐藏 tabbar 避免遮挡输入栏
+        case .party:    return !partyPath.isEmpty   // E-spec：Party tab push PartyRoomView / PartyCreateRoomView 时隐藏 tabbar
         case .profile:  return !profilePath.isEmpty
-        default:        return false
         }
     }
 
@@ -152,6 +154,7 @@ struct MainTabView: View {
             homePath = NavigationPath()
             workPath = NavigationPath()
             messagesPath = NavigationPath()   // H-2：Messages tab 切走时也回根页
+            partyPath = NavigationPath()      // E-spec：Party tab 同款清 path
             profilePath = NavigationPath()
         }
         .task {
@@ -357,6 +360,16 @@ struct MainTabView: View {
             .allowsHitTesting(selection == .messages)
             .accessibilityHidden(selection != .messages)
 
+            // —— Party：永久持有（E-spec §6B v4 反悔 2026-07-10 从 if 销毁重建改 keep-alive）——
+            // 切走再回 tab 保留 PartyListStore state / rooms / scroll offset，对齐 home/messages 模式。
+            // lazy load 由 `isPartyTabActive` env 驱动（对齐 IsHomeTabActiveKey）—— 启动即 mount 但不预热数据，
+            // 用户首次点 Party tab 时才 startInitial。
+            PartyTabRootView(path: $partyPath)
+                .environment(\.isPartyTabActive, selection == .party)
+                .opacity(selection == .party ? 1 : 0)
+                .allowsHitTesting(selection == .party)
+                .accessibilityHidden(selection != .party)
+
             // —— Work / Profile：if 切换销毁重建 ——
             // 用户接受重新加载；不长持 NavigationStack + WorkView/ProfileView 内的资源。
             if selection == .work {
@@ -426,7 +439,7 @@ struct MainTabView: View {
     ///
     /// `liveSettingsLock.isLocked` 拦截触摸（B-spec-开播设置页 §1.4）：
     /// 即使 tabbar 视觉上因子页坍缩为 0 高度，isOnSubpage=true 时它已不响应；`.starting`
-    /// 状态下 LiveSettingsView 仍在栈内（isOnSubpage=true），tabbar 已经拦截，本 lock 兜底
+    /// 状态下 LiveSettingsView 仍在栈内(isOnSubpage=true)，tabbar 已经拦截，本 lock 兜底
     /// 覆盖"子页突然消失"边界（B 档保守）。
     ///
     /// **背景延伸到 home indicator 安全区**（2026-07-09 修）：
@@ -482,15 +495,19 @@ struct MainTabView: View {
     }
 }
 
-/// 4 个 tab 定义（图标取切图，标签走 i18n）。
+/// 5 个 tab 定义（图标取切图，标签走 i18n）。
+///
+/// 声明顺序 = allCases = tabbar 渲染顺序：home / messages / **party** / work / profile
+/// （E-spec §6B v3：party 插第 3 位，居中焦点 tab，对齐主流直播 App"发现/派对"tab 中心突出模式）
 enum MainTab: CaseIterable {
-    case home, messages, work, profile
+    case home, messages, party, work, profile
 
     /// 未选中态切图（浅紫静态色调）
     var icon: String {
         switch self {
         case .home:     return "tabHome"
         case .messages: return "tabMessages"
+        case .party:    return "tabParty"
         case .work:     return "tabWork"
         case .profile:  return "tabProfile"
         }
@@ -501,6 +518,7 @@ enum MainTab: CaseIterable {
         switch self {
         case .home:     return "tabHomeActive"
         case .messages: return "tabMessagesActive"
+        case .party:    return "tabPartyActive"
         case .work:     return "tabWorkActive"
         case .profile:  return "tabProfileActive"
         }
@@ -510,6 +528,7 @@ enum MainTab: CaseIterable {
         switch self {
         case .home:     return L10n.tabHome
         case .messages: return L10n.tabMessages
+        case .party:    return L10n.tabParty
         case .work:     return L10n.tabWork
         case .profile:  return L10n.tabProfile
         }
@@ -531,6 +550,22 @@ extension EnvironmentValues {
     var isHomeTabActive: Bool {
         get { self[IsHomeTabActiveKey.self] }
         set { self[IsHomeTabActiveKey.self] = newValue }
+    }
+}
+
+/// 标记 party tab 是否被用户选中（E-spec §6B v4）。
+///
+/// **设计动机**：party tab 采 ZStack opacity keep-alive → PartyTabRootView 永久 mount，
+/// `.task` / `.onAppear` 不在用户切到 party 时触发（启动即触发）。
+/// 下游 PartyRoomListView 据此判断"party 是否真正被用户访问"做 lazy load —— 避免启动即预热房间列表。
+private struct IsPartyTabActiveKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
+extension EnvironmentValues {
+    var isPartyTabActive: Bool {
+        get { self[IsPartyTabActiveKey.self] }
+        set { self[IsPartyTabActiveKey.self] = newValue }
     }
 }
 

@@ -277,6 +277,42 @@ enum Theme {
         static let matchSubtitle        = Color.white.opacity(0.8)
         /// 页面背景（顶部渐变到 screenBackground）
         static let matchPageBackground  = screenBackground
+
+        // MARK: Party 大厅（E 期设计稿还原 202607091b）
+        /// 页面背景（复用直播间底色）
+        static let partyListBackground   = liveBottomDark
+        /// 房间卡片背景填充
+        static let partyCardFill         = Color(hex: 0x2E1A4F, opacity: 0.75)
+        /// 房间卡片描边
+        static let partyCardBorder       = Color.white.opacity(0.04)
+        /// 房主名字白
+        static let partyRoomName         = Color.white
+        /// 欢迎语灰白
+        static let partyGreeting         = Color.white.opacity(0.55)
+        /// pill Live+Voice 渐变起（粉红）
+        static let partyPillLiveA        = Color(hex: 0xFB4DA6)
+        /// pill Live+Voice 渐变止（紫粉）
+        static let partyPillLiveB        = Color(hex: 0xFF6BE3)
+        /// pill Voice 绿
+        static let partyPillVoice        = Color(hex: 0x2ED573)
+        /// pill 语言 蓝紫
+        static let partyPillLanguage     = Color(hex: 0x6C4CFF)
+        /// pill 文字白
+        static let partyPillText         = Color.white
+        /// Create Room 按钮渐变起（紫粉）
+        static let partyCreateBtnA       = Color(hex: 0xC03AFF)
+        /// Create Room 按钮渐变止（品红）
+        static let partyCreateBtnB       = Color(hex: 0xFF3D8F)
+        /// 火苗数字文字（灰白）
+        static let partyHeatText         = Color.white.opacity(0.85)
+        /// crown +100K badge 底（深紫圆角胶囊）
+        static let partyCrownBadgeBg     = Color(hex: 0x2C1042, opacity: 0.9)
+        /// crown 金黄
+        static let partyCrownGold        = Color(hex: 0xFFD54A)
+        /// crown badge 数字文字
+        static let partyCrownText        = Color(hex: 0xFFD54A)
+        /// tab icon Party inactive 用（tabBarInactive 复用）
+        static let partyTabInactive      = tabBarInactive
     }
 
     // MARK: - 间距

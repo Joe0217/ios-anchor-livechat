@@ -26,11 +26,7 @@ struct POCDebugView: View {
                 } label: {
                     Label("直播开播 Demo", systemImage: "dot.radiowaves.left.and.right")
                 }
-                NavigationLink {
-                    PartyRoomListView()
-                } label: {
-                    Label("派对房 Demo", systemImage: "person.3.fill")
-                }
+                // 派对房入口移除（E-spec §0.2 迁到 Party 主 tab）
             }
 
             callSection
