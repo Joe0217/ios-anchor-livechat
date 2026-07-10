@@ -16,24 +16,18 @@ final class PartyCreateStore: ObservableObject {
 
     // MARK: - 输入字段（用户编辑）
 
-    @Published var roomName: String = "" {
-        didSet {
-            if roomName.count > Self.maxNameLength {
-                roomName = String(roomName.prefix(Self.maxNameLength))
-            }
-        }
-    }
-
-    @Published var roomTagline: String = "" {
-        didSet {
-            if roomTagline.count > Self.maxTaglineLength {
-                roomTagline = String(roomTagline.prefix(Self.maxTaglineLength))
-            }
-        }
-    }
+    /// ⚠️ maxlength 校验由 View 层 `.onChange(of:)` 拦截（`@Published + didSet` 内递归赋值在 SwiftUI 里
+    /// 不生效——setter 走完后 SwiftUI 已 render 一次超长值，用户能看到"超上限仍可继续输入"效果）
+    @Published var roomName: String = ""
+    @Published var roomTagline: String = ""
 
     @Published var selectedLanguage: PartyLanguage?
     @Published var selectedTemplate: PartyRoomTemplate?
+
+    /// 头像上传后的 CDN URL；提交 createRoom 时传给 `roomAvatar` 字段
+    @Published private(set) var uploadedAvatarUrl: String? = nil
+    @Published private(set) var isUploadingAvatar: Bool = false
+    @Published private(set) var uploadError: String = ""
 
     // MARK: - Mode picker 状态
 
@@ -166,13 +160,14 @@ final class PartyCreateStore: ObservableObject {
 
     // MARK: - Submit
 
-    /// 提交条件：房名 + tagline + language + template 都非空/nil
+    /// 提交条件：房名 + tagline + language + template 都非空/nil；头像上传中禁提交
     var canSubmit: Bool {
         !roomName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !roomTagline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && selectedLanguage != nil
             && selectedTemplate != nil
             && !isSubmitting
+            && !isUploadingAvatar
     }
 
     func submit() async {
@@ -188,7 +183,7 @@ final class PartyCreateStore: ObservableObject {
                 greetingMessage: roomTagline.trimmingCharacters(in: .whitespacesAndNewlines),
                 roomLanguage: lang.languageCode,
                 roomTempId: temp.id,
-                roomAvatar: nil
+                roomAvatar: uploadedAvatarUrl
             )
             guard let id = info.id, !id.isEmpty else {
                 submitError = "createErrorNoRoomId"
@@ -210,5 +205,34 @@ final class PartyCreateStore: ObservableObject {
     /// View 消费 createdRoomId 触发 navigation 后清 —— 避免重复触发
     func clearCreatedRoomId() {
         createdRoomId = nil
+    }
+
+    // MARK: - Avatar upload
+
+    /// View 层 PhotosPicker 拿到图片 Data 后调此方法：压缩 → OSS 上传 → 存 uploadedAvatarUrl
+    /// - Note: 阻塞提交按钮直到上传完成，避免用户等待时 tap Create
+    func uploadAvatar(rawData: Data) async {
+        isUploadingAvatar = true
+        uploadError = ""
+        defer { isUploadingAvatar = false }
+        do {
+            let url = try await ImageUploader.shared.upload(rawData: rawData, preset: .avatar)
+            uploadedAvatarUrl = url
+        } catch {
+            uploadError = error.localizedDescription
+        }
+    }
+
+    /// maxlength 拦截（View 层 onChange 调）：超上限 → 截断
+    func trimNameIfNeeded() {
+        if roomName.count > Self.maxNameLength {
+            roomName = String(roomName.prefix(Self.maxNameLength))
+        }
+    }
+
+    func trimTaglineIfNeeded() {
+        if roomTagline.count > Self.maxTaglineLength {
+            roomTagline = String(roomTagline.prefix(Self.maxTaglineLength))
+        }
     }
 }

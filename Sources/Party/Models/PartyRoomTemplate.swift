@@ -16,27 +16,38 @@ struct PartyRoomTemplate: Decodable, Equatable, Identifiable {
     let createRoomLevel: Int?
 
     enum CodingKeys: String, CodingKey {
+        // 主端 iOS 命名
         case id, name, modeType, seatCount, videoSeatCount, voiceSeatCount
         case coverImage
         case createRoomLevel
-        // H5 用户端别名兼容
-        case type          // 后端可能返 type 而不是 modeType
-        case imgUrl        // 后端可能返 imgUrl 而不是 coverImage
+        // ⚠️ 后端真实字段名（2026-07-10 真机 log 校准，见 `.claude/rules/agent-recon-field-names-unverified.md`）
+        case roomTempId        // → id
+        case type              // → modeType
+        case totalSeatNum      // → seatCount
+        case videoNum          // → videoSeatCount
+        case voiceNum          // → voiceSeatCount
+        case imgUrl            // → coverImage
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decode(Int.self, forKey: .id)
+        // id 主字段 `roomTempId`（真机验证），fallback 到 `id`
+        if let v = try? c.decode(Int.self, forKey: .roomTempId) {
+            id = v
+        } else {
+            id = try c.decode(Int.self, forKey: .id)
+        }
         name = try? c.decode(String.self, forKey: .name)
-        // modeType alias 到 type
         modeType = (try? c.decode(Int.self, forKey: .modeType))
                 ?? (try? c.decode(Int.self, forKey: .type))
-        seatCount = try? c.decode(Int.self, forKey: .seatCount)
-        videoSeatCount = try? c.decode(Int.self, forKey: .videoSeatCount)
-        voiceSeatCount = try? c.decode(Int.self, forKey: .voiceSeatCount)
-        // coverImage alias 到 imgUrl
-        coverImage = (try? c.decode(String.self, forKey: .coverImage))
-                  ?? (try? c.decode(String.self, forKey: .imgUrl))
+        seatCount = (try? c.decode(Int.self, forKey: .totalSeatNum))
+                 ?? (try? c.decode(Int.self, forKey: .seatCount))
+        videoSeatCount = (try? c.decode(Int.self, forKey: .videoNum))
+                      ?? (try? c.decode(Int.self, forKey: .videoSeatCount))
+        voiceSeatCount = (try? c.decode(Int.self, forKey: .voiceNum))
+                      ?? (try? c.decode(Int.self, forKey: .voiceSeatCount))
+        coverImage = (try? c.decode(String.self, forKey: .imgUrl))
+                  ?? (try? c.decode(String.self, forKey: .coverImage))
         createRoomLevel = try? c.decode(Int.self, forKey: .createRoomLevel)
     }
 

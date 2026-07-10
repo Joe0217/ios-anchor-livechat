@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 /// 派对房创房页（E-spec v5，2026-07-10 · 对齐 livechat-h5 用户端设计稿）。
 ///
@@ -16,6 +17,8 @@ struct PartyCreateRoomView: View {
     @State private var showModePicker = false
     @State private var showLanguagePicker = false
     @State private var lockedToast: String? = nil
+    @State private var photoPickerItem: PhotosPickerItem? = nil
+    @FocusState private var textFieldFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
     /// 默认构造 —— 提供给 PartyTabRootView 用（Live service 内部构造）
@@ -38,6 +41,9 @@ struct PartyCreateRoomView: View {
     var body: some View {
         ZStack(alignment: .bottom) {
             Theme.Palette.partyListBackground.ignoresSafeArea()
+                // 空白区域点击失焦（对齐 H5 用户端体验）
+                .contentShape(Rectangle())
+                .onTapGesture { textFieldFocused = false }
 
             ScrollView {
                 VStack(spacing: 20) {
@@ -49,10 +55,27 @@ struct PartyCreateRoomView: View {
                     Color.clear.frame(height: 80)   // 底部 Create 按钮预留空间
                 }
                 .padding(.horizontal, 20)
+                // ScrollView 内空白区也失焦
+                .contentShape(Rectangle())
+                .onTapGesture { textFieldFocused = false }
             }
             .scrollIndicators(.hidden)
+            .scrollDismissesKeyboard(.interactively)
 
             createButton.padding(.bottom, 20).padding(.horizontal, 20)
+        }
+        // maxlength 拦截（对齐 rule list-refresh-preserve-items 精神：View 层 onChange 更可靠）
+        .onChange(of: store.roomName) { _ in store.trimNameIfNeeded() }
+        .onChange(of: store.roomTagline) { _ in store.trimTaglineIfNeeded() }
+        // 相册选图 → 上传
+        .onChange(of: photoPickerItem) { item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self) {
+                    await store.uploadAvatar(rawData: data)
+                }
+                photoPickerItem = nil
+            }
         }
         .navigationTitle(L10n.Party.createNavTitle)
         .navigationBarTitleDisplayMode(.inline)
@@ -94,35 +117,53 @@ struct PartyCreateRoomView: View {
     // MARK: - Avatar block
 
     private var avatarBlock: some View {
-        ZStack(alignment: .bottomTrailing) {
-            Circle()
-                .strokeBorder(
-                    LinearGradient(colors: [Theme.Palette.partyCreateAvatarRing1, Theme.Palette.partyCreateAvatarRing2],
-                                   startPoint: .top, endPoint: .bottom),
-                    lineWidth: 3
-                )
-                .background(
-                    Circle().fill(Theme.Palette.partyCardFill)
-                )
-                .frame(width: 120, height: 120)
-                .overlay(
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 44))
-                        .foregroundColor(.white.opacity(0.5))
-                )
+        PhotosPicker(selection: $photoPickerItem, matching: .images) {
+            ZStack(alignment: .bottomTrailing) {
+                Circle()
+                    .strokeBorder(
+                        LinearGradient(colors: [Theme.Palette.partyCreateAvatarRing1, Theme.Palette.partyCreateAvatarRing2],
+                                       startPoint: .top, endPoint: .bottom),
+                        lineWidth: 3
+                    )
+                    .background(
+                        Circle().fill(Theme.Palette.partyCardFill)
+                    )
+                    .frame(width: 120, height: 120)
+                    .overlay(avatarOverlay)
 
-            Circle()
-                .fill(Theme.Palette.partyCreateAvatarCameraBg)
-                .frame(width: 32, height: 32)
-                .overlay(
-                    Image(systemName: "camera.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(.white)
-                )
-                .offset(x: -8, y: -4)
-                .accessibilityLabel("Change avatar")
+                // 相机小图标（tap 整个头像触发 PhotosPicker，icon 仅装饰）
+                Circle()
+                    .fill(Theme.Palette.partyCreateAvatarCameraBg)
+                    .frame(width: 32, height: 32)
+                    .overlay(
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 14))
+                            .foregroundColor(.white)
+                    )
+                    .offset(x: -8, y: -4)
+                    .accessibilityHidden(true)
+            }
         }
-        .accessibilityElement(children: .contain)
+        .buttonStyle(.plain)
+        .accessibilityLabel("Change avatar")
+    }
+
+    @ViewBuilder
+    private var avatarOverlay: some View {
+        if store.isUploadingAvatar {
+            Circle().fill(Color.black.opacity(0.4))
+                .overlay(ProgressView().tint(.white))
+        } else if let url = store.uploadedAvatarUrl, let u = URL(string: url) {
+            CachedAsyncImage(url: u, persistent: true, cdn: (.avatarLarge, .fill)) {
+                Color.clear
+            }
+            .clipShape(Circle())
+            .padding(3)   // 让内容不覆盖 strokeBorder
+        } else {
+            Image(systemName: "person.fill")
+                .font(.system(size: 44))
+                .foregroundColor(.white.opacity(0.5))
+        }
     }
 
     // MARK: - Sections
@@ -131,6 +172,7 @@ struct PartyCreateRoomView: View {
         section(title: L10n.Party.createSectionName) {
             HStack {
                 TextField(L10n.Party.createNamePlaceholder, text: $store.roomName)
+                    .focused($textFieldFocused)
                     .foregroundColor(Theme.Palette.partyCreateInputText)
                     .tint(Theme.Palette.partyCreateChevron)
                 Spacer()
@@ -153,6 +195,7 @@ struct PartyCreateRoomView: View {
         section(title: L10n.Party.createSectionTagline) {
             HStack {
                 TextField(L10n.Party.createTaglinePlaceholder, text: $store.roomTagline)
+                    .focused($textFieldFocused)
                     .foregroundColor(Theme.Palette.partyCreateInputText)
                     .tint(Theme.Palette.partyCreateChevron)
                 Spacer()
