@@ -417,8 +417,7 @@ private struct CallFaceTimeView: View {
             userId: store.current.remoteUserIdString,
             onSubmitSuccess: { showReportSheet = false }
         )
-        // fraction 0.4 遮挡了 title + submit（reasonList 5 项 + description + submit 需更高空间）
-        .presentationDetents([.large])
+        .presentationDetents([.medium])
     }
 
     /// 对齐 H5 index.vue:203-215 askForGift 完整链路：关 sheet + 起 15s 冷却 + 调后端 API + 本地回显。
@@ -905,7 +904,7 @@ private struct VideoLayoutModifier: ViewModifier {
     private let pipWidth: CGFloat = 110
     private let pipHeight: CGFloat = 160
     private let pipTrailing: CGFloat = 16
-    private let pipTop: CGFloat = 60
+    private let pipTop: CGFloat = 100
     private let pipCornerRadius: CGFloat = 14
     private let pipBorderWidth: CGFloat = 1
 
@@ -1417,7 +1416,7 @@ private struct CallMessageScroller: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .center, spacing: 4) {
                 if let level = sender.level {
-                    PublicChatLevelBadge(level: level)
+                    UserLevelBadge(level: level, size: .small)
                 }
                 if sender.isVip {
                     PublicChatVipBadge()
@@ -1668,7 +1667,9 @@ private struct CallChatInputSheet: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // alignment: .bottom 让 HStack 贴 sheet 底部 —— 键盘弹起后 sheet 底与键盘顶贴合，
+        // HStack 自然紧贴键盘上方（原 .top 让 HStack 靠 sheet 顶，与键盘间隔整个 sheet 高度）
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .background(Color(red: 0.08, green: 0.08, blue: 0.09))
         .onAppear { focused = true }
     }
