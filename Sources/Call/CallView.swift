@@ -518,18 +518,13 @@ private struct CallFaceTimeView: View {
                 CallHaptics.impact(.medium)
                 showHangupConfirm = true
             } label: {
-                ZStack {
-                    Circle().fill(Color.black.opacity(0.55))
-                    Image(systemName: "xmark")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.white)
-                }
-                .frame(width: 36, height: 36)
-                .overlay(
-                    Circle().stroke(Color.white.opacity(0.20), lineWidth: 1)
-                )
-                .contentShape(Circle())
-                .accessibilityHidden(true)
+                // 同步直播间关闭图标（liveRoomCloseButton 切图：灰圆 + 白 X 一体）
+                Image("liveRoomCloseButton")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 36, height: 36)
+                    .contentShape(Circle())
+                    .accessibilityHidden(true)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(L10n.callHangupConfirmTitle)
@@ -575,7 +570,7 @@ private struct CallFaceTimeView: View {
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 10)
-        .background(.black.opacity(0.4), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     /// SS 徽章 + 国旗 emoji + 国家码（缺字段时自动降级）
@@ -855,9 +850,11 @@ private struct CallFaceTimeView: View {
                height: pipDragOffset.height + pipDragTranslation.height)
     }
 
-    /// PIP 场景额外 top 偏移：直播私 call 顶部有 liveCallBanner 横幅挤压 → 下移 50pt 避免与 topBar 重叠。
+    /// PIP 场景额外 top 偏移：
+    /// - 直播私 call（.live）：顶部有 liveCallBanner 横幅挤压 → +50pt
+    /// - 独立 1v1（非 .live）：默认再下移 20pt（对齐设计意图，与 topBar 保留视觉呼吸间距）
     private var pipTopExtraForCurrentScene: CGFloat {
-        store.current.frontGameType == .live ? 50 : 0
+        store.current.frontGameType == .live ? 50 : 20
     }
 
     /// 本地相机预览的锁定态 dim overlay（仅 PIP + isCallWaitLocked 时生效；main 全屏时不 dim）
