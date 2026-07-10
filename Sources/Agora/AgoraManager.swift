@@ -586,11 +586,20 @@ extension AgoraManager: AgoraRtcEngineDelegate {
         Task { @MainActor [weak self] in
             guard let self else { return }
             if uid == 0 {
+                let prev = self.localSignalLevel
                 self.localSignalLevel = worst
                 self.networkMonitor?.report(tx: txQuality, rx: rxQuality)
                 self.callNetworkQualityHandler?(worst)
+                if prev != worst {
+                    logger.info("[networkQuality] local worst=\(worst) tx=\(txQuality.rawValue) rx=\(rxQuality.rawValue)")
+                }
             } else {
+                let prev = self.remoteSignalLevel
                 self.remoteSignalLevel = worst
+                // 只在 level 变化时 log（避免每 2s spam）。真机验收：查 Xcode Console filter subsystem=com.anchor.livechat category=Agora
+                if prev != worst {
+                    logger.info("[networkQuality] remote uid=\(uid) worst=\(worst) tx=\(txQuality.rawValue) rx=\(rxQuality.rawValue)")
+                }
             }
         }
     }

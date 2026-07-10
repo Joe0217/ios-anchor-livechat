@@ -229,7 +229,7 @@ private struct CallFaceTimeView: View {
                 }
                 topBar.padding(.top, 12).padding(.horizontal, 16)
                 Spacer()
-                bottomBar.padding(.bottom, 36)
+                bottomBar.padding(.bottom, 12)
             }
             .opacity(isChromeVisible ? 1 : 0)
             .animation(.easeInOut(duration: 0.2), value: isChromeVisible)
@@ -371,7 +371,7 @@ private struct CallFaceTimeView: View {
     @ViewBuilder
     private var chatInputSheet: some View {
         CallChatInputSheet(store: store)
-            .presentationDetents([.height(160)])
+            .presentationDetents([.height(96)])
             .presentationDragIndicator(.visible)
             .preferredColorScheme(.dark)
     }
@@ -389,7 +389,8 @@ private struct CallFaceTimeView: View {
             userId: store.current.remoteUserIdString,
             onSubmitSuccess: { showReportSheet = false }
         )
-        .presentationDetents([.fraction(0.4)])
+        // fraction 0.4 遮挡了 title + submit（reasonList 5 项 + description + submit 需更高空间）
+        .presentationDetents([.large])
     }
 
     /// 对齐 H5 index.vue:203-215 askForGift 完整链路：关 sheet + 起 15s 冷却 + 调后端 API + 本地回显。
@@ -1632,16 +1633,13 @@ private struct CallChatInputSheet: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(spacing: 12) {
-            HStack(alignment: .bottom, spacing: 8) {
-                inputField
-                sendButton
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            Spacer(minLength: 8)
+        HStack(alignment: .bottom, spacing: 8) {
+            inputField
+            sendButton
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color(red: 0.08, green: 0.08, blue: 0.09))
         .onAppear { focused = true }
     }
