@@ -290,11 +290,8 @@ struct MainTabView: View {
             // （否则 app 启动即预热）。下游 LiveTabView 据此判断"home 是否真正被用户访问"，做 lazy load。
             NavigationStack(path: $homePath) {
                 HomeView()
-                    .navigationDestination(for: UserProfileRoute.self) { route in
-                        if case let .userId(uid) = route {
-                            UserProfileView(userId: uid)
-                        }
-                    }
+                    // 详情↔聊天互跳所有 destination(UserProfileRoute + ChatFromProfileRoute) 统一注册
+                    .userProfileAndChatDestinations()
                     // Home 也持有 WorkRoute destination——QuickGoLive 从 Home 内 push LiveSettings 后,
                     // LiveSettings 内嵌 NavigationLink(WorkRoute.wishSetting/.beautySettings) 也要能
                     // 在同一 stack 内 push。**必须与 Work stack 保持 case 一致**，否则从 Home 入口进入
@@ -353,12 +350,9 @@ struct MainTabView: View {
                             ChatDetailContainer(peerYxAccId: pathValue, selfYxAccId: selfYxAccId)
                         }
                     }
-                    // 私聊页 tap 对方头像跳详情页 —— ChatMessageRow 内 NavigationLink(value:) 会走这里
-                    .navigationDestination(for: UserProfileRoute.self) { route in
-                        if case let .userId(uid) = route {
-                            UserProfileView(userId: uid)
-                        }
-                    }
+                    // 详情↔聊天互跳所有 destination(UserProfileRoute + ChatFromProfileRoute) 统一注册
+                    // —— ChatMessageRow 内 NavigationLink(value: UserProfileRoute) 会走 helper 里的 UserProfileRoute case
+                    .userProfileAndChatDestinations()
             }
             .opacity(selection == .messages ? 1 : 0)
             .allowsHitTesting(selection == .messages)
@@ -401,16 +395,13 @@ struct MainTabView: View {
                                 LiveResultView(range: (begin, end), endType: endType, hostPath: $workPath)
                             }
                         }
-                        // 结果页 push 私聊/详情：Work stack 需要 String + UserProfileRoute destination
+                        // 结果页 push 私聊：Work stack String destination（LiveResultView Message 按钮触发）
                         .navigationDestination(for: String.self) { peerYxAccId in
                             let selfYxAccId = SessionStore.shared.user?.yxAccid ?? ""
                             ChatDetailContainer(peerYxAccId: peerYxAccId, selfYxAccId: selfYxAccId)
                         }
-                        .navigationDestination(for: UserProfileRoute.self) { route in
-                            if case let .userId(uid) = route {
-                                UserProfileView(userId: uid)
-                            }
-                        }
+                        // 详情↔聊天互跳所有 destination(UserProfileRoute + ChatFromProfileRoute) 统一注册
+                        .userProfileAndChatDestinations()
                 }
                 .environment(\.liveResultTransition, liveResultTransitionAction)
                 .environment(\.liveTermination, liveTerminationAction)

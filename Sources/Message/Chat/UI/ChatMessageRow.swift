@@ -8,11 +8,22 @@ import SwiftUI
 ///
 /// **视觉**：头像 36 圆形；气泡按 content 类型分发；状态图标（sending/read/failed）气泡右下侧
 struct ChatMessageRow: View {
+    @Environment(\.dismiss) private var dismiss
     let message: ChatMessage
     let myAvatarURL: URL?
     let peerAvatarURL: URL?
     /// 对端业务 userId（非 yxAccId）—— tap 对方头像跳详情页用；nil 时头像不可 tap（对齐 H5 `msgItem.vue` handelClickUserAvatar 逻辑）
     var peerUserId: Int? = nil
+    /// 半屏 popup 模式下 tap 对方头像回调(对齐 H5 msgItem.vue isPopup + emit('showUserCard'))。
+    /// - 非 nil = 半屏模式,tap 头像走 callback → 上层弹 UserCardPopup(不 push navigation)
+    /// - nil = 全屏模式,tap 头像走 NavigationLink(value: UserProfileRoute)
+    var onTapPeerAvatar: ((Int) -> Void)? = nil
+    /// 若本聊天页是从某个用户的详情页 push 出来的，携带该 userId。
+    /// tap 头像时若 userId 匹配 → pop 回详情页，不再 push 新详情，避免详情↔聊天栈无限嵌套。
+    var originProfileUserId: String? = nil
+    /// 当前聊天的 peer yxAccId —— push 详情页时用作 `UserProfileRoute.userIdFromChat` 的第二参数，
+    /// 让被 push 出来的详情页知道自己"上一层是这个私聊"，其「消息」按钮可 pop 而非再 push。
+    var chatPeerYxAccId: String? = nil
     /// 音频播放的 clientMsgId（nil 表示无播放中）
     let playingAudioClientId: String?
     let onTapAudio: (ChatMessage) -> Void
@@ -69,15 +80,34 @@ struct ChatMessageRow: View {
         }
     }
 
-    /// 对方头像:有 peerUserId → NavigationLink 走 UserProfileRoute(祖先 NavigationStack 接管);
-    /// 无 → 静态 AvatarView 不响应 tap(profile 未拉齐场景)。
+    /// 对方头像 4 分支:
+    /// 1. 无 peerUserId → 静态 AvatarView(profile 未拉齐兜底)
+    /// 2. onTapPeerAvatar != nil(半屏模式) → Button + callback(上层弹 UserCardPopup)
+    /// 3. 上一层就是这个用户的详情页(originProfileUserId 匹配) → Button + dismiss(避免栈无限嵌套)
+    /// 4. 其他(全屏模式) → NavigationLink 走 UserProfileRoute（若知道 chatPeerYxAccId 则用 .userIdFromChat 携带来源）
     @ViewBuilder
     private var peerAvatarButton: some View {
         if let uid = peerUserId {
-            NavigationLink(value: UserProfileRoute.userId(String(uid))) {
-                AvatarView(url: peerAvatarURL, size: ChatConstants.listAvatarSize, kind: .user)
+            if let onTap = onTapPeerAvatar {
+                Button { onTap(uid) } label: {
+                    AvatarView(url: peerAvatarURL, size: ChatConstants.listAvatarSize, kind: .user)
+                }
+                .buttonStyle(.plain)
+            } else if String(uid) == originProfileUserId {
+                // 上一层就是这个用户的详情页 → pop 回去（详见 UserProfileRoute.userIdFromChat 说明）
+                Button { dismiss() } label: {
+                    AvatarView(url: peerAvatarURL, size: ChatConstants.listAvatarSize, kind: .user)
+                }
+                .buttonStyle(.plain)
+            } else {
+                let route: UserProfileRoute = chatPeerYxAccId.map {
+                    .userIdFromChat(userId: String(uid), peerYxAccId: $0)
+                } ?? .userId(String(uid))
+                NavigationLink(value: route) {
+                    AvatarView(url: peerAvatarURL, size: ChatConstants.listAvatarSize, kind: .user)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         } else {
             AvatarView(url: peerAvatarURL, size: ChatConstants.listAvatarSize, kind: .user)
         }

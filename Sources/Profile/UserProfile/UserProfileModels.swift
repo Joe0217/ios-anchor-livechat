@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // MARK: - 业务模型
 
@@ -68,6 +69,19 @@ struct BlockUserRequest: Encodable, Equatable {
 /// 本期 H-0 接 .home tab；未来 .profile / .messages 等扩展见 spec §5.3 样板。
 enum UserProfileRoute: Hashable {
     case userId(String)
+    /// 从私聊页 push 出来的详情页，携带该私聊 peer 的 yxAccid。
+    /// 详情页据此判断「发消息」按钮的目标是否就是"上一层"—— 是则 pop 而非 push，避免栈无限嵌套。
+    case userIdFromChat(userId: String, peerYxAccId: String)
+}
+
+/// 从详情页 push 出来的私聊页专用 route（区别于其他入口的裸 `String` push）。
+///
+/// 携带来源详情页的 userId：私聊页据此判断 tap 对方头像的目标是否就是"上一层"—— 是则 pop 而非 push。
+///
+/// 其他入口（MessageList row / LiveResult Message 按钮 / openChatAction）仍走裸 String，行为不变。
+struct ChatFromProfileRoute: Hashable {
+    let peerYxAccId: String
+    let sourceUserId: String
 }
 
 // MARK: - 状态机
@@ -114,3 +128,46 @@ protocol UserProfileServiceProtocol {
 /// **注意**：跨 VM userInfo 字段约定
 /// - `.followRelationChanged`: `["userId": Int, "followFlag": Int(0|1)]`（FollowListVM 既有契约）
 /// - `.blocklistChanged`: 无 userInfo（trial #2 既有，观察方自行 reload）
+
+// MARK: - Destination Helper（详情 ↔ 私聊互跳）
+
+extension View {
+    /// 集中注册详情页 (`UserProfileRoute`) + 从详情页 push 出来的私聊页 (`ChatFromProfileRoute`)
+    /// 两个 destination 到当前 NavigationStack。
+    ///
+    /// **动机**：这两个 route 用于「详情 ↔ 私聊」pop-vs-push 循环去重，任何承载互跳的 stack
+    /// 都必须完整挂两个 destination；分散到多处极易漏挂（历史事故：LiveResultView sheet 内嵌 stack
+    /// 漏挂导致 SwiftUI 抛「no matching navigationDestination」）。集中一处后，未来加 route case
+    /// 只改本 helper —— 编译器强制所有调用方同步生效。
+    ///
+    /// **不包含**：裸 `String`（peerYxAccId → 聊天页）destination —— 各 stack 语义差异较大
+    /// （Messages tab 有 sentinel `__station_list__` 分支），单独维护。
+    ///
+    /// - Parameter hidesSystemNavigationBar: sheet 内嵌 stack 场景传 `true` —— ChatDetailContainer/
+    ///   UserProfileView 用自定义 nav bar，sheet stack 会额外挂 system bar 造成叠加，需显式隐藏。
+    ///   主 stack 场景传 `false`（现有行为保持一致）。
+    @ViewBuilder
+    func userProfileAndChatDestinations(hidesSystemNavigationBar: Bool = false) -> some View {
+        self
+            .navigationDestination(for: UserProfileRoute.self) { route in
+                Group {
+                    switch route {
+                    case .userId(let uid):
+                        UserProfileView(userId: uid)
+                    case .userIdFromChat(let uid, let peer):
+                        UserProfileView(userId: uid, originPeerYxAccId: peer)
+                    }
+                }
+                .toolbar(hidesSystemNavigationBar ? .hidden : .automatic, for: .navigationBar)
+            }
+            .navigationDestination(for: ChatFromProfileRoute.self) { route in
+                let selfYxAccId = SessionStore.shared.user?.yxAccid ?? ""
+                ChatDetailContainer(
+                    peerYxAccId: route.peerYxAccId,
+                    selfYxAccId: selfYxAccId,
+                    originProfileUserId: route.sourceUserId
+                )
+                .toolbar(hidesSystemNavigationBar ? .hidden : .automatic, for: .navigationBar)
+            }
+    }
+}

@@ -20,7 +20,11 @@ struct UserProfileView: View {
     /// 每次触发递增的 token，让 `.task(id:)` 自动取消上一次 sleep（review 建议-5）。
     @State private var reportSuccessToken: Int = 0
 
-    init(userId: String, service: UserProfileServiceProtocol? = nil) {
+    /// 若详情页是从私聊页 push 出来的，携带该私聊 peer 的 yxAccid。
+    /// 「消息」按钮据此判断目标是否就是"上一层"—— 是则 pop 而非 push，避免详情↔聊天栈无限嵌套。
+    private let originPeerYxAccId: String?
+
+    init(userId: String, service: UserProfileServiceProtocol? = nil, originPeerYxAccId: String? = nil) {
         let svc = service ?? UserProfileService.shared
         _vm = StateObject(wrappedValue: UserProfileViewModel(
             userId: userId,
@@ -29,6 +33,7 @@ struct UserProfileView: View {
             networkErrorFallback: L10n.userProfileNetworkError,
             badUserIdFallback: L10n.userProfileBadUserId
         ))
+        self.originPeerYxAccId = originPeerYxAccId
     }
 
     var body: some View {
@@ -73,7 +78,7 @@ struct UserProfileView: View {
                     reportSuccessToken &+= 1
                 }
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.medium, .fraction(0.8)])
         }
         // 菜单弹起
         .confirmationDialog("", isPresented: $showingMenu, titleVisibility: .hidden) {
@@ -257,11 +262,22 @@ struct UserProfileView: View {
     @ViewBuilder
     private func messageButton(detail: UserDetail) -> some View {
         if let yx = detail.yxAccid, !yx.isEmpty {
-            NavigationLink(value: yx) {
-                communicationButtonLabel(systemImage: "bubble.left.fill")
+            if yx == originPeerYxAccId {
+                // 上一层就是这个私聊页 → pop 回去，避免栈无限嵌套（详见 UserProfileRoute.userIdFromChat 说明）
+                Button {
+                    dismiss()
+                } label: {
+                    communicationButtonLabel(systemImage: "bubble.left.fill")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.userProfileActionMessage)
+            } else {
+                NavigationLink(value: ChatFromProfileRoute(peerYxAccId: yx, sourceUserId: vm.userId)) {
+                    communicationButtonLabel(systemImage: "bubble.left.fill")
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.userProfileActionMessage)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L10n.userProfileActionMessage)
         } else {
             communicationButtonLabel(systemImage: "bubble.left.fill")
                 .opacity(Theme.Metric.blocklistButtonDisabledOpacity)

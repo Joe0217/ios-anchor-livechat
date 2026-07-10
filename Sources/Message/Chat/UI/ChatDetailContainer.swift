@@ -17,6 +17,9 @@ struct ChatDetailContainer: View {
     /// 半屏模式的关闭回调（`.sheet` 显示时由 wrapper 传入 `{ isPresented = false }`）；
     /// 全屏 push 场景传 nil，走标准 `dismiss()`
     let onClose: (() -> Void)?
+    /// 若本聊天页是从某个用户的详情页 push 出来的，携带该 userId。
+    /// 消息 row tap 头像时若匹配则 pop 回详情页，避免详情↔聊天栈无限嵌套（详见 ChatFromProfileRoute）。
+    let originProfileUserId: String?
 
     @StateObject private var store: P2PChatStore
     @ObservedObject private var sessionStore: MessageSessionStore = .shared
@@ -38,9 +41,10 @@ struct ChatDetailContainer: View {
 
     private enum MediaLoadState { case idle, loading, loaded, failed }
 
-    init(peerYxAccId: String, selfYxAccId: String, onClose: (() -> Void)? = nil) {
+    init(peerYxAccId: String, selfYxAccId: String, onClose: (() -> Void)? = nil, originProfileUserId: String? = nil) {
         self.peerYxAccId = peerYxAccId
         self.onClose = onClose
+        self.originProfileUserId = originProfileUserId
         let adapter = NIMChatAdapter(peerYxAccId: peerYxAccId, selfYxAccId: selfYxAccId)
         // Batch 6.2a：预组装 4 tip L10n 文案传给 P2PChatStore → 让 store 内部结算路径能 append stimulate tip
         let tipTexts = ReplyPointsTipTexts(
@@ -69,6 +73,7 @@ struct ChatDetailContainer: View {
             privateItems: privateCache,
             privateItemsLoading: privateLoadState == .loading || privateLoadState == .idle,
             peerUserId: peerUserId,
+            originProfileUserId: originProfileUserId,
             onClose: onClose,
             chatType: chatType,
             canCall: callAuthBridge.canCall,
@@ -87,7 +92,7 @@ struct ChatDetailContainer: View {
             if chatType == .regular {
                 await replyPointsStore.beginSession(
                     peer: peerYxAccId,
-                    initialLastUserMsg: nil,   // TODO Batch 6.2：从 P2PChatStore.messagesData 找 last incoming
+                    initialLastUserMsg: nil,   // TODO Batch 6.2:从 P2PChatStore.messagesData 找 last incoming
                     tipTexts: ReplyPointsTipTexts(
                         guide: L10n.chatGuideTip,
                         stimulate: L10n.chatStimulateTip,
@@ -95,11 +100,34 @@ struct ChatDetailContainer: View {
                         replyRemind: L10n.chatReplyRemindTip
                     )
                 )
+
+                // 校验历史私密消息 lockStatus(对齐 H5 chat/index.vue checkPrivateInfo)
+                // P2PChatStore.load 已完成拉历史(与 .task 顺序:store 是 @StateObject,其 .task 内 load 与本 .task 并发,
+                // 但 checkPrivateMessagesLockStatus 内会等 store.state == .loaded 再取 privateIds,若尚未 load 完就返 [] 短路)。
+                await checkPrivateMessagesLockStatus()
             }
         }
         // 离开页面清 session 内 sticky 字段（对齐 spec §Q7 "pop 即清"）
         .onDisappear {
             replyPointsStore.endSession(peer: peerYxAccId)
+        }
+    }
+
+    // MARK: - checkPrivateInfo 校验私密消息锁定态
+
+    /// 收集当前 store 里所有 private 消息的 privateId → 打网校验 lockStatus → 回写。
+    /// 对齐 H5 chat/index.vue checkPrivateInfo():180-206。
+    /// 空 privateIds / mine.userId 缺失 / 接口失败 → 静默返(不影响主流程,lockStatus 保持 .unknown 兜底态)。
+    private func checkPrivateMessagesLockStatus() async {
+        let ids = store.currentPrivateMessageIds
+        guard !ids.isEmpty else { return }
+        guard let uid = anchorInfoStore.mine?.userId ?? sessionAuthStore.user?.userId else { return }
+        do {
+            let statuses = try await CheckPrivateInfoHTTPService.shared
+                .checkPrivateInfo(userId: String(uid), privateIds: ids)
+            store.applyPrivateLockStatuses(statuses)
+        } catch {
+            // 静默失败:lockStatus 保持 .unknown,UI 无锁 icon 兜底
         }
     }
 

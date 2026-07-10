@@ -36,6 +36,10 @@ struct ChatDetailView: View {
     /// 对端业务 userId（H-2 通话入口用；nil = ConversationProfile 未拉齐或后端未返；tap 通话按钮时降级 toast）
     let peerUserId: Int?
 
+    /// 若本聊天页是从某个用户的详情页 push 出来的，携带该 userId。
+    /// 消息 row 里 tap 头像时若 userId 匹配 → pop 回详情页，避免详情↔聊天栈无限嵌套（详见 ChatFromProfileRoute）。
+    let originProfileUserId: String?
+
     /// 半屏 sheet 模式的关闭回调（nil = 走全屏 `dismiss()`；非 nil = wrapper 传入的 `{ isPresented = false }`）。
     /// nav bar 左侧图标据此切换：`chevron.left`（back）/ `xmark`（close）。
     let onClose: (() -> Void)?
@@ -96,6 +100,10 @@ struct ChatDetailView: View {
     @State private var showHistoryExpiredToast: Bool = false
     /// 防重放:load() 首次完成时判定一次,后续状态变化不再触发
     @State private var didCheckHistoryExpired: Bool = false
+    /// 半屏模式(直播间/派对房拉起私聊页)tap 头像时弹的 UserCard 目标 userId;nil = 不显示
+    @State private var userCardUserId: String? = nil
+    /// 半屏模式派生:onClose 非 nil 表示 wrapper 用 sheet 承载 ChatDetailContainer(拉起半屏)
+    private var isPopupMode: Bool { onClose != nil }
     /// 键盘管理（H-2 键盘管理精细化）：
     /// - `.scrollDismissesKeyboard(.interactively)` — 用户拖列表时键盘自然滑走（iM 惯例）
     /// - 键盘弹出 → 自动滚到底部（`onChange(of: isInputFocused)` 处理）
@@ -272,6 +280,19 @@ struct ChatDetailView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: callToastShow)
+        // 半屏模式下 tap 对方头像 → UserCardPopup(对齐 H5 msgItem.vue isPopup + emit('showUserCard'))
+        .overlay {
+            if let uid = userCardUserId {
+                UserCardPopup(
+                    userId: uid,
+                    isPresented: Binding(
+                        get: { userCardUserId != nil },
+                        set: { if !$0 { userCardUserId = nil } }
+                    )
+                )
+                .zIndex(150)   // 高于 rewards records (100) / call toast, 低于 diamond receive (200) / intro (300)
+            }
+        }
         // 云端历史 fallback 也返空 + 会话老会话 → toast 提示(对齐 H5 loadHistoryMsgs 'empty' + 'chat history expired')
         .overlay(alignment: .top) {
             if showHistoryExpiredToast {
@@ -401,9 +422,13 @@ struct ChatDetailView: View {
     /// 按 `stableSortKey = timestamp * 100 + tieBreaker` 混合排序（对齐 H5 chatStore tip 混入 messagesData）
     /// - tieBreaker：真实消息=0；guide=1 / replyPointGuide=2 / replyRemind=3 / stimulate=4
     /// - 让 tip 出现在**同时间戳**真实消息后（同 ts 但 tieBreaker 更大 → 排序靠后）
+    /// - weakTxtType 103/104 系统提示按 type 去重(H5 chat/index.vue weakTextList 语义:每种 type 只保留最新一条)
     private func mergedItems(_ messages: [ChatMessage]) -> [ChatMessage] {
+        // Step 1: weakTxtType 系统提示按 type 去重 —— H5 每种只显示最新 1 条
+        let deduped = Self.dedupeSystemTips(messages)
+
         let tips = replyPointsStore.tips(for: store.peerYxAccId)
-        guard !tips.isEmpty else { return messages }
+        guard !tips.isEmpty else { return deduped }
 
         let tipMessages: [ChatMessage] = tips.map { tip in
             ChatMessage(
@@ -417,8 +442,41 @@ struct ChatDetailView: View {
                 isOutgoing: false
             )
         }
-        return (messages + tipMessages).sorted { lhs, rhs in
+        return (deduped + tipMessages).sorted { lhs, rhs in
             Self.stableSortKey(lhs) < Self.stableSortKey(rhs)
+        }
+    }
+
+    /// 按 weakTxtType 分组保留最新 1 条(对齐 H5 chat/index.vue weakTextList computed:
+    /// 103/104 各只显示最新一条,其余系统提示原样保留)
+    private static func dedupeSystemTips(_ messages: [ChatMessage]) -> [ChatMessage] {
+        // 找出每个 weakType 最新一条消息的 id;非该 id 的同 type systemTip 一律丢弃。
+        // 其他消息(text/image/video/audio/systemGift/missedCall/system/chatTip/private*)不受影响。
+        var latestByType: [Int: (id: String, timestamp: Int64)] = [:]
+        for msg in messages {
+            if case .systemTip(_, let weakType) = msg.content {
+                if let prev = latestByType[weakType] {
+                    if msg.timestamp > prev.timestamp {
+                        latestByType[weakType] = (msg.id, msg.timestamp)
+                    }
+                } else {
+                    latestByType[weakType] = (msg.id, msg.timestamp)
+                }
+            }
+        }
+        // 无 systemTip 或每种 type 只有 1 条 → 直接返回(短路,避免不必要构造)
+        guard !latestByType.isEmpty,
+              messages.filter({
+                  if case .systemTip = $0.content { return true }
+                  return false
+              }).count > latestByType.count else {
+            return messages
+        }
+        return messages.filter { msg in
+            if case .systemTip(_, let weakType) = msg.content {
+                return latestByType[weakType]?.id == msg.id
+            }
+            return true
         }
     }
 
@@ -504,6 +562,11 @@ struct ChatDetailView: View {
                             myAvatarURL: myAvatarURL,
                             peerAvatarURL: peerAvatarURL,
                             peerUserId: peerUserId,
+                            // 半屏模式下 tap 头像走 UserCardPopup;全屏下走 NavigationLink(callback = nil)
+                            onTapPeerAvatar: isPopupMode ? { uid in userCardUserId = String(uid) } : nil,
+                            // 详情↔聊天栈无限嵌套修复：让 row 感知来源 + 携带 chatPeerYxAccId 构造反向 route
+                            originProfileUserId: isPopupMode ? nil : originProfileUserId,
+                            chatPeerYxAccId: isPopupMode ? nil : store.peerYxAccId,
                             playingAudioClientId: audioPlayer.playingKey,
                             onTapAudio: handleTapAudio,
                             onTapVideo: handleTapVideo,
@@ -745,7 +808,8 @@ struct ChatDetailView: View {
             return
         }
         guard let (url, dur) = voiceRecorder.stop() else {
-            // <1s 或异常，无需发送
+            // <1s 或异常 → toast 提示(对齐 H5 recording.vue showToast('Recording time is too short'))
+            showCallToast(L10n.chatVoiceTooShort)
             return
         }
         Task { await store.sendAudio(localFilePath: url.path, dur: dur, previewURL: url) }
@@ -758,8 +822,22 @@ struct ChatDetailView: View {
     }
 
     private func handleTapVideo(_ msg: ChatMessage) {
-        guard case .video(let url, _, _) = msg.content else { return }
-        galleryContext = MediaGalleryContext(urls: [url.absoluteString], startIndex: 0)
+        switch msg.content {
+        case .video(let url, _, _):
+            galleryContext = MediaGalleryContext(urls: [url.absoluteString], startIndex: 0)
+        case .privateVideo(let url, _, _, _):
+            // 私密视频 URL 需 STS 签名后才能播 —— 对齐 H5 `msgItem.vue:129-154 getFinalUrl`。
+            // 直链不带签名会 403(OSS 需 authorizationParam)。失败静默(用户可以再点)。
+            Task {
+                let signed = try? await GiftMessageService.shared.decryptVideoUrl(originalUrl: url.absoluteString)
+                let final = signed ?? url.absoluteString
+                await MainActor.run {
+                    galleryContext = MediaGalleryContext(urls: [final], startIndex: 0)
+                }
+            }
+        default:
+            return
+        }
     }
 
     private func handleTapImage(_ msg: ChatMessage) {
@@ -871,8 +949,8 @@ private struct ChatIntroOverlay: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            // 透明 tap-catcher —— H5 用 pointer-events: auto 不 dim 底层内容
-            Color.black.opacity(0.001)
+            // 半透明黑遮罩 —— 突出高亮 tooltip 层次;整层可 tap 推进
+            Color.black.opacity(0.5)
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onTap)

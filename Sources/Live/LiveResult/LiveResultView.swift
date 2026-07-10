@@ -365,11 +365,9 @@ struct LiveResultView: View {
                 ChatDetailContainer(peerYxAccId: peerYxAccId, selfYxAccId: selfYxAccId)
                     .toolbar(.hidden, for: .navigationBar)
             }
-            .navigationDestination(for: UserProfileRoute.self) { route in
-                if case let .userId(uid) = route {
-                    UserProfileView(userId: uid)
-                }
-            }
+            // 详情↔聊天互跳所有 destination(UserProfileRoute + ChatFromProfileRoute) 统一注册；
+            // sheet 场景须显式隐藏 system nav bar（内部 view 自带自定义 navBar，否则叠加）
+            .userProfileAndChatDestinations(hidesSystemNavigationBar: true)
             .preferredColorScheme(.dark)
         }
     }
@@ -406,12 +404,8 @@ private struct TopGifterCell: View {
         ZStack(alignment: .topTrailing) {
             VStack(spacing: 6) {
                 Button(action: onAvatarTap) {
-                    CachedAsyncImage(url: URL(string: item.icon ?? ""), contentMode: .fill, persistent: false) {
-                        Color.gray.opacity(0.3)
-                    }
-                    .frame(width: 50, height: 50)
-                    .clipShape(Circle())
-                    .contentShape(Circle())
+                    AvatarView(urlString: item.icon, size: 50, kind: .user, persistent: false)
+                        .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
                 .padding(.top, 14)
@@ -463,12 +457,8 @@ private struct PrivateCallRow: View {
     var body: some View {
         HStack(spacing: 8) {
             Button(action: onAvatarTap) {
-                CachedAsyncImage(url: URL(string: item.icon ?? ""), contentMode: .fill, persistent: false) {
-                    Color.gray.opacity(0.3)
-                }
-                .frame(width: 50, height: 50)
-                .clipShape(Circle())
-                .contentShape(Circle())
+                AvatarView(urlString: item.icon, size: 50, kind: .user, persistent: false)
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(item.nickname ?? "")
@@ -524,12 +514,8 @@ private struct GifterFullRow: View {
     var body: some View {
         HStack(spacing: 8) {
             Button(action: onAvatarTap) {
-                CachedAsyncImage(url: URL(string: item.icon ?? ""), contentMode: .fill, persistent: false) {
-                    Color.gray.opacity(0.3)
-                }
-                .frame(width: 50, height: 50)
-                .clipShape(Circle())
-                .contentShape(Circle())
+                AvatarView(urlString: item.icon, size: 50, kind: .user, persistent: false)
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(item.nickname ?? "")
