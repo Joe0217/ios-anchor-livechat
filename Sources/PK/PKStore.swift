@@ -47,6 +47,12 @@ final class PKStore: ObservableObject {
     /// 是否处于搜索态（影响 UI 标题 + load more 参数）。
     @Published private(set) var isSearching: Bool = false
 
+    /// PK 邀请默认时长（秒）—— 对齐 H5 `pkStore.pkSettings.defaultDuration`。
+    /// - 由 [PKDurationPickerSheet] setting 图标弹窗 4 选项（3/5/10/15 min）修改；
+    /// - `inviteByAnchorId` 从此字段取默认时长；
+    /// - 会话内存态（不做 UserDefaults 持久化，对齐 H5 store 内存 setting 行为）
+    @Published var defaultDuration: Int = 300
+
     /// 三个倒计时的剩余秒（UI 直接绑定显示）。
     @Published private(set) var inviteRemainingSeconds: Int = 0
     @Published private(set) var pkRemainingSeconds: Int = 0
@@ -396,6 +402,7 @@ final class PKStore: ObservableObject {
             enterInPK(from: resp,
                       oppositeUserId: info.userId,
                       oppositeNickname: info.nickname,
+                      oppositeAvatar: info.avatar,
                       oppositeChannel: info.agoraChannelId,
                       duration: info.pkDuration,
                       pkType: .invite)
@@ -640,6 +647,7 @@ final class PKStore: ObservableObject {
             enterInPK(from: resp,
                       oppositeUserId: oppositeId,
                       oppositeNickname: ack.nickname ?? item.nickname,
+                      oppositeAvatar: item.avatar,
                       oppositeChannel: ack.agoraChannelId,
                       duration: duration,
                       pkType: .invite)
@@ -673,6 +681,9 @@ final class PKStore: ObservableObject {
                                        top3Users: scores?.top3Users,
                                        oppositeTop3Users: scores?.oppositeTop3Users)
             }
+            // v22（2026-07-11）：本地 append PK 结果公屏消息（对齐 H5 sendPkEndNotice）
+            appendPKResultToPublicChat(result: bundle.result ?? 0,
+                                        opponentNickname: bundle.nickname ?? ctx?.oppositeNickname)
             enterPunishing(seconds: 120)
         case 9:
             // 对方结束 / 中断；仅结束 PK，本端不下播
@@ -711,6 +722,7 @@ final class PKStore: ObservableObject {
             enterInPK(from: resp,
                       oppositeUserId: oppositeId,
                       oppositeNickname: bundle.nickname,
+                      oppositeAvatar: bundle.avatar,
                       oppositeChannel: bundle.agoraChannelId,
                       duration: duration,
                       pkType: .random)
@@ -874,7 +886,20 @@ final class PKStore: ObservableObject {
         logger.info("PK transition \(self.state.rawValue) → \(next.rawValue)")
         state = next
         updateCallState(for: next)
+        updatePrivateCallVisibility(for: next)
         observer?.pkStore(self, didChange: next)
+    }
+
+    /// PK 期间强制关闭 + 隐藏私 call 开关；PK 结束还原（对齐 H5 liveRoom.vue:466 shouldShowPrivateCall）。
+    /// **可见规则**：仅 `.idle` / `.failed` 显示；其他所有态（matching/inviting/invited/starting/inPK/punishing/endingPK）隐藏。
+    /// endingPK 也隐藏——瞬时态很快切到 idle/failed 会自然恢复；隐藏期间用户看到的是稳定关态。
+    private func updatePrivateCallVisibility(for next: PKStateMain) {
+        switch next {
+        case .idle, .failed:
+            liveStore?.resumePrivateCallAfterPK()
+        case .matching, .inviting, .invited, .starting, .inPK, .punishing, .endingPK:
+            liveStore?.pausePrivateCallForPK()
+        }
     }
 
     private func updateCallState(for next: PKStateMain) {
@@ -895,6 +920,7 @@ final class PKStore: ObservableObject {
     private func enterInPK(from resp: PKJoinResponse,
                            oppositeUserId: Int,
                            oppositeNickname: String?,
+                           oppositeAvatar: String?,
                            oppositeChannel: String?,
                            duration: Int,
                            pkType: PKType) {
@@ -903,6 +929,7 @@ final class PKStore: ObservableObject {
         ctx = PKContext(pkId: resp.pkId,
                         oppositeUserId: oppositeUserId,
                         oppositeNickname: oppositeNickname ?? resp.nickname,
+                        oppositeAvatar: oppositeAvatar ?? resp.avatar,
                         oppositeChannel: oppositeChannel,
                         oppositeYxAccId: resp.yxAccId,
                         duration: duration,
@@ -933,6 +960,41 @@ final class PKStore: ObservableObject {
         Task { [weak self] in
             await self?.enterPKInviteSwitchSnapshotAndDisable()
         }
+        // v22（2026-07-11）：本地 append "PK is on!" 公屏消息（对齐 H5 startPreparingCountdown 结束广播）
+        appendPKStartToPublicChat()
+    }
+
+    /// v22（2026-07-11）：主态本地 append PK 开始/结果公屏消息（对齐 H5 sendLiveRoomNotice + 本地 unshift）
+    /// H5 主播端不依赖收到自己发送的 attachType -9 广播，本地 unshift 到 liveChatRecords；iOS 侧同款处理。
+    private func appendPKStartToPublicChat() {
+        guard let store = nim?.messagesStore else { return }
+        store.append(PublicChatMessage(
+            text: L10n.pkNotificationStart,
+            isSystem: false,
+            senderNickname: nil, senderAvatar: nil,
+            userLevel: nil, isHost: false, isVip: false,
+            messageType: .pkNotify
+        ))
+    }
+
+    private func appendPKResultToPublicChat(result: Int, opponentNickname: String?) {
+        guard let store = nim?.messagesStore else { return }
+        let myNick = SessionStore.shared.user?.nickname ?? "Anchor"
+        let oppNick = opponentNickname ?? "Opponent"
+        let text: String
+        switch result {
+        case 1: text = L10n.pkResultWinFormat(myNick, oppNick)
+        case 2: text = L10n.pkResultLoseFormat(myNick, oppNick)
+        case 3: text = L10n.pkResultDrawFormat(myNick, oppNick)
+        default: return
+        }
+        store.append(PublicChatMessage(
+            text: text,
+            isSystem: false,
+            senderNickname: nil, senderAvatar: nil,
+            userLevel: nil, isHost: false, isVip: false,
+            messageType: .pkNotify
+        ))
     }
 
     private func enterPunishing(seconds: Int) {

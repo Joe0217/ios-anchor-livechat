@@ -570,6 +570,7 @@
 // C-4 Wave4 UI 布局对齐
 "call.action.askForGift"     = "اطلب هدية";
 "call.askForGift.rejected"   = "رفض المستخدم طلب الهدية";
+"pk.pkNotificationStart"     = "البطولة PK قيد التشغيل! أرسل الهدايا لدعم المُراسل!🎁";
 "pk.pkResultWin"             = "🎉 فاز %@ على %@ في مباراة PK هذه";
 "pk.pkResultLose"            = "😭 خسر %@ للأسف أمام %@ في هذه المباراة";
 "pk.pkResultDraw"            = "تعادل %@ و %@ في مباراة PK هذه";

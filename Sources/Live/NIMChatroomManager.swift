@@ -635,37 +635,9 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                 }
 
                 switch at {
-                case .pkStatusBundle:
-                    // v22（2026-07-10）：attachType 100 pkStatus=8 时本地生成 PK 结果消息 append 公屏
-                    // 对齐 H5 livePk.js sendPkEndNotice（本端 endPk 后主动生成 3 分支文案 + unshift）
-                    // iOS 侧改由本地生成，无需 sendCustomMsg（对面主播端也会各自收到 100 并本地生成）
-                    let pkStatus = Self.readInt(data["pkStatus"]) ?? 0
-                    if pkStatus == 8 {
-                        let result = Self.readInt(data["result"]) ?? 0
-                        let opponentNick = (data["nickname"] as? String)
-                            ?? (data["opponentNickname"] as? String)
-                            ?? "Opponent"
-                        let myNick = SessionStore.shared.user?.nickname ?? "Anchor"
-                        let resultText: String
-                        switch result {
-                        case 1: resultText = L10n.pkResultWinFormat(myNick, opponentNick)
-                        case 2: resultText = L10n.pkResultLoseFormat(myNick, opponentNick)
-                        case 3: resultText = L10n.pkResultDrawFormat(myNick, opponentNick)
-                        default: resultText = ""
-                        }
-                        if !resultText.isEmpty {
-                            AppLogger.im.info("🥊 [Chatroom] PK end result=\(result, privacy: .public) msg='\(resultText, privacy: .public)'")
-                            items.append(PublicChatMessage(
-                                text: resultText,
-                                isSystem: false,
-                                senderNickname: nil, senderAvatar: nil,
-                                userLevel: nil, isHost: false, isVip: false,
-                                messageType: .pkNotify
-                            ))
-                        }
-                    }
-                    continue
-                case .pkInvite, .pkScoreUpdate, .pkInviteAck, .pkMuteBroadcast:
+                case .pkInvite, .pkScoreUpdate, .pkInviteAck, .pkStatusBundle, .pkMuteBroadcast:
+                    // v22（2026-07-11）：PK 开始 / 结果公屏消息改由 PKStore 本地 append
+                    // （对齐 H5 sendLiveRoomNotice + 本地 unshift 语义，避免依赖聊天室广播 echo）
                     continue
                 case .liveGiftRankUpdate, .rankUpdateOnly:
                     // Top2 已同步，不污染公屏

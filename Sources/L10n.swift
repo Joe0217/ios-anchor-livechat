@@ -1092,6 +1092,9 @@ enum L10n {
     // v22（2026-07-10）：主播索取礼物被用户拒绝的 toast
     static var callAskForGiftRejected: String { localize("call.askForGift.rejected", comment: "主播索取礼物被用户拒绝时的 toast 提示") }
 
+    // v22（2026-07-11）：PK 开始公屏消息（对齐 H5 preparingCountdown 结束后 sendLiveRoomNotice）
+    static var pkNotificationStart: String { localize("pk.pkNotificationStart", comment: "PK 开始公屏文案") }
+
     // v22（2026-07-10）：PK 结果公屏消息（对齐 H5 sendPkEndNotice 3 分支文案）
     static func pkResultWinFormat(_ my: String, _ opponent: String) -> String {
         String(format: localize("pk.pkResultWin", comment: "PK 胜利公屏文案"), my, opponent)

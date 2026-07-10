@@ -526,7 +526,8 @@
 // C-4 Wave4 UI 布局对齐
 "call.action.askForGift"     = "Ask for Gift";
 "call.askForGift.rejected"   = "The user declined your gift request";
-// v22 PK 结果公屏（对齐 H5 pk notification succeed/failed/draw）
+// v22 PK 公屏（对齐 H5 pk notification start/succeed/failed/draw）
+"pk.pkNotificationStart"     = "PK is on! Send gifts to support the broadcaster!🎁";
 "pk.pkResultWin"             = "🎉 %@ defeated %@ in this PK match";
 "pk.pkResultLose"            = "😭 %@ regrettably lost to %@ in this PK";
 "pk.pkResultDraw"            = "%@ and %@ tied in this PK";
