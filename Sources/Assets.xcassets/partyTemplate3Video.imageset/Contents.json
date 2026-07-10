@@ -1,0 +1,8 @@
+{
+  "images" : [
+    { "filename" : "partyTemplate3Video.png", "idiom" : "universal", "scale" : "1x" },
+    { "filename" : "partyTemplate3Video@2x.png", "idiom" : "universal", "scale" : "2x" },
+    { "filename" : "partyTemplate3Video@3x.png", "idiom" : "universal", "scale" : "3x" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}

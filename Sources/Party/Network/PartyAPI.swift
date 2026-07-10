@@ -74,13 +74,29 @@ enum PartyAPI {
     // MARK: - room
 
     /// 房间模板列表（创建房间前选模板用）。
-    /// `type` 参数语义待 implement 期对照接口返回；MVP 传 0 兜底。
+    ///
+    /// **对齐 H5 用户端 `apiGetRoomTempList({type})`**（`livechat-h5/src/api/party/index.ts:36`）：
+    /// - `type: 1` = Voice（纯语聊）
+    /// - `type: 2` = Live+Voice（视频+语聊混合）
+    /// - `type: 0` = MVP 兜底（当调用方未明示 mode 时用）
     static func roomTempList(type: Int = 0) async throws -> [PartyRoomTemplate] {
         let data = try await PartyAPIClient.shared.post(
             "\(pathPrefix)/room/getRoomTempList",
             body: ["type": type]
         )
         return try decodeArrayOrEmpty(data, as: PartyRoomTemplate.self)
+    }
+
+    /// 派对房支持语言列表（创建房间语言 picker 用）。
+    ///
+    /// **对齐 H5 用户端 `apiGetLanguageList()`**（`livechat-h5/src/api/party/index.ts:33`）：
+    /// 无参 POST；response 是 `[{languageName, languageCode}]`。
+    static func languageList() async throws -> [PartyLanguage] {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/language/list",
+            body: [:]
+        )
+        return try decodeArrayOrEmpty(data, as: PartyLanguage.self)
     }
 
     /// 创建房间。MVP 仅传 roomName + roomTempId；其他可选字段 F 期补 UI。

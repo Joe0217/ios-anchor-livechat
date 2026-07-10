@@ -41,7 +41,14 @@ struct PartyTabRootView: View {
             .navigationDestination(for: PartyRoute.self) { route in
                 switch route {
                 case .create:
-                    PartyCreateRoomView()
+                    // 提交成功后 replace path 到 PartyRoomView（不留 create 页在栈上，用户 back 直接回大厅）
+                    // 段位来源：AnchorInfoStore.shared.mine?.level（对齐 H5 create.vue userStore.mineInfo.userLevel）
+                    PartyCreateRoomView(userLevel: AnchorInfoStore.shared.mine?.level ?? 0, onCreated: { roomId in
+                        // v5 F 期扩展路径预留：H5 是 router.replace('/party') + joinPartyRoom
+                        // MVP：pop create 页 + push PartyRoomView（用户能看到进入房间）
+                        path.removeLast()
+                        path.append(PartyRoute.room(id: roomId, password: nil))
+                    })
                 case .room(let id, _):
                     PartyRoomView(roomId: id)
                 }

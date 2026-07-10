@@ -313,6 +313,35 @@ enum Theme {
         static let partyCrownText        = Color(hex: 0xFFD54A)
         /// tab icon Party inactive 用（tabBarInactive 复用）
         static let partyTabInactive      = tabBarInactive
+
+        // MARK: Party 创房页（E-spec v5，2026-07-10）
+        /// 创房页 section 标题紫（"Room name" / "Room Tagline" 等）
+        static let partyCreateSectionTitle = Color(hex: 0x9B7BE2)
+        /// 输入框背景
+        static let partyCreateInputFill    = Color(hex: 0x2E1A4F, opacity: 0.6)
+        /// 输入框描边
+        static let partyCreateInputBorder  = Color.white.opacity(0.08)
+        /// 输入框主文本白
+        static let partyCreateInputText    = Color.white
+        /// 输入框字数计数灰紫
+        static let partyCreateInputCounter = Color(hex: 0x9B7BE2)
+        /// picker chevron 紫粉
+        static let partyCreateChevron      = Color(hex: 0xC060FF)
+        /// 头像圆环渐变（从 Palette 头像 avatarRing3 借用）
+        static let partyCreateAvatarRing1  = Color(hex: 0xFFC542)
+        static let partyCreateAvatarRing2  = Color(hex: 0xFF5C39)
+        /// 头像相机小图标背景
+        static let partyCreateAvatarCameraBg = Color(hex: 0xFF9438)
+        /// mode picker sheet 顶部 tab 选中态渐变（对齐 H5 create.vue linear-gradient 90deg #FF9438 #FF0090 #FE00DE）
+        static let partyCreateModeTabA     = Color(hex: 0xFF9438)
+        static let partyCreateModeTabB     = Color(hex: 0xFF0090)
+        static let partyCreateModeTabC     = Color(hex: 0xFE00DE)
+        /// mode picker sheet 顶部 tab 未选中文字
+        static let partyCreateModeTabInactive = Color.white.opacity(0.5)
+        /// mode picker 模板卡片选中态描边
+        static let partyCreateTempSelected = Color(hex: 0xFB0FEB)
+        /// mode picker 卡片底色（Lock/Unlock 都用）
+        static let partyCreateTempFill     = Color(hex: 0x1F1235)
     }
 
     // MARK: - 间距

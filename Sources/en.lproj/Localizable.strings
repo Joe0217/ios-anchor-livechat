@@ -170,6 +170,8 @@
 "mediaPreview.image"           = "Image";
 "mediaPreview.video"           = "Video";
 "mediaPreview.positionFormat"  = "%d of %d";
+"mediaPreview.image.loadFailed" = "Failed to load image";
+"mediaPreview.image.retry"      = "Retry";
 
 // MARK: - Settings 设置页
 "settings.title"               = "Settings";
@@ -416,6 +418,24 @@
 "liveRoom.roulette.a11y"          = "Interactive wheel";
 "liveRoom.comingSoon.roulette"    = "Interactive wheel coming soon";
 
+/* Roulette intro popup & setting sheet (aligns H5 wheel.* + live.* namespace) */
+"liveRoom.roulette.intro.card1.title" = "Spin the Wheel";
+"liveRoom.roulette.intro.card1.body"  = "Viewers may spin the prize wheel by consuming diamonds. More spins lead to higher audience engagement and revenue.";
+"liveRoom.roulette.intro.card2.title" = "Set Prizes";
+"liveRoom.roulette.intro.card2.body"  = "Streamers can set up exclusive interactive prizes for themselves and fans.";
+"liveRoom.roulette.intro.card3.title" = "Enable Anytime";
+"liveRoom.roulette.intro.card3.body"  = "Enable or disable this feature at any time in the live stream settings.";
+"liveRoom.roulette.intro.next"        = "Next";
+"liveRoom.roulette.intro.start"       = "Start";
+"liveRoom.roulette.setting.title"     = "Set Interaction Wheel";
+"liveRoom.roulette.enable"            = "Enable Wheel";
+"liveRoom.roulette.price"             = "Set Spin Price";
+"liveRoom.roulette.sectors"           = "Set Interaction Items";
+"liveRoom.roulette.sectors.empty"     = "Pending edit";
+"liveRoom.roulette.edit"              = "Edit Wheel";
+"liveRoom.roulette.rules"             = "Game Rules";
+"liveRoom.roulette.errorRetry"        = "Failed to load. Please try again.";
+
 /* LiveRoom H5 interaction alignment (2026-07-06 iteration 2) */
 "liveRoom.tool.message"           = "Messages";
 "liveRoom.tool.gift"              = "Gifts";
@@ -529,6 +549,8 @@
 "auth.error.networkFormat"   = "Network error: %@";
 "auth.error.sessionInvalidated" = "Your session has expired or your account was signed in elsewhere. Please log in again.";
 "live.error.noCover"         = "No live cover set yet. Please configure a cover on the main app first.";
+// 全局顶部错误通知：envelope 解析失败（APIClient/PartyAPIClient/SapiTokenStore 共用；技术错误，三语言统一英文）
+"api.error.responseParseFailed" = "Server response error";
 
 // 公屏系统消息（用户在直播间内可见）
 "im.system.loginFailedFormat" = "IM login failed: %@";
@@ -608,6 +630,8 @@
 "pk.history.title"              = "PK History";
 "pk.rule.title"                 = "PK Rules";
 "pk.rank.title"                 = "PK Ranking";
+"pk.rank.sheet.title"           = "Guardian Fans List";
+"pk.rank.sheet.empty"           = "No Data";
 "pk.comingSoon"                 = "Coming soon";
 "pk.countdownFormat"            = "%ds";
 "pk.opponent.mute"              = "Mute opponent";
@@ -679,6 +703,10 @@
 "chat.historyExpired"  = "This chat history has expired.";
 // 文字气泡内翻译按钮
 "chat.translate"       = "Translate";
+// 语音录制过短
+"chat.voice.tooShort"  = "Recording time is too short";
+// 发送失败网络提示
+"chat.sendNetworkError" = "Oops, connection failed! Please check your network.";
 
 // v5 F-3 消息 preview 归一化
 "message.preview.image"                 = "[Image]";
@@ -730,8 +758,19 @@
 "party.list.pill.voice"                  = "Voice";
 "party.list.pill.languageFallback"       = "English";
 
-"party.create.navTitle"                  = "Create Party Room";
-"party.create.submit"                    = "Create Room";
+"party.create.navTitle"                  = "Create My Room";
+"party.create.submit"                    = "Create";
+"party.create.confirm"                   = "Confirm";
+"party.create.name.placeholder"          = "Xxxxx's Room";
+"party.create.section.tagline"           = "Room Tagline";
+"party.create.tagline.placeholder"       = "Let's chat and have fun together.";
+"party.create.section.language"          = "Room language";
+"party.create.section.mode"              = "Room Mode";
+"party.create.mode.voice"                = "Voice";
+"party.create.mode.liveVoice"            = "Live + Voice";
+"party.create.mode.lockFormat"           = "Lv.%d Lock Mode";
+"party.create.mode.unlockFormat"         = "Lv.%d Unlock Mode";
+"party.create.mode.lockedToastFormat"    = "Lv.%d required";
 "party.create.section.name"              = "Room Name";
 "party.create.name.placeholder"          = "Up to 20 characters";
 "party.create.section.template"          = "Select Template";

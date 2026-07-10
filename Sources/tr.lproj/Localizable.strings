@@ -172,6 +172,8 @@
 "mediaPreview.image"           = "Resim";
 "mediaPreview.video"           = "Video";
 "mediaPreview.positionFormat"  = "%d / %d";
+"mediaPreview.image.loadFailed" = "Resim yüklenemedi";
+"mediaPreview.image.retry"      = "Tekrar dene";
 
 // MARK: - Settings 设置页
 "settings.title"               = "Ayarlar";
@@ -460,6 +462,24 @@
 "liveRoom.roulette.a11y"          = "Etkileşim çarkı";
 "liveRoom.comingSoon.roulette"    = "Etkileşim çarkı yakında";
 
+/* Roulette intro popup & setting sheet (aligns H5 wheel.* + live.* namespace) */
+"liveRoom.roulette.intro.card1.title" = "Çarkı Çevir";
+"liveRoom.roulette.intro.card1.body"  = "İzleyiciler elmas harcayarak ödül çarkını çevirebilir. Daha fazla çevirme, daha yüksek izleyici etkileşimi ve gelir anlamına gelir.";
+"liveRoom.roulette.intro.card2.title" = "Ödülleri Ayarla";
+"liveRoom.roulette.intro.card2.body"  = "Yayıncılar, kendileri ve hayranları için özel etkileşimli ödüller ayarlayabilir.";
+"liveRoom.roulette.intro.card3.title" = "İstediğiniz Zaman Aç";
+"liveRoom.roulette.intro.card3.body"  = "Bu özelliği canlı yayın ayarlarından istediğiniz zaman açıp kapatabilirsiniz.";
+"liveRoom.roulette.intro.next"        = "İleri";
+"liveRoom.roulette.intro.start"       = "Başla";
+"liveRoom.roulette.setting.title"     = "Etkileşim Çarkını Ayarla";
+"liveRoom.roulette.enable"            = "Çarkı Etkinleştir";
+"liveRoom.roulette.price"             = "Dönüş Fiyatını Ayarla";
+"liveRoom.roulette.sectors"           = "Etkileşim Öğelerini Ayarla";
+"liveRoom.roulette.sectors.empty"     = "Düzenleme bekleniyor";
+"liveRoom.roulette.edit"              = "Çarkı Düzenle";
+"liveRoom.roulette.rules"             = "Oyun Kuralları";
+"liveRoom.roulette.errorRetry"        = "Yükleme başarısız. Tekrar deneyin.";
+
 /* LiveRoom H5 interaction alignment (2026-07-06 iteration 2) */
 "liveRoom.tool.message"           = "Mesajlar";
 "liveRoom.tool.gift"              = "Hediyeler";
@@ -573,6 +593,8 @@
 "auth.error.networkFormat"   = "Ağ hatası: %@";
 "auth.error.sessionInvalidated" = "Oturumunuz sona erdi veya hesabınız başka bir yerden açıldı. Lütfen yeniden giriş yapın.";
 "live.error.noCover"         = "Henüz yayın kapağı ayarlanmadı. Lütfen önce ana uygulamadan kapak yapılandırın.";
+// 全局顶部错误通知：envelope 解析失败（技术错误，三语言统一英文，不本地化）
+"api.error.responseParseFailed" = "Server response error";
 
 // 公屏系统消息（用户在直播间内可见）
 "im.system.loginFailedFormat" = "Sohbet girişi başarısız: %@";
@@ -652,6 +674,8 @@
 "pk.history.title"              = "PK Geçmişi";
 "pk.rule.title"                 = "PK Kuralları";
 "pk.rank.title"                 = "PK Sıralaması";
+"pk.rank.sheet.title"           = "Koruyucu Hayran Listesi";
+"pk.rank.sheet.empty"           = "Veri Yok";
 "pk.comingSoon"                 = "Yakında";
 "pk.countdownFormat"            = "%dsn";
 "pk.opponent.mute"              = "Rakibi sessize al";
@@ -723,6 +747,10 @@
 "chat.historyExpired"  = "Sohbet geçmişinin süresi doldu.";
 // 文字气泡内翻译按钮
 "chat.translate"       = "Çevir";
+// 语音录制过短
+"chat.voice.tooShort"  = "Kayıt süresi çok kısa";
+// 发送失败网络提示
+"chat.sendNetworkError" = "Bağlantı başarısız! Lütfen ağınızı kontrol edin.";
 
 // v5 F-3 消息 preview 归一化
 "message.preview.image"                 = "[Resim]";
@@ -774,10 +802,20 @@
 "party.list.pill.voice"                  = "Ses";
 "party.list.pill.languageFallback"       = "İngilizce";
 
-"party.create.navTitle"                  = "Parti Odası Oluştur";
-"party.create.submit"                    = "Oda Oluştur";
+"party.create.navTitle"                  = "Odamı Oluştur";
+"party.create.submit"                    = "Oluştur";
+"party.create.confirm"                   = "Onayla";
 "party.create.section.name"              = "Oda Adı";
-"party.create.name.placeholder"          = "En fazla 20 karakter";
+"party.create.name.placeholder"          = "Xxxxx'in Odası";
+"party.create.section.tagline"           = "Oda Sloganı";
+"party.create.tagline.placeholder"       = "Sohbet edip eğlenelim.";
+"party.create.section.language"          = "Oda Dili";
+"party.create.section.mode"              = "Oda Modu";
+"party.create.mode.voice"                = "Ses";
+"party.create.mode.liveVoice"            = "Canlı + Ses";
+"party.create.mode.lockFormat"           = "Lv.%d Kilitli Mod";
+"party.create.mode.unlockFormat"         = "Lv.%d Kilitsiz Mod";
+"party.create.mode.lockedToastFormat"    = "Lv.%d gerekli";
 "party.create.section.template"          = "Şablon Seç";
 "party.create.template.loading"          = "Şablonlar yükleniyor…";
 "party.create.template.empty"            = "dev'de kullanılabilir şablon yok";

@@ -172,6 +172,8 @@
 "mediaPreview.image"           = "صورة";
 "mediaPreview.video"           = "فيديو";
 "mediaPreview.positionFormat"  = "%d من %d";
+"mediaPreview.image.loadFailed" = "فشل تحميل الصورة";
+"mediaPreview.image.retry"      = "إعادة المحاولة";
 
 // MARK: - Settings 设置页
 "settings.title"               = "الإعدادات";
@@ -460,6 +462,24 @@
 "liveRoom.roulette.a11y"          = "عجلة التفاعل";
 "liveRoom.comingSoon.roulette"    = "عجلة التفاعل قريبًا";
 
+/* Roulette intro popup & setting sheet (aligns H5 wheel.* + live.* namespace) */
+"liveRoom.roulette.intro.card1.title" = "أدر العجلة";
+"liveRoom.roulette.intro.card1.body"  = "يمكن للمشاهدين تدوير عجلة الجوائز عبر الماس. يؤدي زيادة عدد الدوّرات إلى رفع تفاعل الجمهور والإيرادات.";
+"liveRoom.roulette.intro.card2.title" = "إعداد الجوائز";
+"liveRoom.roulette.intro.card2.body"  = "يمكن للمذيعين إعداد جوائز تفاعلية حصرية لأنفسهم ولمعجبيهم.";
+"liveRoom.roulette.intro.card3.title" = "تفعيل في أي وقت";
+"liveRoom.roulette.intro.card3.body"  = "تفعيل أو تعطيل هذه الميزة في أي وقت من إعدادات البث المباشر.";
+"liveRoom.roulette.intro.next"        = "التالي";
+"liveRoom.roulette.intro.start"       = "ابدأ";
+"liveRoom.roulette.setting.title"     = "تعيين عجلة التفاعل";
+"liveRoom.roulette.enable"            = "تفعيل العجلة";
+"liveRoom.roulette.price"             = "تعيين سعر الدوران";
+"liveRoom.roulette.sectors"           = "تعيين عناصر التفاعل";
+"liveRoom.roulette.sectors.empty"     = "بانتظار التعديل";
+"liveRoom.roulette.edit"              = "تعديل العجلة";
+"liveRoom.roulette.rules"             = "قواعد اللعبة";
+"liveRoom.roulette.errorRetry"        = "فشل التحميل. حاول مرة أخرى.";
+
 /* LiveRoom H5 interaction alignment (2026-07-06 iteration 2) */
 "liveRoom.tool.message"           = "الرسائل";
 "liveRoom.tool.gift"              = "الهدايا";
@@ -573,6 +593,8 @@
 "auth.error.networkFormat"   = "خطأ في الشبكة: %@";
 "auth.error.sessionInvalidated" = "انتهت جلستك أو تم تسجيل الدخول من مكان آخر. يرجى تسجيل الدخول مرة أخرى.";
 "live.error.noCover"         = "لم يتم تعيين غلاف بث بعد. يرجى تعيين الغلاف في التطبيق الرئيسي أولاً.";
+// 全局顶部错误通知：envelope 解析失败（技术错误，三语言统一英文，不本地化）
+"api.error.responseParseFailed" = "Server response error";
 
 // 公屏系统消息（用户在直播间内可见）
 "im.system.loginFailedFormat" = "فشل تسجيل دخول الدردشة: %@";
@@ -652,6 +674,8 @@
 "pk.history.title"              = "سجل PK";
 "pk.rule.title"                 = "قواعد PK";
 "pk.rank.title"                 = "ترتيب PK";
+"pk.rank.sheet.title"           = "قائمة معجبي الحارس";
+"pk.rank.sheet.empty"           = "لا توجد بيانات";
 "pk.comingSoon"                 = "قريبًا";
 "pk.countdownFormat"            = "%dث";
 "pk.opponent.mute"              = "كتم صوت الخصم";
@@ -723,6 +747,10 @@
 "chat.historyExpired"  = "انتهت صلاحية سجل المحادثة.";
 // 文字气泡内翻译按钮
 "chat.translate"       = "ترجم";
+// 语音录制过短
+"chat.voice.tooShort"  = "مدة التسجيل قصيرة جدًا";
+// 发送失败网络提示
+"chat.sendNetworkError" = "عذرًا، فشل الاتصال! يرجى التحقق من الشبكة.";
 
 // v5 F-3 消息 preview 归一化
 "message.preview.image"                 = "[صورة]";
@@ -774,10 +802,20 @@
 "party.list.pill.voice"                  = "صوت";
 "party.list.pill.languageFallback"       = "الإنجليزية";
 
-"party.create.navTitle"                  = "إنشاء غرفة حفلات";
-"party.create.submit"                    = "إنشاء الغرفة";
+"party.create.navTitle"                  = "إنشاء غرفتي";
+"party.create.submit"                    = "إنشاء";
+"party.create.confirm"                   = "تأكيد";
 "party.create.section.name"              = "اسم الغرفة";
-"party.create.name.placeholder"          = "حتى 20 حرفًا";
+"party.create.name.placeholder"          = "غرفة Xxxxx";
+"party.create.section.tagline"           = "شعار الغرفة";
+"party.create.tagline.placeholder"       = "دعنا نتحدث ونستمتع معًا.";
+"party.create.section.language"          = "لغة الغرفة";
+"party.create.section.mode"              = "وضع الغرفة";
+"party.create.mode.voice"                = "صوت";
+"party.create.mode.liveVoice"            = "بث + صوت";
+"party.create.mode.lockFormat"           = "مستوى %d وضع مغلق";
+"party.create.mode.unlockFormat"         = "مستوى %d وضع مفتوح";
+"party.create.mode.lockedToastFormat"    = "يتطلب المستوى %d";
 "party.create.section.template"          = "اختر القالب";
 "party.create.template.loading"          = "جارٍ تحميل القوالب…";
 "party.create.template.empty"            = "لا توجد قوالب متاحة في dev";

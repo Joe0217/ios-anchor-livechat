@@ -222,6 +222,11 @@ targets:
       # PartyListServiceLive 依赖 PartyAPI（间接 SDK）故**不入**测
       - path: Sources/Party/List/PartyListStore.swift
       - path: Sources/Party/List/PartyListService.swift
+      # E 里程碑 v5 派对房创房重写 (2026-07-10)：Store + Service protocol + PreviewFake + Language model（纯 Foundation）
+      # PartyCreateServiceLive 依赖 PartyAPI 故**不入**测
+      - path: Sources/Party/Create/PartyCreateStore.swift
+      - path: Sources/Party/Create/PartyCreateService.swift
+      - path: Sources/Party/Models/PartyLanguage.swift
       # G 里程碑 M2：PKCountdownController（纯 Foundation Task；PKStore 状态机依赖 SDK 不入测）
       - path: Sources/PK/PKCountdownController.swift
       # A 里程碑 trial #1 (Circle 朋友圈 tab)：纯枚举 + 状态机 + 服务层 protocol

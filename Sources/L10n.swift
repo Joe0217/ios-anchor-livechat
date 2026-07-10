@@ -161,6 +161,10 @@ enum L10n {
         static var ruleTitle: String { localize("pk.rule.title", comment: "PK 规则标题") }
         /// PK 排行榜标题
         static var rankTitle: String { localize("pk.rank.title", comment: "PK 排行榜标题") }
+        /// PK 贡献榜 sheet 标题（H5 pkRankListPopup.vue "guardian fans list"）
+        static var rankSheetTitle: String { localize("pk.rank.sheet.title", comment: "PK 贡献榜 sheet 标题 Guardian Fans List") }
+        /// PK 贡献榜 sheet 空态文案
+        static var rankSheetEmpty: String { localize("pk.rank.sheet.empty", comment: "PK 贡献榜 sheet 空态 No Data") }
         /// 通用「敬请期待」占位（用于 History/Rule/Rank 视觉占位）
         static var comingSoon: String { localize("pk.comingSoon", comment: "PK 敬请期待占位") }
 
@@ -201,12 +205,22 @@ enum L10n {
         static var listPillVoice: String { localize("party.list.pill.voice", comment: "视觉占位 pill 2：Voice") }
         static var listPillLanguageFallback: String { localize("party.list.pill.languageFallback", comment: "语言 pill fallback：English") }
 
-        // 创建房（PartyCreateRoomView）
-        static var createNavTitle: String { localize("party.create.navTitle", comment: "创建派对房") }
-        static var createSubmit: String { localize("party.create.submit", comment: "创建房间") }
-        static var createSectionName: String { localize("party.create.section.name", comment: "房间名称") }
-        static var createNamePlaceholder: String { localize("party.create.name.placeholder", comment: "最多 20 个字") }
-        static var createSectionTemplate: String { localize("party.create.section.template", comment: "选择模板") }
+        // 创建房（PartyCreateRoomView v5 对齐 livechat-h5 用户端，2026-07-10）
+        static var createNavTitle: String { localize("party.create.navTitle", comment: "Create My Room") }
+        static var createSubmit: String { localize("party.create.submit", comment: "Create") }
+        static var createConfirm: String { localize("party.create.confirm", comment: "Confirm（sheet 底部）") }
+        static var createSectionName: String { localize("party.create.section.name", comment: "Room name") }
+        static var createNamePlaceholder: String { localize("party.create.name.placeholder", comment: "房名 placeholder") }
+        static var createSectionTagline: String { localize("party.create.section.tagline", comment: "Room Tagline") }
+        static var createTaglinePlaceholder: String { localize("party.create.tagline.placeholder", comment: "tagline placeholder") }
+        static var createSectionLanguage: String { localize("party.create.section.language", comment: "Room language") }
+        static var createSectionMode: String { localize("party.create.section.mode", comment: "Room Mode") }
+        static var createModeVoice: String { localize("party.create.mode.voice", comment: "Voice") }
+        static var createModeLiveVoice: String { localize("party.create.mode.liveVoice", comment: "Live + Voice") }
+        static var createModeLockFormat: String { localize("party.create.mode.lockFormat", comment: "Lv.%d Lock Mode") }
+        static var createModeUnlockFormat: String { localize("party.create.mode.unlockFormat", comment: "Lv.%d Unlock Mode") }
+        static var createModeLockedToastFormat: String { localize("party.create.mode.lockedToastFormat", comment: "Lv.%d required") }
+        static var createSectionTemplate: String { localize("party.create.section.template", comment: "旧版 section 标题（保留兼容）") }
         static var createTemplateLoading: String { localize("party.create.template.loading", comment: "加载模板…") }
         static var createTemplateEmpty: String { localize("party.create.template.empty", comment: "dev 暂无可用模板") }
         static var createTemplateFallbackFormat: String { localize("party.create.template.fallbackFormat", comment: "模板 %d") }
@@ -421,6 +435,10 @@ enum L10n {
     static var mediaPreviewVideo: String { localize("mediaPreview.video", comment: "媒体预览视频 a11y") }
     /// 媒体预览页码格式（%d/%d）
     static var mediaPreviewPositionFormat: String { localize("mediaPreview.positionFormat", comment: "媒体预览页码 %d/%d") }
+    /// 媒体预览图片加载失败文案（视频侧已有系统占位；图片新增）
+    static var mediaPreviewImageLoadFailed: String { localize("mediaPreview.image.loadFailed", comment: "图片加载失败") }
+    /// 媒体预览图片加载失败重试按钮
+    static var mediaPreviewImageRetry: String { localize("mediaPreview.image.retry", comment: "图片加载重试按钮") }
 
     // MARK: - Settings 设置页
     static var settingsTitle: String           { localize("settings.title", comment: "设置页标题") }
@@ -519,6 +537,12 @@ enum L10n {
 
     // 对方消息气泡内可见"翻译"按钮（对齐 H5 msgItem.vue CTranslate label="Translate"）
     static var chatTranslate: String       { localize("chat.translate", comment: "文字气泡内翻译按钮 label") }
+
+    // 语音录制 <1s 提示（对齐 H5 recording.vue "Recording time is too short"）
+    static var chatVoiceTooShort: String   { localize("chat.voice.tooShort", comment: "语音录制过短提示") }
+
+    // 发送失败网络提示（对齐 H5 chat/index.vue "Oops, connection failed!"）
+    static var chatSendNetworkError: String { localize("chat.sendNetworkError", comment: "发送消息网络失败提示") }
 
     // MARK: - Message 消息 preview 归一化（v5 F-3 i18n）
     static var messagePreviewImage: String          { localize("message.preview.image", comment: "会话预览：图片") }
@@ -1049,6 +1073,8 @@ enum L10n {
     static var authErrorNetworkFormat: String { localize("auth.error.networkFormat", comment: "登录失败：网络错误（%@ 为系统错误描述）") }
     static var authErrorSessionInvalidated: String { localize("auth.error.sessionInvalidated", comment: "1004 挤下线 / 1005 token 失效统一文案") }
     static var liveErrorNoCover: String { localize("live.error.noCover", comment: "开播失败：账号还没有直播封面") }
+    /// 全局顶部错误通知：envelope 解析失败（APIClient / PartyAPIClient / SapiTokenStore 共用；技术错误，三语言统一英文）
+    static var apiResponseParseFailed: String { localize("api.error.responseParseFailed", comment: "响应解析失败：全局顶部通知文案，三语言统一英文") }
 
     // 公屏系统消息（用户在直播间内可见）
     static var imSystemLoginFailedFormat: String { localize("im.system.loginFailedFormat", comment: "公屏系统消息：IM 登录失败 code=%@") }
