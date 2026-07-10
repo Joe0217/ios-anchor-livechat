@@ -197,7 +197,8 @@ private struct CallFaceTimeView: View {
             // - tap 分派：main 时 chrome toggle / PIP 时 swap（对齐用户 UX 直觉）
             RemoteVideoView(manager: store.agora)
                 .modifier(VideoLayoutModifier(isMain: !isLocalMain,
-                                              pipOffset: pipTotalOffset))
+                                              pipOffset: pipTotalOffset,
+                                              pipTopExtra: pipTopExtraForCurrentScene))
                 // contentShape 已在 modifier 内 apply（锁定在 PIP 内容 frame），不要在外层再挂
                 // Rectangle 覆盖 —— 否则外层全屏 frame 的 hit shape 会让 tap main 区域也命中 PIP。
                 .onTapGesture(perform: handleRemoteTap)
@@ -246,7 +247,8 @@ private struct CallFaceTimeView: View {
             CameraPreview(camera: camera, agora: store.agora)
                 .overlay(cameraPreviewLockOverlay)
                 .modifier(VideoLayoutModifier(isMain: isLocalMain,
-                                              pipOffset: pipTotalOffset))
+                                              pipOffset: pipTotalOffset,
+                                              pipTopExtra: pipTopExtraForCurrentScene))
                 // contentShape 由 modifier 内 apply —— tap 只在 PIP 内容区（110×160）命中，main 时命中全屏
                 .onTapGesture(perform: handleLocalTap)
                 .gesture(pipDragGesture)
@@ -399,7 +401,7 @@ private struct CallFaceTimeView: View {
     @ViewBuilder
     private var chatInputSheet: some View {
         CallChatInputSheet(store: store)
-            .presentationDetents([.height(60)])
+            .presentationDetents([.height(50)])
             .presentationDragIndicator(.visible)
             .preferredColorScheme(.dark)
     }
@@ -417,7 +419,7 @@ private struct CallFaceTimeView: View {
             userId: store.current.remoteUserIdString,
             onSubmitSuccess: { showReportSheet = false }
         )
-        .presentationDetents([.medium])
+        .presentationDetents([.fraction(0.6)])
     }
 
     /// 对齐 H5 index.vue:203-215 askForGift 完整链路：关 sheet + 起 15s 冷却 + 调后端 API + 本地回显。
@@ -707,7 +709,11 @@ private struct CallFaceTimeView: View {
             Text("\(value)")
                 .font(.system(size: 14, weight: .semibold)).monospacedDigit()
                 .foregroundStyle(.white)
-            Text("💎").font(.system(size: 12)).accessibilityHidden(true)
+            Image("liveResultDiamond")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 14, height: 14)
+                .accessibilityHidden(true)
         }
         .padding(.horizontal, 10).padding(.vertical, 4)
         .background(Capsule().fill(tint.opacity(0.85)))
@@ -849,6 +855,11 @@ private struct CallFaceTimeView: View {
                height: pipDragOffset.height + pipDragTranslation.height)
     }
 
+    /// PIP 场景额外 top 偏移：直播私 call 顶部有 liveCallBanner 横幅挤压 → 下移 50pt 避免与 topBar 重叠。
+    private var pipTopExtraForCurrentScene: CGFloat {
+        store.current.frontGameType == .live ? 50 : 0
+    }
+
     /// 本地相机预览的锁定态 dim overlay（仅 PIP + isCallWaitLocked 时生效；main 全屏时不 dim）
     @ViewBuilder
     private var cameraPreviewLockOverlay: some View {
@@ -900,13 +911,16 @@ private struct CallFaceTimeView: View {
 private struct VideoLayoutModifier: ViewModifier {
     let isMain: Bool
     let pipOffset: CGSize
+    /// 场景相关额外 top 偏移（直播私 call 顶部有 liveCallBanner 挤压空间，传 50 避免与 topBar 重叠）
+    var pipTopExtra: CGFloat = 0
 
     private let pipWidth: CGFloat = 110
     private let pipHeight: CGFloat = 160
     private let pipTrailing: CGFloat = 16
-    private let pipTop: CGFloat = 100
+    private let pipTopBase: CGFloat = 100
     private let pipCornerRadius: CGFloat = 14
     private let pipBorderWidth: CGFloat = 1
+    private var pipTop: CGFloat { pipTopBase + pipTopExtra }
 
     func body(content: Content) -> some View {
         content
