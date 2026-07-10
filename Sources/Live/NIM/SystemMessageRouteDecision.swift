@@ -126,11 +126,16 @@ enum SystemMessageRouteDecision {
                 if let d = payload["data"] as? [String: Any] { return d["privateCallOpen"] }
                 return payload["privateCallOpen"]
             }()
+            // v22 P0-1 修：对齐 H5 `!== ''` 语义——无值/空串跳过，**不覆盖本地** privateCallOpen。
+            // 若走兜底 open=true 覆写：主播已关时被后端一条空 payload 消息误开 → CallStore 拦截失效
+            // → 用户又能拨入 → 破坏"关闭私 call"修复目标（详见 docs/plan/代码审查报告-202607102337.md P0-1）
+            guard let raw else { return .passThrough }
+            if let s = raw as? String, s.isEmpty { return .passThrough }
             let open: Bool = {
                 if let n = raw as? Int { return n != 0 }
                 if let n = raw as? NSNumber { return n.intValue != 0 }
-                if let s = raw as? String, !s.isEmpty { return Int(s) != 0 }
-                return true   // 缺字段兜底为开（对齐 H5 privateCall=ref(true) 默认）
+                if let s = raw as? String { return Int(s) != 0 }
+                return true   // Bool 等极小概率不识别类型
             }()
             return .privateCallSwitchChange(open: open)
 

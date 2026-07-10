@@ -228,10 +228,22 @@ final class SystemMessageRouterTests: XCTestCase {
                        .privateCallSwitchChange(open: false))
     }
 
-    func test_privateCallSwitchChange_missingField_defaultOpen() {
-        // 缺字段兜底为 open=true（对齐 H5 `privateCall = ref(true)` 默认）
-        XCTAssertEqual(decide(.privateCallSwitchChange),
-                       .privateCallSwitchChange(open: true))
+    func test_privateCallSwitchChange_missingField_passThrough() {
+        // v22 P0-1 修：对齐 H5 live.js:306 `!== ''`——缺字段跳过，不覆盖本地
+        // 兜底 open=true 覆写会让主播关闭态被后端空 payload 误开
+        XCTAssertEqual(decide(.privateCallSwitchChange), .passThrough)
+    }
+
+    func test_privateCallSwitchChange_emptyString_passThrough() {
+        // 同 P0-1：空串等价于缺字段，跳过
+        XCTAssertEqual(decide(.privateCallSwitchChange, payload: ["privateCallOpen": ""]),
+                       .passThrough)
+    }
+
+    func test_privateCallSwitchChange_nestedData_emptyString_passThrough() {
+        // 嵌套 data.privateCallOpen 空串也应跳过（H5 也是同一逻辑：`data?.privateCallOpen !== ''`）
+        XCTAssertEqual(decide(.privateCallSwitchChange, payload: ["data": ["privateCallOpen": ""]]),
+                       .passThrough)
     }
 
     func test_knownButUnhandled_passThrough() {
