@@ -20,13 +20,24 @@ final class GiftEffectSysMsgRouter: MessageRouter {
     func route(_ attachType: AttachType,
                payload: [String: Any],
                context: MessageContext) -> Bool {
-        // 只 handle sysMsg + syncSysMsg 通道下的 liveCallGift
+        // 只 handle sysMsg + syncSysMsg 通道
         switch context {
         case .sysMsg, .syncSysMsg:
             break
         default:
             return false
         }
+
+        // v22（2026-07-10）：主播索取礼物被用户拒绝 → toast
+        if attachType == .giftRequestRejected {
+            let callState = CallStore.shared.state
+            guard callState != .idle && callState != .ended && callState != .failed else {
+                return false
+            }
+            CallStore.shared.showAskForGiftRejected()
+            return false
+        }
+
         guard attachType == .liveCallGift else { return false }
 
         // ext.data 3 层兜底（对齐 NIMChatroomManager v13 payload 解构风格）

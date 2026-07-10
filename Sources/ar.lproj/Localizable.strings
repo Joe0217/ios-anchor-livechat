@@ -562,6 +562,7 @@
 "call.congrats.ok"                     = "حسنًا";
 // C-4 Wave4 UI 布局对齐
 "call.action.askForGift"     = "اطلب هدية";
+"call.askForGift.rejected"   = "رفض المستخدم طلب الهدية";
 "call.action.more"           = "المزيد";
 "call.action.comingSoon"     = "قريبًا";
 "call.remoteCameraOff"       = "الكاميرا مغلقة";
@@ -697,6 +698,9 @@
 "moment.action.like"             = "إعجاب";
 "moment.action.unlike"           = "إلغاء الإعجاب";
 "moment.action.delete"           = "حذف";
+"moment.delete.confirm.title"    = "حذف هذا المنشور؟";
+"moment.delete.confirm.action"   = "حذف";
+"moment.delete.confirm.cancel"   = "إلغاء";
 
 /* MARK: Blocklist 黑名单列表（I-1） */
 "blocklist.title"                       = "قائمة الحظر";

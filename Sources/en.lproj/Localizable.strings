@@ -518,6 +518,7 @@
 "call.congrats.ok"                     = "OK";
 // C-4 Wave4 UI 布局对齐
 "call.action.askForGift"     = "Ask for Gift";
+"call.askForGift.rejected"   = "The user declined your gift request";
 "call.action.more"           = "More";
 "call.action.comingSoon"     = "Coming soon";
 "call.remoteCameraOff"       = "Camera off";
@@ -653,6 +654,9 @@
 "moment.action.like"             = "Like";
 "moment.action.unlike"           = "Unlike";
 "moment.action.delete"           = "Delete";
+"moment.delete.confirm.title"    = "Delete this moment?";
+"moment.delete.confirm.action"   = "Delete";
+"moment.delete.confirm.cancel"   = "Cancel";
 
 /* MARK: Blocklist 黑名单列表（I-1） */
 "blocklist.title"                       = "Blocklist";

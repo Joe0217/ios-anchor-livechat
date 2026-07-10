@@ -562,6 +562,7 @@
 "call.congrats.ok"                     = "Tamam";
 // C-4 Wave4 UI 布局对齐
 "call.action.askForGift"     = "Hediye iste";
+"call.askForGift.rejected"   = "Kullanıcı hediye isteğinizi reddetti";
 "call.action.more"           = "Daha fazla";
 "call.action.comingSoon"     = "Yakında";
 "call.remoteCameraOff"       = "Kamera kapalı";
@@ -697,6 +698,9 @@
 "moment.action.like"             = "Beğen";
 "moment.action.unlike"           = "Beğenmekten Vazgeç";
 "moment.action.delete"           = "Sil";
+"moment.delete.confirm.title"    = "Bu paylaşımı sil?";
+"moment.delete.confirm.action"   = "Sil";
+"moment.delete.confirm.cancel"   = "İptal";
 
 /* MARK: Blocklist 黑名单列表（I-1） */
 "blocklist.title"                       = "Engellenenler";

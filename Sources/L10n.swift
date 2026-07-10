@@ -606,6 +606,12 @@ enum L10n {
     static var momentActionUnlike: String          { localize("moment.action.unlike", comment: "动态取消点赞 a11y") }
     /// 删除动态按钮 a11y（仅 me 入口）
     static var momentActionDelete: String          { localize("moment.action.delete", comment: "动态删除 a11y") }
+    /// 删除动态二次确认标题
+    static var momentDeleteConfirmTitle: String    { localize("moment.delete.confirm.title", comment: "删除动态确认标题") }
+    /// 删除动态确认按钮（destructive）
+    static var momentDeleteConfirmAction: String   { localize("moment.delete.confirm.action", comment: "删除动态确认按钮") }
+    /// 删除动态取消按钮
+    static var momentDeleteConfirmCancel: String   { localize("moment.delete.confirm.cancel", comment: "删除动态取消按钮") }
 
     // MARK: - J 里程碑：发布朋友圈页（spec §7 v3）
     enum Publish {
@@ -1049,6 +1055,9 @@ enum L10n {
     // Phase C 通话内公屏输入框（对齐 H5 g-faceTime showInput）
     static var callChatInputPlaceholder: String { localize("call.chat.input.placeholder", comment: "通话中公屏输入框占位文案") }
     static var callChatInputSend: String { localize("call.chat.input.send", comment: "通话中公屏输入框发送按钮") }
+
+    // v22（2026-07-10）：主播索取礼物被用户拒绝的 toast
+    static var callAskForGiftRejected: String { localize("call.askForGift.rejected", comment: "主播索取礼物被用户拒绝时的 toast 提示") }
 
     // MARK: - C 1v1 通话（HUD）
     enum Call {

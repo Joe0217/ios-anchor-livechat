@@ -167,6 +167,8 @@ private struct CallFaceTimeView: View {
     @State private var showHangupConfirm: Bool = false
     /// C-4 Wave4 gap-004/005 占位：底部 askForGift / more 按钮点击后 2s 自消的 Coming Soon toast
     @State private var showComingSoonToast: String?
+    /// v22（2026-07-10）：askForGift 被拒 toast 显隐（token 变化 → task 触发 2s 展示）
+    @State private var askForGiftRejectedVisible: Bool = false
     /// PIP 拖动累计偏移（相对初始 topTrailing 锚点；用户 drag onEnded 后 commit）
     @State private var pipDragOffset: CGSize = .zero
     /// PIP 拖动过程中的临时 translation（gesture 结束自动 reset 到 .zero）
@@ -200,6 +202,8 @@ private struct CallFaceTimeView: View {
                 // Rectangle 覆盖 —— 否则外层全屏 frame 的 hit shape 会让 tap main 区域也命中 PIP。
                 .onTapGesture(perform: handleRemoteTap)
                 .zIndex(isLocalMain ? 1 : 0)
+                // v22（2026-07-10）：PIP 状态（isLocalMain=true 时远端是 PIP）跟随 isChromeVisible 隐藏
+                .opacity((!isLocalMain || isChromeVisible) ? 1 : 0)
 
             // C-4 Wave4 C 组 gap-010 + gap-critic-003：远端摄像头 off fallback（用户端主动关摄时）
             // AgoraManager delegate `remoteVideoStateChangedOfUid` 判定 state==.stopped → isRemoteVideoOff=true
@@ -250,6 +254,9 @@ private struct CallFaceTimeView: View {
                 .animation(.easeInOut(duration: 0.25), value: isLocalMain)
                 .animation(.easeInOut(duration: 0.2), value: store.isCallWaitLocked)
                 .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.75), value: pipDragOffset)
+                // v22（2026-07-10）：PIP 状态跟随 isChromeVisible 隐藏（对齐 H5 switchShowAll 一起 tap 隐藏所有内容）
+                // 主态（isLocalMain=true, PIP 是远端小窗，不受本 modifier 影响）保持全屏可见
+                .opacity((isLocalMain || isChromeVisible) ? 1 : 0)
 
             // 独立 X 关闭按钮层（不受 PIP 拖动影响；chrome 显隐联动）
             closeButton
@@ -271,12 +278,15 @@ private struct CallFaceTimeView: View {
 
             // C-4 Wave4 gap-002 P0：公屏消息 MessageScroller 骨架（左侧下方 300×270 反向滚动，对齐 H5 g-faceTime index.vue:30-33）
             // 消费 store.callRecentRemoteText（当前只有单条 4s 自消，未来 Wave 6 接 NIM 通话通道扩展为历史队列）
+            // v22（2026-07-10）：公屏跟随 isChromeVisible 一起显隐（对齐 H5 switchShowAll 语义）
             CallMessageScroller(store: store)
                 .frame(width: 270, height: 300)
                 .padding(.leading, 12)
                 .padding(.bottom, 128)  // 让位底部 bottomBar
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 .allowsHitTesting(false)
+                .opacity(isChromeVisible ? 1 : 0)
+                .animation(.easeInOut(duration: 0.2), value: isChromeVisible)
 
             // C-4 Wave4 Coming Soon toast（askForGift / more 占位按钮点击时显示 2s）
             if let toastText = showComingSoonToast {
@@ -288,12 +298,30 @@ private struct CallFaceTimeView: View {
                     .transition(.opacity)
                     .accessibilityHint(Text(toastText))
             }
+
+            // v22（2026-07-10）：主播 askForGift 被用户拒绝 toast（token 变化即触发 2s 展示）
+            if askForGiftRejectedVisible {
+                Text(L10n.callAskForGiftRejected)
+                    .font(.subheadline).bold()
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16).padding(.vertical, 10)
+                    .background(.black.opacity(0.7), in: Capsule())
+                    .transition(.opacity)
+                    .accessibilityHint(Text(L10n.callAskForGiftRejected))
+            }
         }
         .task(id: showComingSoonToast) {
             guard showComingSoonToast != nil else { return }
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard !Task.isCancelled else { return }
             withAnimation(.easeInOut(duration: 0.2)) { showComingSoonToast = nil }
+        }
+        .task(id: store.askForGiftRejectedToken) {
+            guard store.askForGiftRejectedToken != nil else { return }
+            withAnimation(.easeInOut(duration: 0.2)) { askForGiftRejectedVisible = true }
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.2)) { askForGiftRejectedVisible = false }
         }
         // tap 切 chrome 显隐已挪到 RemoteVideoView 层 —— 避免与 chrome 内 Button 手势竞争。
         // 原挂 body 最外层的 `.contentShape.onTapGesture` 会抢占 CallBtn* 的 Button 手势 → 三按钮不响应
@@ -397,10 +425,11 @@ private struct CallFaceTimeView: View {
     private func handleAskForGift(_ gift: GiftListData) {
         showGiftPicker = false
         // 本地立即回显（H5 askGiftInfo 2s toast 语义 —— iOS 落到公屏 gift cell）
+        // v22（2026-07-10）：本端 nickname 用 "User"（L10n.callSignalLabelUser）而非主播真实昵称
         let sender = CallChatMessage.Sender(
-            nickname: AnchorInfoStore.shared.mine?.nickname ?? "",
+            nickname: L10n.callSignalLabelUser,
             level: nil, isVip: false, isSpecial: false,
-            chatBubble: nil, nicknameColor: .her
+            chatBubble: nil, nicknameColor: .default
         )
         let img = gift.giftSmallImg.isEmpty ? gift.giftImg : gift.giftSmallImg
         store.appendChatMessage(.gift(sender: sender, imageURL: img, count: 1))

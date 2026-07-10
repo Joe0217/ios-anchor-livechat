@@ -171,6 +171,16 @@ final class CallStore: ObservableObject {
     /// 由 `emptyRoomDetector.$countdownRemaining` 转发；CallView 观察后展示 10s 不可取消的倒计时弹窗。
     @Published private(set) var emptyRoomCountdownRemaining: Int?
 
+    /// v22（2026-07-10）：主播 askForGift 被用户拒绝时触发 toast 的 token（UUID 变化 = 触发展示 2s）
+    /// sysMsg attachType=16 (giftRequestRejected) → GiftEffectSysMsgRouter → showAskForGiftRejected()
+    @Published private(set) var askForGiftRejectedToken: UUID?
+
+    /// 展示 askForGift 被拒 toast（token 变化即触发）
+    func showAskForGiftRejected() {
+        askForGiftRejectedToken = UUID()
+        AppLogger.call.info("[CallStore] askForGiftRejected → show toast")
+    }
+
     /// 本轮通话已弹过的 reason 集合，避免同 reason 连续骚扰；endLocally 时清空。
     private var alertedAbnormalReasons: Set<CallAbnormalReason> = []
 
@@ -1128,6 +1138,21 @@ extension CallStore: CallSignalingDelegate {
         // 协议保证：用户端在直播间内发起的拨打都视为直播私 call，无需在 RTM 协议层区分类型
         // weak liveStore 由 LiveRoomView/RootView 在直播态注入（对齐 AgoraManager.liveStore 模式）
         if let ls = liveStore, ls.state == .living, ls.callState == 0 {
+            // v22 修：主播 privateCallOpen=false 时直接 busy reject
+            // 对齐 H5 用户端在开关关闭时拨打按钮 disable；主播端多加一层防御（前端 UI 状态 stale / 后端广播漂移场景）
+            guard ls.privateCallOpen else {
+                AppLogger.call.notice("🚫 [CallStore] 直播态私 call 已关 → busy reject from=\(msg.fromUserId, privacy: .private)")
+                if let signaling {
+                    let busy = CallMessage(action: .reject,
+                                           fromUserId: myUserId,
+                                           remoteUserId: msg.fromUserId,
+                                           callId: msg.callId,
+                                           rejectReason: "busy",
+                                           rejectByInternal: 1)
+                    _ = await signaling.publish(busy)
+                }
+                return
+            }
             AppLogger.call.debug("📞 [CallStore] 直播态收到私 call → 委托 LiveStore.pauseForCall")
             await ls.pauseForCall(msg: msg)
             return
@@ -1354,14 +1379,16 @@ extension CallStore {
     /// 不区分远端 vs 本地 sender —— UI 用 sender.nickname == 主播 nickname 判断左/右侧对齐或色彩差异（当前无此差异）。
     func echoLocalChatText(_ text: String) {
         guard !text.isEmpty else { return }
+        // v22（2026-07-10）：对齐 H5 talkListInCall.unshift({user:'my', ...})——本端消息用固定
+        // "User" 标签（L10n.callSignalLabelUser）而非主播真实昵称，避免公屏出现自己名字
         let mine = AnchorInfoStore.shared.mine
         let sender = CallChatMessage.Sender(
-            nickname: mine?.nickname ?? "",
+            nickname: L10n.callSignalLabelUser,
             level: mine?.level,
             isVip: false,
             isSpecial: false,
             chatBubble: mine?.chatBubble,
-            nicknameColor: .her   // 主播端视角本端消息用 H5 "her" 语义橙色
+            nicknameColor: .default   // H5 'my' 白色（.default 品牌色）而非 .her 橙色
         )
         appendChatMessage(.text(sender: sender, content: text, translation: nil))
     }
