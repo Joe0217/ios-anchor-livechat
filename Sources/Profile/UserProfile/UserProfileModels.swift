@@ -143,22 +143,22 @@ extension View {
     /// **不包含**：裸 `String`（peerYxAccId → 聊天页）destination —— 各 stack 语义差异较大
     /// （Messages tab 有 sentinel `__station_list__` 分支），单独维护。
     ///
-    /// - Parameter hidesSystemNavigationBar: sheet 内嵌 stack 场景传 `true` —— ChatDetailContainer/
-    ///   UserProfileView 用自定义 nav bar，sheet stack 会额外挂 system bar 造成叠加，需显式隐藏。
-    ///   主 stack 场景传 `false`（现有行为保持一致）。
+    /// - Parameter hidesSystemNavigationBar: **仅作用于 ChatFromProfileRoute** 挂出来的聊天页 ——
+    ///   ChatDetailContainer 用自定义 nav bar，sheet 内嵌 stack 会额外挂 system bar 造成叠加，
+    ///   sheet 场景传 `true` 隐藏之。**UserProfileRoute 不受此参数影响**：UserProfileView 用
+    ///   `.toolbar { toolbarContent }` 把 back/FOLLOW/menu 挂到 system nav bar，必须保持可见；
+    ///   若在这里挂 `.toolbar(.hidden)` 会让详情页失去 back 按钮，用户被困（历史事故 P0-1）。
     @ViewBuilder
     func userProfileAndChatDestinations(hidesSystemNavigationBar: Bool = false) -> some View {
         self
             .navigationDestination(for: UserProfileRoute.self) { route in
-                Group {
-                    switch route {
-                    case .userId(let uid):
-                        UserProfileView(userId: uid)
-                    case .userIdFromChat(let uid, let peer):
-                        UserProfileView(userId: uid, originPeerYxAccId: peer)
-                    }
+                // 不套 .toolbar(.hidden) —— UserProfileView 依赖 system nav bar 承载 back/FOLLOW/menu
+                switch route {
+                case .userId(let uid):
+                    UserProfileView(userId: uid)
+                case .userIdFromChat(let uid, let peer):
+                    UserProfileView(userId: uid, originPeerYxAccId: peer)
                 }
-                .toolbar(hidesSystemNavigationBar ? .hidden : .automatic, for: .navigationBar)
             }
             .navigationDestination(for: ChatFromProfileRoute.self) { route in
                 let selfYxAccId = SessionStore.shared.user?.yxAccid ?? ""
