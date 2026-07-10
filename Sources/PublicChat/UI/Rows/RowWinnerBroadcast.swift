@@ -31,10 +31,8 @@ struct RowWinnerBroadcast: View {
             }
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 4) {
-                    if let a = avatar, let au = URL(string: a) {
-                        CachedAsyncImage(url: au, contentMode: .fill) { Color.gray.opacity(0.3) }
-                            .frame(width: 20, height: 20)
-                            .clipShape(Circle())
+                    if let a = avatar, !a.isEmpty {
+                        AvatarView(urlString: a, size: 20, kind: .user)
                     }
                     Text(activityName)
                         .font(.system(size: 13, weight: .bold))

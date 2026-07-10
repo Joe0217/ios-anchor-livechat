@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// H5 源：`anchor-livechat-h5/src/views/liveSetting/components/messageScroller.vue` L565-585
-/// 视觉：h26 min-w212 rounded-20 px8 · 按 tier 派背景（setLevelEnterBg）
-/// 内容：Lv 徽章 + VIP 徽章 + 昵称 #1AFFCD + " Entered Room" + 可选座驾图(size 26)
+/// 视觉：h26 min-w212 rounded-20 px8 · setLevelEnterBg 按 tier 派背景（[6-95] L65-92）
+/// 内容：Lv 徽章 + VIP 徽章 + 昵称 #1AFFCD max-w50 truncate + " Entered Room" + 可选座驾图(size 26)
 struct RowEnterRoom: View {
     let sender: SenderProfile?
     let vehicleImg: String?
@@ -16,12 +16,12 @@ struct RowEnterRoom: View {
                 if s.isVip { PublicChatVipBadge() }
                 Text(s.nickname)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color(red: 26/255, green: 1.0, blue: 205/255))
+                    .foregroundColor(Color(red: 26/255, green: 1.0, blue: 205/255))   // #1AFFCD
                     .lineLimit(1)
                     .frame(maxWidth: 50, alignment: .leading)
             }
             Text("Entered Room")
-                .font(theme.textFont)
+                .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.white)
             if let img = itemSmallImg ?? vehicleImg, let url = URL(string: img), !img.isEmpty {
                 CachedAsyncImage(url: url, contentMode: .fit) { Color.clear }
@@ -30,19 +30,35 @@ struct RowEnterRoom: View {
         }
         .padding(.horizontal, 8)
         .frame(minWidth: 212, minHeight: 26)
-        .background(enterBg, in: RoundedRectangle(cornerRadius: 20))
+        .background(levelEnterBg, in: RoundedRectangle(cornerRadius: 20))
     }
 
-    /// H5 setLevelEnterBg(userLevel) —— 按 tier 派渐变；简化为 3 档
-    private var enterBg: LinearGradient {
-        let tier = LevelTierResolver.tier(for: sender?.userLevel ?? 0)
-        let colors: [Color]
-        switch tier {
-        case 0...2: colors = [Color.white.opacity(0.10), Color.clear]
-        case 3...5: colors = [Color(red: 0.20, green: 0.60, blue: 0.95).opacity(0.5), Color.clear]
-        case 6...8: colors = [Color(red: 0.75, green: 0.20, blue: 0.85).opacity(0.5), Color.clear]
-        default:    colors = [Color(red: 0.95, green: 0.55, blue: 0.20).opacity(0.5), Color.clear]
+    /// H5 setLevelEnterBg tier → 单色渐变（bg1-6：CSS 纯色 → 0 透明；bg7-11：H5 是 border image，iOS 简化为类似色渐变）
+    /// 对齐 H5 L65-92 分档：0 / 1 / 2-10 / 11-20 / 21-30 / 31-40 / 41-45 / 46-50 / 51-55 / 56-60 / 61-65 / 66+
+    private var levelEnterBg: LinearGradient {
+        let lv = sender?.userLevel ?? 0
+        let color = tierColor(lv)
+        return LinearGradient(
+            colors: [color, color.opacity(0)],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+
+    private func tierColor(_ level: Int) -> Color {
+        switch level {
+        case 0:           return Color.black.opacity(0.16)   // bg0：默认灰半透（H5 undefined 沿用 rgba(0,0,0,0.16) 视觉）
+        case 1:           return Color(red: 95/255, green: 143/255, blue: 188/255)   // #5F8FBC bg1
+        case 2...10:      return Color(red: 94/255, green: 90/255, blue: 207/255)    // #5E5ACF bg2
+        case 11...20:     return Color(red: 222/255, green: 132/255, blue: 132/255)  // #DE8484 bg3
+        case 21...30:     return Color(red: 191/255, green: 134/255, blue: 94/255)   // #BF865E bg4
+        case 31...40:     return Color(red: 221/255, green: 109/255, blue: 155/255)  // #DD6D9B bg5
+        case 41...45:     return Color(red: 232/255, green: 98/255, blue: 154/255)   // #E8629A bg6
+        case 46...50:     return Color(red: 255/255, green: 140/255, blue: 90/255)   // bg7 border image 简化色
+        case 51...55:     return Color(red: 200/255, green: 90/255, blue: 200/255)   // bg8 简化色
+        case 56...60:     return Color(red: 255/255, green: 100/255, blue: 150/255)  // bg9 简化色
+        case 61...65:     return Color(red: 220/255, green: 60/255, blue: 100/255)   // bg10 简化色
+        default:          return Color(red: 255/255, green: 80/255, blue: 60/255)    // bg11/12 简化色
         }
-        return LinearGradient(colors: colors, startPoint: .leading, endPoint: .trailing)
     }
 }

@@ -214,6 +214,20 @@ final class NIMChatroomManager: NSObject, ObservableObject {
         return nil
     }
 
+    /// v22（2026-07-10）：Int 兼容读取（NSNumber → Int 直接 as? Int 在大数 / JSON parse 场景可能 nil）
+    static func readInt(_ raw: Any?) -> Int? {
+        readInt64(raw).map(Int.init)
+    }
+
+    /// v22：Bool 兼容读取（remoteExt 从 JSON parse 时布尔可能是 NSNumber(0/1)，as? Bool 可能 fail）
+    static func readBool(_ raw: Any?) -> Bool {
+        if let v = raw as? Bool { return v }
+        if let v = raw as? NSNumber { return v.boolValue }
+        if let v = raw as? Int { return v != 0 }
+        if let v = raw as? String { return v == "1" || v.lowercased() == "true" }
+        return false
+    }
+
     /// 收公屏消息（main actor）。H M5：自定义消息分发统一走 `NIMService.dispatch`，
     /// 路由器按 protocol 短路决定消费；公屏文本副作用（-9 pkChatNotice）由本方法兼顾。
     fileprivate func processIncoming(_ batch: [NIMMessage]) {
@@ -375,9 +389,9 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                                 ?? (data["fromNick"] as? String)
                                 ?? (data["nickname"] as? String)
                             let avatar = (data["fromAvatar"] as? String) ?? (data["icon"] as? String)
-                            let userLevel = (data["userLevel"] as? Int) ?? (data["level"] as? Int)
-                            let isVip = (data["isVip"] as? Bool) ?? false
-                            let isHost = (data["isHost"] as? Bool) ?? false
+                            let userLevel = Self.readInt(data["userLevel"]) ?? Self.readInt(data["level"])
+                            let isVip = Self.readBool(data["isVip"])
+                            let isHost = Self.readBool(data["isHost"])
                             let totalReward: Int64 = Self.readInt64(data["totalReward"]) ?? 0
                             let msgType: PublicChatMessageType = totalReward > 0
                                 ? .luckyGift(giftIconUrl: giftIcon, count: Int(giftNum), totalReward: totalReward)
@@ -421,9 +435,9 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                         if let s = m.senderName, !s.isEmpty { return s }
                         return data["fromNick"] as? String
                     }()
-                    let userLevel = (data["userLevel"] as? Int) ?? (data["level"] as? Int)
-                    let isVip = (data["isVip"] as? Bool) ?? false
-                    let isHost = (data["isHost"] as? Bool) ?? false
+                    let userLevel = Self.readInt(data["userLevel"]) ?? Self.readInt(data["level"])
+                    let isVip = Self.readBool(data["isVip"])
+                    let isHost = Self.readBool(data["isHost"])
                     let avatar = data["fromAvatar"] as? String
 
                     // v18 luckyGift 分派（对齐 H5 handleLiveGiftMessage L818）：
@@ -569,9 +583,10 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                     // 已知但不实现（132/133/1004/1007/1014/...）+ unknown：仅静默 dispatch（router 已分发），不污染公屏
                     continue
                 default:
-                    // 礼物 / 合规等 H 阶段仍占位显示（H 礼物会话接 SVGA 后改）
+                    // v22（2026-07-10）：不再 append "[Gift/Custom message]" 占位污染公屏
+                    // 未识别的 attachType 走 router 已 dispatch 静默处理，公屏侧不展示
                     if m.messageType == .custom {
-                        items.append(PublicChatMessage(text: L10n.imSystemGiftPlaceholder, isSystem: true))
+                        AppLogger.im.debug("🔕 [Chatroom] unhandled custom attachType=\(String(describing: at), privacy: .public) —— skip public chat")
                         continue
                     }
                 }
@@ -587,9 +602,9 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                 let ext = (m.remoteExt as? [String: Any]) ?? [:]
                 let nickname = (ext["fromNick"] as? String).flatMap { $0.isEmpty ? nil : $0 }
                     ?? m.senderName
-                let level = (ext["userLevel"] as? Int) ?? (ext["level"] as? Int)
-                let isVip = (ext["isVip"] as? Bool) ?? false
-                let isHost = (ext["isHost"] as? Bool) ?? false
+                let level = Self.readInt(ext["userLevel"]) ?? Self.readInt(ext["level"])
+                let isVip = Self.readBool(ext["isVip"])
+                let isHost = Self.readBool(ext["isHost"])
                 let avatar = ext["fromIcon"] as? String
                 items.append(PublicChatMessage(
                     text: body,
@@ -602,8 +617,8 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                     messageType: .regular
                 ))
             case .custom:
-                // 解码失败兜底
-                items.append(PublicChatMessage(text: L10n.imSystemGiftPlaceholder, isSystem: true))
+                // v22（2026-07-10）：解码失败静默 log，不再 append "[Gift/Custom message]" 污染公屏
+                AppLogger.im.debug("🔕 [Chatroom] custom NIMMessage no attachType extracted —— skip public chat")
             case .notification:
                 // v19 对齐 H5 handleNotificationMessage（live.js:927-1007）：
                 // memberEnter/memberExit 时**过滤主播本人**（`account !== yxAccid`）后 delta +/-1
@@ -633,8 +648,8 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                                 if let ext = extDict {
                                     if let n = ext["fromNick"] as? String, !n.isEmpty { nickname = n }
                                     else if let n = ext["nickname"] as? String, !n.isEmpty { nickname = n }
-                                    userLevel = (ext["userLevel"] as? Int) ?? (ext["level"] as? Int)
-                                    isVip = (ext["isVip"] as? Bool) ?? false
+                                    userLevel = Self.readInt(ext["userLevel"]) ?? Self.readInt(ext["level"])
+                                    isVip = Self.readBool(ext["isVip"])
                                     vehicleImg = (ext["vehicleImg"] as? String) ?? (ext["itemSmallImg"] as? String)
                                 }
                             }

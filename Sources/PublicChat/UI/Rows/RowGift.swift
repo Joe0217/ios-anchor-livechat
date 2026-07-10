@@ -2,7 +2,7 @@ import SwiftUI
 
 /// H5 源：`anchor-livechat-h5/src/views/liveSetting/components/messageScroller.vue` L486-517
 /// 视觉：max-w249 min-h24 rounded-12 px8 py5 · bg rgba(0,0,0,0.16)
-/// 格式：Lv + VIP + 昵称 #1AFFCD + " Send " 白 + gift icon h16 w16 + " x N" 白
+/// 格式：Lv + VIP + 昵称 #1AFFCD + " Send " 白 + gift icon 22pt（H5 h16，iOS 用户反馈需要 +6pt） + " x N" 白
 struct RowGift: View {
     let sender: SenderProfile?
     let iconURL: String?
@@ -23,7 +23,7 @@ struct RowGift: View {
             Text("Send")   // H5 L495/514: {{ $t('common.Send') }}
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.white)
-            PublicChatGiftIconBubble(iconURL: iconURL, count: count, iconSize: 16)
+            PublicChatGiftIconBubble(iconURL: iconURL, count: count, iconSize: 22)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
