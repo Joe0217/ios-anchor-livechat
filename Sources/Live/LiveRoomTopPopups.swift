@@ -65,6 +65,10 @@ struct TopSheetsModifier: ViewModifier {
     let onRankUpdate: (Int?) -> Void
     @Binding var showRouletteSetting: Bool
     @Binding var showRouletteIntro: Bool
+    /// 转盘启用状态变化回调（sheet 内 Enable/Close/Save 成功后回传给 LiveRoomView 更新顶部 icon）
+    let onRouletteEnabledChanged: (Bool) -> Void
+    /// Enable 成功后 sheet 立即关闭，toast 需上抛到 LiveRoomView 全屏层展示
+    let onRouletteToast: (String) -> Void
 
     func body(content: Content) -> some View {
         // v17: 所有直播间 sheet 加 .fraction(0.4) + .large 双 detents —— 默认 2/5 屏，允许用户拖大
@@ -75,7 +79,7 @@ struct TopSheetsModifier: ViewModifier {
                                       roomId: roomIdStr,
                                       isPresented: $showContribution)
                     .sheetTopInset()
-                    .presentationDetents([.medium])
+                    .presentationDetents([.fraction(0.4)])
                     .presentationDragIndicator(.visible)   // 用顶部 X 关闭，隐藏 drag indicator
             }
             .sheet(isPresented: $showRank) {
@@ -83,7 +87,7 @@ struct TopSheetsModifier: ViewModifier {
                 RankSheetView(anchorUserId: uidStr,
                               isPresented: $showRank,
                               onRankUpdate: onRankUpdate)
-                    .presentationDetents([.medium])
+                    .presentationDetents([.fraction(0.4)])
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showUserWeeklyRank) {
@@ -94,14 +98,16 @@ struct TopSheetsModifier: ViewModifier {
                     dbId: Int(roomIdStr) ?? 0
                 )
                     .sheetTopInset()
-                    .presentationDetents([.medium])
+                    .presentationDetents([.fraction(0.4)])
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showRouletteSetting) {
                 RouletteSettingSheet(anchorUserId: uidStr,
                                      liveRoomId: roomIdStr,
-                                     isPresented: $showRouletteSetting)
-                    .presentationDetents([.medium])
+                                     isPresented: $showRouletteSetting,
+                                     onEnabledChanged: onRouletteEnabledChanged,
+                                     onToast: onRouletteToast)
+                    .presentationDetents([.fraction(0.65)])
                     .presentationDragIndicator(.visible)
             }
             .overlay {

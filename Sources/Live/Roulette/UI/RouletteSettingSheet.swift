@@ -1,56 +1,68 @@
 import SwiftUI
 
-/// Roulette 配置 sheet（对齐 H5 liveRoulettePopup.vue 主 popup）
+/// Roulette 主 sheet（对齐 H5 [liveRoulettePopup.vue] 完整功能）
 ///
-/// **本轮范围**（Level B）：显示 4-8 奖项 + 启用开关 + 价格 + 编辑/规则按钮（详情弹窗 TODO H 里程碑）
+/// 从上到下：
+/// - Header：左 ? 图标（重开引导）+ 中间 "Set Interaction Wheel" + 右占位
+/// - Central：RouletteWheelView 转盘可视化
+/// - Price row：钻石图 + 可编辑价格输入框
+/// - Edit Wheel 按钮（渐变边框 outline）
+/// - Main button 三态（Enable / Finish Editing / disabled 灰态）
+/// - Close Wheel 按钮（enabled 才显示）
+/// - 底部 Toast overlay（2s 自消）
 struct RouletteSettingSheet: View {
     @StateObject private var store: RouletteStore
     @Binding var isPresented: Bool
 
-    init(anchorUserId: String, liveRoomId: String, isPresented: Binding<Bool>) {
+    /// 编辑子 sheet 显示
+    @State private var showEditSheet: Bool = false
+    /// 重开引导 popup 显示（点 ? 图标）
+    @State private var showIntroReopen: Bool = false
+    /// 价格 TextField 绑定 text 版（对齐 H5 diamondCount）
+    @State private var priceText: String = ""
+    @FocusState private var priceFocused: Bool
+
+    /// 启用状态变化回调（Enable/Close/Save 成功、savedConfig.enabled 有变化时触发，供 LiveRoomView 顶部 icon 两态切换）
+    let onEnabledChanged: ((Bool) -> Void)?
+    /// Enable 成功后 sheet 立即关闭，toast 需上抛到 LiveRoomView 全屏层显示（sheet 内 overlay 会随 sheet dismount 一起消失）
+    let onToast: ((String) -> Void)?
+
+    init(anchorUserId: String,
+         liveRoomId: String,
+         isPresented: Binding<Bool>,
+         onEnabledChanged: ((Bool) -> Void)? = nil,
+         onToast: ((String) -> Void)? = nil) {
         self._store = StateObject(wrappedValue: RouletteStore(anchorUserId: anchorUserId,
                                                               liveRoomId: liveRoomId))
         self._isPresented = isPresented
+        self.onEnabledChanged = onEnabledChanged
+        self.onToast = onToast
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        ZStack {
+            Color(hex: 0x242221).ignoresSafeArea()
             content
+            toastOverlay
         }
-        .background(Color(hex: 0x1A0033).ignoresSafeArea())
-        .onAppear { store.loadIfNeeded() }
+        .onAppear(perform: handleAppear)
+        .onChange(of: store.state, perform: handleStateChange)
+        .onChange(of: store.savedConfig.enabled) { newValue in
+            onEnabledChanged?(newValue)
+        }
+        .sheet(isPresented: $showEditSheet) {
+            RouletteEditSheet(store: store, isPresented: $showEditSheet)
+                .presentationDetents([.fraction(0.5), .fraction(0.8)])
+                .presentationDragIndicator(.visible)
+        }
+        .overlay {
+            RouletteIntroPopup(isPresented: $showIntroReopen, onFinish: {
+                showIntroReopen = false
+            })
+        }
     }
 
-    /// v2 修订（2026-07-09）：删顶部右 X 关闭按钮 —— 用户反馈"sheet 顶部关闭按钮误触"。
-    /// 关闭走 sheet drag indicator + swipe down。左侧 ? 规则入口保留（不同语义，非关闭按钮）。
-    private var header: some View {
-        HStack {
-            // 规则入口按钮（TODO H 里程碑接入 rpsRulesSheet）
-            Button {
-                // TODO: 打开规则 sheet
-            } label: {
-                Image(systemName: "questionmark.circle")
-                    .font(.system(size: 18))
-                    .foregroundColor(.white.opacity(0.7))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel(Text(L10n.liveRoomRouletteRules))
-
-            Spacer()
-
-            Text(L10n.liveRoomRouletteSettingTitle)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
-
-            Spacer()
-
-            // 保持左右对称：右侧占位 44x44（原 X 按钮位）
-            Color.clear.frame(width: 44, height: 44)
-        }
-        .padding(.top, 8)
-    }
+    // MARK: - content
 
     @ViewBuilder
     private var content: some View {
@@ -65,81 +77,142 @@ struct RouletteSettingSheet: View {
     }
 
     private var configForm: some View {
-        ScrollView {
+        // ScrollView 包裹：sheet detent 0.65 高度下若内容超出（大屏 iPad / 大字号 / 键盘弹起）允许纵向滚动
+        ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 16) {
-                // 启用开关
-                HStack {
-                    Text(L10n.liveRoomRouletteEnable)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                    Spacer()
-                    Toggle("", isOn: Binding(
-                        get: { store.draftConfig.enabled },
-                        set: { _ in store.toggleEnabled() }
-                    ))
-                    .labelsHidden()
-                    .tint(Color(hex: 0xFFBB02))
+                header
+                RouletteWheelView(sectors: store.displaySectors)
+                    .padding(.vertical, 10)
+                priceRow
+                editButton
+                mainButton
+                if store.closeButtonVisible {
+                    closeButton
                 }
-                .padding(.horizontal, 20).padding(.vertical, 14)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-
-                // 价格
-                HStack {
-                    Text(L10n.liveRoomRoulettePrice)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                    Spacer()
-                    HStack(spacing: 4) {
-                        Image("liveRoomDiamondBadge")
-                            .resizable().frame(width: 14, height: 14)
-                        Text("\(store.draftConfig.price)")
-                            .font(.system(size: 15, weight: .heavy))
-                            .foregroundColor(Color(hex: 0xFFE600))
-                    }
-                }
-                .padding(.horizontal, 20).padding(.vertical, 14)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-
-                // 奖项列表 + 编辑按钮
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text(L10n.liveRoomRouletteSectors)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
-                        Spacer()
-                        Button {
-                            // TODO H 里程碑：弹编辑项目 popup
-                        } label: {
-                            Text(L10n.liveRoomRouletteEdit)
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(Color(hex: 0xFFBB02))
-                        }
-                    }
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                        ForEach(Array(store.draftConfig.sectors.enumerated()), id: \.offset) { _, sector in
-                            Text(sector)
-                                .font(.system(size: 13))
-                                .foregroundColor(.white)
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .background(Color.white.opacity(0.05),
-                                            in: RoundedRectangle(cornerRadius: 8))
-                        }
-                        if store.draftConfig.sectors.isEmpty {
-                            Text(L10n.liveRoomRouletteSectorsEmpty)
-                                .font(.system(size: 13))
-                                .foregroundColor(.white.opacity(0.4))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                        }
-                    }
-                }
-                .padding(20)
-                .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
             }
-            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 32)
+            .padding(.horizontal, 24).padding(.top, 8).padding(.bottom, 20)
         }
+    }
+
+    // MARK: - sub views
+
+    private var header: some View {
+        ZStack {
+            HStack {
+                Button(action: reopenIntro) {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 20))
+                        .foregroundColor(.white.opacity(0.7))
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(L10n.liveRoomRouletteRules))
+                Spacer()
+            }
+            Text(L10n.liveRoomRouletteSettingTitle)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(.white)
+        }
+    }
+
+    private var priceRow: some View {
+        HStack(spacing: 6) {
+            Image("liveRoomDiamondBadge")
+                .resizable().frame(width: 18, height: 18)
+            TextField("", text: $priceText,
+                      prompt: Text(L10n.liveRoomRoulettePrice)
+                        .foregroundColor(.white.opacity(0.3)))
+                .keyboardType(.numberPad)
+                .multilineTextAlignment(.center)
+                .foregroundColor(.white)
+                .focused($priceFocused)
+                .frame(maxWidth: 120)
+                .onChange(of: priceText, perform: handlePriceChange)
+        }
+        .padding(.horizontal, 18).padding(.vertical, 10)
+        .background(Color(hex: 0x101010), in: Capsule())
+    }
+
+    private var editButton: some View {
+        Button(action: openEditSheet) {
+            HStack(spacing: 6) {
+                Image(systemName: "pencil")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                Text(L10n.liveRoomRouletteEdit)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                Capsule()
+                    .stroke(
+                        LinearGradient(colors: [Color(hex: 0x8E60E6), Color(hex: 0xD074E9)],
+                                       startPoint: .leading, endPoint: .trailing),
+                        lineWidth: 1.5
+                    )
+            )
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var mainButton: some View {
+        switch store.mainButtonKind {
+        case .disabled:
+            mainButtonLabel(text: L10n.liveRoomRouletteEnable,
+                            background: AnyShapeStyle(Color.white.opacity(0.1)),
+                            textOpacity: 0.3)
+                .allowsHitTesting(false)
+        case .enable:
+            Button(action: handleEnable) {
+                mainButtonLabel(text: L10n.liveRoomRouletteEnable,
+                                background: mainButtonGradient,
+                                textOpacity: 1.0)
+            }
+            .buttonStyle(.plain)
+            .disabled(store.isSaving)
+        case .finishEditing:
+            Button(action: handleFinishEditing) {
+                mainButtonLabel(text: L10n.liveRoomRouletteFinishEditing,
+                                background: mainButtonGradient,
+                                textOpacity: 1.0)
+            }
+            .buttonStyle(.plain)
+            .disabled(store.isSaving)
+        }
+    }
+
+    private func mainButtonLabel(text: String, background: AnyShapeStyle, textOpacity: Double) -> some View {
+        Text(text)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundColor(.white.opacity(textOpacity))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(background, in: Capsule())
+    }
+
+    private var mainButtonGradient: AnyShapeStyle {
+        AnyShapeStyle(
+            LinearGradient(colors: [Color(hex: 0x8E60E6), Color(hex: 0xD074E9)],
+                           startPoint: .leading, endPoint: .trailing)
+        )
+    }
+
+    private var closeButton: some View {
+        Button(action: handleClose) {
+            Text(L10n.liveRoomRouletteCloseWheel)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color(hex: 0x4F4267), in: Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(store.isSaving)
     }
 
     private var errorView: some View {
@@ -147,16 +220,91 @@ struct RouletteSettingSheet: View {
             Text(L10n.liveRoomRouletteErrorRetry)
                 .font(.system(size: 14))
                 .foregroundColor(.white.opacity(0.5))
-            Button {
-                store.retry()
-            } label: {
+                .multilineTextAlignment(.center)
+            Button(action: store.retry) {
                 Text(L10n.liveRoomRetry)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 24).padding(.vertical, 8)
                     .background(Color.white.opacity(0.15), in: Capsule())
             }
+            .buttonStyle(.plain)
         }
+        .padding(.horizontal, 32)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var toastOverlay: some View {
+        if let toast = store.toast {
+            VStack {
+                Spacer()
+                Text(toast)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16).padding(.vertical, 8)
+                    .background(Color.black.opacity(0.7), in: Capsule())
+                    .padding(.bottom, 40)
+            }
+            .transition(.opacity)
+        }
+    }
+
+    // MARK: - handlers
+
+    private func handleAppear() {
+        store.loadIfNeeded()
+    }
+
+    /// state 从 loading → loaded 时同步服务端价格到本地 TextField
+    private func handleStateChange(_ newState: RouletteStore.LoadState) {
+        if case .loaded = newState, priceText.isEmpty, store.savedConfig.price > 0 {
+            priceText = String(store.savedConfig.price)
+        }
+    }
+
+    private func handlePriceChange(_ newValue: String) {
+        // 仅收数字（对齐 H5 diamond input 语义）
+        let digits = newValue.filter { $0.isNumber }
+        if digits != newValue { priceText = digits }
+        store.draftPrice = Int(digits) ?? 0
+    }
+
+    private func openEditSheet() {
+        priceFocused = false
+        showEditSheet = true
+    }
+
+    private func handleEnable() {
+        priceFocused = false
+        Task {
+            await store.enableWheel()
+            // 成功后立即关 sheet + 上抛 toast 到 LiveRoomView（sheet 内 overlay toast 会随 dismount 消失）
+            // 失败态：不关 sheet，保留 sheet 内 store.toast 显示错误
+            guard store.savedConfig.enabled else { return }
+            isPresented = false
+            onToast?(L10n.liveRoomRouletteToastStarted)
+        }
+    }
+
+    private func handleFinishEditing() {
+        priceFocused = false
+        Task { await store.finishEditing() }
+    }
+
+    private func handleClose() {
+        priceFocused = false
+        Task {
+            await store.closeWheel()
+            // 成功后立即关 sheet + 上抛 toast（对齐 H5 closeWheelBtn emit('closePopup')）
+            // closeWheel 成功后 savedConfig.enabled=false；失败保留 true 让 sheet 内 toast 显示错误
+            guard !store.savedConfig.enabled else { return }
+            isPresented = false
+            onToast?(L10n.liveRoomRouletteToastStopped)
+        }
+    }
+
+    private func reopenIntro() {
+        showIntroReopen = true
     }
 }

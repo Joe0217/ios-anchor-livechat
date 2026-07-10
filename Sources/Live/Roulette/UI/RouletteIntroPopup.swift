@@ -1,24 +1,27 @@
 import SwiftUI
 
-/// Roulette 首次引导 popup（对齐 H5 rpsIntroPopup.vue 3 卡片引导 + Skip/Next/Start）
+/// Roulette 首次引导 popup（对齐 H5 [rpsIntroPopup.vue] 2 卡片 + Next 按钮）
 ///
-/// 交互：3 张卡片顺序显示 → 最后一张点 "Start" 完成引导 → 触发 onFinish 回调
+/// - 卡 1：Wheel（对齐 H5 live.Wheel + live.Wheel intro desc）
+/// - 卡 2：Rock Paper Scissors（对齐 H5 live.Rock Paper Scissors + live.RPS intro desc）
+/// - 顶部标题："Live Interactive Game Rules"
 struct RouletteIntroPopup: View {
     @Binding var isPresented: Bool
     let onFinish: () -> Void
 
     @State private var currentCard: Int = 0
-    private let totalCards = 3
+    private let totalCards = 2
 
     private var titles: [String] {
         [L10n.liveRoomRouletteIntroCard1Title,
-         L10n.liveRoomRouletteIntroCard2Title,
-         L10n.liveRoomRouletteIntroCard3Title]
+         L10n.liveRoomRouletteIntroRpsTitle]
     }
     private var bodies: [String] {
         [L10n.liveRoomRouletteIntroCard1Body,
-         L10n.liveRoomRouletteIntroCard2Body,
-         L10n.liveRoomRouletteIntroCard3Body]
+         L10n.liveRoomRouletteIntroRpsBody]
+    }
+    private var icons: [String] {
+        ["gift.fill", "hand.raised.fill"]
     }
 
     var body: some View {
@@ -27,23 +30,22 @@ struct RouletteIntroPopup: View {
                 Color.black.opacity(0.5).ignoresSafeArea()
                     .contentShape(Rectangle())
 
-                VStack(spacing: 20) {
-                    // Card icon（每张不同：SF Symbol 占位；H 里程碑替换切图）
-                    Image(systemName: cardIcon)
-                        .font(.system(size: 56))
-                        .foregroundColor(Color(hex: 0xFFBB02))
-                        .frame(height: 80)
-
-                    Text(titles[currentCard])
+                VStack(spacing: 16) {
+                    // 顶部标题
+                    Text(L10n.liveRoomRouletteIntroHeader)
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.white)
                         .multilineTextAlignment(.center)
+                        .padding(.horizontal, 16)
 
-                    Text(bodies[currentCard])
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.8))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 24)
+                    // 卡片区（横滑，H5 用 van-swipe autoplay 3.5s；iOS 用 TabView(.page) 手动滑）
+                    TabView(selection: $currentCard) {
+                        ForEach(0..<totalCards, id: \.self) { idx in
+                            card(idx: idx).tag(idx)
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .frame(height: 250)
 
                     // 进度点
                     HStack(spacing: 8) {
@@ -53,29 +55,24 @@ struct RouletteIntroPopup: View {
                                 .frame(width: 8, height: 8)
                         }
                     }
-                    .padding(.top, 8)
 
-                    // 按钮：Next / Start
-                    Button {
-                        if currentCard < totalCards - 1 {
-                            currentCard += 1
-                        } else {
-                            onFinish()
-                            withAnimation { isPresented = false }
-                        }
-                    } label: {
-                        Text(currentCard < totalCards - 1
-                             ? L10n.liveRoomRouletteIntroNext
-                             : L10n.liveRoomRouletteIntroStart)
+                    // Next 按钮
+                    Button(action: handleNext) {
+                        Text(L10n.liveRoomRouletteIntroNext)
                             .font(.system(size: 15, weight: .bold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                            .background(Color(hex: 0x6400D1), in: Capsule())
+                            .background(
+                                LinearGradient(colors: [Color(hex: 0x8515FF), Color(hex: 0xE40132)],
+                                               startPoint: .leading, endPoint: .trailing),
+                                in: Capsule()
+                            )
                     }
+                    .buttonStyle(.plain)
                     .padding(.horizontal, 40)
                 }
-                .padding(.vertical, 32)
+                .padding(.vertical, 24)
                 .frame(maxWidth: 320)
                 .background(
                     LinearGradient(colors: [Color(hex: 0x5300A1), Color(hex: 0x3800A0)],
@@ -88,12 +85,31 @@ struct RouletteIntroPopup: View {
         }
     }
 
-    private var cardIcon: String {
-        switch currentCard {
-        case 0: return "gift.fill"
-        case 1: return "dice.fill"
-        case 2: return "sparkles"
-        default: return "sparkles"
+    @ViewBuilder
+    private func card(idx: Int) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: icons[idx])
+                .font(.system(size: 48))
+                .foregroundColor(Color(hex: 0xFFBB02))
+                .frame(height: 60)
+            Text(titles[idx])
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
+            Text(bodies[idx])
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.85))
+                .multilineTextAlignment(.leading)
+                .padding(.horizontal, 20)
+        }
+    }
+
+    private func handleNext() {
+        if currentCard < totalCards - 1 {
+            withAnimation { currentCard += 1 }
+        } else {
+            onFinish()
+            withAnimation { isPresented = false }
         }
     }
 }
