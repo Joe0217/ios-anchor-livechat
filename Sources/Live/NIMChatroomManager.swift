@@ -739,13 +739,46 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                 // v11 结构化填充：让 ChatRowRegular 能渲染等级徽章 + 昵称青绿色 + Host/VIP 标
                 // remoteExt 常见字段（H5 蓝本 messageScroller.vue setLevelImg 依赖）：
                 //   userLevel: Int / level: Int / isVip: Bool / isHost: Bool / fromNick / fromIcon
-                let ext = (m.remoteExt as? [String: Any]) ?? [:]
+                // v22（2026-07-11）：H5 转盘/猜拳等特殊消息也走 NIM `.text`（非 custom），通过
+                // ext.type 字段区分（H5 messageScroller L347 注释：wheelRes/rpsWinNotify/pk_notification/enterRoom）
+                //   type='wheelRes' → RowWheelRes（text=奖品名）
+                //   type='enterRoom' → RowEnterRoom（text 常为空 + ext 有 itemSmallImg）
+                //   其他/无 type → RowRegularText（普通用户文本）
+                var ext = (m.remoteExt as? [String: Any]) ?? [:]
+                if ext.isEmpty, let s = m.remoteExt as? String,
+                   let d = s.data(using: .utf8),
+                   let parsed = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+                    ext = parsed
+                }
+                let extType = ext["type"] as? String ?? ""
                 let nickname = (ext["fromNick"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                    ?? (ext["fromNickName"] as? String).flatMap { $0.isEmpty ? nil : $0 }
                     ?? m.senderName
                 let level = Self.readInt(ext["userLevel"]) ?? Self.readInt(ext["level"])
                 let isVip = Self.readBool(ext["isVip"])
                 let isHost = Self.readBool(ext["isHost"])
-                let avatar = ext["fromIcon"] as? String
+                let avatar = (ext["fromIcon"] as? String) ?? (ext["icon"] as? String)
+
+                // 按 ext.type 分派 messageType
+                let msgType: PublicChatMessageType
+                switch extType {
+                case "wheelRes":
+                    msgType = .wheelRes
+                case "rpsWinNotify":
+                    let medalUrl = ext["medalUrl"] as? String
+                    let medalHours = Self.readInt(ext["grantedHours"]) ?? Self.readInt(ext["medalHours"])
+                    msgType = .rpsWin(medalUrl: medalUrl, medalHours: medalHours)
+                case "pk_notification":
+                    msgType = .pkNotify
+                case "enterRoom":
+                    let inLive = Self.readInt(ext["inLiveChannel"]) ?? 0
+                    msgType = inLive == 1 ? .officialBoostEnter : .enterRoom
+                default:
+                    msgType = .regular
+                }
+
+                let itemSmallImg = (ext["itemSmallImg"] as? String) ?? (ext["vehicleImg"] as? String)
+                AppLogger.im.debug("💬 [Chatroom] text ext.type='\(extType, privacy: .public)' → msgType=\(String(describing: msgType), privacy: .public) body='\(body.prefix(40), privacy: .public)'")
                 items.append(PublicChatMessage(
                     text: body,
                     isSystem: false,
@@ -754,7 +787,8 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                     userLevel: level,
                     isHost: isHost,
                     isVip: isVip,
-                    messageType: .regular
+                    messageType: msgType,
+                    itemSmallImg: itemSmallImg
                 ))
             case .custom:
                 // v22（2026-07-10）：解码失败静默 log，不再 append "[Gift/Custom message]" 污染公屏
