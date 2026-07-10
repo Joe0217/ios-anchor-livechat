@@ -399,7 +399,7 @@ private struct CallFaceTimeView: View {
     @ViewBuilder
     private var chatInputSheet: some View {
         CallChatInputSheet(store: store)
-            .presentationDetents([.height(96)])
+            .presentationDetents([.height(60)])
             .presentationDragIndicator(.visible)
             .preferredColorScheme(.dark)
     }

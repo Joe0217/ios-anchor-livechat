@@ -52,12 +52,16 @@ struct ReportUserSheet: View {
         ZStack {
             Theme.Palette.profileBackground.ignoresSafeArea()
 
+            // 2026-07-10 通话内 sheet 高度受限（medium ~50% screen），reasonList + description
+            // 可能超过 sheet 可视高 → ScrollView 包住中间可滚动区，title 顶固定 / submitButton 底固定。
             VStack(spacing: 0) {
-                // 拖拽指示条（sheet iOS 系统会显示，这里不重绘）
                 title
-                reasonList
-                descriptionSection
-                Spacer(minLength: 8)
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        reasonList
+                        descriptionSection
+                    }
+                }
                 submitButton
             }
             .padding(.horizontal, 24)
@@ -263,7 +267,7 @@ private final class PreviewReportService: ReportUserServiceProtocol {
                 service: PreviewReportService(),
                 onSubmitSuccess: {}
             )
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.medium, .fraction(0.8)])
         }
         .preferredColorScheme(.dark)
 }
