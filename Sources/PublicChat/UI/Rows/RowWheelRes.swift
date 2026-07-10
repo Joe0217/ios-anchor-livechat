@@ -12,9 +12,10 @@ struct RowWheelRes: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
-            // rouletteMsg.webp 占位（iOS 无本地 asset，用 emoji 🎡 24pt 接近转盘造型）
-            Text("🎡")
-                .font(.system(size: 24))
+            // v22（2026-07-11）：真设计切图 liveRoomRouletteMsgIcon（用户提供 rouletteMsg 3x png）
+            Image("liveRoomRouletteMsgIcon")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
                 .frame(width: 28, height: 28)
 
             HStack(alignment: .center, spacing: 4) {
