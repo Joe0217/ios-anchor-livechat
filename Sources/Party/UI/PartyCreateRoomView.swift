@@ -241,13 +241,14 @@ struct PartyCreateRoomView: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Theme.Palette.partyCreateChevron)
                     }
-                    // 已选模板 preview
+                    // 已选模板 preview（v6.1：去 hardcode 高度，用 aspectRatio 保持切图原比例，避免裁剪）
                     if let temp = store.selectedTemplate {
                         Divider().background(Theme.Palette.partyCardBorder)
                         HStack {
                             Spacer()
                             templateThumbnail(temp)
-                                .frame(width: 180, height: 120)
+                                .frame(width: 240)
+                                .fixedSize(horizontal: false, vertical: true)
                             Spacer()
                         }
                         .padding(.vertical, 8)
@@ -416,7 +417,7 @@ struct PartyCreateModePickerSheet: View {
                 Text(store.templatesError)
                     .font(.system(size: 13))
                     .foregroundColor(.orange)
-                Button(L10n.Party.retry) { Task { await store.loadTemplates() } }
+                Button(L10n.Party.retry) { Task { await store.loadTemplates(for: store.mode) } }
                     .foregroundColor(.white)
             }
             .padding(.top, 40)

@@ -32,17 +32,27 @@ final class PartyCreateStore: ObservableObject {
     // MARK: - Mode picker 状态
 
     /// 1=Voice / 2=Live+Voice（对齐 H5 type 参数）
+    /// v6.1：切换 tab **只切 UI 不重拉**（两 mode list 同 loadInitial 一次性并发拉），
+    /// 直接从 `templatesByMode` 缓存读取 + 切 selectedTemplate 到该 mode 下第一张
     @Published var mode: Int = 2 {
         didSet {
-            if mode != oldValue {
-                Task { await loadTemplates() }
+            guard mode != oldValue else { return }
+            // 切 selectedTemplate 到新 mode 下的第一张（缓存已就绪时无 loading，未就绪时走 loadInitial 补拉）
+            if let cached = templatesByMode[mode], !cached.isEmpty {
+                selectedTemplate = cached.first
+            } else {
+                Task { await loadTemplates(for: mode) }
             }
         }
     }
 
-    @Published private(set) var templates: [PartyRoomTemplate] = []
+    /// 按 mode 缓存的模板列表（v6.1）
+    @Published private(set) var templatesByMode: [Int: [PartyRoomTemplate]] = [:]
     @Published private(set) var templatesLoading: Bool = false
     @Published private(set) var templatesError: String = ""
+
+    /// 当前 mode 下的模板列表（View 层用）
+    var templates: [PartyRoomTemplate] { templatesByMode[mode] ?? [] }
 
     // MARK: - Language picker 状态
 
@@ -88,30 +98,40 @@ final class PartyCreateStore: ObservableObject {
 
     // MARK: - Load 触发（View onAppear 调）
 
-    /// 首次进入创房页时拉模板 + 语言列表（并发）
+    /// 首次进入创房页时并发拉两 mode 模板 + 语言列表（v6.1 tab 切换不再重拉）
     func loadInitial() async {
-        async let t: () = loadTemplates()
+        async let voice: () = loadTemplates(for: Self.modeVoice)
+        async let liveVoice: () = loadTemplates(for: Self.modeLiveVoice)
         async let l: () = loadLanguages()
-        _ = await (t, l)
+        _ = await (voice, liveVoice, l)
     }
 
-    func loadTemplates() async {
-        templatesLoading = true
-        templatesError = ""
-        defer { templatesLoading = false }
+    /// 拉某个 mode 的模板；缓存到 `templatesByMode[mode]`；仅切到当前 mode 时更新 selectedTemplate
+    func loadTemplates(for targetMode: Int) async {
+        // 仅当前 mode 切 loading 视觉；后台预拉不干扰 UI
+        let isCurrent = targetMode == mode
+        if isCurrent {
+            templatesLoading = true
+            templatesError = ""
+        }
+        defer {
+            if isCurrent { templatesLoading = false }
+        }
         do {
-            let list = try await service.fetchTemplates(type: mode)
-            templates = list
-            // v6：全部可选，默认选第一张
-            if let cur = selectedTemplate, !list.contains(where: { $0.id == cur.id }) {
-                selectedTemplate = list.first
-            } else if selectedTemplate == nil {
-                selectedTemplate = list.first
+            let list = try await service.fetchTemplates(type: targetMode)
+            templatesByMode[targetMode] = list
+            // v6：全部可选，默认选第一张（仅当前 mode）
+            if isCurrent {
+                if let cur = selectedTemplate, !list.contains(where: { $0.id == cur.id }) {
+                    selectedTemplate = list.first
+                } else if selectedTemplate == nil {
+                    selectedTemplate = list.first
+                }
             }
         } catch is CancellationError {
             return
         } catch {
-            templatesError = error.localizedDescription
+            if isCurrent { templatesError = error.localizedDescription }
         }
     }
 
