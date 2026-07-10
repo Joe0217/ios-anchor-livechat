@@ -37,7 +37,7 @@ struct RowRegularText: View {
     @ViewBuilder private var badgesCluster: some View {
         if let s = sender {
             HStack(spacing: 4) {
-                if let lv = s.userLevel, lv > 0 { PublicChatLevelBadge(level: lv) }
+                if let lv = s.userLevel, lv > 0 { UserLevelBadge(level: lv, size: .small) }
                 if s.isVip { PublicChatVipBadge() }
             }
         }

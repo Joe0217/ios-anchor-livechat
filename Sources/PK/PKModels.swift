@@ -116,6 +116,8 @@ struct PKTopUser: Codable, Equatable {
 struct PKInviteInfo: Codable, Equatable {
     let userId: Int
     let nickname: String?
+    /// 邀请方头像 URL（后端可能下发，spec 类型声明不完整；参 [ios-decode-userid-compat] 精神：H5 类型声明不可信）
+    let avatar: String?
     let countryId: String?
     let agoraChannelId: String?
     let pkDuration: Int

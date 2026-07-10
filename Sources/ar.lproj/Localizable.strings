@@ -828,10 +828,11 @@
 "party.language.all"                     = "الكل";
 "party.rank.partyRich"                   = "الأثرياء";
 "party.rank.room"                        = "الغرف";
-"party.search.placeholder"               = "ابحث عن الغرف";
-"party.search.hint"                      = "أدخل الكلمات المفتاحية للبحث";
-"party.search.noResults"                 = "لا توجد غرف";
+"party.search.placeholder"               = "ابحث باسم الغرفة أو المعرّف";
+"party.search.hint"                      = "";
+"party.search.noResults"                 = "";
 "party.comingSoon"                       = "قريبًا";
+"party.myRoom"                           = "غرفتي";
 
 "party.create.navTitle"                  = "إنشاء غرفتي";
 "party.create.submit"                    = "إنشاء";

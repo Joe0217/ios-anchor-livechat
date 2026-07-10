@@ -828,10 +828,11 @@
 "party.language.all"                     = "Tümü";
 "party.rank.partyRich"                   = "PartyRich";
 "party.rank.room"                        = "Oda";
-"party.search.placeholder"               = "Oda ara";
-"party.search.hint"                      = "Aramak için anahtar kelime girin";
-"party.search.noResults"                 = "Oda bulunamadı";
+"party.search.placeholder"               = "Oda adı / kimliği ile ara";
+"party.search.hint"                      = "";
+"party.search.noResults"                 = "";
 "party.comingSoon"                       = "Yakında";
+"party.myRoom"                           = "Odam";
 
 "party.create.navTitle"                  = "Odamı Oluştur";
 "party.create.submit"                    = "Oluştur";

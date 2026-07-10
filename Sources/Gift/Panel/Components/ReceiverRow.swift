@@ -50,17 +50,10 @@ struct GiftPanelReceiverRow: View {
         let selected = store.receiversSelection.contains(item.id)
         return Button(action: { store.toggleReceiver(item.id) }) {
             ZStack(alignment: .topTrailing) {
-                CachedAsyncImage(url: item.avatarURL,
-                                 contentMode: .fill,
-                                 persistent: false,
-                                 cdn: (.avatarSmall, .fill)) {
-                    Circle().fill(Color.white.opacity(0.15))
-                }
-                .frame(width: 34, height: 34)
-                .clipShape(Circle())
-                .overlay(
-                    Circle().stroke(selected ? Color.pink : Color.clear, lineWidth: 2)
-                )
+                AvatarView(url: item.avatarURL, size: 34, kind: .user, persistent: false)
+                    .overlay(
+                        Circle().stroke(selected ? Color.pink : Color.clear, lineWidth: 2)
+                    )
 
                 if selected {
                     Image(systemName: "checkmark.circle.fill")

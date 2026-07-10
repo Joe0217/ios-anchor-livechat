@@ -241,13 +241,9 @@ struct UserWeeklyRankSheetView: View {
             )
     }
 
+    /// 2026-07-10 迁移到公共组件 UserLevelBadge (11 tier gradient 对齐 H5)
     private func levelBadge(_ level: Int) -> some View {
-        HStack(spacing: 2) {
-            Image(systemName: "diamond.fill").font(.system(size: 8)).foregroundColor(.white)
-            Text("Lv.\(level)").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
-        }
-        .padding(.horizontal, 4).padding(.vertical, 1)
-        .background(levelColor(level), in: Capsule())
+        UserLevelBadge(level: level, size: .small)
     }
 
     private var vipBadge: some View {
@@ -256,16 +252,6 @@ struct UserWeeklyRankSheetView: View {
             .foregroundColor(.white)
             .padding(.horizontal, 3).padding(.vertical, 1)
             .background(Color(hex: 0xFFBB02), in: RoundedRectangle(cornerRadius: 3))
-    }
-
-    private func levelColor(_ level: Int) -> Color {
-        switch level {
-        case 0..<10:  return Color(hex: 0x808080)
-        case 10..<30: return Color(hex: 0x00A5FF)
-        case 30..<50: return Color(hex: 0x9817CA)
-        case 50..<70: return Color(hex: 0xFFBB02)
-        default:      return Color(hex: 0xFF0090)
-        }
     }
 
     private func formatDiamond(_ n: Int64) -> String {
@@ -354,16 +340,10 @@ private struct WeekTopThreeCards: View {
                 AvatarView(urlString: entry.avatarUrl, size: 48, kind: .user)
                     .overlay(Circle().stroke(crownColor(rank), lineWidth: 2))
                 // v18 Q4: Week 前 3 名等级徽章（对齐 H5 userWeeklyRank Week Tab Top3 level badge h18 z-3）
+                // 2026-07-10 迁移到公共组件 UserLevelBadge
                 if entry.level > 0 {
-                    HStack(spacing: 2) {
-                        Image(systemName: "diamond.fill").font(.system(size: 7)).foregroundColor(.white)
-                        Text("Lv.\(entry.level)")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                    .padding(.horizontal, 4).padding(.vertical, 1)
-                    .background(levelColor(entry.level), in: Capsule())
-                    .offset(y: 6)   // 半覆盖 avatar 底沿
+                    UserLevelBadge(level: entry.level, size: .small)
+                        .offset(y: 6)   // 半覆盖 avatar 底沿
                 }
             }
             .frame(height: 54)   // avatar 48 + level badge overflow 6
@@ -388,17 +368,6 @@ private struct WeekTopThreeCards: View {
             in: RoundedRectangle(cornerRadius: 12)
         )
         .offset(y: offsetY)
-    }
-
-    /// v18 Week 前 3 名等级徽章色档（对齐 H5 messageScroller setLevelBg 6 档）
-    private func levelColor(_ level: Int) -> Color {
-        switch level {
-        case 0..<10:  return Color(hex: 0x808080)
-        case 10..<30: return Color(hex: 0x00A5FF)
-        case 30..<50: return Color(hex: 0x9817CA)
-        case 50..<70: return Color(hex: 0xFFBB02)
-        default:      return Color(hex: 0xFF0090)
-        }
     }
 
     private func crownColor(_ rank: Int) -> Color {
@@ -443,12 +412,8 @@ private struct ViewerRow: View {
                             )
                     }
                     if viewer.level > 0 {
-                        HStack(spacing: 2) {
-                            Image(systemName: "diamond.fill").font(.system(size: 8)).foregroundColor(.white)
-                            Text("Lv.\(viewer.level)").font(.system(size: 10, weight: .bold)).foregroundColor(.white)
-                        }
-                        .padding(.horizontal, 4).padding(.vertical, 1)
-                        .background(levelColor(viewer.level), in: Capsule())
+                        // 2026-07-10 迁移到公共组件 UserLevelBadge
+                        UserLevelBadge(level: viewer.level, size: .small)
                     }
                     if viewer.isVip {
                         Text("VIP")
@@ -469,15 +434,5 @@ private struct ViewerRow: View {
             Spacer(minLength: 8)
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
-    }
-
-    private func levelColor(_ level: Int) -> Color {
-        switch level {
-        case 0..<10:  return Color(hex: 0x808080)
-        case 10..<30: return Color(hex: 0x00A5FF)
-        case 30..<50: return Color(hex: 0x9817CA)
-        case 50..<70: return Color(hex: 0xFFBB02)
-        default:      return Color(hex: 0xFF0090)
-        }
     }
 }

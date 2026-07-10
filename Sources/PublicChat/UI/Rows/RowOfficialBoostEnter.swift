@@ -13,7 +13,7 @@ struct RowOfficialBoostEnter: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 4) {
                 if let s = sender {
-                    if let lv = s.userLevel, lv > 0 { PublicChatLevelBadge(level: lv) }
+                    if let lv = s.userLevel, lv > 0 { UserLevelBadge(level: lv, size: .small) }
                     if s.isVip { PublicChatVipBadge() }
                 }
                 Text("Official Boost✨")

@@ -6,7 +6,7 @@ struct PublicChatSenderCapsule: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            if let lv = sender.userLevel, lv > 0 { PublicChatLevelBadge(level: lv) }
+            if let lv = sender.userLevel, lv > 0 { UserLevelBadge(level: lv, size: .small) }
             if sender.isVip { PublicChatVipBadge() }
             if sender.isHost { PublicChatHostBadge() }
             Text(sender.nickname + ":")

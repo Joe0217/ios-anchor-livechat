@@ -785,10 +785,11 @@
 "party.language.all"                     = "All";
 "party.rank.partyRich"                   = "PartyRich";
 "party.rank.room"                        = "Room";
-"party.search.placeholder"               = "Search rooms";
-"party.search.hint"                      = "Enter keywords to search rooms";
-"party.search.noResults"                 = "No rooms found";
+"party.search.placeholder"               = "Search by room name / id";
+"party.search.hint"                      = "";
+"party.search.noResults"                 = "";
 "party.comingSoon"                       = "Coming soon";
+"party.myRoom"                           = "My Room";
 
 "party.create.navTitle"                  = "Create My Room";
 "party.create.submit"                    = "Create";

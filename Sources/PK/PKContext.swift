@@ -14,6 +14,10 @@ struct PKContext: Equatable {
     let pkId: String
     let oppositeUserId: Int
     let oppositeNickname: String?
+    /// 对手头像 URL（贡献榜 sheet header 显示 opponent side 时使用）。
+    /// 来源：匹配成功 `bundle.avatar` / 邀请方接受 `item.avatar`（我方发邀请时记的对方 avatar）/
+    /// 收到邀请接受 `info.avatar`（若后端下发）。缺失时 sheet header 走 AvatarView 默认兜底图。
+    let oppositeAvatar: String?
     let oppositeChannel: String?
     let oppositeYxAccId: String?
     let duration: Int        // 秒

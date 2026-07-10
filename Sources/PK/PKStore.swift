@@ -681,10 +681,9 @@ final class PKStore: ObservableObject {
                                        top3Users: scores?.top3Users,
                                        oppositeTop3Users: scores?.oppositeTop3Users)
             }
-            // v22（2026-07-11）：本地 append PK 结果公屏消息（对齐 H5 sendPkEndNotice）
-            appendPKResultToPublicChat(result: bundle.result ?? 0,
-                                        opponentNickname: bundle.nickname ?? ctx?.oppositeNickname)
-            enterPunishing(seconds: 120)
+            // v22（2026-07-11）：result 来自后端广播；主动结束路径 result=nil 由 enterPunishing 内本地算
+            enterPunishing(seconds: 120, resultFromBundle: bundle.result,
+                           opponentNickname: bundle.nickname ?? ctx?.oppositeNickname)
         case 9:
             // 对方结束 / 中断；仅结束 PK，本端不下播
             logger.info("🏁 [PK Opposite Ended] currentState=\(self.state.rawValue) currentScores my=\(self.scores?.pkCounter ?? 0) opp=\(self.scores?.oppositePkCounter ?? 0) bundleScores my=\(bundle.pkCounter ?? -1) opp=\(bundle.oppositePkCounter ?? -1)")
@@ -997,13 +996,30 @@ final class PKStore: ObservableObject {
         ))
     }
 
-    private func enterPunishing(seconds: Int) {
+    /// v22（2026-07-11）：signature 增加 resultFromBundle / opponentNickname 让公屏结果消息在所有路径下都能 append
+    /// - 后端广播路径（handle100_status case 8）：传 bundle.result / bundle.nickname
+    /// - 主动结束路径（endPKActive / handleInPKExpired）：传 nil，函数内用本地 scores 计算胜负
+    private func enterPunishing(seconds: Int,
+                                 resultFromBundle: Int? = nil,
+                                 opponentNickname: String? = nil) {
         transition(to: .punishing)
         startPunishCountdown(seconds: seconds)
         unsubscribeNetworkQuality()
         if let c = ctx {
             observer?.pkStore(self, didEnterPunishing: c)
         }
+        // v22（2026-07-11）：本地 append PK 结果公屏消息（对齐 H5 sendPkEndNotice）
+        // result 优先 bundle 值，无则用本地 scores 计算：my > opp → 胜 1；my < opp → 败 2；相等 → 平 3
+        let effectiveResult: Int
+        if let r = resultFromBundle, r > 0 {
+            effectiveResult = r
+        } else {
+            let my = scores?.pkCounter ?? 0
+            let opp = scores?.oppositePkCounter ?? 0
+            effectiveResult = my > opp ? 1 : (my < opp ? 2 : 3)
+        }
+        appendPKResultToPublicChat(result: effectiveResult,
+                                    opponentNickname: opponentNickname ?? ctx?.oppositeNickname)
         // G #2 反馈修复：pkStatus=8 PK 自然结束时立即弹结果窗（含 result + 最终分数）。
         // 不等 120s punishing 结束才显示——punishing 是惩罚时间，结果应该实时可见。
         if !hasShownResult {

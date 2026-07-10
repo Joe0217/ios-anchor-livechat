@@ -133,8 +133,15 @@ struct LiveRoomView: View {
         .sheet(isPresented: $showPKDebug) { pkDebugPanel }   // M0 调试入口（仅 DEBUG，不限高）
         #endif
         .sheet(isPresented: $showInviteSheet) {
-            PKInviteSheet(store: pkStore, isPresented: $showInviteSheet)
-                .presentationDetents([.fraction(0.5), .fraction(0.8)])
+            PKInviteSheet(store: pkStore,
+                          isPresented: $showInviteSheet,
+                          onTapAvatar: { uid in
+                              // tap anchor avatar → 关邀请 sheet + 打开 UserCard popup（对齐 H5 openAnchorProfile）
+                              showInviteSheet = false
+                              userCardUserId = uid
+                          },
+                          selfAvatarURL: AnchorInfoStore.shared.iconURL?.absoluteString)
+                .presentationDetents([.fraction(0.6), .fraction(0.8)])
                 .presentationDragIndicator(.visible)
         }
         // G M3 / spec §6.1：PK 各态 overlay 合并为单一 PKOverlayHost，避免 5 层 _OverlayModifier
@@ -433,10 +440,11 @@ struct LiveRoomView: View {
     /// - matching → idle/failed：视为匹配失败，自动挂载 MatchFailed（对齐 H5 pkMatchFailedPopup）
     private func handlePKStateChange(_ newState: PKStateMain) {
         defer { lastPKState = newState }
-        // 对齐 H5 pkInitiatePopup.vue:254-258 `pkStatus !== 'Live' → closePopup`：
-        // 任何 non-idle/failed 态（含 matching/inviting/invited/starting/inPK/punishing/endingPK）
-        // 都关闭 PK 邀请 sheet，避免用户在 PK 流程中还能看到邀请入口
-        if newState != .idle && newState != .failed {
+        // 对齐 H5 精确行为（2026-07-11 反悔上一轮 over-close）：
+        // - H5 pkInitiatePopup.vue:254-258 `pkStatus !== 'Live'` 只调 closePopup() 重置搜索状态，**不关闭 sheet**
+        // - H5 liveRoom.vue:558-559 真正 `showPkInitiatePopup.value=false` 只在 `pkStatus === 'InPK'` 时
+        // → iOS 对齐：**仅 .inPK / .punishing 关闭邀请 sheet**；`.matching / .inviting / .invited / .starting / .endingPK` 全保留
+        if newState == .inPK || newState == .punishing {
             showInviteSheet = false
         }
         switch newState {

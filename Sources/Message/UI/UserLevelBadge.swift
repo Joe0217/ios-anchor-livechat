@@ -1,46 +1,77 @@
 import SwiftUI
 
-/// 主播段位 badge（对齐 H5 `list.vue:362-367`：Lv.X 彩色渐变胶囊 + crown 图标）。
+/// 主播 / 用户 **等级徽章公共组件**（视觉基准：Message 列表设计稿；逻辑对齐 H5 `c-levelBadge.vue`）。
 ///
-/// **对齐 H5 `userLevelStatus.ts` 11 段渐变配置**（`Sources/Message/UI/UserLevelBadge.swift`）：
-/// - 1-9   浅紫 → 桃紫
-/// - 10-19 深紫 → 亮紫
-/// - 20-29 亮紫 → 品红
-/// - 30-39 电紫 → 玫红
-/// - 40-44 深紫 → 灰紫
-/// - 45-49 紫罗兰 → 深紫红
-/// - 50-54 紫 → 粉紫
-/// - 55-59 亮紫 → 玫粉
-/// - 60-64 灰紫 → 玫棕
-/// - 65-70 紫 → 棕红
-/// - 70+   紫 → 橘棕
+/// **本工程唯一等级胶囊组件** —— PublicChat / Live / PK / Message / Call / UserCard 全部走它，
+/// 禁止再写 ad-hoc `HStack + Text("Lv.\(n)")` 实现（参 [prefer-shared-component-over-adhoc]）。
 ///
-/// **图标**：SF Symbol `crown.fill` 占位（H-2 真图标 vipX.webp 素材替换）
+/// **视觉基准**：Message 列表设计稿（2026-07-10 用户明示"直接使用"）——Capsule + padding + `crown.fill`
+/// SF Symbol + 白色文本。**不**照抄 H5 rounded-8 + vipX.webp 切图（iOS 侧无此资源）。
+///
+/// **逻辑对齐 H5 `userLevelStatus.ts` 11 段渐变配置**（1-9 / 10-19 / 20-29 / 30-39 / 40-44 /
+/// 45-49 / 50-54 / 55-59 / 60-64 / 65-70 / 70+），每档独立 linear gradient。
+///
+/// **Size 三档**（padding / icon / text 按比例缩放，Capsule 形状不变）：
+/// - `.small`  padding H4/V1 · icon7 · text8（PublicChat 公屏 / marquee 密集场景，等同旧 PublicChatLevelBadge）
+/// - `.medium` padding H5/V2 · icon8 · text9（**默认**；等同 Message 列表原视觉基准）
+/// - `.large`  padding H6/V3 · icon10 · text11（详情页 / 用户名片）
+///
+/// **用法**：
+/// ```swift
+/// UserLevelBadge(level: 25)                          // Int 直接传，默认 .medium
+/// UserLevelBadge(level: 25, size: .small)            // 明示 size
+/// UserLevelBadge(levelName: user.levelName)          // 从接口 String? 传，nil/空/"0" 自动不渲染
+/// ```
 struct UserLevelBadge: View {
-    let levelName: String   // 传入非空非"0"字符串（View 层判 shouldShow 后再渲染）
+    enum Size {
+        case small, medium, large
 
-    var body: some View {
-        HStack(spacing: 2) {
-            Image(systemName: "crown.fill")
-                .font(.system(size: 8))
-                .foregroundStyle(.white)
-            Text("Lv.\(levelName)")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundStyle(.white)
-        }
-        .padding(.horizontal, 5)
-        .padding(.vertical, 2)
-        .background(
-            LinearGradient(colors: Self.gradient(for: levelName),
-                           startPoint: .leading, endPoint: .trailing)
-        )
-        .clipShape(Capsule())
-        .accessibilityLabel(L10n.messageA11yLevelFormat(levelName))
+        var paddingH: CGFloat { self == .small ? 4 : self == .medium ? 5 : 6 }
+        var paddingV: CGFloat { self == .small ? 1 : self == .medium ? 2 : 3 }
+        var iconSize: CGFloat { self == .small ? 7 : self == .medium ? 8 : 10 }
+        var textSize: CGFloat { self == .small ? 8 : self == .medium ? 9 : 11 }
     }
 
-    private static func gradient(for levelName: String) -> [Color] {
-        let n = Int(levelName) ?? 0
-        switch n {
+    let level: Int
+    let size: Size
+
+    /// 主入口：Int 等级值
+    init(level: Int, size: Size = .medium) {
+        self.level = level
+        self.size = size
+    }
+
+    /// 便捷入口：从接口 String? 传入；nil/空/非数字自动转 0 → body 内不渲染（调用方无需判空）
+    init(levelName: String?, size: Size = .medium) {
+        self.level = Int(levelName ?? "") ?? 0
+        self.size = size
+    }
+
+    var body: some View {
+        // level <= 0 时不渲染（对齐 H5 `<div v-if="level">` 语义）
+        if level > 0 {
+            HStack(spacing: 2) {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: size.iconSize))
+                    .foregroundStyle(.white)
+                Text("Lv.\(level)")
+                    .font(.system(size: size.textSize, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            .padding(.horizontal, size.paddingH)
+            .padding(.vertical, size.paddingV)
+            .background(
+                LinearGradient(colors: Self.gradient(for: level),
+                               startPoint: .leading, endPoint: .trailing)
+            )
+            .clipShape(Capsule())
+            .accessibilityLabel(L10n.messageA11yLevelFormat("\(level)"))
+        }
+    }
+
+    /// 11 段渐变映射（对齐 H5 c-levelBadge.vue levelConfigs 表）
+    static func gradient(for level: Int) -> [Color] {
+        switch level {
         case 1...9:   return [Color(hex: 0x64439D), Color(hex: 0x8F5DB6)]
         case 10...19: return [Color(hex: 0x583B8E), Color(hex: 0x924CB7)]
         case 20...29: return [Color(hex: 0x906CC9), Color(hex: 0xBD5DD8)]

@@ -8,11 +8,11 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "PKServi
 /// 全部走 `APIClient.shared.post` AES 加解密 + 公共头链路（与 B/C/D 一致）。
 /// 错误码 1004/1005 在 APIClient 单点分流 logout，PKService 仅转译 APIError → PKServiceError.business。
 ///
-/// **必用 13 个**（spec §1.4 + 2026-06-25 §1.2 反悔扩展）：startPkMatch / cancelMatch / joinPk / invitePk /
-/// handleInvite / endPk / endPunishing / getPkTop3RankList / getPkStatus / mutePkRoom / updateInviteSwitch /
-/// **getRecommendAnchorList / queryInviteSwitch**（后两者为推荐列表 + 接受邀请开关 UI 接入）。
-/// **占位 4 个**（throw `.notImplemented`，待 H/I 接续）：getPkRankList / getPkRecordList /
-/// getPkInfo / selectPKRuleIcon。
+/// **必用 14 个**（spec §1.4 + 2026-06-25 §1.2 反悔扩展 + 2026-07-10 PK 贡献榜 sheet 接入）：
+/// startPkMatch / cancelMatch / joinPk / invitePk / handleInvite / endPk / endPunishing /
+/// getPkTop3RankList / getPkStatus / mutePkRoom / updateInviteSwitch /
+/// **getRecommendAnchorList / queryInviteSwitch / getPkRankList**（贡献榜 sheet）。
+/// **占位 3 个**（throw `.notImplemented`，待 H/I 接续）：getPkRecordList / getPkInfo / selectPKRuleIcon。
 enum PKService {
     // MARK: - 通用响应解码 helper
 
@@ -160,12 +160,41 @@ enum PKService {
                                body: ["searchValue": close ? 1 : 0])
     }
 
-    // MARK: - 6 占位接口（G 范围外，throw notImplemented）
+    // MARK: - PK 贡献榜（H5 pkRankListPopup.vue 接口）
 
-    /// 占位：PK 全榜（H 礼物全景阶段可能接入）。
-    static func getPkRankList(pkId: String, anchorId: Int) async throws -> [PKTopUser] {
-        throw PKServiceError.notImplemented
+    /// PK 贡献榜（`POST /api/pk/getPkRankList` body `{pkId, anchorId}`）。
+    ///
+    /// H5 蓝本：`anchor-livechat-h5/src/api/livePk/index.ts` L81-83；
+    /// `anchor-livechat-h5/src/views/liveRoom/components/pkLive/pkRankListPopup.vue` L45-73。
+    /// H5 响应 `res || []`——直接是数组；APIClient 已剥 `result` 层，data 就是 `[PKRankItem]` json。
+    /// 兼容后端可能返回 `{list/records/data: [...]}` 包装（参 getRecommendAnchorList 兜底模式）。
+    static func getPkRankList(pkId: String, anchorId: Int) async throws -> [PKRankItem] {
+        let body: [String: Any] = ["pkId": pkId, "anchorId": anchorId]
+        let data: Data
+        do {
+            data = try await APIClient.shared.post("/api/pk/getPkRankList", body: body)
+        } catch let err as APIError {
+            throw PKServiceError.business(code: err.code, message: err.message)
+        }
+        // 裸数组优先（H5 响应形态）
+        if let arr = try? JSONDecoder().decode([PKRankItem].self, from: data) {
+            return arr
+        }
+        // 包装结构兜底
+        struct Wrapper: Decodable {
+            let list: [PKRankItem]?
+            let records: [PKRankItem]?
+            let data: [PKRankItem]?
+        }
+        if let wrap = try? JSONDecoder().decode(Wrapper.self, from: data) {
+            return wrap.list ?? wrap.records ?? wrap.data ?? []
+        }
+        logger.error("decode /api/pk/getPkRankList failed; raw=\(String(data: data, encoding: .utf8) ?? "nil", privacy: .private)")
+        throw PKServiceError.decode(NSError(domain: "PKService", code: -1,
+                                            userInfo: [NSLocalizedDescriptionKey: "getPkRankList decode failed"]))
     }
+
+    // MARK: - 3 占位接口（G 范围外，throw notImplemented）
 
     /// 推荐主播列表 / 搜索（spec §1.2 反悔扩展，2026-06-25 G #11 落地）。
     ///
@@ -242,8 +271,29 @@ enum PKService {
         throw PKServiceError.notImplemented
     }
 
-    /// 占位：PK 规则图（G 不做规则 UI）。注意接口在 `/api/agora/live/selectPKRuleIcon`（非 /api/pk）。
+    /// PK 规则图片 URL（`POST /api/agora/live/selectPKRuleIcon`）。
+    ///
+    /// H5 蓝本：`anchor-livechat-h5/src/api/livePk/index.ts:148` `getPkRuleImgApi` →
+    /// `pkRulePopup.vue:17-24` `res.liveIcon` 作为规则图片 src。
+    ///
+    /// 接口路径**在 `/api/agora/live/*`，非 `/api/pk/*`**（与其他 PK 接口分域，参 [api-http-method-strict]）。
+    /// 返回图片 URL；空/失败由调用方决定 fallback（PKRulePopup 显示空态）。
     static func selectPKRuleIcon() async throws -> String {
-        throw PKServiceError.notImplemented
+        let data: Data
+        do {
+            data = try await APIClient.shared.post("/api/agora/live/selectPKRuleIcon", body: [:])
+        } catch let err as APIError {
+            throw PKServiceError.business(code: err.code, message: err.message)
+        }
+        struct Resp: Decodable { let liveIcon: String? }
+        if let resp = try? JSONDecoder().decode(Resp.self, from: data) {
+            return resp.liveIcon ?? ""
+        }
+        // 兼容裸字符串（后端可能直接返 String）
+        if let s = try? JSONDecoder().decode(String.self, from: data) {
+            return s
+        }
+        logger.error("decode /api/agora/live/selectPKRuleIcon failed; raw=\(String(data: data, encoding: .utf8) ?? "nil", privacy: .private)")
+        return ""
     }
 }

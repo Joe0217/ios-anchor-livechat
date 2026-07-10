@@ -226,6 +226,7 @@ enum L10n {
         static var searchHint: String { localize("party.search.hint", comment: "空 query 提示") }
         static var searchNoResults: String { localize("party.search.noResults", comment: "无搜索结果") }
         static var comingSoon: String { localize("party.comingSoon", comment: "占位 toast 文案 Coming soon") }
+        static var myRoom: String { localize("party.myRoom", comment: "浮动按钮 My Room（已创房时展示）") }
 
         // 创建房（PartyCreateRoomView v5 对齐 livechat-h5 用户端，2026-07-10）
         static var createNavTitle: String { localize("party.create.navTitle", comment: "Create My Room") }

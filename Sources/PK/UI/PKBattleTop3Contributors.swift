@@ -17,30 +17,49 @@ import SwiftUI
 /// - Top1 → SF Symbol `crown.fill` 金黄（近似 icon-top3-1）
 /// - Top2 → `pkBattleRank2` 切图（Frame 1171275841 蓝色 "2"，对应 icon-top3-2）
 /// - Top3 → `pkBattleRank3` 切图（Frame 1171275842 棕色 "3"，对应 icon-top3-3）
+///
+/// **交互**（2026-07-10）：对齐 H5 L104/L175 `@click="showMyRankList"/"showOpponentRankList"` —
+/// 两侧整块（含空数据态）都可 tap 拉起对应 PK 贡献榜 sheet。tap 走 Button + `.plain` style +
+/// `.contentShape(Rectangle())` 保证整块热区（[swiftui-button-plain-hitarea]）。
 struct PKBattleTop3Contributors: View {
     let myTop3: [PKTopUser]
     let opponentTop3: [PKTopUser]
+    let onTapSide: (PKRankSide) -> Void
 
     private let avatarSize: CGFloat = 28
     private let rankIconSize: CGFloat = 12
 
     var body: some View {
         HStack(spacing: 0) {
-            // 我方（左）：粉色横向渐变，内层反向排列（从右往左 top1/2/3）
-            side(users: myTop3,
-                 gradient: LinearGradient(colors: [Color(hex: 0xF8179D, opacity: 0.2),
-                                                   Color(hex: 0xF8179D, opacity: 0)],
-                                          startPoint: .leading, endPoint: .trailing),
-                 isMine: true)
-                .frame(maxWidth: .infinity)
+            Button {
+                onTapSide(.my)
+            } label: {
+                // 我方（左）：粉色横向渐变，内层反向排列（从右往左 top1/2/3）
+                side(users: myTop3,
+                     gradient: LinearGradient(colors: [Color(hex: 0xF8179D, opacity: 0.2),
+                                                       Color(hex: 0xF8179D, opacity: 0)],
+                                              startPoint: .leading, endPoint: .trailing),
+                     isMine: true)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel(Text(L10n.PK.rankSheetTitle))
 
-            // 对方（右）：蓝色横向渐变，内层正向排列
-            side(users: opponentTop3,
-                 gradient: LinearGradient(colors: [Color(hex: 0x1068FA, opacity: 0),
-                                                   Color(hex: 0x1068FA, opacity: 0.2)],
-                                          startPoint: .leading, endPoint: .trailing),
-                 isMine: false)
-                .frame(maxWidth: .infinity)
+            Button {
+                onTapSide(.opponent)
+            } label: {
+                // 对方（右）：蓝色横向渐变，内层正向排列
+                side(users: opponentTop3,
+                     gradient: LinearGradient(colors: [Color(hex: 0x1068FA, opacity: 0),
+                                                       Color(hex: 0x1068FA, opacity: 0.2)],
+                                              startPoint: .leading, endPoint: .trailing),
+                     isMine: false)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+            .accessibilityLabel(Text(L10n.PK.rankSheetTitle))
         }
         .frame(height: 32)
     }
@@ -57,14 +76,14 @@ struct PKBattleTop3Contributors: View {
                         ForEach(Array((users.isEmpty ? [nil] : Array(users.prefix(3).map { Optional($0) })).enumerated().reversed()), id: \.offset) { idx, user in
                             avatarSlot(user: user, rank: idx)
                         }
-                        arrowIcon(direction: .rightToLeft, hidden: users.isEmpty)
+                        arrowIcon(direction: .rightToLeft)
                     }
                     // H5 我方 `pe-8 ps-16` LTR → leading:16 / trailing:8
                     .padding(.leading, 16)
                     .padding(.trailing, 8)
                 } else {
                     HStack(spacing: 8) {
-                        arrowIcon(direction: .leftToRight, hidden: users.isEmpty)
+                        arrowIcon(direction: .leftToRight)
                         // top1/2/3（正向）
                         ForEach(Array((users.isEmpty ? [nil] : Array(users.prefix(3).map { Optional($0) })).enumerated()), id: \.offset) { idx, user in
                             avatarSlot(user: user, rank: idx)
@@ -78,21 +97,11 @@ struct PKBattleTop3Contributors: View {
     }
 
     /// 单个头像位 + 边框色（按 rank）+ 右下 rank icon
-    @ViewBuilder
     private func avatarSlot(user: PKTopUser?, rank: Int) -> some View {
         ZStack(alignment: .bottomTrailing) {
-            Group {
-                if let user {
-                    AvatarView(urlString: user.displayAvatar, size: avatarSize, kind: .user)
-                } else {
-                    // 2026-07-07 v5：空占位灰圆 → defaultUserAvatar（对齐 H5 icon-top-empty.webp 意图）
-                    Image("defaultUserAvatar")
-                        .resizable()
-                        .frame(width: avatarSize, height: avatarSize)
-                        .clipShape(Circle())
-                }
-            }
-            .overlay(Circle().stroke(borderColor(rank), lineWidth: 1))
+            // 2026-07-07 v5：空占位对齐 H5 icon-top-empty.webp 意图；AvatarView 传 nil URL 自动走 defaultUserAvatar 兜底
+            AvatarView(urlString: user?.displayAvatar, size: avatarSize, kind: .user)
+                .overlay(Circle().stroke(borderColor(rank), lineWidth: 1))
 
             // 右下角 rank icon（H5 `absolute bottom--6 right-0` = 悬出 avatar 右下 6pt）
             rankIcon(rank: rank)
@@ -137,12 +146,12 @@ struct PKBattleTop3Contributors: View {
         }
     }
 
-    /// 箭头（点击进入排行榜的指示），空数据时透明占位
+    /// 箭头（tap 拉起榜单的视觉指示）。2026-07-10 起始终显示——tap 交互始终可用，视觉不再随空数据切透明
     private enum ArrowDir { case leftToRight, rightToLeft }
-    private func arrowIcon(direction: ArrowDir, hidden: Bool) -> some View {
+    private func arrowIcon(direction: ArrowDir) -> some View {
         Image(systemName: direction == .leftToRight ? "chevron.left" : "chevron.right")
             .font(.system(size: 10, weight: .semibold))
-            .foregroundColor(hidden ? .clear : .white.opacity(0.4))
+            .foregroundColor(.white.opacity(0.4))
             .accessibilityHidden(true)
     }
 }

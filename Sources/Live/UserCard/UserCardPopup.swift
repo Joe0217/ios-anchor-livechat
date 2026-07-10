@@ -54,7 +54,7 @@ struct UserCardPopup: View {
                 if let flag = info.countryEmoji {
                     Text(flag).font(.system(size: 13))
                 }
-                PublicChatLevelBadge(level: info.level)
+                UserLevelBadge(level: info.level, size: .small)
             }
 
             // 关注 / 粉丝数

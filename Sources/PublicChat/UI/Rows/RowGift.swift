@@ -13,7 +13,7 @@ struct RowGift: View {
     var body: some View {
         HStack(alignment: .center, spacing: 3) {
             if let s = sender {
-                if let lv = s.userLevel, lv > 0 { PublicChatLevelBadge(level: lv) }
+                if let lv = s.userLevel, lv > 0 { UserLevelBadge(level: lv, size: .small) }
                 if s.isVip { PublicChatVipBadge() }
                 Text(s.nickname)
                     .font(.system(size: 12, weight: .medium))

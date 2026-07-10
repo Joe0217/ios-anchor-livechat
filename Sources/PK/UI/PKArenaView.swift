@@ -25,6 +25,8 @@ struct PKArenaView: View {
     let agora: AgoraManager
 
     @State private var isOpponentMuted: Bool = false
+    /// PK 贡献榜 sheet 呈现 side（对齐 H5 pkBattleViewTop3Contributors.vue @click showMyRankList/showOpponentRankList）
+    @State private var rankSheetSide: PKRankSide?
 
     var body: some View {
         GeometryReader { geo in
@@ -72,11 +74,12 @@ struct PKArenaView: View {
                     .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
                 }
 
-                // 4) 视频区正下方 Top3 贡献榜
+                // 4) 视频区正下方 Top3 贡献榜（2026-07-10 起两侧整块 tap 拉起对应贡献榜 sheet）
                 VStack(spacing: 0) {
                     Spacer().frame(height: PKArenaLayout.topOffset + PKArenaLayout.videoHeight + 4)
                     PKBattleTop3Contributors(myTop3: store.scores?.top3Users ?? [],
-                                             opponentTop3: store.scores?.oppositeTop3Users ?? [])
+                                             opponentTop3: store.scores?.oppositeTop3Users ?? [],
+                                             onTapSide: handleRankSideTap)
                         .frame(height: 32)
                     Spacer(minLength: 0)
                 }
@@ -96,6 +99,49 @@ struct PKArenaView: View {
         // 而 LiveRoomView 的 GeometryReader 用外层 `.ignoresSafeArea()` 全忽略 → 两 view 基准差 47pt → 对方视频比本端低 47pt
         // 改为无参数 `.ignoresSafeArea()` 让 PKArenaView 内部 GeometryReader 与 LiveRoomView 走完全相同尺寸基准
         .ignoresSafeArea()
+        // PK 贡献榜 sheet（对齐 H5 pkRankListPopup.vue h-559 固定半屏）
+        .sheet(item: $rankSheetSide) { side in
+            pkRankSheet(side: side)
+                .presentationDetents([.fraction(0.5)])
+        }
+    }
+
+    // MARK: - PK 贡献榜 sheet 接线
+
+    /// Top3 一侧被点击（H5 showMyRankList / showOpponentRankList）。
+    /// ctx.pkId 缺失时（starting/matching 边界瞬时态）忽略 tap 兜底避免拉空接口。
+    @MainActor
+    private func handleRankSideTap(_ side: PKRankSide) {
+        guard store.ctx?.pkId != nil else { return }
+        rankSheetSide = side
+    }
+
+    /// side → 主播上下文映射（对齐 H5 pkRankListPopup.vue `currentAnchorInfo`）：
+    /// - `.my`：AnchorInfoStore（session 主播）+ PKStore.ownAnchorId
+    /// - `.opponent`：PKContext（对手 uid + nickname + avatar）
+    @MainActor @ViewBuilder
+    private func pkRankSheet(side: PKRankSide) -> some View {
+        if let ctx = store.ctx {
+            switch side {
+            case .my:
+                let anchorInfo = AnchorInfoStore.shared
+                PKRankSheetView(
+                    side: .my,
+                    pkId: ctx.pkId,
+                    anchorId: store.ownAnchorId,
+                    anchorAvatarURL: anchorInfo.iconURL?.absoluteString,
+                    anchorNickname: anchorInfo.displayName
+                )
+            case .opponent:
+                PKRankSheetView(
+                    side: .opponent,
+                    pkId: ctx.pkId,
+                    anchorId: ctx.oppositeUserId,
+                    anchorAvatarURL: ctx.oppositeAvatar,
+                    anchorNickname: ctx.oppositeNickname ?? ""
+                )
+            }
+        }
     }
 
     // MARK: - 对手静音按钮

@@ -11,22 +11,7 @@ struct RegisterAvatarPickerView: View {
             ZStack(alignment: .bottomTrailing) {
                 // 头像圆形（无背景色/边框，对齐 2026-07-09 用户反馈）
                 ZStack {
-                    if let url = store.iconUrl, let u = URL(string: url) {
-                        AsyncImage(url: u) { img in
-                            img.resizable().aspectRatio(contentMode: .fill)
-                        } placeholder: {
-                            Circle().fill(Color.gray.opacity(0.2))
-                        }
-                        .frame(width: 100, height: 100)
-                        .clipShape(Circle())
-                    } else {
-                        ZStack {
-                            Circle().fill(Color.gray.opacity(0.2)).frame(width: 100, height: 100)
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 44))
-                                .foregroundStyle(.white.opacity(0.5))
-                        }
-                    }
+                    AvatarView(urlString: store.iconUrl, size: 100, kind: .anchor, persistent: false)
                     if store.isAvatarUploading {
                         Circle().fill(.black.opacity(0.4)).frame(width: 100, height: 100)
                         ProgressView().tint(.white)
