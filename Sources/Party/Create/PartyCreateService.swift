@@ -13,13 +13,20 @@ protocol PartyCreateService: Sendable {
     /// 拉语言列表（H5: `apiGetLanguageList()`）
     func fetchLanguages() async throws -> [PartyLanguage]
 
-    /// 提交创房（H5: `apiCreatePartyRoom`）
+    /// 拉背景图列表（H5: `apiGetPartyBgImages`；对齐安卓 `getRoomBgImages`）
+    func fetchBackgrounds() async throws -> [PartyBackground]
+
+    /// 拉创房权限（H5: `apiGetPartyRoomAuth`；对齐安卓 `getCreatePartyRoomConditions`）
+    func fetchCreateConditions() async throws -> PartyCreateConditions
+
+    /// 提交创房（H5: `apiCreatePartyRoom`；对齐安卓 6 字段）
     func createRoom(
         roomName: String,
         greetingMessage: String,
         roomLanguage: String,
         roomTempId: Int,
-        roomAvatar: String?
+        roomAvatar: String?,
+        bgImgId: Int?
     ) async throws -> PartyRoomInfo
 }
 
@@ -35,15 +42,21 @@ struct PartyCreateServicePreviewFake: PartyCreateService {
 
     let templates: [PartyRoomTemplate]
     let languages: [PartyLanguage]
+    let backgrounds: [PartyBackground]
+    let conditions: PartyCreateConditions
     let createResult: Kind
 
     init(
         templates: [PartyRoomTemplate] = [],
         languages: [PartyLanguage] = [],
+        backgrounds: [PartyBackground] = [],
+        conditions: PartyCreateConditions = PartyCreateConditions(canCreateRoom: true, createRoomLevel: nil, isWithlist: nil),
         createResult: Kind = .success
     ) {
         self.templates = templates
         self.languages = languages
+        self.backgrounds = backgrounds
+        self.conditions = conditions
         self.createResult = createResult
     }
 
@@ -57,7 +70,17 @@ struct PartyCreateServicePreviewFake: PartyCreateService {
         return languages
     }
 
-    func createRoom(roomName: String, greetingMessage: String, roomLanguage: String, roomTempId: Int, roomAvatar: String?) async throws -> PartyRoomInfo {
+    func fetchBackgrounds() async throws -> [PartyBackground] {
+        try Task.checkCancellation()
+        return backgrounds
+    }
+
+    func fetchCreateConditions() async throws -> PartyCreateConditions {
+        try Task.checkCancellation()
+        return conditions
+    }
+
+    func createRoom(roomName: String, greetingMessage: String, roomLanguage: String, roomTempId: Int, roomAvatar: String?, bgImgId: Int?) async throws -> PartyRoomInfo {
         switch createResult {
         case .success:
             return Self.makeFakeRoom(id: "fake-room-\(roomTempId)", name: roomName)

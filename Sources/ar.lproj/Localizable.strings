@@ -458,7 +458,6 @@
 "liveRoom.comingSoon.rank"        = "الترتيب الأسبوعي قريبًا";
 "liveRoom.comingSoon.privateCall" = "المكالمة الخاصة قريبًا";
 "liveRoom.comingSoon.gift"        = "متجر الهدايا قريبًا";
-"liveRoom.comingSoon.send"        = "إرسال الدردشة قريبًا";
 "liveRoom.roulette.a11y"          = "عجلة التفاعل";
 "liveRoom.comingSoon.roulette"    = "عجلة التفاعل قريبًا";
 
@@ -842,6 +841,10 @@
 "party.create.mode.lockFormat"           = "مستوى %d وضع مغلق";
 "party.create.mode.unlockFormat"         = "مستوى %d وضع مفتوح";
 "party.create.mode.lockedToastFormat"    = "يتطلب المستوى %d";
+"party.create.section.background"        = "خلفية الغرفة";
+"party.create.bg.permanent"              = "دائم";
+"party.create.bg.empty"                  = "لا توجد خلفيات متاحة";
+"party.create.permissionDenied"          = "تواصل مع المشرف لفتح إنشاء الغرفة";
 "party.create.section.template"          = "اختر القالب";
 "party.create.template.loading"          = "جارٍ تحميل القوالب…";
 "party.create.template.empty"            = "لا توجد قوالب متاحة في dev";

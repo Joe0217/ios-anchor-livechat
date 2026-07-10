@@ -25,9 +25,13 @@ final class PartyCreateStore: ObservableObject {
     @Published var selectedTemplate: PartyRoomTemplate?
 
     /// 头像上传后的 CDN URL；提交 createRoom 时传给 `roomAvatar` 字段
+    /// v7：无本地上传时降级 fallback 到 `defaultAvatarUrl`（用户登录头像 mine.icon）
     @Published private(set) var uploadedAvatarUrl: String? = nil
     @Published private(set) var isUploadingAvatar: Bool = false
     @Published private(set) var uploadError: String = ""
+
+    /// 用户当前登录头像（AnchorInfoStore.mine.icon）；View 层显示 + submit 时兜底
+    let defaultAvatarUrl: String?
 
     // MARK: - Mode picker 状态
 
@@ -59,6 +63,12 @@ final class PartyCreateStore: ObservableObject {
     @Published private(set) var languages: [PartyLanguage] = []
     @Published private(set) var languagesLoading: Bool = false
 
+    // MARK: - Background picker 状态（v7 对齐安卓）
+
+    @Published private(set) var backgrounds: [PartyBackground] = []
+    @Published private(set) var backgroundsLoading: Bool = false
+    @Published var selectedBackground: PartyBackground?
+
     // MARK: - 提交状态
 
     @Published private(set) var isSubmitting: Bool = false
@@ -88,22 +98,53 @@ final class PartyCreateStore: ObservableObject {
         service: PartyCreateService,
         defaultName: String = "",
         defaultTagline: String = "",
+        defaultAvatarUrl: String? = nil,
         userLevel: Int = 0
     ) {
         self.service = service
         self.userLevel = userLevel
+        self.defaultAvatarUrl = defaultAvatarUrl
         self.roomName = defaultName
         self.roomTagline = defaultTagline
     }
 
     // MARK: - Load 触发（View onAppear 调）
 
-    /// 首次进入创房页时并发拉两 mode 模板 + 语言列表（v6.1 tab 切换不再重拉）
+    /// 首次进入创房页时并发拉两 mode 模板 + 语言 + 背景图（v7 对齐安卓 loadData 3 项）
     func loadInitial() async {
         async let voice: () = loadTemplates(for: Self.modeVoice)
         async let liveVoice: () = loadTemplates(for: Self.modeLiveVoice)
         async let l: () = loadLanguages()
-        _ = await (voice, liveVoice, l)
+        async let b: () = loadBackgrounds()
+        _ = await (voice, liveVoice, l, b)
+    }
+
+    /// 拉背景图列表（安卓 loadData 第 3 项，首张自动选中）
+    func loadBackgrounds() async {
+        guard backgrounds.isEmpty else { return }
+        backgroundsLoading = true
+        defer { backgroundsLoading = false }
+        do {
+            let list = try await service.fetchBackgrounds()
+            backgrounds = list
+            // 首张自动选中（对齐安卓）
+            if selectedBackground == nil { selectedBackground = list.first }
+        } catch is CancellationError {
+            return
+        } catch {
+            // 静默降级：View 层显示占位（对齐 H5 create.vue 兜底 DEFAULT_BG）
+        }
+    }
+
+    /// 权限校验（对齐安卓 PartyFragment 点击 Create 时 gate）
+    /// 返回 canCreateRoom；失败时保守 return true（不阻塞用户）
+    func checkCreatePermission() async -> Bool {
+        do {
+            let cond = try await service.fetchCreateConditions()
+            return cond.canCreateRoom
+        } catch {
+            return true
+        }
     }
 
     /// 拉某个 mode 的模板；缓存到 `templatesByMode[mode]`；仅切到当前 mode 时更新 selectedTemplate
@@ -181,13 +222,16 @@ final class PartyCreateStore: ObservableObject {
         isSubmitting = true
         submitError = ""
         defer { isSubmitting = false }
+        // v7 对齐安卓：本地上传优先，否则 fallback 到登录默认头像
+        let avatarUrl = uploadedAvatarUrl ?? defaultAvatarUrl
         do {
             let info = try await service.createRoom(
                 roomName: roomName.trimmingCharacters(in: .whitespacesAndNewlines),
                 greetingMessage: roomTagline.trimmingCharacters(in: .whitespacesAndNewlines),
                 roomLanguage: lang.languageCode,
                 roomTempId: temp.id,
-                roomAvatar: uploadedAvatarUrl
+                roomAvatar: avatarUrl,
+                bgImgId: selectedBackground?.id
             )
             guard let id = info.id, !id.isEmpty else {
                 submitError = "createErrorNoRoomId"

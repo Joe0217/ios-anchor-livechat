@@ -16,16 +16,18 @@ struct PartyCreateRoomView: View {
 
     @State private var showModePicker = false
     @State private var showLanguagePicker = false
+    @State private var showBackgroundPicker = false
     @State private var photoPickerItem: PhotosPickerItem? = nil
     @FocusState private var textFieldFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
     /// 默认构造 —— 提供给 PartyTabRootView 用（Live service 内部构造）
-    init(defaultName: String = "", defaultTagline: String = "Let's chat and have fun together.", userLevel: Int = 0, onCreated: @escaping (String) -> Void = { _ in }) {
+    init(defaultName: String = "", defaultTagline: String = "Let's chat and have fun together.", defaultAvatarUrl: String? = nil, userLevel: Int = 0, onCreated: @escaping (String) -> Void = { _ in }) {
         _store = StateObject(wrappedValue: PartyCreateStore(
             service: PartyCreateServiceLive(),
             defaultName: defaultName,
             defaultTagline: defaultTagline,
+            defaultAvatarUrl: defaultAvatarUrl,
             userLevel: userLevel
         ))
         self.onCreated = onCreated
@@ -51,6 +53,7 @@ struct PartyCreateRoomView: View {
                     sectionTagline
                     sectionLanguage
                     sectionMode
+                    sectionBackground   // v7 对齐安卓 6 字段
                     Color.clear.frame(height: 80)   // 底部 Create 按钮预留空间
                 }
                 .padding(.horizontal, 20)
@@ -89,6 +92,10 @@ struct PartyCreateRoomView: View {
         .sheet(isPresented: $showLanguagePicker) {
             PartyCreateLanguagePickerSheet(store: store) { showLanguagePicker = false }
                 .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showBackgroundPicker) {
+            PartyCreateBackgroundPickerSheet(store: store) { showBackgroundPicker = false }
+                .presentationDetents([.medium, .large])
         }
         .onChange(of: store.createdRoomId) { id in
             if let id, !id.isEmpty {
@@ -137,7 +144,10 @@ struct PartyCreateRoomView: View {
         if store.isUploadingAvatar {
             Circle().fill(Color.black.opacity(0.4))
                 .overlay(ProgressView().tint(.white))
-        } else if let url = store.uploadedAvatarUrl, let u = URL(string: url) {
+        } else if let url = store.uploadedAvatarUrl ?? store.defaultAvatarUrl,
+                  !url.isEmpty,
+                  let u = URL(string: url) {
+            // v7 对齐安卓：本地上传优先 → fallback 登录默认头像
             CachedAsyncImage(url: u, persistent: true, cdn: (.avatarLarge, .fill)) {
                 Color.clear
             }
@@ -222,6 +232,68 @@ struct PartyCreateRoomView: View {
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    private var sectionBackground: some View {
+        section(title: L10n.Party.createSectionBackground) {
+            Button {
+                showBackgroundPicker = true
+            } label: {
+                VStack(spacing: 12) {
+                    HStack {
+                        Text(store.selectedBackground?.bgImgName ?? "—")
+                            .foregroundColor(Theme.Palette.partyCreateInputText)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(Theme.Palette.partyCreateChevron)
+                    }
+                    // 已选背景预览大图 + Permanent/duration 标签
+                    if let bg = store.selectedBackground {
+                        Divider().background(Theme.Palette.partyCardBorder)
+                        ZStack(alignment: .bottomTrailing) {
+                            backgroundThumbnail(bg, big: true)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 140)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            Text(bg.isPermanent ? L10n.Party.createBgPermanent : "\(bg.duration ?? 0)s")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 8).padding(.vertical, 3)
+                                .background(Capsule().fill(Color.black.opacity(0.55)))
+                                .padding(8)
+                        }
+                        .padding(.top, 4)
+                    }
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .fill(Theme.Palette.partyCreateInputFill)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Theme.Palette.partyCreateInputBorder, lineWidth: 0.5)
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
+    private func backgroundThumbnail(_ bg: PartyBackground, big: Bool) -> some View {
+        let urlStr = big ? (bg.bigImgUrl ?? bg.imgUrl) : (bg.imgUrl ?? bg.bigImgUrl)
+        if let url = urlStr, !url.isEmpty, let u = URL(string: url) {
+            CachedAsyncImage(url: u, persistent: true, cdn: (.avatarLarge, .fill)) {
+                Rectangle().fill(Theme.Palette.partyCreateTempFill)
+            }
+        } else {
+            Rectangle().fill(Theme.Palette.partyCreateTempFill)
+                .overlay(
+                    Image(systemName: "photo").foregroundColor(.white.opacity(0.4))
+                )
         }
     }
 
@@ -532,6 +604,124 @@ struct PartyCreateLanguagePickerSheet: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Background picker sheet
+
+/// 对齐安卓 `ChoosePartyRoomBackgroundDialog` 网格弹窗。
+/// 视觉：3 列缩略图 grid + 选中态紫粉描边 + 底部 Confirm。
+struct PartyCreateBackgroundPickerSheet: View {
+    @ObservedObject var store: PartyCreateStore
+    var onConfirm: () -> Void
+
+    private let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            Theme.Palette.partyListBackground.ignoresSafeArea()
+            VStack(spacing: 12) {
+                Text(L10n.Party.createSectionBackground)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.top, 16)
+                content
+                Spacer(minLength: 80)
+            }
+            confirmButton.padding(.bottom, 20).padding(.horizontal, 20)
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if store.backgroundsLoading && store.backgrounds.isEmpty {
+            HStack { Spacer(); ProgressView().tint(.white); Spacer() }
+                .padding(.top, 40)
+        } else if store.backgrounds.isEmpty {
+            Text(L10n.Party.createBgEmpty)
+                .font(.system(size: 13))
+                .foregroundColor(Theme.Palette.partyGreeting)
+                .padding(.top, 40)
+        } else {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 10) {
+                    ForEach(store.backgrounds) { bg in
+                        backgroundCard(bg)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    private func backgroundCard(_ bg: PartyBackground) -> some View {
+        let selected = store.selectedBackground?.id == bg.id
+        return Button {
+            store.selectedBackground = bg
+        } label: {
+            ZStack(alignment: .topTrailing) {
+                Group {
+                    if let urlStr = bg.imgUrl ?? bg.bigImgUrl,
+                       !urlStr.isEmpty,
+                       let u = URL(string: urlStr) {
+                        CachedAsyncImage(url: u, persistent: true, cdn: (.avatarLarge, .fill)) {
+                            Rectangle().fill(Theme.Palette.partyCreateTempFill)
+                        }
+                    } else {
+                        Rectangle().fill(Theme.Palette.partyCreateTempFill)
+                    }
+                }
+                .aspectRatio(0.75, contentMode: .fill)   // 3:4 竖向缩略图
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
+                if selected {
+                    Image("partyTemplateSelected")
+                        .resizable()
+                        .frame(width: 20, height: 20)
+                        .padding(6)
+                }
+                if !bg.isPermanent, let d = bg.duration, d > 0 {
+                    Text("\(d)s")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Capsule().fill(Color.black.opacity(0.55)))
+                        .padding(6)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(selected ? Theme.Palette.partyCreateTempSelected : Color.clear, lineWidth: 1.5)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var confirmButton: some View {
+        Button(action: onConfirm) {
+            HStack {
+                Spacer()
+                Text(L10n.Party.createConfirm)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                Spacer()
+            }
+            .padding(.vertical, 14)
+            .background(
+                Capsule().fill(
+                    LinearGradient(
+                        colors: [Theme.Palette.partyCreateBtnA, Theme.Palette.partyCreateBtnB],
+                        startPoint: .leading, endPoint: .trailing
+                    )
+                )
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(store.selectedBackground == nil)
+        .opacity(store.selectedBackground == nil ? 0.5 : 1)
     }
 }
 

@@ -10,12 +10,21 @@ struct PartyCreateServiceLive: PartyCreateService {
         try await PartyAPI.languageList()
     }
 
+    func fetchBackgrounds() async throws -> [PartyBackground] {
+        try await PartyAPI.backgroundList()
+    }
+
+    func fetchCreateConditions() async throws -> PartyCreateConditions {
+        try await PartyAPI.getCreateRoomConditions()
+    }
+
     func createRoom(
         roomName: String,
         greetingMessage: String,
         roomLanguage: String,
         roomTempId: Int,
-        roomAvatar: String?
+        roomAvatar: String?,
+        bgImgId: Int?
     ) async throws -> PartyRoomInfo {
         try await PartyAPI.createRoom(
             roomName: roomName,
@@ -23,7 +32,7 @@ struct PartyCreateServiceLive: PartyCreateService {
             greetingMessage: greetingMessage,
             roomLanguage: roomLanguage,
             roomTempId: roomTempId,
-            bgImgId: nil
+            bgImgId: bgImgId
         )
     }
 }

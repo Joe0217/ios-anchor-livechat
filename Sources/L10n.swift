@@ -233,6 +233,11 @@ enum L10n {
         static var createModeUnlockFormat: String { localize("party.create.mode.unlockFormat", comment: "Lv.%d Unlock Mode") }
         static var createModeLockedToastFormat: String { localize("party.create.mode.lockedToastFormat", comment: "Lv.%d required") }
         static var createSectionTemplate: String { localize("party.create.section.template", comment: "旧版 section 标题（保留兼容）") }
+        // v7 对齐安卓 5 项 gap（2026-07-11）
+        static var createSectionBackground: String { localize("party.create.section.background", comment: "Room Background section 标题") }
+        static var createBgPermanent: String { localize("party.create.bg.permanent", comment: "永久背景标签") }
+        static var createBgEmpty: String { localize("party.create.bg.empty", comment: "背景列表空态") }
+        static var createPermissionDenied: String { localize("party.create.permissionDenied", comment: "创房权限被拒 toast") }
         static var createTemplateLoading: String { localize("party.create.template.loading", comment: "加载模板…") }
         static var createTemplateEmpty: String { localize("party.create.template.empty", comment: "dev 暂无可用模板") }
         static var createTemplateFallbackFormat: String { localize("party.create.template.fallbackFormat", comment: "模板 %d") }
@@ -853,8 +858,6 @@ enum L10n {
     static var liveRoomComingSoonPrivateCall: String { localize("liveRoom.comingSoon.privateCall", comment: "点击 Private Call 大按钮占位提示") }
     /// Coming soon 提示（快捷礼物）
     static var liveRoomComingSoonGift: String { localize("liveRoom.comingSoon.gift", comment: "点击底部快捷礼物占位提示") }
-    /// Coming soon 提示（公屏发送）
-    static var liveRoomComingSoonSend: String { localize("liveRoom.comingSoon.send", comment: "点击 Say hi 发送按钮占位提示") }
 
     // MARK: LiveRoom 顶部互动转盘（对齐 H5 liveRoomTop.vue rouletteOpen/Close.webp，2026-07-06 补入）
     static var liveRoomRouletteA11y: String { localize("liveRoom.roulette.a11y", comment: "顶部互动转盘按钮 a11y") }

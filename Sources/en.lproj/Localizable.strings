@@ -414,7 +414,6 @@
 "liveRoom.comingSoon.rank"        = "Weekly rank coming soon";
 "liveRoom.comingSoon.privateCall" = "Private call coming soon";
 "liveRoom.comingSoon.gift"        = "Gift shop coming soon";
-"liveRoom.comingSoon.send"        = "Chat send coming soon";
 "liveRoom.roulette.a11y"          = "Interactive wheel";
 "liveRoom.comingSoon.roulette"    = "Interactive wheel coming soon";
 
@@ -798,6 +797,10 @@
 "party.create.mode.lockFormat"           = "Lv.%d Lock Mode";
 "party.create.mode.unlockFormat"         = "Lv.%d Unlock Mode";
 "party.create.mode.lockedToastFormat"    = "Lv.%d required";
+"party.create.section.background"        = "Room Background";
+"party.create.bg.permanent"              = "Permanent";
+"party.create.bg.empty"                  = "No backgrounds available";
+"party.create.permissionDenied"          = "Contact admin to unlock room creation";
 "party.create.section.name"              = "Room Name";
 "party.create.name.placeholder"          = "Up to 20 characters";
 "party.create.section.template"          = "Select Template";

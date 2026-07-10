@@ -458,7 +458,6 @@
 "liveRoom.comingSoon.rank"        = "Haftalık sıralama yakında";
 "liveRoom.comingSoon.privateCall" = "Özel arama yakında";
 "liveRoom.comingSoon.gift"        = "Hediye mağazası yakında";
-"liveRoom.comingSoon.send"        = "Sohbet gönderme yakında";
 "liveRoom.roulette.a11y"          = "Etkileşim çarkı";
 "liveRoom.comingSoon.roulette"    = "Etkileşim çarkı yakında";
 
@@ -842,6 +841,10 @@
 "party.create.mode.lockFormat"           = "Lv.%d Kilitli Mod";
 "party.create.mode.unlockFormat"         = "Lv.%d Kilitsiz Mod";
 "party.create.mode.lockedToastFormat"    = "Lv.%d gerekli";
+"party.create.section.background"        = "Oda Arka Planı";
+"party.create.bg.permanent"              = "Kalıcı";
+"party.create.bg.empty"                  = "Kullanılabilir arka plan yok";
+"party.create.permissionDenied"          = "Oda oluşturmayı açmak için yöneticiyle iletişime geçin";
 "party.create.section.template"          = "Şablon Seç";
 "party.create.template.loading"          = "Şablonlar yükleniyor…";
 "party.create.template.empty"            = "dev'de kullanılabilir şablon yok";

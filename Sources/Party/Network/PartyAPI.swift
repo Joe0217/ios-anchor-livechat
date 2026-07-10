@@ -99,6 +99,30 @@ enum PartyAPI {
         return try decodeArrayOrEmpty(data, as: PartyLanguage.self)
     }
 
+    /// 创房权限校验（Party 首页点"创建"时前置 gate）。
+    ///
+    /// **对齐 H5 `apiGetPartyRoomAuth`** + 安卓 `PartyVM.getCreatePartyRoomConditions`。
+    /// POST `/room/getCreateRoomConditions`，无参；response `{canCreateRoom, createRoomLevel, isWithlist}`。
+    static func getCreateRoomConditions() async throws -> PartyCreateConditions {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/getCreateRoomConditions",
+            body: [:]
+        )
+        return try decodeObject(data, as: PartyCreateConditions.self)
+    }
+
+    /// 派对房背景图列表（创房 Background picker 用）。
+    ///
+    /// **对齐 H5 `apiGetPartyBgImages`** + 安卓 `getRoomBgImages`。
+    /// POST `/room/getBgImages`，参数 `{pageSize, offset}`；response `[{id, imgUrl, bigImgUrl, bgImgName, duration}]`。
+    static func backgroundList(pageSize: Int = 50, offset: Int = 0) async throws -> [PartyBackground] {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/getBgImages",
+            body: ["pageSize": pageSize, "offset": offset]
+        )
+        return try decodeArrayOrEmpty(data, as: PartyBackground.self)
+    }
+
     /// 创建房间。MVP 仅传 roomName + roomTempId；其他可选字段 F 期补 UI。
     static func createRoom(
         roomName: String,

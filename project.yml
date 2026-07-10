@@ -202,7 +202,6 @@ targets:
       - path: Sources/PublicChat/Model/PublicChatVariant.swift
       - path: Sources/PublicChat/Model/UnifiedPublicChatMessage.swift
       - path: Sources/PublicChat/Store/UnifiedPublicChatFeed.swift
-      - path: Sources/PublicChat/Utils/LevelTierResolver.swift
       # Phase 1 T8：抽出的 PublicChatMessage struct（原在 NIMChatroomManager.swift，纯 Foundation）
       - path: Sources/Live/PublicScreen/LivePublicChatPayload.swift
       # Phase 1 T9：adapter 读 messageType → 派 PublicChatVariant
@@ -227,6 +226,8 @@ targets:
       - path: Sources/Party/Create/PartyCreateStore.swift
       - path: Sources/Party/Create/PartyCreateService.swift
       - path: Sources/Party/Models/PartyLanguage.swift
+      # v7 对齐安卓（2026-07-11）：PartyBackground + PartyCreateConditions（纯 Decodable，零 SDK）
+      - path: Sources/Party/Models/PartyBackground.swift
       # G 里程碑 M2：PKCountdownController（纯 Foundation Task；PKStore 状态机依赖 SDK 不入测）
       - path: Sources/PK/PKCountdownController.swift
       # A 里程碑 trial #1 (Circle 朋友圈 tab)：纯枚举 + 状态机 + 服务层 protocol
