@@ -110,6 +110,14 @@ final class PartyListStore: ObservableObject {
         beginRefresh()
     }
 
+    /// SwiftUI `.refreshable` closure 专用：await 直到刷新任务完成，让顶部 spinner 保持到数据到位。
+    /// **必须 await currentTask?.value**——直接调 `refresh()` 是 sync 立即返回，SwiftUI 会误判刷新完成
+    /// 立即收 spinner，用户看到"下拉后立刻收回"的怪异体验（见 rule list-refresh-preserve-items）。
+    func refreshAsync() async {
+        beginRefresh()
+        await currentTask?.value
+    }
+
     /// 上拉加载更多：仅 `.loaded` 有效；`loading/loadingMore/error/pageError` 时忽略（refresh 承担强夺）
     func loadMore() {
         guard case .loaded(let rooms, let hasMore) = state, hasMore else { return }

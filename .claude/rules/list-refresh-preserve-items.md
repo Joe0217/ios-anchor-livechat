@@ -1,10 +1,14 @@
-# 列表下拉刷新期必须保留已有 items 视觉
+# 列表下拉刷新 UX 双铁律：保留 items 视觉 + async closure 等到任务完成
 
-> 来源：2026-07-10 E 期 PartyListStore v1 `beginRefresh` 内 `state = .loading` → UI 走 loadingView 覆盖 → rooms 视觉消失 → 数据到重回 → 闪烁 UX。用户"每次做下拉刷新都会犯"要求精简沉淀。
+> 来源：
+> - 2026-07-10 A：PartyListStore v1 `beginRefresh` 内 `state = .loading` → UI 走 loadingView 覆盖 → rooms 视觉消失 → 数据到重回 → 闪烁 UX
+> - 2026-07-10 B：`.refreshable { store.refresh() }` closure 内 `refresh()` sync 返回 → SwiftUI 立即收顶部 spinner → 用户下拉后 spinner 一闪即隐，怪异体验
+>
+> 两次都是同一场景（下拉刷新）的相邻反模式，用户"每次做下拉刷新都会犯"要求精简沉淀。
 
-## 规则
+## 规则 A：refresh 语义必须保留已有 items 视觉
 
-任何"列表 + 下拉刷新 (`.refreshable` / pull-to-refresh)"场景，Store 的 refresh 语义**必须保留已有 items 视觉**，UI 层不能因 refresh 切到"全屏 loading 覆盖"清空列表。
+任何"列表 + 下拉刷新"场景，Store 的 refresh 语义**必须保留已有 items 视觉**，UI 层不能因 refresh 切到"全屏 loading 覆盖"清空列表。
 
 ## Why
 
@@ -47,11 +51,53 @@ private func beginRefresh() {
 - 完成时：`refreshing(_) → loaded(newItems) / error / pageError`
 - UI switch case：`.refreshing` 走"有 items 的列表 view"，与 `.loaded` 视觉一致
 
-### Preflight（写 refresh 逻辑时的自检）
+### Preflight A（写 refresh 逻辑时的自检）
 
 - [ ] refresh 期用户能否看到当前列表？若"看不到，先清空再显示"→ 反模式
 - [ ] refresh 是否走 `state = .loading` 单一态？若是 → 拆 `.loading`（首拉）vs `.refreshing(items)`（有数据刷新）
 - [ ] 无 items 时（首拉/error）refresh 可以走 loading（无视觉可保留）
+
+## 规则 B：`.refreshable` closure 必须 async await 到任务完成
+
+`.refreshable { ... }` closure 是 async；**必须在里面 await 直到刷新任务真正完成**，SwiftUI 才会正确显示顶部 spinner 至数据到达。
+
+### 反模式
+
+```swift
+// ❌ closure 直接 sync 返回 → SwiftUI 立即收 spinner
+.refreshable {
+    store.refresh()   // sync 触发 Task 后立即返回
+}
+```
+
+用户下拉手势 release 时 spinner 立即消失（并没等 network 完成）—— 视觉"下拉一下弹回来"，用户以为没刷新。
+
+### 正模式
+
+```swift
+// ✅ closure await 到 task 完成，spinner 保持
+.refreshable {
+    await store.refreshAsync()
+}
+```
+
+Store 侧配对：
+
+```swift
+func refresh() {
+    beginRefresh()   // sync 触发 currentTask
+}
+
+func refreshAsync() async {
+    beginRefresh()
+    await currentTask?.value   // await 到刷新任务完成
+}
+```
+
+### Preflight B
+
+- [ ] `.refreshable` closure 内是否只调 sync 方法？若是 → 加 `refreshAsync() async` + `await currentTask?.value`
+- [ ] Store 有无 Task 承载 refresh？若无 → refresh 立即完成时不需要 refreshAsync（少见）
 
 ## 触发场景
 

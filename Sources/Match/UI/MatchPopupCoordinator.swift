@@ -21,6 +21,8 @@ final class MatchPopupCoordinator: ObservableObject {
     @Published private(set) var appHidden: Bool = false
     /// 是否处于 4 tab 根页之外的子页（LiveRoom / WishSetting / BeautySettings / UserProfile / Call 等）—— 不弹
     @Published private(set) var blockedByOtherPage: Bool = false
+    /// E-spec §0.2 F-16：Party 主 tab gate（独立于 blockedByOtherPage 子页 gate）
+    @Published private(set) var partyTabBlocked: Bool = false
     /// 用户是否在线（跟随 OnlineStatusStore.userSetOnline）；不在线时不弹 tip，避免与 AutoOfflineDialog 重叠
     @Published private(set) var userOnline: Bool = true
 
@@ -72,6 +74,16 @@ final class MatchPopupCoordinator: ObservableObject {
         }
     }
 
+    /// E-spec §0.2 F-16：Party 主 tab gate（大厅根页 + 子页都抑制）。
+    /// 与 `blockedByOtherPage`（子页信号）独立 setter；MainTabView 在 `onChange(of: selection)` 时调用
+    /// `updatePartyTabBlocked(selection == .party)`。gate 组合逻辑在 checkAndShow 内 OR 起。
+    func updatePartyTabBlocked(_ blocked: Bool) {
+        partyTabBlocked = blocked
+        if blocked && isShowing {
+            isShowing = false
+        }
+    }
+
     /// 在线态 gate（由 OnlineStatusStore.$userSetOnline sink 转发）：
     /// 不在线时不弹 tip；避免与 AutoOfflineDialog 视觉重叠。
     private func updateUserOnline(_ online: Bool) {
@@ -109,12 +121,13 @@ final class MatchPopupCoordinator: ObservableObject {
         }
     }
 
-    /// 组合态检查（对齐 H5 c-goMatch.vue:468 gate + v4 subpage 拦截 + v5 online gate）
+    /// 组合态检查（对齐 H5 c-goMatch.vue:468 gate + v4 subpage 拦截 + v5 online gate + E-spec F-16 party tab gate）
     private func checkAndShow() {
         let store = MatchStore.shared
+        // E-spec §0.2 F-16：Party tab（大厅或子页）与子页 gate OR 起来传给 MatchStore
         let shouldShow = store.shouldShowTipPopup(
             appHidden: appHidden,
-            blockedByOtherPage: blockedByOtherPage,
+            blockedByOtherPage: blockedByOtherPage || partyTabBlocked,
             userOnline: userOnline
         )
         logger.debug("checkAndShow: appHidden=\(self.appHidden) blockedByOtherPage=\(self.blockedByOtherPage) userOnline=\(self.userOnline) shouldShow=\(shouldShow) state=\(String(describing: store.state))")

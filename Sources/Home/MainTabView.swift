@@ -146,7 +146,7 @@ struct MainTabView: View {
             // 通话态由 RootView.CallView zIndex 100 全屏覆盖，tip zIndex 50 视觉上已被盖，无需额外 gate
             matchPopupCoordinator.updateBlockedByOtherPage(newValue)
         }
-        .onChange(of: selection) { _ in
+        .onChange(of: selection) { newValue in
             // 程序驱动切换（如 liveResultTransition 结束直播切 Work + 重建 workPath 为 [.liveResult]）
             // 必须跳过清 path，避免覆盖 action 内同帧刚设置的路径（review 202607091438 P1）
             guard !suppressPathClearOnTabChange else { return }
@@ -156,6 +156,8 @@ struct MainTabView: View {
             messagesPath = NavigationPath()   // H-2：Messages tab 切走时也回根页
             partyPath = NavigationPath()      // E-spec：Party tab 同款清 path
             profilePath = NavigationPath()
+            // E-spec §0.2 F-16：Party 主 tab gate（大厅根页 + 子页都抑制 match tip 弹窗）
+            matchPopupCoordinator.updatePartyTabBlocked(newValue == .party)
         }
         .task {
             // 全局图片配置预热（对齐 H5 app.js `getBannerList([2])`）：
@@ -172,6 +174,8 @@ struct MainTabView: View {
             MatchStore.shared.attachCameraSession(matchCameraSession)
             // L 里程碑 #3c：启动 10 分钟提示弹窗调度
             matchPopupCoordinator.start()
+            // E-spec §0.2 F-16：初始 gate 同步（onChange 不触发首次；覆盖冷启动 selection != .home 的场景）
+            matchPopupCoordinator.updatePartyTabBlocked(selection == .party)
         }
         // 观察 scenePhase 更新 popupCoordinator.appHidden 用于组合态 gate
         .onChange(of: scenePhase) { newPhase in

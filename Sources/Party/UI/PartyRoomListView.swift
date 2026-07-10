@@ -37,7 +37,9 @@ struct PartyRoomListView: View {
             store.startInitial()
         }
         .refreshable {
-            store.refresh()
+            // 必须 await 刷新完成，否则 sync 返回让 SwiftUI 立刻收 spinner
+            // （见 rule list-refresh-preserve-items §"async closure 必须等到 task 完成"）
+            await store.refreshAsync()
         }
         .navigationBarHidden(true)
         // iOS 16 已知：`.navigationBarHidden(true)` 会截断外层 `.safeAreaInset(edge: .bottom)` 的传播
@@ -344,18 +346,8 @@ struct PartyRoomCardView: View {
     }
 
     private func avatarCircle(url: String) -> some View {
-        Group {
-            if let u = URL(string: url) {
-                CachedAsyncImage(url: u, persistent: true, cdn: (.avatarSmall, .fill)) {
-                    Circle().fill(Theme.Palette.cardFill)
-                }
-            } else {
-                Circle().fill(Theme.Palette.cardFill)
-            }
-        }
-        .frame(width: 20, height: 20)
-        .clipShape(Circle())
-        .overlay(Circle().stroke(Theme.Palette.partyCardFill, lineWidth: 1.5))
+        AvatarView(urlString: url, size: 20, kind: .user)
+            .overlay(Circle().stroke(Theme.Palette.partyCardFill, lineWidth: 1.5))
     }
 
     private var heatIndicator: some View {

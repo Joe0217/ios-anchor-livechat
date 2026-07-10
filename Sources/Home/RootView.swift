@@ -110,6 +110,10 @@ struct RootView: View {
             // GiftEffect 引擎清理：stop current + clear pending + tearDown players + hide Window
             GiftEffectCenter.shared.reset()
             GiftEffectOverlayWindow.shared.hide()
+            // E-spec §0.2 F-05/F-06：派对房残留清理（forceLeaveRoom 覆盖 preparing/leaving 中间态；
+            // detachChatRouter 切断跨账号 delegate 调用；PartyListStore 因 MainTabView dismount 自然 deinit）
+            await PartyStore.shared.forceLeaveRoom(.userRequest)
+            PartyStore.shared.detachChatRouter()
         }
     }
 }

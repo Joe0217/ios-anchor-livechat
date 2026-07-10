@@ -97,6 +97,14 @@ final class PartyStore: ObservableObject {
         NIMService.shared.registerRouter(chatRouter)
     }
 
+    /// E-spec §0.2 F-05：登出时切断 chatRouter 全局注册。
+    /// 用户 A 登出 → NIMOnlineKeeper.stop → 用户 B 登录 → NIMService 重连；chatRouter 仍是 A 时代实例、
+    /// delegate 仍是本单例 → 派对房消息若从 B 账号收到，会误触发 delegate 调用 UI 状态。
+    /// 由 RootView.syncSessionDependent 登出分支调用。
+    func detachChatRouter() {
+        NIMService.shared.unregisterRouter(chatRouter)
+    }
+
     // MARK: - enterRoom
 
     func enterRoom(roomId: String, password: String? = nil) async {
