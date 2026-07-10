@@ -617,13 +617,18 @@
 "pk.entry.title"             = "PK Başlat";
 "pk.entry.random"            = "Rastgele PK";
 "pk.entry.invite"            = "ID ile Davet Et";
+"pk.initiate.title"          = "PK Başlat";
+"pk.matchingCard.hint"       = "Aynı seviyede rastgele eşleşme. Tahmini eşleşme süresi 15 saniye.";
+"pk.matchingCard.matched"    = "Rakiple başarıyla eşleşildi";
+"pk.matchingCard.searching"  = "Rakip aranıyor";
+"pk.durationPicker.title"    = "PK süresini ayarla";
 
 "pk.matching.title"          = "Eşleşiyor...";
 "pk.matching.subtitle"       = "Rakip aranıyor";
 "pk.matching.cancel"         = "İptal";
 "pk.matching.cancelled"      = "PK Eşleşmesi İptal Edildi";
 
-"pk.invite.title"            = "PK Daveti Gönder";
+"pk.invite.title"            = "PK Başlat";
 "pk.invite.placeholder"      = "Rakip UID";
 "pk.invite.durationLabel"    = "PK süresi";
 "pk.invite.send"             = "Davet Gönder";

@@ -16,6 +16,9 @@ protocol CircleServiceProtocol {
     /// - parameter postId: 帖子 id（H5 keyword 字段）
     /// - 默认拉最近 7 天、最多 100 条（H5 行为）
     func getComments(postId: Int, pageSize: Int, currentPage: Int) async throws -> [MomentComment]
+    /// 删除我发的朋友圈（对齐 H5 `mine/index.vue:117-125` → `postDelete({ searchValue: id })`）。
+    /// - parameter postId: 帖子 id（H5 `searchValue` 字段值）
+    func deletePost(postId: Int) async throws
 }
 
 /// 朋友圈接口集 (对应 H5 `friendsCircle/*`，蓝本 02-11 §2.1)。
@@ -81,6 +84,15 @@ final class CircleService: CircleServiceProtocol {
         let body: [String: Any] = ["id": postId, "optionType": optionType]
         _ = try await APIClient.shared.post("/api/expand/friendsCircle/like", body: body)
         logger.info("like postId=\(postId) optionType=\(optionType) ok")
+    }
+
+    /// 删除动态（对齐 H5 `api/circle/index.ts:12` `postDelete({ searchValue: id })`）。
+    /// 200 视为成功；调用方（`MomentFeedStore.deletePost`）负责成功后本地移除 —— 对齐 H5 `.then(filter)`
+    /// 悲观 UI 语义，避免请求失败时错删数据。
+    func deletePost(postId: Int) async throws {
+        let body: [String: Any] = ["searchValue": postId]
+        _ = try await APIClient.shared.post("/api/expand/friendsCircle/del", body: body)
+        logger.info("deletePost postId=\(postId) ok")
     }
 
     /// 拉某条 post 的评论列表（对齐 H5 `comments.vue` + `/api/expand/friendsCircle/getComments`）。

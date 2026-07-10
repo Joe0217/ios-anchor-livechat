@@ -199,6 +199,50 @@ final class MomentFeedStore: ObservableObject {
         }
     }
 
+    /// 删除动态（对齐 H5 `mine/index.vue:117-125` 悲观 UI 语义：接口成功后再本地移除）。
+    ///
+    /// - fire-and-forget；结果通过状态机切换反馈
+    /// - `.loaded` / `.loadingMore` / `.loadMoreError` 三态都可删（posts 都有）；其它态 no-op
+    /// - 失败仅 log warning，不改 state / 不 toast（对齐 H5 无失败提示）；调用方可加 UX 层 toast
+    /// - 删完后不自动 refresh 首页（H5 也不 refresh）——只 filter 本地数组，滚动位置不跳
+    /// - **无二次确认**：确认 dialog 由 UI 层负责（`.confirmationDialog` 挂在 CircleView / ProfileView）
+    func deletePost(postId: Int) {
+        guard state.posts.contains(where: { $0.postId == postId }) else { return }
+        Task { [weak self, service] in
+            do {
+                try await service.deletePost(postId: postId)
+                guard let self, !Task.isCancelled else { return }
+                await MainActor.run {
+                    self.applyPostRemoval(postId: postId)
+                }
+            } catch {
+                logger.warning("deletePost failed postId=\(postId): \(String(describing: error))")
+            }
+        }
+    }
+
+    /// 移除单条 post 后保持当前状态语义（`.loaded` / `.loadingMore` / `.loadMoreError`）。
+    /// state 可能在 await 期间迁移（用户切走 or 触底加载）——用**当前**最新 state 里的 posts 做过滤，
+    /// 只在能找到该 postId 时才更新，避免与其它并发变化冲突。
+    private func applyPostRemoval(postId: Int) {
+        switch state {
+        case .loaded(let posts, let hasMore):
+            let filtered = posts.filter { $0.postId != postId }
+            guard filtered.count != posts.count else { return }   // 未命中：可能已翻页 trim 走
+            state = .loaded(posts: filtered, hasMore: hasMore)
+        case .loadingMore(let posts):
+            let filtered = posts.filter { $0.postId != postId }
+            guard filtered.count != posts.count else { return }
+            state = .loadingMore(posts: filtered)
+        case .loadMoreError(let posts):
+            let filtered = posts.filter { $0.postId != postId }
+            guard filtered.count != posts.count else { return }
+            state = .loadMoreError(posts: filtered)
+        case .idle, .loadingFirst, .error:
+            break
+        }
+    }
+
     /// 用户点 retry。
     /// - `.error` → 回 `.loadingFirst`
     /// - `.loadMoreError` → 回 `.loadingMore` (posts 保留)
@@ -321,5 +365,6 @@ private final class PreviewCircleService: CircleServiceProtocol {
         try await Task.sleep(nanoseconds: .max)
         return []
     }
+    func deletePost(postId: Int) async throws {}
 }
 #endif

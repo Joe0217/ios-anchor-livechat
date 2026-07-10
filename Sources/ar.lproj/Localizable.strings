@@ -617,13 +617,18 @@
 "pk.entry.title"             = "بدء PK";
 "pk.entry.random"            = "PK عشوائي";
 "pk.entry.invite"            = "دعوة برقم المعرف";
+"pk.initiate.title"          = "بدء PK";
+"pk.matchingCard.hint"       = "المطابقة العشوائية ضمن نفس الرتبة. المطابقة المتوقعة خلال 15 ثانية.";
+"pk.matchingCard.matched"    = "تمت مطابقة الخصم بنجاح";
+"pk.matchingCard.searching"  = "البحث عن منافس";
+"pk.durationPicker.title"    = "ضبط مدة PK";
 
 "pk.matching.title"          = "جاري المطابقة...";
 "pk.matching.subtitle"       = "البحث عن منافس";
 "pk.matching.cancel"         = "إلغاء";
 "pk.matching.cancelled"      = "تم إلغاء مطابقة PK";
 
-"pk.invite.title"            = "دعوة إلى PK";
+"pk.invite.title"            = "بدء PK";
 "pk.invite.placeholder"      = "رقم معرف المنافس";
 "pk.invite.durationLabel"    = "مدة PK";
 "pk.invite.send"             = "إرسال الدعوة";

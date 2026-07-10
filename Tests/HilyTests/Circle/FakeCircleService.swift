@@ -18,6 +18,7 @@ final class FakeCircleService: CircleServiceProtocol {
     var getOfficialMomentsResult: Result<MomentPage, Error> = .success(.empty)
     var likeResult: Result<Void, Error> = .success(())
     var getCommentsResult: Result<[MomentComment], Error> = .success([])
+    var deletePostResult: Result<Void, Error> = .success(())
 
     // 调用记录
     private(set) var getMyMomentsCalls: [(userId: Int, pageSize: Int, currentPage: Int)] = []
@@ -25,6 +26,7 @@ final class FakeCircleService: CircleServiceProtocol {
     private(set) var getOfficialMomentsCalls: [(pageSize: Int, currentPage: Int)] = []
     private(set) var likeCalls: [(postId: Int, optionType: Int)] = []
     private(set) var getCommentsCalls: [(postId: Int, pageSize: Int, currentPage: Int)] = []
+    private(set) var deletePostCalls: [Int] = []
 
     /// 模拟网络延迟 (秒)，让单测可在 cancel/再触发期窗口内插桩
     var delaySeconds: Double = 0
@@ -70,6 +72,15 @@ final class FakeCircleService: CircleServiceProtocol {
         try await maybeSleep()
         switch getCommentsResult {
         case .success(let list): return list
+        case .failure(let err): throw err
+        }
+    }
+
+    func deletePost(postId: Int) async throws {
+        deletePostCalls.append(postId)
+        try await maybeSleep()
+        switch deletePostResult {
+        case .success: return
         case .failure(let err): throw err
         }
     }

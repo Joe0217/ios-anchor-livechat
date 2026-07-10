@@ -206,15 +206,45 @@ struct MediaGalleryContext: Identifiable, Equatable {
 ///
 /// **参考实现**：朋友圈预览 [CircleView](x-source-tag://CircleView)（点朋友圈九宫格 → 拉起本 view）。
 struct MediaGalleryView: View {
-    let urls: [String]
+    /// 数据源：远端 URL 列表 or 本地 UIImage 列表（发布页选图预览用）。
+    /// 两种模式共享 TabView 横滑 + 页码 + 下拉关闭 + a11y；仅 cell 加载路径不同。
+    fileprivate enum Source {
+        case urls([String])
+        case localImages([UIImage])
+
+        var count: Int {
+            switch self {
+            case .urls(let arr): return arr.count
+            case .localImages(let arr): return arr.count
+            }
+        }
+
+        func isVideo(at index: Int) -> Bool {
+            if case .urls(let arr) = self, arr.indices.contains(index) {
+                return MomentPost.isVideo(url: arr[index])
+            }
+            return false
+        }
+    }
+
+    fileprivate let source: Source
     let startIndex: Int
     @Environment(\.dismiss) private var dismiss
     @State private var currentIndex: Int
     /// 下拉关闭的 drag 偏移（视觉跟手 + 松手判定）
     @State private var dragOffsetY: CGFloat = 0
 
+    /// 远端 URL 列表模式（默认）——图片/视频按扩展名自动分派
     init(urls: [String], startIndex: Int = 0) {
-        self.urls = urls
+        self.source = .urls(urls)
+        self.startIndex = startIndex
+        _currentIndex = State(initialValue: startIndex)
+    }
+
+    /// 本地 UIImage 列表模式（发布页选图预览用）
+    /// - 不走网络、不入 MediaGalleryCache；随 view dismiss 释放
+    init(localImages: [UIImage], startIndex: Int = 0) {
+        self.source = .localImages(localImages)
         self.startIndex = startIndex
         _currentIndex = State(initialValue: startIndex)
     }
@@ -224,13 +254,13 @@ struct MediaGalleryView: View {
             Color.black.opacity(1 - Double(min(abs(dragOffsetY), 200)) / 400.0)
                 .ignoresSafeArea()
 
-            if urls.count == 1 {
-                singleContent(url: urls[0], isCurrent: true)
+            if source.count == 1 {
+                singleContent(at: 0, isCurrent: true)
                     .offset(y: dragOffsetY)
             } else {
                 TabView(selection: $currentIndex) {
-                    ForEach(urls.indices, id: \.self) { i in
-                        singleContent(url: urls[i], isCurrent: i == currentIndex)
+                    ForEach(0..<source.count, id: \.self) { i in
+                        singleContent(at: i, isCurrent: i == currentIndex)
                             .tag(i)
                     }
                 }
@@ -291,30 +321,38 @@ struct MediaGalleryView: View {
     /// 落在 aspectRatio(.fit) 收缩后的空白区域时，穿透到 Color.clear 触发 dismiss。
     /// 视频保留系统 controls，其上层 Color.clear 也在 controls 下层，不干扰播放。
     @ViewBuilder
-    private func singleContent(url: String, isCurrent: Bool) -> some View {
+    private func singleContent(at index: Int, isCurrent: Bool) -> some View {
         ZStack {
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture {
                     dismiss()
                 }
-            if MomentPost.isVideo(url: url) {
-                MediaGalleryVideoPlayer(urlString: url, isCurrent: isCurrent)
-            } else {
-                MediaGalleryImageCell(urlString: url)
+            switch source {
+            case .urls(let arr):
+                if MomentPost.isVideo(url: arr[index]) {
+                    MediaGalleryVideoPlayer(urlString: arr[index], isCurrent: isCurrent)
+                } else {
+                    MediaGalleryImageCell(urlString: arr[index])
+                        .allowsHitTesting(true)
+                }
+            case .localImages(let arr):
+                Image(uiImage: arr[index])
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
                     .allowsHitTesting(true)
             }
         }
         // A3（P2-3）：VoiceOver 感知媒体类型 + 页码——`.combine` 合并子元素为整体读，
         // 避免 VoiceOver 分开读"图像""视频播放器"默认 label 而无法感知内容。
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityLabel(for: url))
+        .accessibilityLabel(accessibilityLabel(at: index))
     }
 
     /// A3：媒体位置 + 类型 a11y 文案（走 L10n 支持 i18n）
-    private func accessibilityLabel(for url: String) -> String {
-        let typeLabel = MomentPost.isVideo(url: url) ? L10n.mediaPreviewVideo : L10n.mediaPreviewImage
-        let position = String(format: L10n.mediaPreviewPositionFormat, currentIndex + 1, urls.count)
+    private func accessibilityLabel(at index: Int) -> String {
+        let typeLabel = source.isVideo(at: index) ? L10n.mediaPreviewVideo : L10n.mediaPreviewImage
+        let position = String(format: L10n.mediaPreviewPositionFormat, currentIndex + 1, source.count)
         return "\(typeLabel) \(position)"
     }
 }
@@ -323,40 +361,95 @@ struct MediaGalleryView: View {
 ///
 /// **不走 CachedAsyncImage**：CachedAsyncImage 有 App 级 NSCache 语义，预览用会污染全局；
 /// 这里用池独立管理，会话结束时 clear 释放，符合"20MB 上限 + 不跨会话"约束。
+///
+/// **三态视觉**（与视频侧的 loading/error 对齐）：
+/// - `.loading` → ProgressView 白色转圈（不叠加）
+/// - `.loaded(UIImage)` → 图片本体
+/// - `.failed` → photo.slash 图标 + 文案 + retry；retry 重置为 loading 再走一次 load
+///
+/// `retryToken` 递增触发 `.task(id:)` 重跑，实现 "点击 retry → 重新拉图" 的正确取消 + 重启。
 private struct MediaGalleryImageCell: View {
     let urlString: String
-    @State private var image: UIImage?
+
+    private enum LoadState: Equatable {
+        case loading
+        case loaded(UIImage)
+        case failed
+    }
+    @State private var state: LoadState = .loading
+    @State private var retryToken: Int = 0
 
     var body: some View {
-        Group {
-            if let image {
+        ZStack {
+            Color.black   // 底色：loading/failed 期避免透明区域
+            switch state {
+            case .loading:
+                ProgressView()
+                    .tint(.white)
+                    .scaleEffect(1.2)
+            case .loaded(let image):
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-            } else {
-                Color.black
+            case .failed:
+                failedOverlay
             }
         }
-        .task(id: urlString) {
+        .task(id: TaskKey(url: urlString, retry: retryToken)) {
             await load()
         }
     }
 
+    private var failedOverlay: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "photo.slash")
+                .font(.system(size: 40))
+                .foregroundStyle(.white.opacity(0.5))
+            Text(L10n.mediaPreviewImageLoadFailed)
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.7))
+            Button {
+                state = .loading
+                retryToken &+= 1
+            } label: {
+                Text(L10n.mediaPreviewImageRetry)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 6)
+                    .background(Color.white.opacity(0.18), in: Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// `.task(id:)` 用组合 key：url 变化或 retry 递增都触发重跑 + 取消旧任务
+    private struct TaskKey: Equatable {
+        let url: String
+        let retry: Int
+    }
+
     @MainActor
     private func load() async {
-        // 池命中 → 直接展示
+        // 池命中 → 直接展示（跳过 loading 闪烁）
         if let cached = MediaGalleryCache.shared.getImage(url: urlString) {
-            image = cached
+            state = .loaded(cached)
             return
         }
-        // 未命中 → ephemeral 下载 → 入池
-        guard let url = URL(string: urlString) else { return }
+        // 未命中 → 保持 loading 直到结果回来
+        guard let url = URL(string: urlString) else {
+            state = .failed
+            return
+        }
         let fetched = await ImageCache.shared.fetchEphemeral(url)
-        // I1：用 Task.isCancelled 而非同源派生比较——`.task(id: urlString)` 在 urlString 变化时会取消旧 Task，
+        // I1：用 Task.isCancelled 而非同源派生比较——`.task(id:)` 在 key 变化时会取消旧 Task，
         // await 恢复后此处 isCancelled=true 即丢弃 stale 写入，避免快速滑动时错位图片。
-        if let fetched, !Task.isCancelled {
+        guard !Task.isCancelled else { return }
+        if let fetched {
             MediaGalleryCache.shared.putImage(url: urlString, image: fetched)
-            image = fetched
+            state = .loaded(fetched)
+        } else {
+            state = .failed
         }
     }
 }

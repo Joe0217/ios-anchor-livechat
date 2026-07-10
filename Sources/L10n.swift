@@ -68,6 +68,16 @@ enum L10n {
         static var entryTitle: String { localize("pk.entry.title", comment: "发起 PK") }
         static var entryRandom: String { localize("pk.entry.random", comment: "随机匹配") }
         static var entryInvite: String { localize("pk.entry.invite", comment: "邀请对方") }
+        /// PK 邀请 sheet 主标题（对齐 H5 `pk.Initiate PK`）
+        static var initiateTitle: String { localize("pk.initiate.title", comment: "邀请 sheet 主标题 Initiate PK") }
+        /// PKMatchingCard idle 提示文案（对齐 H5 `pk.RANDOM PK NOTICE` 系列）
+        static var matchingCardHint: String { localize("pk.matchingCard.hint", comment: "随机匹配 idle 提示") }
+        /// PKMatchingCard matched 视觉短文（对齐 H5 `pk.Opponent matched successfully`）
+        static var matchingCardMatched: String { localize("pk.matchingCard.matched", comment: "对手匹配成功") }
+        /// PKMatchingCard matching 状态左上 chip（对齐 H5 `pk.Searching for an opponent`）
+        static var matchingCardSearching: String { localize("pk.matchingCard.searching", comment: "匹配中状态 chip") }
+        /// Duration picker sheet 标题（对齐 H5 `pk.Set the PK duration`）
+        static var durationPickerTitle: String { localize("pk.durationPicker.title", comment: "PK 时长选择器标题") }
 
         static var matchingTitle: String { localize("pk.matching.title", comment: "匹配中") }
         static var matchingSubtitle: String { localize("pk.matching.subtitle", comment: "搜索中等待") }

@@ -574,13 +574,18 @@
 "pk.entry.title"             = "Initiate PK";
 "pk.entry.random"            = "Random PK";
 "pk.entry.invite"            = "Invite by ID";
+"pk.initiate.title"          = "Initiate PK";
+"pk.matchingCard.hint"       = "Random matches within your rank. Estimated match in 15s.";
+"pk.matchingCard.matched"    = "Opponent matched successfully";
+"pk.matchingCard.searching"  = "Searching for an opponent";
+"pk.durationPicker.title"    = "Set the PK duration";
 
 "pk.matching.title"          = "Matching...";
 "pk.matching.subtitle"       = "Searching for an opponent";
 "pk.matching.cancel"         = "Cancel";
 "pk.matching.cancelled"      = "PK Matching Cancelled";
 
-"pk.invite.title"            = "Invite to PK";
+"pk.invite.title"            = "Initiate PK";
 "pk.invite.placeholder"      = "Opponent UID";
 "pk.invite.durationLabel"    = "PK duration";
 "pk.invite.send"             = "Send Invitation";

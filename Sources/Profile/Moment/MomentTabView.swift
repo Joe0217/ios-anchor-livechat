@@ -10,12 +10,16 @@ import SwiftUI
 /// **嵌入约束**：本 view 嵌在 ProfileView 的 ScrollView 内，**内部只出 LazyVStack**，不叠 ScrollView（禁忌）。
 /// 触底 loadMore 依 `onAppear` 判 `post == last` 触发。
 ///
-/// **删除动作**：与 [CircleView](../../Home/Circle/CircleView.swift):65 一致占位——业务真删除随发布/删除接口里程碑接入。
+/// **删除动作**：触发本 view 内 `pendingDeletePost` 二次确认 → `MomentFeedStore.deletePost` → 接口成功后 store 悲观移除。
+/// 与 [CircleView](../../Home/Circle/CircleView.swift) me 入口同款 pattern；接口对齐 H5 `mine/index.vue:117-125` `postDelete({searchValue:id})`。
 struct MomentTabView: View {
     @StateObject private var store: MomentFeedStore
     /// 点击图片/视频时向上传递给 ProfileView 层的 fullScreenCover 触发（对齐 CircleView 模式）。
     /// 见 [swiftui-fullscreencover-hoist.md](../../../.claude/rules/swiftui-fullscreencover-hoist.md)：modal 必须 hoist 到唯一容器层。
     var onMediaPreview: ((MediaGalleryContext) -> Void)?
+
+    /// 删除动态二次确认 pending 项
+    @State private var pendingDeletePost: MomentPost?
 
     init(userId: Int? = nil, onMediaPreview: ((MediaGalleryContext) -> Void)? = nil) {
         let uid = userId ?? SessionStore.shared.user?.userId ?? 0
@@ -25,6 +29,9 @@ struct MomentTabView: View {
 
     var body: some View {
         let posts = store.state.posts
+        // maxWidth: .infinity 让 loading/empty/error 三态能居中——
+        // ProfileView 外层 VStack 是 `alignment: .leading`（左对齐），紧密尺寸的 ProgressView 会贴左；
+        // 撑满宽度后，内部 VStack 默认 center 对齐 + 子居中 —— spinner 才在中间
         VStack(spacing: 12) {
             if posts.isEmpty {
                 emptyOverlay
@@ -37,7 +44,8 @@ struct MomentTabView: View {
                                 if let id = post.postId { store.tapLike(postId: id) }
                             },
                             onDeleteTap: {
-                                // 占位：删除业务随发布/删除接口里程碑落地（与 CircleView 一致）
+                                // 触发二次确认（iOS HIG：破坏性动作应加确认）
+                                pendingDeletePost = post
                             },
                             showComment: true,
                             onImageTap: { idx in
@@ -60,9 +68,28 @@ struct MomentTabView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity)
         .task {
             // idempotent：state ≠ .idle 时不重复触发
             store.enterMoment()
+        }
+        // 删除动态二次确认（与 CircleView me 入口同款 pattern）
+        .confirmationDialog(
+            L10n.momentDeleteConfirmTitle,
+            isPresented: Binding(
+                get: { pendingDeletePost != nil },
+                set: { newVal in if !newVal { pendingDeletePost = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDeletePost
+        ) { post in
+            Button(L10n.momentDeleteConfirmAction, role: .destructive) {
+                if let id = post.postId { store.deletePost(postId: id) }
+                pendingDeletePost = nil
+            }
+            Button(L10n.momentDeleteConfirmCancel, role: .cancel) {
+                pendingDeletePost = nil
+            }
         }
     }
 

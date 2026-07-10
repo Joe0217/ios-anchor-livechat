@@ -171,7 +171,9 @@ struct ProfileView: View {
         case .gifts:
             ProfileGiftsTabView(vm: vm)
         case .moment:
-            MomentTabView()
+            // onMediaPreview 上传 galleryContext → 复用本 view 顶层 fullScreenCover 的公共 MediaGalleryView
+            // 见 [swiftui-fullscreencover-hoist.md](../../.claude/rules/swiftui-fullscreencover-hoist.md)：modal 挂唯一容器层
+            MomentTabView(onMediaPreview: { galleryContext = $0 })
         }
     }
 

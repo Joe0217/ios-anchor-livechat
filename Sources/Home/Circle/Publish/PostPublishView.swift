@@ -19,6 +19,14 @@ struct PostPublishView: View {
 
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var showDiscardConfirm: Bool = false
+    /// 本地图预览挂载点（Int? 不满足 Identifiable，用简单 wrapper）
+    @State private var localPreview: LocalPreviewContext?
+
+    /// fullScreenCover(item:) 需要 Identifiable —— 简单包 startIndex
+    private struct LocalPreviewContext: Identifiable {
+        let startIndex: Int
+        var id: Int { startIndex }
+    }
 
     var body: some View {
         NavigationStack {
@@ -41,7 +49,9 @@ struct PostPublishView: View {
                     }
                 }
         }
-        // R11/R12：上传中切走弹 confirm
+        // 下拉手势关闭：有草稿/上传中拦截（用户仍可通过 Cancel 按钮→ confirm 路径退出）
+        .interactiveDismissDisabled(hasDraft || isInProgress)
+        // R11/R12：Cancel + 上传中切走 + 有草稿丢弃 三种场景共用 confirm
         .confirmationDialog(L10n.Publish.discardTitle,
                             isPresented: $showDiscardConfirm,
                             titleVisibility: .visible) {
@@ -70,6 +80,13 @@ struct PostPublishView: View {
         // toast 复用 BlocklistView 模式：`.overlay + .task(id:)`，2s 自动消失
         .overlay(alignment: .top) {
             transientErrorToast
+        }
+        // 缩略图点击 → 公共 MediaGalleryView 全屏预览（localImages 模式）
+        .fullScreenCover(item: $localPreview) { ctx in
+            MediaGalleryView(
+                localImages: viewModel.imageDataList.compactMap(UIImage.init(data:)),
+                startIndex: ctx.startIndex
+            )
         }
     }
 
@@ -137,34 +154,50 @@ struct PostPublishView: View {
         }
     }
 
+    /// 缩略图 cell：`Color.clear.aspectRatio(1, .fit).overlay { ... }` 严格骨架。
+    ///
+    /// **为什么不能直接把 aspectRatio 挂 ZStack**：ZStack 会取内部 `Image(uiImage:)` 的 intrinsic size
+    /// —— 加载完的图片带真实尺寸，`.fit` 下 cell 收缩到图片比例导致同行不同图**高度不一致 → 排版错乱**。
+    /// Color.clear 无 intrinsic size + aspectRatio(1) 强制正方形骨架 —— 与 [ProfileMediaGrid.cell](../../Profile/Components/ProfileMediaGrid.swift)
+    /// / [MomentPostRow.gridCell](../MomentPostRow.swift) 同款模式。
+    ///
+    /// **点击预览**：走公共 [`MediaGalleryView`](../../Core/MediaGallery/MediaGalleryView.swift)（local UIImage 模式）——
+    /// 见 [prefer-shared-component-over-adhoc](../../../.claude/rules/prefer-shared-component-over-adhoc.md)。
     @ViewBuilder
     private func imageThumbnail(idx: Int) -> some View {
-        ZStack(alignment: .topTrailing) {
-            if let uiImage = UIImage(data: viewModel.imageDataList[idx]) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Color.gray.opacity(0.3)
+        let uiImage = UIImage(data: viewModel.imageDataList[idx])
+        Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                if let uiImage {
+                    Button {
+                        openLocalPreview(startingAt: idx)
+                    } label: {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isInProgress)
+                } else {
+                    Color.gray.opacity(0.3)
+                }
             }
-        }
-        .aspectRatio(1, contentMode: .fit)
-        .frame(maxWidth: .infinity)
-        .clipped()
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .overlay(alignment: .topTrailing) {
-            Button {
-                viewModel.removeImage(at: idx)
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(.white, .black.opacity(0.5))
-                    .padding(4)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(alignment: .topTrailing) {
+                Button {
+                    viewModel.removeImage(at: idx)
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(.white, .black.opacity(0.5))
+                        .padding(4)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.Publish.removeImage)
+                .allowsHitTesting(!isInProgress)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L10n.Publish.removeImage)
-        }
-        .allowsHitTesting(!isInProgress)
     }
 
     private var addImageButton: some View {
@@ -236,17 +269,36 @@ struct PostPublishView: View {
         }
     }
 
-    /// 用户点 Cancel：editing 直接 dismiss；进行中弹 confirm（R11）
+    /// 有草稿：文本非空 或 有选中图片
+    /// —— iOS HIG：破坏性丢弃前应二次确认；下拉手势关闭也走这条路
+    private var hasDraft: Bool {
+        !viewModel.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !viewModel.imageDataList.isEmpty
+    }
+
+    /// 用户点 Cancel：editing 无草稿 → 直接 dismiss；有草稿 / 进行中 → 弹 confirm
     private func handleCancelRequest() {
         switch viewModel.state {
         case .editing, .failed:
-            // 有内容也不弹 confirm（编辑态 cancel 直接走，符合 H5 简陋设计）
-            viewModel.cancelInflightForDismiss()
-            dismiss()
+            if hasDraft {
+                showDiscardConfirm = true
+            } else {
+                viewModel.cancelInflightForDismiss()
+                dismiss()
+            }
         case .uploadingImages, .creatingPost:
             showDiscardConfirm = true
         case .success:
             dismiss()
+        }
+    }
+
+    /// 打开本地图预览（走公共 MediaGalleryView.localImages 模式）
+    /// - 延一帧避免 Button press animation 未完成时 present 触发 "presentation is in progress"
+    ///   （见 [swiftui-fullscreencover-hoist.md](../../../.claude/rules/swiftui-fullscreencover-hoist.md)）
+    private func openLocalPreview(startingAt idx: Int) {
+        DispatchQueue.main.async {
+            localPreview = LocalPreviewContext(startIndex: idx)
         }
     }
 

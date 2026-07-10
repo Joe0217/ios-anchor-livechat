@@ -32,6 +32,8 @@ struct CircleView: View {
     /// 图片/视频大图预览挂载点（统一挂在容器层，避免 TabView 内每 tag 挂 cover 竞态）。
     /// 见 [MediaGalleryContext](../../Core/MediaGallery/MediaGalleryView.swift) 类型定义处的详细说明。
     @State private var mediaPreview: MediaGalleryContext?
+    /// 删除动态二次确认 pending 项（`me` 入口专用）
+    @State private var pendingDeletePost: MomentPost?
 
     init(isActive: Bool) {
         self.isActive = isActive
@@ -62,8 +64,9 @@ struct CircleView: View {
                 MomentView(store: meStore,
                            showDelete: true,
                            showComment: true,
-                           onDeleteTap: { _ in
-                               // 占位：删除业务随发布功能里程碑落地（CircleService.deletePost）
+                           onDeleteTap: { post in
+                               // 触发二次确认（iOS HIG：破坏性动作应加确认；H5 无但 iOS trash icon 只有 14pt 更易误触）
+                               pendingDeletePost = post
                            },
                            onMediaPreview: { mediaPreview = $0 })
                     .tag(CircleSubTab.me)
@@ -86,6 +89,24 @@ struct CircleView: View {
         // 图片/视频大图预览（统一挂在容器层——见 mediaPreview 定义处说明）
         .fullScreenCover(item: $mediaPreview) { ctx in
             MediaGalleryView(urls: ctx.urls, startIndex: ctx.startIndex)
+        }
+        // 删除动态二次确认（对齐 UserProfileBlockConfirmDialog 模式）
+        .confirmationDialog(
+            L10n.momentDeleteConfirmTitle,
+            isPresented: Binding(
+                get: { pendingDeletePost != nil },
+                set: { newVal in if !newVal { pendingDeletePost = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingDeletePost
+        ) { post in
+            Button(L10n.momentDeleteConfirmAction, role: .destructive) {
+                if let id = post.postId { meStore.deletePost(postId: id) }
+                pendingDeletePost = nil
+            }
+            Button(L10n.momentDeleteConfirmCancel, role: .cancel) {
+                pendingDeletePost = nil
+            }
         }
         // Lazy load 三入口：可见性 / outer tab 切换 / sub tab 切换 任一变化都重新检查
         .onChange(of: circleStore.currentSub) { newSub in
