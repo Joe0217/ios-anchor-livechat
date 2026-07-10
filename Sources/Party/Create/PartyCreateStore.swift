@@ -102,11 +102,11 @@ final class PartyCreateStore: ObservableObject {
         do {
             let list = try await service.fetchTemplates(type: mode)
             templates = list
-            // 若已选模板不在新 list 中，重置到第一张 Unlock 的
+            // v6：全部可选，默认选第一张
             if let cur = selectedTemplate, !list.contains(where: { $0.id == cur.id }) {
-                selectedTemplate = list.first(where: { isUnlocked($0) })
+                selectedTemplate = list.first
             } else if selectedTemplate == nil {
-                selectedTemplate = list.first(where: { isUnlocked($0) })
+                selectedTemplate = list.first
             }
         } catch is CancellationError {
             return
@@ -134,28 +134,12 @@ final class PartyCreateStore: ObservableObject {
 
     // MARK: - Selection
 
-    /// 模板 tap 处理：Unlock 直接选中；Lock 触发 lockedTapError（View 消费显示 toast）
-    /// 返回 nil 表示 Unlock 选中成功；返回非 nil 是 Lock 提示文案
+    /// 模板 tap 处理：v6（2026-07-10）**对齐安卓：所有模板都可选，无等级门槛**。
+    /// 返回值保留为 String? 兼容旧签名，永远返 nil（无 lock 提示）。
     @discardableResult
     func selectTemplate(_ template: PartyRoomTemplate) -> String? {
-        if isUnlocked(template) {
-            selectedTemplate = template
-            return nil
-        }
-        return lockedMessage(for: template)
-    }
-
-    /// 用户段位是否解锁该模板
-    func isUnlocked(_ template: PartyRoomTemplate) -> Bool {
-        guard let need = template.createRoomLevel, need > 0 else { return true }
-        return userLevel >= need
-    }
-
-    /// Lock 模板 tap 时给 view 层的 toast 文案生成
-    private func lockedMessage(for template: PartyRoomTemplate) -> String {
-        // 对齐 H5 upLevel.vue:82：`Level X or above is required to use room mode`
-        let need = template.createRoomLevel ?? 0
-        return "Lv.\(need) required"
+        selectedTemplate = template
+        return nil
     }
 
     // MARK: - Submit

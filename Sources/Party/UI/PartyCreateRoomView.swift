@@ -16,7 +16,6 @@ struct PartyCreateRoomView: View {
 
     @State private var showModePicker = false
     @State private var showLanguagePicker = false
-    @State private var lockedToast: String? = nil
     @State private var photoPickerItem: PhotosPickerItem? = nil
     @FocusState private var textFieldFocused: Bool
     @Environment(\.dismiss) private var dismiss
@@ -90,21 +89,6 @@ struct PartyCreateRoomView: View {
         .sheet(isPresented: $showLanguagePicker) {
             PartyCreateLanguagePickerSheet(store: store) { showLanguagePicker = false }
                 .presentationDetents([.medium])
-        }
-        .overlay(alignment: .top) {
-            if let t = lockedToast {
-                Text(t)
-                    .font(.system(size: 13))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(Capsule().fill(Color.black.opacity(0.8)))
-                    .padding(.top, 12)
-                    .transition(.opacity)
-                    .task(id: t) {
-                        try? await Task.sleep(nanoseconds: 2_000_000_000)
-                        lockedToast = nil
-                    }
-            }
         }
         .onChange(of: store.createdRoomId) { id in
             if let id, !id.isEmpty {
@@ -374,7 +358,6 @@ struct PartyCreateRoomView: View {
 struct PartyCreateModePickerSheet: View {
     @ObservedObject var store: PartyCreateStore
     var onConfirm: () -> Void
-    @State private var lockedToast: String? = nil
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -385,21 +368,6 @@ struct PartyCreateModePickerSheet: View {
                 Spacer(minLength: 80)
             }
             confirmButton.padding(.bottom, 20).padding(.horizontal, 20)
-        }
-        .overlay(alignment: .top) {
-            if let t = lockedToast {
-                Text(t)
-                    .font(.system(size: 13))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(Capsule().fill(Color.black.opacity(0.8)))
-                    .padding(.top, 60)
-                    .transition(.opacity)
-                    .task(id: t) {
-                        try? await Task.sleep(nanoseconds: 2_000_000_000)
-                        lockedToast = nil
-                    }
-            }
         }
     }
 
@@ -471,38 +439,23 @@ struct PartyCreateModePickerSheet: View {
     }
 
     private func templateCard(_ temp: PartyRoomTemplate) -> some View {
+        // v6：对齐安卓无等级门槛，全部模板都可选；去除 lock/unlock label + 锁 icon + opacity
         let selected = store.selectedTemplate?.id == temp.id
-        let unlocked = store.isUnlocked(temp)
         return Button {
-            if let msg = store.selectTemplate(temp) {
-                lockedToast = msg
-            }
+            store.selectTemplate(temp)
         } label: {
-            VStack(spacing: 8) {
-                ZStack(alignment: .topTrailing) {
-                    PartyCreateRoomView.assetNameForTemplate(temp).map {
-                        Image($0).resizable().scaledToFit()
-                    }
-                    if selected {
-                        Image("partyTemplateSelected")
-                            .resizable()
-                            .frame(width: 22, height: 22)
-                            .padding(6)
-                    }
+            ZStack(alignment: .topTrailing) {
+                PartyCreateRoomView.assetNameForTemplate(temp).map {
+                    Image($0).resizable().scaledToFit()
                 }
-                .frame(maxWidth: .infinity)
-
-                HStack(spacing: 4) {
-                    Image(systemName: unlocked ? "lock.open.fill" : "lock.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.6))
-                    let level = temp.createRoomLevel ?? 0
-                    Text(String(format: unlocked ? L10n.Party.createModeUnlockFormat : L10n.Party.createModeLockFormat, level))
-                        .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.7))
+                if selected {
+                    Image("partyTemplateSelected")
+                        .resizable()
+                        .frame(width: 22, height: 22)
+                        .padding(6)
                 }
-                .padding(.bottom, 8)
             }
+            .frame(maxWidth: .infinity)
             .padding(8)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -512,7 +465,6 @@ struct PartyCreateModePickerSheet: View {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(selected ? Theme.Palette.partyCreateTempSelected : Color.clear, lineWidth: 1.5)
             )
-            .opacity(unlocked ? 1 : 0.5)
             .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
