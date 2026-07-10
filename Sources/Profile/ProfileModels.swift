@@ -48,17 +48,159 @@ struct AnchorInfo: Codable {
     let giftList: [GiftItem]?      // 礼物墙（userProfile 也用此字段）
 
     // H-3 新增（对齐 H5 私聊页深化）
-    let chatBubble: String?        // 主播穿戴的气泡装扮 URL（H5 `mineInfo.chatBubble`，来自虚拟道具 itemType=4）
+    let chatBubble: String?        // 主播穿戴的气泡装扮 URL（H5 `mineInfo.chatBubble`，来自虚拟道具 itemType=4)
     let activeTycoon: Bool?        // 主播自己是否大R（发送消息时 remoteExt 透传给对端，让对端 nav 显徽章）
 
+    // 工作台数据（H5 mineInfo.dataStatistics + anchorIncomeMap；H5 type.ts 声明 anchorIncomeMap?: null 是撒谎，真接口返 dict）
+    let dataStatistics: AnchorDataStatistics?
+    let anchorIncomeMap: AnchorIncomeMap?
+
     // A-2 新增（v3 BLOCK-2 修：供注册被拒重录 hydrate 回填；H5 `type.ts` L67/78/115/195 等多处 mineInfo 类型声明字段名推）
-    // ⚠️ 未真机抓包 verify；H5 type.ts birthday 有 number 有 string，先用 String? 覆盖 "yyyy-MM-dd" 情况；若接口实际返 number 后期改 Codable init(from:) 用 String/Int 兼容 decode（对齐 rule ios-decode-userid-compat.md）
     let email: String?             // 注册用邮箱；H5 `type.ts:67` `email?: string` / L195 `email: string`
-    let birthday: String?          // "yyyy-MM-dd"；H5 混发 number/string，一期先 String
+    /// birthday："yyyy-MM-dd" 或 number timestamp（H5 type.ts:21/51 声明 number / L78/115 声明 string，后端混发）；
+    /// Finding #8 修 2026-07-10：Codable init(from:) 里通过 `KeyedDecodingContainer.decodeFlexibleString` String/Int/Double 兼容 decode，对齐 rule ios-decode-userid-compat.md
+    let birthday: String?
     let phone: String?             // 手机号；H5 `type.ts:68`
     let inviteCode: String?        // 邀请码；对齐 H5 register `formData.inviteCode`
     let language: String?          // 已学语言 逗号 join（对齐 H5 register `formData.language`）
     let countryId: String?         // ⚠️ 与 countryCode（ISO 两字母）不同：H5 register formData.countryId 是 en 名（"Spain"）或 locale，抓包定；先 String?
+
+    // Finding #8 修 2026-07-10：手写 init(from:) 让 birthday 支持 String/Int/Double 混发 decode
+    // 其它字段沿用 decodeIfPresent 语义（与 Swift 自动 synthesized 一致；写全一遍是因为一旦手写 init(from:) 就会禁用 auto synthesize）
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.userId = try c.decodeIfPresent(Int.self, forKey: .userId)
+        self.nickname = try c.decodeIfPresent(String.self, forKey: .nickname)
+        self.icon = try c.decodeIfPresent(String.self, forKey: .icon)
+        self.sex = try c.decodeIfPresent(Int.self, forKey: .sex)
+        self.age = try c.decodeIfPresent(Int.self, forKey: .age)
+        self.countryCode = try c.decodeIfPresent(String.self, forKey: .countryCode)
+        self.signature = try c.decodeIfPresent(String.self, forKey: .signature)
+        self.signatureVaild = try c.decodeIfPresent(Int.self, forKey: .signatureVaild)
+        self.level = try c.decodeIfPresent(Int.self, forKey: .level)
+        self.levelName = try c.decodeIfPresent(String.self, forKey: .levelName)
+        self.callPrice = try c.decodeIfPresent(Int.self, forKey: .callPrice)
+        self.upsNum = try c.decodeIfPresent(Int.self, forKey: .upsNum)
+        self.fansNum = try c.decodeIfPresent(Int.self, forKey: .fansNum)
+        self.friendsNum = try c.decodeIfPresent(Int.self, forKey: .friendsNum)
+        self.pictures = try c.decodeIfPresent([MediaAsset].self, forKey: .pictures)
+        self.videos = try c.decodeIfPresent([MediaAsset].self, forKey: .videos)
+        self.picList = try c.decodeIfPresent([AnchorPicItem].self, forKey: .picList)
+        self.greetMsgs = try c.decodeIfPresent([GreetMsg].self, forKey: .greetMsgs)
+        self.callVideoUrl = try c.decodeIfPresent(String.self, forKey: .callVideoUrl)
+        self.giftList = try c.decodeIfPresent([GiftItem].self, forKey: .giftList)
+        self.chatBubble = try c.decodeIfPresent(String.self, forKey: .chatBubble)
+        self.activeTycoon = try c.decodeIfPresent(Bool.self, forKey: .activeTycoon)
+        self.dataStatistics = try c.decodeIfPresent(AnchorDataStatistics.self, forKey: .dataStatistics)
+        self.anchorIncomeMap = try c.decodeIfPresent(AnchorIncomeMap.self, forKey: .anchorIncomeMap)
+        self.email = try c.decodeIfPresent(String.self, forKey: .email)
+        // birthday: String/Int/Double 兼容（对齐 ios-decode-userid-compat.md）
+        self.birthday = c.decodeFlexibleString(forKey: .birthday)
+        self.phone = try c.decodeIfPresent(String.self, forKey: .phone)
+        self.inviteCode = try c.decodeIfPresent(String.self, forKey: .inviteCode)
+        self.language = try c.decodeIfPresent(String.self, forKey: .language)
+        self.countryId = try c.decodeIfPresent(String.self, forKey: .countryId)
+    }
+
+    /// Memberwise init 保留供 EditProfileView+Preview 等 test/preview 代码继续用位置参数构造
+    init(userId: Int?, nickname: String?, icon: String?, sex: Int?, age: Int?,
+         countryCode: String?, signature: String?, signatureVaild: Int?,
+         level: Int?, levelName: String?, callPrice: Int?,
+         upsNum: Int?, fansNum: Int?, friendsNum: Int?,
+         pictures: [MediaAsset]?, videos: [MediaAsset]?, picList: [AnchorPicItem]? = nil,
+         greetMsgs: [GreetMsg]?,
+         callVideoUrl: String?, giftList: [GiftItem]?,
+         chatBubble: String?, activeTycoon: Bool?,
+         dataStatistics: AnchorDataStatistics? = nil, anchorIncomeMap: AnchorIncomeMap? = nil,
+         email: String?, birthday: String?, phone: String?, inviteCode: String?,
+         language: String?, countryId: String?) {
+        self.userId = userId; self.nickname = nickname; self.icon = icon; self.sex = sex; self.age = age
+        self.countryCode = countryCode; self.signature = signature; self.signatureVaild = signatureVaild
+        self.level = level; self.levelName = levelName; self.callPrice = callPrice
+        self.upsNum = upsNum; self.fansNum = fansNum; self.friendsNum = friendsNum
+        self.pictures = pictures; self.videos = videos; self.picList = picList
+        self.greetMsgs = greetMsgs
+        self.callVideoUrl = callVideoUrl; self.giftList = giftList
+        self.chatBubble = chatBubble; self.activeTycoon = activeTycoon
+        self.dataStatistics = dataStatistics; self.anchorIncomeMap = anchorIncomeMap
+        self.email = email; self.birthday = birthday; self.phone = phone; self.inviteCode = inviteCode
+        self.language = language; self.countryId = countryId
+    }
+}
+
+/// KeyedDecodingContainer helper：字段可能是 String / Int / Double / null 时的兼容 decode
+/// 对齐 .claude/rules/ios-decode-userid-compat.md 精神——H5 接口混发数字/字符串是常态，不能严格 String decode
+extension KeyedDecodingContainer {
+    func decodeFlexibleString(forKey key: Key) -> String? {
+        // `try?` 已把 `T??` flatten 成 `T?`（Swift 5+），单层 if let 就够；
+        // 若再写 `, let s` 是对已解开的 non-optional String 再解一次 → "conditional binding must have Optional" 报错
+        if let s = try? decodeIfPresent(String.self, forKey: key) { return s }
+        if let i = try? decodeIfPresent(Int64.self, forKey: key) { return String(i) }
+        if let d = try? decodeIfPresent(Double.self, forKey: key) { return String(Int64(d)) }
+        return nil
+    }
+
+    /// Int 版：接口混发 Int / String / Double 时的兼容 decode
+    func decodeFlexibleInt(forKey key: Key) -> Int? {
+        if let i = try? decodeIfPresent(Int.self, forKey: key) { return i }
+        if let s = try? decodeIfPresent(String.self, forKey: key), let i = Int(s) { return i }
+        if let d = try? decodeIfPresent(Double.self, forKey: key) { return Int(d) }
+        return nil
+    }
+}
+
+/// 主播工作台数据统计（H5 `mineInfo.dataStatistics`，getAnchorInfo 响应字段）。
+/// H5 蓝本 work/index.vue L498/509/520：`callNum` 是**在线时长**（秒），`weeklyDiamonds` 是**平均通话时长**（秒），
+/// 字段名 H5 复用未纠正，业务语义已跑偏；本文件的 doc comment 描述业务语义为准。
+struct AnchorDataStatistics: Codable, Equatable {
+    let callNum: Int?           // 今日在线时长（秒）
+    let weeklyDiamonds: Int?    // 今日平均通话时长（秒）
+    let positiveRating: Int?    // 好评率（0-100 整数）
+
+    init(callNum: Int? = nil, weeklyDiamonds: Int? = nil, positiveRating: Int? = nil) {
+        self.callNum = callNum
+        self.weeklyDiamonds = weeklyDiamonds
+        self.positiveRating = positiveRating
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.callNum = c.decodeFlexibleInt(forKey: .callNum)
+        self.weeklyDiamonds = c.decodeFlexibleInt(forKey: .weeklyDiamonds)
+        self.positiveRating = c.decodeFlexibleInt(forKey: .positiveRating)
+    }
+}
+
+/// 今日收益字典（H5 `mineInfo.anchorIncomeMap`）。
+/// H5 蓝本 work/index.vue L279 `mappedIncomeItems`：值直接与 UI 拼接 + `|| '0'` 兜底 → 类型按 String? 处理；
+/// 后端混发 Int/String 由 flexible decode 统一收敛到 String。
+struct AnchorIncomeMap: Codable, Equatable {
+    let totalCoin: String?
+    let callIncome: String?
+    let giftIncome: String?
+    let taskReward: String?
+    let invitationReward: String?
+    let unlock: String?
+
+    init(totalCoin: String? = nil, callIncome: String? = nil, giftIncome: String? = nil,
+         taskReward: String? = nil, invitationReward: String? = nil, unlock: String? = nil) {
+        self.totalCoin = totalCoin
+        self.callIncome = callIncome
+        self.giftIncome = giftIncome
+        self.taskReward = taskReward
+        self.invitationReward = invitationReward
+        self.unlock = unlock
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.totalCoin = c.decodeFlexibleString(forKey: .totalCoin)
+        self.callIncome = c.decodeFlexibleString(forKey: .callIncome)
+        self.giftIncome = c.decodeFlexibleString(forKey: .giftIncome)
+        self.taskReward = c.decodeFlexibleString(forKey: .taskReward)
+        self.invitationReward = c.decodeFlexibleString(forKey: .invitationReward)
+        self.unlock = c.decodeFlexibleString(forKey: .unlock)
+    }
 }
 
 /// 问候语单条（I-spec-用户资料编辑页 §2.2）。

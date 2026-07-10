@@ -31,6 +31,12 @@ struct WorkView: View {
                 .padding(.bottom, 232)
             }
             .scrollIndicators(.hidden)
+            // 下拉刷新（对齐 H5 <CPullRefresh @list-on-refresh="listOnRefresh">）。
+            // await 到 vm.refresh() 完成才收 spinner，避免手势 release 时闪隐
+            // （rule list-refresh-preserve-items §B）
+            .refreshable {
+                await vm.refresh()
+            }
         }
         // 悬浮开关：overlay 精确定位，距 tabbar 上边 180pt（用户 2 次指定共 +100pt）
         .overlay(alignment: .bottomTrailing) {
