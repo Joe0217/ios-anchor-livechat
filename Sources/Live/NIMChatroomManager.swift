@@ -201,6 +201,60 @@ final class NIMChatroomManager: NSObject, ObservableObject {
         presenceStore.onlineCount = 0
     }
 
+    /// 主播发送公屏文字（严格对齐 H5 sendMessage liveRoom.vue:291-319）。
+    ///
+    /// remoteExt 是 `[String: Any]` NSDictionary（`NIMMessage.h:174`），H5 `JSON.stringify` 是 JS SDK
+    /// 类型要求；iOS SDK 直接接受 dict，同 Party [`PartyRoomChatManager.sendText`](../Party/Chat/PartyRoomChatManager.swift)。
+    /// 本地立即 append 后不做 echo 过滤（NIMSDK 10.10.0 chatroom `.text` send 不回声给发送者，
+    /// Party 已生产验证）。空/纯空白/未进房 → 静默 return；200 字上限（H5 maxlength）单点截断；
+    /// send throw → catch log 不清空 inputText 让用户重试。
+    /// 详见 `docs/plan/H-直播间发送公屏文字-spec-202607101100.md`。
+    ///
+    /// - Returns: `true` = caller 可清空 inputText（发送成功 or 输入本来就空/未进房，清空无副作用）；
+    ///            `false` = NIM SDK send 抛错，caller 应保留 inputText 让用户重试（对齐 spec R5）
+    @discardableResult
+    func sendText(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, hasJoined else { return true }
+        let capped = String(trimmed.prefix(200))
+
+        // 本地立即回显（主播自身信息 SessionStore + AnchorInfoStore 三级回落已由 AnchorInfoStore 封装）
+        let session = SessionStore.shared.user
+        let anchor = AnchorInfoStore.shared
+        let anchorUserId = anchor.userId
+        let nickname = anchor.displayName.isEmpty ? session?.nickname : anchor.displayName
+        let avatar = anchor.info?.icon ?? anchor.mine?.icon ?? session?.icon
+        let userLevel = anchor.info?.level ?? anchor.mine?.level
+
+        messagesStore.append(PublicChatMessage(
+            text: capped,
+            isSystem: false,
+            senderNickname: nickname,
+            senderAvatar: avatar,
+            userLevel: userLevel,
+            isHost: true,
+            isVip: false,   // AnchorInfoStore/SessionStore 目前无 isVip 字段；观众端自身补齐
+            messageType: .regular
+        ))
+
+        // 云信广播（remoteExt = dict 直接赋值，禁止 JSONSerialization → String 转换）
+        let msg = NIMMessage()
+        msg.text = capped
+        msg.remoteExt = [
+            "userId": anchorUserId,
+            "chatBubble": ""   // v22 Phase 3 / chatBubble 里程碑接入 mineInfo.chatBubble
+        ]
+        let nimSession = NIMSession(roomId, type: .chatroom)
+        do {
+            try NIMSDK.shared().chatManager.send(msg, to: nimSession)
+            AppLogger.im.info("🟢 [Chatroom] sendText ok len=\(capped.count, privacy: .public)")
+            return true
+        } catch {
+            AppLogger.im.error("🔴 [Chatroom] sendText failed: \(String(describing: error), privacy: .private)")
+            return false
+        }
+    }
+
     private func push(_ text: String, system: Bool) {
         messagesStore.append(PublicChatMessage(text: text, isSystem: system))
     }

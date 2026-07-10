@@ -48,8 +48,8 @@ struct LiveRoomView: View {
     /// G M3：邀请发起 sheet 显示状态
     @State private var showInviteSheet = false
 
-    /// 底部 Say hi 输入框绑定（NIMChatroomManager 暂无主播 sendText API，本次为视觉占位；
-    /// H 里程碑接入后本 state 由本地写入 → nim.send(text) 回落公屏）
+    /// 底部 Say hi 输入框绑定：`onSend` → `nim.sendText(_:)`（严格对齐 H5 sendMessage
+    /// liveRoom.vue:291-319，spec `docs/plan/H-直播间发送公屏文字-spec-202607101100.md`）
     @State private var inputText: String = ""
 
     /// "Coming soon" toast（快捷礼物 / 私 call 主动发起 / task / 排行 等占位入口点击提示）
@@ -96,6 +96,11 @@ struct LiveRoomView: View {
     /// Roulette 分两态：intro 首次引导（overlay 中心 modal）+ setting 转盘设置（sheet 底部）
     @State private var showRouletteIntro: Bool = false
     @State private var showRouletteSetting: Bool = false
+    /// Roulette 顶部按钮 icon 两态开关（对齐 H5 liveRoomTop.vue rouletteStatus）
+    /// - false → rouletteClose.webp（关闭态）
+    /// - true  → rouletteOpen.webp（开启态）
+    /// 数据源：onAppear 拉 queryConfig 拿初始；SettingSheet 保存/切换时 callback 回传
+    @State private var isRouletteEnabled: Bool = false
 
     // MARK: - v9 新增 State
     /// 虚拟道具特效开关 store（UserDefaults persist）
@@ -172,7 +177,9 @@ struct LiveRoomView: View {
             // v14 Q3 sheet load 完成后回填顶部 rank 徽章（对齐 H5 "无推送→查看后更新"）
             onRankUpdate: { [weak nim = nim] rank in nim?.anchorRankStore.setRank(rank) },
             showRouletteSetting: $showRouletteSetting,
-            showRouletteIntro: $showRouletteIntro
+            showRouletteIntro: $showRouletteIntro,
+            onRouletteEnabledChanged: { newValue in isRouletteEnabled = newValue },
+            onRouletteToast: { msg in withAnimation { comingSoonToast = msg } }
         ))
         // 依 pkStore.state 转换自动挂载 InviteWaiting / MatchFailed
         // - inviting：发出邀请后自动挂载 InviteWaiting（对齐 H5 pkInviteWaitingPopup）
@@ -318,10 +325,10 @@ struct LiveRoomView: View {
                 // - 移除原 DEBUG PK 按钮（PKEntryButton 5 态已覆盖入口）+ 原「结束直播」大红按钮（迁到 Setting 菜单 & 顶部 X）
                 HStack(spacing: Theme.Metric.liveRoomToolbarGap) {
                     LiveRoomInputRow(text: $inputText, onSend: {
-                        // H 里程碑：NIMChatroomManager 加 sendText API 后接入。当前视觉占位
-                        guard !inputText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                        inputText = ""
-                        comingSoonToast = L10n.liveRoomComingSoonSend
+                        // sendText 内做 trim/空判/hasJoined 守卫 + 200 字截断（对齐 H5 maxlength）
+                        // return true → 清空（H5 line 305 `if (res) inputText.value = ''`）
+                        // return false → NIM send throw，保留 inputText 让用户重试（spec R5）
+                        if nim.sendText(inputText) { inputText = "" }
                     })
                     PKEntryButton(store: pkStore,
                                   showInviteSheet: $showInviteSheet,
@@ -406,6 +413,19 @@ struct LiveRoomView: View {
             anchorUserId: SessionStore.shared.user?.userId.map(String.init) ?? "",
             anchorNickname: SessionStore.shared.user?.nickname ?? title
         )
+        loadRouletteEnabledStatus()
+    }
+
+    /// 拉取主播当前转盘开启状态用于顶部 icon 显示
+    /// 对齐 H5 [liveRoomTop.vue onMounted L164-172] `getQueryWheelConfigByAnchorId → rouletteStatus`
+    private func loadRouletteEnabledStatus() {
+        let uid = SessionStore.shared.user?.userId.map(String.init) ?? ""
+        guard !uid.isEmpty else { return }
+        Task {
+            if let cfg = try? await RouletteServiceReal().queryConfig(anchorUserId: uid) {
+                await MainActor.run { isRouletteEnabled = cfg.enabled }
+            }
+        }
     }
 
     /// 依 pkStore.state 转换自动挂载 InviteWaiting / MatchFailed
@@ -735,6 +755,7 @@ struct LiveRoomView: View {
             onRankTap:         { showRankSheet = true },
             onAudienceTap:     { showUserWeeklyRankSheet = true },
             onRouletteTap:     handleRouletteTap,
+            isRouletteEnabled: isRouletteEnabled,
             contributionStore: nim.contributionStore,
             anchorRankStore: nim.anchorRankStore,
             wishlistStore: nim.wishlistStore,
@@ -1402,6 +1423,8 @@ fileprivate struct LiveRoomHeroTopArea: View {
     let onAudienceTap: () -> Void
     /// 顶部互动转盘按钮点击（对齐 H5 liveRoomTop.vue L256-273 rouletteButton）
     let onRouletteTap: () -> Void
+    /// 转盘 icon 两态开关（对齐 H5 rouletteStatus: true=rouletteOpen / false=rouletteClose）
+    let isRouletteEnabled: Bool
     // v10 数据源接入
     @ObservedObject var contributionStore: LiveContributionStore
     @ObservedObject var anchorRankStore: LiveAnchorRankStore
@@ -1436,7 +1459,8 @@ fileprivate struct LiveRoomHeroTopArea: View {
                                  onRankTap: onRankTap)
                 Spacer()
                 Button(action: onRouletteTap) {
-                    Image("pkBattleTop1Crown")
+                    // 对齐 H5 liveRoomTop.vue L264-267：rouletteStatus 切 rouletteOpen/rouletteClose 两态
+                    Image(isRouletteEnabled ? "rouletteOpen" : "rouletteClose")
                         .resizable()
                         .frame(width: 28, height: 32)
                         .contentShape(Rectangle())
