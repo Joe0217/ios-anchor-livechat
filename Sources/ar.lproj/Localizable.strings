@@ -463,14 +463,9 @@
 "liveRoom.comingSoon.roulette"    = "عجلة التفاعل قريبًا";
 
 /* Roulette intro popup & setting sheet (aligns H5 wheel.* + live.* namespace) */
-"liveRoom.roulette.intro.card1.title" = "أدر العجلة";
-"liveRoom.roulette.intro.card1.body"  = "يمكن للمشاهدين تدوير عجلة الجوائز عبر الماس. يؤدي زيادة عدد الدوّرات إلى رفع تفاعل الجمهور والإيرادات.";
-"liveRoom.roulette.intro.card2.title" = "إعداد الجوائز";
-"liveRoom.roulette.intro.card2.body"  = "يمكن للمذيعين إعداد جوائز تفاعلية حصرية لأنفسهم ولمعجبيهم.";
-"liveRoom.roulette.intro.card3.title" = "تفعيل في أي وقت";
-"liveRoom.roulette.intro.card3.body"  = "تفعيل أو تعطيل هذه الميزة في أي وقت من إعدادات البث المباشر.";
+"liveRoom.roulette.intro.card1.title" = "دولاب الحظ";
+"liveRoom.roulette.intro.card1.body"  = "يمكن للمشاهدين تدوير عجلة الجوائز عبر الماس. يؤدي زيادة عدد الدوّرات إلى رفع تفاعل الجمهور والإيرادات. يمكن للمذيعين إعداد جوائز تفاعلية حصرية لأنفسهم ولمعجبيهم، وتفعيل أو تعطيل هذه الميزة في أي وقت من إعدادات البث المباشر.";
 "liveRoom.roulette.intro.next"        = "التالي";
-"liveRoom.roulette.intro.start"       = "ابدأ";
 "liveRoom.roulette.setting.title"     = "تعيين عجلة التفاعل";
 "liveRoom.roulette.enable"            = "تفعيل العجلة";
 "liveRoom.roulette.price"             = "تعيين سعر الدوران";
@@ -479,6 +474,19 @@
 "liveRoom.roulette.edit"              = "تعديل العجلة";
 "liveRoom.roulette.rules"             = "قواعد اللعبة";
 "liveRoom.roulette.errorRetry"        = "فشل التحميل. حاول مرة أخرى.";
+
+/* Roulette v11: functional alignment with H5 */
+"liveRoom.roulette.intro.header"      = "قواعد لعبة البث المباشر التفاعلية";
+"liveRoom.roulette.intro.rps.title"   = "حجر ورقة مقص";
+"liveRoom.roulette.intro.rps.body"    = "يدفع المشاهدون الماس لتحدي المذيع في حجر ورقة مقص. يلعب النظام نيابةً عن المذيع. كل فوز يمنح المذيع وسامًا، مما يعزز تفاعل المعجبين والإيرادات.";
+"liveRoom.roulette.closeWheel"        = "إغلاق العجلة";
+"liveRoom.roulette.finishEditing"     = "إنهاء التحرير";
+"liveRoom.roulette.edit.title"        = "تعيين عناصر التفاعل";
+"liveRoom.roulette.edit.confirm"      = "تأكيد";
+"liveRoom.roulette.edit.enterItems"   = "أدخل عناصرك";
+"liveRoom.roulette.toast.started"     = "بدأت العجلة";
+"liveRoom.roulette.toast.stopped"     = "توقفت العجلة";
+"liveRoom.roulette.toast.enterPrice"  = "يرجى إدخال السعر";
 
 /* LiveRoom H5 interaction alignment (2026-07-06 iteration 2) */
 "liveRoom.tool.message"           = "الرسائل";
@@ -563,6 +571,9 @@
 // C-4 Wave4 UI 布局对齐
 "call.action.askForGift"     = "اطلب هدية";
 "call.askForGift.rejected"   = "رفض المستخدم طلب الهدية";
+"pk.pkResultWin"             = "🎉 فاز %@ على %@ في مباراة PK هذه";
+"pk.pkResultLose"            = "😭 خسر %@ للأسف أمام %@ في هذه المباراة";
+"pk.pkResultDraw"            = "تعادل %@ و %@ في مباراة PK هذه";
 "call.action.more"           = "المزيد";
 "call.action.comingSoon"     = "قريبًا";
 "call.remoteCameraOff"       = "الكاميرا مغلقة";
@@ -608,10 +619,10 @@
 "pk.entry.random"            = "PK عشوائي";
 "pk.entry.invite"            = "دعوة برقم المعرف";
 
-"pk.matching.title"          = "جاري البحث عن منافس...";
-"pk.matching.subtitle"       = "يرجى الانتظار";
+"pk.matching.title"          = "جاري المطابقة...";
+"pk.matching.subtitle"       = "البحث عن منافس";
 "pk.matching.cancel"         = "إلغاء";
-"pk.matching.cancelled"      = "تم إلغاء البحث";
+"pk.matching.cancelled"      = "تم إلغاء مطابقة PK";
 
 "pk.invite.title"            = "دعوة إلى PK";
 "pk.invite.placeholder"      = "رقم معرف المنافس";
@@ -637,7 +648,7 @@
 
 "pk.toast.inviteRejectedFormat" = "%@ رفض دعوة PK الخاصة بك";
 "pk.toast.inviteAcceptedFormat" = "%@ قبل دعوة PK الخاصة بك";
-"pk.toast.inviteTimeout"        = "انتهت صلاحية دعوة PK";
+"pk.toast.inviteTimeout"        = "انتهت مدة دعوة PK";
 
 "pk.invite.searchPlaceholder"   = "المعرف أو الاسم المستعار";
 "pk.invite.recommendTitle"      = "موصى به";
@@ -647,26 +658,26 @@
 "pk.invite.btn.invite"          = "دعوة";
 "pk.invite.btn.waiting"         = "في الانتظار";
 "pk.invite.btn.pking"           = "في PK";
-"pk.invite.toast.busy"          = "البث المباشر مشغول، حاول لاحقاً";
-"pk.invite.toast.beingInvited"  = "يعالج دعوة PK أخرى، حاول لاحقاً";
+"pk.invite.toast.busy"          = "الطرف الآخر مشغول، يرجى المحاولة لاحقًا";
+"pk.invite.toast.beingInvited"  = "يعالج الخصم دعوة PK أخرى، يرجى المحاولة لاحقًا";
 "pk.invite.toast.self"          = "لا يمكنك دعوة نفسك";
-"pk.invite.toast.limit"         = "وصلت الحد الأقصى لدعوات PK";
-"pk.invite.toast.matching"      = "جارٍ المطابقة العشوائية، الإلغاء للدعوة";
+"pk.invite.toast.limit"         = "تم بلوغ الحد الأقصى لدعوات PK. حاول لاحقًا";
+"pk.invite.toast.matching"      = "الخصم في مطابقة PK عشوائية، يرجى المحاولة لاحقًا";
 "pk.invite.toast.sent"          = "تم إرسال دعوة PK";
 
 /* PK popup H5 alignment (2026-07-06 iteration 3) */
-"pk.giveUp.title"               = "التخلي عن PK؟";
-"pk.giveUp.confirm"             = "تأكيد إيقاف هذه المباراة";
+"pk.giveUp.title"               = "التخلي عن PK";
+"pk.giveUp.confirm"             = "هل أنت متأكد من الخروج من هذه المباراة؟ في حال الفصل التلقائي، ستُحسب نتيجة المباراة كخسارة";
 "pk.giveUp.action"              = "استسلام";
 "pk.continuePK"                 = "متابعة PK";
 "pk.pkEnded.title"              = "انتهت المباراة";
 "pk.disconnect.action"          = "قطع الاتصال بالبث";
 "pk.matchFailed.title"          = "لم يتم العثور على مباراة مؤقتًا";
-"pk.matchFailed.hint1"          = "عذرًا، لا يوجد بثاث بنفس القوة حاليًا";
+"pk.matchFailed.hint1"          = "عذرًا، لا يوجد بث مباشر بمستوى مماثل متاح الآن!";
 "pk.matchFailed.hint2"          = "إيقاف المطابقة. اختر بثاثًا محددًا لبدء PK";
 "pk.matchFailed.initiate"       = "بدء PK";
-"pk.inviting.title"             = "جاري دعوة PK";
-"pk.waitingAcceptance"          = "بانتظار قبول PK";
+"pk.inviting.title"             = "جارٍ إرسال دعوة PK...";
+"pk.waitingAcceptance"          = "في انتظار قبول PK";
 "pk.cancelInvitation"           = "إلغاء دعوة PK";
 "pk.punish.label"               = "عقوبة";
 "pk.result.win"                 = "فوز";
@@ -805,6 +816,17 @@
 "party.list.pill.liveVoice"              = "فيديو+صوت";
 "party.list.pill.voice"                  = "صوت";
 "party.list.pill.languageFallback"       = "الإنجليزية";
+
+"party.tab.party"                        = "حفلة";
+"party.tab.follow"                       = "المتابَعون";
+"party.tab.recent"                       = "الأخيرة";
+"party.language.all"                     = "الكل";
+"party.rank.partyRich"                   = "الأثرياء";
+"party.rank.room"                        = "الغرف";
+"party.search.placeholder"               = "ابحث عن الغرف";
+"party.search.hint"                      = "أدخل الكلمات المفتاحية للبحث";
+"party.search.noResults"                 = "لا توجد غرف";
+"party.comingSoon"                       = "قريبًا";
 
 "party.create.navTitle"                  = "إنشاء غرفتي";
 "party.create.submit"                    = "إنشاء";

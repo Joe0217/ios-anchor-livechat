@@ -112,7 +112,7 @@ enum L10n {
         static var inviteToastBeingInvited: String { localize("pk.invite.toast.beingInvited", comment: "对方正在处理其他邀请") }
         static var inviteToastSelf: String { localize("pk.invite.toast.self", comment: "不能邀请自己") }
         static var inviteToastLimit: String { localize("pk.invite.toast.limit", comment: "邀请已达上限") }
-        static var inviteToastMatching: String { localize("pk.invite.toast.matching", comment: "随机匹配中，请先取消") }
+        static var inviteToastMatching: String { localize("pk.invite.toast.matching", comment: "对方在随机匹配中，请稍后再试（对齐 H5 语义：对方 in matching，非自己）") }
         static var inviteToastInviteSent: String { localize("pk.invite.toast.sent", comment: "PK 邀请已发送") }
 
         // MARK: - H5 pkLive/* popup 对齐（2026-07-06 iteration 3：PK 全套 UI 同步）
@@ -204,6 +204,18 @@ enum L10n {
         static var listPillLiveVoice: String { localize("party.list.pill.liveVoice", comment: "视觉占位 pill 1：Live+Voice") }
         static var listPillVoice: String { localize("party.list.pill.voice", comment: "视觉占位 pill 2：Voice") }
         static var listPillLanguageFallback: String { localize("party.list.pill.languageFallback", comment: "语言 pill fallback：English") }
+
+        // 大厅增强（E-plan 2026-07-10 对齐 livechat-h5 用户端 /party/index.vue）
+        static var tabParty: String { localize("party.tab.party", comment: "顶部 tab Party") }
+        static var tabFollow: String { localize("party.tab.follow", comment: "顶部 tab Follow") }
+        static var tabRecent: String { localize("party.tab.recent", comment: "顶部 tab Recent") }
+        static var languageAll: String { localize("party.language.all", comment: "语言 pill All 选项") }
+        static var rankPartyRich: String { localize("party.rank.partyRich", comment: "PartyRich 榜卡文案") }
+        static var rankRoom: String { localize("party.rank.room", comment: "Room 榜卡文案") }
+        static var searchPlaceholder: String { localize("party.search.placeholder", comment: "搜索输入框占位") }
+        static var searchHint: String { localize("party.search.hint", comment: "空 query 提示") }
+        static var searchNoResults: String { localize("party.search.noResults", comment: "无搜索结果") }
+        static var comingSoon: String { localize("party.comingSoon", comment: "占位 toast 文案 Coming soon") }
 
         // 创建房（PartyCreateRoomView v5 对齐 livechat-h5 用户端，2026-07-10）
         static var createNavTitle: String { localize("party.create.navTitle", comment: "Create My Room") }
@@ -877,14 +889,10 @@ enum L10n {
     static var liveRoomContributionErrorRetry: String { localize("liveRoom.contribution.errorRetry", comment: "加载失败重试") }
     static var liveRoomContribution90dFormat: String { localize("liveRoom.contribution.last90dFormat", comment: "90天格式") }
     static var liveRoomContributionSentAction: String { localize("liveRoom.contribution.sentAction", comment: "送出动作") }
-    static var liveRoomRouletteIntroCard1Title: String { localize("liveRoom.roulette.intro.card1.title", comment: "引导卡1标题") }
-    static var liveRoomRouletteIntroCard1Body: String { localize("liveRoom.roulette.intro.card1.body", comment: "引导卡1正文") }
-    static var liveRoomRouletteIntroCard2Title: String { localize("liveRoom.roulette.intro.card2.title", comment: "引导卡2标题") }
-    static var liveRoomRouletteIntroCard2Body: String { localize("liveRoom.roulette.intro.card2.body", comment: "引导卡2正文") }
-    static var liveRoomRouletteIntroCard3Title: String { localize("liveRoom.roulette.intro.card3.title", comment: "引导卡3标题") }
-    static var liveRoomRouletteIntroCard3Body: String { localize("liveRoom.roulette.intro.card3.body", comment: "引导卡3正文") }
-    static var liveRoomRouletteIntroNext: String { localize("liveRoom.roulette.intro.next", comment: "下一步") }
-    static var liveRoomRouletteIntroStart: String { localize("liveRoom.roulette.intro.start", comment: "开始") }
+    // v11 引导 2 卡（Wheel + RPS）：card1 复用为 Wheel 卡；card2/card3 + Start 已废弃
+    static var liveRoomRouletteIntroCard1Title: String { localize("liveRoom.roulette.intro.card1.title", comment: "引导卡 1 (Wheel) 标题") }
+    static var liveRoomRouletteIntroCard1Body: String { localize("liveRoom.roulette.intro.card1.body", comment: "引导卡 1 (Wheel) 正文") }
+    static var liveRoomRouletteIntroNext: String { localize("liveRoom.roulette.intro.next", comment: "Next 按钮") }
     static var liveRoomRouletteSettingTitle: String { localize("liveRoom.roulette.setting.title", comment: "转盘设置标题") }
     static var liveRoomRouletteEnable: String { localize("liveRoom.roulette.enable", comment: "启用转盘") }
     static var liveRoomRoulettePrice: String { localize("liveRoom.roulette.price", comment: "转盘价格") }
@@ -893,6 +901,18 @@ enum L10n {
     static var liveRoomRouletteEdit: String { localize("liveRoom.roulette.edit", comment: "编辑") }
     static var liveRoomRouletteRules: String { localize("liveRoom.roulette.rules", comment: "规则") }
     static var liveRoomRouletteErrorRetry: String { localize("liveRoom.roulette.errorRetry", comment: "加载失败重试") }
+    // MARK: v11 转盘功能对齐 H5（新增 UI + 编辑子 sheet + Toast）
+    static var liveRoomRouletteIntroHeader: String { localize("liveRoom.roulette.intro.header", comment: "引导 popup 顶部标题") }
+    static var liveRoomRouletteIntroRpsTitle: String { localize("liveRoom.roulette.intro.rps.title", comment: "引导卡 RPS 标题") }
+    static var liveRoomRouletteIntroRpsBody: String { localize("liveRoom.roulette.intro.rps.body", comment: "引导卡 RPS 正文") }
+    static var liveRoomRouletteCloseWheel: String { localize("liveRoom.roulette.closeWheel", comment: "关闭转盘按钮") }
+    static var liveRoomRouletteFinishEditing: String { localize("liveRoom.roulette.finishEditing", comment: "完成编辑按钮") }
+    static var liveRoomRouletteEditTitle: String { localize("liveRoom.roulette.edit.title", comment: "编辑子 sheet 标题") }
+    static var liveRoomRouletteEditConfirm: String { localize("liveRoom.roulette.edit.confirm", comment: "编辑子 sheet Confirm 按钮") }
+    static var liveRoomRouletteEditEnterItems: String { localize("liveRoom.roulette.edit.enterItems", comment: "编辑子 sheet 输入 placeholder") }
+    static var liveRoomRouletteToastStarted: String { localize("liveRoom.roulette.toast.started", comment: "启用成功 toast") }
+    static var liveRoomRouletteToastStopped: String { localize("liveRoom.roulette.toast.stopped", comment: "关闭成功 toast") }
+    static var liveRoomRouletteToastEnterPrice: String { localize("liveRoom.roulette.toast.enterPrice", comment: "价格为空 toast") }
     static var liveRoomRetry: String { localize("liveRoom.retry", comment: "通用重试") }
 
     // MARK: v6-v9 keys (linter 曾清空，v10 补回)
@@ -1058,6 +1078,17 @@ enum L10n {
 
     // v22（2026-07-10）：主播索取礼物被用户拒绝的 toast
     static var callAskForGiftRejected: String { localize("call.askForGift.rejected", comment: "主播索取礼物被用户拒绝时的 toast 提示") }
+
+    // v22（2026-07-10）：PK 结果公屏消息（对齐 H5 sendPkEndNotice 3 分支文案）
+    static func pkResultWinFormat(_ my: String, _ opponent: String) -> String {
+        String(format: localize("pk.pkResultWin", comment: "PK 胜利公屏文案"), my, opponent)
+    }
+    static func pkResultLoseFormat(_ my: String, _ opponent: String) -> String {
+        String(format: localize("pk.pkResultLose", comment: "PK 失败公屏文案"), my, opponent)
+    }
+    static func pkResultDrawFormat(_ my: String, _ opponent: String) -> String {
+        String(format: localize("pk.pkResultDraw", comment: "PK 平局公屏文案"), my, opponent)
+    }
 
     // MARK: - C 1v1 通话（HUD）
     enum Call {

@@ -463,14 +463,9 @@
 "liveRoom.comingSoon.roulette"    = "Etkileşim çarkı yakında";
 
 /* Roulette intro popup & setting sheet (aligns H5 wheel.* + live.* namespace) */
-"liveRoom.roulette.intro.card1.title" = "Çarkı Çevir";
-"liveRoom.roulette.intro.card1.body"  = "İzleyiciler elmas harcayarak ödül çarkını çevirebilir. Daha fazla çevirme, daha yüksek izleyici etkileşimi ve gelir anlamına gelir.";
-"liveRoom.roulette.intro.card2.title" = "Ödülleri Ayarla";
-"liveRoom.roulette.intro.card2.body"  = "Yayıncılar, kendileri ve hayranları için özel etkileşimli ödüller ayarlayabilir.";
-"liveRoom.roulette.intro.card3.title" = "İstediğiniz Zaman Aç";
-"liveRoom.roulette.intro.card3.body"  = "Bu özelliği canlı yayın ayarlarından istediğiniz zaman açıp kapatabilirsiniz.";
+"liveRoom.roulette.intro.card1.title" = "Çark";
+"liveRoom.roulette.intro.card1.body"  = "İzleyiciler elmas harcayarak ödül çarkını çevirebilir. Daha fazla çevirme, daha yüksek izleyici etkileşimi ve gelir anlamına gelir. Yayıncılar, kendileri ve hayranları için özel etkileşimli ödüller ayarlayabilir ve bu özelliği canlı yayın ayarlarından istediği zaman açıp kapatabilir.";
 "liveRoom.roulette.intro.next"        = "İleri";
-"liveRoom.roulette.intro.start"       = "Başla";
 "liveRoom.roulette.setting.title"     = "Etkileşim Çarkını Ayarla";
 "liveRoom.roulette.enable"            = "Çarkı Etkinleştir";
 "liveRoom.roulette.price"             = "Dönüş Fiyatını Ayarla";
@@ -479,6 +474,19 @@
 "liveRoom.roulette.edit"              = "Çarkı Düzenle";
 "liveRoom.roulette.rules"             = "Oyun Kuralları";
 "liveRoom.roulette.errorRetry"        = "Yükleme başarısız. Tekrar deneyin.";
+
+/* Roulette v11: functional alignment with H5 */
+"liveRoom.roulette.intro.header"      = "Canlı Yayın Etkileşimli Oyun Kuralları";
+"liveRoom.roulette.intro.rps.title"   = "Taş Kâğıt Makas";
+"liveRoom.roulette.intro.rps.body"    = "İzleyiciler Taş-Kâğıt-Makas'ta yayıncıya meydan okumak için elmas öder. Sistem, yayıncı adına oynar. Her galibiyet yayıncıya bir madalya kazandırır, hayran etkileşimini ve geliri artırır.";
+"liveRoom.roulette.closeWheel"        = "Çarkı Kapat";
+"liveRoom.roulette.finishEditing"     = "Düzenlemeyi Bitir";
+"liveRoom.roulette.edit.title"        = "Etkileşim Öğelerini Ayarla";
+"liveRoom.roulette.edit.confirm"      = "Onayla";
+"liveRoom.roulette.edit.enterItems"   = "Öğelerinizi Girin";
+"liveRoom.roulette.toast.started"     = "Çark Başladı";
+"liveRoom.roulette.toast.stopped"     = "Çark Durdu";
+"liveRoom.roulette.toast.enterPrice"  = "Lütfen Fiyatı Girin";
 
 /* LiveRoom H5 interaction alignment (2026-07-06 iteration 2) */
 "liveRoom.tool.message"           = "Mesajlar";
@@ -563,6 +571,9 @@
 // C-4 Wave4 UI 布局对齐
 "call.action.askForGift"     = "Hediye iste";
 "call.askForGift.rejected"   = "Kullanıcı hediye isteğinizi reddetti";
+"pk.pkResultWin"             = "🎉 %@, bu PK'da %@'i yendi";
+"pk.pkResultLose"            = "😭 %@ maalesef bu PK'da %@'e kaybetti";
+"pk.pkResultDraw"            = "%@ ve %@ bu PK'da berabere kaldı";
 "call.action.more"           = "Daha fazla";
 "call.action.comingSoon"     = "Yakında";
 "call.remoteCameraOff"       = "Kamera kapalı";
@@ -608,10 +619,10 @@
 "pk.entry.random"            = "Rastgele PK";
 "pk.entry.invite"            = "ID ile Davet Et";
 
-"pk.matching.title"          = "Rakip aranıyor...";
-"pk.matching.subtitle"       = "Lütfen bekleyin";
+"pk.matching.title"          = "Eşleşiyor...";
+"pk.matching.subtitle"       = "Rakip aranıyor";
 "pk.matching.cancel"         = "İptal";
-"pk.matching.cancelled"      = "Eşleştirme iptal edildi";
+"pk.matching.cancelled"      = "PK Eşleşmesi İptal Edildi";
 
 "pk.invite.title"            = "PK Daveti Gönder";
 "pk.invite.placeholder"      = "Rakip UID";
@@ -637,7 +648,7 @@
 
 "pk.toast.inviteRejectedFormat" = "%@ PK davetinizi reddetti";
 "pk.toast.inviteAcceptedFormat" = "%@ PK davetinizi kabul etti";
-"pk.toast.inviteTimeout"        = "PK daveti süresi doldu";
+"pk.toast.inviteTimeout"        = "PK Daveti Süresi Doldu";
 
 "pk.invite.searchPlaceholder"   = "UID veya kullanıcı adı";
 "pk.invite.recommendTitle"      = "Öneriler";
@@ -647,26 +658,26 @@
 "pk.invite.btn.invite"          = "Davet et";
 "pk.invite.btn.waiting"         = "Bekleniyor";
 "pk.invite.btn.pking"           = "PK'de";
-"pk.invite.toast.busy"          = "Diğer yayıncı meşgul, sonra dene";
-"pk.invite.toast.beingInvited"  = "Başka PK daveti işliyor, sonra dene";
+"pk.invite.toast.busy"          = "Karşı taraf meşgul, lütfen daha sonra tekrar deneyin";
+"pk.invite.toast.beingInvited"  = "Rakip başka bir PK davetini işliyor, lütfen daha sonra tekrar deneyin";
 "pk.invite.toast.self"          = "Kendinizi davet edemezsiniz";
-"pk.invite.toast.limit"         = "PK daveti üst sınırına ulaşıldı";
-"pk.invite.toast.matching"      = "Rastgele eşleşme sürüyor, davet için iptal et";
+"pk.invite.toast.limit"         = "PK davet sınırına ulaşıldı. Daha sonra deneyin";
+"pk.invite.toast.matching"      = "Rakip rastgele PK eşleşmesinde, lütfen daha sonra tekrar deneyin";
 "pk.invite.toast.sent"          = "PK daveti gönderildi";
 
 /* PK popup H5 alignment (2026-07-06 iteration 3) */
-"pk.giveUp.title"               = "PK'dan vazgeç?";
-"pk.giveUp.confirm"             = "Bu PK'yı kesmeyi onaylayın";
+"pk.giveUp.title"               = "PK'yi Bırak";
+"pk.giveUp.confirm"             = "Bu PK'den çıkmak istediğinizden emin misiniz? Otomatik olarak bağlantı kesilirse, PK sonucunuz kayıp olacaktır";
 "pk.giveUp.action"              = "Vazgeç";
 "pk.continuePK"                 = "PK'ya devam";
 "pk.pkEnded.title"              = "PK Bitti";
 "pk.disconnect.action"          = "Yayın Bağlantısını Kes";
 "pk.matchFailed.title"          = "Şu anda eşleşme bulunamadı";
-"pk.matchFailed.hint1"          = "Şu anda eşit güçte yayıncı yok";
+"pk.matchFailed.hint1"          = "Şu anda eşdeğer güçte bir yayıncı yok!";
 "pk.matchFailed.hint2"          = "Eşleşme kapalı. Belirli bir yayıncı seçerek PK başlatın";
 "pk.matchFailed.initiate"       = "PK Başlat";
-"pk.inviting.title"             = "PK'ya davet ediliyor";
-"pk.waitingAcceptance"          = "PK kabulü bekleniyor";
+"pk.inviting.title"             = "PK Daveti Gönderiliyor...";
+"pk.waitingAcceptance"          = "PK Kabulü Bekleniyor";
 "pk.cancelInvitation"           = "PK Davetini İptal Et";
 "pk.punish.label"               = "Ceza";
 "pk.result.win"                 = "KAZANDIN";
@@ -805,6 +816,17 @@
 "party.list.pill.liveVoice"              = "Canlı+Ses";
 "party.list.pill.voice"                  = "Ses";
 "party.list.pill.languageFallback"       = "İngilizce";
+
+"party.tab.party"                        = "Parti";
+"party.tab.follow"                       = "Takip";
+"party.tab.recent"                       = "Son";
+"party.language.all"                     = "Tümü";
+"party.rank.partyRich"                   = "PartyRich";
+"party.rank.room"                        = "Oda";
+"party.search.placeholder"               = "Oda ara";
+"party.search.hint"                      = "Aramak için anahtar kelime girin";
+"party.search.noResults"                 = "Oda bulunamadı";
+"party.comingSoon"                       = "Yakında";
 
 "party.create.navTitle"                  = "Odamı Oluştur";
 "party.create.submit"                    = "Oluştur";

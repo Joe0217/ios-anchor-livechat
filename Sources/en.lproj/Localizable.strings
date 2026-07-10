@@ -419,14 +419,9 @@
 "liveRoom.comingSoon.roulette"    = "Interactive wheel coming soon";
 
 /* Roulette intro popup & setting sheet (aligns H5 wheel.* + live.* namespace) */
-"liveRoom.roulette.intro.card1.title" = "Spin the Wheel";
-"liveRoom.roulette.intro.card1.body"  = "Viewers may spin the prize wheel by consuming diamonds. More spins lead to higher audience engagement and revenue.";
-"liveRoom.roulette.intro.card2.title" = "Set Prizes";
-"liveRoom.roulette.intro.card2.body"  = "Streamers can set up exclusive interactive prizes for themselves and fans.";
-"liveRoom.roulette.intro.card3.title" = "Enable Anytime";
-"liveRoom.roulette.intro.card3.body"  = "Enable or disable this feature at any time in the live stream settings.";
+"liveRoom.roulette.intro.card1.title" = "Wheel";
+"liveRoom.roulette.intro.card1.body"  = "Viewers may spin the prize wheel by consuming diamonds. More spins lead to higher audience engagement and revenue. Streamers can set up exclusive interactive prizes for themselves and fans, and enable or disable this feature at any time in the live stream settings.";
 "liveRoom.roulette.intro.next"        = "Next";
-"liveRoom.roulette.intro.start"       = "Start";
 "liveRoom.roulette.setting.title"     = "Set Interaction Wheel";
 "liveRoom.roulette.enable"            = "Enable Wheel";
 "liveRoom.roulette.price"             = "Set Spin Price";
@@ -435,6 +430,19 @@
 "liveRoom.roulette.edit"              = "Edit Wheel";
 "liveRoom.roulette.rules"             = "Game Rules";
 "liveRoom.roulette.errorRetry"        = "Failed to load. Please try again.";
+
+/* Roulette v11: functional alignment with H5 (Wheel + RPS 2-card intro + Edit sub-sheet + Toast) */
+"liveRoom.roulette.intro.header"      = "Live Interactive Game Rules";
+"liveRoom.roulette.intro.rps.title"   = "Rock Paper Scissors";
+"liveRoom.roulette.intro.rps.body"    = "Viewers pay diamonds to challenge the streamer in Rock-Paper-Scissors. The system plays on the streamer's behalf. Each win earns the streamer a medal, boosting fan engagement and revenue.";
+"liveRoom.roulette.closeWheel"        = "Close Wheel";
+"liveRoom.roulette.finishEditing"     = "Finish Editing";
+"liveRoom.roulette.edit.title"        = "Set Interaction Items";
+"liveRoom.roulette.edit.confirm"      = "Confirm";
+"liveRoom.roulette.edit.enterItems"   = "Enter your items";
+"liveRoom.roulette.toast.started"     = "Wheel Started";
+"liveRoom.roulette.toast.stopped"     = "Wheel Stopped";
+"liveRoom.roulette.toast.enterPrice"  = "Please Enter the Price";
 
 /* LiveRoom H5 interaction alignment (2026-07-06 iteration 2) */
 "liveRoom.tool.message"           = "Messages";
@@ -519,6 +527,10 @@
 // C-4 Wave4 UI 布局对齐
 "call.action.askForGift"     = "Ask for Gift";
 "call.askForGift.rejected"   = "The user declined your gift request";
+// v22 PK 结果公屏（对齐 H5 pk notification succeed/failed/draw）
+"pk.pkResultWin"             = "🎉 %@ defeated %@ in this PK match";
+"pk.pkResultLose"            = "😭 %@ regrettably lost to %@ in this PK";
+"pk.pkResultDraw"            = "%@ and %@ tied in this PK";
 "call.action.more"           = "More";
 "call.action.comingSoon"     = "Coming soon";
 "call.remoteCameraOff"       = "Camera off";
@@ -564,10 +576,10 @@
 "pk.entry.random"            = "Random PK";
 "pk.entry.invite"            = "Invite by ID";
 
-"pk.matching.title"          = "Pairing with opponent...";
-"pk.matching.subtitle"       = "Searching, please wait";
+"pk.matching.title"          = "Matching...";
+"pk.matching.subtitle"       = "Searching for an opponent";
 "pk.matching.cancel"         = "Cancel";
-"pk.matching.cancelled"      = "Matching cancelled";
+"pk.matching.cancelled"      = "PK Matching Cancelled";
 
 "pk.invite.title"            = "Invite to PK";
 "pk.invite.placeholder"      = "Opponent UID";
@@ -593,7 +605,7 @@
 
 "pk.toast.inviteRejectedFormat" = "%@ refused your PK invitation";
 "pk.toast.inviteAcceptedFormat" = "%@ accepted your PK invitation";
-"pk.toast.inviteTimeout"        = "PK invitation expired";
+"pk.toast.inviteTimeout"        = "PK Invitation Expired";
 
 "pk.invite.searchPlaceholder"   = "UID or nickname";
 "pk.invite.recommendTitle"      = "Recommend";
@@ -603,26 +615,26 @@
 "pk.invite.btn.invite"          = "Invite";
 "pk.invite.btn.waiting"         = "Waiting";
 "pk.invite.btn.pking"           = "PKing";
-"pk.invite.toast.busy"          = "The other streamer is busy. Try again later";
-"pk.invite.toast.beingInvited"  = "Other handling another PK invite. Try later";
+"pk.invite.toast.busy"          = "The other party is busy, please try again later";
+"pk.invite.toast.beingInvited"  = "Opponent is processing another PK invitation, please try again later";
 "pk.invite.toast.self"          = "Cannot invite yourself";
-"pk.invite.toast.limit"         = "PK invitation limit reached. Try later";
-"pk.invite.toast.matching"      = "Random matching in progress. Cancel to invite";
+"pk.invite.toast.limit"         = "PK invitation limit reached. Try again later";
+"pk.invite.toast.matching"      = "Opponent is in random PK matching, please try again later";
 "pk.invite.toast.sent"          = "PK invitation sent";
 
 /* PK popup H5 alignment (2026-07-06 iteration 3) */
-"pk.giveUp.title"               = "Give up the PK?";
-"pk.giveUp.confirm"             = "Confirm to interrupt this PK";
+"pk.giveUp.title"               = "Give Up the PK";
+"pk.giveUp.confirm"             = "Are you sure you want to quit this PK? If auto-disconnected, your PK result will be a loss";
 "pk.giveUp.action"              = "Give Up";
 "pk.continuePK"                 = "Continue PK";
 "pk.pkEnded.title"              = "PK Ended";
 "pk.disconnect.action"          = "Disconnect Live";
 "pk.matchFailed.title"          = "No match found temporarily";
-"pk.matchFailed.hint1"          = "Oops, no equal-strength streamer available now";
+"pk.matchFailed.hint1"          = "Oops, no equal-strength streamer available now!";
 "pk.matchFailed.hint2"          = "Matching off. Go pick a specific streamer for PK";
 "pk.matchFailed.initiate"       = "Initiate PK";
-"pk.inviting.title"             = "Inviting to PK";
-"pk.waitingAcceptance"          = "Waiting PK acceptance";
+"pk.inviting.title"             = "Inviting to PK...";
+"pk.waitingAcceptance"          = "Waiting for PK Acceptance";
 "pk.cancelInvitation"           = "Cancel PK Invitation";
 "pk.punish.label"               = "Punish";
 "pk.result.win"                 = "WIN";
@@ -761,6 +773,17 @@
 "party.list.pill.liveVoice"              = "Live+Voice";
 "party.list.pill.voice"                  = "Voice";
 "party.list.pill.languageFallback"       = "English";
+
+"party.tab.party"                        = "Party";
+"party.tab.follow"                       = "Follow";
+"party.tab.recent"                       = "Recent";
+"party.language.all"                     = "All";
+"party.rank.partyRich"                   = "PartyRich";
+"party.rank.room"                        = "Room";
+"party.search.placeholder"               = "Search rooms";
+"party.search.hint"                      = "Enter keywords to search rooms";
+"party.search.noResults"                 = "No rooms found";
+"party.comingSoon"                       = "Coming soon";
 
 "party.create.navTitle"                  = "Create My Room";
 "party.create.submit"                    = "Create";
