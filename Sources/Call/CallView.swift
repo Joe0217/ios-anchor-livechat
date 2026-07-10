@@ -1484,9 +1484,17 @@ private struct CallMessageScroller: View {
             let nameColor = resolveNicknameColor(sender.nicknameColor, isSpecial: sender.isSpecial)
             Text("\(Text(nickname).foregroundColor(nameColor))\(Text(":  ").foregroundColor(.white))")
                 .font(.system(size: 13, weight: .medium))
-            CachedRemoteImage(urlString: imageURL, size: 40)
-                .frame(width: 40, height: 40)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+            // v22（2026-07-10）：改用 CachedAsyncImage（NSCache + URLCache 双层持久缓存），
+            // 修复 AsyncImage 无强缓存 → 滚动重拉失败导致的礼物图不显示
+            CachedAsyncImage(url: URL(string: imageURL), contentMode: .fill) {
+                Image(systemName: "gift.fill")
+                    .font(.system(size: 16))
+                    .foregroundColor(.white.opacity(0.55))
+                    .frame(width: 40, height: 40)
+                    .background(Color.white.opacity(0.08))
+            }
+            .frame(width: 40, height: 40)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
             Text("x \(count)")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Color(red: 1.0, green: 0.80, blue: 0.30))
