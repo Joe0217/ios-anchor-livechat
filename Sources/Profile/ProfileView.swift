@@ -12,13 +12,10 @@ import UIKit
 /// 通用规则：navigation path 上抬到 MainTabView 持有（`@Binding var path`），
 /// 两段 navigationDestination（FollowSegment / ProfileRoute）也上移到 MainTabView 根节点，
 /// 让 tabbar 能感知 Profile 子页 push/pop 深度，做几何坍缩。
-/// 媒体预览 sheet 数据载体：MediaAsset + 是否视频。
-/// Identifiable 让 fullScreenCover(item:) 能用单一 state 驱动开关。
-private struct MediaPreviewContext: Identifiable {
-    let asset: MediaAsset
-    let isVideo: Bool
-    var id: String { "\(asset.id)-\(isVideo ? "v" : "p")" }
-}
+///
+/// 图片/视频预览走公共组件 [`MediaGalleryView`](../Core/MediaGallery/MediaGalleryView.swift)（20MB LRU + 横滑翻页 + 下拉关闭）。
+/// Photos 与 Videos 分开成两个 URL 列表——用户从 photos section 打开预览时只滑图片，videos section 打开时只滑视频，
+/// 保留分区语义。
 
 /// Profile 子页路由枚举。NavigationLink(value:) + navigationDestination(for:) 解耦目标类型。
 /// FollowSegment 已是另一个独立 NavigationDestination；本 enum 容纳剩余子页路由。
@@ -34,7 +31,7 @@ enum ProfileRoute: Hashable {
 
 struct ProfileView: View {
     @StateObject private var vm = ProfileViewModel()
-    @State private var previewContext: MediaPreviewContext?
+    @State private var galleryContext: MediaGalleryContext?
     @Binding var path: NavigationPath
 
     /// 屏幕顶部 safe area inset（状态栏/刘海高度）。
@@ -89,10 +86,8 @@ struct ProfileView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Color.clear.frame(height: Theme.Metric.tabBarHeight)
         }
-        .fullScreenCover(item: $previewContext) { ctx in
-            MediaPreviewView(item: ctx.asset, isVideo: ctx.isVideo) {
-                previewContext = nil
-            }
+        .fullScreenCover(item: $galleryContext) { ctx in
+            MediaGalleryView(urls: ctx.urls, startIndex: ctx.startIndex)
         }
         .preferredColorScheme(.dark)
     }
@@ -164,13 +159,13 @@ struct ProfileView: View {
                     title: String(format: L10n.profilePhotosFormat, vm.photos.count, vm.photosTotal),
                     items: vm.photos,
                     isVideoGrid: false,
-                    onTap: { asset in previewContext = MediaPreviewContext(asset: asset, isVideo: false) }
+                    onTap: { asset in openGallery(with: vm.photos, target: asset) }
                 )
                 ProfileMediaGrid(
                     title: String(format: L10n.profileVideosFormat, vm.videos.count, vm.videosTotal),
                     items: vm.videos,
                     isVideoGrid: true,
-                    onTap: { asset in previewContext = MediaPreviewContext(asset: asset, isVideo: true) }
+                    onTap: { asset in openGallery(with: vm.videos, target: asset) }
                 )
             }
         case .gifts:
@@ -186,6 +181,26 @@ struct ProfileView: View {
             .foregroundColor(Theme.Palette.profileTabInactive)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 60)
+    }
+
+    /// 打开图库预览：取当前 section 全量 URL 列表 + 点击项 index。
+    /// vaild=3 的被拒项由 `ProfileMediaGrid` 已 `.disabled` 拦截，此处不会走到。
+    private func openGallery(with items: [MediaAsset], target: MediaAsset) {
+        let urls = items.compactMap { $0.url }
+        guard !urls.isEmpty else { return }
+        // 用 assetId 匹配起始 index；缺 id 时 fallback URL 相等；仍缺时从头开始
+        let idx: Int = {
+            if let tid = target.assetId,
+               let i = items.firstIndex(where: { $0.assetId == tid }) {
+                return items[..<i].compactMap { $0.url }.count
+            }
+            if let tUrl = target.url,
+               let i = urls.firstIndex(of: tUrl) {
+                return i
+            }
+            return 0
+        }()
+        galleryContext = MediaGalleryContext(urls: urls, startIndex: idx)
     }
 }
 

@@ -4,7 +4,7 @@ import SwiftUI
 ///
 /// cell 用 AsyncImage 加载远端缩略图（图片用 url，视频用 coverUrl ?? url）；
 /// 视频叠加播放图标；审核态（vaild=2 审核中 / 3 已拒）显示对应蒙层 + 徽章。
-/// `onTap` 由父 View 注入，触发后弹出 MediaPreviewView 全屏预览。
+/// `onTap` 由父 View 注入，触发后走公共组件 MediaGalleryView 全屏预览。
 struct ProfileMediaGrid: View {
     let title: String
     let items: [MediaAsset]
@@ -57,44 +57,54 @@ struct ProfileMediaGrid: View {
         .padding(.horizontal, Theme.Metric.profileDescPadding)
     }
 
+    /// 单个 cell：`Color.clear.aspectRatio(1, .fit).overlay { ... }` 严格骨架。
+    ///
+    /// **为什么不能直接把 aspectRatio 挂 ZStack**：ZStack 会取内部 `CachedAsyncImage` 的 intrinsic size
+    /// —— AsyncImage 加载完后 Image 会带真实尺寸，`.fit` 下 cell 收缩到图片比例导致同行不同图**高度不一致 → 错位**。
+    /// Color.clear 无 intrinsic size + aspectRatio(1) 强制正方形骨架，图片放 overlay 里再 `.fill` 撑满 —— 与
+    /// `MomentPostRow.gridCell` 同款模式，保证 photos/videos 两个 grid 每格都是完全一致的正方形。
     private func cell(for item: MediaAsset) -> some View {
         let imageURL = URL(string: (isVideoGrid ? item.coverUrl : item.url) ?? "")
         let isReviewing = item.vaild == 2
         let isRejected = item.vaild == 3
 
-        return ZStack {
-            // 远端图：缓存版 AsyncImage，切 tab 回来无重新加载
-            CachedAsyncImage(url: imageURL, contentMode: .fill, cdn: (.custom(width: 320), .fill)) {
-                Theme.Palette.profileGridPlaceholder
-            }
+        return Color.clear
+            .aspectRatio(1, contentMode: .fit)
+            .overlay {
+                ZStack {
+                    // 远端图：缓存版 AsyncImage，切 tab 回来无重新加载
+                    CachedAsyncImage(url: imageURL, contentMode: .fill, cdn: (.custom(width: 320), .fill)) {
+                        Theme.Palette.profileGridPlaceholder
+                    }
 
-            // 视频播放角标
-            if isVideoGrid {
-                Image("profileVideoPlay")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 36, height: 36)
-                    .accessibilityHidden(true)
-            }
+                    // 视频播放角标
+                    if isVideoGrid {
+                        Image("profileVideoPlay")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 36, height: 36)
+                            .accessibilityHidden(true)
+                    }
 
-            // 审核态蒙层 + 徽章
-            if isReviewing || isRejected {
-                Color.black.opacity(0.55)
-                VStack(spacing: 4) {
-                    Image(systemName: isReviewing ? "clock.fill" : "xmark.octagon.fill")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(.white)
-                    Text(isReviewing ? L10n.profileMediaReviewing : L10n.profileMediaRejected)
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white)
-                        .multilineTextAlignment(.center)
+                    // 审核态蒙层 + 徽章
+                    if isReviewing || isRejected {
+                        Color.black.opacity(0.55)
+                        VStack(spacing: 4) {
+                            Image(systemName: isReviewing ? "clock.fill" : "xmark.octagon.fill")
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundStyle(.white)
+                            Text(isReviewing ? L10n.profileMediaReviewing : L10n.profileMediaRejected)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(.white)
+                                .multilineTextAlignment(.center)
+                        }
+                        .padding(6)
+                    }
                 }
-                .padding(6)
             }
-        }
-        .aspectRatio(1, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.profileGridCell, style: .continuous))
-        .accessibilityLabel(cellA11yLabel(item: item, isReviewing: isReviewing, isRejected: isRejected))
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.profileGridCell, style: .continuous))
+            .accessibilityLabel(cellA11yLabel(item: item, isReviewing: isReviewing, isRejected: isRejected))
     }
 
     private func cellA11yLabel(item: MediaAsset, isReviewing: Bool, isRejected: Bool) -> String {
