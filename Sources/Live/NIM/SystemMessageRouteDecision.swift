@@ -34,6 +34,11 @@ enum SystemMessageAction: Equatable {
     /// 收到 attachType=37 → 服务端主动踢下线 → 查是否达通话上限 → 弹 SetToBusyDialog
     case checkForcedBusy
 
+    /// v22 attachType 52 私 call 开关状态反向同步（对齐 H5 stores/modules/live.js:306-307
+    /// `currentLiveInfo.privateCallOpen = ext.data.privateCallOpen`）—— 后端广播状态变更时
+    /// 更新 LiveStore.privateCallOpen；CallStore 据此判 busy reject。
+    case privateCallSwitchChange(open: Bool)
+
     /// 非 sysMsg / syncSysMsg 通道或未覆盖 attachType：router 应 `return false` 让链路下游继续。
     case passThrough
 }
@@ -112,9 +117,26 @@ enum SystemMessageRouteDecision {
              .diamondBoxWarm, .diamondBoxOpen, .diamondBoxClaim, .diamondBoxSettle:
             return .passThrough
 
+        // ===== v22 私 call 开关状态反向同步（H5 attachType 52）=====
+
+        case .privateCallSwitchChange:
+            // H5 stores/modules/live.js:306：`ext?.data?.privateCallOpen !== ''` —— 兼容多态取值
+            // payload 可能为 flat({privateCallOpen:1}) 或嵌套 data.privateCallOpen
+            let raw: Any? = {
+                if let d = payload["data"] as? [String: Any] { return d["privateCallOpen"] }
+                return payload["privateCallOpen"]
+            }()
+            let open: Bool = {
+                if let n = raw as? Int { return n != 0 }
+                if let n = raw as? NSNumber { return n.intValue != 0 }
+                if let s = raw as? String, !s.isEmpty { return Int(s) != 0 }
+                return true   // 缺字段兜底为开（对齐 H5 privateCall=ref(true) 默认）
+            }()
+            return .privateCallSwitchChange(open: open)
+
         // ===== spec 标记 ❌ 低优先（H 不实现，业务侧无产品决策；J 期按需补） =====
 
-        case .giftRequestRejected, .userRechargeSuccess, .privateCallSwitchChange,
+        case .giftRequestRejected, .userRechargeSuccess,
              .liveAnnouncement, .userBindAfterRecharged, .userBindAfterNotRecharged,
              .anchorTaskReward:
             return .passThrough

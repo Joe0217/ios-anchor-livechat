@@ -66,6 +66,21 @@ final class LiveStore: ObservableObject {
     // ─── 权限拒绝对外提示（M2 接入）─────────────
     @Published var permissionDeniedAlert: Bool = false
 
+    // ─── v22 私 call 开关状态（对齐 H5 currentLiveInfo.privateCallOpen）─
+    /// 默认 true（对齐 H5 `privateCall = ref(true)` 语义）；
+    /// 主播 toggle 通过 setPrivateCallOpen 修改，IM attachType 52 反向同步同一入口。
+    /// CallStore.handleIncomingVideoCall 直播态分支据此判定 busy reject（=false 拦截来电）。
+    @Published private(set) var privateCallOpen: Bool = true
+
+    /// PK 期间私 call 开关"隐藏"标记（对齐 H5 liveRoom.vue:466 `shouldShowPrivateCall` 派生）。
+    /// - true：LiveRoomView 里 LiveRoomPrivateCallSwitch **隐藏**（不渲染入口）
+    /// - false：正常显示
+    /// 由 [pausePrivateCallForPK]/[resumePrivateCallAfterPK] 切换；PKStore.transition 驱动
+    @Published private(set) var privateCallHiddenForPK: Bool = false
+
+    /// 保存"进入隐藏前"的开关值，退出隐藏时恢复（对齐 H5 liveRoom.vue:476 `privateCallBeforeHidden`）
+    private var privateCallBeforeHidden: Bool?
+
     // ─── D 里程碑：通话挂断后回直播倒计时（15s，对齐 H5 liveRoom.vue:220）─
     @Published private(set) var isWaitingReturnLive: Bool = false
     @Published private(set) var returnLiveCountdown: Int = 0
@@ -298,6 +313,62 @@ extension LiveStore {
     /// NetworkQualityMonitor 调用：弱网降级时写文案；恢复时传 nil 清空。
     func setNetworkWarning(_ text: String?) {
         networkWarningToast = text
+    }
+
+    /// v22 私 call 开关状态同步入口。
+    /// 两处调用点：
+    /// - LiveRoomView 开关 toggle 成功调 API 后写回本地
+    /// - IM attachType 52 (privateCallSwitchChange) 反向同步
+    func setPrivateCallOpen(_ open: Bool) {
+        privateCallOpen = open
+    }
+
+    /// PK 期间强制关闭 + 隐藏私 call 开关（对齐 H5 liveRoom.vue:471-491）。
+    /// **调用时机**：PKStore.transition 进入非 idle/failed 态时（matching/inviting/invited/starting/inPK/punishing/endingPK）
+    /// - 记录 `privateCallBeforeHidden = privateCallOpen`
+    /// - 立即本地 close（拦截来电）+ 通知后端（防止后端仍派单）
+    /// - `privateCallHiddenForPK = true` 让 UI 层隐藏入口
+    /// **幂等**：已隐藏时重复调不覆盖 `privateCallBeforeHidden`（保护多次状态转换）
+    func pausePrivateCallForPK() {
+        guard !privateCallHiddenForPK else { return }
+        privateCallBeforeHidden = privateCallOpen
+        privateCallOpen = false
+        privateCallHiddenForPK = true
+        pushPrivateCallToBackend(false)
+        logger.info("pausePrivateCallForPK: saved before=\(self.privateCallBeforeHidden ?? true, privacy: .public) → closed")
+    }
+
+    /// PK 结束还原私 call 开关（对齐 H5 liveRoom.vue:493-511）。
+    /// **调用时机**：PKStore.transition 回到 idle/failed 时
+    /// - `privateCallOpen = privateCallBeforeHidden ?? true`（H5 无保存值时默认 true）
+    /// - `privateCallHiddenForPK = false` 让 UI 层重新显示
+    /// - 通知后端恢复
+    /// **幂等**：未隐藏时无操作
+    func resumePrivateCallAfterPK() {
+        guard privateCallHiddenForPK else { return }
+        let restore = privateCallBeforeHidden ?? true
+        privateCallHiddenForPK = false
+        privateCallOpen = restore
+        privateCallBeforeHidden = nil
+        pushPrivateCallToBackend(restore)
+        logger.info("resumePrivateCallAfterPK: restored=\(restore, privacy: .public)")
+    }
+
+    /// 通知后端更新私 call 开关（[pausePrivateCallForPK]/[resumePrivateCallAfterPK] 内部使用）。
+    /// - roomId 缺失（尚未进房）时静默跳过——PK 只可能在 living 态发生，此路径几乎不会命中
+    /// - 网络失败不回滚本地状态（本地已强制切换；后端派单一致性会通过下一次 API/心跳兜底）
+    private func pushPrivateCallToBackend(_ open: Bool) {
+        guard let rid = roomId, rid > 0 else {
+            logger.warning("pushPrivateCallToBackend skipped: roomId nil")
+            return
+        }
+        Task { [weak self] in
+            do {
+                try await LiveService.updatePrivateCall(roomId: rid, open: open)
+            } catch {
+                self?.logger.warning("pushPrivateCallToBackend open=\(open, privacy: .public) failed: \(String(describing: error), privacy: .private)")
+            }
+        }
     }
 
     /// v5.1：NetworkQualityMonitor 每次 report 后调用更新调试信息（LiveRoomView 调试面板实时显示）。

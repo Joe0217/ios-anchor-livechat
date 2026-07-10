@@ -55,8 +55,11 @@ struct LiveRoomView: View {
     /// "Coming soon" toast（快捷礼物 / 私 call 主动发起 / task / 排行 等占位入口点击提示）
     @State private var comingSoonToast: String? = nil
 
-    /// Private Call 开关（对齐 H5 privateCall = ref(true) 默认开）
-    /// 待接后端 updatePrivateCall API（H 里程碑），当前 toggle 只本地 + toast 占位
+    /// Private Call 开关本地 UI 态（对齐 H5 `privateCall = ref(true)` 默认开）。
+    /// 真数据源在 `LiveStore.privateCallOpen`：
+    /// - onAppear 从 store 初始化本 @State
+    /// - toggle 时乐观更新本 @State + 调 `LiveService.updatePrivateCall` + 成功后写回 store；失败回滚 + toast
+    /// - `.onReceive(store.$privateCallOpen)` 反向同步（IM attachType 52 到达时）
     @State private var privateCallOn: Bool = true
 
     /// 设置按钮 confirmationDialog 显隐（含美颜 / 结束直播两项，对齐 H5 底部 setting 按钮）
@@ -118,7 +121,7 @@ struct LiveRoomView: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showBeauty) {
             beautyPanel
-                .presentationDetents([.medium])
+                .presentationDetents([.fraction(0.4)])
                 .presentationDragIndicator(.visible)
         }
         #if DEBUG
@@ -126,7 +129,7 @@ struct LiveRoomView: View {
         #endif
         .sheet(isPresented: $showInviteSheet) {
             PKInviteSheet(store: pkStore, isPresented: $showInviteSheet)
-                .presentationDetents([.medium])
+                .presentationDetents([.fraction(0.5), .fraction(0.8)])
                 .presentationDragIndicator(.visible)
         }
         // G M3 / spec §6.1：PK 各态 overlay 合并为单一 PKOverlayHost，避免 5 层 _OverlayModifier
@@ -208,6 +211,10 @@ struct LiveRoomView: View {
         .overlay { callAndReturnLiveOverlays }
         .animation(.easeInOut(duration: 0.2), value: callState)
         .onReceive(callStore.$state) { newState in callState = newState }
+        // v22 私 call 开关反向同步：IM attachType 52（后端广播）走 store 更新，UI 层跟随
+        .onReceive(store.$privateCallOpen) { open in
+            if privateCallOn != open { privateCallOn = open }
+        }
         .animation(.easeInOut(duration: 0.2), value: store.isWaitingReturnLive)
         // Task 9：声明本 view 属于 GiftEffect .live 场景 —— onAppear 时 setActiveScene，onDisappear 时 leaveScene（硬中断+清队列）
         // ⚠️ scopeId 必须用 **yxRoomId**（云信房间 id），与 NIMChatroomManager.enter(roomId:) + IM handler intake.ingest(scopeId:) 完全一致；
@@ -293,11 +300,14 @@ struct LiveRoomView: View {
                             PublicChatDebugInjector.injectAll(into: nim.messagesStore)
                         }
                         #endif
-                    LiveRoomPrivateCallSwitch(isOn: $privateCallOn, onToggle: { _ in
-                        // TODO: H 里程碑接 updatePrivateCall API；当前仅本地 state + toast 占位
-                        comingSoonToast = L10n.liveRoomComingSoonPrivateCall
-                    })
-                    .padding(.bottom, 60)   // 让开底部工具栏 + gift row 高度，与 H5 pb-60 对齐
+                    // PK 期间隐藏私 call 开关（对齐 H5 liveRoom.vue:466 shouldShowPrivateCall）
+                    // 隐藏由 LiveStore.privateCallHiddenForPK 驱动，PKStore.transition 联动切换
+                    if !store.privateCallHiddenForPK {
+                        LiveRoomPrivateCallSwitch(isOn: $privateCallOn, onToggle: { next in
+                            handlePrivateCallToggle(next)
+                        })
+                        .padding(.bottom, 60)   // 让开底部工具栏 + gift row 高度，与 H5 pb-60 对齐
+                    }
                 }
                 // 2026-07-07 v7：快捷礼物栏完全移除（用户明示"主播端没有快捷送礼"）——
                 // 原以为 H5 有此栏但 PK 中隐藏，实测 H5 主播端从未显示此栏（LiveRoomGiftList 是观众端组件）。
@@ -403,6 +413,12 @@ struct LiveRoomView: View {
     /// - matching → idle/failed：视为匹配失败，自动挂载 MatchFailed（对齐 H5 pkMatchFailedPopup）
     private func handlePKStateChange(_ newState: PKStateMain) {
         defer { lastPKState = newState }
+        // 对齐 H5 pkInitiatePopup.vue:254-258 `pkStatus !== 'Live' → closePopup`：
+        // 任何 non-idle/failed 态（含 matching/inviting/invited/starting/inPK/punishing/endingPK）
+        // 都关闭 PK 邀请 sheet，避免用户在 PK 流程中还能看到邀请入口
+        if newState != .idle && newState != .failed {
+            showInviteSheet = false
+        }
         switch newState {
         case .inviting:
             if !pkStore.invitedAnchors.isEmpty { showPKInviteWaiting = true }
@@ -639,7 +655,7 @@ struct LiveRoomView: View {
             Spacer()
         }
         .padding()
-        .presentationDetents([.medium])
+        .presentationDetents([.fraction(0.4)])
     }
 
     private func runPKDebugJoin() async {
@@ -672,12 +688,39 @@ struct LiveRoomView: View {
         BeautyPanel(beauty: beauty, camera: camera)
     }
 
+    // MARK: - v22 Private Call 开关：调 API + 失败回滚
+
+    /// 对齐 H5 liveRoom.vue:367 `changePrivateCall`：调 updatePrivateCall；失败还原开关 + toast。
+    /// 成功后写回 LiveStore 让 CallStore.handleIncomingVideoCall 立即感知（关闭时来电 busy reject）。
+    private func handlePrivateCallToggle(_ next: Bool) {
+        guard let rid = roomInfo.id, rid > 0 else {
+            // 极端场景：roomInfo.id 缺失时接口无法调，回滚 UI + toast
+            privateCallOn = !next
+            comingSoonToast = L10n.liveRoomComingSoonPrivateCall
+            return
+        }
+        // 乐观更新：先把 store 改成 next（让 CallStore 立即拦截来电，即使 API 未回来）
+        store.setPrivateCallOpen(next)
+        Task { @MainActor in
+            do {
+                try await LiveService.updatePrivateCall(roomId: rid, open: next)
+            } catch {
+                // 回滚（UI + store）+ toast（对齐 H5 "Private call switch failed, please try again."）
+                privateCallOn = !next
+                store.setPrivateCallOpen(!next)
+                comingSoonToast = L10n.liveRoomComingSoonPrivateCall
+            }
+        }
+    }
+
     // MARK: - v11 抽 LiveRoomHeroTopArea 到 computed property（缓解 SwiftUI type-check timeout）
 
     private var heroTopArea: some View {
+        // v22 修：顶部展示"主播昵称"，不是直播描述（title 是 liveDescribe/bio，误传成 anchorName）。
+        // 对齐 H5 liveRoomTop.vue L202-204：`{{ userStore.mineInfo.nickname }}`
         LiveRoomHeroTopArea(
             anchorIconURL: SessionStore.shared.user?.icon,
-            anchorName: title,
+            anchorName: SessionStore.shared.user?.nickname ?? title,
             hotScore: roomInfo.hotScore ?? 0,
             agora: agora,
             presence: nim.presenceStore,
@@ -731,7 +774,7 @@ private struct BeautyPanel: View {
             Spacer()
         }
         .padding()
-        .presentationDetents([.medium])
+        .presentationDetents([.fraction(0.4)])
         .onReceive(
             beauty.objectWillChange
                 .throttle(for: 0.06, scheduler: DispatchQueue.main, latest: true)

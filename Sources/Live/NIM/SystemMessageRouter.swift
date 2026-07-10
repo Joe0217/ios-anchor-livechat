@@ -124,6 +124,9 @@ final class SystemMessageRouter: MessageRouter {
             // 对齐安卓 HomeHomeFragment queryHideState(false, true)：静默查超限 + 弹窗
             // 走 triggerCheckForcedBusy 统一到 activeCheckTask 串行化（审查报告-202607061550 必修-2）
             OnlineStatusStore.shared.triggerCheckForcedBusy(showToast: false, doAction: true)
+        case .privateCallSwitchChange(let open):
+            liveStore?.setPrivateCallOpen(open)
+            logger.info("[SysMsgRouter] privateCallSwitchChange → LiveStore.privateCallOpen=\(open, privacy: .public)")
         case .passThrough:
             logger.debug("[SysMsgRouter] passThrough \(attachType.raw, privacy: .public) ctx=\(String(describing: context), privacy: .public)")
         }

@@ -158,6 +158,18 @@ enum LiveService {
         _ = try await APIClient.shared.post("/api/agora/live/endLiveRoom", body: ["endType": endType])
     }
 
+    /// v22 私 call 开关切换（对齐 H5 api/live/index.ts:54 updatePrivateCall）
+    /// - endpoint: `POST /api/agora/live/updatePrivateCall`（H5 侧字面 path 尾部有空格疑似笔误，此处按标准去空格；
+    ///   若真机 404 需按 rule api-http-method-strict 补空格实测）
+    /// - body: `{ id: roomId, privateCallOpen: 0 | 1 }`
+    static func updatePrivateCall(roomId: Int, open: Bool) async throws {
+        let body: [String: Any] = [
+            "id": roomId,
+            "privateCallOpen": open ? 1 : 0
+        ]
+        _ = try await APIClient.shared.post("/api/agora/live/updatePrivateCall", body: body)
+    }
+
     /// 心愿承诺规范同意（对齐 H5 `liveWishfulGiftAgreement` api/live/index.ts:16 + wishlist-rule-modal.vue:16）
     /// 后端记录用户已同意合规规范；失败不阻塞开播（H5 也是 `catch { silent }`）
     static func clickWishAgreement() async throws {

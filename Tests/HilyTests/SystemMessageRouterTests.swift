@@ -187,7 +187,7 @@ final class SystemMessageRouterTests: XCTestCase {
     func test_lowPriorityAndJMilestoneCases_passThrough() {
         XCTAssertEqual(decide(.giftRequestRejected), .passThrough)
         XCTAssertEqual(decide(.userRechargeSuccess), .passThrough)
-        XCTAssertEqual(decide(.privateCallSwitchChange), .passThrough)
+        // v22：privateCallSwitchChange 已从 passThrough 迁到实现动作（同步 LiveStore.privateCallOpen）
         XCTAssertEqual(decide(.liveAnnouncement), .passThrough)
         XCTAssertEqual(decide(.userBindAfterRecharged), .passThrough)
         XCTAssertEqual(decide(.userBindAfterNotRecharged), .passThrough)
@@ -204,6 +204,34 @@ final class SystemMessageRouterTests: XCTestCase {
 
     func test_unknown_attachType_passThrough() {
         XCTAssertEqual(decide(.unknown(raw: "999")), .passThrough)
+    }
+
+    // MARK: - v22 privateCallSwitchChange (52) 反向同步（对齐 H5 live.js:306 `ext.data.privateCallOpen`）
+
+    func test_privateCallSwitchChange_flat_open1() {
+        XCTAssertEqual(decide(.privateCallSwitchChange, payload: ["privateCallOpen": 1]),
+                       .privateCallSwitchChange(open: true))
+    }
+
+    func test_privateCallSwitchChange_flat_open0() {
+        XCTAssertEqual(decide(.privateCallSwitchChange, payload: ["privateCallOpen": 0]),
+                       .privateCallSwitchChange(open: false))
+    }
+
+    func test_privateCallSwitchChange_nestedData() {
+        XCTAssertEqual(decide(.privateCallSwitchChange, payload: ["data": ["privateCallOpen": 1]]),
+                       .privateCallSwitchChange(open: true))
+    }
+
+    func test_privateCallSwitchChange_stringValue() {
+        XCTAssertEqual(decide(.privateCallSwitchChange, payload: ["privateCallOpen": "0"]),
+                       .privateCallSwitchChange(open: false))
+    }
+
+    func test_privateCallSwitchChange_missingField_defaultOpen() {
+        // 缺字段兜底为 open=true（对齐 H5 `privateCall = ref(true)` 默认）
+        XCTAssertEqual(decide(.privateCallSwitchChange),
+                       .privateCallSwitchChange(open: true))
     }
 
     func test_knownButUnhandled_passThrough() {
