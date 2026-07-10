@@ -1039,6 +1039,10 @@ final class CallStore: ObservableObject {
             self.callWaitState = 0
             // 拨打失败提示：idle 时清空，避免下次通话继承旧 error 文案
             self.lastError = ""
+            // 2026-07-10 code-review P0-5 修复：跨通话公屏历史清空
+            // 否则下通话 CallMessageScroller 会显示上通话残留 gift/text 行；
+            // 配合 GiftEffectSysMsgRouter 内的 state gate（idle 期 backlog 不 append）双保险
+            self.callChatMessages.removeAll()
         }
     }
 

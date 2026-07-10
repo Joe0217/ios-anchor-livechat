@@ -39,6 +39,13 @@ final class GiftEffectSysMsgRouter: MessageRouter {
             data = parsed
         }
 
+        // 2026-07-10 code-review P0-5 修复：state gate —— idle/ended/failed 期收到
+        // syncSysMsg backlog attachType=4 不 intake 也不追加公屏历史（否则通话间残留污染）。
+        let callState = CallStore.shared.state
+        guard callState != .idle && callState != .ended && callState != .failed else {
+            return false
+        }
+
         let scopeId = CallStore.shared.current.callId ?? ""
         let mineYxAccid = SessionStore.shared.user?.yxAccid ?? ""
         GiftEffectIntake.ingest(scene: .call, scopeId: scopeId,

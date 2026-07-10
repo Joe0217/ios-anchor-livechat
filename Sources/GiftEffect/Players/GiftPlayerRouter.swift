@@ -58,6 +58,9 @@ public final class GiftPlayerRouter: GiftPlayerRouting {
     }
 
     public func warmupSVGA() {
+        // 命名保留（RootView 调用点用）；实际两个 player 都预热
+        // 2026-07-10 code-review E-1 修复：加 YYEVA 预热避免首条 mp4 gift 卡帧
         svgaPlayer.warmup()
+        yyevaPlayer.warmup()
     }
 }

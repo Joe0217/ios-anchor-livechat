@@ -338,30 +338,33 @@ extension NIMChatAdapter: NIMChatManagerDelegate {
     }
 
     /// 收到对端消息
+    ///
+    /// 2026-07-10 code-review E-5 修复：合并两次遍历（原 compactMap + intake for-loop）为单循环，
+    /// 减少 relevant 数组遍历次数。同条消息的 JSON parse 在 mapContent 和 intake 里仍各一次
+    /// （改 Mapper 签名接收 pre-parsed dict 影响面大，暂留）。
     nonisolated func onRecvMessages(_ messages: [NIMMessage]) {
         Task { @MainActor [weak self] in
             guard let self else { return }
             let relevant = messages.filter { $0.session?.sessionId == self.peerYxAccId }
-            // Batch 3.9：我方历史消息需补上当前穿戴的 chatBubble（MainActor 内取，作为参数传给 nonisolated map）
+            guard !relevant.isEmpty else { return }
             let selfChatBubble = Self.currentSelfChatBubble()
-            let converted = relevant.compactMap {
-                ChatMessageMapper.map($0, selfYxAccId: self.selfYxAccId, selfChatBubble: selfChatBubble)
-            }
-            // Task 11：Chat 场景收到 SEND_GIFT 礼物 → 接入跨场景礼物特效引擎（有 svga/mp4 时弹中央大动画；
-            // 消息气泡由现有 SystemGiftBubbleView + ChatMessageMapper 已 map 到 .systemGift 独立承担）
             let mineYxAccid = SessionStore.shared.user?.yxAccid ?? ""
-            for nim in relevant where nim.messageType == .custom {
-                guard let raw = nim.rawAttachContent,
+
+            var converted: [ChatMessage] = []
+            converted.reserveCapacity(relevant.count)
+            for nim in relevant {
+                if let msg = ChatMessageMapper.map(nim, selfYxAccId: self.selfYxAccId, selfChatBubble: selfChatBubble) {
+                    converted.append(msg)
+                }
+                // 同循环内做 SEND_GIFT intake，避免二次遍历 relevant
+                guard nim.messageType == .custom,
+                      let raw = nim.rawAttachContent,
                       let data = raw.data(using: .utf8),
                       let attach = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
-                // 2026-07-09 review 反悔加固：attachType 双形态兼容（字符串 "SEND_GIFT" or 数字 1）
-                // 对齐 AttachType.sendGift 定义；ios-decode-userid-compat 精神
                 let atStr = attach["attachType"] as? String
                 let atNum = (attach["attachType"] as? NSNumber)?.intValue
                 if atStr == "SEND_GIFT" || atNum == 1 {
-                    // 2026-07-09 fix pre-existing：NIMChatAdapter 无 self.peerYxAccid 字段；
-                    // 从 NIMMessage.session.sessionId 取（P2P 场景 sessionId 即对端 yxAccid）。
-                    let peer = nim.session?.sessionId ?? ""
+                    let peer = nim.session?.sessionId ?? self.peerYxAccId
                     chatLogger.debug("[Chat] SEND_GIFT intake peer=\(peer, privacy: .public) keys=\(attach.keys.joined(separator: ","), privacy: .public)")
                     GiftEffectIntake.ingest(scene: .chat, scopeId: peer, payload: attach, mineYxAccid: mineYxAccid)
                 }

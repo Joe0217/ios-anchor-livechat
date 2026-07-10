@@ -200,4 +200,100 @@ final class GiftEffectCenterTests: XCTestCase {
         center.warmupSVGA()
         XCTAssertEqual(router.warmupCount, 1)
     }
+
+    // ==========================================================
+    // 2026-07-10 code-review 追加 tc（P0-1/P0-3/P0-4 + E-3）
+    // ==========================================================
+
+    // 16：P0-1 修复 —— pending 满 30 时 party me 送礼应替换 tail 保留自己
+    func testPartyMeSentYieldsTailWhenFull() {
+        center.setActiveScene(partyKey)
+        router.manualFinish = true
+        // 塞满 30 条（A + 29 条 pending）
+        center.enqueue(item(key: partyKey, name: "A"))
+        for i in 1...29 {
+            center.enqueue(item(key: partyKey, name: "P\(i)"))
+        }
+        // 此刻 current=A, pending=[P1..P29]（29 条）；再来一条普通 gift 塞满 pending
+        center.enqueue(item(key: partyKey, name: "P30"))
+        // pending 现在 30 条：[P1..P30]。party me 送礼 → tail(P30) 让位，ME 插头
+        center.enqueue(item(key: partyKey, self: true, name: "ME"))
+        router.finishCurrent()   // A 播完
+        // 修复前：me 会被 while removeFirst 立即淘汰 → 播 P1
+        // 修复后：me 保住队首优先级
+        XCTAssertEqual(center.current?.giftName, "ME")
+    }
+
+    // 17：P0-3 修复 —— setActiveScene push 旧 key，leaveScene pop restore
+    func testSceneStackRestoresOnLeave() {
+        center.setActiveScene(liveKey)
+        router.manualFinish = true
+        center.enqueue(item(key: liveKey, name: "L1"))
+        XCTAssertEqual(router.playHistory.count, 1)   // L1 播中
+
+        // Call 覆盖直播（Live push 到栈）
+        let callKey = GiftEffectSceneKey(scene: .call, scopeId: "call_1")
+        center.setActiveScene(callKey)
+        center.enqueue(item(key: callKey, name: "C1"))
+        XCTAssertEqual(center.current?.giftName, "C1")
+
+        // Call 结束（leaveScene pop 恢复 Live）
+        center.leaveScene(callKey)
+        // 现在 activeKey 应该 restore 到 liveKey
+        // 直接 enqueue Live gift 验证 restore 成功
+        center.enqueue(item(key: liveKey, name: "L2"))
+        XCTAssertEqual(center.current?.giftName, "L2")
+    }
+
+    // 18：P0-2 修复 —— leaveScene 传空 scopeId 时 scene-only match 也走 restore
+    func testLeaveSceneScopeOnlyMatchFallback() {
+        center.setActiveScene(liveKey)
+        router.manualFinish = true
+        let callKey = GiftEffectSceneKey(scene: .call, scopeId: "call_A")
+        center.setActiveScene(callKey)
+        center.enqueue(item(key: callKey, name: "C1"))
+
+        // 模拟 CallView.onDisappear 时 store.current.callId 已被清 → scopeId=""
+        let emptyCallKey = GiftEffectSceneKey(scene: .call, scopeId: "")
+        center.leaveScene(emptyCallKey)   // scope 不匹配 activeKey 的 "call_A"，但 scene=.call 匹配
+        // 修复后：走 scene-only match fallback → pop restore Live
+        center.enqueue(item(key: liveKey, name: "L1"))
+        XCTAssertEqual(center.current?.giftName, "L1")
+    }
+
+    // 19：P0-4 修复 —— installPlayerRouter 期间 pending 不被误播（isTearingDown 包裹）
+    func testInstallPlayerRouterProtectsPending() {
+        center.setActiveScene(liveKey)
+        router.manualFinish = true
+        center.enqueue(item(key: liveKey, name: "A"))
+        center.enqueue(item(key: liveKey, name: "B"))
+        XCTAssertEqual(router.playHistory.count, 1)   // A 播中，B 在 pending
+
+        // 换新 router
+        let newRouter = FakeGiftPlayerRouter()
+        newRouter.manualFinish = true
+        center.installPlayerRouter(newRouter)
+
+        // 老 router 触发 stopAll + tearDown（若无 isTearingDown 保护，会消费 B）
+        XCTAssertEqual(router.stopAllCount, 1)
+        XCTAssertEqual(router.tearDownCount, 1)
+        XCTAssertEqual(router.playHistory.count, 1)   // B 未在老 router 上误播
+
+        // 新 router 承接 pending B（installPlayerRouter 尾部 playNextIfIdle）
+        XCTAssertEqual(newRouter.playHistory.count, 1)
+        XCTAssertEqual(center.current?.giftName, "B")
+    }
+
+    // 20：E-3 修复 —— MicroToast cap 3，超过时替换旧的保留最新
+    func testMicroToastCapAt3() {
+        center.setActiveScene(liveKey)
+        // 突发塞 5 条 MicroToast
+        for i in 1...5 {
+            let toast = MicroToastItem(sceneKey: liveKey, imgUrl: nil, giftName: "T\(i)", count: 1, duration: 60)
+            center.showMicroToast(toast)
+        }
+        // 应保留最新 3 条（T3/T4/T5），前面被替换
+        XCTAssertEqual(center.microToasts.count, 3)
+        XCTAssertEqual(center.microToasts.map { $0.giftName }, ["T3", "T4", "T5"])
+    }
 }

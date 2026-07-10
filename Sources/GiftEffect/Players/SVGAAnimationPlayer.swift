@@ -20,6 +20,16 @@ final class SVGAAnimationPlayer: NSObject, GiftAnimationPlayer, SVGAPlayerDelega
     /// videoItem 覆盖 → 视觉播 A 而非 B。用 gen 让 parse 闭包 fire 时对比自己那次的 gen，不匹配丢弃。
     private var currentGen: Int = 0
 
+    /// SVGAVideoEntity 缓存（2026-07-10 code-review E-2 修复）：
+    /// 同 URL 重复 parse 会付网络下载 + zip 解压 + 帧图片解码开销；同一直播场景热门礼物
+    /// 1 分钟送 20 次 → 累计 ~600ms 主线程 parse 工作全浪费。用 NSCache 保留最近 30 条解析结果，
+    /// 命中直接复用 videoItem，只走 startAnimation。
+    private let videoEntityCache: NSCache<NSString, SVGAVideoEntity> = {
+        let c = NSCache<NSString, SVGAVideoEntity>()
+        c.countLimit = 30
+        return c
+    }()
+
     override init() { super.init() }
 
     /// 冷启 5s 后调（HilyApp Task 7）预热 parser，减少首条动画首帧延迟
@@ -41,7 +51,18 @@ final class SVGAAnimationPlayer: NSObject, GiftAnimationPlayer, SVGAPlayerDelega
         currentFinish = onFinish
 
         let p = ensurePlayer(in: host)
+
+        // E-2 cache 命中：直接复用 videoItem 跳过 parse
+        if let cached = videoEntityCache.object(forKey: urlStr as NSString) {
+            p.videoItem = cached
+            p.loops = 1
+            p.clearsAfterStop = true
+            p.startAnimation()
+            return
+        }
+
         let parser = ensureParser()
+        let cacheKey = urlStr as NSString
 
         parser.parse(with: url) { [weak self, weak p] videoItem in
             guard let self else { return }
@@ -55,6 +76,8 @@ final class SVGAAnimationPlayer: NSObject, GiftAnimationPlayer, SVGAPlayerDelega
                 self.fireFinishOnce()
                 return
             }
+            // E-2 缓存 parse 结果供下次命中
+            self.videoEntityCache.setObject(videoItem, forKey: cacheKey)
             p.videoItem = videoItem
             p.loops = 1
             p.clearsAfterStop = true

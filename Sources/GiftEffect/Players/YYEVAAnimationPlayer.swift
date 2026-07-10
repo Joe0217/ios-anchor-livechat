@@ -19,6 +19,19 @@ final class YYEVAAnimationPlayer: NSObject, GiftAnimationPlayer, IYYEVAPlayerDel
 
     override init() { super.init() }
 
+    /// 冷启预热：提前 lazy init YYEVAPlayer 触发 Metal shader 预编译，避免首条 mp4 gift 首帧卡帧 100-400ms
+    /// （2026-07-10 code-review E-1 修复：warmupSVGA 只暖 SVGA，YYEVA 首次 use 时 Metal newLibraryWithFile
+    /// + shader compile 阻塞 main queue；此 warmup 无 host UIView，不 addSubview，等真正 play 时 ensurePlayer 加入）
+    func warmup() {
+        if player == nil {
+            let p = YYEVAPlayer(frame: .zero)
+            p.delegate = self
+            p.backgroundColor = .clear
+            player = p
+            logger.info("YYEVA warmed up (Metal shader precompile)")
+        }
+    }
+
     func play(item: GiftEffectItem, in host: UIView, onFinish: @escaping () -> Void) {
         guard let urlStr = item.animationUrl else {
             onFinish()
