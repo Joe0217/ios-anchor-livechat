@@ -289,17 +289,34 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                 // 等按 protocol 短路决定消费
                 NIMService.shared.dispatch(at, payload: payload, context: .liveChatroom(roomId: roomId))
 
-                // 公屏文本副作用：-9 pkChatNotice 的 content 直接展示
-                // v22 Phase 1（2026-07-10）：改用 .pkNotify 变体渲染暗红 D33901/30 气泡（H5 L519-521），
-                // 不再用 isSystem: true → 系统黄底样式（视觉与 PK 通知不符）
-                if at == .pkChatNotice, let txt = payload["content"] as? String, !txt.isEmpty {
-                    items.append(PublicChatMessage(
-                        text: txt,
-                        isSystem: false,
-                        senderNickname: nil, senderAvatar: nil,
-                        userLevel: nil, isHost: false, isVip: false,
-                        messageType: .pkNotify
-                    ))
+                // 公屏文本副作用：-9 pkChatNotice 的 content 直接展示（对齐 H5 handelPkNotification）
+                // v22 Phase 1（2026-07-10）：改用 .pkNotify 变体渲染暗红 D33901/30 气泡（H5 L519-521）
+                // v22（2026-07-10 二轮）：content 字段 3 层兜底（payload/data/text）保 PK 结果消息可见
+                if at == .pkChatNotice {
+                    // 单独提前解 innerData（此处未走到 line 330 的 data 声明）
+                    var innerData: [String: Any] = payload
+                    if let dict = payload["data"] as? [String: Any] {
+                        innerData = dict
+                    } else if let s = payload["data"] as? String,
+                              let d = s.data(using: .utf8),
+                              let parsed = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+                        innerData = parsed
+                    }
+                    let txt = (payload["content"] as? String)
+                        ?? (innerData["content"] as? String)
+                        ?? (payload["text"] as? String)
+                        ?? (innerData["text"] as? String)
+                        ?? ""
+                    AppLogger.im.debug("🥊 [Chatroom] pkChatNotice content='\(txt.prefix(80), privacy: .public)' payloadKeys=\(payload.keys.joined(separator: ","), privacy: .public) dataKeys=\(innerData.keys.joined(separator: ","), privacy: .public)")
+                    if !txt.isEmpty {
+                        items.append(PublicChatMessage(
+                            text: txt,
+                            isSystem: false,
+                            senderNickname: nil, senderAvatar: nil,
+                            userLevel: nil, isHost: false, isVip: false,
+                            messageType: .pkNotify
+                        ))
+                    }
                     continue
                 }
                 // v11 礼物副作用桥接（H 期 GiftMessageRouter 落地前的直连方案）：
@@ -459,19 +476,9 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                     ))
                     continue   // gift/luckyGift row 已 append，跳过下方默认分支
 
-                // v18 活动中奖广播（attachType 140）
+                // v22（2026-07-10）：活动中奖广播（attachType 140）主播端不入公屏
+                // （用户反馈：Winner Got 消息不该出现在主播端公屏；H5 该消息主要面向用户端）
                 case .activityWinnerPublic:
-                    let nickname = (data["nickname"] as? String) ?? (data["fromNick"] as? String)
-                    let activityName = (data["activityName"] as? String) ?? ""
-                    let quantity = data["quantity"] as? Int
-                    items.append(PublicChatMessage(
-                        text: "",
-                        isSystem: false,
-                        senderNickname: nickname,
-                        senderAvatar: data["avatar"] as? String,
-                        userLevel: nil, isHost: false, isVip: false,
-                        messageType: .winnerBroadcast(activityName: activityName, quantity: quantity)
-                    ))
                     continue
 
                 // v18 猜拳获胜（attachType 144 LIVA_GAME_NOTIFY）
@@ -581,16 +588,27 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                     continue
                 case .enterRoomAnimation, .privateCallEnterAnimation:
                     // v22（2026-07-10）：attachType 80 座驾进场 / 83 私 call 进场 → 公屏 .enterRoom
-                    // （同步 H5 逻辑：itemSmallImg 座驾图与 enter row 一起展示）
+                    // 对齐 H5 stores/modules/virtualProps.js playEnterAnimation payload 结构：
+                    //   data.username / data.icon / data.userLevel / data.isVip / data.activeTycoon
+                    //   data.list: Array<String> —— 每项是 JSON 字符串，parse 后 {itemImg, itemType, ...}
                     // inLiveChannel === 1 → officialBoostEnter；其他 → enterRoom
                     let inLiveChannel = Self.readInt(data["inLiveChannel"]) ?? 0
-                    let nickname: String? = (m.senderName?.isEmpty == false ? m.senderName : nil)
+                    let nickname: String? = (data["username"] as? String)
+                        ?? (m.senderName?.isEmpty == false ? m.senderName : nil)
                         ?? (data["fromNick"] as? String)
-                        ?? (data["nickname"] as? String)
-                    let avatar = (data["fromAvatar"] as? String) ?? (data["icon"] as? String)
+                    let avatar = (data["icon"] as? String) ?? (data["fromAvatar"] as? String)
                     let userLevel = Self.readInt(data["userLevel"]) ?? Self.readInt(data["level"])
                     let isVip = Self.readBool(data["isVip"])
-                    let itemSmallImg = (data["itemSmallImg"] as? String) ?? (data["vehicleImg"] as? String)
+                    // 座驾图：优先 data.list[0] JSON.itemImg；兜底老字段 itemSmallImg/vehicleImg
+                    var vehicleItemImg: String? = nil
+                    if let list = data["list"] as? [String], let first = list.first,
+                       let d = first.data(using: .utf8),
+                       let itemDict = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+                        vehicleItemImg = itemDict["itemImg"] as? String
+                    }
+                    if vehicleItemImg == nil {
+                        vehicleItemImg = (data["itemSmallImg"] as? String) ?? (data["vehicleImg"] as? String)
+                    }
                     items.append(PublicChatMessage(
                         text: "",
                         isSystem: false,
@@ -600,7 +618,7 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                         isHost: false,
                         isVip: isVip,
                         messageType: inLiveChannel == 1 ? .officialBoostEnter : .enterRoom,
-                        itemSmallImg: itemSmallImg
+                        itemSmallImg: vehicleItemImg
                     ))
                     continue
                 case .knownButUnhandled, .unknown:
@@ -647,52 +665,18 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                 // v19 对齐 H5 handleNotificationMessage（live.js:927-1007）：
                 // memberEnter/memberExit 时**过滤主播本人**（`account !== yxAccid`）后 delta +/-1
                 //
-                // v22 Phase 1（2026-07-10）：enter 事件改用 .enterRoom 变体渲染（tier 渐变胶囊气泡）
-                // 从 content.ext（NIMChatroomNotificationContent.ext）解 remoteExt JSON 拿用户信息
-                // （对齐 H5 notification.ext 提取 nickname/userLevel/isVip 供 messageScroller 渲染）
+                // v22（2026-07-10）：notification 分支**只**做 delta 计数，不再 append enterRoom row
+                // （memberEnter.ext 常无 itemSmallImg 字段 → 座驾图拿不到；改由 attachType 80
+                // enterRoomAnimation 分支统一 append，那里携带完整 vehicle 数据）
                 if let obj = m.messageObject as? NIMNotificationObject,
                    let content = obj.content as? NIMChatroomNotificationContent {
-                    // 通知目标账号：content.targets 数组第一个即触发事件的用户
                     let evtUserId: String = content.targets?.first?.userId ?? ""
                     let isAnchorSelf = !evtUserId.isEmpty && evtUserId == anchorYxAccount
                     if content.eventType == .enter {
-                        if !isAnchorSelf {
-                            delta += 1   // v19 过滤主播本人
-                            // 尝试从 notification.ext（如有）拿用户信息；无则用 targets nick 兜底
-                            var nickname: String? = content.targets?.first?.nick
-                            var userLevel: Int? = nil
-                            var isVip = false
-                            var vehicleImg: String? = nil
-                            if let extRaw = content.ext {
-                                var extDict: [String: Any]? = extRaw as? [String: Any]
-                                if extDict == nil, let s = extRaw as? String,
-                                   let d = s.data(using: .utf8) {
-                                    extDict = try? JSONSerialization.jsonObject(with: d) as? [String: Any]
-                                }
-                                if let ext = extDict {
-                                    if let n = ext["fromNick"] as? String, !n.isEmpty { nickname = n }
-                                    else if let n = ext["nickname"] as? String, !n.isEmpty { nickname = n }
-                                    userLevel = Self.readInt(ext["userLevel"]) ?? Self.readInt(ext["level"])
-                                    isVip = Self.readBool(ext["isVip"])
-                                    vehicleImg = (ext["vehicleImg"] as? String) ?? (ext["itemSmallImg"] as? String)
-                                }
-                            }
-                            items.append(PublicChatMessage(
-                                text: "",
-                                isSystem: false,
-                                senderNickname: nickname ?? evtUserId,
-                                senderAvatar: nil,
-                                userLevel: userLevel,
-                                isHost: false,
-                                isVip: isVip,
-                                messageType: .enterRoom,
-                                itemSmallImg: vehicleImg
-                            ))
-                            _ = vehicleImg   // .enterRoom 变体当前 associated value 不含 vehicleImg；adapter 侧统一置 nil
-                        }
+                        if !isAnchorSelf { delta += 1 }
                     } else if content.eventType == .exit {
                         if !isAnchorSelf && presenceStore.onlineCount + delta > 0 {
-                            delta -= 1   // v19 过滤主播 + 避免负数
+                            delta -= 1
                         }
                     }
                 }
