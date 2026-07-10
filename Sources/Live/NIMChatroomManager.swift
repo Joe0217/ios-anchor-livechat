@@ -592,23 +592,37 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                     //   data.username / data.icon / data.userLevel / data.isVip / data.activeTycoon
                     //   data.list: Array<String> —— 每项是 JSON 字符串，parse 后 {itemImg, itemType, ...}
                     // inLiveChannel === 1 → officialBoostEnter；其他 → enterRoom
-                    let inLiveChannel = Self.readInt(data["inLiveChannel"]) ?? 0
+                    let inLiveChannel = Self.readInt(data["inLiveChannel"]) ?? Self.readInt(payload["inLiveChannel"]) ?? 0
                     let nickname: String? = (data["username"] as? String)
                         ?? (m.senderName?.isEmpty == false ? m.senderName : nil)
                         ?? (data["fromNick"] as? String)
-                    let avatar = (data["icon"] as? String) ?? (data["fromAvatar"] as? String)
-                    let userLevel = Self.readInt(data["userLevel"]) ?? Self.readInt(data["level"])
-                    let isVip = Self.readBool(data["isVip"])
-                    // 座驾图：优先 data.list[0] JSON.itemImg；兜底老字段 itemSmallImg/vehicleImg
+                        ?? (data["nickname"] as? String)
+                        ?? (payload["fromNick"] as? String)
+                    let avatar = (data["icon"] as? String)
+                        ?? (data["fromAvatar"] as? String)
+                        ?? (data["avatar"] as? String)
+                    // 座驾图 + 内嵌 userLevel/isVip：先解 data.list[0] JSON
                     var vehicleItemImg: String? = nil
+                    var listInnerUserLevel: Int? = nil
+                    var listInnerIsVip: Bool? = nil
                     if let list = data["list"] as? [String], let first = list.first,
                        let d = first.data(using: .utf8),
                        let itemDict = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
                         vehicleItemImg = itemDict["itemImg"] as? String
+                        listInnerUserLevel = Self.readInt(itemDict["userLevel"]) ?? Self.readInt(itemDict["level"])
+                        listInnerIsVip = Self.readBool(itemDict["isVip"])
                     }
                     if vehicleItemImg == nil {
                         vehicleItemImg = (data["itemSmallImg"] as? String) ?? (data["vehicleImg"] as? String)
                     }
+                    // userLevel 多路兜底（data / payload 顶层 / list 内嵌 / ext key 通用）
+                    let userLevel = Self.readInt(data["userLevel"])
+                        ?? Self.readInt(data["level"])
+                        ?? Self.readInt(payload["userLevel"])
+                        ?? Self.readInt(payload["level"])
+                        ?? listInnerUserLevel
+                    let isVip = Self.readBool(data["isVip"]) || Self.readBool(payload["isVip"]) || (listInnerIsVip ?? false)
+                    AppLogger.im.debug("🚗 [Chatroom] attachType=\(String(describing: at), privacy: .public) userLevel=\(userLevel ?? -1, privacy: .public) isVip=\(isVip, privacy: .public) vehicle=\(vehicleItemImg ?? "nil", privacy: .public) dataKeys=\(data.keys.joined(separator: ","), privacy: .public) payloadKeys=\(payload.keys.joined(separator: ","), privacy: .public)")
                     items.append(PublicChatMessage(
                         text: "",
                         isSystem: false,
