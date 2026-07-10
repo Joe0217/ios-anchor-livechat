@@ -1379,16 +1379,16 @@ extension CallStore {
     /// 不区分远端 vs 本地 sender —— UI 用 sender.nickname == 主播 nickname 判断左/右侧对齐或色彩差异（当前无此差异）。
     func echoLocalChatText(_ text: String) {
         guard !text.isEmpty else { return }
-        // v22（2026-07-10）：对齐 H5 talkListInCall.unshift({user:'my', ...})——本端消息用固定
-        // "User" 标签（L10n.callSignalLabelUser）而非主播真实昵称，避免公屏出现自己名字
+        // v22（2026-07-11 反悔）：用户明示主播端公屏应显示主播真实昵称，不用 "User" 通用标签
+        // 撤销 2026-07-10 的 L10n.callSignalLabelUser 改动
         let mine = AnchorInfoStore.shared.mine
         let sender = CallChatMessage.Sender(
-            nickname: L10n.callSignalLabelUser,
+            nickname: mine?.nickname ?? "",
             level: mine?.level,
             isVip: false,
             isSpecial: false,
             chatBubble: mine?.chatBubble,
-            nicknameColor: .default   // H5 'my' 白色（.default 品牌色）而非 .her 橙色
+            nicknameColor: .default   // 本端消息用白色（H5 my 语义），非 .her 橙色
         )
         appendChatMessage(.text(sender: sender, content: text, translation: nil))
     }

@@ -426,9 +426,9 @@ private struct CallFaceTimeView: View {
     private func handleAskForGift(_ gift: GiftListData) {
         showGiftPicker = false
         // 本地立即回显（H5 askGiftInfo 2s toast 语义 —— iOS 落到公屏 gift cell）
-        // v22（2026-07-10）：本端 nickname 用 "User"（L10n.callSignalLabelUser）而非主播真实昵称
+        // v22（2026-07-11 反悔）：主播端公屏显示主播真实昵称（用户明示）
         let sender = CallChatMessage.Sender(
-            nickname: L10n.callSignalLabelUser,
+            nickname: AnchorInfoStore.shared.mine?.nickname ?? "",
             level: nil, isVip: false, isSpecial: false,
             chatBubble: nil, nicknameColor: .default
         )
