@@ -46,7 +46,7 @@ enum LivePublicChatAdapter {
         case .luckyGift(let iconUrl, let count, let total):
             return .luckyGift(iconURL: iconUrl, count: count, totalReward: total)
         case .enterRoom:
-            return .enterRoom(vehicleImg: nil, itemSmallImg: nil)
+            return .enterRoom(vehicleImg: nil, itemSmallImg: m.itemSmallImg)
         case .officialBoostEnter:
             return .officialBoostEnter
         case .pkNotify:

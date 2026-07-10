@@ -579,6 +579,30 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                 case .liveGiftRankUpdate, .rankUpdateOnly:
                     // Top2 已同步，不污染公屏
                     continue
+                case .enterRoomAnimation, .privateCallEnterAnimation:
+                    // v22（2026-07-10）：attachType 80 座驾进场 / 83 私 call 进场 → 公屏 .enterRoom
+                    // （同步 H5 逻辑：itemSmallImg 座驾图与 enter row 一起展示）
+                    // inLiveChannel === 1 → officialBoostEnter；其他 → enterRoom
+                    let inLiveChannel = Self.readInt(data["inLiveChannel"]) ?? 0
+                    let nickname: String? = (m.senderName?.isEmpty == false ? m.senderName : nil)
+                        ?? (data["fromNick"] as? String)
+                        ?? (data["nickname"] as? String)
+                    let avatar = (data["fromAvatar"] as? String) ?? (data["icon"] as? String)
+                    let userLevel = Self.readInt(data["userLevel"]) ?? Self.readInt(data["level"])
+                    let isVip = Self.readBool(data["isVip"])
+                    let itemSmallImg = (data["itemSmallImg"] as? String) ?? (data["vehicleImg"] as? String)
+                    items.append(PublicChatMessage(
+                        text: "",
+                        isSystem: false,
+                        senderNickname: nickname,
+                        senderAvatar: avatar,
+                        userLevel: userLevel,
+                        isHost: false,
+                        isVip: isVip,
+                        messageType: inLiveChannel == 1 ? .officialBoostEnter : .enterRoom,
+                        itemSmallImg: itemSmallImg
+                    ))
+                    continue
                 case .knownButUnhandled, .unknown:
                     // 已知但不实现（132/133/1004/1007/1014/...）+ unknown：仅静默 dispatch（router 已分发），不污染公屏
                     continue
@@ -661,7 +685,8 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                                 userLevel: userLevel,
                                 isHost: false,
                                 isVip: isVip,
-                                messageType: .enterRoom
+                                messageType: .enterRoom,
+                                itemSmallImg: vehicleImg
                             ))
                             _ = vehicleImg   // .enterRoom 变体当前 associated value 不含 vehicleImg；adapter 侧统一置 nil
                         }

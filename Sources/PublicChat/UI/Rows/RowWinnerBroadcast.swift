@@ -44,14 +44,7 @@ struct RowWinnerBroadcast: View {
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(.white)
                 }
-                if let cta = joinCTA {
-                    Text(cta)
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color(red: 1.0, green: 148/255, blue: 56/255), in: RoundedRectangle(cornerRadius: 8))   // #FF9438
-                }
+                // v22 (2026-07-10)：主播端不显示 Join 按钮（H5 该 CTA 只对用户端有意义）
             }
             .padding(10)
         }
@@ -67,19 +60,14 @@ struct RowWinnerBroadcast: View {
             Text(activityName)
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(Color(red: 1.0, green: 216/255, blue: 78/255))   // #FFD84E
-                .lineLimit(1)
+                .lineLimit(2)
             if let q = quantity {
                 Text("*\(q)")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white)
             }
-            Spacer(minLength: 4)
-            Text(joinCTA ?? "Join")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(.white)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(Color(red: 1.0, green: 148/255, blue: 56/255), in: RoundedRectangle(cornerRadius: 8))
+            // v22 (2026-07-10)：主播端不显示 Join 按钮
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, 10)
         .frame(maxWidth: 249, minHeight: 26)

@@ -17,6 +17,8 @@ struct PublicChatMessage: Identifiable {
     let isHost: Bool
     let isVip: Bool
     let messageType: PublicChatMessageType
+    /// v22（2026-07-10）：座驾图 URL（enterRoom / officialBoostEnter 场景专用）
+    let itemSmallImg: String?
 
     init(text: String,
          isSystem: Bool,
@@ -25,7 +27,8 @@ struct PublicChatMessage: Identifiable {
          userLevel: Int? = nil,
          isHost: Bool = false,
          isVip: Bool = false,
-         messageType: PublicChatMessageType = .regular) {
+         messageType: PublicChatMessageType = .regular,
+         itemSmallImg: String? = nil) {
         self.text = text
         self.isSystem = isSystem
         self.senderNickname = senderNickname
@@ -34,5 +37,6 @@ struct PublicChatMessage: Identifiable {
         self.isHost = isHost
         self.isVip = isVip
         self.messageType = messageType
+        self.itemSmallImg = itemSmallImg
     }
 }
