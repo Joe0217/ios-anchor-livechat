@@ -29,18 +29,22 @@ struct PKRulePopup: View {
     }
 
     var body: some View {
-        ZStack {
-            // 半透黑蒙层（拦截 tap 但不允许点击关闭——只走 OK 按钮）
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
+        // v22（2026-07-11）：加 isPresented gate —— 让 PKRulePopup 可安全嵌入 overlay 而非仅 fullScreenCover
+        // （原实现 body 无 gate → PKInvitedSheet.overlay 挂载时永远显示且关不掉）
+        if isPresented {
+            ZStack {
+                // 半透黑蒙层（拦截 tap 但不允许点击关闭——只走 OK 按钮）
+                Color.black.opacity(0.5)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
 
-            // 中央卡片：95% 屏宽 · 无 title · 无 X · 底部 OK 按钮
-            centerCard
+                // 中央卡片：95% 屏宽 · 无 title · 无 X · 底部 OK 按钮
+                centerCard
+            }
+            // 让 fullScreenCover 背景透明，露出底下 PKInviteSheet 视觉（overlay 挂载时无影响）
+            .background(ClearFullScreenCoverBackground())
+            .task { await load() }
         }
-        // 让 fullScreenCover 背景透明，露出底下 PKInviteSheet 视觉
-        .background(ClearFullScreenCoverBackground())
-        .task { await load() }
     }
 
     // MARK: - Center card

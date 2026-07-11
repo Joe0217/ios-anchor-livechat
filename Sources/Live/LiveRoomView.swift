@@ -114,10 +114,32 @@ struct LiveRoomView: View {
     /// v10 心愿单半屏面板显隐
     @State private var showWishlistPanel: Bool = false
 
+    /// 半屏消息列表 sheet 显隐（对齐 H5 messagePopup） —— 底部工具栏消息按钮触发。
+    @State private var showMessageSheet: Bool = false
+    /// 半屏私聊 sheet 承载（非 nil 时叠加在 messageSheet 之上，对齐 H5 talkPopup）；
+    /// 用 wrapper struct 满足 sheet(item:) Identifiable 要求。
+    @State private var selectedChatPeer: ChatSheetPeer? = nil
+    /// 半屏消息列表数据源（订阅未读计数用于消息按钮红点）。
+    @ObservedObject private var sessionStore: MessageSessionStore = .shared
+
     /// body 里若写 `let isPKActive = ...`，body 会从"单表达式 @ViewBuilder"降级为"多语句 closure"，
     /// SwiftUI 类型推导复杂度剧增；抽 computed property 让 body 保持单表达式（rule swiftui-body-type-check-timeout §4）
     private var isPKActive: Bool {
         pkStore.state == .starting || pkStore.state == .inPK || pkStore.state == .punishing
+    }
+
+    /// 半屏消息列表未读合计（对齐 H5 sessionStore.newMsg red-dot + messagePopup 数据源过滤语义）。
+    /// **不用** `unreadCount(in: .flame)` —— 那含 systemInboxEntries（sheet 里已过滤掉），
+    /// 会导致红点显示 ≠ sheet 内容，用户点开看不到"未读源"。
+    /// 语义：与 ConversationSheetContent.allSessions 对齐（3 类并集去重 → 累加 unreadCount）
+    private var liveMessageUnreadTotal: Int {
+        let all = sessionStore.sessions(in: .flame)
+            + sessionStore.sessions(in: .prime)
+            + sessionStore.sessions(in: .stranger)
+        var seen = Set<String>()
+        return all
+            .filter { seen.insert($0.id).inserted }
+            .reduce(0) { $0 + $1.unreadCount }
     }
 
     var body: some View {
@@ -140,7 +162,11 @@ struct LiveRoomView: View {
                               showInviteSheet = false
                               userCardUserId = uid
                           },
-                          selfAvatarURL: AnchorInfoStore.shared.iconURL?.absoluteString)
+                          selfAvatarURL: AnchorInfoStore.shared.iconURL?.absoluteString,
+                          onRequestOpenWaiting: {
+                              // v22（2026-07-11）：Waiting 按钮 tap 时才打开 waiting popup（不自动触发）
+                              showPKInviteWaiting = true
+                          })
                 .presentationDetents([.fraction(0.6), .fraction(0.8)])
                 .presentationDragIndicator(.visible)
         }
@@ -204,6 +230,30 @@ struct LiveRoomView: View {
             )
             .sheetTopInset()
             .presentationDetents([.fraction(0.32)])
+            .presentationDragIndicator(.visible)
+        }
+        // 直播间半屏消息列表（对齐 H5 messagePopup 408pt） —— 底部工具栏消息按钮触发；
+        // 直播 RTC 全程不中断（sheet 保留底层可见，@StateObject camera/agora 生命周期独立）
+        .sheet(isPresented: $showMessageSheet) {
+            ConversationSheetContent(
+                store: sessionStore,
+                onSelectSession: { session in
+                    selectedChatPeer = ChatSheetPeer(id: session.id)
+                },
+                onClose: { showMessageSheet = false }
+            )
+            .presentationDetents([.fraction(0.55)])
+            .presentationDragIndicator(.visible)
+        }
+        // 直播间半屏私聊页（对齐 H5 talkPopup 548pt 叠加）—— 从半屏消息列表点会话触发；
+        // ChatDetailContainer.onClose 非 nil → ChatDetailView 走 sheet 承载模式（chevron 变 xmark，跳过 nav bar hidden + swipe pop）
+        .sheet(item: $selectedChatPeer) { peer in
+            ChatDetailContainer(
+                peerYxAccId: peer.id,
+                selfYxAccId: SessionStore.shared.user?.yxAccid ?? "",
+                onClose: { selectedChatPeer = nil }
+            )
+            .presentationDetents([.fraction(0.75), .large])
             .presentationDragIndicator(.visible)
         }
         .animation(.easeInOut(duration: 0.2), value: pkStore.state)
@@ -344,7 +394,18 @@ struct LiveRoomView: View {
                     LiveRoomToolButton(systemName: nil,
                                        imageName: "liveRoomToolMessageBadge",
                                        a11y: L10n.liveRoomToolMessage,
-                                       action: { comingSoonToast = L10n.liveRoomComingSoonMessage })
+                                       action: { showMessageSheet = true })
+                        .overlay(alignment: .topTrailing) {
+                            // 未读红点（对齐 H5 sessionStore.newMsg），3 类会话未读合计 > 0 显示
+                            if liveMessageUnreadTotal > 0 {
+                                Circle()
+                                    .fill(Color.red)
+                                    .frame(width: 8, height: 8)
+                                    .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                                    .offset(x: -2, y: 2)
+                                    .accessibilityHidden(true)
+                            }
+                        }
                     LiveRoomToolButton(systemName: nil,
                                        imageName: "liveRoomToolGiftBadge",
                                        a11y: L10n.liveRoomToolGift,
@@ -449,7 +510,8 @@ struct LiveRoomView: View {
         }
         switch newState {
         case .inviting:
-            if !pkStore.invitedAnchors.isEmpty { showPKInviteWaiting = true }
+            // v22（2026-07-11）：不再自动弹 waiting popup（用户明示：只在 Waiting 按钮 tap 时才弹）
+            break
         case .idle, .failed:
             // 上一态是 matching → 未进 starting/inPK 就回到 idle/failed，视为匹配失败
             if lastPKState == .matching { showPKMatchFailed = true }
@@ -1533,6 +1595,11 @@ fileprivate struct LiveRoomPrivateCallSwitch: View {
 // 2026-07-07 v7：LiveRoomGiftQuickTile + LiveRoomGiftQuickRow 已完全移除
 // —— 用户明示"主播端没有快捷送礼"，H5 主播端此栏本就不存在（旧实现对齐错误）。
 // Theme token `liveRoomGiftTile*` / `liveRoomGiftPrice` 保留供未来 gift picker 复用
+
+/// 半屏私聊 sheet(item:) 的 Identifiable wrapper —— peerYxAccId 即 id。
+fileprivate struct ChatSheetPeer: Identifiable {
+    let id: String
+}
 
 fileprivate struct LiveRoomToolButton: View {
     let systemName: String?      // 非 nil 走 SF Symbol

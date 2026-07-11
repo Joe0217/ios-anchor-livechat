@@ -29,6 +29,13 @@ extension ChatMessageContent {
         case .privateImage: return L10n.messagePreviewPrivatePhoto
         case .privateVideo: return L10n.messagePreviewPrivateVideo
         case .chatTip(_, let text, _): return text.isEmpty ? L10n.messagePreviewUnknown : text
+        // 新增 case 兜底（cpRankReward / itemNotice / rewardDiamond / punishmentAppeal / rechargeNotify / systemFallback）
+        case .cpRankReward: return L10n.messagePreviewUnknown
+        case .itemNotice(_, let itemName, _, _): return itemName.isEmpty ? L10n.messagePreviewUnknown : itemName
+        case .rewardDiamond(let demoContent): return demoContent.isEmpty ? L10n.messagePreviewUnknown : demoContent
+        case .punishmentAppeal(let text, _): return text.isEmpty ? L10n.messagePreviewUnknown : text
+        case .rechargeNotify(let content, _, _): return content.isEmpty ? L10n.messagePreviewUnknown : content
+        case .systemFallback(let text): return text.isEmpty ? L10n.messagePreviewUnknown : text
         }
     }
 }

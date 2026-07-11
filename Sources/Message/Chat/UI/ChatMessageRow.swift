@@ -153,6 +153,9 @@ struct ChatMessageRow: View {
             PrivateVideoBubbleView(url: url, coverUrl: cover, dur: dur, lockStatus: lockStatus) {
                 onTapVideo(message)
             }
+        // 新增 case 兜底（未在 body 上层拦截，气泡侧统一走 EmptyView 或简版文字）
+        case .cpRankReward, .itemNotice, .rewardDiamond, .punishmentAppeal, .rechargeNotify, .systemFallback:
+            EmptyView()
         }
     }
 

@@ -30,6 +30,8 @@ struct PKInviteSheet: View {
     let onTapAvatar: (String) -> Void
     /// 我方 anchor 头像 URL（PKMatchingCard idle 左侧头像用；LiveRoomView 从 AnchorInfoStore 派生传入）
     let selfAvatarURL: String?
+    /// v22（2026-07-11）：Waiting 按钮 tap 时通知外部打开 waiting popup（不再由 state 自动触发）
+    let onRequestOpenWaiting: () -> Void
     @State private var inputKeyword: String = ""
 
     // sub-sheet / popup 显隐
@@ -46,11 +48,13 @@ struct PKInviteSheet: View {
     init(store: PKStore,
          isPresented: Binding<Bool>,
          onTapAvatar: @escaping (String) -> Void,
-         selfAvatarURL: String?) {
+         selfAvatarURL: String?,
+         onRequestOpenWaiting: @escaping () -> Void = {}) {
         self.store = store
         self._isPresented = isPresented
         self.onTapAvatar = onTapAvatar
         self.selfAvatarURL = selfAvatarURL
+        self.onRequestOpenWaiting = onRequestOpenWaiting
     }
 
     var body: some View {
@@ -315,11 +319,10 @@ struct PKInviteSheet: View {
         if store.state == .matching {
             return
         }
-        // 已邀请 → 对齐 H5 pkInitiatePopup.vue tap Waiting 打开等待弹窗：
-        // iOS `.inviting` state 时 handlePKStateChange 已自动 set showPKInviteWaiting=true，
-        // waiting popup 处在 pkPopupsOverlay 但被 InviteSheet 遮挡；关闭 InviteSheet 让底层 waiting popup 露出
+        // v22（2026-07-11）：已邀请 → tap Waiting 显式请求 LiveRoomView 打开 waiting popup（不再靠 state 自动触发）
         if store.invitedAnchors[anchor.userId] != nil {
             isPresented = false
+            onRequestOpenWaiting()
             return
         }
         // 后端禁态 toast 由 disabled 阻挡，不发起
