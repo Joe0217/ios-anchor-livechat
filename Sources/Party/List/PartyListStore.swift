@@ -71,6 +71,29 @@ final class PartyListStore: ObservableObject {
 
     @Published private(set) var state: State = .idle
 
+    // MARK: - 语言状态（E 增强：语言 pill 横滑）
+
+    /// 首个占位为 "All"（languageCode=""）；后续 append PartyAPI.languageList 结果。
+    @Published private(set) var languages: [PartyLanguage] = [.all]
+
+    @Published private(set) var activeLanguageIndex: Int = 0
+
+    /// languages 是否已从后端拉过（避免重复请求；失败保留只 [.all]）。
+    private var didLoadLanguages = false
+
+    // MARK: - 我的派对房状态（E 增强 v2：Create Room / My Room 按钮分流）
+
+    /// 用户已有的派对房（`nil` = 无 room；有值 = 显 My Room 按钮，点击直接进）。
+    @Published private(set) var myRoom: PartyMyRoom?
+    /// **已完成一次 myRoom 拉取**（成功或失败）。View 层用来 gate 浮动按钮渲染 ——
+    /// 未 load 完前不显示按钮，避免"先显 Create 后切 My Room"闪切（用户 2026-07-11 反馈）。
+    @Published private(set) var didLoadMyRoom = false
+    /// 拉取进行中 dedup flag（独立于 didLoadMyRoom 语义）
+    private var isLoadingMyRoom = false
+
+    /// 本 Store 服务的 tab 类型（.party 主大厅 / .followed 关注 / .recent 最近）。
+    let kind: PartyRoomListKind
+
     private let service: PartyListService
     private let pageSize: Int
     private let languageCodeProvider: () -> String?
@@ -84,10 +107,12 @@ final class PartyListStore: ObservableObject {
 
     init(
         service: PartyListService,
+        kind: PartyRoomListKind = .party,
         pageSize: Int = PartyListStore.defaultPageSize,
         languageCodeProvider: @escaping () -> String? = { nil }
     ) {
         self.service = service
+        self.kind = kind
         self.pageSize = pageSize
         self.languageCodeProvider = languageCodeProvider
     }
@@ -110,12 +135,37 @@ final class PartyListStore: ObservableObject {
         beginRefresh()
     }
 
-    /// SwiftUI `.refreshable` closure 专用：await 直到刷新任务完成，让顶部 spinner 保持到数据到位。
-    /// **必须 await currentTask?.value**——直接调 `refresh()` 是 sync 立即返回，SwiftUI 会误判刷新完成
-    /// 立即收 spinner，用户看到"下拉后立刻收回"的怪异体验（见 rule list-refresh-preserve-items）。
+    /// SwiftUI `.refreshable` closure 专用：await 到网络请求真正完成，spinner 才收起。
+    ///
+    /// **两个关键机制**（对齐 LiveStreamViewModel v14 模式）：
+    /// 1. **inflight guard**：已有 refresh 在跑时不重复触发，直接 await 现有 task（避免 TabView(.page) 内
+    ///    `.refreshable` 短时间多次触发把 spinner 冲刷掉）
+    /// 2. **Task.detached**：请求生命周期与 SwiftUI view/refreshable Task 完全解耦——即便 refreshable
+    ///    closure 被 SwiftUI cancel（页切走/body re-eval），URLSession 请求继续跑完再回填 state
     func refreshAsync() async {
-        beginRefresh()
-        await currentTask?.value
+        // inflight：已在跑就 await 现有 task
+        if let existing = currentTask {
+            await existing.value
+            return
+        }
+
+        loadedPageCount = 0
+        switch state {
+        case .loaded(let rooms, _), .loadingMore(let rooms), .pageError(let rooms, _):
+            state = .refreshing(rooms: rooms)
+        case .refreshing:
+            break
+        case .idle, .loading, .error:
+            state = .loading
+        }
+
+        let task = Task.detached { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performInitial()
+        }
+        currentTask = task
+        await task.value
+        if currentTask == task { currentTask = nil }
     }
 
     /// 上拉加载更多：仅 `.loaded` 有效；`loading/loadingMore/error/pageError` 时忽略（refresh 承担强夺）
@@ -134,6 +184,71 @@ final class PartyListStore: ObservableObject {
     func retryPage() {
         guard case .pageError(let rooms, _) = state else { return }
         beginLoadMore(currentRooms: rooms)
+    }
+
+    // MARK: - 语言 pill（E 增强）
+
+    /// 首次进入 Party tab 时拉一次语言列表。失败保留 [.all] 单项，本会话不重试。
+    /// 对齐 H5 用户端 `stores/modules/party.js:1354 getLanguageList` 首项拼 All。
+    func loadLanguagesIfNeeded() async {
+        guard !didLoadLanguages else { return }
+        didLoadLanguages = true
+        do {
+            let list = try await PartyAPI.languageList()
+            languages = [.all] + list
+        } catch {
+            // 保留 [.all]，静默；下次 tab 切回不重试（避免长期失败刷屏）
+            languages = [.all]
+        }
+    }
+
+    /// 切换语言 pill → activeLanguageIndex 更新 + 触发重拉。
+    func setLanguage(index: Int) {
+        guard index >= 0, index < languages.count, index != activeLanguageIndex else { return }
+        activeLanguageIndex = index
+        beginRefresh()
+    }
+
+    /// 当前语言 code。`nil` 代表 All（不传给后端）；`languageCodeProvider` 参数保留仅作 fallback。
+    /// **Follow/Recent tab 强制返回 nil**（H5 index.vue L96 语义：`tabIndex===0 ? languageCode : null`）。
+    private var currentLanguageCode: String? {
+        guard kind == .party else { return nil }
+        guard activeLanguageIndex < languages.count else { return nil }
+        let code = languages[activeLanguageIndex].languageCode
+        return code.isEmpty ? nil : code
+    }
+
+    // MARK: - 我的派对房（E 增强 v2）
+
+    /// 首次进入 Party tab 时拉一次；失败/无 room 保持 `myRoom = nil`；后端 roomStatus=2（封禁）也视为无 room。
+    /// 对齐 H5 用户端 index.vue L36 `showMyRoomIcon = hasMyRoom && roomStatus !== 2`。
+    /// **完成后**才置 `didLoadMyRoom = true`，View 才显示浮动按钮（避免闪切）。
+    func loadMyRoomIfNeeded() async {
+        guard !didLoadMyRoom, !isLoadingMyRoom else { return }
+        await performLoadMyRoom(clearOnFail: true)
+    }
+
+    /// 手动重拉（如刚创建完房 pop 回大厅时）。已 loaded 时按钮已在，reload 期间保留旧值不清空避免闪。
+    func reloadMyRoom() async {
+        guard !isLoadingMyRoom else { return }
+        await performLoadMyRoom(clearOnFail: false)
+    }
+
+    private func performLoadMyRoom(clearOnFail: Bool) async {
+        isLoadingMyRoom = true
+        defer { isLoadingMyRoom = false }
+        do {
+            let wrapper = try await PartyAPI.getMyRoomAndFamilyInfo()
+            if let r = wrapper?.myRoom, r.isVisible {
+                myRoom = r
+            } else {
+                myRoom = nil
+            }
+        } catch {
+            if clearOnFail { myRoom = nil }
+            // reload 场景失败：保留旧 myRoom（避免按钮从 My Room 闪成 Create）
+        }
+        didLoadMyRoom = true
     }
 
     // MARK: - 内部 —— 状态迁移
@@ -179,7 +294,8 @@ final class PartyListStore: ObservableObject {
         do {
             try Task.checkCancellation()
             let rooms = try await service.fetchList(
-                languageCode: languageCodeProvider(),
+                kind: kind,
+                languageCode: currentLanguageCode ?? languageCodeProvider(),
                 offset: nil,
                 pageSize: pageSize,
                 queryParam: nil,
@@ -209,7 +325,8 @@ final class PartyListStore: ObservableObject {
         do {
             try Task.checkCancellation()
             let page = try await service.fetchList(
-                languageCode: languageCodeProvider(),
+                kind: kind,
+                languageCode: currentLanguageCode ?? languageCodeProvider(),
                 offset: offset,
                 pageSize: pageSize,
                 queryParam: nil,
