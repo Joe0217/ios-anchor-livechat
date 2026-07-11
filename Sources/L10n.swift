@@ -974,8 +974,10 @@ enum L10n {
     static var liveRoomToolMessage:  String { localize("liveRoom.tool.message",  comment: "底部消息按钮 a11y") }
     static var liveRoomToolGift:     String { localize("liveRoom.tool.gift",     comment: "底部礼物按钮 a11y") }
     static var liveRoomToolSetting:  String { localize("liveRoom.tool.setting",  comment: "底部设置按钮 a11y（含美颜/结束直播）") }
-    /// 消息按钮点击占位
+    /// 消息按钮点击占位（v18 前使用；v18 起消息按钮真接入 ConversationSheetContent 半屏列表 sheet，此 key 保留用作兜底 toast）
     static var liveRoomComingSoonMessage: String { localize("liveRoom.comingSoon.message", comment: "消息按钮占位提示") }
+    /// 半屏消息列表标题（对齐 H5 messagePopup 顶部 "Messages"）
+    static var liveRoomSheetMessagesTitle: String { localize("liveRoom.sheet.messagesTitle", comment: "半屏消息列表标题") }
     /// 设置菜单：美颜项
     static var liveRoomSettingBeauty:     String { localize("liveRoom.setting.beauty",     comment: "设置菜单：美颜") }
     /// 设置菜单：结束直播项

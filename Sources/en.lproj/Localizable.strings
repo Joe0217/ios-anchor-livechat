@@ -448,6 +448,7 @@
 "liveRoom.tool.gift"              = "Gifts";
 "liveRoom.tool.setting"           = "Settings";
 "liveRoom.comingSoon.message"     = "Chat inbox coming soon";
+"liveRoom.sheet.messagesTitle"    = "Messages";
 "liveRoom.setting.beauty"         = "Beauty";
 "liveRoom.setting.endLive"        = "End live";
 "liveRoom.pk.a11y.default"        = "Start PK";

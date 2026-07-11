@@ -492,6 +492,7 @@
 "liveRoom.tool.gift"              = "Hediyeler";
 "liveRoom.tool.setting"           = "Ayarlar";
 "liveRoom.comingSoon.message"     = "Mesaj kutusu yakında";
+"liveRoom.sheet.messagesTitle"    = "Mesajlar";
 "liveRoom.setting.beauty"         = "Güzellik";
 "liveRoom.setting.endLive"        = "Yayını bitir";
 "liveRoom.pk.a11y.default"        = "PK başlat";

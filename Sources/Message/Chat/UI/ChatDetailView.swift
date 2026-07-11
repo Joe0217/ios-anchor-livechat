@@ -53,6 +53,11 @@ struct ChatDetailView: View {
     // Batch 6.1：回复积分状态（订阅 store 的 sessions[peer] 派生 RewardProgress 显示）
     @ObservedObject var replyPointsStore: ReplyPointsStore
 
+    /// 半屏 sheet 承载模式下，wrapper 的 detent selection binding —— 键盘弹起时自动切 `.large` 让高度扩到极大，
+    /// 避免"medium detent + 键盘遮挡"触发系统被迫 resize，与键盘上升动画不同步造成卡顿。
+    /// nil = 全屏 push 模式（无 detent 概念），或 wrapper 未传（不做主动切换）。
+    let sheetDetent: Binding<PresentationDetent>? = nil
+
     // MARK: - view state
 
     @State private var inputText: String = ""
@@ -121,10 +126,15 @@ struct ChatDetailView: View {
             ChatPalette.pageBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
+                if isPopupMode {
+                    // 半屏 sheet 顶部让 10pt 呼吸空间（drag indicator 与 navBar 之间）
+                    Color.clear.frame(height: 10)
+                }
                 navBar
                 // Batch 6.1：顶部宝箱进度条（对齐 H5 `chat/index.vue:1011` `<RewardProgress v-if="!chatType">`）
-                // 仅 regular 会话 + isOpenPaidMessage 才显示；view 内部自判
-                if chatType == .regular {
+                // 仅 regular 会话 + isOpenPaidMessage 才显示；view 内部自判。
+                // **半屏 sheet 模式（直播间/派对房拉起私聊）隐藏宝箱条** —— 空间有限 + 直播中主播不需要奖励引导
+                if chatType == .regular && !isPopupMode {
                     RewardProgressView(
                         peer: store.peerYxAccId,
                         store: replyPointsStore,
@@ -318,9 +328,9 @@ struct ChatDetailView: View {
         .onChange(of: systemPhotoPickerItems) { items in
             handleCustomerPhotoSelected(items)
         }
-        .navigationBarBackButtonHidden(true)
-        // H-3 spec §4.12 / §F-57~59：恢复系统左边缘右滑返回手势（`navigationBarBackButtonHidden(true)` 副作用禁用了它）
-        .swipeToPopEnabled()
+        // pushed 模式挂 nav bar hidden + swipeToPop；sheet 模式跳过（sheet 无 NavigationStack 上下文，
+        // navigationBarBackButtonHidden 空转，swipeToPop 与 sheet 系统下拉手势冲突）
+        .modifier(ChatDetailPushChromeModifier(isPushed: !isPopupMode))
         // Task 11：声明本 view 属于 GiftEffect .chat 场景；Chat 场景 IM SEND_GIFT 有 svga/mp4 时弹中央大动画（无动画走消息气泡不启 MicroToast）
         .giftEffectScene(.chat, scopeId: store.peerYxAccId)
     }
@@ -332,14 +342,15 @@ struct ChatDetailView: View {
             Button {
                 if let onClose { onClose() } else { dismiss() }
             } label: {
-                Image(systemName: onClose != nil ? "xmark" : "chevron.left")
+                // 图标统一 chevron.left —— 无论 push (返消息 tab) 还是 sheet (返半屏消息列表)，语义都是"返回上层"
+                Image(systemName: "chevron.left")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(onClose != nil ? "Close" : "Back")
+            .accessibilityLabel("Back")
 
             // 对方 = 用户（kind: .user）；接入 headwear 字段后可补头像框
             AvatarView(url: peerAvatarURL, size: ChatConstants.navAvatarSize, kind: .user)
@@ -608,6 +619,11 @@ struct ChatDetailView: View {
             // 键盘动画 ~250ms;多帧兜底(0/100/300ms)覆盖动画全程,无 withAnimation(避免与键盘曲线叠加"跳动")。
             .onChange(of: isInputFocused) { focused in
                 guard focused else { return }
+                // 半屏 sheet 模式：键盘弹起前主动切 `.large` detent —— 与系统键盘动画曲线一致上升，
+                // 避免 medium detent 被键盘挤压时的 partial resize 卡顿感（sheet resize 与键盘动画不同步）
+                if let sheetDetent = sheetDetent {
+                    sheetDetent.wrappedValue = .large
+                }
                 let lastId = messages.last?.stableId
                 let scrollBottom: () -> Void = {
                     if let id = lastId {
@@ -1012,6 +1028,21 @@ private struct ChatIntroOverlay: View {
                 ),
                 in: RoundedRectangle(cornerRadius: 10, style: .continuous)
             )
+    }
+}
+
+/// pushed 模式（主 chat tab NavigationLink）挂 nav bar hidden + swipeToPop；
+/// sheet 模式（直播间/派对房拉起半屏）跳过 —— 没有 NavigationStack 上下文，两个 modifier 都无效或与 sheet 下拉手势冲突。
+private struct ChatDetailPushChromeModifier: ViewModifier {
+    let isPushed: Bool
+    func body(content: Content) -> some View {
+        if isPushed {
+            content
+                .navigationBarBackButtonHidden(true)
+                .swipeToPopEnabled()
+        } else {
+            content
+        }
     }
 }
 

@@ -492,6 +492,7 @@
 "liveRoom.tool.gift"              = "الهدايا";
 "liveRoom.tool.setting"           = "الإعدادات";
 "liveRoom.comingSoon.message"     = "صندوق الرسائل قريبًا";
+"liveRoom.sheet.messagesTitle"    = "الرسائل";
 "liveRoom.setting.beauty"         = "الفلتر";
 "liveRoom.setting.endLive"        = "إنهاء البث";
 "liveRoom.pk.a11y.default"        = "بدء PK";

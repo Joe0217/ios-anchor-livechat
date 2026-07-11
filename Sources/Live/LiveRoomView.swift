@@ -115,10 +115,8 @@ struct LiveRoomView: View {
     @State private var showWishlistPanel: Bool = false
 
     /// 半屏消息列表 sheet 显隐（对齐 H5 messagePopup） —— 底部工具栏消息按钮触发。
+    /// **半屏私聊 sheet 挂在 ConversationSheetContent 内部**（sheet-over-sheet），不在此层。
     @State private var showMessageSheet: Bool = false
-    /// 半屏私聊 sheet 承载（非 nil 时叠加在 messageSheet 之上，对齐 H5 talkPopup）；
-    /// 用 wrapper struct 满足 sheet(item:) Identifiable 要求。
-    @State private var selectedChatPeer: ChatSheetPeer? = nil
     /// 半屏消息列表数据源（订阅未读计数用于消息按钮红点）。
     @ObservedObject private var sessionStore: MessageSessionStore = .shared
 
@@ -233,27 +231,16 @@ struct LiveRoomView: View {
             .presentationDragIndicator(.visible)
         }
         // 直播间半屏消息列表（对齐 H5 messagePopup 408pt） —— 底部工具栏消息按钮触发；
-        // 直播 RTC 全程不中断（sheet 保留底层可见，@StateObject camera/agora 生命周期独立）
+        // 直播 RTC 全程不中断（sheet 保留底层可见，@StateObject camera/agora 生命周期独立）。
+        // **半屏私聊 sheet 挂在 ConversationSheetContent 内部**（sheet-over-sheet），此层只管消息列表。
+        // SwiftUI 同一 view 挂多个平行 sheet 同一时刻只显示一个，会出现"点会话 → 消息列表关闭后才显示私聊"的错觉。
         .sheet(isPresented: $showMessageSheet) {
             ConversationSheetContent(
                 store: sessionStore,
-                onSelectSession: { session in
-                    selectedChatPeer = ChatSheetPeer(id: session.id)
-                },
+                selfYxAccId: SessionStore.shared.user?.yxAccid ?? "",
                 onClose: { showMessageSheet = false }
             )
             .presentationDetents([.fraction(0.55)])
-            .presentationDragIndicator(.visible)
-        }
-        // 直播间半屏私聊页（对齐 H5 talkPopup 548pt 叠加）—— 从半屏消息列表点会话触发；
-        // ChatDetailContainer.onClose 非 nil → ChatDetailView 走 sheet 承载模式（chevron 变 xmark，跳过 nav bar hidden + swipe pop）
-        .sheet(item: $selectedChatPeer) { peer in
-            ChatDetailContainer(
-                peerYxAccId: peer.id,
-                selfYxAccId: SessionStore.shared.user?.yxAccid ?? "",
-                onClose: { selectedChatPeer = nil }
-            )
-            .presentationDetents([.fraction(0.75), .large])
             .presentationDragIndicator(.visible)
         }
         .animation(.easeInOut(duration: 0.2), value: pkStore.state)
@@ -1595,11 +1582,6 @@ fileprivate struct LiveRoomPrivateCallSwitch: View {
 // 2026-07-07 v7：LiveRoomGiftQuickTile + LiveRoomGiftQuickRow 已完全移除
 // —— 用户明示"主播端没有快捷送礼"，H5 主播端此栏本就不存在（旧实现对齐错误）。
 // Theme token `liveRoomGiftTile*` / `liveRoomGiftPrice` 保留供未来 gift picker 复用
-
-/// 半屏私聊 sheet(item:) 的 Identifiable wrapper —— peerYxAccId 即 id。
-fileprivate struct ChatSheetPeer: Identifiable {
-    let id: String
-}
 
 fileprivate struct LiveRoomToolButton: View {
     let systemName: String?      // 非 nil 走 SF Symbol

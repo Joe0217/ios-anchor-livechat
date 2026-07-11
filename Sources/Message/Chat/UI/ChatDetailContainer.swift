@@ -20,6 +20,9 @@ struct ChatDetailContainer: View {
     /// 若本聊天页是从某个用户的详情页 push 出来的，携带该 userId。
     /// 消息 row tap 头像时若匹配则 pop 回详情页，避免详情↔聊天栈无限嵌套（详见 ChatFromProfileRoute）。
     let originProfileUserId: String?
+    /// 半屏 sheet 承载时的 detent selection binding（wrapper 传入）—— 键盘弹起时 ChatDetailView 主动切 `.large`
+    /// 避免键盘遮挡触发系统被迫 resize 与键盘上升不同步导致卡顿。nil = push 模式或无需主动切换。
+    let sheetDetent: Binding<PresentationDetent>?
 
     @StateObject private var store: P2PChatStore
     @ObservedObject private var sessionStore: MessageSessionStore = .shared
@@ -41,10 +44,11 @@ struct ChatDetailContainer: View {
 
     private enum MediaLoadState { case idle, loading, loaded, failed }
 
-    init(peerYxAccId: String, selfYxAccId: String, onClose: (() -> Void)? = nil, originProfileUserId: String? = nil) {
+    init(peerYxAccId: String, selfYxAccId: String, onClose: (() -> Void)? = nil, originProfileUserId: String? = nil, sheetDetent: Binding<PresentationDetent>? = nil) {
         self.peerYxAccId = peerYxAccId
         self.onClose = onClose
         self.originProfileUserId = originProfileUserId
+        self.sheetDetent = sheetDetent
         let adapter = NIMChatAdapter(peerYxAccId: peerYxAccId, selfYxAccId: selfYxAccId)
         // Batch 6.2a：预组装 4 tip L10n 文案传给 P2PChatStore → 让 store 内部结算路径能 append stimulate tip
         let tipTexts = ReplyPointsTipTexts(
@@ -77,7 +81,8 @@ struct ChatDetailContainer: View {
             onClose: onClose,
             chatType: chatType,
             canCall: callAuthBridge.canCall,
-            replyPointsStore: replyPointsStore
+            replyPointsStore: replyPointsStore,
+            sheetDetent: sheetDetent
         )
         // Batch 3.6+3.7：进入私聊页并行拉普通相册（picList）+ 私密相册（privateInfo）
         // Batch 6.1：regular 会话时触发 ReplyPointsStore.beginSession（拉 messageBoxList + auto-claim）
