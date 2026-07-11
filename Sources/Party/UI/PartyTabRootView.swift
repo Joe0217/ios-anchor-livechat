@@ -36,6 +36,10 @@ struct PartyTabRootView: View {
             PartyListMainView(
                 listStore: listStore,
                 onTapCreate: tapCreate,
+                onTapMyRoom: { roomId in
+                    // v2：已有 myRoom 时点击浮动按钮直接进自己的房（对齐 H5 index.vue L191-207）
+                    path.append(PartyRoute.room(id: roomId, password: nil))
+                },
                 onTapRoom: { roomId in
                     path.append(PartyRoute.room(id: roomId, password: nil))
                 },
@@ -53,6 +57,8 @@ struct PartyTabRootView: View {
                         onCreated: { roomId in
                             path.removeLast()
                             path.append(PartyRoute.room(id: roomId, password: nil))
+                            // v2：刚创建完房 pop 回大厅时刷新 myRoom 状态，浮按钮切到 My Room
+                            Task { await listStore.reloadMyRoom() }
                         }
                     )
                 case .room(let id, _):
@@ -84,21 +90,26 @@ struct PartyTabRootView: View {
     // MARK: - Actions
 
     private func tapCreate() {
+        AppLogger.party.info("[PartyTab] tapCreate begin checking=\(self.checkingPermission, privacy: .public)")
         guard !checkingPermission else { return }
         checkingPermission = true
         Task {
             defer { Task { @MainActor in checkingPermission = false } }
             do {
                 let cond = try await createService.fetchCreateConditions()
+                AppLogger.party.info("[PartyTab] cond canCreate=\(cond.canCreateRoom, privacy: .public) lv=\(cond.createRoomLevel ?? -1, privacy: .public)")
                 await MainActor.run {
                     if cond.canCreateRoom {
+                        AppLogger.party.info("[PartyTab] push .create")
                         path.append(PartyRoute.create)
                     } else {
+                        AppLogger.party.info("[PartyTab] toast permissionDenied")
                         permissionDeniedToast = L10n.Party.createPermissionDenied
                     }
                 }
             } catch {
                 // 网络错保守 fallback：直接 push（对齐安卓宽松策略；无网络不阻塞 UI）
+                AppLogger.party.error("[PartyTab] fetchCreateConditions failed: \(String(describing: error), privacy: .public); fallback push")
                 await MainActor.run { path.append(PartyRoute.create) }
             }
         }
