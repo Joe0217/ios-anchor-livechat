@@ -107,6 +107,16 @@ final class P2PChatStore: ObservableObject {
             state = .loaded(merged)
             isEndReached = merged.count < pageSize
 
+            // P1-2：load 成功后从历史消息 hydrate ReplyPointsStore.lastUserMsgInfo，
+            // 对齐 H5 initReplyRemindOnEnter。beginSession 未完成时 hydrate 内部 guard 跳过。
+            if let tipTexts = replyPointsTipTexts {
+                ReplyPointsStore.shared.hydrateLastUserMsgFromHistory(
+                    peer: peerYxAccId,
+                    msgs: merged,
+                    tipTexts: tipTexts
+                )
+            }
+
             // 进页副作用：清本地 unread + 给对端已读回执（最后一条非我消息）
             await provider.markAllRead(peerYxAccId: peerYxAccId)
             if let lastIncoming = merged.last(where: { !$0.isOutgoing }) {
@@ -426,7 +436,7 @@ final class P2PChatStore: ObservableObject {
                 peer: peerYxAccId,
                 msgId: m.id,
                 timestamp: m.timestamp,
-                msgType: nil,   // 后端 msgType 从 ext 派生（v3 Major-6：缺失默认 "pay"），当前 iOS 未解析 ext.msgType 字段 → 让 Store 走 "pay" 兜底
+                msgType: m.msgType,   // P1-1：Mapper 从 remoteExt.msgType 提取；缺失时 Store 兜底 "pay"
                 isGift: isGift,
                 stimulateTipText: tipTexts.stimulate
             )
@@ -500,6 +510,7 @@ final class P2PChatStore: ObservableObject {
                 // H-3：ChatMessage 新增 var 字段（chatBubble / privateId）需同步保留（Major-5：新加字段必须在所有构造点同步）
                 reconstructed.chatBubble = m.chatBubble
                 reconstructed.privateId = m.privateId
+                reconstructed.msgType = m.msgType   // P1-1：保留 pay/free 属性（同 chatBubble/privateId 一并保留）
                 copy = reconstructed
                 clientToServerId[clientMsgId] = messageId
                 sentMessageForPropagate = copy
@@ -519,20 +530,19 @@ final class P2PChatStore: ObservableObject {
         }
     }
 
-    /// Batch 6.2a：从 ChatMessage 派生 msgType 并调 ReplyPointsStore.onSendAnchorMsg
-    /// - .text/.image/.video/.audio → 正常参与结算
+    /// Batch 6.2a：主播消息发送成功 → 结算回复积分。
+    /// - .text/.image/.video/.audio → 参与结算（ReplyPointsStore 内部用 `state.lastUserMsgInfo.msgType` 传给后端）
     /// - .privateImage/.privateVideo/.systemGift/.missedCall/.systemTip/.system/.chatTip → 短路（对齐 H5 isGift/系统消息不结算）
+    ///
+    /// **P1-1 修**：msgType 参数**不再传** —— H5 `message.js:1108` 传的是**用户上一条消息**的 pay/free 属性，
+    /// 不是主播这次回复的媒介类型。ReplyPointsStore.onSendAnchorMsg 内部现从 lastUserMsgInfo.msgType 派生。
     private func triggerSettleReplyPoints(for sent: ChatMessage) {
-        let msgType: String
         switch sent.content {
-        case .text:  msgType = "text"
-        case .image: msgType = "image"
-        case .video: msgType = "video"
-        case .audio: msgType = "audio"
+        case .text, .image, .video, .audio: break
         default: return   // 私密 / 礼物 / 系统消息不参与结算
         }
         Task { @MainActor in
-            await ReplyPointsStore.shared.onSendAnchorMsg(peer: self.peerYxAccId, msgType: msgType)
+            await ReplyPointsStore.shared.onSendAnchorMsg(peer: self.peerYxAccId)
         }
     }
 

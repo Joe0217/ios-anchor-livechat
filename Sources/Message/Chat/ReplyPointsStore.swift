@@ -187,7 +187,10 @@ final class ReplyPointsStore: ObservableObject {
     ///
     /// **不变量**（v2 Critical-5 / v3 §8.2 #5）：无论成功 / 失败 / isGift 短路，`lastUserMsgInfo = nil`
     /// 在 defer 里执行 —— 防用户 1 条消息主播 N 次重复调 settle 触发风控。
-    func onSendAnchorMsg(peer: String, msgType: String) async {
+    /// **P1-1 修**：`msgType` 参数删除 —— API 期望的是**用户上一条消息**的 pay/free 属性
+    /// （对齐 H5 `message.js:1108` `msgType: lastMsg.msgType`），不是主播这次回复的媒介类型。
+    /// 内部从 `last.msgType` 派生传给后端。
+    func onSendAnchorMsg(peer: String) async {
         guard var state = sessions[peer],
               let last = state.lastUserMsgInfo
         else { return }
@@ -210,7 +213,7 @@ final class ReplyPointsStore: ObservableObject {
             let res = try await service.settleReplyPoints(
                 userYxAccid: peer,
                 userMsgId: last.msgId,
-                msgType: msgType
+                msgType: last.msgType   // P1-1：传用户消息的 pay/free（对齐 H5 line 1108 lastMsg.msgType），已在 onReceiveUserMsg 里 ?? "pay" 兜底
             )
             if res.settled {
                 // M-7:整块回写 stale state 会覆盖并发的 autoClaimIfNeeded / checkReplyRemindTrigger 修改
@@ -223,6 +226,9 @@ final class ReplyPointsStore: ObservableObject {
                 sessions[peer] = s
                 pendingSettleResult = res                              // 触发 view 跳跃动画
                 logger.info("[ReplyPoints] settle success peer=\(peer, privacy: .private) points=\(res.points) total=\(res.currentTotalPoints)")
+                // P1-4：settle 成功后重新拉 messageBoxList 检查跨节点变 claimable → auto-claim
+                // 对齐 H5 rewardProgress.vue:81-89 watch(currentProgress) → handleGetMessageBox → getAnchorMessageBox
+                await refreshMessageBoxAndAutoClaim(peer: peer)
             } else {
                 logger.info("[ReplyPoints] settle returned settled=false (isGift/未开付费) peer=\(peer, privacy: .private)")
             }
@@ -256,6 +262,78 @@ final class ReplyPointsStore: ObservableObject {
         // Batch 6.3.1：所有 claim 完累加显示；多次 claim 累加到同一弹窗（用户 tap Get 后 view 清 nil）
         if totalClaimedDiamond > 0 {
             pendingClaimDiamond = (pendingClaimDiamond ?? 0) + totalClaimedDiamond
+        }
+    }
+
+    // MARK: - 历史消息 hydrate（P1-2：对齐 H5 initReplyRemindOnEnter）
+
+    /// **P1-2 修**：进入会话时从 P2PChatStore.load 拉到的历史消息补 lastUserMsgInfo，
+    /// 对齐 H5 `chat/index.vue:788-836 initReplyRemindOnEnter`。
+    ///
+    /// **调用时机**：P2PChatStore.load 成功后（`state = .loaded(msgs)` 之后）。
+    ///
+    /// **短路条件**：
+    /// - `sessions[peer] == nil` —— beginSession 未跑或非付费会话（下次 begin/receive 会补）
+    /// - `state.lastUserMsgInfo != nil` —— 实时收到过用户消息，不覆盖已有值
+    ///
+    /// **行为**：
+    /// 1. 从 msgs 反向找 last `!isOutgoing && !isGift` 消息作为 "用户上一条消息"
+    /// 2. 派生 hasHistoryReply（该消息之后是否有主播回复，对齐 H5 line 807-813）
+    /// 3. 赋 lastUserMsgInfo / replyRemindBaseTs 到 sessions[peer]
+    /// 4. 重跑 tryInjectReplyPointGuideTip + tryInjectReplyRemindTip 判定
+    func hydrateLastUserMsgFromHistory(
+        peer: String,
+        msgs: [ChatMessage],
+        tipTexts: ReplyPointsTipTexts,
+        now: Date = Date()
+    ) {
+        guard var state = sessions[peer] else { return }
+        guard state.lastUserMsgInfo == nil else { return }
+        guard let last = msgs.reversed().first(where: { m in
+            !m.isOutgoing && !Self.isGiftContent(m.content)
+        }) else { return }
+
+        // hasHistoryReply：last 消息之后是否有主播回复（H5 chat/index.vue:807-813）
+        if let idx = msgs.lastIndex(where: { $0.id == last.id }),
+           msgs.index(after: idx) < msgs.endIndex {
+            state.hasHistoryReply = msgs[msgs.index(after: idx)...].contains(where: { $0.isOutgoing })
+        }
+        state.lastUserMsgInfo = LastUserMsgInfo(
+            msgId: last.id,
+            timestamp: last.timestamp,
+            msgType: last.msgType ?? "pay",   // 缺失兜底 pay（对齐 H5 line 802 `|| 'pay'`）
+            isGift: false
+        )
+        state.replyRemindBaseTs = last.timestamp
+        sessions[peer] = state
+
+        if isOpenPaidMessage(peer: peer) {
+            tryInjectReplyPointGuideTip(peer: peer, text: tipTexts.replyPointGuide, now: now)
+            tryInjectReplyRemindTip(peer: peer, text: tipTexts.replyRemind, now: now)
+        }
+    }
+
+    private static func isGiftContent(_ content: ChatMessageContent) -> Bool {
+        if case .systemGift = content { return true }
+        return false
+    }
+
+    // MARK: - 跨节点 auto-claim（P1-4：对齐 H5 rewardProgress watch(currentProgress)）
+
+    /// **P1-4 修**：settle 成功后重新拉 messageBoxList，把可能刚跨过阈值变 `.claimable` 的节点领掉。
+    /// 对齐 H5 `rewardProgress.vue:81-89 watch(currentProgress) → handleGetMessageBox → getAnchorMessageBox`。
+    ///
+    /// 失败静默：下次 settle 再重试；网络错也不打断主结算成功日志。
+    private func refreshMessageBoxAndAutoClaim(peer: String) async {
+        do {
+            let list = try await service.fetchMessageBoxList(userYxAccid: peer)
+            guard var state = sessions[peer] else { return }
+            // 只更新 messageBoxList,currentProgress 已由 settle 权威覆盖不动
+            state.messageBoxList = list.pointInfoList
+            sessions[peer] = state
+            await autoClaimIfNeeded(peer: peer)
+        } catch {
+            logger.warning("[ReplyPoints] refreshMessageBox failed peer=\(peer, privacy: .private): \(String(describing: error), privacy: .public)")
         }
     }
 

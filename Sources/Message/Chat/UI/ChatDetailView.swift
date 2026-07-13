@@ -382,6 +382,15 @@ struct ChatDetailView: View {
         // pushed 模式挂 nav bar hidden + swipeToPop；sheet 模式跳过（sheet 无 NavigationStack 上下文，
         // navigationBarBackButtonHidden 空转，swipeToPop 与 sheet 系统下拉手势冲突）
         .modifier(ChatDetailPushChromeModifier(isPushed: !isPopupMode))
+        // P1-3：15min replyRemind timer 驱动 —— 每分钟检查一次 replyRemindBaseTs（对齐 H5 chat/index.vue:907-918
+        // watch(msgArr.length){ setTimeout(15min → addReplyTip) }）。Store 内部 guard 无变化零 side effect。
+        .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
+            guard chatType == .regular else { return }
+            ReplyPointsStore.shared.checkReplyRemindTrigger(
+                peer: store.peerYxAccId,
+                tipText: L10n.chatReplyRemindTip
+            )
+        }
         // Task 11：声明本 view 属于 GiftEffect .chat 场景；Chat 场景 IM SEND_GIFT 有 svga/mp4 时弹中央大动画（无动画走消息气泡不启 MicroToast）
         .giftEffectScene(.chat, scopeId: store.peerYxAccId)
     }

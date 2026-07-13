@@ -269,6 +269,16 @@ enum MessageAttachParser {
         else { return nil }
         return URL(string: s)
     }
+
+    /// 从 NIM `remoteExt` 解出用户消息 `msgType`（`"pay"` / `"free"`）—— 对齐 H5 `msg.ext?.msgType || 'pay'`
+    /// （`message.js:1076` / `chat/index.vue:802`）。用于 ReplyPointsStore 结算前累加 payMsgPoints / freeMsgPoints。
+    /// nil = 后端未派发，caller 走 "pay" 兜底。
+    static func extractMsgType(remoteExt: [String: Any]?) -> String? {
+        guard let ext = remoteExt,
+              let s = ext["msgType"] as? String, !s.isEmpty
+        else { return nil }
+        return s
+    }
 }
 
 /// H-3 私密消息 remoteExt 解析结果（spec §1.1 / §3.4）

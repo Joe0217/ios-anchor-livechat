@@ -425,7 +425,10 @@ enum ChatMessageMapper {
         // 对方消息 → 用对方 chatBubble；我方消息 → 保持自己气泡由 optimistic 层写入的值（此处不覆盖）
         if !isOutgoing {
             // NIMMessage.remoteExt 是 [AnyHashable: Any]?；parser 期望 [String: Any]?，需类型强转
-            msg.chatBubble = MessageAttachParser.extractChatBubble(remoteExt: nim.remoteExt as? [String: Any])
+            let ext = nim.remoteExt as? [String: Any]
+            msg.chatBubble = MessageAttachParser.extractChatBubble(remoteExt: ext)
+            // P1-1：从 remoteExt 提取用户消息 pay/free 属性（对齐 H5 msg.ext?.msgType）
+            msg.msgType = MessageAttachParser.extractMsgType(remoteExt: ext)
         } else if let url = selfChatBubble {
             // 我方历史消息（重新登录 / 拉历史时无 optimistic 值）用调用方传入的当前穿戴气泡
             msg.chatBubble = url

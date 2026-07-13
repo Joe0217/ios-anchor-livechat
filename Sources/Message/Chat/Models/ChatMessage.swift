@@ -33,6 +33,10 @@ struct ChatMessage: Identifiable, Equatable, Hashable {
     /// **注意**：privateId 是后端派发的业务 id，**不是** NIM messageId；`checkPrivateInfo` 入参就是 privateIds 集合。
     var privateId: String? = nil
 
+    /// 用户消息付费属性（来自 `remoteExt.msgType`）：`"pay"` / `"free"`。缺失默认按 `"pay"` 兜底（对齐 H5 `message.js:1076`）。
+    /// 用于 ReplyPointsStore.onReceiveUserMsg 累加 payMsgPoints / freeMsgPoints，settleReplyPoints 也传此字段。
+    var msgType: String? = nil
+
     /// Batch 6.4：ForEach / scrollTo 稳定 identity —— clientMsgId 优先（发送前后不变）,SDK 回填 messageId 时不 dismantle row
     /// 对齐 H5 msgItem :key 优先 `idClient` 语义（chat/index.vue:1017）
     var stableId: String { clientMsgId ?? id }
