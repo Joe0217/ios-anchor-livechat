@@ -22,6 +22,9 @@
 // MARK: - 美颜降级
 "beauty.unavailable"         = "الفلتر غير متاح";
 
+// MARK: - 全局空态占位（EmptyStateView 默认文案）
+"common.emptyState.noContent" = "لا يوجد محتوى متاح";
+
 // MARK: - 网络弱网降级（v5 分层）
 "network.warning"            = "الشبكة غير مستقرة، تم التبديل إلى معدل إطارات منخفض";
 

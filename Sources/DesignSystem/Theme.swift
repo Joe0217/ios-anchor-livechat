@@ -342,6 +342,68 @@ enum Theme {
         static let partyCreateTempSelected = Color(hex: 0xFB0FEB)
         /// mode picker 卡片底色（Lock/Unlock 都用）
         static let partyCreateTempFill     = Color(hex: 0x1F1235)
+
+        // MARK: Party 房间内（设计稿还原 2026-07-11）
+        /// 房间背景色（image 115 未覆盖处的兜底纯色）
+        static let partyRoomBackground     = Color(hex: 0x0B0010)
+        /// 内容层暗化遮罩（覆盖背景大图，让文字可读）
+        static let partyRoomOverlay        = Color.black.opacity(0.35)
+        /// 顶部主播名 白
+        static let partyRoomAnchorName     = Color.white
+        /// 顶部 ID 浅灰紫
+        static let partyRoomAnchorId       = Color.white.opacity(0.55)
+        /// 关注按钮底色（紫灰半透明）
+        static let partyRoomFollowFill     = Color(hex: 0x8B84B0, opacity: 0.55)
+        /// 顶部工具栏图标 tint
+        static let partyRoomToolbarIcon    = Color.white
+        /// 收益金黄（趟马灯/奖杯数字/箭头）
+        static let partyRoomHeatGold       = Color(hex: 0xFFD54A)
+        /// 观众数白
+        static let partyRoomViewerCount    = Color.white
+        /// 麦位视频/占位背景色（相机关时的深灰底）
+        static let partyRoomSeatFill       = Color(hex: 0x1F1A26)
+        /// 麦位空态椅子 stroke（粉紫圆环内的椅子）
+        static let partyRoomSeatChair      = Color.white.opacity(0.5)
+        /// 麦位名字胶囊底（黑透）
+        static let partyRoomSeatNameFill   = Color.black.opacity(0.5)
+        /// 麦位名字文字白
+        static let partyRoomSeatNameText   = Color.white
+        /// 麦位下方 Gems 数字胶囊底（黑透）
+        static let partyRoomGemsFill       = Color.black.opacity(0.55)
+        /// Gems 数字文字白
+        static let partyRoomGemsText       = Color.white
+        /// 静音角标底色（灰透黑）
+        static let partyRoomMuteBadgeFill  = Color.black.opacity(0.35)
+        /// 空占位数字（"3"、"4"、"7"）文字白
+        static let partyRoomEmptyIndex     = Color.white
+        /// Tab strip 选中态文字色（黄）
+        static let partyRoomTabActive      = Color(hex: 0xFFE600)
+        /// Tab strip 未选中态（白 55%）
+        static let partyRoomTabInactive    = Color.white.opacity(0.55)
+        /// Tab strip 选中下划线（黄）
+        static let partyRoomTabUnderline   = Color(hex: 0xFFE600)
+        /// 欢迎消息文字绿
+        static let partyRoomWelcomeText    = Color(hex: 0x4EFFB0)
+        /// 聊天用户名文字白
+        static let partyRoomChatName       = Color.white
+        /// 聊天正文白
+        static let partyRoomChatText       = Color.white
+        /// 礼物消息胶囊底（半透黑）
+        static let partyRoomGiftMsgFill    = Color.black.opacity(0.35)
+        /// 礼物消息文字白
+        static let partyRoomGiftMsgText    = Color.white
+        /// 底部输入框半透明底
+        static let partyRoomInputFill      = Color.black.opacity(0.35)
+        /// 底部输入框描边（微弱白）
+        static let partyRoomInputBorder    = Color.white.opacity(0.12)
+        /// 底部输入框 placeholder 白 50%
+        static let partyRoomInputPlaceholder = Color.white.opacity(0.5)
+        /// 底部工具栏图标圆按钮底（半透黑）
+        static let partyRoomToolBtnFill    = Color.black.opacity(0.3)
+        /// Lv 徽章紫渐变起
+        static let partyRoomLevelStart     = Color(hex: 0x7C3AED)
+        /// Lv 徽章紫渐变止
+        static let partyRoomLevelEnd       = Color(hex: 0xC026D3)
     }
 
     // MARK: - 间距
@@ -606,6 +668,70 @@ enum Theme {
         static let matchButtonBottomInset: CGFloat = 100
         /// 匹配开关按钮距右侧
         static let matchButtonTrailingInset: CGFloat = 20
+
+        // MARK: Party 房间内（设计稿还原 2026-07-11）
+        /// 屏幕左右安全边距
+        static let partyRoomScreenH: CGFloat        = 12
+        /// 顶部主播条：头像尺寸
+        static let partyRoomAnchorAvatar: CGFloat   = 44
+        /// 顶部主播条：奖杯装饰宽（覆盖头像上方）
+        static let partyRoomAnchorTrophy: CGFloat   = 38
+        /// 顶部关注按钮
+        static let partyRoomFollowSize: CGFloat     = 30
+        /// 顶部工具栏图标尺寸
+        static let partyRoomToolbarIconSize: CGFloat = 22
+        /// 顶部工具栏图标间距
+        static let partyRoomToolbarIconGap: CGFloat = 12
+        /// 顶部条上下 padding
+        static let partyRoomTopBarV: CGFloat        = 8
+        /// 收益/观众条上下 padding
+        static let partyRoomStatRowV: CGFloat       = 6
+        /// 收益条黄色数字 icon 尺寸
+        static let partyRoomStatIconSize: CGFloat   = 16
+        /// 收益条箭头尺寸
+        static let partyRoomStatArrowSize: CGFloat  = 10
+        /// 大麦位（3 列）之间水平间距（0pt 让 3 个 BigSeatCell 严格无缝相邻）
+        static let partyRoomBigSeatGap: CGFloat     = 0
+        /// 小麦位（5 列）水平间距
+        static let partyRoomSmallSeatGap: CGFloat   = 8
+        /// 小麦位每 cell 头像尺寸
+        static let partyRoomSmallSeatAvatar: CGFloat = 46
+        /// 小麦位 name+gems 与头像间距
+        static let partyRoomSmallSeatVGap: CGFloat  = 4
+        /// 麦位 name 胶囊
+        static let partyRoomSeatNameHPadding: CGFloat = 6
+        static let partyRoomSeatNameVPadding: CGFloat = 2
+        /// Gems 胶囊 padding
+        static let partyRoomGemsHPadding: CGFloat   = 6
+        static let partyRoomGemsVPadding: CGFloat   = 2
+        static let partyRoomGemsIconSize: CGFloat   = 12
+        /// Tab strip 上下 padding
+        static let partyRoomTabV: CGFloat           = 8
+        /// Tab 项之间水平间距
+        static let partyRoomTabGap: CGFloat         = 20
+        /// Tab 下划线宽/高
+        static let partyRoomTabUnderlineW: CGFloat  = 20
+        static let partyRoomTabUnderlineH: CGFloat  = 3
+        /// 聊天区 padding
+        static let partyRoomChatHPadding: CGFloat   = 12
+        /// 聊天消息之间垂直 gap
+        static let partyRoomChatMsgGap: CGFloat     = 8
+        /// 聊天头像尺寸
+        static let partyRoomChatAvatar: CGFloat     = 32
+        /// 聊天头像与文字 gap
+        static let partyRoomChatAvatarGap: CGFloat  = 10
+        /// 底部输入栏高度
+        static let partyRoomInputHeight: CGFloat    = 40
+        /// 底部输入栏左右 padding
+        static let partyRoomInputHPadding: CGFloat  = 14
+        /// 底部工具栏圆按钮尺寸
+        static let partyRoomToolBtnSize: CGFloat    = 36
+        /// 底部工具栏圆按钮内图标尺寸
+        static let partyRoomToolBtnIconSize: CGFloat = 22
+        /// 底部工具栏之间 gap
+        static let partyRoomToolBtnGap: CGFloat     = 8
+        /// 底部输入栏与工具栏间距
+        static let partyRoomInputToolGap: CGFloat   = 6
     }
 
     // MARK: - 圆角
@@ -654,6 +780,20 @@ enum Theme {
         /// 跑马灯胶囊圆角（对齐 H5 rounded-12 = 12pt / 但 h-40 是半高 20 更接近视觉）
         static let matchMarquee: CGFloat = 20
         /// 匹配开关按钮不用圆角（直接切图圆形，无需 clip）
+
+        // MARK: Party 房间内（设计稿还原 2026-07-11）
+        /// 关注按钮圆
+        static let partyRoomFollow: CGFloat        = 15
+        /// 大麦位圆角（无圆角，方形铺满）
+        static let partyRoomBigSeat: CGFloat       = 0
+        /// 名字胶囊/Gems 胶囊
+        static let partyRoomChip: CGFloat          = 10
+        /// 底部输入栏
+        static let partyRoomInput: CGFloat         = 20
+        /// 底部工具栏圆按钮
+        static let partyRoomToolBtn: CGFloat       = 18
+        /// 礼物消息胶囊
+        static let partyRoomGiftMsg: CGFloat       = 8
     }
 
     // MARK: - 字号
@@ -792,6 +932,36 @@ enum Theme {
         static let liveRoomInputPlaceholder = Font.system(size: 13, weight: .regular)
         /// 底部快捷礼物 tile 价格
         static let liveRoomGiftPrice     = Font.system(size: 10, weight: .semibold)
+
+        // MARK: Party 房间内（设计稿还原 2026-07-11）
+        /// 主播名
+        static let partyRoomAnchorName    = Font.system(size: 16, weight: .medium)
+        /// ID:1234567
+        static let partyRoomAnchorId      = Font.system(size: 12, weight: .regular)
+        /// 收益数字（380.7K）
+        static let partyRoomHeatNumber    = Font.system(size: 15, weight: .semibold)
+        /// 观众数字（88）
+        static let partyRoomViewerNumber  = Font.system(size: 14, weight: .medium)
+        /// 大麦位名字胶囊
+        static let partyRoomSeatName      = Font.system(size: 11, weight: .medium)
+        /// 大麦位空位数字（"3"、"4"）
+        static let partyRoomEmptyIndex    = Font.system(size: 14, weight: .medium)
+        /// Gems 数字
+        static let partyRoomGemsNumber    = Font.system(size: 11, weight: .semibold)
+        /// 小麦位名字（用户名）
+        static let partyRoomSmallSeatName = Font.system(size: 11, weight: .regular)
+        /// Tab 项（All / Chat / Gift）
+        static let partyRoomTab           = Font.system(size: 15, weight: .semibold)
+        /// 欢迎绿字
+        static let partyRoomWelcome       = Font.system(size: 13, weight: .regular)
+        /// 聊天用户名
+        static let partyRoomChatName      = Font.system(size: 13, weight: .semibold)
+        /// 聊天正文
+        static let partyRoomChatText      = Font.system(size: 13, weight: .regular)
+        /// 礼物消息
+        static let partyRoomGiftMsg       = Font.system(size: 12, weight: .regular)
+        /// 底部输入 placeholder
+        static let partyRoomInputPlaceholder = Font.system(size: 14, weight: .regular)
     }
 
     // MARK: - 渐变与段位光谱

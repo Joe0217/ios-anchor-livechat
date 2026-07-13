@@ -22,6 +22,9 @@
 // MARK: - 美颜降级
 "beauty.unavailable"         = "Güzellik kullanılamıyor";
 
+// MARK: - 全局空态占位（EmptyStateView 默认文案）
+"common.emptyState.noContent" = "Kullanılabilir içerik yok";
+
 // MARK: - 网络弱网降级（v5 分层）
 "network.warning"            = "Ağ kararsız, düşük kare hızına geçildi";
 

@@ -20,6 +20,9 @@
 // MARK: - 美颜降级
 "beauty.unavailable"         = "Beauty unavailable";
 
+// MARK: - 全局空态占位（EmptyStateView 默认文案）
+"common.emptyState.noContent" = "No content available";
+
 // MARK: - 网络弱网降级（v5 分层）
 "network.warning"            = "Network unstable, switched to low frame rate";
 

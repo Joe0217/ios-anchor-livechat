@@ -41,7 +41,8 @@ struct PartyMessageListView: View {
             }
         }
         .frame(maxHeight: .infinity)
-        .background(Color(.systemBackground))
+        // 设计稿视觉重排后聊天区盖在 room 背景大图上，systemBackground（dark 下不透明黑）会抹掉底图；
+        // 改用 clear 让底图透出。若未来某处需要不透明底可外层包装挂 background。
     }
 
     private func messageRow(_ msg: PartyChatMessage) -> some View {
