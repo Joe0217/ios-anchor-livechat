@@ -1,6 +1,7 @@
 import Combine
 import Foundation
 import NIMSDK
+import SwiftUI  // @AppStorage（E v2 §3 partySaveInfo.autoEnter{On,Off}Application 本地持久化）
 
 /// 派对房全局房间状态（spec §1.4.2 + §1.4.5 + §1.4.6）。
 ///
@@ -47,6 +48,57 @@ final class PartyStore: ObservableObject {
     @Published private(set) var isFollowingAnchor: Bool = false
     /// 关注切换请求是否在飞（防连点重复请求）
     @Published private(set) var isTogglingFollow: Bool = false
+
+    /// v12：房主头像装饰框 URL（对齐 H5 `ownerInfo.headFrame` = `apiPartyGetUser.headFrameSmallImg`）。
+    /// enterRoom 完成后 async 拉；`.svga` 结尾 iOS 暂 fallback 到无装饰（G/H 期接 SVGA 播放器）。
+    @Published private(set) var ownerHeadFrameURL: String?
+    private var didLoadOwnerInfo = false
+
+    /// v15 声纹反馈：正在说话的 Agora uid 集合（对齐 H5 `volumeList`）。
+    /// 数据源：`PartyRTCEngine.reportAudioVolumeIndicationOfSpeakers` → 阈值 volume>5 → 500ms 全量替换。
+    /// UI 层：`isSpeaking(seat:)` 派生，seat.userId String → UInt 转换后查集合命中。
+    @Published private(set) var speakingUids: Set<UInt> = []
+
+    // MARK: - Room Mode (E v2 §1)
+
+    /// 房主 Room Mode 模板列表缓存（key=tab type 1/2）。spec §1 UI 态。
+    @Published private(set) var roomModeTemplates: [PartyRoomModeType: [PartyRoomTemplate]] = [:]
+    /// 模板拉取状态机；`partialLoaded` 承载单 tab 失败另一 tab 成功场景（spec §1）。
+    @Published private(set) var roomModeTemplatesState: PartyRoomModeTemplatesState = .idle
+    /// 切模板成功本地时间戳；IM 1017 处理入口对比 msgTimestamp - 3s 判丢乱序旧 1001/1012（spec §1 步骤 1）。
+    private var lastRoomTempSwitchAt: Date? = nil
+    /// switchRoomMode 幂等 flag（Confirm 2000ms window 内二次点击不重复请求，spec §0 throttle）
+    private var isBusySwitchRoomMode: Bool = false
+
+    // MARK: - Mic Application (E v2 §2)
+
+    /// 排麦申请列表状态机（房主/房管端），套 list-refresh-preserve-items rule（保留 refreshing 视觉）
+    @Published private(set) var micApplicationsState: PartyMicApplicationsState = .idle
+    /// Mic Application 开关（来源：1021 IM 广播）
+    @Published private(set) var micApplicationSwitchOn: Bool = false
+    /// 队列总长度（1018 payload num 消费；用于外部 badge/系统消息计数）
+    @Published private(set) var queueSeatNum: Int = 0
+    /// 观众端 "我的申请"（inIndex 排队位序 + rejectedAt 30s 冷却）
+    @Published private(set) var myApplyInfo: PartyMyApplyInfo = .init()
+    /// agreeSeat 并发占位集合：房主快速批准两申请时排除已挑走的 seatIndex 防冲突（spec §2 R6）
+    private var pendingApproveSeatIndex: Set<Int> = []
+    /// applying 超时兜底 Task：inIndex > 0 持续 5min 无 IM → 本地自动 giveUp（spec §2 R9）
+    private var applyingTimeoutTask: Task<Void, Never>? = nil
+    /// 开关 API 幂等 flag（防连点，与 Confirm 分开 flag 隔离）
+    private var isBusyMicSwitch: Bool = false
+    /// spec §0 throttle：所有 Mic Application 类 mutating async 用 isBusy flag 幂等（防 spam 双请求）
+    private var isBusyApplyMic: Bool = false
+    private var isBusyCancelMyMicApplication: Bool = false
+    private var isBusyRefuseMicApplication: Bool = false
+    /// agreeMicApplication 用 per-userId set 幂等（同一申请者不重复批准，不同申请者可并发）
+    private var pendingApproveUserId: Set<String> = []
+
+    /// partySaveInfo（对齐 H5 stores/modules/user.js partySaveInfo）：本地长驻两个 Bool flag，
+    /// 用户是否已经首次协议确认过 "打开申请" / "关闭申请"；二次同方向切换 UI 直接调 API 不弹协议弹窗。
+    /// 说明：@AppStorage 在 ObservableObject 中不触发 objectWillChange（与视图订阅相反），
+    /// 但本 flag 是 "应否弹协议弹窗" 的一次性判断——UI 层 imperative 读取即可，无需 Combine 订阅。
+    @AppStorage("party.autoEnterOnApplication") var autoEnterOnApplication: Bool = false
+    @AppStorage("party.autoEnterOffApplication") var autoEnterOffApplication: Bool = false
 
     // MARK: - 子模块
 
@@ -152,6 +204,8 @@ final class PartyStore: ObservableObject {
         onlineUserCount = info.onlineCount
         // 初始化关注态（对齐 H5 `currentPartyInfo.isFollowOwner`；nil 视为未关注）
         isFollowingAnchor = info.isFollowOwner ?? false
+        // v12：房主头像框 async 拉（不阻塞进房主流程）
+        Task { [weak self] in await self?.loadOwnerInfoIfNeeded() }
         roomState = .entering
 
         // Step 3: RTC join
@@ -289,6 +343,22 @@ final class PartyStore: ObservableObject {
         lastInviteResult = nil
         isFollowingAnchor = false
         isTogglingFollow = false
+        // v12：房主头像框 state 清（退房后下次进新房需重拉）
+        ownerHeadFrameURL = nil
+        didLoadOwnerInfo = false
+        // E v2：Room Mode / Mic Application 状态清 —— 退房需清残留，避免下次进房带入旧队列
+        roomModeTemplates = [:]
+        roomModeTemplatesState = .idle
+        lastRoomTempSwitchAt = nil
+        isBusySwitchRoomMode = false
+        micApplicationsState = .idle
+        micApplicationSwitchOn = false
+        queueSeatNum = 0
+        myApplyInfo = .init()
+        pendingApproveSeatIndex = []
+        applyingTimeoutTask?.cancel()
+        applyingTimeoutTask = nil
+        isBusyMicSwitch = false
     }
 
     // MARK: - 房主保存设置后本地同步（v8.2）
@@ -309,6 +379,25 @@ final class PartyStore: ObservableObject {
             greetingMessage: greetingMessage,
             roomLanguage: roomLanguage
         )
+    }
+
+    // MARK: - 房主 ownerInfo（v12 对齐 H5 party.js:1259 loadOwnerInfo）
+
+    /// enterRoom 后 async 拉房主 headFrame 装饰。失败/无字段静默 nil，视觉降级到无装饰。
+    /// dedup：`didLoadOwnerInfo` 保证同一房只拉一次；`resetState()` 清 flag 让新房重拉。
+    func loadOwnerInfoIfNeeded() async {
+        guard !didLoadOwnerInfo,
+              let ownerId = roomInfo?.ownerId,
+              let uid = Int(ownerId), uid > 0 else { return }
+        didLoadOwnerInfo = true
+        do {
+            let info = try await PartyAPI.getUserBasicInfo(userId: uid)
+            let url = info?.headFrameSmallImg?.trimmingCharacters(in: .whitespaces)
+            ownerHeadFrameURL = (url?.isEmpty == false) ? url : nil
+        } catch {
+            AppLogger.party.error("[PartyStore] loadOwnerInfo failed: \(String(describing: error), privacy: .public)")
+            ownerHeadFrameURL = nil
+        }
     }
 
     // MARK: - 关注房主（对齐 H5 header-wrap.vue L139-140 handleFollowOrNo）
@@ -377,6 +466,30 @@ final class PartyStore: ObservableObject {
             )
         } catch {
             lastError = .underlying((error as? PartyAPIError) ?? .networkError)
+        }
+    }
+
+    /// 切麦：从当前麦位切换到目标 seatIndex（对齐 H5 feachExchangeSeat）。
+    /// - 前置：selfSeat 存在且已 joined
+    /// - targetSeatType 取自目标麦位 seatType（1=video / 2=voice），后端需知道目标位类型做校验
+    /// - 成功后等服务端 1001 seat/update 广播 → seatList 更新触发 postMikeList，不乐观更新
+    func requestExchangeSeat(targetSeatIndex: Int, targetSeatType: Int) async {
+        guard let info = roomInfo, selfSeat != nil, roomState == .joined else { return }
+        do {
+            try await PartyAPI.exchangeSeat(
+                roomId: info.id ?? "",
+                seatIndex: targetSeatIndex,
+                yxRoomId: info.yxRoomId ?? "",
+                seatType: targetSeatType,
+                roomTempId: info.roomTempIdInt
+            )
+        } catch let api as PartyAPIError {
+            let mapped = PartyRoomErrorMapper.map(api)
+            lastError = mapped
+            if case .seatOccupied = mapped { await reloadSeatListFromServer() }
+            if case .seatEmpty = mapped { await reloadSeatListFromServer() }
+        } catch {
+            lastError = .underlying(.networkError)
         }
     }
 
@@ -584,6 +697,384 @@ final class PartyStore: ObservableObject {
         isLocalCameraActive = false
         AppLogger.party.info("[PartyStore] camera capture stopped")
     }
+
+    // MARK: - Room Mode (E v2 §1)
+
+    /// 拉取 Room Mode 模板列表（并发 type=1 + type=2；单 tab 失败走 partialLoaded）。
+    /// spec §1 UI 态：`loading → loaded / partialLoaded / error`。已缓存 tab 复用不重拉。
+    func loadRoomModeTemplates() async {
+        // 若两 tab 都已缓存则直接切到 loaded 态（enterRoom 后二次打开面板时命中）
+        if let voice = roomModeTemplates[.voiceOnly],
+           let live = roomModeTemplates[.liveAndVoice] {
+            roomModeTemplatesState = .loaded(voice: voice, live: live)
+            return
+        }
+        roomModeTemplatesState = .loading
+
+        // 并发 Promise.allSettled 语义
+        async let voiceResult: [PartyRoomTemplate]? = fetchRoomTempListSafely(type: PartyRoomModeType.voiceOnly.rawValue)
+        async let liveResult: [PartyRoomTemplate]? = fetchRoomTempListSafely(type: PartyRoomModeType.liveAndVoice.rawValue)
+        let voice = await voiceResult
+        let live = await liveResult
+
+        if let v = voice { roomModeTemplates[.voiceOnly] = v }
+        if let l = live { roomModeTemplates[.liveAndVoice] = l }
+
+        switch (voice, live) {
+        case (let v?, let l?):
+            roomModeTemplatesState = .loaded(voice: v, live: l)
+            AppLogger.party.info("[PartyStore] roomMode templates loaded voice=\(v.count, privacy: .public) live=\(l.count, privacy: .public)")
+        case (nil, nil):
+            // 两 tab 都失败 → error（依赖 APIClient 全局 toast；本地只落状态机）
+            roomModeTemplatesState = .error(L10n.Party.roomModeLoadError)
+            AppLogger.party.error("[PartyStore] roomMode templates all failed")
+        default:
+            // 单 tab 失败 → partialLoaded
+            roomModeTemplatesState = .partialLoaded(voice: voice, live: live)
+            AppLogger.party.notice("[PartyStore] roomMode templates partial voiceOk=\(voice != nil, privacy: .public) liveOk=\(live != nil, privacy: .public)")
+        }
+    }
+
+    /// 单 tab 拉取，异常吞掉返 nil（partialLoaded 语义依赖此包装）
+    private func fetchRoomTempListSafely(type: Int) async -> [PartyRoomTemplate]? {
+        do {
+            return try await PartyAPI.roomTempList(type: type)
+        } catch {
+            AppLogger.party.error("[PartyStore] roomTempList(type=\(type, privacy: .public)) failed: \(String(describing: error), privacy: .private)")
+            return nil
+        }
+    }
+
+    /// 房主切模板（spec §1）。isBusy 2000ms 幂等；成功后本地立即调 handleRoomModeChanged
+    /// （不等 IM 1017 回执，云信可能不发自己回执导致状态分裂）。
+    func switchRoomMode(to tempId: Int) async {
+        guard !isBusySwitchRoomMode else {
+            AppLogger.party.notice("[PartyStore] switchRoomMode skip: busy")
+            return
+        }
+        guard let info = roomInfo, roomState == .joined else {
+            AppLogger.party.notice("[PartyStore] switchRoomMode skip: not joined")
+            return
+        }
+        // 幂等：当前模板 == 目标 → 直接 return
+        if info.roomTempIdInt == tempId {
+            AppLogger.party.info("[PartyStore] switchRoomMode noop: already tempId=\(tempId, privacy: .public)")
+            return
+        }
+        isBusySwitchRoomMode = true
+        defer { isBusySwitchRoomMode = false }
+
+        do {
+            try await PartyAPI.switchRoomTemp(
+                roomId: info.id ?? "",
+                roomTempId: tempId,
+                yxRoomId: info.yxRoomId ?? ""
+            )
+            // 打时间戳用于 IM 1017 乱序判丢（spec §1 步骤 1）
+            lastRoomTempSwitchAt = Date()
+            AppLogger.party.info("[PartyStore] switchRoomTemp ok tempId=\(tempId, privacy: .public)")
+            // 房主本地兜底：不等 IM 回执，立即触发 handleRoomModeChanged
+            handleRoomModeChanged(newTempId: tempId, seats: nil, cause: .local)
+        } catch {
+            AppLogger.party.error("[PartyStore] switchRoomTemp failed: \(String(describing: error), privacy: .private)")
+            lastError = .underlying((error as? PartyAPIError) ?? .networkError)
+        }
+    }
+
+    /// Room Mode 切换统一入口（spec §1 IM 1017 处理步骤 3-7）。
+    /// - Parameters:
+    ///   - newTempId: 新模板 ID
+    ///   - seats: 若来自 IM 且 payload 含 seats，全量替换；nil 时触发 seat/list 重拉
+    ///   - cause: `.local` 房主 API 成功兜底 / `.remote` 观众端 IM 到达
+    func handleRoomModeChanged(newTempId: Int?, seats: [PartyRoomSeat]?, cause: PartyRoomModeChangeCause) {
+        // 幂等保护（spec §1 步骤 2）：无论 .local 还是 .remote，若目标 tempId 已生效则短路，
+        // 只增量刷 seats 不重复触发下麦/系统消息（防房主本地兜底后 IM 到达 double 触发）
+        if let tempId = newTempId, roomInfo?.roomTempIdInt == tempId {
+            AppLogger.party.info("[PartyStore] handleRoomModeChanged idempotent tempId=\(tempId, privacy: .public) cause=\(String(describing: cause), privacy: .public)")
+            if let s = seats {
+                seatList = s
+                postMikeList()
+            }
+            return
+        }
+
+        // 步骤 3：全量替换 seatList + RTC bindings 对账（等价 postMikeList）
+        if let s = seats {
+            seatList = s
+            postMikeList()
+        } else {
+            // IM payload 缺 seats（或本地兜底路径）→ 全量重拉兜底
+            Task { [weak self] in await self?.reloadSeatListFromServer() }
+        }
+
+        // 步骤 4：自身分支——先前在麦上则触发下麦 hook + 视频停采
+        // TODO(spec §1 step 4)：接入统一埋点框架后补 party_video_leave/voice_leave reason=modeChange
+        let wasOnSeat = (selfSeat != nil)
+        if wasOnSeat {
+            disableLocalVideoCapture()
+            AppLogger.party.info("[PartyStore] handleRoomModeChanged self was on seat, disable local video (reason=modeChange)")
+        }
+
+        // 步骤 5：公屏落系统消息
+        chatRouter.postSystemMessage(L10n.Party.roomModeSystemMsg)
+
+        // 步骤 6：清 Mic Application 相关状态（服务端切模板时会清队列）
+        applyingTimeoutTask?.cancel()
+        applyingTimeoutTask = nil
+        myApplyInfo = .init()
+        micApplicationsState = .empty
+        queueSeatNum = 0
+        pendingApproveSeatIndex = []
+
+        // 步骤 7：更新 roomInfo.roomTempId（供后续 IM 幂等判断命中）
+        // newTempId==nil 时（IM payload 无该字段）跳过 —— 后续同款切换会走完整路径不重复副作用无影响，只是幂等失效
+        if let info = roomInfo, let tempId = newTempId {
+            roomInfo = info.withUpdated(roomTempId: String(tempId))
+        }
+        AppLogger.party.info("[PartyStore] handleRoomModeChanged applied tempId=\(newTempId ?? -1, privacy: .public) cause=\(String(describing: cause), privacy: .public) hadSeats=\(seats != nil, privacy: .public)")
+    }
+
+    // MARK: - Mic Application (E v2 §2)
+
+    /// 拉取排麦申请列表（房主/房管）。
+    /// - `.initial`：首次开面板 → `.loading`
+    /// - `.refresh`：下拉刷新 / 1018 op=1 触发 → 保留旧 items 视觉走 `.refreshing(items)`
+    func loadMicApplications(reason: PartyMicApplicationsLoadReason) async {
+        guard let info = roomInfo, roomState == .joined else { return }
+
+        // list-refresh-preserve-items rule：refresh 时保留视觉
+        switch (reason, micApplicationsState) {
+        case (.refresh, .loaded(let old)):
+            micApplicationsState = .refreshing(old)
+        case (.refresh, .refreshing(let old)):
+            micApplicationsState = .refreshing(old)
+        default:
+            micApplicationsState = .loading
+        }
+
+        do {
+            let resp = try await PartyAPI.getQueueSeatList(roomId: info.id ?? "", pageSize: 99)
+            queueSeatNum = resp.totalNum
+            if resp.records.isEmpty {
+                micApplicationsState = .empty
+            } else {
+                micApplicationsState = .loaded(resp.records)
+            }
+            AppLogger.party.info("[PartyStore] getQueueSeatList ok total=\(resp.totalNum, privacy: .public) rec=\(resp.records.count, privacy: .public)")
+        } catch {
+            AppLogger.party.error("[PartyStore] getQueueSeatList failed: \(String(describing: error), privacy: .private)")
+            micApplicationsState = .error(L10n.Party.errorNetworkLost)
+        }
+    }
+
+    /// list-refresh-preserve-items rule：`.refreshable` closure 必须 await 到任务完成，
+    /// 否则顶部 spinner 立即消失。
+    func refreshMicApplications() async {
+        await loadMicApplications(reason: .refresh)
+    }
+
+    /// 观众端申请上麦（spec §2 观众端）。30s 冷却 + 5min 超时兜底。
+    func applyMic(seatIndex: Int) async {
+        // spec §0 throttle：防 spam 双 tap 发重复 onSeat
+        guard !isBusyApplyMic else {
+            AppLogger.party.notice("[PartyStore] applyMic skip: busy")
+            return
+        }
+        guard let info = roomInfo, roomState == .joined else { return }
+        // 30s 冷却：拒后再次点空位 → toast + 不发接口（spec §2 R8）
+        if let rejectedAt = myApplyInfo.rejectedAt,
+           Date().timeIntervalSince(rejectedAt) < 30 {
+            AppLogger.party.notice("[PartyStore] applyMic blocked by 30s cooldown")
+            lastError = .underlying(.business(code: "MIC_APPLY_COOLDOWN", message: L10n.Party.micApplicationRejectedCooldown))
+            return
+        }
+        isBusyApplyMic = true
+        defer { isBusyApplyMic = false }
+
+        do {
+            _ = try await PartyAPI.onSeat(
+                roomId: info.id ?? "",
+                seatIndex: seatIndex,
+                yxRoomId: info.yxRoomId ?? "",
+                roomTempId: info.roomTempIdInt
+            )
+            // 分流：本地暂标 inIndex = 请求 seatIndex；后续 IM 1001（直接上麦）或 1018 op=1（真入队）分流
+            myApplyInfo.inIndex = seatIndex
+            AppLogger.party.info("[PartyStore] applyMic ok seatIndex=\(seatIndex, privacy: .public); waiting IM to disambiguate")
+            startApplyingTimeoutTask()
+        } catch let api as PartyAPIError {
+            let mapped = PartyRoomErrorMapper.map(api)
+            lastError = mapped
+            AppLogger.party.error("[PartyStore] applyMic failed: \(String(describing: api), privacy: .private)")
+        } catch {
+            lastError = .underlying(.networkError)
+        }
+    }
+
+    /// 观众端放弃排麦（spec §2）。成功后本地清 inIndex + 停超时 Task。
+    func cancelMyMicApplication() async {
+        guard !isBusyCancelMyMicApplication else {
+            AppLogger.party.notice("[PartyStore] cancelMyMicApplication skip: busy")
+            return
+        }
+        guard let info = roomInfo, myApplyInfo.inIndex > 0 else { return }
+        isBusyCancelMyMicApplication = true
+        defer { isBusyCancelMyMicApplication = false }
+        do {
+            try await PartyAPI.giveUpQueueSeat(
+                roomId: info.id ?? "",
+                yxRoomId: info.yxRoomId ?? ""
+            )
+            myApplyInfo.inIndex = 0
+            applyingTimeoutTask?.cancel()
+            applyingTimeoutTask = nil
+            AppLogger.party.info("[PartyStore] cancelMyMicApplication ok")
+        } catch {
+            AppLogger.party.error("[PartyStore] giveUpQueueSeat failed: \(String(describing: error), privacy: .private)")
+            lastError = .underlying((error as? PartyAPIError) ?? .networkError)
+        }
+    }
+
+    /// 房主/房管批准申请（spec §2）。seatIndex nil 时挑首空位（排除 pendingApproveSeatIndex 防并发冲突）。
+    /// 无可用位 → toast + 不调接口（spec §2 R7）。
+    func agreeMicApplication(userId: String, seatIndex: Int?) async {
+        // spec §0 throttle（per-userId）：同一申请者防连点重复批准；不同 userId 允许并发（seat 占位靠 pendingApproveSeatIndex）
+        guard !pendingApproveUserId.contains(userId) else {
+            AppLogger.party.notice("[PartyStore] agreeMic skip: userId=\(userId, privacy: .public) already in-flight")
+            return
+        }
+        guard let info = roomInfo, roomState == .joined else { return }
+        // 目标 seatIndex：外部指定优先；否则挑首空位排除已占位
+        let targetIndex: Int
+        if let idx = seatIndex {
+            targetIndex = idx
+        } else if let idx = firstAvailableSeatIndexExcludingPending() {
+            targetIndex = idx
+        } else {
+            AppLogger.party.notice("[PartyStore] agreeMic no available seat")
+            lastError = .underlying(.business(code: "MIC_NO_SEAT", message: L10n.Party.micApplicationNoSeatAvailable))
+            return
+        }
+
+        // 占位
+        pendingApproveUserId.insert(userId)
+        pendingApproveSeatIndex.insert(targetIndex)
+        defer {
+            pendingApproveUserId.remove(userId)
+            pendingApproveSeatIndex.remove(targetIndex)
+        }
+
+        do {
+            try await PartyAPI.agreeSeat(
+                roomId: info.id ?? "",
+                seatIndex: targetIndex,
+                targetUserId: userId,
+                operatorType: 1,  // 内圈硬编 1（房主）；房管路径中圈 TODO
+                roomTempId: info.roomTempIdInt,
+                yxRoomId: info.yxRoomId ?? ""
+            )
+            AppLogger.party.info("[PartyStore] agreeSeat ok user=\(userId, privacy: .public) seat=\(targetIndex, privacy: .public)")
+            // 服务端下发 1018 op=2（出队）+ 1001/1012（麦位刷新）组合，本地不乐观更新
+        } catch let api as PartyAPIError {
+            AppLogger.party.error("[PartyStore] agreeSeat failed: \(String(describing: api), privacy: .private)")
+            lastError = PartyRoomErrorMapper.map(api)
+        } catch {
+            lastError = .underlying(.networkError)
+        }
+    }
+
+    /// 房主/房管拒绝申请（spec §2）。服务端下发 1018 op=3 → 被拒者本地设 rejectedAt 冷却。
+    func refuseMicApplication(userId: String) async {
+        guard !isBusyRefuseMicApplication else {
+            AppLogger.party.notice("[PartyStore] refuseMic skip: busy")
+            return
+        }
+        guard let info = roomInfo, roomState == .joined else { return }
+        isBusyRefuseMicApplication = true
+        defer { isBusyRefuseMicApplication = false }
+        do {
+            try await PartyAPI.refuseQueueSeat(
+                roomId: info.id ?? "",
+                targetUserId: userId,
+                yxRoomId: info.yxRoomId ?? ""
+            )
+            AppLogger.party.info("[PartyStore] refuseQueueSeat ok user=\(userId, privacy: .public)")
+        } catch {
+            AppLogger.party.error("[PartyStore] refuseQueueSeat failed: \(String(describing: error), privacy: .private)")
+            lastError = .underlying((error as? PartyAPIError) ?? .networkError)
+        }
+    }
+
+    /// 房主切换 Mic Application 开关（spec §2）。isBusy 幂等。
+    /// UI 层负责前置协议弹窗（首次切换时基于 autoEnter{On,Off}Application flag 判断）。
+    /// 成功后**不本地乐观更新** `micApplicationSwitchOn`——等 1021 广播到达统一同步（避免与观众端不一致）。
+    func toggleMicApplicationSwitch(enable: Bool) async {
+        guard !isBusyMicSwitch else {
+            AppLogger.party.notice("[PartyStore] toggleMicApplicationSwitch skip: busy")
+            return
+        }
+        guard let info = roomInfo, roomState == .joined else { return }
+        isBusyMicSwitch = true
+        defer { isBusyMicSwitch = false }
+
+        do {
+            try await PartyAPI.updateOnSeatEnable(roomId: info.id ?? "", enable: enable ? 1 : 0)
+            AppLogger.party.info("[PartyStore] updateOnSeatEnable ok enable=\(enable, privacy: .public)")
+        } catch {
+            AppLogger.party.error("[PartyStore] updateOnSeatEnable failed: \(String(describing: error), privacy: .private)")
+            lastError = .underlying((error as? PartyAPIError) ?? .networkError)
+        }
+    }
+
+    /// 挑首空位（排除 `pendingApproveSeatIndex` 已占位），供 `agreeMicApplication` seatIndex=nil 分支用。
+    /// nil 表示无可用空位。
+    private func firstAvailableSeatIndexExcludingPending() -> Int? {
+        for seat in seatList {
+            guard let idx = seat.seatIndex, idx > 0 else { continue }
+            if seat.occupied { continue }
+            if pendingApproveSeatIndex.contains(idx) { continue }
+            return idx
+        }
+        return nil
+    }
+
+    /// 观众 applying 超时兜底 Task：5min 无 IM 到达 → 本地自动 giveUp（spec §2 R9）
+    private func startApplyingTimeoutTask() {
+        // 捕捉本次申请的 inIndex snapshot：5min 后若 IM 到达（批准/拒绝/放弃/直接上麦）已让 inIndex 变化，
+        // 则本 Task 视为竞态失败者，静默 no-op（避免与其他路径重复弹 toast）
+        let startInIndex = myApplyInfo.inIndex
+        applyingTimeoutTask?.cancel()
+        applyingTimeoutTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 300 * 1_000_000_000)
+            if Task.isCancelled { return }
+            await MainActor.run { [weak self] in
+                guard let self = self else { return }
+                // 竞态判定：inIndex 必须与启动 Task 时一致且 > 0，才是真 timeout
+                guard self.myApplyInfo.inIndex == startInIndex, self.myApplyInfo.inIndex > 0 else { return }
+                AppLogger.party.notice("[PartyStore] applying 5min timeout, auto giveUp inIndex=\(self.myApplyInfo.inIndex, privacy: .public)")
+                Task { [weak self] in
+                    await self?.cancelMyMicApplication()
+                    await MainActor.run { [weak self] in
+                        self?.lastError = .underlying(.business(code: "MIC_APPLY_TIMEOUT", message: L10n.Party.micApplicationTimeoutAutoGiveUp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Room Mode / Mic Application supporting enums (E v2)
+
+/// `handleRoomModeChanged` 触发源：`.local` 房主 API 成功兜底 / `.remote` 观众端 IM 1017 到达
+enum PartyRoomModeChangeCause {
+    case local
+    case remote
+}
+
+/// 排麦申请列表拉取 reason（配合 list-refresh-preserve-items rule）
+enum PartyMicApplicationsLoadReason {
+    case initial
+    case refresh
 }
 
 // MARK: - PartyRTCEngineDelegate
@@ -611,6 +1102,35 @@ extension PartyStore: PartyRTCEngineDelegate {
             await self?.forceLeaveRoom(.entryFailed)
         }
         lastError = .enterFailed(underlying: reason)
+    }
+
+    /// v15 声纹反馈：500ms 一次全量替换 speakingUids；空集合=全体静音。
+    /// 用 Set 比较避免不必要的 objectWillChange 触发（同一集合内容不派发）。
+    func partyRTCEngine(_ engine: PartyRTCEngine, didUpdateSpeakingUids uids: Set<UInt>) {
+        if uids != speakingUids {
+            speakingUids = uids
+        }
+    }
+}
+
+// MARK: - v15 声纹派生查询
+
+extension PartyStore {
+    /// 判断某个麦位当前是否正在说话（用于 SeatCell isSpeaking 参数派生）。
+    /// 对齐 H5 `isVoicePrintFrameActive` 判定（简化版，省略 vfxUrl SVGA）：
+    /// 1. seat.userId 存在且能转 UInt
+    /// 2. uid 在 speakingUids 集合内（volume>5 阈值过滤后）
+    /// 3. 用户自身麦克风开 (microphoneEnabled=1)
+    /// 4. 座位未被房管禁麦 (seatMicrophoneEnabled=1)
+    /// 缺一即不显示 pulse（H5 语义：静音/禁麦不应显声纹）
+    func isSpeaking(seat: PartyRoomSeat) -> Bool {
+        guard let uidStr = seat.userId,
+              let uid = UInt(uidStr),
+              uid > 0 else { return false }
+        guard speakingUids.contains(uid) else { return false }
+        guard (seat.microphoneEnabled ?? 0) == 1 else { return false }
+        guard (seat.seatMicrophoneEnabled ?? 0) == 1 else { return false }
+        return true
     }
 }
 
@@ -641,6 +1161,11 @@ extension PartyStore: PartyRoomChatManagerDelegate {
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveSeatUpdate payload: [String: Any], raw: NIMMessage) {
         _ = raw
+        // spec §0/§1 乱序判丢：切模板成功后 3s 内 1001 广播多为旧数据，直接覆盖会踩到旧 seatList
+        if isWithinRoomTempSwitchGuard {
+            AppLogger.party.notice("[PartyStore] 1001 dropped by roomTempSwitch 3s guard")
+            return
+        }
         // MVP 简化：1001 payload schema 待 M3 抓真实帧确认；
         // 现策略——若 payload 含完整 seatList 数组直接替换，否则全量重拉。
         AppLogger.party.notice("[PartyStore] 1001 seatUpdate payload keys=\(Array(payload.keys), privacy: .public)")
@@ -652,11 +1177,41 @@ extension PartyStore: PartyRoomChatManagerDelegate {
             AppLogger.party.notice("[PartyStore] 1001 fallback to reloadSeatListFromServer")
             Task { [weak self] in await self?.reloadSeatListFromServer() }
         }
+        // spec §2 观众端分流：本人出现在 seatList → 真上麦（非入队），清 inIndex + 停 timeout Task
+        // 若 5min timeout task 已在跑，本次 IM 到达时手工触发 clearOnDirectOnSeat 避免误 giveUp
+        clearApplyingIfDirectOnSeat()
+    }
+
+    /// spec §2 观众端分流兜底：本人已进 seatList（真上麦而非入队）时清 myApplyInfo.inIndex + 停 timeout Task。
+    /// 由 1001 / 1012 处理路径末尾调用，防 5min timeout task 误触发 giveUp。
+    private func clearApplyingIfDirectOnSeat() {
+        guard myApplyInfo.inIndex > 0 else { return }
+        guard selfSeat != nil else { return }
+        AppLogger.party.info("[PartyStore] self on-seat detected while applying (inIndex=\(self.myApplyInfo.inIndex, privacy: .public)); clear + stop timeout Task")
+        myApplyInfo.inIndex = 0
+        applyingTimeoutTask?.cancel()
+        applyingTimeoutTask = nil
+    }
+
+    /// spec §0 乱序保护：切模板成功后 3s 内所有 1001/1012 增量广播均视为旧数据丢弃
+    /// （容差窗口对齐 §0 二次校验 "3s 容差" 语义；实操简化：不用 msgTimestamp 比对，
+    /// 用切模板成功至今的秒数判断，前提是 IM 到达延迟远小于 3s）
+    private var isWithinRoomTempSwitchGuard: Bool {
+        guard let at = lastRoomTempSwitchAt else { return false }
+        return Date().timeIntervalSince(at) < 3.0
     }
 
     func partyRoomChatDidRequireSeatListReload(_ chat: PartyRoomChatManager) {
+        // spec §0/§1 乱序判丢：切模板成功后 3s 内 1012 全量重拉指令多来自旧上下文，丢弃避免覆盖
+        if isWithinRoomTempSwitchGuard {
+            AppLogger.party.notice("[PartyStore] 1012 dropped by roomTempSwitch 3s guard")
+            return
+        }
         AppLogger.party.notice("[PartyStore] 1012 require full seatList reload")
-        Task { [weak self] in await self?.reloadSeatListFromServer() }
+        Task { [weak self] in
+            await self?.reloadSeatListFromServer()
+            await MainActor.run { self?.clearApplyingIfDirectOnSeat() }
+        }
     }
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveProhibitMic payload: [String: Any], raw: NIMMessage) {
@@ -836,6 +1391,141 @@ extension PartyStore: PartyRoomChatManagerDelegate {
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveInviteResult result: PartyVideoSeatInviteResult) {
         lastInviteResult = result
+    }
+
+    // MARK: - E v2 §1/§2 Room Mode + Mic Application IM 消费
+
+    /// 1017 Room Mode 切模板广播（spec §1）。步骤 1 乱序判丢：msgTimestamp < lastRoomTempSwitchAt-3s → drop
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveModeChange payload: [String: Any], msgTimestampMs: Int64) {
+        // 步骤 1：乱序判丢（3s 容差；房主切模板成功后旧 1001/1012 排队晚到）
+        if let switchedAt = lastRoomTempSwitchAt {
+            let switchedAtMs = Int64(switchedAt.timeIntervalSince1970 * 1000)
+            if msgTimestampMs < switchedAtMs - 3000 {
+                AppLogger.party.notice("[PartyStore] 1017 dropped by lastRoomTempSwitchAt-3s guard (msgAt=\(msgTimestampMs, privacy: .public) switchedAt=\(switchedAtMs, privacy: .public))")
+                return
+            }
+        }
+
+        // 提取字段（真机 log 验证前先按 spec §1 起草字段名）
+        // spec §0 二次校验：payload 只必含 seats/currentSeatIndex/currentUserId/seatOperate，
+        // roomTempId 可能不在 payload —— 缺失时不 fallback，继续走 seats + 下麦 + 系统消息全流程，
+        // 只跳过 §1 步骤 7 roomInfo.roomTempId 更新（幂等判断失效但不阻塞主路径）
+        let newTempIdOpt = PartyValueNormalizer.intify(payload["roomTempId"])
+
+        // 尝试解 seats 数组（若 payload 内含）
+        var seats: [PartyRoomSeat]? = nil
+        if let arr = payload["seats"] as? [[String: Any]] {
+            if let jsonData = try? JSONSerialization.data(withJSONObject: arr),
+               let decoded = try? JSONDecoder().decode([PartyRoomSeat].self, from: jsonData) {
+                seats = decoded
+            } else {
+                AppLogger.party.error("[PartyStore] 1017 seats decode failed; will fallback via reload")
+            }
+        }
+
+        AppLogger.party.info("[PartyStore] 1017 changeMode tempId=\(newTempIdOpt ?? -1, privacy: .public) hasSeats=\(seats != nil, privacy: .public)")
+        handleRoomModeChanged(newTempId: newTempIdOpt, seats: seats, cause: .remote)
+    }
+
+    /// 1018 排麦通知（spec §2）。4 分支：1=申请 / 2=同意 / 3=拒绝 / 4=放弃
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveQueueSeatUpdate payload: [String: Any], raw: NIMMessage) {
+        _ = raw
+        let operation = PartyValueNormalizer.intify(payload["operation"]) ?? 0
+        let num = PartyValueNormalizer.intify(payload["num"]) ?? 0
+        let userId = PartyValueNormalizer.stringify(payload["userId"]) ?? ""
+        queueSeatNum = num
+
+        let mine = (myUserIdString ?? "") == userId && !userId.isEmpty
+
+        switch operation {
+        case 1:
+            // 申请：非本人 → 面板已开就重拉（保留旧视觉 refresh）；本人不动 inIndex（本地 applyMic 已设）
+            if !mine {
+                // 面板 open 状态：micApplicationsState 已经是 loaded/empty/refreshing 之一
+                let panelOpen: Bool
+                switch micApplicationsState {
+                case .loaded, .empty, .refreshing, .error: panelOpen = true
+                case .idle, .loading: panelOpen = false
+                }
+                if panelOpen {
+                    Task { [weak self] in await self?.refreshMicApplications() }
+                }
+            }
+            AppLogger.party.info("[PartyStore] 1018 op=1 apply user=\(userId, privacy: .public) mine=\(mine, privacy: .public) num=\(num, privacy: .public)")
+        case 2:
+            // 同意：申请者被批准出队 → 面板 splice；本人则清 inIndex + 停 Task
+            spliceMicApplicationsRecord(userId: userId)
+            if mine {
+                myApplyInfo.inIndex = 0
+                applyingTimeoutTask?.cancel()
+                applyingTimeoutTask = nil
+            }
+            AppLogger.party.info("[PartyStore] 1018 op=2 agree user=\(userId, privacy: .public) mine=\(mine, privacy: .public)")
+        case 3:
+            // 拒绝：面板 splice；本人则清 inIndex + 停 Task + 设 rejectedAt 冷却 + toast
+            spliceMicApplicationsRecord(userId: userId)
+            if mine {
+                myApplyInfo.inIndex = 0
+                myApplyInfo.rejectedAt = Date()
+                applyingTimeoutTask?.cancel()
+                applyingTimeoutTask = nil
+                lastError = .underlying(.business(code: "MIC_APPLY_REJECTED", message: L10n.Party.micApplicationRejectedByHost))
+            }
+            AppLogger.party.info("[PartyStore] 1018 op=3 refuse user=\(userId, privacy: .public) mine=\(mine, privacy: .public)")
+        case 4:
+            // 放弃：面板 splice；本人 giveUp 已在 cancelMyMicApplication 里清过 inIndex，这里幂等
+            spliceMicApplicationsRecord(userId: userId)
+            if mine {
+                myApplyInfo.inIndex = 0
+                applyingTimeoutTask?.cancel()
+                applyingTimeoutTask = nil
+            }
+            AppLogger.party.info("[PartyStore] 1018 op=4 giveUp user=\(userId, privacy: .public) mine=\(mine, privacy: .public)")
+        default:
+            AppLogger.party.notice("[PartyStore] 1018 unknown operation=\(operation, privacy: .public) num=\(num, privacy: .public)")
+        }
+    }
+
+    /// 1021 Mic Application 开关广播（spec §2）。同步 `micApplicationSwitchOn` + 公屏系统消息。
+    /// 关闭时若面板打开 → 顺手切回 empty（体验：状态清空避免观众卡在旧列表上）
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveMicApplicationSwitch payload: [String: Any], raw: NIMMessage) {
+        _ = raw
+        let enable = PartyValueNormalizer.intify(payload["enable"]) ?? 0
+        let on = (enable == 1)
+        micApplicationSwitchOn = on
+        AppLogger.party.info("[PartyStore] 1021 micApplicationSwitch enable=\(enable, privacy: .public)")
+
+        // 关时顺手关面板旧列表（避免观众端卡在旧数据）
+        if !on {
+            micApplicationsState = .empty
+            queueSeatNum = 0
+        }
+
+        // 公屏系统消息
+        chatRouter.postSystemMessage(on
+            ? L10n.Party.micApplicationSwitchOnSystemMsg
+            : L10n.Party.micApplicationSwitchOffSystemMsg
+        )
+    }
+
+    /// 从 `micApplicationsState` 已加载列表里 splice 掉指定 userId（1018 op=2/3/4 触发）
+    private func spliceMicApplicationsRecord(userId: String) {
+        guard !userId.isEmpty else { return }
+        let updated: (([PartyMicApplication]) -> [PartyMicApplication]) = { list in
+            list.filter { $0.userId != userId }
+        }
+        switch micApplicationsState {
+        case .loaded(let items):
+            let next = updated(items)
+            micApplicationsState = next.isEmpty ? .empty : .loaded(next)
+        case .refreshing(let items):
+            let next = updated(items)
+            // refreshing 是刷新中间态，splice 后 loader 完成时会覆盖，这里保持 refreshing 视觉
+            micApplicationsState = next.isEmpty ? .empty : .refreshing(next)
+        default:
+            // idle / loading / empty / error 无需 splice
+            break
+        }
     }
 
     /// 从 1001 payload 解 seats 数组（安卓确认 §3.1：顶层 key=`seats`，全量麦位，附 `seatOperate` 变更原因）。

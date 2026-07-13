@@ -38,6 +38,8 @@ struct PartyRoomView: View {
     @State private var activeRoomTool: PartyRoomToolSheetKind? = nil
     /// tools sheet 内 stub 项 tap 时 toast
     @State private var stubToolToast: String? = nil
+    /// E v2 §1：Room Mode 二次确认 sheet 之间共享的 pending tempId（模板 grid 选中 → 弹确认 sheet）
+    @State private var pendingRoomModeTempId: Int? = nil
     /// v9：公告只读 sheet 显隐（对齐 H5 announcement-popup.vue，MVP 只读；房主/房管编辑权限 F 期补）
     @State private var showAnnouncement: Bool = false
     /// v9：更多菜单 action sheet 显隐（对齐 H5 more-tool-popup.vue Minimize/Exit）
@@ -178,21 +180,30 @@ struct PartyRoomView: View {
             roomName: store.roomInfo?.roomName ?? L10n.Party.defaultRoomName,
             roomId: store.roomInfo?.id ?? roomId,
             anchorAvatarURL: store.roomInfo?.roomAvatar,
-            heatText: heatText,
-            viewerCountText: "\(store.roomInfo?.onlineCount ?? 0)",
+            wealthText: heatText,
+            honorText: heatText,
+            audienceCountText: "\(store.roomInfo?.onlineCount ?? 0)",
             isFollowing: isFollowingOwner,
-            // v3：判"自己的房间" —— selfRole == .owner（对齐 PartyRoomInfo.selfRoleType 优先 roomRoleType，兜底 ownerId 比较）
             isSelfRoom: store.selfRole == .owner,
-            // v9：房主+房管有管理权限（对齐 H5 header-wrap.vue v-if=computedRoomRoleType!==NORMAL）
             canManage: store.selfRole == .owner || store.selfRole == .admin,
+            canStartPk: (store.selfRole == .owner || store.selfRole == .admin) && (store.roomInfo?.roomTempIdInt == 1),
             onFollowTap: handleFollowTap,
+            onPkTap: handlePkTap,
             onAnnouncementTap: handleAnnouncementTap,
             onShareTap: handleShareTap,
             onManagementTap: handleManagementTap,
             onMoreTap: handleMoreTap,
-            onHeatTap: handleHeatTap,
+            onRankTap: handleRankTap,
             onViewerTap: handleViewerTap
         )
+    }
+
+    private func handlePkTap() {
+        AppLogger.party.notice("[PartyRoom] pk tapped (TODO G-milestone PK flow)")
+    }
+
+    private func handleRankTap(_ kind: PartyRankKind) {
+        AppLogger.party.notice("[PartyRoom] rank tapped kind=\(String(describing: kind), privacy: .public) (TODO F-milestone rank sheet)")
     }
 
     private var heatText: String {
@@ -577,6 +588,22 @@ struct PartyRoomView: View {
                         stubToolToast = L10n.Party.toolComingSoon
                     }
                 },
+                onTapRoomMode: {
+                    // E v2 §1：切 Room Mode 模板 grid sheet
+                    Task { @MainActor in
+                        activeRoomTool = nil
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        activeRoomTool = .roomMode
+                    }
+                },
+                onTapMicApplication: {
+                    // E v2 §2：切 Mic Application 申请列表 sheet
+                    Task { @MainActor in
+                        activeRoomTool = nil
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        activeRoomTool = .micApplicationList
+                    }
+                },
                 onTapStub: { label in
                     // 关 sheet + 顶部 toast
                     Task { @MainActor in
@@ -618,6 +645,92 @@ struct PartyRoomView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Theme.Palette.partyListBackground.ignoresSafeArea())
                 .preferredColorScheme(.dark)
+        case .roomMode:
+            // E v2 §1 + §3 Sheet Mount Hoist：Room Mode 模板 grid → onConfirmRequest 上抛 → 切 .roomModeConfirm
+            NavigationStack {
+                PartyRoomModeSheet(
+                    store: store,
+                    userLevel: AnchorInfoStore.shared.mine?.level ?? 0,
+                    onConfirmRequest: { tempId in
+                        Task { @MainActor in
+                            activeRoomTool = nil
+                            try? await Task.sleep(nanoseconds: 350_000_000)
+                            pendingRoomModeTempId = tempId
+                            activeRoomTool = .roomModeConfirm
+                        }
+                    }
+                )
+            }
+            .preferredColorScheme(.dark)
+        case .roomModeConfirm:
+            // E v2 §1：二次确认 → onConfirm 调 store.switchRoomMode 完成切模板
+            PartyRoomModeConfirmSheet(
+                tempId: pendingRoomModeTempId ?? 0,
+                tempName: nil,
+                onCancel: {
+                    activeRoomTool = nil
+                    pendingRoomModeTempId = nil
+                },
+                onConfirm: {
+                    guard let t = pendingRoomModeTempId else {
+                        activeRoomTool = nil
+                        return
+                    }
+                    Task {
+                        let before = store.lastError
+                        await store.switchRoomMode(to: t)
+                        // spec §4 R4：API 失败 → 弹窗保持 + lastError alert 展示；成功才关
+                        let apiFailed = (store.lastError != nil) && (store.lastError?.errorDescription != before?.errorDescription)
+                        await MainActor.run {
+                            if !apiFailed {
+                                activeRoomTool = nil
+                                pendingRoomModeTempId = nil
+                            }
+                        }
+                    }
+                }
+            )
+            .presentationDetents([.height(200)])
+        case .micApplicationList:
+            NavigationStack {
+                PartyMicApplicationSheet(store: store, onTapSwitchToggle: {
+                    // 先判 autoEnter*Application flag：首次切换弹协议确认；二次直接调 API
+                    let willEnable = !store.micApplicationSwitchOn
+                    let alreadyConfirmed = willEnable ? store.autoEnterOnApplication : store.autoEnterOffApplication
+                    if alreadyConfirmed {
+                        Task { await store.toggleMicApplicationSwitch(enable: willEnable) }
+                        return
+                    }
+                    Task { @MainActor in
+                        activeRoomTool = nil
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        activeRoomTool = .micApplicationSwitchConfirm
+                    }
+                })
+            }
+            .preferredColorScheme(.dark)
+            .presentationDetents([.medium, .large])
+        case .micApplicationSwitchConfirm:
+            // E v2 §2 A4：首次切换 Mic Application 开关的协议确认（confirm 后本地 flag 置 true）
+            PartyMicApplicationSwitchConfirmSheet(
+                enable: !store.micApplicationSwitchOn,
+                onCancel: { activeRoomTool = nil },
+                onConfirm: {
+                    let willEnable = !store.micApplicationSwitchOn
+                    Task {
+                        await store.toggleMicApplicationSwitch(enable: willEnable)
+                        await MainActor.run {
+                            if willEnable {
+                                store.autoEnterOnApplication = true
+                            } else {
+                                store.autoEnterOffApplication = true
+                            }
+                            activeRoomTool = nil
+                        }
+                    }
+                }
+            )
+            .presentationDetents([.height(220)])
         }
     }
 

@@ -297,6 +297,7 @@
 "giftPicker.all"                     = "Tümü";
 "giftPicker.recharge"                = "Yükle";
 "giftPicker.recharge.toast"          = "Yükleme yakında geliyor";
+"giftPicker.sent.toast"              = "Hediye gönderildi";
 
 // MARK: - L-spec-愿望单设置页 v1
 "wishSetting.navTitle"               = "Dilek Ayarları";
@@ -980,6 +981,35 @@
 "party.error.passwordWrong"              = "Yanlış oda şifresi";
 "party.error.mediaSwitchFailed"          = "Mikrofon/kamera değiştirilemedi";
 
+/* MARK: - E spec §3 Room Mode */
+"party.roomMode.sheetTitle"              = "Oda Modu";
+"party.roomMode.liveAndVoiceTab"         = "Canlı+Ses";
+"party.roomMode.voiceOnlyTab"            = "Ses";
+"party.roomMode.confirmTitle"            = "Oda Modu Değiştir?";
+"party.roomMode.confirmBody"             = "Tüm kullanıcılar koltuklarından kaldırılacak.";
+"party.roomMode.confirmSwitch"           = "Değiştir";
+"party.roomMode.confirmCancel"           = "İptal";
+"party.roomMode.upgradeGuide"            = "Bu modu açmak için %d seviyeye ulaşın";
+"party.roomMode.systemMsg"               = "Oda düzeni güncellendi. Tüm kullanıcılar koltuklarından kaldırıldı. Sohbete devam etmek için yeni bir koltuk seçin!";
+"party.roomMode.emptyState"              = "Kullanılabilir mod yok";
+"party.roomMode.loadError"               = "Modlar yüklenemedi";
+
+/* MARK: - E spec §3 Mic Application */
+"party.micApplication.sheetTitle"        = "Mikrofon Başvuruları";
+"party.micApplication.emptyState"        = "Başvuru yok";
+"party.micApplication.approve"           = "Onayla";
+"party.micApplication.reject"            = "Reddet";
+"party.micApplication.noSeatAvailable"   = "Uygun koltuk yok, birinin ayrılmasını bekleyin";
+"party.micApplication.rejectedCooldown"  = "Lütfen daha sonra tekrar deneyin";
+"party.micApplication.rejectedByHost"    = "Koltuk isteğiniz reddedildi";
+"party.micApplication.timeoutAutoGiveUp" = "Başvuru zaman aşımına uğradı";
+"party.micApplication.switchOnTitle"     = "Mikrofon Başvurularını Etkinleştir?";
+"party.micApplication.switchOffTitle"    = "Mikrofon Başvurularını Devre Dışı Bırak?";
+"party.micApplication.switchOnBody"      = "Kullanıcılar bir koltuğa katılma isteği gönderebilir. Her isteği onaylamanız gerekecek.";
+"party.micApplication.switchOffBody"     = "Kullanıcılar artık koltuk talep edemez.";
+"party.micApplication.switchOnSystemMsg" = "Mikrofon başvuruları açıldı";
+"party.micApplication.switchOffSystemMsg" = "Mikrofon başvuruları kaldırıldı";
+
 /* MARK: - H-0 用户详情页 */
 "userProfile.uid.prefix"                 = "uid: ";
 "userProfile.like.label"                 = "Beğeni Sayısı";
@@ -1229,6 +1259,9 @@
 "partyRoom.a11y.more"                    = "Daha fazla";
 "partyRoom.a11y.heat"                    = "Sıcaklık";
 "partyRoom.a11y.viewers"                 = "İzleyiciler";
+"partyRoom.a11y.wealthRank"              = "Servet sıralaması";
+"partyRoom.a11y.honorRank"               = "Onur sıralaması";
+"partyRoom.a11y.pk"                      = "PK başlat";
 "partyRoom.tab.all"                      = "Tümü";
 "partyRoom.tab.chat"                     = "Sohbet";
 "partyRoom.tab.gift"                     = "Hediye";
@@ -1258,3 +1291,7 @@
 "partyRoom.toolMenu.startPk"             = "PK Başlat";
 "partyRoom.toolMenu.luckyNumber"         = "Şanslı Sayı";
 "partyRoom.toolMenu.roomMute"            = "Odayı Sessize Al";
+"partyRoom.seat.locked"                  = "Koltuk kilitli";
+"partyRoom.seat.videoNeedsInvite"        = "Oda Sahibi/Yöneticiden davet gerekli";
+"partyRoom.switchSeat.title"             = "Bu koltuğa geçilsin mi?";
+"partyRoom.switchSeat.confirm"           = "Geç";

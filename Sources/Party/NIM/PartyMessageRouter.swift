@@ -91,6 +91,20 @@ final class PartyMessageRouter: MessageRouter {
         case .userEnterVehicle:
             // v23（2026-07-13）用户进场座驾动画 attachType=1004：派对房座驾 SVGA/MP4 全屏特效
             delegate?.partyRoomChat(chat, didReceiveEnterAnimation: payload, raw: m)
+        case .changeMode:
+            // E v2 §1 Room Mode 切模板广播；msgTimestampMs 用于步骤 1 乱序判丢（vs lastRoomTempSwitchAt）。
+            // 真机 log 校对字段名（im-payload-real-log-over-code-assumption rule）：
+            //   payloadKeys=\(Array(payload.keys)) 期望含 seats / currentSeatIndex / currentUserId / seatOperate / roomTempId
+            AppLogger.party.info("[PartyRouter] 1017 changeMode payloadKeys=\(Array(payload.keys), privacy: .public)")
+            delegate?.partyRoomChat(chat, didReceiveModeChange: payload, msgTimestampMs: Int64(m.timestamp * 1000))
+        case .queueSeatUpdate:
+            // E v2 §2 Mic Application 排麦通知；payload 期望 { num, operation, userId }。
+            AppLogger.party.info("[PartyRouter] 1018 queueSeatUpdate payloadKeys=\(Array(payload.keys), privacy: .public)")
+            delegate?.partyRoomChat(chat, didReceiveQueueSeatUpdate: payload, raw: m)
+        case .micApplicationSwitch:
+            // E v2 §2 Mic Application 开关广播；payload 期望 { enable: Int }。
+            AppLogger.party.info("[PartyRouter] 1021 micApplicationSwitch payloadKeys=\(Array(payload.keys), privacy: .public)")
+            delegate?.partyRoomChat(chat, didReceiveMicApplicationSwitch: payload, raw: m)
         case .inviteVideoSeat:
             handleVideoSeatInvite(payload: payload, raw: m, chat: chat)
         case .inviteVideoSeatAccept:
@@ -144,6 +158,18 @@ final class PartyMessageRouter: MessageRouter {
             return
         }
         delegate?.partyRoomChat(chat, didReceiveVideoSeatInvite: invite)
+    }
+
+    // MARK: - E v2：本地系统消息投递（Room Mode 切换 / Mic Application 开关公屏系统消息）
+
+    /// 让 Store 层业务事件（切模板成功、Mic Application 开关广播）通过 router 投递到公屏。
+    /// 路由到 `chatManager.appendLocalSystemMessage(_:)`；chatManager 未 wired 时 log 后 no-op。
+    func postSystemMessage(_ text: String) {
+        guard let chat = chatManager else {
+            AppLogger.party.notice("[PartyRouter] postSystemMessage skip: chatManager nil text=\(text, privacy: .public)")
+            return
+        }
+        chat.appendLocalSystemMessage(text)
     }
 
     // MARK: - M5 备用路径：MessageRouter protocol

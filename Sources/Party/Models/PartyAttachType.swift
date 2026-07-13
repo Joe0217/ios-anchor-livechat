@@ -33,6 +33,15 @@ enum PartyAttachType: Int {
     /// TODO: [im-payload-real-log-over-code-assumption] 首次真机接入需通过 payloadKeys log 校对字段名
     case userEnterVehicle = 1004
 
+    // MARK: - Room Mode / Mic Application（E v2 扩展）
+
+    /// 1017 切换房间模板广播（gzip+Base64；payload `{ seats, currentSeatIndex, currentUserId, seatOperate }`）
+    case changeMode = 1017
+    /// 1018 排麦通知（payload `{ num, operation, userId }`；operation 1=申请/2=同意/3=拒绝/4=放弃）
+    case queueSeatUpdate = 1018
+    /// 1021 开启/关闭申请上麦开关（payload `{ enable: Int }` 0/1）
+    case micApplicationSwitch = 1021
+
     // MARK: - 视频位邀请响应（MVP 9 类;主动发起 inviteOnSeat 推 F）
 
     /// 1040 邀请上视频位（被邀请用户收到 → PartyStore.pendingVideoSeatInvite 弹窗）
@@ -74,7 +83,9 @@ enum PartyKnownButUnhandledAttachType {
         // 派对房 F/H/I/J 期范围
         -10, -11,           // EMOJI / EMOJI_PLAY
         // v23 移除 1004（原 F 期占位）—— 已接入 .userEnterVehicle 用于座驾进场特效
-        1009, 1010, 1011, 1013, 1014, 1017, 1018, 1019, 1021,
+        // v2（2026-07-14）移除 1017 / 1018 / 1021 —— 已接入 changeMode / queueSeatUpdate / micApplicationSwitch
+        // 保留 1020（H5 空实现，iOS 同步不消费）
+        1009, 1010, 1011, 1013, 1014, 1019, 1020,
         1022, 1023, 1024, 1025, 1026, 1049,
         1050, 1051, 1052,   // LuckyNumber
         1100, 1101, 1102, 1103, 1104, 1105, 1106,

@@ -54,6 +54,15 @@ struct PartyRoomInfo: Codable, Equatable {
     /// 房间关注态（对齐 H5 `currentPartyInfo.isFollowOwner`；仅 `room/enter` 接口返）。
     /// `nil` 视为未关注（保守 fallback）。
     let isFollowOwner: Bool?
+    /// 财富榜当日累计贡献值（对齐 H5 `currentPartyInfo.contributionCostNum`；房内顶部统计条轮播 1）。
+    /// ⚠️ dev 实测后端返 **String**（`"0"`），非 Int；按 [ios-decode-userid-compat.md] rule 保留 String? + 派生 Int。
+    let contributionCostNum: String?
+    /// 荣耀榜当日累计荣耀值（对齐 H5 `currentPartyInfo.honorDailyTotal`；房内顶部统计条轮播 2）。
+    /// ⚠️ dev 实测后端返 **String**（`"0"`），非 Int；同上策略。
+    let honorDailyTotal: String?
+    /// 观众数（对齐 H5 `currentPartyInfo.audienceNum`；独立于 `onlineUserList.count`——
+    /// 后者是预览用户前 N 条，前者是真实观众总数）
+    let audienceNum: Int?
     /// 麦位列表（dev 实测 `room/enter` 接口返字段名是 `roomSeatList`，与 spec 反推的 seatList 不符）；
     /// `room/list` 不返麦位列表。
     let roomSeatList: [PartyRoomSeat]?
@@ -64,6 +73,12 @@ struct PartyRoomInfo: Codable, Equatable {
     /// 衍生：roomTempId Int 形式（后端 DTO 是 Long，但 HTTP 响应给字符串；调上下麦/respondInvite 时需 Int）。
     /// fallback 1（dev 主流模板 ID）；若 String 不可解析为 Int 同样退化到 1。
     var roomTempIdInt: Int { Int(roomTempId ?? "") ?? 1 }
+
+    /// 衍生：贡献值 Int 形式（UI 用 PartyNumberFormat.compact(Int) 显示）；fallback 0。
+    var contributionCostNumInt: Int { Int(contributionCostNum ?? "") ?? 0 }
+
+    /// 衍生：荣耀值 Int 形式（UI 同上）；fallback 0。
+    var honorDailyTotalInt: Int { Int(honorDailyTotal ?? "") ?? 0 }
 
     /// SwiftUI ForEach 用稳定 Identity（review 202606252033 P1-5）。
     /// `id` 是 String? 可能 nil；多个 nil 同 Identity 会让 ForEach diff 错乱。
@@ -98,13 +113,18 @@ struct PartyRoomInfo: Codable, Equatable {
         return owner == me ? .owner : .audience
     }
 
-    /// 房主保存设置后回写 4 字段（其他字段保留）。传 nil 表示不改；传新值覆盖。
+    /// 房主保存设置后回写字段（其他字段保留）。传 nil 表示不改；传新值覆盖。
     /// SwiftUI Store 侧用：`store.roomInfo = info.withUpdated(...)`
+    ///
+    /// v2（2026-07-14）追加 `roomTempId` 参数——E spec §1 Room Mode 切模板成功后，
+    /// PartyStore.handleRoomModeChanged 需回写 `roomInfo.roomTempId` 让下次 IM 幂等判断能命中
+    /// （否则 `roomTempId==newTempId` 幂等保护恒为 false，重复触发下麦 hook）。
     func withUpdated(
         roomName: String? = nil,
         roomAvatar: String? = nil,
         greetingMessage: String? = nil,
-        roomLanguage: String? = nil
+        roomLanguage: String? = nil,
+        roomTempId: String? = nil
     ) -> PartyRoomInfo {
         PartyRoomInfo(
             id: id,
@@ -126,7 +146,7 @@ struct PartyRoomInfo: Codable, Equatable {
             createTime: createTime,
             needPassword: needPassword,
             snapshotId: snapshotId,
-            roomTempId: roomTempId,
+            roomTempId: roomTempId ?? self.roomTempId,
             roomTempType: roomTempType,
             rangIndex: rangIndex,
             showChest: showChest,
@@ -134,6 +154,9 @@ struct PartyRoomInfo: Codable, Equatable {
             pkStatus: pkStatus,
             pkId: pkId,
             isFollowOwner: isFollowOwner,
+            contributionCostNum: contributionCostNum,
+            honorDailyTotal: honorDailyTotal,
+            audienceNum: audienceNum,
             roomSeatList: roomSeatList
         )
     }

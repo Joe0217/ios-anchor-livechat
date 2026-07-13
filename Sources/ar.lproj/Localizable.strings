@@ -297,6 +297,7 @@
 "giftPicker.all"                     = "الكل";
 "giftPicker.recharge"                = "إعادة الشحن";
 "giftPicker.recharge.toast"          = "إعادة الشحن قادمة قريبًا";
+"giftPicker.sent.toast"              = "تم إرسال الهدية";
 
 // MARK: - L-spec-愿望单设置页 v1
 "wishSetting.navTitle"               = "إعدادات قائمة الأمنيات";
@@ -980,6 +981,35 @@
 "party.error.passwordWrong"              = "كلمة مرور الغرفة غير صحيحة";
 "party.error.mediaSwitchFailed"          = "فشل تبديل الميكروفون/الكاميرا";
 
+/* MARK: - E spec §3 Room Mode */
+"party.roomMode.sheetTitle"              = "وضع الغرفة";
+"party.roomMode.liveAndVoiceTab"         = "بث مباشر+صوت";
+"party.roomMode.voiceOnlyTab"            = "صوت";
+"party.roomMode.confirmTitle"            = "تبديل وضع الغرفة؟";
+"party.roomMode.confirmBody"             = "سيتم نقل جميع المستخدمين من مقاعدهم.";
+"party.roomMode.confirmSwitch"           = "تبديل";
+"party.roomMode.confirmCancel"           = "إلغاء";
+"party.roomMode.upgradeGuide"            = "الوصول إلى المستوى %d لفتح هذا الوضع";
+"party.roomMode.systemMsg"               = "تم تحديث تخطيط الغرفة. تم نقل جميع المستخدمين من مقاعدهم. الرجاء اختيار مقعد جديد للمتابعة!";
+"party.roomMode.emptyState"              = "لا توجد أوضاع متاحة";
+"party.roomMode.loadError"               = "فشل تحميل الأوضاع";
+
+/* MARK: - E spec §3 Mic Application */
+"party.micApplication.sheetTitle"        = "طلبات المايك";
+"party.micApplication.emptyState"        = "لا توجد طلبات";
+"party.micApplication.approve"           = "موافقة";
+"party.micApplication.reject"            = "رفض";
+"party.micApplication.noSeatAvailable"   = "لا يوجد مقعد متاح، يرجى انتظار مغادرة شخص ما";
+"party.micApplication.rejectedCooldown"  = "الرجاء المحاولة لاحقاً";
+"party.micApplication.rejectedByHost"    = "تم رفض طلبك للمقعد";
+"party.micApplication.timeoutAutoGiveUp" = "انتهت مهلة الطلب";
+"party.micApplication.switchOnTitle"     = "تمكين طلبات المايك؟";
+"party.micApplication.switchOffTitle"    = "تعطيل طلبات المايك؟";
+"party.micApplication.switchOnBody"      = "يمكن للمستخدمين طلب الانضمام إلى مقعد. ستحتاج إلى الموافقة على كل طلب.";
+"party.micApplication.switchOffBody"     = "لن يتمكن المستخدمون من طلب المقاعد بعد الآن.";
+"party.micApplication.switchOnSystemMsg" = "تم تشغيل طلبات المايك";
+"party.micApplication.switchOffSystemMsg" = "تمت إزالة طلبات المايك";
+
 /* MARK: - H-0 用户详情页 */
 "userProfile.uid.prefix"                 = "المعرف: ";
 "userProfile.like.label"                 = "عدد الإعجابات";
@@ -1229,6 +1259,9 @@
 "partyRoom.a11y.more"                    = "المزيد";
 "partyRoom.a11y.heat"                    = "الحرارة";
 "partyRoom.a11y.viewers"                 = "المشاهدون";
+"partyRoom.a11y.wealthRank"              = "قائمة الثروة";
+"partyRoom.a11y.honorRank"               = "قائمة الشرف";
+"partyRoom.a11y.pk"                      = "بدء PK";
 "partyRoom.tab.all"                      = "الكل";
 "partyRoom.tab.chat"                     = "الدردشة";
 "partyRoom.tab.gift"                     = "الهدية";
@@ -1258,3 +1291,7 @@
 "partyRoom.toolMenu.startPk"             = "بدء PK";
 "partyRoom.toolMenu.luckyNumber"         = "الرقم المحظوظ";
 "partyRoom.toolMenu.roomMute"            = "كتم صوت الغرفة";
+"partyRoom.seat.locked"                  = "المقعد مقفل";
+"partyRoom.seat.videoNeedsInvite"        = "يتطلب دعوة من مالك الغرفة/المسؤول";
+"partyRoom.switchSeat.title"             = "التبديل إلى هذا المقعد؟";
+"partyRoom.switchSeat.confirm"           = "تبديل";

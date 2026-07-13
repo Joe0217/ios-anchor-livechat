@@ -13,18 +13,35 @@ struct PartyRoomAnchorBar: View {
     let roomName: String
     let roomId: String
     let anchorAvatarURL: String?
-    let heatText: String
-    let viewerCountText: String
+    /// v12：房主头像装饰框 URL（对齐 H5 head-frame.vue，源自 `apiPartyGetUser.headFrameSmallImg`）
+    /// `.svga` 结尾 iOS 暂不支持渲染（fallback 无装饰）；.png/.webp 走 CachedAsyncImage
+    let headFrameURL: String?
+    /// v11 对齐 H5 header-wrap.vue：统计条从 heat+viewers 改为 wealth/honor 轮播 + audience
+    let wealthText: String
+    let honorText: String
+    let audienceCountText: String
     let isFollowing: Bool
     /// v3：自己的房间（房主本人）不显示关注按钮（对齐 H5 用户端 index.vue 同 owner 隐藏 follow）
     let isSelfRoom: Bool
+    /// 是否有管理权限（房主或房管）—— 决定房管按钮是否显示（对齐 H5 header-wrap.vue v-if=computedRoomRoleType!==NORMAL）
+    let canManage: Bool
+    /// v12：PK 入口是否可见（对齐 H5 `canStartPk`：canManage && roomTempId==1 && battleStore.isFunctionEnabled）
+    /// iOS G 里程碑接 PK 前用 `canManage && roomTempIdInt == 1` 兜底（不判 feature flag）
+    let canStartPk: Bool
     let onFollowTap: () -> Void
+    /// v12：PK 入口点击（对齐 H5 `handleItemNoThrottleFn('startPk')`；iOS G 期接 PK 流程前暂 log/toast）
+    let onPkTap: () -> Void
     let onAnnouncementTap: () -> Void
     let onShareTap: () -> Void
     let onManagementTap: () -> Void
     let onMoreTap: () -> Void
-    let onHeatTap: () -> Void
+    /// v11：财富/荣耀榜入口（H5 里点击弹 RoomRank sheet 分别 type=rank/honor；iOS 待 F 期做榜单 sheet）
+    let onRankTap: (PartyRankKind) -> Void
+    /// v11：观众数入口（对齐 H5 userRank sheet；iOS 待 F 期）
     let onViewerTap: () -> Void
+
+    /// v11：轮播索引（0=财富榜，1=荣耀榜）；5s 自动切换，对齐 H5 v-swiper autoplay=5000
+    @State private var rankSwiperIndex: Int = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -34,6 +51,10 @@ struct PartyRoomAnchorBar: View {
                 // Component 11 关注按钮紧贴房间信息（房名/ID 右侧）；自己房间不显示（isSelfRoom）
                 if !isSelfRoom {
                     followButton
+                }
+                // v12：PK 入口（房主/房管 + roomTempId=1 + feature flag 时显示）
+                if canStartPk {
+                    pkButton
                 }
                 Spacer(minLength: 8)
                 toolbarIcons
@@ -113,6 +134,21 @@ struct PartyRoomAnchorBar: View {
         return UIImage(named: "partyFollowUnchecked") != nil ? "partyFollowUnchecked" : "partyFollowCheck"
     }
 
+    // MARK: - PK 入口（v12 对齐 H5 header-wrap.vue L167 `pk-room-top-icon.webp`）
+
+    private var pkButton: some View {
+        Button(action: onPkTap) {
+            // 切图未提供，fallback 到 iOS 现有 `livePkIcon`（直播 PK icon）视觉近似；等 pk-room-top-icon asset 补齐后自动切换
+            Image(UIImage(named: "partyPkTopIcon") != nil ? "partyPkTopIcon" : "livePkIcon")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 24, height: 24)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.PartyRoom.a11yPk)
+    }
+
     // MARK: - 工具栏 4 个白线图标
 
     private var toolbarIcons: some View {
@@ -123,9 +159,12 @@ struct PartyRoomAnchorBar: View {
             iconButton(asset: "partyIconShare",
                        label: L10n.PartyRoom.a11yShare,
                        action: onShareTap)
-            iconButton(asset: "partyIconManagement",
-                       label: L10n.PartyRoom.a11yManagement,
-                       action: onManagementTap)
+            // 管理按钮：仅房主/房管显示（对齐 H5 header-wrap.vue v-if=computedRoomRoleType!==NORMAL）
+            if canManage {
+                iconButton(asset: "partyIconManagement",
+                           label: L10n.PartyRoom.a11yManagement,
+                           action: onManagementTap)
+            }
             iconButton(asset: "partyIconMore",
                        label: L10n.PartyRoom.a11yMore,
                        action: onMoreTap)
@@ -148,54 +187,90 @@ struct PartyRoomAnchorBar: View {
         .accessibilityLabel(label)
     }
 
-    // MARK: - 收益 / 观众数行
+    // MARK: - 排名行（v11：对齐 H5 header-wrap.vue 第二行 h-24 · 财富/荣耀 5s 轮播 + 观众数）
 
     private var statRow: some View {
         HStack(spacing: 4) {
-            Button(action: onHeatTap) {
-                HStack(spacing: 4) {
-                    Image("partyTrophy")
-                        .resizable().scaledToFit()
-                        .frame(width: Theme.Metric.partyRoomStatIconSize,
-                               height: Theme.Metric.partyRoomStatIconSize)
-                    Text(heatText)
-                        .font(Theme.Typography.partyRoomHeatNumber)
-                        .foregroundColor(Theme.Palette.partyRoomHeatGold)
-                    Image("partyArrowYellow")
-                        .resizable().scaledToFit()
-                        .frame(width: Theme.Metric.partyRoomStatArrowSize,
-                               height: Theme.Metric.partyRoomStatArrowSize)
-                }
-                .padding(.vertical, 2)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L10n.PartyRoom.a11yHeat)
-
+            rankSwiperButton
             Spacer()
-
-            Button(action: onViewerTap) {
-                HStack(spacing: 4) {
-                    Image("partyIconViewer")
-                        .resizable()
-                        .renderingMode(.template)
-                        .foregroundColor(Theme.Palette.partyRoomViewerCount)
-                        .frame(width: Theme.Metric.partyRoomStatIconSize,
-                               height: Theme.Metric.partyRoomStatIconSize)
-                    Text(viewerCountText)
-                        .font(Theme.Typography.partyRoomViewerNumber)
-                        .foregroundColor(Theme.Palette.partyRoomViewerCount)
-                    Image("partyArrowYellow")
-                        .resizable().scaledToFit()
-                        .frame(width: Theme.Metric.partyRoomStatArrowSize,
-                               height: Theme.Metric.partyRoomStatArrowSize)
-                }
-                .padding(.vertical, 2)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(L10n.PartyRoom.a11yViewers)
+            viewerButton
         }
         .padding(.vertical, Theme.Metric.partyRoomStatRowV)
     }
+
+    /// 左侧：icon_rank + 数值轮播（contribution ↔ honor 5s 自切）+ 右黄箭头
+    /// 点击 → onRankTap(当前展示的榜单类型)
+    private var rankSwiperButton: some View {
+        Button {
+            let kind: PartyRankKind = (rankSwiperIndex == 0) ? .wealth : .honor
+            onRankTap(kind)
+        } label: {
+            HStack(spacing: 4) {
+                Image("partyTrophy")
+                    .resizable().scaledToFit()
+                    .frame(width: Theme.Metric.partyRoomStatIconSize,
+                           height: Theme.Metric.partyRoomStatIconSize)
+                // 数值区固定宽度避免轮播时布局跳动
+                ZStack {
+                    Text(rankSwiperIndex == 0 ? wealthText : honorText)
+                        .font(Theme.Typography.partyRoomHeatNumber)
+                        .foregroundColor(Theme.Palette.partyRoomHeatGold)
+                        .lineLimit(1)
+                        .id(rankSwiperIndex) // 触发 transition
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+                .frame(minWidth: 40, alignment: .leading)
+                .clipped()
+                Image("partyArrowYellow")
+                    .resizable().scaledToFit()
+                    .frame(width: Theme.Metric.partyRoomStatArrowSize,
+                           height: Theme.Metric.partyRoomStatArrowSize)
+            }
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(rankSwiperIndex == 0 ? L10n.PartyRoom.a11yWealthRank : L10n.PartyRoom.a11yHonorRank)
+        .task {
+            // 5s 循环切换（对齐 H5 v-swiper autoplay=5000）；view dismount 时 task 自动 cancel
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                if Task.isCancelled { return }
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    rankSwiperIndex = (rankSwiperIndex + 1) % 2
+                }
+            }
+        }
+    }
+
+    /// 右侧：观众 icon + audienceCountText + 右灰箭头
+    private var viewerButton: some View {
+        Button(action: onViewerTap) {
+            HStack(spacing: 4) {
+                Image("partyIconViewer")
+                    .resizable()
+                    .renderingMode(.template)
+                    .foregroundColor(Theme.Palette.partyRoomViewerCount)
+                    .frame(width: Theme.Metric.partyRoomStatIconSize,
+                           height: Theme.Metric.partyRoomStatIconSize)
+                Text(audienceCountText)
+                    .font(Theme.Typography.partyRoomViewerNumber)
+                    .foregroundColor(Theme.Palette.partyRoomViewerCount)
+                Image("partyArrowYellow")
+                    .resizable().scaledToFit()
+                    .frame(width: Theme.Metric.partyRoomStatArrowSize,
+                           height: Theme.Metric.partyRoomStatArrowSize)
+            }
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.PartyRoom.a11yViewers)
+    }
+}
+
+/// v11：榜单类型（对齐 H5 `showRankPopupType` 分档：rank=财富榜 / honor=荣耀榜 / onlineUser=观众榜）
+enum PartyRankKind {
+    case wealth
+    case honor
 }

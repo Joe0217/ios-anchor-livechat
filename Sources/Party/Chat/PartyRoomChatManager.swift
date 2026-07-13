@@ -234,6 +234,26 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
         trimIfNeeded()
     }
 
+    /// 追加本地系统消息（E v2 §1/§2：切模板 / Mic Application 开关广播后公屏落一条业务系统消息）。
+    ///
+    /// 当前 `PartyMsgType` 无独立 `.system` 案例；MVP 阶段暂借 `.text` 视觉外壳（isLocal=true / role=nil /
+    /// nickname 空 → UI 层可通过这三特征识别为系统消息，未来 UI 细化时再扩 `.system` case）。
+    /// 不写 NIM——本地消息不广播到远端。
+    func appendLocalSystemMessage(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let msg = PartyChatMessage(
+            userId: nil,
+            nickname: nil,
+            role: nil,
+            text: trimmed,
+            msgType: .text,
+            isLocal: true,
+            timestamp: Date().timeIntervalSince1970
+        )
+        push(msg)
+    }
+
     /// 更新指定消息的 translation 字段(对齐 H5 messageScroller.vue translatedClick + PublicChatListView.setTranslation)。
     /// 命中不到 msgId 或非 `.text` msgType 时静默 no-op。
     func setTranslation(messageId: UUID, translation: String) {
@@ -369,4 +389,12 @@ protocol PartyRoomChatManagerDelegate: AnyObject {
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveEnterAnimation payload: [String: Any], raw: NIMMessage)
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveVideoSeatInvite invite: PartyVideoSeatInvite)
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveInviteResult result: PartyVideoSeatInviteResult)
+
+    // E v2（2026-07-14）Room Mode + Mic Application IM 消费 callback
+    /// 1017 切模板广播；`msgTimestampMs` 用于 spec §1 IM 处理步骤 1 乱序判丢（vs `lastRoomTempSwitchAt`）
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveModeChange payload: [String: Any], msgTimestampMs: Int64)
+    /// 1018 排麦通知；payload 内 `{ num, operation, userId }`（真机验证前起草）
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveQueueSeatUpdate payload: [String: Any], raw: NIMMessage)
+    /// 1021 Mic Application 开关广播；payload 内 `{ enable: Int }`（0/1）
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveMicApplicationSwitch payload: [String: Any], raw: NIMMessage)
 }

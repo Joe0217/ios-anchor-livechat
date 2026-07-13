@@ -3,6 +3,12 @@ import SwiftUI
 /// 派对房 tools sheet 枚举（PartyRoomView 用 enum-driven 单 sheet 切换）
 enum PartyRoomToolSheetKind: String, Identifiable {
     case tools, settings, blocklist
+    // spec §3 Sheet Mount Hoist 新增（swiftui-fullscreencover-hoist rule）：
+    // Room Mode + Mic Application 相关 modal 全部 hoist 到 PartyRoomView 单一 enum
+    case roomMode
+    case roomModeConfirm
+    case micApplicationList
+    case micApplicationSwitchConfirm
     var id: String { rawValue }
 }
 
@@ -21,6 +27,10 @@ struct PartyRoomToolsSheet: View {
     let isPlatformAdmin: Bool
     let onTapSettings: () -> Void
     let onTapBlocklist: () -> Void
+    /// spec §3 wire：Room Mode item tap → 关本 sheet + 350ms 后打开 activeRoomTool = .roomMode
+    let onTapRoomMode: () -> Void
+    /// spec §3 wire：Mic Application item tap → 关本 sheet + 350ms 后打开 activeRoomTool = .micApplicationList
+    let onTapMicApplication: () -> Void
     /// 其他 stub 项 tap 通用回调（View 可 toast "Coming soon"）
     let onTapStub: (String) -> Void
 
@@ -48,11 +58,11 @@ struct PartyRoomToolsSheet: View {
                         onTapSettings()
                     }
                     toolItem(icon: "hand.raised.fill", label: L10n.Party.toolMicApplication) {
-                        onTapStub(L10n.Party.toolMicApplication)
+                        onTapMicApplication()
                     }
                     if isOwner {
                         toolItem(icon: "square.grid.2x2.fill", label: L10n.Party.toolRoomMode) {
-                            onTapStub(L10n.Party.toolRoomMode)
+                            onTapRoomMode()
                         }
                     }
                     toolItem(icon: "person.crop.circle.badge.minus", label: L10n.Party.toolBlocklist) {

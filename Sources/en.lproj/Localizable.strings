@@ -295,6 +295,7 @@
 "giftPicker.all"                     = "All";
 "giftPicker.recharge"                = "Recharge";
 "giftPicker.recharge.toast"          = "Recharge is coming soon";
+"giftPicker.sent.toast"              = "Gift sent";
 
 // MARK: - L-spec-愿望单设置页 v1（对齐 H5 wishSetting）
 "wishSetting.navTitle"               = "Wish Setting";
@@ -938,6 +939,35 @@
 "party.error.passwordWrong"              = "Wrong room password";
 "party.error.mediaSwitchFailed"          = "Failed to switch mic/camera";
 
+/* MARK: - E spec §3 Room Mode */
+"party.roomMode.sheetTitle"              = "Room Mode";
+"party.roomMode.liveAndVoiceTab"         = "Live+Voice";
+"party.roomMode.voiceOnlyTab"            = "Voice";
+"party.roomMode.confirmTitle"            = "Switch Room Mode?";
+"party.roomMode.confirmBody"             = "All users will be moved off seats.";
+"party.roomMode.confirmSwitch"           = "Switch";
+"party.roomMode.confirmCancel"           = "Cancel";
+"party.roomMode.upgradeGuide"            = "Reach level %d to unlock this mode";
+"party.roomMode.systemMsg"               = "Room layout updated. All users have been moved off seats. Please select a new seat to continue chatting!";
+"party.roomMode.emptyState"              = "No modes available";
+"party.roomMode.loadError"               = "Failed to load modes";
+
+/* MARK: - E spec §3 Mic Application */
+"party.micApplication.sheetTitle"        = "Mic Applications";
+"party.micApplication.emptyState"        = "No applications";
+"party.micApplication.approve"           = "Approve";
+"party.micApplication.reject"            = "Reject";
+"party.micApplication.noSeatAvailable"   = "No available seat, please wait for someone to leave";
+"party.micApplication.rejectedCooldown"  = "Please try again later";
+"party.micApplication.rejectedByHost"    = "Your request for a seat has been rejected";
+"party.micApplication.timeoutAutoGiveUp" = "Application timed out";
+"party.micApplication.switchOnTitle"     = "Enable Mic Applications?";
+"party.micApplication.switchOffTitle"    = "Disable Mic Applications?";
+"party.micApplication.switchOnBody"      = "Users can request to join a seat. You will need to approve each request.";
+"party.micApplication.switchOffBody"     = "Users can no longer request seats.";
+"party.micApplication.switchOnSystemMsg" = "The mic application is turned on";
+"party.micApplication.switchOffSystemMsg" = "The mic application is removed";
+
 /* MARK: - H-0 用户详情页 */
 "userProfile.uid.prefix"                 = "uid: ";
 "userProfile.like.label"                 = "Like Count";
@@ -1269,6 +1299,9 @@
 "partyRoom.a11y.more"                    = "More";
 "partyRoom.a11y.heat"                    = "Heat";
 "partyRoom.a11y.viewers"                 = "Viewers";
+"partyRoom.a11y.wealthRank"              = "Wealth ranking";
+"partyRoom.a11y.honorRank"               = "Honor ranking";
+"partyRoom.a11y.pk"                      = "Start PK";
 "partyRoom.tab.all"                      = "All";
 "partyRoom.tab.chat"                     = "Chat";
 "partyRoom.tab.gift"                     = "Gift";
@@ -1298,3 +1331,7 @@
 "partyRoom.toolMenu.startPk"             = "Start PK";
 "partyRoom.toolMenu.luckyNumber"         = "Lucky Number";
 "partyRoom.toolMenu.roomMute"            = "Mute Room";
+"partyRoom.seat.locked"                  = "The seat is locked";
+"partyRoom.seat.videoNeedsInvite"        = "Requires invitation from the Room Owner/Admin";
+"partyRoom.switchSeat.title"             = "Switch to this seat?";
+"partyRoom.switchSeat.confirm"           = "Switch";

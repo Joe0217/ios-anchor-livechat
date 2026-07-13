@@ -327,6 +327,36 @@ enum L10n {
         static var errorKicked: String { localize("party.error.kicked", comment: "已被房主踢出") }
         static var errorPasswordWrong: String { localize("party.error.passwordWrong", comment: "进房密码错误") }
         static var errorMediaSwitchFailed: String { localize("party.error.mediaSwitchFailed", comment: "麦克风/摄像头切换失败") }
+
+        // MARK: - E spec §3 Room Mode（模板切换）
+        static var roomModeSheetTitle: String { localize("party.roomMode.sheetTitle", comment: "Room Mode sheet 标题") }
+        static var roomModeLiveAndVoiceTab: String { localize("party.roomMode.liveAndVoiceTab", comment: "Room Mode Live+Voice tab") }
+        static var roomModeVoiceOnlyTab: String { localize("party.roomMode.voiceOnlyTab", comment: "Room Mode Voice-only tab") }
+        static var roomModeConfirmTitle: String { localize("party.roomMode.confirmTitle", comment: "Room Mode 切换二次确认标题") }
+        static var roomModeConfirmBody: String { localize("party.roomMode.confirmBody", comment: "Room Mode 切换二次确认正文（所有用户会下麦）") }
+        static var roomModeConfirmSwitch: String { localize("party.roomMode.confirmSwitch", comment: "Room Mode 确认切换按钮") }
+        static var roomModeConfirmCancel: String { localize("party.roomMode.confirmCancel", comment: "Room Mode 取消切换按钮") }
+        /// %d = 需要达到的等级
+        static var roomModeUpgradeGuideFormat: String { localize("party.roomMode.upgradeGuide", comment: "Room Mode 等级不足引导文案") }
+        static var roomModeSystemMsg: String { localize("party.roomMode.systemMsg", comment: "Room Mode 切换后公屏系统消息") }
+        static var roomModeEmptyState: String { localize("party.roomMode.emptyState", comment: "Room Mode 空态") }
+        static var roomModeLoadError: String { localize("party.roomMode.loadError", comment: "Room Mode 模板加载失败") }
+
+        // MARK: - E spec §3 Mic Application（申请上麦）
+        static var micApplicationSheetTitle: String { localize("party.micApplication.sheetTitle", comment: "申请上麦列表 sheet 标题") }
+        static var micApplicationEmptyState: String { localize("party.micApplication.emptyState", comment: "申请上麦列表空态") }
+        static var micApplicationApprove: String { localize("party.micApplication.approve", comment: "申请上麦-同意按钮") }
+        static var micApplicationReject: String { localize("party.micApplication.reject", comment: "申请上麦-拒绝按钮") }
+        static var micApplicationNoSeatAvailable: String { localize("party.micApplication.noSeatAvailable", comment: "同意时无空位 toast") }
+        static var micApplicationRejectedCooldown: String { localize("party.micApplication.rejectedCooldown", comment: "被拒后冷却期再申请 toast") }
+        static var micApplicationRejectedByHost: String { localize("party.micApplication.rejectedByHost", comment: "申请人被房主拒绝 toast") }
+        static var micApplicationTimeoutAutoGiveUp: String { localize("party.micApplication.timeoutAutoGiveUp", comment: "申请超时自动放弃 toast") }
+        static var micApplicationSwitchOnTitle: String { localize("party.micApplication.switchOnTitle", comment: "开启 Mic Application 确认标题") }
+        static var micApplicationSwitchOffTitle: String { localize("party.micApplication.switchOffTitle", comment: "关闭 Mic Application 确认标题") }
+        static var micApplicationSwitchOnBody: String { localize("party.micApplication.switchOnBody", comment: "开启 Mic Application 确认正文") }
+        static var micApplicationSwitchOffBody: String { localize("party.micApplication.switchOffBody", comment: "关闭 Mic Application 确认正文") }
+        static var micApplicationSwitchOnSystemMsg: String { localize("party.micApplication.switchOnSystemMsg", comment: "开启 Mic Application 公屏系统消息") }
+        static var micApplicationSwitchOffSystemMsg: String { localize("party.micApplication.switchOffSystemMsg", comment: "关闭 Mic Application 公屏系统消息") }
     }
 
     // MARK: - PartyRoom 房间内 UI（AnchorBar / ChatTabStrip / InputBar 使用）
@@ -342,6 +372,11 @@ enum L10n {
         static var a11yMore: String { localize("partyRoom.a11y.more", comment: "更多图标 a11y") }
         static var a11yHeat: String { localize("partyRoom.a11y.heat", comment: "热度 a11y") }
         static var a11yViewers: String { localize("partyRoom.a11y.viewers", comment: "观众 a11y") }
+        // v11：顶部统计条榜单入口（对齐 H5 header-wrap.vue wealthRank/honorRank 分档）
+        static var a11yWealthRank: String { localize("partyRoom.a11y.wealthRank", comment: "财富榜入口 a11y") }
+        static var a11yHonorRank: String { localize("partyRoom.a11y.honorRank", comment: "荣耀榜入口 a11y") }
+        // v12：PK 入口 a11y
+        static var a11yPk: String { localize("partyRoom.a11y.pk", comment: "PK 入口 a11y") }
 
         // 公屏 tab strip（PartyRoomChatTabStrip）
         static var tabAll: String { localize("partyRoom.tab.all", comment: "公屏 tab All") }
@@ -375,6 +410,12 @@ enum L10n {
         static var toolMenuStartPk: String { localize("partyRoom.toolMenu.startPk", comment: "工具菜单：发起 PK") }
         static var toolMenuLuckyNumber: String { localize("partyRoom.toolMenu.luckyNumber", comment: "工具菜单：幸运数字") }
         static var toolMenuRoomMute: String { localize("partyRoom.toolMenu.roomMute", comment: "工具菜单：房间静音") }
+
+        // v15：麦位点击分流（对齐 H5 joinOrOutMic 4 分支）
+        static var seatLockedToast: String { localize("partyRoom.seat.locked", comment: "锁麦位 toast：The seat is locked") }
+        static var videoSeatNeedsInviteToast: String { localize("partyRoom.seat.videoNeedsInvite", comment: "视频位需邀请 toast") }
+        static var switchSeatTitle: String { localize("partyRoom.switchSeat.title", comment: "切麦确认弹窗标题") }
+        static var switchSeatConfirm: String { localize("partyRoom.switchSeat.confirm", comment: "切麦确认按钮") }
     }
 
     // MARK: - Work 工作台（设计稿还原）
@@ -871,6 +912,8 @@ enum L10n {
     static var giftPickerRecharge: String { localize("giftPicker.recharge", comment: "H-5 余额不足 Recharge 按钮 label") }
     /// H-5 派对房送礼：phase = insufficientBalance 时 tap Recharge 弹 toast（本轮无真充值页）
     static var giftPickerRechargeToast: String { localize("giftPicker.recharge.toast", comment: "H-5 Recharge tap toast · 充值功能开发中") }
+    /// H-5 派对房送礼：sendGift 成功后 PartyRoomView 顶部 toast 反馈（对齐 H5 party-gift-popup.vue showNotify）
+    static var giftPickerSentToast: String { localize("giftPicker.sent.toast", comment: "H-5 sendGift 成功 toast · Gift sent") }
 
     // MARK: - L-spec-愿望单设置页 v1
     static var wishSettingNavTitle: String { localize("wishSetting.navTitle", comment: "Wish Setting 页顶部") }

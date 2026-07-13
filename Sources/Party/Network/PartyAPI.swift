@@ -248,6 +248,23 @@ enum PartyAPI {
         }
     }
 
+    /// 拉用户基础信息（对齐 H5 `apiPartyGetUser({userId})`）。
+    /// endpoint 特殊：**不带 pathPrefix `/party` 段**（H5 是 `/sapi/weidou/v1/client/user/get`），
+    /// 因此显式拼绝对 path 而非 `pathPrefix+/room/...` 模式。
+    /// 主播端派对房用途：拉房主 ownerInfo → `headFrameSmallImg` 装饰顶部头像框。
+    static func getUserBasicInfo(userId: Int) async throws -> PartyUserBasicInfo? {
+        let data = try await PartyAPIClient.shared.post(
+            "/sapi/weidou/v1/client/user/get",
+            body: ["userId": userId]
+        )
+        // 后端可能返回 null / 空对象（用户已注销等）—— 静默降级 nil
+        do {
+            return try decodeObject(data, as: PartyUserBasicInfo.self)
+        } catch {
+            return nil
+        }
+    }
+
     /// 进房。`isAnchor` 主播端固定 true。
     static func enterRoom(roomId: String, password: String? = nil) async throws -> PartyRoomInfo {
         var body: [String: Any] = [
@@ -312,6 +329,30 @@ enum PartyAPI {
         )
     }
 
+    /// 切麦：从当前麦位切到目标 seatIndex（对齐 H5 apiPartyExchangeSeat + usePartyHooks.js:1322）。
+    /// - operatorType 固定 10（H5 硬编码）
+    /// - seatType 传目标麦位的 seatType（1=video / 2=voice）
+    /// 成功后服务端下发 1001 seat/update 广播全员，前端等 seatList 更新，不做乐观。
+    static func exchangeSeat(
+        roomId: String,
+        seatIndex: Int,
+        yxRoomId: String,
+        seatType: Int,
+        roomTempId: Int
+    ) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/seat/exchangeSeat",
+            body: [
+                "roomId": roomId,
+                "seatIndex": seatIndex,
+                "yxRoomId": yxRoomId,
+                "operatorType": 10,
+                "seatType": seatType,
+                "roomTempId": roomTempId,
+            ]
+        )
+    }
+
     /// 切换麦克风/摄像头开关。`type: 1=麦克风 / 2=摄像头 / 3=麦+摄像头`（安卓确认 §2.3）。
     /// 服务端成功后下发 NIM `1008 PARTY_ROOM_UPDATE_MEDIA` 广播全员（M3 内分发）。
     /// `enable` Int 0/1（安卓确认 §2.3 后端 DTO 是 Integer）。
@@ -353,7 +394,125 @@ enum PartyAPI {
         )
     }
 
+    // MARK: - room mode (E v2 §1)
+
+    /// 切换房间模板（Room Mode 切模式）。spec §1 契约。
+    /// 对齐 H5 `apiSwitchRoomTemp({roomId, roomTempId, yxRoomId})`。
+    /// 无字段消费；truthy 即成功。房主本地兜底：成功后立即调 `handleRoomModeChanged`，
+    /// 不等 IM 1017（云信可能不发自己回执），观众端走 IM 到达路径 + `roomTempId==newTempId` 幂等。
+    static func switchRoomTemp(roomId: String, roomTempId: Int, yxRoomId: String) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/seat/switchRoomTemp",
+            body: [
+                "roomId": roomId,
+                "roomTempId": roomTempId,
+                "yxRoomId": yxRoomId,
+            ]
+        )
+    }
+
+    // MARK: - mic application (E v2 §2)
+
+    /// 拉排麦申请列表（房主/房管端 Mic Application 面板用）。spec §2 契约。
+    /// 对齐 H5 `apiGetQueueSeatList({roomId, pageSize})`。
+    /// `myIndex = -1` 表示当前用户不在列表；`totalNum` 队列总长度用于 badge / 系统消息计数。
+    static func getQueueSeatList(roomId: String, pageSize: Int = 99) async throws -> PartyMicApplicationListResponse {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/seat/getQueueSeatList",
+            body: [
+                "roomId": roomId,
+                "pageSize": pageSize,
+            ]
+        )
+        return try decodeObject(data, as: PartyMicApplicationListResponse.self)
+    }
+
+    /// 拒绝申请（房主/房管操作，spec §2）。对齐 H5 `apiRefuseQueueSeat`。
+    /// 服务端成功后下发 1018 op=3 广播；申请者本地设 `rejectedAt = now` 触发 30s 冷却。
+    static func refuseQueueSeat(roomId: String, targetUserId: String, yxRoomId: String) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/seat/refuseQueueSeat",
+            body: [
+                "roomId": roomId,
+                "targetUserId": targetUserId,
+                "yxRoomId": yxRoomId,
+            ]
+        )
+    }
+
+    /// 通过申请（房主/房管操作，spec §2）。对齐 H5 `apiAgreeSeat`。
+    /// - `seatIndex`：房主端挑首空位（排除 `pendingApproveSeatIndex` 已占位集合防并发冲突）
+    /// - `operatorType`：房主端硬编 1；房管路径待真机验证后回填（spec §5 TODO）
+    /// - 服务端成功后下发 1001/1012（麦位刷新）+ 1018 op=2（出队通知）组合，无独立"批准"广播
+    static func agreeSeat(
+        roomId: String,
+        seatIndex: Int,
+        targetUserId: String,
+        operatorType: Int,
+        roomTempId: Int,
+        yxRoomId: String
+    ) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/seat/agreeSeat",
+            body: [
+                "roomId": roomId,
+                "seatIndex": seatIndex,
+                "targetUserId": targetUserId,
+                "operatorType": operatorType,
+                "roomTempId": roomTempId,
+                "yxRoomId": yxRoomId,
+            ]
+        )
+    }
+
+    /// 切换排麦申请开关（房主端，spec §2）。对齐 H5 `apiUpdateOnSeatEnable({roomId, enable})`。
+    /// `enable: 0` 关闭 / `1` 开启；服务端成功后下发 1021 广播全员同步 `onSeatApplySwitch`。
+    /// 首次切换需 UI 层前置协议弹窗（`partySaveInfo.autoEnterOn/OffApplication` = false 时）。
+    static func updateOnSeatEnable(roomId: String, enable: Int) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/updateOnSeatEnable",
+            body: [
+                "roomId": roomId,
+                "enable": enable,
+            ]
+        )
+    }
+
+    /// 观众放弃排麦（spec §2）。对齐 H5 `apiGiveUpQueueSeat({roomId, yxRoomId})`。
+    /// 成功后本地清 `myApplyInfo.inIndex = 0` + toast；服务端下发 1018 op=4 广播。
+    static func giveUpQueueSeat(roomId: String, yxRoomId: String) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/seat/giveUpQueueSeat",
+            body: [
+                "roomId": roomId,
+                "yxRoomId": yxRoomId,
+            ]
+        )
+    }
+
     // MARK: - gift
+
+    /// 派对房礼物架列表（H-5 · 对齐 H5 用户端 `apiPartyGetRoomGift`）。
+    ///
+    /// **path**: `/sapi/weidou/v1/client/party/gift/getPartyRoomGift`（sapi 域，与 sendGift 同域）
+    /// **⚠️ 不走** `/api/gift/v3/getGiftList`（主接口不识别 PARTY_ROOM/PARTY_GIFT scene → parameter.error）
+    ///
+    /// **Request body**（H5 `stores/modules/party.js:1269-1272`）：
+    /// - `showType`: 0=礼物架 / 1=底部栏（默认 0）
+    /// - `apiVersion`: 2 触发后端 tabs[] 结构（灰度关闭时后端自动 v1 回退）
+    ///
+    /// **Response 结构**：`{tabs: [{tabCode, tabName, tabSort, gifts: [GiftListData]}]}`
+    /// v1 兜底（`{giftInfoDtoList: {Popular: [...], ...}}`）由调用侧另作 fallback；本方法只识别 v2。
+    static func getPartyRoomGift(showType: Int = 0, apiVersion: Int = 2) async throws -> PartyGiftV2Response {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/gift/getPartyRoomGift",
+            body: [
+                "showType": showType,
+                "apiVersion": apiVersion,
+            ]
+        )
+        return try decodeObject(data, as: PartyGiftV2Response.self)
+    }
 
     /// 派对房送礼（普通骨架）。`scene` 固定 "PARTY_ROOM"。
     /// 服务端成功后下发 NIM `2049 RECEIVE_PARTY_ROOM_GIFT_COMPRESSED` 广播；
@@ -368,5 +527,31 @@ enum PartyAPI {
         ]
         let data = try await PartyAPIClient.shared.post("\(pathPrefix)/gift/sendGift", body: body)
         return try decodeObject(data, as: PartySendGiftResult.self)
+    }
+}
+
+/// 排麦申请列表 API response（`getQueueSeatList` 的 DTO 包装，spec §2）。
+///
+/// 字段来源：H5 `apiGetQueueSeatList` response 起草推断；真机 log 未验证前所有字段用兜底
+/// (agent-recon-field-names-unverified rule)。手写 `init(from:)` 让缺字段回退到安全默认值，
+/// 而非整体 decode 失败（列表接口整体挂 = 房主 Mic Application 面板整体瘫）。
+struct PartyMicApplicationListResponse: Decodable, Equatable {
+    /// 队列总长度（可能超过 records.count；records 受 pageSize 限制）
+    let totalNum: Int
+    /// 排麦申请人列表（按排队顺序）
+    let records: [PartyMicApplication]
+    /// 当前用户在队列中的位序；`-1` 表示不在队列（房主/房管拉时通常 -1）
+    let myIndex: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case totalNum, records, myIndex
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // 缺字段兜底：totalNum/records 缺失时视为空列表；myIndex 缺失视为不在队
+        self.totalNum = (try? c.decode(Int.self, forKey: .totalNum)) ?? 0
+        self.records = (try? c.decode([PartyMicApplication].self, forKey: .records)) ?? []
+        self.myIndex = (try? c.decode(Int.self, forKey: .myIndex)) ?? -1
     }
 }
