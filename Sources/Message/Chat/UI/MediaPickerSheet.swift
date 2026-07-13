@@ -134,6 +134,8 @@ struct MediaPickerSheet: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // S-7:a11y 让 VoiceOver 念"图片"/"视频"而非"按钮"
+        .accessibilityLabel(item.kind == .video ? L10n.chatA11yMediaVideo : L10n.chatA11yMediaImage)
     }
 
     /// 左上角图/视频类型徽章（对齐 H5 `absolute left-6 top-6 h-16 w-16` album-image/album-video icon）

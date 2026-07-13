@@ -23,6 +23,8 @@ struct AudioBubbleView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // S-7:a11y VoiceOver 念"播放/暂停 N 秒语音"而非"按钮"
+        .accessibilityLabel(isPlaying ? L10n.chatA11yAudioPause(sec: dur) : L10n.chatA11yAudioPlay(sec: dur))
     }
 
     private var iconView: some View {

@@ -166,7 +166,10 @@ final class VoiceRecorder: ObservableObject {
                 if Task.isCancelled { return }
                 guard let self, let start = self.startedAt else { return }
                 let sec = Int(Date().timeIntervalSince(start))
-                self.currentSeconds = sec
+                // S-5:100ms tick 但 Int 秒仅每 1s 变化,去重避免 10Hz Published emit 引起 ChatDetailView body 无意义重算
+                if sec != self.currentSeconds {
+                    self.currentSeconds = sec
+                }
                 if sec >= ChatConstants.voiceMaxDurationSec {
                     // 60s 到点自动停止 + 触发发送
                     if let (url, dur) = self.stop() {

@@ -10,7 +10,12 @@ import SwiftUI
 ///   [EditProfileStore.swift](../../../Profile/EditProfile/EditProfileStore.swift):118）
 /// - 从 `SessionStore.shared.user.yxAccid` 取自己 yxAccId
 ///
-/// **导航接线**：NavigationStack push 时创建；pop 时销毁（P2PChatStore.deinit 触发 unsubscribe）。
+/// **导航接线**：NavigationStack push 时创建；pop 时销毁。
+///
+/// **SDK delegate unsubscribe 时机**（S-6:注释与实现对齐,原注释宣称 P2PChatStore.deinit 触发,实际 store 明确不放 deinit,见 P2PChatStore §"delegate 生命周期"）：
+/// - **主路径**：ChatDetailView.onDisappear → store.teardown() → NIMChatAdapter.unsubscribe;有 scenePhase != .background 守卫防切后台误触发
+/// - **兜底**：NIMChatAdapter 自身 deinit(SwiftUI @StateObject 释放触发)保证 delegate 不残留
+/// - **边界**:后台 kill / crash 前若 view 未 dismount → delegate 挂着,下次冷启动重新登录时 activate() 会 add,SDK 层去重(不会 double register)
 struct ChatDetailContainer: View {
 
     let peerYxAccId: String

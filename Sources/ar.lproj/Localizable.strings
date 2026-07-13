@@ -782,6 +782,13 @@
 // 文字气泡内翻译按钮
 "chat.translate"       = "ترجم";
 
+// S-7 Chat a11y labels
+"chat.a11y.audioPlay"             = "تشغيل الصوت %d ثانية";
+"chat.a11y.audioPause"            = "إيقاف الصوت %d ثانية";
+"chat.a11y.resend"                = "إعادة إرسال الرسالة الفاشلة";
+"chat.a11y.mediaImage"            = "صورة";
+"chat.a11y.mediaVideo"            = "فيديو";
+
 // M-5 ChatInputBar 输入栏文案
 "chat.input.typeMessage"          = "اكتب رسالة";
 "chat.input.holdToTalk"           = "اضغط للتحدث";

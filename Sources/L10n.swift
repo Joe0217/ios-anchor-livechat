@@ -619,6 +619,17 @@ enum L10n {
     // 对方消息气泡内可见"翻译"按钮（对齐 H5 msgItem.vue CTranslate label="Translate"）
     static var chatTranslate: String       { localize("chat.translate", comment: "文字气泡内翻译按钮 label") }
 
+    // MARK: - Chat a11y accessibility labels（S-7,icon-only Button 补齐 VoiceOver 语义）
+    static func chatA11yAudioPlay(sec: Int) -> String {
+        String(format: localize("chat.a11y.audioPlay", comment: "语音气泡 a11y 播放 (%d 秒)"), sec)
+    }
+    static func chatA11yAudioPause(sec: Int) -> String {
+        String(format: localize("chat.a11y.audioPause", comment: "语音气泡 a11y 暂停 (%d 秒)"), sec)
+    }
+    static var chatA11yResend: String    { localize("chat.a11y.resend", comment: "发送失败重发按钮 a11y") }
+    static var chatA11yMediaImage: String { localize("chat.a11y.mediaImage", comment: "相册图片 cell a11y") }
+    static var chatA11yMediaVideo: String { localize("chat.a11y.mediaVideo", comment: "相册视频 cell a11y") }
+
     // MARK: - ChatInputBar 输入栏文案（M-5,对齐 H5 chat/index.vue placeholder + 按钮）
     static var chatInputTypeMessage: String { localize("chat.input.typeMessage", comment: "输入框 placeholder") }
     static var chatInputHoldToTalk: String  { localize("chat.input.holdToTalk", comment: "语音按住说话按钮") }

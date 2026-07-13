@@ -369,7 +369,8 @@ extension NIMChatAdapter: NIMChatManagerDelegate {
                 let atNum = (attach["attachType"] as? NSNumber)?.intValue
                 if atStr == "SEND_GIFT" || atNum == 1 {
                     let peer = nim.session?.sessionId ?? self.peerYxAccId
-                    chatLogger.debug("[Chat] SEND_GIFT intake peer=\(peer, privacy: .public) keys=\(attach.keys.joined(separator: ","), privacy: .public)")
+                    // S-3:peer 是云信 yxAccId 稳定用户标识,统一 .private 对齐 ReplyPointsStore 8 处惯例
+                    chatLogger.debug("[Chat] SEND_GIFT intake peer=\(peer, privacy: .private) keys=\(attach.keys.joined(separator: ","), privacy: .public)")
                     GiftEffectIntake.ingest(scene: .chat, scopeId: peer, payload: attach, mineYxAccid: mineYxAccid)
                 }
             }

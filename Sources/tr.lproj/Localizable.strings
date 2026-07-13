@@ -782,6 +782,13 @@
 // 文字气泡内翻译按钮
 "chat.translate"       = "Çevir";
 
+// S-7 Chat a11y labels
+"chat.a11y.audioPlay"             = "%d saniyelik sesi oynat";
+"chat.a11y.audioPause"            = "%d saniyelik sesi duraklat";
+"chat.a11y.resend"                = "Başarısız mesajı tekrar gönder";
+"chat.a11y.mediaImage"            = "Fotoğraf";
+"chat.a11y.mediaVideo"            = "Video";
+
 // M-5 ChatInputBar 输入栏文案
 "chat.input.typeMessage"          = "Mesaj yazın";
 "chat.input.holdToTalk"           = "Konuşmak için basılı tutun";

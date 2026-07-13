@@ -57,7 +57,8 @@ struct MicrosoftTranslateService: TranslateServiceProtocol, Sendable {
         let (data, resp) = try await session.data(for: req)
         if let http = resp as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
             let bodyStr = String(data: data, encoding: .utf8)
-            logger.warning("[Translate] non-2xx status=\(http.statusCode) body=\(bodyStr ?? "nil", privacy: .public)")
+            // S-4:bodyStr 可能含请求文本片段(用户聊天原文),降级 .private 避免 sysdiagnose 泄漏;status 保 .public 便于定位
+            logger.warning("[Translate] non-2xx status=\(http.statusCode) body=\(bodyStr ?? "nil", privacy: .private)")
             throw TranslateServiceError.httpError(status: http.statusCode, body: bodyStr)
         }
 

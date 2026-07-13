@@ -32,24 +32,23 @@ final class VideoThumbnailCache {
     }
 
     /// 异步提取首帧。返回 nil = 提取失败（网络 / 视频格式 / 权限）
+    /// S-8:iOS 16+ 用 async `image(at:)` 新 API 替代已弃用的 `copyCGImage(at:actualTime:)`
+    /// (老 API iOS 18/19 可能移除;新 API 内建后台执行,无需 Task.detached)
     static func extractFirstFrame(from url: URL) async -> UIImage? {
-        // AVAsset 初始化本身不网络请求；copyCGImage 才 blocking
         let asset = AVURLAsset(url: url)
         let gen = AVAssetImageGenerator(asset: asset)
         gen.appliesPreferredTrackTransform = true
         gen.requestedTimeToleranceBefore = .zero
         gen.requestedTimeToleranceAfter = CMTime(seconds: 0.3, preferredTimescale: 600)
 
-        return await Task.detached(priority: .userInitiated) {
-            let time = CMTime(seconds: 0.1, preferredTimescale: 600)
-            do {
-                let cgImage = try gen.copyCGImage(at: time, actualTime: nil)
-                return UIImage(cgImage: cgImage)
-            } catch {
-                logger.warning("extract failed url=\(url.absoluteString, privacy: .private): \(String(describing: error), privacy: .public)")
-                return nil
-            }
-        }.value
+        let time = CMTime(seconds: 0.1, preferredTimescale: 600)
+        do {
+            let (cgImage, _) = try await gen.image(at: time)
+            return UIImage(cgImage: cgImage)
+        } catch {
+            logger.warning("extract failed url=\(url.absoluteString, privacy: .private): \(String(describing: error), privacy: .public)")
+            return nil
+        }
     }
 }
 

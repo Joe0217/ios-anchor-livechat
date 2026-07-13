@@ -36,6 +36,7 @@ struct VideoPlayerFullScreen: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(L10n.mediaPreviewClose)
             .padding(.top, 12)
             .padding(.leading, 12)
         }
@@ -90,6 +91,7 @@ struct FullScreenImagePreview: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(L10n.mediaPreviewClose)
             .padding(.top, 12)
             .padding(.leading, 12)
         }

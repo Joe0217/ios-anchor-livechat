@@ -272,6 +272,7 @@ struct ChatMessageRow: View {
                         .font(.system(size: 14)).foregroundStyle(.red)
                         .contentShape(Rectangle())
                 }
+                .accessibilityLabel(L10n.chatA11yResend)
                 .buttonStyle(.plain)
             case .refused:
                 Image(systemName: "hand.raised.fill")
