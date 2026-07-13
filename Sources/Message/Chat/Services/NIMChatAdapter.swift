@@ -447,13 +447,13 @@ enum ChatMessageMapper {
                   let urlString = audio.url, let url = URL(string: urlString) else { return nil }
             return .audio(url: url, dur: audio.duration / 1000)   // NIM 存毫秒 → 秒
         case .custom:
-            // H-2 spec §2.4：走 MessageAttachParser 双分支分发
-            // SEND_GIFT / MISSED_CALLS_RECORD / weakTxtType 数字系统提示 → 特化 case；
-            // 其他未识别 attachType → `.system(rawJSON:)` 保原数据留 H-3+ 扩展
+            // H-2 spec §2.4 + 系统会话对齐：走 MessageAttachParser 全量分发。
+            // remoteExt 传入让 parser 能识别 ext.viewFlag=8 / ext.penaltyUserId 系统消息类型
+            // （对齐 H5 systemMsg.vue isRewardMsg / isPunishmentAppealMsg 判定）
             let raw = nim.rawAttachContent ?? "{}"
             if let data = raw.data(using: .utf8),
                let attach = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                return MessageAttachParser.parseCustom(attach, rawJSON: raw)
+                return MessageAttachParser.parseCustom(attach, rawJSON: raw, remoteExt: nim.remoteExt as? [String: Any])
             }
             return .system(rawJSON: raw)
         default:

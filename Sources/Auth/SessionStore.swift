@@ -100,18 +100,44 @@ final class SessionStore: ObservableObject {
                 suppressCodes: ["1005"]                     // A-2 spec §3.2 v3 BLOCK-1：让 1005 走 catch 分流未注册跳注册，而非被 observer logout 拦截
             )
             let result = try JSONDecoder().decode(LoginResult.self, from: data)
-            guard await applyLogin(result) else {
+            guard let token = result.token, !token.isEmpty else {
                 errorMessage = L10n.authErrorNoToken
                 return
             }
 
-            // A-2 spec §3.2 v3：登录成功但审核中/被拒 → 触发 resubmit（对齐 H5 login/index.vue:75-82 else 分支）
-            if let userType = result.userType, userType != 2 && userType != 9 {
+            // A-2 code-review Finding #1 修 2026-07-10：resubmit 路径先分流再决定是否 applyLogin
+            // 原：先 applyLogin(翻 isLoggedIn=true → RootView dismantle LoginView) → 再设 needsResubmit → 无监听者 → 路径整体断
+            // 修：userType 属"审核中/被拒" → **不**调 applyLogin，让 isLoggedIn 保 false 使 LoginView 存活；
+            //     临时设 AuthToken.value 让 APIClient 能拉 mineInfo；LoginView.onChange 消费 needsResubmit push register；
+            //     RegisterStore.submit 成功后才 applyLogin(register 接口返 result) 真登录
+            // 对齐 H5 login/index.vue:75-82 else 分支语义 (userType !== 2 && !== 9 走 register)
+            let isResubmitPath = (result.userType != nil && result.userType != 2 && result.userType != 9)
+            //     ↑ Finding #7 修：userType nil 视为**合法登录**（H5 !== 对 undefined 也 truthy → 走 else register；
+            //       iOS 保守：nil 时不算 resubmit，直接走正常登录路径避免误判把已注册用户塞进 register）
+
+            if isResubmitPath {
+                // 临时授权：让 APIClient 能带 token 拉 mineInfo；isLoggedIn 保 false 让 LoginView 存活
+                AuthToken.value = token
                 _ = KeychainStore.setString(password, for: KeychainKey.pendingRegisterPassword)
-                await AnchorInfoStore.shared.refresh()      // 显式 await 同步等（applyLogin 里的 fire-and-forget 会拿旧值，v3 NEW-4）
+                await AnchorInfoStore.shared.refresh()
                 if let mineInfo = AnchorInfoStore.shared.mine {
                     needsResubmit = PendingResubmit(loginResult: result, mineInfo: mineInfo)
+                } else {
+                    // Post-review NEW-2 修 2026-07-10：refresh 失败 mine nil → 无 needsResubmit 触发用户卡登录页无反馈
+                    // 回退清临时状态 + 用通用网络错误提示（避免误导用户 email/pwd 错）
+                    AuthToken.value = nil
+                    _ = KeychainStore.remove(for: KeychainKey.pendingRegisterPassword)
+                    errorMessage = String(format: L10n.authErrorNetworkFormat, "profile refresh failed")
+                    AppLogger.auth.error("[SessionStore] resubmit path aborted: AnchorInfoStore.mine nil after refresh")
                 }
+                // 不 applyLogin，等 RegisterStore.submit 成功后调
+                return
+            }
+
+            // 正常登录（userType == 2 已审核 / 9 代理 / nil 视为合法）
+            guard await applyLogin(result) else {
+                errorMessage = L10n.authErrorNoToken
+                return
             }
         } catch let e as APIError where e.code == "1005" {
             // 1005 = 账号未注册；suppressCodes 已让 APIClient 不 post 通知，此处安全设 pendingRegister 让 LoginView push 注册页
@@ -191,6 +217,10 @@ final class SessionStore: ObservableObject {
         _ = KeychainStore.remove(for: KeychainKey.pendingRegisterPassword)
         pendingRegister = nil
         needsResubmit = nil
+        // Bug fix 2026-07-10：注册完成后 logout 会跳回注册页而非登录页 —— NavigationStack path 残留 [.basicInfo, .required, ...]，
+        // RootView 分流回 LoginView 时 LoginView 顶层 NavigationStack 用 pathHolder.path 恢复到最后一次的注册栈。
+        // 修：logout 时清 path 让下次进 LoginView 从根开始
+        RegisterPathHolder.shared.reset()
     }
 
     // MARK: - H M4：sysMsg 通道入口（spec §3.1 / H 校验清单 §1.1.2 A 表）
@@ -227,6 +257,9 @@ final class SessionStore: ObservableObject {
             AuthToken.value = t
             // Batch 6.1.3: 冷启动已登录 → 立即 activate 全局 P2P observer（避免走 login 路径遗漏）
             GlobalP2PMessageObserver.shared.activate()
+            // H-3: 冷启动 restore 时也 activate AppConfigStore(rule session-scoped-store-refresh 双入口)
+            // 否则 microsoftTranslatorKey/Area 为 nil,翻译 tap 会 toast "Translation config missing"
+            Task { await AppConfigStore.shared.activate() }
             return
         }
         // v1 迁移：UserDefaults 残留 → Keychain，迁完清旧
@@ -240,6 +273,8 @@ final class SessionStore: ObservableObject {
             AuthToken.value = t
             // Batch 6.1.3: 同步 v1 迁移路径也 activate
             GlobalP2PMessageObserver.shared.activate()
+            // H-3: 同 v2 路径,冷启动 restore 后 activate AppConfigStore
+            Task { await AppConfigStore.shared.activate() }
         }
     }
 }

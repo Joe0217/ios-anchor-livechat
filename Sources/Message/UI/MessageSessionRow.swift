@@ -75,10 +75,35 @@ struct MessageSessionRow: View {
                     VIPBadge()
                 }
             }
-            Text(session.lastMessage)
-                .font(.system(size: 13))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            // preview 行:最后一条我方消息前展示已读态勾(对齐设计稿 消息列表-未读已读.png)
+            HStack(spacing: 4) {
+                readReceiptCheck
+                Text(session.lastMessage)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    /// 已读态勾图标:sent = 灰勾(ic-no-add)/ read = 绿勾(Component 13)/ none = 不显示
+    @ViewBuilder
+    private var readReceiptCheck: some View {
+        switch session.lastMessageReadState {
+        case .sent:
+            Image("messageReadCheckmarkGray")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 10, height: 10)
+                .accessibilityHidden(true)
+        case .read:
+            Image("messageReadCheckmarkGreen")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 10, height: 10)
+                .accessibilityHidden(true)
+        case .none:
+            EmptyView()
         }
     }
 

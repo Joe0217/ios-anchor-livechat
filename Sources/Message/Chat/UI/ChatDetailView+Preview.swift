@@ -110,10 +110,12 @@ struct ChatDetailView_Previews: PreviewProvider {
             privateItems: [],
             privateItemsLoading: false,
             peerUserId: 12345,
+            originProfileUserId: nil,
             onClose: nil,
             chatType: .regular,
             canCall: false,
-            replyPointsStore: ReplyPointsStore.shared
+            replyPointsStore: ReplyPointsStore.shared,
+            sheetDetent: nil
         )
         .previewDisplayName("Loaded · 4 bubble 类型 + 6 状态")
     }
@@ -126,10 +128,12 @@ struct ChatDetailView_Previews: PreviewProvider {
             mediaItems: [], mediaItemsLoading: false,
             privateItems: [], privateItemsLoading: false,
             peerUserId: nil,
+            originProfileUserId: nil,
             onClose: nil,
             chatType: .regular,
             canCall: false,
-            replyPointsStore: ReplyPointsStore.shared
+            replyPointsStore: ReplyPointsStore.shared,
+            sheetDetent: nil
         )
         .previewDisplayName("Empty")
     }
@@ -142,10 +146,12 @@ struct ChatDetailView_Previews: PreviewProvider {
             mediaItems: [], mediaItemsLoading: false,
             privateItems: [], privateItemsLoading: false,
             peerUserId: nil,
+            originProfileUserId: nil,
             onClose: nil,
             chatType: .regular,
             canCall: false,
-            replyPointsStore: ReplyPointsStore.shared
+            replyPointsStore: ReplyPointsStore.shared,
+            sheetDetent: nil
         )
         .previewDisplayName("Error retry")
     }

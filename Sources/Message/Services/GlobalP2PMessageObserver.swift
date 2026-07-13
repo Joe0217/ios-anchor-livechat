@@ -92,19 +92,28 @@ extension GlobalP2PMessageObserver: NIMChatManagerDelegate {
     /// 2. addMsgToMsgArr（塞本地消息数组）
     /// 3. sessionStore.onUpdateSession（unread+1 + lastMsg）
     ///
-    /// iOS 等价：`NIMConversationManager.saveMessage(_:forSession:completion:)`
-    /// — SDK 会自动 fire didAdd/didUpdate → `NIMSessionAdapter` 已订阅 → MessageSessionStore 一并更新 Flame 顶部 System 入口
+    /// iOS 等价：**用 custom message 落地保留完整 attach**(对齐 H5 `type: 'custom'`) —— 让 ChatMessageMapper.mapContent
+    /// 走 `.custom` 分支 → MessageAttachParser 识别 attachType=35 → `.rechargeNotify` 完整渲染 ID 链接跳转。
+    /// SDK 自动 fire didAdd → NIMSessionAdapter 订阅 → MessageSessionStore 更新 Flame 顶部 System 入口。
     private func synthesizeRechargeNotification(originalMessage: NIMMessage, attach: [String: Any]) {
         let notifyAccId = AppConfig.notificationYxAccId
         let session = NIMSession(notifyAccId, type: .P2P)
 
+        // 用 GenericCustomAttachment 承载完整 attach dict —— 保 attachType/content/userId/yxAccid 全字段
+        guard JSONSerialization.isValidJSONObject(attach),
+              let jsonData = try? JSONSerialization.data(withJSONObject: attach),
+              let jsonStr = String(data: jsonData, encoding: .utf8) else {
+            logger.error("[GlobalP2P] synthesizeRechargeNotification attach JSON encode failed")
+            return
+        }
+        let attachment = GenericCustomAttachment(rawDict: attach, rawJSON: jsonStr)
+        let customObject = NIMCustomObject()
+        customObject.attachment = attachment
         let msg = NIMMessage()
-        // 通知消息以文本承载 content（对齐 H5 msgObj.body = attach.content）
-        let content = (attach["content"] as? String) ?? "You have a new recharge notification"
-        msg.text = content
-        // 把原 attach 塞进 remoteExt 供后续解析（可选，spec 后续扩展 UI 时用）
-        if JSONSerialization.isValidJSONObject(attach) {
-            msg.remoteExt = ["rechargeAttach": attach]
+        msg.messageObject = customObject
+        // 兜底把 content 也塞 remoteExt(旧客户端 fallback,新客户端走 rawDict)
+        if let content = attach["content"] as? String, !content.isEmpty {
+            msg.remoteExt = ["rechargeContentFallback": content]
         }
 
         NIMSDK.shared().conversationManager.save(msg, for: session) { error in

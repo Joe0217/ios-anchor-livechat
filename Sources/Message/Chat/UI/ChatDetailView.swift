@@ -56,7 +56,43 @@ struct ChatDetailView: View {
     /// 半屏 sheet 承载模式下，wrapper 的 detent selection binding —— 键盘弹起时自动切 `.large` 让高度扩到极大，
     /// 避免"medium detent + 键盘遮挡"触发系统被迫 resize，与键盘上升动画不同步造成卡顿。
     /// nil = 全屏 push 模式（无 detent 概念），或 wrapper 未传（不做主动切换）。
-    let sheetDetent: Binding<PresentationDetent>? = nil
+    let sheetDetent: Binding<PresentationDetent>?
+
+    /// 显式 init —— Swift 对 `Optional<T>` stored property 隐含 default nil,memberwise init 不 include
+    /// sheetDetent 参数(caller 传 sheetDetent 会报 Extra argument),因此手写 init 显式暴露该参数。
+    init(
+        store: P2PChatStore,
+        peerNickname: String,
+        peerAvatarURL: URL?,
+        myAvatarURL: URL?,
+        mediaItems: [AnchorMediaItem],
+        mediaItemsLoading: Bool,
+        privateItems: [AnchorMediaItem],
+        privateItemsLoading: Bool,
+        peerUserId: Int?,
+        originProfileUserId: String?,
+        onClose: (() -> Void)?,
+        chatType: ChatType,
+        canCall: Bool,
+        replyPointsStore: ReplyPointsStore,
+        sheetDetent: Binding<PresentationDetent>? = nil
+    ) {
+        self._store = StateObject(wrappedValue: store)
+        self.peerNickname = peerNickname
+        self.peerAvatarURL = peerAvatarURL
+        self.myAvatarURL = myAvatarURL
+        self.mediaItems = mediaItems
+        self.mediaItemsLoading = mediaItemsLoading
+        self.privateItems = privateItems
+        self.privateItemsLoading = privateItemsLoading
+        self.peerUserId = peerUserId
+        self.originProfileUserId = originProfileUserId
+        self.onClose = onClose
+        self.chatType = chatType
+        self.canCall = canCall
+        self._replyPointsStore = ObservedObject(wrappedValue: replyPointsStore)
+        self.sheetDetent = sheetDetent
+    }
 
     // MARK: - view state
 
@@ -80,6 +116,8 @@ struct ChatDetailView: View {
     // Batch 6.3.3：翻译后文本内存态 map（message.id → 译文）；离开页面清 nil（对齐 H5 spec §1.3 "不持久化"）
     @State private var translatedTexts: [String: String] = [:]
     @StateObject private var voiceRecorder = VoiceRecorder()
+    /// M-4:handleVoiceStart 内订阅 $currentSeconds 的 Task 句柄 —— view dismount 时 cancel,避免 Task 越过 view 生命周期持续 for-await
+    @State private var voiceObserveTask: Task<Void, Never>? = nil
     @ObservedObject private var audioPlayer = ChatAudioPlayer.shared
     /// 上拉分页节流（相邻 400ms 内的顶部触发合并）
     @State private var lastLoadMoreAt: Date = .distantPast
@@ -109,6 +147,12 @@ struct ChatDetailView: View {
     @State private var userCardUserId: String? = nil
     /// 半屏模式派生:onClose 非 nil 表示 wrapper 用 sheet 承载 ChatDetailContainer(拉起半屏)
     private var isPopupMode: Bool { onClose != nil }
+    /// 系统通知会话派生(对齐 H5 systemMsg.vue 独立 view):用于 nav 隐头像 + row 用固定 system-icon
+    private var isSystemSession: Bool { chatType == .system }
+    /// 惩罚申诉已申诉的 penaltyUserId 集合(内存态,对齐 H5 item.isAppeal 不持久化)
+    @State private var appealedPenaltyUserIds: Set<String> = []
+    /// MainTabView 注入的 UserProfile push action —— 系统会话里 tap 充值通知 ID 数字跳详情页用
+    @Environment(\.openUserProfile) private var openUserProfile
     /// 键盘管理（H-2 键盘管理精细化）：
     /// - `.scrollDismissesKeyboard(.interactively)` — 用户拖列表时键盘自然滑走（iM 惯例）
     /// - 键盘弹出 → 自动滚到底部（`onChange(of: isInputFocused)` 处理）
@@ -215,6 +259,13 @@ struct ChatDetailView: View {
             // H-2 spec §4.8：真正离开页面才解 delegate；切后台不解（回前台仍要收增量消息）
             // 对齐 swiftui-fullscreencover-hoist.md §2 精神：onDisappear 需 scenePhase 守卫防 background 误触发
             guard scenePhase != .background else { return }
+            // M-3:录音中离页 → 显式 cancel 释放麦克风,避免橙点持续 60s auto-stop 才熄灭(隐私事故)
+            if voiceRecorder.isRecording {
+                voiceRecorder.cancel()
+            }
+            // M-4:cancel 观察 Task,避免 view dismount 后 for-await 通过 AsyncPublisher 持有 voiceRecorder
+            voiceObserveTask?.cancel()
+            voiceObserveTask = nil
             store.teardown()
         }
         .sheet(isPresented: $showMediaSheet) {
@@ -353,7 +404,10 @@ struct ChatDetailView: View {
             .accessibilityLabel("Back")
 
             // 对方 = 用户（kind: .user）；接入 headwear 字段后可补头像框
-            AvatarView(url: peerAvatarURL, size: ChatConstants.navAvatarSize, kind: .user)
+            // 系统会话(system information)nav 无头像,对齐 H5 CNavBar :title (systemMsg.vue L249)
+            if !isSystemSession {
+                AvatarView(url: peerAvatarURL, size: ChatConstants.navAvatarSize, kind: .user)
+            }
 
             Text(peerNickname)
                 .font(.system(size: 16, weight: .medium))
@@ -577,7 +631,12 @@ struct ChatDetailView: View {
                             onTapImage: handleTapImage,
                             onResend: handleResend,
                             translatedText: translatedTexts[msg.id],
-                            onLongPressTranslate: handleTranslate
+                            onLongPressTranslate: handleTranslate,
+                            isSystemSession: isSystemSession,
+                            onSystemComingSoon: handleSystemComingSoon,
+                            onSystemAppeal: handleSystemAppeal,
+                            onSystemTapUserId: handleSystemTapUserId,
+                            appealedPenaltyUserIds: appealedPenaltyUserIds
                         )
                         .id(msg.stableId)   // scrollTo anchor 与 ForEach id 一致
                     }
@@ -799,8 +858,9 @@ struct ChatDetailView: View {
     private func handleVoiceStart() {
         voiceRecorder.start()
         voiceState = .recording(seconds: 0)
-        // 订阅 recorder seconds 更新到 overlay
-        Task { @MainActor in
+        // M-4:高频按停会启动多个观察 Task,先 cancel 旧的再启新的;view dismount 时由 onDisappear cancel
+        voiceObserveTask?.cancel()
+        voiceObserveTask = Task { @MainActor in
             for await sec in voiceRecorder.$currentSeconds.values {
                 guard voiceRecorder.isRecording else { break }
                 voiceState = (voiceState == .willCancel(seconds: sec))
@@ -811,7 +871,13 @@ struct ChatDetailView: View {
     }
 
     private func handleVoiceEnd(cancelled: Bool) {
-        defer { voiceState = nil }
+        defer {
+            voiceState = nil
+            // M-4:结束录音也 cancel 观察 Task(recorder.stop 后 currentSeconds 归 0 会 emit 一次触发 break,
+            // 但显式 cancel 更稳,避免依赖 AsyncPublisher emit 时序)
+            voiceObserveTask?.cancel()
+            voiceObserveTask = nil
+        }
         if cancelled {
             voiceRecorder.cancel()
             return
@@ -863,17 +929,31 @@ struct ChatDetailView: View {
     /// - 目标语言：iOS 设备当前语言（`Locale.current.language.languageCode?.identifier`）；主播端全球通用兜底 en
     /// - config: 从 AppConfigStore 派生 microsoft key/area（TranslateConfigBridge 已建）
     /// - 失败静默；重复 tap 已翻译消息 → 无操作（map hit 短路）
+    ///
+    /// **系统会话扩展**（对齐 H5 `systemMsg.vue` v-else 分支 CTranslate）:
+    /// 对方普通文字消息之外,还支持 4 类系统消息翻译:
+    /// - `.rewardDiamond` — 原文 = "Congratulations! You've received Diamond*X"
+    /// - `.punishmentAppeal(text)` — 原文 = `text`
+    /// - `.rechargeNotify(content)` — 原文 = `content`(H5 `getPlainTextContent` 返 `attach.content`)
+    /// - `.systemFallback(text)` — 原文 = `text`
+    ///
+    /// CP 榜 / 虚拟道具通知 H5 明确无翻译(v-if 前置分支不挂 CTranslate),此处不支持。
     private func handleTranslate(_ msg: ChatMessage) {
-        guard case .text(let text) = msg.content else { return }
+        guard let text = translatableText(for: msg.content) else { return }
         guard translatedTexts[msg.id] == nil else { return }   // 已翻译 → 短路
-        guard let key = AppConfigStore.shared.microsoftTranslatorKey,
-              let area = AppConfigStore.shared.microsoftTranslatorArea,
-              !key.isEmpty, !area.isEmpty else {
-            callToastMessage = "Translation config missing"
-            callToastShow = true
-            return
-        }
-        let targetLang = Locale.current.language.languageCode?.identifier ?? "en"
+        // 防御:AppConfigStore.activate() 若还在跑(冷启动竞态)或缺失,回落 hardcode fallback
+        // (AppConfigStore.translatorKeyFallback/AreaFallback 是硬编码的正确值,与后端 config 同源)
+        let key = AppConfigStore.shared.microsoftTranslatorKey ?? AppConfigStore.translatorKeyFallback
+        let area = AppConfigStore.shared.microsoftTranslatorArea ?? AppConfigStore.translatorAreaFallback
+        // 目标语言 = AppLocaleStore 当前选择(.en/.ar/.tr),.system 时兜底系统 locale
+        let targetLang: String = {
+            switch AppLocaleStore.shared.current {
+            case .en: return "en"
+            case .ar: return "ar"
+            case .tr: return "tr"
+            case .system: return Locale.current.language.languageCode?.identifier ?? "en"
+            }
+        }()
         Task {
             do {
                 let translated = try await MicrosoftTranslateService.shared.translate(
@@ -884,6 +964,61 @@ struct ChatDetailView: View {
                 callToastMessage = "Translation failed"
                 callToastShow = true
             }
+        }
+    }
+
+    /// 从 content 提取可翻译原文（对齐 H5 `systemMsg.vue` `getPlainTextContent`）。
+    /// 返回 nil 表示该消息类型不支持翻译。
+    /// **iOS 补齐**:H5 CP 榜 / 虚拟道具明确无翻译,但 iOS 产品意图希望全部系统消息可翻译,故补齐(用主文案作原文)。
+    private func translatableText(for content: ChatMessageContent) -> String? {
+        switch content {
+        case .text(let s):
+            return s
+        case .cpRankReward(let rankNo, _):
+            return L10n.chatSystemCpRankRewardMsg(rank: rankNo)
+        case .itemNotice(let kind, let itemName, let itemType, let addTime):
+            let typeName = ItemNoticeBubbleView.itemTypeName(itemType)
+            switch kind {
+            case .get:
+                let duration = addTime.map { ItemNoticeBubbleView.formatDuration($0) } ?? ""
+                return L10n.chatSystemItemGet(itemName: itemName, itemType: typeName, duration: duration)
+            case .expired:
+                return L10n.chatSystemItemExpired(itemName: itemName, itemType: typeName)
+            }
+        case .rewardDiamond(let demoContent):
+            return L10n.chatSystemRewardDiamond(count: demoContent)
+        case .punishmentAppeal(let text, _):
+            return text
+        case .rechargeNotify(let content, _, _):
+            return content
+        case .systemFallback(let text):
+            return text
+        default:
+            return nil
+        }
+    }
+
+    // MARK: - 系统会话 handler(对齐 H5 systemMsg.vue 交互降级)
+
+    /// CP 榜卡片 tap / 虚拟道具 View Now tap —— 依赖模块(/rank / /virtualProps)未实装,统一弹 toast
+    private func handleSystemComingSoon() {
+        callToastMessage = L10n.chatSystemComingSoon
+        callToastShow = true
+    }
+
+    /// 惩罚申诉 "click here" tap —— getPunishmentAppeal API 未实装,弹 toast + 灰化 UI
+    private func handleSystemAppeal(_ penaltyUserId: String) {
+        appealedPenaltyUserIds.insert(penaltyUserId)
+        callToastMessage = L10n.chatSystemComingSoon
+        callToastShow = true
+    }
+
+    /// 充值通知 ID 数字 tap —— 跳用户详情页(popup 模式走 UserCardPopup;全屏走 openUserProfile action)
+    private func handleSystemTapUserId(_ userId: String) {
+        if isPopupMode {
+            userCardUserId = userId
+        } else {
+            openUserProfile.perform(userId)
         }
     }
 

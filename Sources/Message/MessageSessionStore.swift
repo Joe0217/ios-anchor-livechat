@@ -191,8 +191,21 @@ final class MessageSessionStore: ObservableObject {
 
     // MARK: - 加载
 
+    /// M-8:state 短摘要(不含 associated value 里的会话字段),用于 log .public 输出避免 PII 泄漏
+    /// e.g. `loaded(count:42)` / `idle` / `loading` / `error`
+    private static func stateKindLabel(_ state: MessageSessionState) -> String {
+        switch state {
+        case .idle: return "idle"
+        case .loading: return "loading"
+        case .loaded(let sessions): return "loaded(count:\(sessions.count))"
+        case .error: return "error"
+        }
+    }
+
     func load() async {
-        logger.info("🟢 [MessageStore] load() start state=\(String(describing: self.state), privacy: .public)")
+        // M-8:state=.loaded([MessageSession]) reflection dump 会带 peerNickname/lastMessage/yxAccid 等 PII,
+        // 用短摘要替代整 state,避免 unified log 泄漏聊天摘要(App Store 5.1.1 privacy 相关)
+        logger.info("🟢 [MessageStore] load() start stateKind=\(Self.stateKindLabel(self.state), privacy: .public)")
         // v5.1 修复（Q2）：已 loaded 非空态下的 reload（下拉刷新 / 重连 syncOK）**不切 loading**，
         // 保留旧数据让 SwiftUI .refreshable 自带的下拉转圈指示器承载 loading 视觉，
         // 避免消息列表闪烁（消失→ProgressView→重现）。
@@ -372,6 +385,18 @@ final class MessageSessionStore: ObservableObject {
         } catch {
             state = .loaded(current)
             logger.notice("[MessageStore] delete rollback \(sessionId, privacy: .private)")
+        }
+    }
+
+    /// 清空指定分类下所有会话（对齐 H5 `news/index.vue:showEmpty` → `deleteSessionsByList`）。
+    /// - `.flame` / `.prime` / `.stranger` 里显示的所有 P2P 会话逐条 delete；系统入口（Station/Notification/Admin）不受影响
+    /// - 失败静默；每条走同款 provider.delete 有单独 rollback
+    func clearCategory(_ cat: MessageSessionCategory) async {
+        let targets = sessions(in: cat)
+        guard !targets.isEmpty else { return }
+        logger.info("[MessageStore] clearCategory \(cat.rawValue, privacy: .public) count=\(targets.count, privacy: .public)")
+        for s in targets {
+            await delete(sessionId: s.id)
         }
     }
 

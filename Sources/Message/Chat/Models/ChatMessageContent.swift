@@ -41,6 +41,50 @@ enum ChatMessageContent: Equatable, Hashable {
     /// 回复积分 tip（H-3 spec §2.5）。tip 与真实消息按 `stableSortKey` 混合排序；
     /// **不进 pendingBottomBadge 未读计数**（对齐 §F-40）。
     case chatTip(kind: ChatTipKind, text: String, tipTs: Int64)
+
+    // MARK: - 系统通知会话消息类型（对齐 H5 `views/news/message/systemMsg.vue`）
+
+    /// CP 榜奖励到账 —— `attach.attachType == "CP_RANK_REWARD_NOTIFY"`
+    /// - `rankNo`: 排名（rank.cp_rank_reward_msg 文案里的 %d）
+    /// - `items`: 奖励道具列表 `[{itemIcon, itemName, itemType, quantity, durationDays}]`
+    case cpRankReward(rankNo: Int, items: [CpRankRewardItem])
+
+    /// 虚拟道具通知 —— `attach.attachType == "ITEM_GET_NOTICE" / "ITEM_EXPIRED_NOTICE"`
+    case itemNotice(kind: ItemNoticeKind, itemName: String, itemType: Int, addTime: Int64?)
+
+    /// 奖励下发（钻石到账）—— `ext.viewFlag == 8`
+    /// 文案："Congratulations! You've received Diamond*{demoContent}"
+    case rewardDiamond(demoContent: String)
+
+    /// 惩罚申诉消息 —— `ext.penaltyUserId` 非空
+    /// - `text`: 原 body（含 "click here" 关键字用于替换成可点链接）
+    /// - `penaltyUserId`: 传给 `getPunishmentAppeal({userId:})` 的入参
+    /// **isAppealed 由 view 层内存态维护**（H5 同款），不进 model。
+    case punishmentAppeal(text: String, penaltyUserId: String)
+
+    /// 用户充值成功通知 —— `attach.attachType == 35`
+    /// - `content`: 原 attach.content 全文（含 "ID 12345" 用于替换成可点链接）
+    /// - `targetUserId` / `targetYxAccId`: attach 里的目标用户信息（tap ID 跳详情用）
+    case rechargeNotify(content: String, targetUserId: String?, targetYxAccId: String?)
+
+    /// 兜底文本 —— attach 有 body/content 但 attachType 未识别（对齐 H5 v-else v-html body）
+    /// 与 `.text` 语义不同（`.text` 是 NIM 原生 text 消息；此为 custom 消息兜底展示）
+    case systemFallback(text: String)
+}
+
+/// CP 榜奖励卡片单个道具项。
+struct CpRankRewardItem: Equatable, Hashable {
+    let itemIcon: String?
+    let itemName: String
+    let itemType: Int      // 1 座驾 / 2 头像框 / 3 进场 / 4 聊天皮肤 / 5 卡片框 / 7 钻石 / 8 聊天卡
+    let quantity: Int
+    let durationDays: Int  // 时限型道具用（1-5 显示 × Nd）
+}
+
+/// 虚拟道具通知子类（对齐 H5 `ITEM_GET_NOTICE` / `ITEM_EXPIRED_NOTICE`）。
+enum ItemNoticeKind: String, Equatable, Hashable {
+    case get       // 收到（含 addTime 时长）
+    case expired   // 过期
 }
 
 /// 未接来电子类（对齐 H5 `msgItem.vue`：status=null/undefined missed / 2 canceled / 3 rejected）

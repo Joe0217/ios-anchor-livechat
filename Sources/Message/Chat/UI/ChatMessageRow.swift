@@ -34,6 +34,16 @@ struct ChatMessageRow: View {
     var translatedText: String? = nil
     /// Batch 6.3.3：长按翻译回调（对方文字消息才 non-nil）
     var onLongPressTranslate: ((ChatMessage) -> Void)? = nil
+    /// 系统通知会话标识（对齐 H5 systemMsg.vue 独立 view）——true 时对方头像固定 system-icon,不走 peer avatar
+    var isSystemSession: Bool = false
+    /// 系统消息里"Coming soon"降级 tap 回调(CP 榜卡片 tap / 虚拟道具 View Now tap)——统一走 toast。
+    var onSystemComingSoon: (() -> Void)? = nil
+    /// 惩罚申诉 tap "click here" 回调(参数 = penaltyUserId)——caller 弹 toast + 灰化 UI。
+    var onSystemAppeal: ((String) -> Void)? = nil
+    /// 系统消息里 tap 用户 ID 跳详情页(充值通知 ID 数字)——caller 传 userId,由父 view 触发 navigation。
+    var onSystemTapUserId: ((String) -> Void)? = nil
+    /// 惩罚申诉已申诉的 penaltyUserId 集合(内存态,对齐 H5 item.isAppeal 不持久化)——用于灰化 click here。
+    var appealedPenaltyUserIds: Set<String> = []
 
     var body: some View {
         // 系统提示（居中灰字条）不走左右 avatar 布局
@@ -41,8 +51,20 @@ struct ChatMessageRow: View {
             SystemTipRow(text: text, weakType: weakType)
                 .padding(.horizontal, 12)
         } else if case .system = message.content {
-            // 兜底占位不展示（保数据便于 H-3+ 分发）
+            // 兜底占位不展示（保数据便于 H-3+ 分发）—— parser 已尽量转 .systemFallback,此处只兜 raw 无 body 场景
             EmptyView()
+        } else if isSystemSession, isSystemMessageContent(message.content) {
+            // 系统会话消息:只对方(from = 系统账号)布局,固定 system-icon 头像,居左气泡
+            HStack(alignment: .top, spacing: 8) {
+                Image("messageInboxNotification")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 36, height: 36)
+                bubbleView
+                Spacer(minLength: 40)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
         } else if case .chatTip(_, let text, _) = message.content {
             // H-3 spec §2.5：回复积分 4 tip 居中展示；Step 1a 占位样式，Step 1b 替换 ChatTipRow(kind, text)
             Text(text)
@@ -153,9 +175,77 @@ struct ChatMessageRow: View {
             PrivateVideoBubbleView(url: url, coverUrl: cover, dur: dur, lockStatus: lockStatus) {
                 onTapVideo(message)
             }
-        // 新增 case 兜底（未在 body 上层拦截，气泡侧统一走 EmptyView 或简版文字）
+        // 系统通知会话专属气泡(对齐 H5 systemMsg.vue 6 类特殊消息)——只在系统会话下有意义,非系统会话下的历史脏数据兜底为 EmptyView
+        case .cpRankReward(let rankNo, let items):
+            if isSystemSession {
+                CpRankRewardBubbleView(
+                    rankNo: rankNo,
+                    items: items,
+                    onCheckCpRanking: { onSystemComingSoon?() },
+                    translatedText: translatedText,
+                    onTranslate: { onLongPressTranslate?(message) }
+                )
+            } else { EmptyView() }
+        case .itemNotice(let kind, let itemName, let itemType, let addTime):
+            if isSystemSession {
+                ItemNoticeBubbleView(
+                    kind: kind,
+                    itemName: itemName,
+                    itemType: itemType,
+                    addTime: addTime,
+                    onViewNow: { onSystemComingSoon?() },
+                    translatedText: translatedText,
+                    onTranslate: { onLongPressTranslate?(message) }
+                )
+            } else { EmptyView() }
+        case .rewardDiamond(let demoContent):
+            if isSystemSession {
+                RewardDiamondBubbleView(
+                    demoContent: demoContent,
+                    translatedText: translatedText,
+                    onTranslate: { onLongPressTranslate?(message) }
+                )
+            } else { EmptyView() }
+        case .punishmentAppeal(let text, let penaltyUserId):
+            if isSystemSession {
+                PunishmentAppealBubbleView(
+                    text: text,
+                    penaltyUserId: penaltyUserId,
+                    isAppealed: appealedPenaltyUserIds.contains(penaltyUserId),
+                    onAppeal: { onSystemAppeal?(penaltyUserId) },
+                    translatedText: translatedText,
+                    onTranslate: { onLongPressTranslate?(message) }
+                )
+            } else { EmptyView() }
+        case .rechargeNotify(let content, let targetUserId, _):
+            if isSystemSession {
+                RechargeNotifyBubbleView(
+                    content: content,
+                    targetUserId: targetUserId,
+                    onTapUserId: { uid in onSystemTapUserId?(uid) },
+                    translatedText: translatedText,
+                    onTranslate: { onLongPressTranslate?(message) }
+                )
+            } else { EmptyView() }
+        case .systemFallback(let text):
+            // 兜底文本气泡:对齐 H5 v-else v-html body。iOS SwiftUI Text 不解析 HTML,展示原文
+            // 复用 TextBubbleView 已有的 translatedText + onLongPressTranslate 能力(对齐 H5 v-else CTranslate)
+            TextBubbleView(
+                text: text,
+                isOutgoing: false,
+                translatedText: translatedText,
+                onLongPressTranslate: { onLongPressTranslate?(message) }
+            )
+        }
+    }
+
+    /// 判定是否为系统会话专属消息内容(用于 body 层选布局:系统消息用 system-icon + 只左布局,不走 outgoing 分支)
+    private func isSystemMessageContent(_ content: ChatMessageContent) -> Bool {
+        switch content {
         case .cpRankReward, .itemNotice, .rewardDiamond, .punishmentAppeal, .rechargeNotify, .systemFallback:
-            EmptyView()
+            return true
+        default:
+            return false
         }
     }
 

@@ -87,6 +87,23 @@ struct MainTabView: View {
         }
     }
 
+    /// 跨 view 打开用户详情页 action:append UserProfileRoute 到**当前活跃 tab** 的 path。
+    /// 用于 ChatDetailView 里系统消息 tap "ID 12345" 场景 —— openURL 回调无法用 NavigationLink 承载 push。
+    /// 已注册的各 tab navigationDestination(for: UserProfileRoute.self) 会自动接单。
+    private var openUserProfileAction: OpenUserProfileAction {
+        OpenUserProfileAction { userId in
+            guard !userId.isEmpty else { return }
+            let route = UserProfileRoute.userId(userId)
+            switch selection {
+            case .home:     homePath.append(route)
+            case .messages: messagesPath.append(route)
+            case .work:     workPath.append(route)
+            case .party:    partyPath.append(route)
+            case .profile:  profilePath.append(route)
+            }
+        }
+    }
+
     /// 直播结束 → 切 Work Tab + workPath 重建为单层 `[liveResult]`（B spec v7 push 架构）。
     /// LiveRoomView + LiveSettings dismount 触发 onDisappear 正常清资源；结果页作为新根出现。
     ///
@@ -330,6 +347,7 @@ struct MainTabView: View {
             })
             .environment(\.liveTermination, liveTerminationAction)
             .environment(\.openChat, openChatAction)
+            .environment(\.openUserProfile, openUserProfileAction)
             .opacity(selection == .home ? 1 : 0)
             .allowsHitTesting(selection == .home)
             .accessibilityHidden(selection != .home)
@@ -353,6 +371,7 @@ struct MainTabView: View {
                     // 详情↔聊天互跳所有 destination(UserProfileRoute + ChatFromProfileRoute) 统一注册
                     // —— ChatMessageRow 内 NavigationLink(value: UserProfileRoute) 会走 helper 里的 UserProfileRoute case
                     .userProfileAndChatDestinations()
+                    .environment(\.openUserProfile, openUserProfileAction)
             }
             .opacity(selection == .messages ? 1 : 0)
             .allowsHitTesting(selection == .messages)
@@ -406,6 +425,7 @@ struct MainTabView: View {
                 .environment(\.liveResultTransition, liveResultTransitionAction)
                 .environment(\.liveTermination, liveTerminationAction)
             .environment(\.openChat, openChatAction)
+            .environment(\.openUserProfile, openUserProfileAction)
             .environment(\.openHomeMatch, openHomeMatchAction)
             } else if selection == .profile {
                 NavigationStack(path: $profilePath) {
@@ -604,6 +624,25 @@ extension EnvironmentValues {
     var openChat: OpenChatAction {
         get { self[OpenChatKey.self] }
         set { self[OpenChatKey.self] = newValue }
+    }
+}
+
+/// 跨 view 打开用户详情页 action(对齐 openChatAction 模式)。
+/// 用于 ChatDetailView 内系统消息 tap "ID 12345" 跳详情等无法用 NavigationLink 声明式承载的场景。
+/// 实现:append UserProfileRoute 到当前 tab path,让已注册的 navigationDestination 承接。
+struct OpenUserProfileAction {
+    let perform: (_ userId: String) -> Void
+    static let noop = OpenUserProfileAction(perform: { _ in })
+}
+
+private struct OpenUserProfileKey: EnvironmentKey {
+    static let defaultValue: OpenUserProfileAction = .noop
+}
+
+extension EnvironmentValues {
+    var openUserProfile: OpenUserProfileAction {
+        get { self[OpenUserProfileKey.self] }
+        set { self[OpenUserProfileKey.self] = newValue }
     }
 }
 

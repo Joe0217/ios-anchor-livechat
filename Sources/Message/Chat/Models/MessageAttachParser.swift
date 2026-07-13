@@ -16,24 +16,114 @@ enum MessageAttachParser {
     /// weakTxtType 数字系统提示白名单（对齐 H5 `stores/modules/message.js:130`）
     static let weakTxtTypes: Set<Int> = [-4, 103, 104, 156, 157]
 
-    /// 主入口：从 attach dict + raw JSON 解析为 ChatMessageContent。
+    /// 主入口：从 attach dict + raw JSON + remoteExt 解析为 ChatMessageContent。
     /// - Parameters:
     ///   - attach: 反序列化后的 dict（NIMSDK rawAttachContent JSON 解析结果）
     ///   - rawJSON: 原始 JSON string（fallback 保数据用）
-    static func parseCustom(_ attach: [String: Any], rawJSON: String) -> ChatMessageContent {
-        guard let token = extractAttachType(attach) else {
-            return .system(rawJSON: rawJSON)
+    ///   - remoteExt: NIM message.remoteExt（H5 systemMsg.vue 里 `item.ext`）—— viewFlag / penaltyUserId 判定用
+    static func parseCustom(_ attach: [String: Any], rawJSON: String, remoteExt: [String: Any]? = nil) -> ChatMessageContent {
+        // 判定优先级对齐 H5 `systemMsg.vue` v-if 链 + `msgItem.vue`:
+        // 1. attach.attachType 字符串特化 (CP_RANK / ITEM_NOTICE / SEND_GIFT / MISSED_CALLS_RECORD)
+        // 2. ext.viewFlag == 8 (rewardDiamond) —— 属兜底分支内特化,但从 attach 无 attachType 分辨
+        // 3. ext.penaltyUserId 非空 (punishmentAppeal)
+        // 4. attach.attachType == 35 (rechargeNotify)
+        // 5. attach.attachType 数字 weakTxtType 白名单 (systemTip)
+        // 6. 兜底 textContentFallback → .systemFallback
+        let token = extractAttachType(attach)
+
+        // 优先级 1: 字符串 attachType 特化
+        if case .string(let s) = token {
+            switch s {
+            case "CP_RANK_REWARD_NOTIFY":
+                if let msg = parseCpRankReward(attach) { return msg }
+            case "ITEM_GET_NOTICE":
+                if let msg = parseItemNotice(attach, kind: .get) { return msg }
+            case "ITEM_EXPIRED_NOTICE":
+                if let msg = parseItemNotice(attach, kind: .expired) { return msg }
+            case "SEND_GIFT":
+                if let msg = parseSendGift(attach) { return msg }
+            case "MISSED_CALLS_RECORD":
+                if let msg = parseMissedCall(attach) { return msg }
+            default:
+                break
+            }
         }
-        switch token {
-        case .string("SEND_GIFT"):
-            return parseSendGift(attach) ?? .system(rawJSON: rawJSON)
-        case .string("MISSED_CALLS_RECORD"):
-            return parseMissedCall(attach) ?? .system(rawJSON: rawJSON)
-        case .number(let n) where weakTxtTypes.contains(n):
+
+        // 优先级 2-3: ext 特化（H5 里 item.ext == remoteExt）
+        if let ext = remoteExt {
+            if extractInt(ext["viewFlag"]) == 8 {
+                let demo = (ext["demoContent"] as? String) ?? ""
+                return .rewardDiamond(demoContent: demo)
+            }
+            if let penaltyId = extractPenaltyUserId(ext) {
+                let body = textContentFallbackString(attach) ?? ""
+                return .punishmentAppeal(text: body, penaltyUserId: penaltyId)
+            }
+        }
+
+        // 优先级 4: attachType == 35 充值通知
+        if case .number(35) = token {
+            let content = (attach["content"] as? String) ?? textContentFallbackString(attach) ?? ""
+            let targetUserId = extractStringOrNumberAsString(attach["userId"])
+            let targetYxAccId = attach["yxAccid"] as? String
+            return .rechargeNotify(content: content, targetUserId: targetUserId, targetYxAccId: targetYxAccId)
+        }
+
+        // 优先级 5: weakTxtType 白名单
+        if case .number(let n) = token, weakTxtTypes.contains(n) {
             return parseSystemTip(attach, weakType: n) ?? .system(rawJSON: rawJSON)
-        default:
-            return .system(rawJSON: rawJSON)
         }
+
+        // 优先级 6: 兜底 —— 有 content/text/body 用 .systemFallback（不再 .text 混淆）；否则 .system 保 raw
+        if let text = textContentFallbackString(attach) {
+            return .systemFallback(text: text)
+        }
+        return .system(rawJSON: rawJSON)
+    }
+
+    /// unknown attachType 兜底：attach.content/text/msg/body 任一非空 → 转 .text case 显示（对齐 H5 msgObj.body 语义）
+    /// **保留**用于兼容旧调用点；新调用点用 `textContentFallbackString` + `.systemFallback`
+    private static func textContentFallback(_ attach: [String: Any]) -> ChatMessageContent? {
+        textContentFallbackString(attach).map { .text($0) }
+    }
+
+    /// 提取 attach 内的兜底文本字段（对齐 H5 handleXxxNotification `msgObj.body = attach.content`）。
+    private static func textContentFallbackString(_ attach: [String: Any]) -> String? {
+        let text = (attach["content"] as? String)
+            ?? (attach["text"] as? String)
+            ?? (attach["msg"] as? String)
+            ?? (attach["body"] as? String)
+            ?? ""
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// Int/NSNumber 双兼容抽取（用于 ext.viewFlag 判定 —— 后端可能返 8 或 "8"）
+    private static func extractInt(_ any: Any?) -> Int? {
+        if let n = any as? Int { return n }
+        if let n = any as? NSNumber {
+            let cType = String(cString: n.objCType)
+            if cType != "c" && cType != "B" { return n.intValue }
+        }
+        if let s = any as? String { return Int(s) }
+        return nil
+    }
+
+    /// ext.penaltyUserId 双兼容抽取（可能是 Int 或 String）
+    private static func extractPenaltyUserId(_ ext: [String: Any]) -> String? {
+        guard let raw = ext["penaltyUserId"] else { return nil }
+        return extractStringOrNumberAsString(raw)
+    }
+
+    /// String / NSNumber / Int 兼容转 String（rule ios-decode-userid-compat 精神）
+    private static func extractStringOrNumberAsString(_ any: Any?) -> String? {
+        if let s = any as? String, !s.isEmpty { return s }
+        if let n = any as? NSNumber {
+            let cType = String(cString: n.objCType)
+            if cType != "c" && cType != "B" { return n.stringValue }
+        }
+        if let i = any as? Int { return String(i) }
+        return nil
     }
 
     /// 提取 attachType（双分支：字符串 or 数字）
@@ -79,6 +169,42 @@ enum MessageAttachParser {
             }
         }()
         return .missedCall(kind: kind)
+    }
+
+    // MARK: - 系统通知会话消息类型（对齐 H5 `views/news/message/systemMsg.vue` + `cpRankRewardMsg.vue`）
+
+    /// CP 榜奖励卡片 —— attachType == "CP_RANK_REWARD_NOTIFY"
+    /// H5 `cpRankRewardMsg.vue:27` 取 `data.value?.rankNo`,`data.value?.items[]`。
+    /// 但 H5 里 `data` = `props.item`(整个 message),`items` 与 `rankNo` 可能是 attach 直连字段或嵌套 —— 双兼容取。
+    private static func parseCpRankReward(_ attach: [String: Any]) -> ChatMessageContent? {
+        let rankNo: Int = extractInt(attach["rankNo"]) ?? 1
+        let rawItems = (attach["items"] as? [[String: Any]]) ?? []
+        let items: [CpRankRewardItem] = rawItems.compactMap { dict in
+            let name = (dict["itemName"] as? String) ?? ""
+            guard !name.isEmpty else { return nil }
+            return CpRankRewardItem(
+                itemIcon: dict["itemIcon"] as? String,
+                itemName: name,
+                itemType: extractInt(dict["itemType"]) ?? 0,
+                quantity: extractInt(dict["quantity"]) ?? 1,
+                durationDays: extractInt(dict["durationDays"]) ?? 0
+            )
+        }
+        return .cpRankReward(rankNo: rankNo, items: items)
+    }
+
+    /// 虚拟道具通知 —— attachType == "ITEM_GET_NOTICE" / "ITEM_EXPIRED_NOTICE"
+    /// H5 `systemMsg.vue:173-200`:`attachment.itemName / itemType / addTime`
+    private static func parseItemNotice(_ attach: [String: Any], kind: ItemNoticeKind) -> ChatMessageContent? {
+        let itemName = (attach["itemName"] as? String) ?? ""
+        let itemType = extractInt(attach["itemType"]) ?? 0
+        let addTime: Int64? = {
+            if kind == .get {
+                if let n = extractInt(attach["addTime"]) { return Int64(n) }
+            }
+            return nil
+        }()
+        return .itemNotice(kind: kind, itemName: itemName, itemType: itemType, addTime: addTime)
     }
 
     /// weakTxtType 系统提示：文案由 H-3 阶段扩 L10n 映射；本 spec 直接取 attach 里可能的 text 字段兜底

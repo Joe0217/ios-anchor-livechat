@@ -10,6 +10,22 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "VoiceRe
 /// **格式**：m4a AAC 44.1kHz 单声道（iOS 主流；NIMSDK 云信端支持）
 /// **持久化**：录到 `.cachesDirectory/chat/audio/{UUID}.m4a`（比 tmp 更抗系统 auto clean）
 /// **60s 上限**：对齐 H5 `recording.vue:34` MAX_DURATION_MS，到点自动 stop + 触发发送回调
+/// M-3 兜底 cleanup handle —— @MainActor class 的 deinit 是 nonisolated,不能触碰 @MainActor 字段;
+/// 用独立 non-isolated 小 class 承载 recorder + 残留文件句柄,VoiceRecorder deinit 时随之释放触发清理。
+///
+/// **正常路径**:ChatDetailView.onDisappear 显式调 `voiceRecorder.cancel()`(见 rule 中的 M-3 fix);
+/// 本 handle 仅兜底 view/store 意外释放场景(kill / crash restore 前),防止麦克风橙点残留 60s。
+private final class VoiceRecorderCleanupHandle {
+    var recorder: AVAudioRecorder?
+    var fileURL: URL?
+
+    deinit {
+        recorder?.stop()
+        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+        if let url = fileURL { try? FileManager.default.removeItem(at: url) }
+    }
+}
+
 @MainActor
 final class VoiceRecorder: ObservableObject {
 
@@ -25,6 +41,8 @@ final class VoiceRecorder: ObservableObject {
     private var tickTask: Task<Void, Never>?
     private var currentFileURL: URL?
     private var startedAt: Date?
+    /// M-3 兜底清理句柄 —— 与 recorder/currentFileURL 同步维护,VoiceRecorder 意外释放时随之 deinit 释放麦克风
+    private let cleanupHandle = VoiceRecorderCleanupHandle()
 
     /// 60s 到点自动 stop + 触发 send 的回调（由 ChatDetailView 注入）
     var onAutoStopReachMax: ((URL, Int) -> Void)?
@@ -52,15 +70,19 @@ final class VoiceRecorder: ObservableObject {
         isRecording = false
         currentSeconds = 0
         try? deactivateAudioSession()
+        // M-3:主动 stop 已释放麦克风,清空兜底 handle 避免 deinit 二次操作(AVAudioRecorder.stop 幂等但多余)
+        cleanupHandle.recorder = nil
 
         guard let url = currentFileURL, dur >= ChatConstants.voiceMinDurationSec else {
             // 时长过短 → 删除文件
             if let url = currentFileURL { try? FileManager.default.removeItem(at: url) }
             currentFileURL = nil
+            cleanupHandle.fileURL = nil
             return nil
         }
         let result = (url, min(dur, ChatConstants.voiceMaxDurationSec))
         currentFileURL = nil   // 转移所有权到 caller
+        cleanupHandle.fileURL = nil   // 文件归 caller,不再兜底删
         return result
     }
 
@@ -76,6 +98,9 @@ final class VoiceRecorder: ObservableObject {
         try? deactivateAudioSession()
         if let url = currentFileURL { try? FileManager.default.removeItem(at: url) }
         currentFileURL = nil
+        // M-3:主动 cancel 已完整清理,清空兜底 handle
+        cleanupHandle.recorder = nil
+        cleanupHandle.fileURL = nil
     }
 
     // MARK: - 内部
@@ -124,6 +149,9 @@ final class VoiceRecorder: ObservableObject {
             self.startedAt = Date()
             self.isRecording = true
             self.currentSeconds = 0
+            // M-3:同步到兜底 handle,view 意外释放时 deinit 触发清理
+            cleanupHandle.recorder = rec
+            cleanupHandle.fileURL = url
             startTick()
         } catch {
             logger.error("startRecording error: \(String(describing: error), privacy: .public)")
