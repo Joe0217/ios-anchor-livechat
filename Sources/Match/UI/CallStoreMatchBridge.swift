@@ -20,6 +20,13 @@ final class CallStoreMatchBridge: MatchCallStoreObserving {
         callStore.lastJoinCallSource
     }
 
+    /// P2-1 对齐 H5 useCallApi.js:397：上一次通话是否为异常出错结束。
+    /// 判定 = `current.hangupReason == .beginCallError`（RTC/RTM/信令建链失败对应 CallOverReason 10）。
+    /// MatchStore 在 .matchingCalling → .idle 时读此值走"关匹配"分支。
+    var latestHangupWasError: Bool {
+        callStore.current.hangupReason == .beginCallError
+    }
+
     // MARK: - Publishers（对齐 MatchCallStoreObserving protocol）
 
     /// state.$state 到 .calling/.connecting/.connected 触发 —— MatchStore 用来在通话中间态无条件 unsubscribe camera

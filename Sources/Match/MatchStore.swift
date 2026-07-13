@@ -21,6 +21,11 @@ protocol MatchCallStoreObserving: AnyObject {
     var enteredConnectedPublisher: AnyPublisher<Void, Never> { get }
     /// 快照最近一次 lastJoinCallSource（供 idle 时读取）
     var latestJoinCallSource: String? { get }
+    /// P2-1 对齐 H5 useCallApi.js:397：本次通话结束是否是异常出错路径
+    /// （对应 CallOverReason.beginCallError —— RTC/RTM/信令建链失败）。
+    /// MatchStore 在 .matchingCalling → .idle 时读此值判定：true 时走"关匹配"（H5 保守策略），
+    /// false 时按 source 走 resume/keep 逻辑。**不暴露 CallOverReason 类型**保持 test module 隔离。
+    var latestHangupWasError: Bool { get }
 }
 
 // MARK: - 状态机 · Match 4 态 + 独立维度 isMatchBlocked
@@ -254,10 +259,14 @@ final class MatchStore: ObservableObject {
             .store(in: &callStoreCancellables)
 
         // CallStore.state → .idle → 若 lastJoinCallSource=='matchV4' 回 .matching + 重启 camera
+        // P2-1：同时读 latestHangupWasError，出错时走"关匹配"分支（对齐 H5 useCallApi.js:397）
         observer.stateReturnedToIdlePublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self, weak observer] in
-                self?.handleCallStoreReturnedToIdle(lastJoinCallSource: observer?.latestJoinCallSource)
+                self?.handleCallStoreReturnedToIdle(
+                    lastJoinCallSource: observer?.latestJoinCallSource,
+                    lastCallError: observer?.latestHangupWasError ?? false
+                )
             }
             .store(in: &callStoreCancellables)
 
@@ -449,6 +458,8 @@ final class MatchStore: ObservableObject {
         if source == "matchV4" {
             state = .matchingCalling
             logger.info("handleJoinCallSource: matchV4 → state=.matchingCalling")
+            // P1 对齐 H5 c-goMatch.vue:110-119：进入 MATCHING_CALLING 立即检测一次 + 启动 3 次随机检测
+            startFaceCheckInCalling()
         } else {
             // Gap-5：非 matchV4 来源 → 暂停匹配（对齐 H5 useCallApi.js:485-486 MATCHING_LEFT 语义）。
             // 保留"恢复"意图，通话结束时按 wasConnectedInCall 分流：接通过弹 Alert；直接拒绝自动 openMatch
@@ -465,14 +476,40 @@ final class MatchStore: ObservableObject {
     }
 
     /// CallStore.state 转 .idle（通话完全结束）触发。
-    /// v3 §2.2 + Gap-5：分三个入口态处理：
+    /// v3 §2.2 + Gap-5 + P1/P2-1：分四个入口态处理：
+    /// - `.matchingCalling` + `lastCallError=true` → 关匹配（对齐 H5 useCallApi.js:397 保守策略）
+    /// - `.matchingCalling` + `isMatchBlocked` → 转 `.blocked`（通话中人脸检测异常场景，P1）
     /// - `.matchingCalling`（matchV4 匹配通话）→ 通话结束回 `.matching` 重启 faceCheck
     /// - `.matchingSuspended`（非 matchV4 暂停期）→ 按 `wasConnectedInCall` 分流：
     ///     - true（接通过）→ 弹 Resume Match Alert
     ///     - false（未接通 / 直接拒绝）→ 自动 openMatch
     /// - 其他态 → 不管
-    func handleCallStoreReturnedToIdle(lastJoinCallSource: String?) {
+    ///
+    /// - Parameter lastCallError: P2-1 —— 本次通话是否异常出错结束（对应 CallOverReason.beginCallError）。
+    ///   默认 false 兼容现有 test caller；生产由 CallStoreMatchBridge 传真值。
+    func handleCallStoreReturnedToIdle(lastJoinCallSource: String?, lastCallError: Bool = false) {
         if state == .matchingCalling {
+            // P2-1 对齐 H5 useCallApi.js:397：通话异常出错 → 关匹配（保守策略，避免反复错误循环）
+            if lastCallError {
+                logger.warning("handleCallStoreReturnedToIdle: matchingCalling + callError → state=.ended (align H5:397)")
+                stopFaceCheck()
+                cameraSession?.stop()
+                state = .ended
+                lastToast = .turnOffSucceed
+                // 补发 toggleMatch(0) 退池（fire-and-forget；H5 通过 MATCHING_ENDED watch → closeMatch → toggleMatch(0)）
+                Task { [service] in
+                    _ = try? await service.toggleMatch(status: 0, faceCheckStatus: nil)
+                }
+                return
+            }
+            // P1：通话中人脸检测异常已标 isMatchBlocked → 转 .blocked（不 restart camera）
+            if isMatchBlocked {
+                logger.info("handleCallStoreReturnedToIdle: matchingCalling + blocked (in-call faceCheck) → state=.blocked")
+                stopFaceCheck()
+                cameraSession?.stop()
+                state = .blocked
+                return
+            }
             if lastJoinCallSource == "matchV4" {
                 state = .matching
                 cameraSession?.start()  // 重新起 camera（Match 独立 session）
@@ -634,21 +671,60 @@ final class MatchStore: ObservableObject {
     /// 未露脸异常收尾（对齐 H5 handleFaceCheckException）
     /// - 上报 reportNoFace（TODO：J 里程碑接入 OSS 截图 + 真接口）
     /// - toggleMatch(0, faceCheckStatus:1) 关匹配（本次桶）
-    /// - state → .blocked + isMatchBlocked=true 持久化
-    /// - showExitMatchPopup=true（"移除匹配"弹窗）
+    /// - **匹配态**（.matching）：state → .blocked + camera.stop + showExitMatchPopup（"移除匹配"弹窗）
+    /// - **通话态**（.matchingCalling，P1 对齐 H5 line 193-205 handleFaceCheckException('connected'/'random')）:
+    ///   仅标 isMatchBlocked + toggleMatch(0,1)，**不改 state 也不弹 exitMatchPopup**（CallStore 主控此态；
+    ///   通话结束时 handleCallStoreReturnedToIdle 判 isMatchBlocked → 转 .blocked）
     private func handleFaceCheckException(fromRandom: Bool) {
-        logger.warning("handleFaceCheckException: fromRandom=\(fromRandom) → blocked")
+        let inCall = (state == .matchingCalling)
+        logger.warning("handleFaceCheckException: fromRandom=\(fromRandom) inCall=\(inCall)")
         stopFaceCheck()
-        cameraSession?.stop()
         isMatchBlocked = true
         MatchPersistedStore.saveIsMatchBlocked(true)
-        state = .blocked
-        showExitMatchPopup = true
-        lastToast = .noFaceDetected
+
+        if inCall {
+            // P1 通话中：不改 state，不停摄像头（CallView 有自己的 CameraManager），不弹 exitMatchPopup（H5 line 279 明示仅 openMatch 期 5s 倒计时后才弹）
+            lastToast = .noFaceDetected
+        } else {
+            cameraSession?.stop()
+            state = .blocked
+            showExitMatchPopup = true
+            lastToast = .noFaceDetected
+        }
 
         // 服务端上报（faceCheckStatus=1）—— OSS 截图 + reportNoFace 留 spec BL-4 J-合规
         Task { [service] in
             _ = try? await service.toggleMatch(status: 0, faceCheckStatus: 1)
+        }
+    }
+
+    /// P1 对齐 H5 c-goMatch.vue:110-119：进入 MATCHING_CALLING 立即检测一次 + 启动 3 次随机检测。
+    /// 与 `startFaceCheckAfterOpenMatch` 的区别：
+    /// - guard state == `.matchingCalling`（vs `.matching`）
+    /// - **无 30s 首检等待**（H5 通话态立即检）
+    /// - **无 5s noFacePopup 兜底**（H5 line 172-186：通话中随机检测无脸直接调 handleFaceCheckException，不弹倒计时）
+    private func startFaceCheckInCalling() {
+        stopFaceCheck()  // 清 openMatch 期启动的 30s + 随机 timer（对齐 H5 c-goMatch:114 clearAllTimers）
+
+        // 立即检测一次（对齐 H5 line 116-117：!faceDetected → handleFaceCheckException('connected')）
+        if !faceDetection.hasFace() {
+            handleFaceCheckException(fromRandom: false)
+            return
+        }
+
+        // 3 次随机递归检测（对齐 H5 startRandomFaceCheck，line 165-190）
+        faceCheckTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let intervals = self.generateRandomCheckSchedule()
+            for interval in intervals {
+                try? await Task.sleep(nanoseconds: interval)
+                guard !Task.isCancelled, self.state == .matchingCalling else { return }
+                if !self.faceDetection.hasFace() {
+                    self.handleFaceCheckException(fromRandom: true)
+                    return
+                }
+            }
+            logger.info("faceCheck (in-calling): all random checks passed")
         }
     }
 

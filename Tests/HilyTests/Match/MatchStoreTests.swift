@@ -26,7 +26,8 @@ import XCTest
 /// | R9  | handleCameraInterruptionTimeout → .ended     | `test_R9_cameraInterruptionTimeout_stateEnded` |
 /// | R10 | handleIMOffline → .ended（不调 toggleMatch）  | `test_R10_imOffline_stateEnded_noToggleMatch` |
 /// | R19 | shouldShowTipPopup 组合态 gate               | `test_R19_shouldShowTipPopup_combinedGate` |
-/// | R21 | source != 'matchV4' → .ended + toggle(0)     | `test_R21_nonMatchV4Source_forceEnded` |
+/// | R21 | source != 'matchV4' → .matchingSuspended（v4 Gap-5）| `test_R21_nonMatchV4Source_matchingSuspended` |
+/// | Gap-5a | suspended + 未接通 → 通话结束自动 openMatch | `test_Gap5a_suspended_notConnected_autoOpenMatch` |
 ///
 @MainActor
 final class MatchStoreTests: XCTestCase {
@@ -35,6 +36,7 @@ final class MatchStoreTests: XCTestCase {
 
     private func makeStore(service: FakeMatchService? = nil,
                            camera: FakeMatchCameraSession? = nil,
+                           faceDetection: FakeFaceDetectionService? = nil,
                            preConfigure: (() -> Void)? = nil) -> (MatchStore, FakeMatchService, FakeMatchCameraSession) {
         // 清空 UserDefaults，然后 preConfigure（若需模拟冷启动 blocked / 首日已同意等）
         MatchPersistedStore.resetForTesting()
@@ -42,7 +44,8 @@ final class MatchStoreTests: XCTestCase {
 
         let fakeService = service ?? FakeMatchService()
         let fakeCamera = camera ?? FakeMatchCameraSession()
-        let store = MatchStore(service: fakeService)
+        let fakeFace = faceDetection ?? FakeFaceDetectionService()
+        let store = MatchStore(service: fakeService, faceDetection: fakeFace)
         store.attachCameraSession(fakeCamera)
         return (store, fakeService, fakeCamera)
     }
@@ -312,8 +315,14 @@ final class MatchStoreTests: XCTestCase {
         XCTAssertFalse(blockedStore.shouldShowTipPopup(appHidden: false))
     }
 
-    /// R21：matching 中收 source != 'matchV4' → 强制关匹配 + camera stop + toggleMatch(0)
-    func test_R21_nonMatchV4Source_forceEnded() async {
+    /// R21（v4 Gap-5 修订）：matching 中收 source != 'matchV4' → **`.matchingSuspended`**（非 .ended）。
+    ///
+    /// **对齐 H5 useCallApi.js:485-486 + c-goMatch.vue:130-135 MATCHING_LEFT 语义**：
+    /// 关摄像头 + toggleMatch(0) 退池 + 保留"恢复"意图；通话结束时按 wasConnectedInCall 分流恢复。
+    ///
+    /// 历史：v3 spec §5.2 R21 原写"强制 .ended"，v4 追加 Gap-5 后语义变更为 .matchingSuspended，
+    /// spec §2.2/§5.2 表格未同步；本 test 追随 impl 与 v4 Gap-5 描述对齐（2026-07-14）。
+    func test_R21_nonMatchV4Source_matchingSuspended() async {
         let (store, service, camera) = makeStore()
         service.isMatchOpenResult = .success(.allowed)
         service.toggleMatchResult = .success(true)
@@ -322,18 +331,20 @@ final class MatchStoreTests: XCTestCase {
 
         store.handleJoinCallSource("liveCall") // 非 matchV4
 
-        XCTAssertEqual(store.state, .ended)
+        XCTAssertEqual(store.state, .matchingSuspended,
+                       "Gap-5：非 matchV4 → suspended（保留恢复意图，非 .ended）")
         // handleCallStoreLeavingIdle 已 stop 一次；handleJoinCallSource 非 matchV4 再 stop 一次
-        XCTAssertGreaterThanOrEqual(camera.stopCallCount, 1)
+        XCTAssertGreaterThanOrEqual(camera.stopCallCount, 1, "摄像头应关（Gap-5 退池）")
 
         // 补发 toggleMatch(0) 是 fire-and-forget
         try? await Task.sleep(nanoseconds: 100_000_000)
         let closeCallCount = service.toggleMatchCalls.filter { $0.status == 0 }.count
-        XCTAssertGreaterThanOrEqual(closeCallCount, 1, "non-matchV4 source should rollback server toggleMatch(0)")
+        XCTAssertGreaterThanOrEqual(closeCallCount, 1,
+                                    "non-matchV4 source should rollback server toggleMatch(0)")
     }
 
-    /// R21b：source=nil（joinCall 失败降级）→ 视为非 matchV4 → force .ended
-    func test_R21b_nilSource_forceEnded() async {
+    /// R21b（v4 Gap-5 修订）：source=nil（joinCall 失败降级）→ 视同非 matchV4 → **`.matchingSuspended`**
+    func test_R21b_nilSource_matchingSuspended() async {
         let (store, service, _) = makeStore()
         service.isMatchOpenResult = .success(.allowed)
         service.toggleMatchResult = .success(true)
@@ -342,7 +353,8 @@ final class MatchStoreTests: XCTestCase {
 
         store.handleJoinCallSource(nil)
 
-        XCTAssertEqual(store.state, .ended)
+        XCTAssertEqual(store.state, .matchingSuspended,
+                       "Gap-5：nil source 与非 matchV4 同款走 suspended")
     }
 
     // MARK: - 补充：不变量 / 边界
@@ -381,5 +393,154 @@ final class MatchStoreTests: XCTestCase {
 
         XCTAssertTrue(store.todayNoReminderChecked)
         XCTAssertTrue(MatchPersistedStore.load().todayNoReminderChecked)
+    }
+
+    // MARK: - P1 · MATCHING_CALLING 内人脸检测（对齐 H5 c-goMatch.vue:110-119）
+
+    /// P1-a：进入 .matchingCalling 时若立即检测无脸 → 触发 handleFaceCheckException（通话中路径）
+    ///  - state 保持 .matchingCalling（CallStore 主控，不能被 MatchStore 抢改）
+    ///  - isMatchBlocked = true 持久化
+    ///  - toggleMatch(0, faceCheckStatus:1) 上报
+    ///  - **不弹 showExitMatchPopup**（H5 line 279 明示仅 openMatch 期 5s 倒计时后才弹）
+    func test_P1a_inCallingImmediateNoFace_keepStateBlockPersisted() async {
+        let face = FakeFaceDetectionService()
+        face.stubbedHasFace = true  // openMatch 阶段人脸正常
+        let (store, service, _) = makeStore(faceDetection: face)
+        service.isMatchOpenResult = .success(.allowed)
+        service.toggleMatchResult = .success(true)
+        await store.openMatch()
+        XCTAssertEqual(store.state, .matching)
+        store.handleCallStoreLeavingIdle()
+
+        // 命中 matchV4 前把 face 切成无脸 → 进入 matchingCalling 立即检测应触发异常
+        face.stubbedHasFace = false
+        store.handleJoinCallSource("matchV4")
+
+        // state 应保持 .matchingCalling（不改）
+        XCTAssertEqual(store.state, .matchingCalling)
+        // isMatchBlocked 持久化
+        XCTAssertTrue(store.isMatchBlocked)
+        XCTAssertTrue(MatchPersistedStore.load().isMatchBlocked)
+        // 不弹 exitMatchPopup
+        XCTAssertFalse(store.showExitMatchPopup)
+
+        // toggleMatch(0, faceCheckStatus:1) 是 fire-and-forget
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        let faceFailCloseCount = service.toggleMatchCalls.filter { $0.status == 0 && $0.faceCheckStatus == 1 }.count
+        XCTAssertEqual(faceFailCloseCount, 1, "in-call face fail must send toggleMatch(0, faceCheckStatus:1)")
+    }
+
+    /// P1-b：进入 .matchingCalling 立即检测有脸 → state 正常保持 .matchingCalling，isMatchBlocked 不变
+    func test_P1b_inCallingImmediateHasFace_stateNormal() async {
+        let face = FakeFaceDetectionService()
+        face.stubbedHasFace = true
+        let (store, service, _) = makeStore(faceDetection: face)
+        service.isMatchOpenResult = .success(.allowed)
+        service.toggleMatchResult = .success(true)
+        await store.openMatch()
+        store.handleCallStoreLeavingIdle()
+
+        store.handleJoinCallSource("matchV4")
+
+        XCTAssertEqual(store.state, .matchingCalling)
+        XCTAssertFalse(store.isMatchBlocked)
+    }
+
+    /// P1-c：通话中检测异常后通话结束 → handleCallStoreReturnedToIdle 判 isMatchBlocked → 转 .blocked（不 restart camera）
+    func test_P1c_returnedToIdle_afterInCallBlocked_transitionsToBlocked() async {
+        let face = FakeFaceDetectionService()
+        let (store, service, camera) = makeStore(faceDetection: face)
+        service.isMatchOpenResult = .success(.allowed)
+        service.toggleMatchResult = .success(true)
+        await store.openMatch()
+        store.handleCallStoreLeavingIdle()
+        // 通话中检测异常
+        face.stubbedHasFace = false
+        store.handleJoinCallSource("matchV4")
+        XCTAssertEqual(store.state, .matchingCalling)
+        XCTAssertTrue(store.isMatchBlocked)
+        let startCountBefore = camera.startCallCount
+
+        // 通话结束
+        store.handleCallStoreReturnedToIdle(lastJoinCallSource: "matchV4")
+
+        XCTAssertEqual(store.state, .blocked, "in-call face fail + call end → .blocked, not .matching")
+        XCTAssertEqual(camera.startCallCount, startCountBefore, "must NOT restart camera when blocked")
+    }
+
+    // MARK: - P2-1 · callError 通话异常关匹配（对齐 H5 useCallApi.js:397）
+
+    /// P2-1-a：matchV4 通话异常出错结束 → state=.ended + toggleMatch(0) + camera.stop
+    func test_P2_1a_matchV4_callError_forceEnded() async {
+        let (store, service, camera) = makeStore()
+        service.isMatchOpenResult = .success(.allowed)
+        service.toggleMatchResult = .success(true)
+        await store.openMatch()
+        store.handleCallStoreLeavingIdle()
+        store.handleJoinCallSource("matchV4")
+        XCTAssertEqual(store.state, .matchingCalling)
+        let stopCountBefore = camera.stopCallCount
+        let toggleCountBefore = service.toggleMatchCalls.filter { $0.status == 0 }.count
+
+        // 模拟 CallStore 异常结束（callError 路径）
+        store.handleCallStoreReturnedToIdle(lastJoinCallSource: "matchV4", lastCallError: true)
+
+        XCTAssertEqual(store.state, .ended, "call error should force close match (align H5:397)")
+        XCTAssertGreaterThan(camera.stopCallCount, stopCountBefore, "camera should stop on call error")
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        let toggleCountAfter = service.toggleMatchCalls.filter { $0.status == 0 }.count
+        XCTAssertGreaterThan(toggleCountAfter, toggleCountBefore, "should send toggleMatch(0) on call error")
+    }
+
+    /// P2-1-b：matchV4 通话正常结束（无 error）→ 回 .matching + restart camera（现有行为不受影响）
+    func test_P2_1b_matchV4_normalEnd_backwardCompatibility() async {
+        let (store, service, camera) = makeStore()
+        service.isMatchOpenResult = .success(.allowed)
+        service.toggleMatchResult = .success(true)
+        await store.openMatch()
+        store.handleCallStoreLeavingIdle()
+        store.handleJoinCallSource("matchV4")
+        let startCountBefore = camera.startCallCount
+
+        // 正常结束（lastCallError = false / 默认值）
+        store.handleCallStoreReturnedToIdle(lastJoinCallSource: "matchV4")
+
+        XCTAssertEqual(store.state, .matching, "normal end should resume matching")
+        XCTAssertGreaterThan(camera.startCallCount, startCountBefore, "camera should restart on normal end")
+    }
+
+    // MARK: - Gap-5 · .matchingSuspended 出口边分流（wasConnectedInCall 判定）
+
+    /// Gap-5-a：suspended + 用户未接通（`wasConnectedInCall=false`，默认值）→ 通话结束自动 openMatch。
+    ///
+    /// 对齐 [MatchStore.swift](Sources/Match/MatchStore.swift) `handleCallStoreReturnedToIdle` 的
+    /// `.matchingSuspended` 分支：接通过弹 Resume Alert；未接通 → `Task { await self.openMatch() }`。
+    ///
+    /// 覆盖场景：主播 .matching 时收到非 matchV4 来电，用户直接拒绝/未接通，通话结束 → 自动恢复匹配。
+    ///
+    /// **未覆盖**（需 test-only bridge mock 基建，见交付说明）：Gap-5-b `wasConnectedInCall=true`
+    /// → 弹 Resume Match Alert 分支。
+    func test_Gap5a_suspended_notConnected_autoOpenMatch() async {
+        let (store, service, _) = makeStore()
+        service.isMatchOpenResult = .success(.allowed)
+        service.toggleMatchResult = .success(true)
+        await store.openMatch()
+        store.handleCallStoreLeavingIdle()
+        store.handleJoinCallSource("liveCall")
+        XCTAssertEqual(store.state, .matchingSuspended)
+        let isMatchOpenCountBefore = service.isMatchOpenCallCount
+
+        // 通话结束（未接通 —— wasConnectedInCall 保持默认 false）
+        store.handleCallStoreReturnedToIdle(lastJoinCallSource: "liveCall")
+
+        // handleCallStoreReturnedToIdle 内 Task { openMatch } 是异步的，等其调度完成
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(store.state, .matching, "Gap-5-a: not-connected → auto openMatch resumes matching")
+        XCTAssertFalse(store.showResumeMatchAlert, "not-connected 路径不应弹 Resume Alert")
+        // openMatch 内部会再次调 isMatchOpen（自动恢复走完整校验流程）
+        XCTAssertGreaterThan(service.isMatchOpenCallCount, isMatchOpenCountBefore,
+                             "auto openMatch should run isOpen check")
     }
 }
