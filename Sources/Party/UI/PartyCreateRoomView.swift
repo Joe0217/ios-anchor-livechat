@@ -103,6 +103,23 @@ struct PartyCreateRoomView: View {
                 onCreated(id)
             }
         }
+        // v7.1 gap 2: submitError toast overlay（对齐安卓失败 toast，用户看不到错误原因 → 现补 UI）
+        .overlay(alignment: .top) {
+            if !store.submitError.isEmpty {
+                Text(store.submitError)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Capsule().fill(Color.black.opacity(0.85)))
+                    .padding(.top, 60)
+                    .transition(.opacity)
+                    .task(id: store.submitError) {
+                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        store.clearSubmitError()
+                    }
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: store.submitError.isEmpty)
     }
 
     // MARK: - Avatar block

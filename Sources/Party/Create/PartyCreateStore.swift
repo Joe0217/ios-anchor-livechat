@@ -205,12 +205,14 @@ final class PartyCreateStore: ObservableObject {
 
     // MARK: - Submit
 
-    /// 提交条件：房名 + tagline + language + template 都非空/nil；头像上传中禁提交
+    /// 提交条件：房名 + tagline + language + template + background 都非空/nil；头像上传中禁提交
+    /// v7.1：加 selectedBackground 检查（对齐安卓 6 字段全必填 checkConfirmEnable）
     var canSubmit: Bool {
         !roomName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !roomTagline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && selectedLanguage != nil
             && selectedTemplate != nil
+            && selectedBackground != nil
             && !isSubmitting
             && !isUploadingAvatar
     }
@@ -253,6 +255,11 @@ final class PartyCreateStore: ObservableObject {
     /// View 消费 createdRoomId 触发 navigation 后清 —— 避免重复触发
     func clearCreatedRoomId() {
         createdRoomId = nil
+    }
+
+    /// View 层 toast 自清；submitError overlay 显示 3s 后调
+    func clearSubmitError() {
+        submitError = ""
     }
 
     // MARK: - Avatar upload
