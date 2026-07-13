@@ -89,11 +89,13 @@ struct RootView: View {
             // v23（2026-07-13）store Task handle 供 logout 时 cancel（避免旧 Task 对新 router 冗余 warmup）
             warmupTask?.cancel()
             warmupTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                // iOS 16+ Duration API：类型安全避免 nanoseconds 位数手误漏 0 → runtime bug
+                // （对齐 code-review-discipline §9.5 正例）
+                try? await Task.sleep(for: .seconds(5))
                 guard !Task.isCancelled else { return }
                 GiftEffectCenter.shared.warmupSVGA()
                 // 300ms 间隔避免两组 SDK 实例同时首次分配 GPU 资源 spike 内存
-                try? await Task.sleep(nanoseconds: 300_000_000)
+                try? await Task.sleep(for: .milliseconds(300))
                 guard !Task.isCancelled else { return }
                 EnterEffectCenter.shared.warmupSVGA()
             }
