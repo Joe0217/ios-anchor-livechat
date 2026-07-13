@@ -295,6 +295,8 @@
 "giftPicker.empty"                   = "Kullanılabilir hediye yok";
 "giftPicker.send"                    = "Gönder";
 "giftPicker.all"                     = "Tümü";
+"giftPicker.recharge"                = "Yükle";
+"giftPicker.recharge.toast"          = "Yükleme yakında geliyor";
 
 // MARK: - L-spec-愿望单设置页 v1
 "wishSetting.navTitle"               = "Dilek Ayarları";

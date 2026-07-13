@@ -1,0 +1,8 @@
+{
+  "images" : [
+    { "idiom" : "universal", "filename" : "authLoginBackground.png",    "scale" : "1x" },
+    { "idiom" : "universal", "filename" : "authLoginBackground@2x.png", "scale" : "2x" },
+    { "idiom" : "universal", "filename" : "authLoginBackground@3x.png", "scale" : "3x" }
+  ],
+  "info" : { "author" : "xcode", "version" : 1 }
+}

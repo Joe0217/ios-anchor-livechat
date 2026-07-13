@@ -293,6 +293,8 @@
 "giftPicker.empty"                   = "No gifts available";
 "giftPicker.send"                    = "Send";
 "giftPicker.all"                     = "All";
+"giftPicker.recharge"                = "Recharge";
+"giftPicker.recharge.toast"          = "Recharge is coming soon";
 
 // MARK: - L-spec-愿望单设置页 v1（对齐 H5 wishSetting）
 "wishSetting.navTitle"               = "Wish Setting";
@@ -1254,6 +1256,7 @@
 "register.error.compressFailed"                     = "Video processing failed. Please re-record.";
 "register.error.uploadFailed"                       = "Upload failed. Please retry.";
 "register.error.imageTooLarge"                      = "The image is too large (max %dMB). Please choose a smaller one.";
+"register.error.serverTemporary"                    = "Server temporarily unavailable. Please try again.";
 
 /* MARK: - PartyRoom 房间内 UI (AnchorBar / ChatTabStrip / InputBar) */
 "partyRoom.idFormat"                     = "ID:%@";

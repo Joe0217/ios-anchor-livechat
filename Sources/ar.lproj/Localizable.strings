@@ -295,6 +295,8 @@
 "giftPicker.empty"                   = "لا توجد هدايا متاحة";
 "giftPicker.send"                    = "أرسل";
 "giftPicker.all"                     = "الكل";
+"giftPicker.recharge"                = "إعادة الشحن";
+"giftPicker.recharge.toast"          = "إعادة الشحن قادمة قريبًا";
 
 // MARK: - L-spec-愿望单设置页 v1
 "wishSetting.navTitle"               = "إعدادات قائمة الأمنيات";

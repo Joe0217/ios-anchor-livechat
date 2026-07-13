@@ -867,6 +867,10 @@ enum L10n {
     static var giftPickerSend: String { localize("giftPicker.send", comment: "派对房送礼 Send 按钮") }
     /// H-4 公共礼物面板：All 全选按钮（派对房受者头像行）
     static var giftPickerAll: String { localize("giftPicker.all", comment: "All 全选按钮") }
+    /// H-5 派对房送礼：phase = insufficientBalance 时 "Recharge" 按钮
+    static var giftPickerRecharge: String { localize("giftPicker.recharge", comment: "H-5 余额不足 Recharge 按钮 label") }
+    /// H-5 派对房送礼：phase = insufficientBalance 时 tap Recharge 弹 toast（本轮无真充值页）
+    static var giftPickerRechargeToast: String { localize("giftPicker.recharge.toast", comment: "H-5 Recharge tap toast · 充值功能开发中") }
 
     // MARK: - L-spec-愿望单设置页 v1
     static var wishSettingNavTitle: String { localize("wishSetting.navTitle", comment: "Wish Setting 页顶部") }
@@ -1722,5 +1726,6 @@ enum L10n {
         static func errorImageTooLarge(_ maxMB: Int) -> String {
             String(format: localize("register.error.imageTooLarge", comment: "图片超原图硬顶 %d MB"), maxMB)
         }
+        static var errorServerTemporary: String { localize("register.error.serverTemporary", comment: "服务端临时错误（空 body / 非 JSON / 5xx），提示用户重试") }
     }
 }

@@ -174,8 +174,8 @@ enum Theme {
         static let blocklistRetryText   = Color.white
         /// 错误态 message 文字（白 80%）
         static let blocklistErrorMessage = Color.white.opacity(0.8)
-        /// transient toast 背景（黑 70%）
-        static let blocklistToastBackground = Color.black.opacity(0.7)
+        /// transient toast 背景（黑 60%）
+        static let blocklistToastBackground = Color.black.opacity(0.6)
 
         // MARK: UserProfile 详情页（H-0，对照 H5 视觉）
         /// like/favorite 卡片底色（H5 #2B213E）
@@ -404,6 +404,26 @@ enum Theme {
         static let partyRoomLevelStart     = Color(hex: 0x7C3AED)
         /// Lv 徽章紫渐变止
         static let partyRoomLevelEnd       = Color(hex: 0xC026D3)
+
+        // MARK: Auth 登录页（设计稿还原 2026-07-13）
+        /// 登录按钮胶囊纯色粉(设计稿采样 #FF55CC)
+        static let authLoginButton        = Color(hex: 0xFF55CC)
+        /// 登录按钮文字白
+        static let authLoginButtonText    = Color.white
+        /// 输入框填充(暗紫半透明,盖在 blur bg 上)
+        static let authInputFill          = Color(hex: 0x2E1A4F, opacity: 0.45)
+        /// 输入框主文本(用户输入)白
+        static let authInputText          = Color.white
+        /// 输入框 placeholder 白 55%
+        static let authInputPlaceholder   = Color.white.opacity(0.55)
+        /// 输入框右侧眼睛图标 tint(白 65%)
+        static let authInputIconTint      = Color.white.opacity(0.65)
+        /// Forget Password 灰紫(采样 #9E97AE)
+        static let authForgetText         = Color(hex: 0x9E97AE)
+        /// 错误提示红(复用 iOS system red)
+        static let authErrorText          = Color(hex: 0xFF453A)
+        /// 背景兜底色(切图加载失败时的近黑紫)
+        static let authBackgroundFallback = Color(hex: 0x2A1F44)
     }
 
     // MARK: - 间距
@@ -591,8 +611,8 @@ enum Theme {
         static let liveRoomTopViewerSize: CGFloat   = 32
         /// 顶部观众数徽章尺寸
         static let liveRoomViewerCountSize: CGFloat = 32
-        /// 关闭 X 按钮尺寸
-        static let liveRoomCloseSize: CGFloat       = 24
+        /// 关闭 X 按钮尺寸（2026-07-11 用户明示对齐观众图标 32pt）
+        static let liveRoomCloseSize: CGFloat       = 32
         /// Task/Diamond/Rank 徽章 tile 高度
         static let liveRoomBadgeHeight: CGFloat     = 28
         /// Task/Diamond/Rank 徽章 tile 之间 gap
@@ -692,6 +712,8 @@ enum Theme {
         static let partyRoomStatArrowSize: CGFloat  = 10
         /// 大麦位（3 列）之间水平间距（0pt 让 3 个 BigSeatCell 严格无缝相邻）
         static let partyRoomBigSeatGap: CGFloat     = 0
+        /// 大麦位区高度（1/1 aspect 三格铺满宽度）
+        /// 用 aspectRatio 保持不写死，避免不同屏幕拉伸
         /// 小麦位（5 列）水平间距
         static let partyRoomSmallSeatGap: CGFloat   = 8
         /// 小麦位每 cell 头像尺寸
@@ -732,8 +754,39 @@ enum Theme {
         static let partyRoomToolBtnGap: CGFloat     = 8
         /// 底部输入栏与工具栏间距
         static let partyRoomInputToolGap: CGFloat   = 6
-    }
 
+        // MARK: Auth 登录页（设计稿还原 2026-07-13）
+        /// 屏幕左右内边距
+        static let authScreenHPadding: CGFloat  = 24
+        /// logo 尺寸(切图正方)
+        static let authLogoSize: CGFloat        = 94
+        /// logo 距顶部安全区间距
+        static let authLogoTopGap: CGFloat      = 110
+        /// logo 与标题图之间垂直间距
+        static let authLogoToTitleGap: CGFloat  = 110
+        /// 标题图渲染高度(切图 233x30 @1x → 逻辑 30pt 高)
+        static let authTitleHeight: CGFloat     = 30
+        /// 标题图与邮箱输入框之间垂直间距
+        static let authTitleToEmailGap: CGFloat = 40
+        /// 输入框之间垂直间距
+        static let authInputGap: CGFloat        = 16
+        /// 输入框高度(pill)
+        static let authInputHeight: CGFloat     = 54
+        /// 输入框内左右内边距
+        static let authInputHPadding: CGFloat   = 24
+        /// 输入框右侧眼睛图标尺寸
+        static let authEyeIconSize: CGFloat     = 20
+        /// 密码框到登录按钮的垂直间距
+        static let authPasswordToLoginGap: CGFloat = 60
+        /// 登录按钮高度
+        static let authLoginBtnHeight: CGFloat  = 54
+        /// 登录按钮与 Forget Password 垂直间距
+        static let authLoginToForgetGap: CGFloat = 30
+        /// 错误提示行上下 padding
+        static let authErrorVPadding: CGFloat   = 6
+        /// 错误提示行左右 padding
+        static let authErrorHPadding: CGFloat   = 8
+    }
     // MARK: - 圆角
     enum Radius {
         static let statCard: CGFloat = 12
@@ -794,6 +847,12 @@ enum Theme {
         static let partyRoomToolBtn: CGFloat       = 18
         /// 礼物消息胶囊
         static let partyRoomGiftMsg: CGFloat       = 8
+
+        // MARK: Auth 登录页（设计稿还原 2026-07-13）
+        /// 输入框圆角(pill,取半高)
+        static let authInput: CGFloat              = 27
+        /// 登录按钮圆角(pill,取半高)
+        static let authLoginBtn: CGFloat           = 27
     }
 
     // MARK: - 字号
@@ -962,6 +1021,18 @@ enum Theme {
         static let partyRoomGiftMsg       = Font.system(size: 12, weight: .regular)
         /// 底部输入 placeholder
         static let partyRoomInputPlaceholder = Font.system(size: 14, weight: .regular)
+
+        // MARK: Auth 登录页（设计稿还原 2026-07-13）
+        /// 输入框内文字(用户输入)
+        static let authInputText     = Font.system(size: 16, weight: .regular)
+        /// 输入框 placeholder(与 input 同字号)
+        static let authInputPlaceh   = Font.system(size: 16, weight: .regular)
+        /// 登录按钮文字 "Log in / Register"
+        static let authLoginButton   = Font.system(size: 20, weight: .medium)
+        /// Forget Password? 链接文字
+        static let authForget        = Font.system(size: 14, weight: .regular)
+        /// 错误提示文字
+        static let authError         = Font.system(size: 13, weight: .regular)
     }
 
     // MARK: - 渐变与段位光谱
