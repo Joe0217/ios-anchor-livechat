@@ -15,6 +15,8 @@ struct LiveSettingsView: View {
     /// push 到 LiveRoomView 的参数持有；本页不显示美颜 UI。
     @StateObject private var beautyParams = BeautyParameters()
     @State private var goLive = false
+    /// 无直播权限 / 开播接口报错时，store 通过 `shouldDismiss` 信号触发 pop 返回
+    @Environment(\.dismiss) private var dismiss
 
     // v5: Cover 上传
     @State private var pickerItem: PhotosPickerItem?
@@ -104,6 +106,10 @@ struct LiveSettingsView: View {
         }
         .onChange(of: store.roomInfo?.id) { newId in
             if newId != nil { goLive = true }
+        }
+        .onChange(of: store.shouldDismiss) { should in
+            // 无直播权限 / getMyLiveRoomV2 / beginLiveRoom 报错时，store 展示 toast 后触发 pop
+            if should { dismiss() }
         }
         .onChange(of: pickerItem) { newItem in
             guard let newItem else { return }

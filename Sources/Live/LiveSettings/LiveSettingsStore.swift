@@ -38,9 +38,15 @@ final class LiveSettingsStore: ObservableObject {
 
     /// 用户端预检 toast（对齐 H5 `showToast(...)`）：checkCanLive 4 项失败时短暂显示，2s 自清。
     /// **与 `state=.error` 区分语义**：toast = 用户可修正的边界（简介/封面/冷却/IM），
-    /// error banner = 接口/系统错误（网络失败、code=-1 等）。
+    /// error banner = 接口/系统错误（当前仅 cover 上传失败保留 banner；load/startLive 的
+    /// 无权限/API 报错走 `showErrorAndDismiss` → toast + auto pop）。
     @Published var toastMessage: String?
     private var toastClearTask: Task<Void, Never>?
+
+    /// 无直播权限 / 开播接口报错时，展示 toast 后自动 pop 返回。
+    /// View 侧 `.onChange(of: shouldDismiss)` 观察此信号调用 `dismiss()`。
+    @Published var shouldDismiss: Bool = false
+    private var dismissTask: Task<Void, Never>?
 
     /// 心愿承诺规范弹窗（对齐 H5 `showWishRuleModal` index.vue:240-248 + wishlist-rule-modal.vue）。
     /// 触发条件：首次开播 + 有 wishlist + 有 promise + 未同意规范
@@ -67,14 +73,14 @@ final class LiveSettingsStore: ObservableObject {
     /// View onAppear 首调：userType 守卫 → getMyLiveRoomRaw 预拉封面/简介。
     ///
     /// userType 守卫（对齐 `LivePrepareView.startLive():89-97`）：只有 `userType == 2`（已审核主播）放行。
-    /// 失败 `state=.error`，页面 Start Live 按钮 disabled（error 态判定）。
+    /// 无权限 / API 报错（含 code=1111 request.failed）走 `showErrorAndDismiss` → toast + 自动 pop 返回。
     func load() async {
         guard let user = session.user else {
-            state = .error(L10n.livePrepareGuardUnverified)
+            showErrorAndDismiss(L10n.livePrepareGuardUnverified)
             return
         }
         if user.userType != 2 {
-            state = .error(user.userType == 9 ? L10n.livePrepareGuardAgent : L10n.livePrepareGuardUnverified)
+            showErrorAndDismiss(user.userType == 9 ? L10n.livePrepareGuardAgent : L10n.livePrepareGuardUnverified)
             return
         }
         state = .loading
@@ -99,9 +105,10 @@ final class LiveSettingsStore: ObservableObject {
                 // 登出 / 挤下线由 SessionStore 处理；本页短路
                 return
             }
-            state = .error(String(format: L10n.livePrepareErrorPrefix, e.message, e.code))
+            // 无直播权限 / 接口报错：toast 提示后自动 pop（例：code=1111 request.failed）
+            showErrorAndDismiss(String(format: L10n.livePrepareErrorPrefix, e.message, e.code))
         } catch {
-            state = .error(String(format: L10n.livePrepareErrorGeneric, error.localizedDescription))
+            showErrorAndDismiss(String(format: L10n.livePrepareErrorGeneric, error.localizedDescription))
         }
     }
 
@@ -110,8 +117,11 @@ final class LiveSettingsStore: ObservableObject {
     /// tap Start Live 入口：4 项 checkCanLive → startLive 三接口串行 → 成功赋 roomInfo（触发 push）。
     ///
     /// 状态锁：`.starting` 期间 `LiveSettingsLock.lock()` 让 MainTabView tabbar 拦截触摸，
-    /// push 到 LiveRoomView 后 View 消失 → deinit → unlock（双保险：`.error` 也 unlock）。
+    /// push 到 LiveRoomView 后 View 消失 → deinit → unlock。
+    /// 1004/1005 短路 + `showErrorAndDismiss`（toast + auto pop）分支均显式 unlock，避免 tabbar 卡死。
     func startTapped() async {
+        // 无权限报错 pop 过渡期（showErrorAndDismiss 已排队 1.5s 后 dismiss），忽略后续开播点击
+        if shouldDismiss { return }
         // 红队 🟠#6：入口自清 .error
         if case .error = state { state = .editing }
 
@@ -140,11 +150,6 @@ final class LiveSettingsStore: ObservableObject {
 
         state = .starting
         lock.lock()
-        defer {
-            // startLive 成功后 push；等 View 消失时 deinit 再 unlock；
-            // 但 .error 分支需要立即 unlock 让用户能切 tab 离开
-            if case .error = state { lock.unlock() }
-        }
 
         do {
             let giftParam: (id: Int64, price: Int64)? = selectedGift.map { ($0.id, $0.giftPrice) }
@@ -172,7 +177,7 @@ final class LiveSettingsStore: ObservableObject {
             )
             guard let ch = info.agoraChannelId, !ch.isEmpty,
                   let tk = info.rtcToken, !tk.isEmpty else {
-                state = .error(L10n.livePrepareErrorNoChannel)
+                showErrorAndDismiss(L10n.livePrepareErrorNoChannel)
                 return
             }
             roomInfo = info
@@ -181,16 +186,18 @@ final class LiveSettingsStore: ObservableObject {
             if e.code == "1004" || e.code == "1005" {
                 // SessionStore 会处理登出流程 —— 本页短路 return（不写 errorMessage，避免与 SessionStore.errorMessage 双错）
                 state = .editing  // 让 View 从 disabled 恢复；但 SessionStore.isLoggedIn 会驱动 RootView 跳登录
+                lock.unlock()
                 return
             }
             if e.code == "-1" {
                 // 红队 🔴#4：LiveService 层 cover fail-safe（getMyLiveRoom 二拉时 cover 空）
-                state = .error(L10n.liveErrorNoCover)
+                showErrorAndDismiss(L10n.liveErrorNoCover)
                 return
             }
-            state = .error(String(format: L10n.livePrepareErrorPrefix, e.message, e.code))
+            // 接口报错（含 code=1111 request.failed）：toast 提示后自动 pop
+            showErrorAndDismiss(String(format: L10n.livePrepareErrorPrefix, e.message, e.code))
         } catch {
-            state = .error(String(format: L10n.livePrepareErrorGeneric, error.localizedDescription))
+            showErrorAndDismiss(String(format: L10n.livePrepareErrorGeneric, error.localizedDescription))
         }
     }
 
@@ -255,6 +262,28 @@ final class LiveSettingsStore: ObservableObject {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard !Task.isCancelled else { return }
             await MainActor.run { self?.toastMessage = nil }
+        }
+    }
+
+    /// 无直播权限 / 开播接口报错统一入口：toast 提示后 1.5s 自动 pop 返回。
+    ///
+    /// 内部一并调 `lock.unlock()` 兜底解锁（`.starting` 分支路径可能在报错前锁定过 tabbar），
+    /// 并把 state 回退到 `.editing`，避免 toast 期间底部按钮仍显示 "Starting..." spinner 混淆。
+    /// 复用现有 `showToast` 的 2s 自清逻辑；dismiss 触发时 view 已随之 pop，无 UI 残留。
+    private func showErrorAndDismiss(_ msg: String) {
+        switch state {
+        case .loading, .starting:
+            state = .editing
+        default:
+            break
+        }
+        lock.unlock()
+        showToast(msg)
+        dismissTask?.cancel()
+        dismissTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard !Task.isCancelled else { return }
+            await MainActor.run { self?.shouldDismiss = true }
         }
     }
 
