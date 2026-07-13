@@ -1,99 +1,20 @@
 import SwiftUI
 
-/// 派对房大厅（E-spec §7 + §6B v3 设计稿还原）。
+/// 派对房列表内容区（E 增强 refactor：Party/Follow/Recent 3 tab 复用）。
 ///
-/// View 只读 `@ObservedObject var store: PartyListStore`（副作用全收敛进 Store，view 层零业务逻辑）。
-/// 由 `PartyTabRootView` 挂载并持有 store；本 view 通过 3 个 callback 上抛导航意图。
+/// **重构历史**（2026-07-10）：原 PartyRoomListView 含 header/crownBadge/createRoomButton 混在一起。
+/// E 增强将顶部 3 tab / 语言 pill / 榜单卡 / 浮动按钮上移到 `PartyListMainView`，本文件降级为
+/// 纯"内容区"组件，泛型 `Store: PartyRoomListLike` 让 3 个 tab 共用同一份 UI 实现。
 ///
-/// **视觉范围**（v3 拍板 2026-07-10）：仅 Party 主 tab 视觉对齐设计稿——房间卡片新样式 +
-/// 中心浮动 Create Room + crown badge（显图标业务不做）。**砍**顶部 3 pill / 搜索 / 语言 filter / Banner（推 F 期）。
-struct PartyRoomListView: View {
-    @ObservedObject var store: PartyListStore
-    let onTapCreate: () -> Void
-    let onTapCrown: () -> Void
+/// **spec §7 §12 F 期演进笔记**已在 v3 落地；E 增强对齐 H5 用户端 `/party/index.vue` 3-tab TabView(.page)。
+struct PartyRoomListContent<Store: PartyRoomListLike>: View {
+    @ObservedObject var store: Store
     let onTapRoom: (String) -> Void
-
-    /// E-spec §6B v4：keep-alive 架构下"用户是否真在看 party tab"信号（对齐 home 模式）。
-    /// 首次变 true 时才拉数据，避免启动即预热。
-    @Environment(\.isPartyTabActive) private var isPartyTabActive
+    /// Follow/Recent tab 需要在 `.loaded(rooms: [])` 时显 "Coming soon" 空态；Party tab 显常规空态。
+    let comingSoonOnEmpty: Bool
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Theme.Palette.partyListBackground
-                .ignoresSafeArea()
-
-            VStack(spacing: 0) {
-                header
-                contentArea
-            }
-
-            createRoomButton
-                .padding(.bottom, 24)
-        }
-        .task(id: isPartyTabActive) {
-            // keep-alive 下 .task 启动即触发，用 id: isPartyTabActive 让每次 tab 激活时重新计算 gate
-            // 只在 isActive + idle 时拉；已 loaded 后切走再回来不重复拉（用户偏好保留状态）
-            guard isPartyTabActive, case .idle = store.state else { return }
-            store.startInitial()
-        }
-        .refreshable {
-            // 必须 await 刷新完成，否则 sync 返回让 SwiftUI 立刻收 spinner
-            // （见 rule list-refresh-preserve-items §"async closure 必须等到 task 完成"）
-            await store.refreshAsync()
-        }
-        .navigationBarHidden(true)
-        // iOS 16 已知：`.navigationBarHidden(true)` 会截断外层 `.safeAreaInset(edge: .bottom)` 的传播
-        // （MainTabView 挂的 tabBarHostContainer 52pt inset 到不了这里）→ ScrollView 内容和
-        // createRoomButton 会跨过 tabbar 顶延伸 → 底部被 tabbar 覆盖。此处补一层本地 safeAreaInset 兜底。
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            Color.clear.frame(height: Theme.Metric.tabBarHeight)
-        }
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        HStack(alignment: .center) {
-            Text(L10n.tabParty)
-                .font(.system(size: 24, weight: .bold))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [Theme.Palette.brandYellow, Theme.Palette.brandOrange, Theme.Palette.brandPinkA],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-
-            Spacer()
-
-            crownBadge
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 8)
-        .padding(.bottom, 12)
-    }
-
-    private var crownBadge: some View {
-        Button(action: onTapCrown) {
-            HStack(spacing: 4) {
-                Image(systemName: "crown.fill")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Theme.Palette.partyCrownGold)
-                Text("+100K")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(Theme.Palette.partyCrownText)
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                Capsule().fill(Theme.Palette.partyCrownBadgeBg)
-            )
-            .overlay(
-                Capsule().stroke(Theme.Palette.partyCrownGold.opacity(0.4), lineWidth: 0.5)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Party ranking")
+        contentArea
     }
 
     // MARK: - Content area (state-driven)
@@ -102,16 +23,19 @@ struct PartyRoomListView: View {
     private var contentArea: some View {
         switch store.state {
         case .idle, .loading:
-            loadingView
+            // Follow/Recent 未接入真接口前，store 停在 .idle，view 直接显 Coming soon 空态而非 spinner
+            if comingSoonOnEmpty { comingSoonView } else { loadingView }
         case .loaded(let rooms, let hasMore):
             if rooms.isEmpty {
-                emptyView
+                if comingSoonOnEmpty { comingSoonView } else { emptyView }
             } else {
                 roomList(rooms: rooms, hasMore: hasMore, showBottomLoader: false, pageErrorMessage: nil)
             }
         case .refreshing(let rooms):
             // list-refresh-preserve-items rule：下拉刷新期保留 rooms 视觉，顶部 spinner 由 .refreshable 自身管
-            roomList(rooms: rooms, hasMore: false, showBottomLoader: false, pageErrorMessage: nil)
+            // hasMore 传 true 保持底部 loadMoreSentinel 显示；避免 loaded→refreshing→loaded 时 sentinel 闪烁
+            // （loadMore() 内部对 .refreshing 态是 no-op，sentinel onAppear 触发不会重入）
+            roomList(rooms: rooms, hasMore: true, showBottomLoader: false, pageErrorMessage: nil)
         case .loadingMore(let rooms):
             roomList(rooms: rooms, hasMore: true, showBottomLoader: true, pageErrorMessage: nil)
         case .error(let message, _):
@@ -125,8 +49,7 @@ struct PartyRoomListView: View {
 
     private var loadingView: some View {
         VStack(spacing: 12) {
-            ProgressView()
-                .tint(.white)
+            ProgressView().tint(.white)
             Text(L10n.Party.loading)
                 .font(.system(size: 13))
                 .foregroundColor(Theme.Palette.partyGreeting)
@@ -137,6 +60,19 @@ struct PartyRoomListView: View {
     private var emptyView: some View {
         EmptyStateView(textColor: Theme.Palette.partyGreeting)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// Follow/Recent tab 未接入真接口前的空态（E 增强）。
+    private var comingSoonView: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "hourglass")
+                .font(.system(size: 42))
+                .foregroundColor(Theme.Palette.partyGreeting)
+            Text(L10n.Party.comingSoon)
+                .font(.system(size: 14))
+                .foregroundColor(Theme.Palette.partyGreeting)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func errorView(message: String) -> some View {
@@ -223,36 +159,6 @@ struct PartyRoomListView: View {
                 store.loadMore()
             }
         }
-    }
-
-    // MARK: - Create Room floating button
-
-    private var createRoomButton: some View {
-        Button(action: onTapCreate) {
-            HStack(spacing: 6) {
-                Image("partyCreatePlus")
-                    .resizable()
-                    .frame(width: 20, height: 20)
-                    .accessibilityHidden(true)
-                Text(L10n.Party.listCreateRoom)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(
-                Capsule().fill(
-                    LinearGradient(
-                        colors: [Theme.Palette.partyCreateBtnA, Theme.Palette.partyCreateBtnB],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-            )
-            .shadow(color: Theme.Palette.partyCreateBtnA.opacity(0.5), radius: 12, y: 4)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.Party.listCreateRoom)
     }
 }
 
@@ -366,74 +272,23 @@ struct PartyRoomCardView: View {
 
 #if DEBUG
 
-/// 6 态 Preview 覆盖（E-spec §12 step 1b 要求）：loading / loaded / loadingMore / empty / error / pageError
-struct PartyRoomListView_Previews: PreviewProvider {
+/// PartyRoomListContent 精简 preview（E 增强 refactor 后）：3 态覆盖，Party 全量 preview 移到 PartyListMainView。
+struct PartyRoomListContent_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            preview(kind: .success(mockRooms(count: 4)), label: "loaded")
-            preview(kind: .empty, label: "empty")
-            preview(kind: .networkError, label: "error")
-            preview(kind: .delayThenSuccess(mockRooms(count: 4), delayNanos: 999_000_000_000), label: "loading")
-            preview(loadingMoreRooms: mockRooms(count: 4), label: "loadingMore")
-            preview(pageErrorRooms: mockRooms(count: 4), pageErrorMessage: "network", label: "pageError")
+            content(kind: .success(mockRooms(count: 4)), label: "loaded")
+            content(kind: .empty, label: "empty")
+            content(kind: .networkError, label: "error")
         }
         .preferredColorScheme(.dark)
     }
 
-    /// 通用：从 PreviewFake 起 state
-    private static func preview(kind: PartyListServicePreviewFake.Kind, label: String) -> some View {
+    private static func content(kind: PartyListServicePreviewFake.Kind, label: String) -> some View {
         let store = PartyListStore(service: PartyListServicePreviewFake(kind))
         store.startInitial()
-        return PartyRoomListView(
-            store: store,
-            onTapCreate: {},
-            onTapCrown: {},
-            onTapRoom: { _ in }
-        )
-        .previewDisplayName(label)
-    }
-
-    /// loadingMore：直接构造已 loaded + 手动触发 loadMore 拉一个慢响应
-    private static func preview(loadingMoreRooms rooms: [PartyRoomInfo], label: String) -> some View {
-        let fake = PartyListServicePreviewFake(sequence: [
-            .success(rooms),
-            .delayThenSuccess(rooms, delayNanos: 999_000_000_000)
-        ])
-        let store = PartyListStore(service: fake)
-        store.startInitial()
-        // 用 Task 延迟触发 loadMore，Preview 内启动即可
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            store.loadMore()
-        }
-        return PartyRoomListView(
-            store: store,
-            onTapCreate: {},
-            onTapCrown: {},
-            onTapRoom: { _ in }
-        )
-        .previewDisplayName(label)
-    }
-
-    /// pageError：先 success，再触发 loadMore 拉 network error
-    private static func preview(pageErrorRooms rooms: [PartyRoomInfo], pageErrorMessage: String, label: String) -> some View {
-        let fake = PartyListServicePreviewFake(sequence: [
-            .success(rooms),
-            .networkError
-        ])
-        let store = PartyListStore(service: fake)
-        store.startInitial()
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            store.loadMore()
-        }
-        return PartyRoomListView(
-            store: store,
-            onTapCreate: {},
-            onTapCrown: {},
-            onTapRoom: { _ in }
-        )
-        .previewDisplayName(label)
+        return PartyRoomListContent(store: store, onTapRoom: { _ in }, comingSoonOnEmpty: false)
+            .previewDisplayName(label)
+            .background(Theme.Palette.partyListBackground)
     }
 
     static func mockRooms(count: Int) -> [PartyRoomInfo] {
@@ -447,10 +302,7 @@ struct PartyRoomListView_Previews: PreviewProvider {
                 "roomLanguage": "English",
                 "onlineUserList": [
                     ["userId": "u1", "avatar": ""],
-                    ["userId": "u2", "avatar": ""],
-                    ["userId": "u3", "avatar": ""],
-                    ["userId": "u4", "avatar": ""],
-                    ["userId": "u5", "avatar": ""]
+                    ["userId": "u2", "avatar": ""]
                 ]
             ]
             let data = try! JSONSerialization.data(withJSONObject: json)

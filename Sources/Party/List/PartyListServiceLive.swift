@@ -11,6 +11,7 @@ import Foundation
 /// **snapshotId 不传**（spec §3 F-03）：现契约撕掉 envelope 拿不到分页级 sid，MVP 用 offset 分页足够。
 struct PartyListServiceLive: PartyListService {
     func fetchList(
+        kind: PartyRoomListKind,
         languageCode: String?,
         offset: Int?,
         pageSize: Int,
@@ -18,6 +19,7 @@ struct PartyListServiceLive: PartyListService {
         version: String
     ) async throws -> [PartyRoomInfo] {
         try await PartyAPI.roomList(
+            kind: kind,
             languageCode: languageCode,
             snapshotId: nil,
             offset: offset,

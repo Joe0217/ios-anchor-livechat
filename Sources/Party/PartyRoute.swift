@@ -12,4 +12,6 @@ enum PartyRoute: Hashable {
     case create
     /// 进入某个房间（密码房 MVP 不做前置密码框，password 保留字段供 F 期使用）
     case room(id: String, password: String?)
+    /// 搜索页（E 增强 2026-07-10：对齐 H5 用户端 `/party/search`）
+    case search
 }

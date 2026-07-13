@@ -659,6 +659,13 @@
 "pk.opponent.mute"              = "Mute opponent";
 "pk.opponent.unmute"            = "Unmute opponent";
 
+// PK History record sheet (v23 2026-07-13, aligned with H5 pkHistoryPopup.vue)
+"pk.record.effectiveWinLabel"   = "Effective PK Win Count This Week";
+"pk.record.effectiveTipTitle"   = "Effective wins";
+"pk.record.effectiveTipMessage" = "Number of PK matches won with PK score above the effective threshold this week.";
+"pk.record.keepDaysFooter"      = "Keep last 30 days records";
+"pk.record.selfDefault"         = "Me";
+
 // MARK: - H IM 完善 错误文案（NIMServiceError.errorDescription）
 "im.error.loginFailedFormat"         = "IM login failed (code=%@) %@";
 "im.error.tokenInvalid"              = "Session expired, please sign in again";
@@ -728,6 +735,27 @@
 "chat.historyExpired"  = "This chat history has expired.";
 // 文字气泡内翻译按钮
 "chat.translate"       = "Translate";
+
+// 系统通知会话文案（对齐 H5 systemMsg.vue + cpRankRewardMsg.vue）
+"chat.system.comingSoon"          = "Coming soon";
+"chat.system.viewNow"             = "View Now";
+"chat.system.checkCpRanking"      = "Check Cp ranking";
+"chat.system.appealClickHere"     = "click here";
+"chat.system.appealSuccess"       = "Appeal Success";
+"chat.system.durationPerm"        = "Perm";
+"chat.system.itemType.vehicle"    = "Vehicle";
+"chat.system.itemType.frame"      = "Frame";
+"chat.system.itemType.entrance"   = "Entrance";
+"chat.system.itemType.chatSkin"   = "Chat Skin";
+"chat.system.itemType.cardFrame"  = "Card Frame";
+"chat.system.itemGetFormat"       = "Congratulations! You've received the【%1$@】【%2$@】* (%3$@). You can view it in Mine > Props.";
+"chat.system.itemExpiredFormat"   = "Your【%1$@】【%2$@】has expired";
+"chat.system.durationHourMinuteFormat" = "%1$d hours %2$d minutes";
+"chat.system.durationHourFormat"       = "%1$d hours";
+"chat.system.durationMinuteFormat"     = "%1$d minutes";
+"chat.system.rewardDiamondFormat"      = "Congratulations! You've received Diamond*%@";
+"chat.system.cpRankRewardMsgFormat"    = "Congratulations! You've received the TOP %d reward from CP Weekly Rank.";
+
 // 语音录制过短
 "chat.voice.tooShort"  = "Recording time is too short";
 // 发送失败网络提示
@@ -1175,3 +1203,26 @@
 "register.error.compressFailed"                     = "Video processing failed. Please re-record.";
 "register.error.uploadFailed"                       = "Upload failed. Please retry.";
 "register.error.imageTooLarge"                      = "The image is too large (max %dMB). Please choose a smaller one.";
+
+/* MARK: - PartyRoom 房间内 UI (AnchorBar / ChatTabStrip / InputBar) */
+"partyRoom.idFormat"                     = "ID:%@";
+"partyRoom.welcomeFallback"              = "Welcome to my room, let's have fun!";
+"partyRoom.a11y.follow"                  = "Follow";
+"partyRoom.a11y.following"               = "Following";
+"partyRoom.a11y.announcement"            = "Announcement";
+"partyRoom.a11y.share"                   = "Share";
+"partyRoom.a11y.management"              = "Management";
+"partyRoom.a11y.more"                    = "More";
+"partyRoom.a11y.heat"                    = "Heat";
+"partyRoom.a11y.viewers"                 = "Viewers";
+"partyRoom.tab.all"                      = "All";
+"partyRoom.tab.chat"                     = "Chat";
+"partyRoom.tab.gift"                     = "Gift";
+"partyRoom.input.placeholder"            = "Say hello...";
+"partyRoom.a11y.emoji"                   = "Emoji";
+"partyRoom.a11y.speaker.on"              = "Speaker on";
+"partyRoom.a11y.speaker.off"             = "Speaker off";
+"partyRoom.a11y.mic.on"                  = "Mic on";
+"partyRoom.a11y.mic.off"                 = "Mic off";
+"partyRoom.a11y.game"                    = "Games";
+"partyRoom.a11y.gift"                    = "Send gift";

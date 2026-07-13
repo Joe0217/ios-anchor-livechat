@@ -299,6 +299,36 @@ enum L10n {
         static var errorMediaSwitchFailed: String { localize("party.error.mediaSwitchFailed", comment: "麦克风/摄像头切换失败") }
     }
 
+    // MARK: - PartyRoom 房间内 UI（AnchorBar / ChatTabStrip / InputBar 使用）
+    enum PartyRoom {
+        // 顶部房主条（PartyRoomAnchorBar）
+        static var idFormat: String { localize("partyRoom.idFormat", comment: "房间 ID 显示格式 ID:%@") }
+        static var welcomeFallback: String { localize("partyRoom.welcomeFallback", comment: "欢迎语 fallback") }
+        static var a11yFollow: String { localize("partyRoom.a11y.follow", comment: "关注按钮 a11y") }
+        static var a11yFollowing: String { localize("partyRoom.a11y.following", comment: "已关注按钮 a11y") }
+        static var a11yAnnouncement: String { localize("partyRoom.a11y.announcement", comment: "公告图标 a11y") }
+        static var a11yShare: String { localize("partyRoom.a11y.share", comment: "分享图标 a11y") }
+        static var a11yManagement: String { localize("partyRoom.a11y.management", comment: "管理图标 a11y") }
+        static var a11yMore: String { localize("partyRoom.a11y.more", comment: "更多图标 a11y") }
+        static var a11yHeat: String { localize("partyRoom.a11y.heat", comment: "热度 a11y") }
+        static var a11yViewers: String { localize("partyRoom.a11y.viewers", comment: "观众 a11y") }
+
+        // 公屏 tab strip（PartyRoomChatTabStrip）
+        static var tabAll: String { localize("partyRoom.tab.all", comment: "公屏 tab All") }
+        static var tabChat: String { localize("partyRoom.tab.chat", comment: "公屏 tab Chat") }
+        static var tabGift: String { localize("partyRoom.tab.gift", comment: "公屏 tab Gift") }
+
+        // 底部输入栏（PartyRoomInputBar）
+        static var inputPlaceholder: String { localize("partyRoom.input.placeholder", comment: "聊天输入 placeholder") }
+        static var a11yEmoji: String { localize("partyRoom.a11y.emoji", comment: "表情按钮 a11y") }
+        static var a11ySpeakerOn: String { localize("partyRoom.a11y.speaker.on", comment: "扬声器已开 a11y") }
+        static var a11ySpeakerOff: String { localize("partyRoom.a11y.speaker.off", comment: "扬声器已关 a11y") }
+        static var a11yMicOn: String { localize("partyRoom.a11y.mic.on", comment: "麦克风已开 a11y") }
+        static var a11yMicOff: String { localize("partyRoom.a11y.mic.off", comment: "麦克风已关 a11y") }
+        static var a11yGame: String { localize("partyRoom.a11y.game", comment: "游戏按钮 a11y") }
+        static var a11yGift: String { localize("partyRoom.a11y.gift", comment: "礼物按钮 a11y") }
+    }
+
     // MARK: - Work 工作台（设计稿还原）
     static var workWeeklyLevel: String { localize("work.weeklyLevel", comment: "周等级") }
     static var workDetail: String { localize("work.detail", comment: "详情") }
@@ -568,6 +598,40 @@ enum L10n {
 
     // 对方消息气泡内可见"翻译"按钮（对齐 H5 msgItem.vue CTranslate label="Translate"）
     static var chatTranslate: String       { localize("chat.translate", comment: "文字气泡内翻译按钮 label") }
+
+    // MARK: - 系统通知会话文案（对齐 H5 systemMsg.vue + cpRankRewardMsg.vue）
+    static var chatSystemComingSoon: String     { localize("chat.system.comingSoon", comment: "CP 榜 / View Now / click here 降级 toast") }
+    static var chatSystemViewNow: String        { localize("chat.system.viewNow", comment: "虚拟道具 GET 通知里 View Now CTA") }
+    static var chatSystemCheckCpRanking: String { localize("chat.system.checkCpRanking", comment: "CP 榜奖励卡片底部 Check Cp ranking CTA") }
+    static var chatSystemAppealClickHere: String { localize("chat.system.appealClickHere", comment: "惩罚申诉气泡里可点击的 click here") }
+    static var chatSystemAppealSuccess: String  { localize("chat.system.appealSuccess", comment: "申诉成功 toast") }
+    static var chatSystemDurationPerm: String   { localize("chat.system.durationPerm", comment: "虚拟道具永久时长") }
+    static var chatSystemItemTypeVehicle: String   { localize("chat.system.itemType.vehicle", comment: "") }
+    static var chatSystemItemTypeFrame: String     { localize("chat.system.itemType.frame", comment: "") }
+    static var chatSystemItemTypeEntrance: String  { localize("chat.system.itemType.entrance", comment: "") }
+    static var chatSystemItemTypeChatSkin: String  { localize("chat.system.itemType.chatSkin", comment: "") }
+    static var chatSystemItemTypeCardFrame: String { localize("chat.system.itemType.cardFrame", comment: "") }
+    static func chatSystemItemGet(itemName: String, itemType: String, duration: String) -> String {
+        String(format: localize("chat.system.itemGetFormat", comment: "虚拟道具收到通知,3 参数:名字/类型/时长"), itemName, itemType, duration)
+    }
+    static func chatSystemItemExpired(itemName: String, itemType: String) -> String {
+        String(format: localize("chat.system.itemExpiredFormat", comment: "虚拟道具过期通知,2 参数:名字/类型"), itemName, itemType)
+    }
+    static func chatSystemDurationHourMinute(hour: Int, minute: Int) -> String {
+        String(format: localize("chat.system.durationHourMinuteFormat", comment: "X hours Y minutes"), hour, minute)
+    }
+    static func chatSystemDurationHour(hour: Int) -> String {
+        String(format: localize("chat.system.durationHourFormat", comment: "X hours"), hour)
+    }
+    static func chatSystemDurationMinute(minute: Int) -> String {
+        String(format: localize("chat.system.durationMinuteFormat", comment: "X minutes"), minute)
+    }
+    static func chatSystemRewardDiamond(count: String) -> String {
+        String(format: localize("chat.system.rewardDiamondFormat", comment: "钻石到账,1 参数:数量"), count)
+    }
+    static func chatSystemCpRankRewardMsg(rank: Int) -> String {
+        String(format: localize("chat.system.cpRankRewardMsgFormat", comment: "CP 榜奖励主文案,1 参数:排名"), rank)
+    }
 
     // 语音录制 <1s 提示（对齐 H5 recording.vue "Recording time is too short"）
     static var chatVoiceTooShort: String   { localize("chat.voice.tooShort", comment: "语音录制过短提示") }

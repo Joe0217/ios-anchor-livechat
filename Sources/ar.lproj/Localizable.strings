@@ -702,6 +702,13 @@
 "pk.opponent.mute"              = "كتم صوت الخصم";
 "pk.opponent.unmute"            = "إلغاء كتم صوت الخصم";
 
+// PK History record sheet (v23 2026-07-13)
+"pk.record.effectiveWinLabel"   = "عدد انتصارات PK الفعّالة هذا الأسبوع";
+"pk.record.effectiveTipTitle"   = "الانتصارات الفعّالة";
+"pk.record.effectiveTipMessage" = "عدد مباريات PK التي فُزت بها بنقاط PK أعلى من الحد الأدنى الفعّال هذا الأسبوع.";
+"pk.record.keepDaysFooter"      = "الاحتفاظ بسجلات آخر 30 يومًا";
+"pk.record.selfDefault"         = "أنا";
+
 // MARK: - H IM 完善 错误文案（NIMServiceError.errorDescription）
 "im.error.loginFailedFormat"         = "فشل تسجيل دخول الدردشة (code=%@) %@";
 "im.error.tokenInvalid"              = "انتهت صلاحية الجلسة، يرجى تسجيل الدخول مرة أخرى";
@@ -771,6 +778,27 @@
 "chat.historyExpired"  = "انتهت صلاحية سجل المحادثة.";
 // 文字气泡内翻译按钮
 "chat.translate"       = "ترجم";
+
+// 系统通知会话文案（对齐 H5 systemMsg.vue + cpRankRewardMsg.vue）
+"chat.system.comingSoon"          = "قريبًا";
+"chat.system.viewNow"             = "عرض الآن";
+"chat.system.checkCpRanking"      = "شاهد ترتيب CP";
+"chat.system.appealClickHere"     = "اضغط هنا";
+"chat.system.appealSuccess"       = "تم الاستئناف بنجاح";
+"chat.system.durationPerm"        = "دائم";
+"chat.system.itemType.vehicle"    = "مركبة";
+"chat.system.itemType.frame"      = "إطار";
+"chat.system.itemType.entrance"   = "دخول";
+"chat.system.itemType.chatSkin"   = "خلفية الدردشة";
+"chat.system.itemType.cardFrame"  = "إطار البطاقة";
+"chat.system.itemGetFormat"       = "تهانينا! لقد حصلت على【%1$@】【%2$@】* (%3$@). يمكنك عرضه في ملفي > العناصر.";
+"chat.system.itemExpiredFormat"   = "لقد انتهت صلاحية【%1$@】【%2$@】";
+"chat.system.durationHourMinuteFormat" = "%1$d ساعة %2$d دقيقة";
+"chat.system.durationHourFormat"       = "%1$d ساعة";
+"chat.system.durationMinuteFormat"     = "%1$d دقيقة";
+"chat.system.rewardDiamondFormat"      = "تهانينا! لقد حصلت على ألماس*%@";
+"chat.system.cpRankRewardMsgFormat"    = "تهانينا! لقد حصلت على مكافأة المركز %d من ترتيب CP الأسبوعي.";
+
 // 语音录制过短
 "chat.voice.tooShort"  = "مدة التسجيل قصيرة جدًا";
 // 发送失败网络提示
@@ -1136,3 +1164,26 @@
 "editProfile.toast.avatarInReview"                 = "الصورة الشخصية قيد المراجعة، يرجى الانتظار...";
 "editProfile.toast.nicknameInReview"               = "عذرًا، تفاصيل ملفك الشخصي قيد المراجعة";
 "editProfile.toast.networkError"                   = "خطأ في الشبكة، يرجى المحاولة مرة أخرى";
+
+/* MARK: - PartyRoom 房间内 UI (AnchorBar / ChatTabStrip / InputBar) */
+"partyRoom.idFormat"                     = "المعرّف:%@";
+"partyRoom.welcomeFallback"              = "مرحبًا بكم في غرفتي، لنمرح!";
+"partyRoom.a11y.follow"                  = "متابعة";
+"partyRoom.a11y.following"               = "تتم المتابعة";
+"partyRoom.a11y.announcement"            = "إعلان";
+"partyRoom.a11y.share"                   = "مشاركة";
+"partyRoom.a11y.management"              = "الإدارة";
+"partyRoom.a11y.more"                    = "المزيد";
+"partyRoom.a11y.heat"                    = "الحرارة";
+"partyRoom.a11y.viewers"                 = "المشاهدون";
+"partyRoom.tab.all"                      = "الكل";
+"partyRoom.tab.chat"                     = "الدردشة";
+"partyRoom.tab.gift"                     = "الهدية";
+"partyRoom.input.placeholder"            = "قل مرحبًا...";
+"partyRoom.a11y.emoji"                   = "الرموز التعبيرية";
+"partyRoom.a11y.speaker.on"              = "مكبّر الصوت مفتوح";
+"partyRoom.a11y.speaker.off"             = "مكبّر الصوت مغلق";
+"partyRoom.a11y.mic.on"                  = "الميكروفون مفتوح";
+"partyRoom.a11y.mic.off"                 = "الميكروفون مغلق";
+"partyRoom.a11y.game"                    = "الألعاب";
+"partyRoom.a11y.gift"                    = "إرسال هدية";

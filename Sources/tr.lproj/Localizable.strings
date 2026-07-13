@@ -702,6 +702,13 @@
 "pk.opponent.mute"              = "Rakibi sessize al";
 "pk.opponent.unmute"            = "Rakibi sessizden çıkar";
 
+// PK History record sheet (v23 2026-07-13)
+"pk.record.effectiveWinLabel"   = "Bu Haftaki Etkin PK Galibiyet Sayısı";
+"pk.record.effectiveTipTitle"   = "Etkin galibiyetler";
+"pk.record.effectiveTipMessage" = "Bu hafta etkin eşik değerinin üzerinde PK skoruyla kazanılan PK maçlarının sayısı.";
+"pk.record.keepDaysFooter"      = "Son 30 günün kayıtlarını sakla";
+"pk.record.selfDefault"         = "Ben";
+
 // MARK: - H IM 完善 错误文案（NIMServiceError.errorDescription）
 "im.error.loginFailedFormat"         = "IM girişi başarısız (code=%@) %@";
 "im.error.tokenInvalid"              = "Oturum süresi doldu, lütfen tekrar giriş yapın";
@@ -771,6 +778,27 @@
 "chat.historyExpired"  = "Sohbet geçmişinin süresi doldu.";
 // 文字气泡内翻译按钮
 "chat.translate"       = "Çevir";
+
+// 系统通知会话文案（对齐 H5 systemMsg.vue + cpRankRewardMsg.vue）
+"chat.system.comingSoon"          = "Yakında";
+"chat.system.viewNow"             = "Şimdi Gör";
+"chat.system.checkCpRanking"      = "CP Sıralamasına Bak";
+"chat.system.appealClickHere"     = "buraya tıkla";
+"chat.system.appealSuccess"       = "İtiraz Başarılı";
+"chat.system.durationPerm"        = "Kalıcı";
+"chat.system.itemType.vehicle"    = "Araç";
+"chat.system.itemType.frame"      = "Çerçeve";
+"chat.system.itemType.entrance"   = "Giriş";
+"chat.system.itemType.chatSkin"   = "Sohbet Teması";
+"chat.system.itemType.cardFrame"  = "Kart Çerçevesi";
+"chat.system.itemGetFormat"       = "Tebrikler! 【%1$@】【%2$@】* (%3$@) aldınız. Bunu Ben > Eşyalar bölümünden görebilirsiniz.";
+"chat.system.itemExpiredFormat"   = "【%1$@】【%2$@】süresi doldu";
+"chat.system.durationHourMinuteFormat" = "%1$d saat %2$d dakika";
+"chat.system.durationHourFormat"       = "%1$d saat";
+"chat.system.durationMinuteFormat"     = "%1$d dakika";
+"chat.system.rewardDiamondFormat"      = "Tebrikler! Elmas*%@ aldınız";
+"chat.system.cpRankRewardMsgFormat"    = "Tebrikler! CP Haftalık Sıralamasından %d. sıra ödülünü aldınız.";
+
 // 语音录制过短
 "chat.voice.tooShort"  = "Kayıt süresi çok kısa";
 // 发送失败网络提示
@@ -1136,3 +1164,26 @@
 "editProfile.toast.avatarInReview"                 = "Profil fotoğrafı incelemede, lütfen bekleyin...";
 "editProfile.toast.nicknameInReview"               = "Üzgünüz, profil bilgileriniz incelemede";
 "editProfile.toast.networkError"                   = "Ağ hatası, lütfen tekrar deneyin";
+
+/* MARK: - PartyRoom 房间内 UI (AnchorBar / ChatTabStrip / InputBar) */
+"partyRoom.idFormat"                     = "Kimlik:%@";
+"partyRoom.welcomeFallback"              = "Odama hoş geldin, hadi eğlenelim!";
+"partyRoom.a11y.follow"                  = "Takip et";
+"partyRoom.a11y.following"               = "Takip ediliyor";
+"partyRoom.a11y.announcement"            = "Duyuru";
+"partyRoom.a11y.share"                   = "Paylaş";
+"partyRoom.a11y.management"              = "Yönetim";
+"partyRoom.a11y.more"                    = "Daha fazla";
+"partyRoom.a11y.heat"                    = "Sıcaklık";
+"partyRoom.a11y.viewers"                 = "İzleyiciler";
+"partyRoom.tab.all"                      = "Tümü";
+"partyRoom.tab.chat"                     = "Sohbet";
+"partyRoom.tab.gift"                     = "Hediye";
+"partyRoom.input.placeholder"            = "Merhaba de...";
+"partyRoom.a11y.emoji"                   = "Emoji";
+"partyRoom.a11y.speaker.on"              = "Hoparlör açık";
+"partyRoom.a11y.speaker.off"             = "Hoparlör kapalı";
+"partyRoom.a11y.mic.on"                  = "Mikrofon açık";
+"partyRoom.a11y.mic.off"                 = "Mikrofon kapalı";
+"partyRoom.a11y.game"                    = "Oyunlar";
+"partyRoom.a11y.gift"                    = "Hediye gönder";

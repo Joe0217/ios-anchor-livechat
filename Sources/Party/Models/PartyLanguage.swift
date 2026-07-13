@@ -12,3 +12,11 @@ struct PartyLanguage: Codable, Equatable, Identifiable, Hashable {
 
     var id: String { languageCode }
 }
+
+extension PartyLanguage {
+    /// 前端拼接的 "All" 选项（`languageCode = ""` → 后端 nil，拉全大厅）。
+    /// 对齐 H5 用户端 `stores/modules/party.js:1354` 首项拼 `{languageName:'All', languageCode:''}`。
+    static var all: PartyLanguage {
+        PartyLanguage(languageName: L10n.Party.languageAll, languageCode: "")
+    }
+}

@@ -73,10 +73,22 @@ struct PartyTabRootView: View {
         .overlay(alignment: .top) {
             if let t = permissionDeniedToast {
                 Text(t)
-                    .font(.system(size: 13))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(Capsule().fill(Color.black.opacity(0.8)))
+                    .background(
+                        Capsule().fill(
+                            LinearGradient(
+                                colors: [
+                                    Theme.Palette.partyCreateBtnA.opacity(0.4),
+                                    Theme.Palette.partyCreateBtnB.opacity(0.4)
+                                ],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                    )
+                    .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
                     .padding(.top, 60)
                     .transition(.opacity)
                     .task(id: t) {

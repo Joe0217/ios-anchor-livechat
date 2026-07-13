@@ -145,7 +145,14 @@ enum PartyAPI {
     }
 
     /// 房间列表（大厅）。游标分页：snapshotId 锁列表快照 + offset 翻页。
+    ///
+    /// 3 个 tab 走 3 个 endpoint（对齐 H5 用户端 `src/api/party/index.ts` L21/24/27）：
+    /// - `.party`    → `/party/room/list`
+    /// - `.followed` → `/party/room/followed/list`
+    /// - `.recent`   → `/party/room/recent/list`
+    /// 参数结构完全一致；Follow/Recent 强制不筛语言（H5 index.vue L96 语义：`tabIndex===0 ? languageCode : null`）。
     static func roomList(
+        kind: PartyRoomListKind = .party,
         languageCode: String? = nil,
         snapshotId: String? = nil,
         offset: Int? = nil,
@@ -161,8 +168,20 @@ enum PartyAPI {
         if let v = snapshotId { body["snapshotId"] = v }
         if let v = offset { body["offset"] = v }
         if let v = queryParam { body["queryParam"] = v }
-        let data = try await PartyAPIClient.shared.post("\(pathPrefix)/room/list", body: body)
+        let data = try await PartyAPIClient.shared.post("\(pathPrefix)\(kind.endpointSuffix)", body: body)
         return try decodeArrayOrEmpty(data, as: PartyRoomInfo.self)
+    }
+
+    /// 我的派对房 + 家族信息（H5 `apiGetPartyRoomInfo`）。无 body，返回可能为 null/空对象（视为无 room）。
+    /// 用于大厅浮动按钮"Create Room / My Room"分流：有 `myRoom.id` 且 `roomStatus != 2` → 显示 My Room。
+    static func getMyRoomAndFamilyInfo() async throws -> PartyMyRoomInfoWrapper? {
+        let data = try await PartyAPIClient.shared.post("\(pathPrefix)/room/getMyRoomAndFamilyInfo", body: [:])
+        // 后端可能返回空对象/null——统一收敛为 nil
+        do {
+            return try decodeObject(data, as: PartyMyRoomInfoWrapper.self)
+        } catch {
+            return nil
+        }
     }
 
     /// 进房。`isAnchor` 主播端固定 true。

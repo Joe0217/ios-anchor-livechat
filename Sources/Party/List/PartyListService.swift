@@ -8,7 +8,9 @@ import Foundation
 /// **参数透传**（spec §7, F-11）：与 `PartyAPI.roomList` 完全对齐，MVP 不用 snapshotId（F-03）
 /// 但保留 languageCode/queryParam/version 以便 F 期加搜索/关注时无 breaking change。
 protocol PartyListService: Sendable {
+    /// 3 tab（Party/Follow/Recent）共用契约；kind 决定 endpoint（对齐 H5 用户端）。
     func fetchList(
+        kind: PartyRoomListKind,
         languageCode: String?,
         offset: Int?,
         pageSize: Int,
@@ -46,13 +48,14 @@ struct PartyListServicePreviewFake: PartyListService {
     }
 
     func fetchList(
+        kind: PartyRoomListKind,
         languageCode: String?,
         offset: Int?,
         pageSize: Int,
         queryParam: String?,
         version: String
     ) async throws -> [PartyRoomInfo] {
-        // 按 offset 索引下一个 kind；越界则用最后一个（模拟稳定后续调用）
+        // 按 offset 索引下一个 kind（PreviewFake.Kind，不同于外层 PartyRoomListKind）
         let idx = min(max(0, (offset ?? 0) / max(1, pageSize)), kinds.count - 1)
         let kind = kinds[idx]
 

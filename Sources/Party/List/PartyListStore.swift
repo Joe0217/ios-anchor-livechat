@@ -100,6 +100,12 @@ final class PartyListStore: ObservableObject {
 
     private var currentTask: Task<Void, Never>?
 
+    /// refreshAsync 独立 inflight 标记（v3：与 currentTask 解耦）。
+    /// 修复 P1：原 inflight guard 用 `currentTask != nil` 判断，`beginLoadMore` 完成不清 nil →
+    /// loadMore 后调 refreshAsync 误把已完成的 loadMore task 当 inflight → `.value` 立即返回 →
+    /// spinner 一闪即收。改为独立 flag：refresh 只 gate 自己，不受 loadMore 生命周期影响。
+    private var isRefreshing = false
+
     /// 当前已加载页面数（用于 offset 计算）。`loaded/pageError` 时表示已成功页数；`loadingMore` 时是"尝试中"。
     private var loadedPageCount: Int = 0
 
@@ -143,11 +149,16 @@ final class PartyListStore: ObservableObject {
     /// 2. **Task.detached**：请求生命周期与 SwiftUI view/refreshable Task 完全解耦——即便 refreshable
     ///    closure 被 SwiftUI cancel（页切走/body re-eval），URLSession 请求继续跑完再回填 state
     func refreshAsync() async {
-        // inflight：已在跑就 await 现有 task
-        if let existing = currentTask {
-            await existing.value
+        // v3 inflight guard：只 gate refresh 自身，不受 loadMore/前置 startInitial 的 currentTask 生命周期影响
+        if isRefreshing {
+            await currentTask?.value
             return
         }
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        // 若前置有 startInitial/setLanguage 启动的 task_A 未完成，cancel 之避免与本次 refresh 并行写 state
+        currentTask?.cancel()
 
         loadedPageCount = 0
         switch state {
