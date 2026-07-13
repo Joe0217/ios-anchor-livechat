@@ -12,11 +12,15 @@ import SwiftUI
 /// - chat: 观测 onlineCount（NIM 实时增减，比 store.onlineUserCount 业务快照更新）
 /// - roomState: 用于 stateBadge 显色文案
 /// - onLeave: 退房按钮回调（由父 view 注入，承接 store.leaveRoom + dismiss）
+/// - showSettings: 是否显示右上齿轮入口（房主可见）；nil 时不显示
+/// - onTapSettings: 齿轮 tap 回调（父 view 处理 push 到设置页）
 struct PartyRoomHeaderView: View {
     let roomName: String
     @ObservedObject var chat: PartyRoomChatManager
     let roomState: PartyRoomState
     let onLeave: () -> Void
+    var showSettings: Bool = false
+    var onTapSettings: (() -> Void)? = nil
 
     var body: some View {
         HStack {
@@ -29,6 +33,14 @@ struct PartyRoomHeaderView: View {
             }
             Spacer()
             stateBadge
+            if showSettings, let onTapSettings {
+                Button(action: onTapSettings) {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.secondary)
+                }
+                .accessibilityLabel(L10n.Party.settingsNavTitle)
+            }
             Button(action: onLeave) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 22))

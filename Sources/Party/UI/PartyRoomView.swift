@@ -19,6 +19,8 @@ import SwiftUI
 /// - 底部输入 + 5 工具按钮（PartyRoomInputBar）
 struct PartyRoomView: View {
     let roomId: String
+    /// v8：密码房进房时传入（对齐 H5 clickRoomItem 密码框语义）；普通房传 nil
+    var password: String? = nil
 
     @ObservedObject private var store = PartyStore.shared
     @Environment(\.dismiss) private var dismiss
@@ -30,6 +32,8 @@ struct PartyRoomView: View {
     @State private var showSelfActions: Bool = false
     @State private var showError: Bool = false
     @State private var didStartEnter: Bool = false
+    /// v8 房主设置页 sheet
+    @State private var showSettings: Bool = false
     /// P2-10：sortedSeats 缓存
     @State private var sortedSeatsCache: [PartyRoomSeat] = []
     /// 聊天区 tab（视觉状态本地维护；MVP 阶段 All/Chat/Gift 共用同一消息列表，
@@ -51,6 +55,7 @@ struct PartyRoomView: View {
             // 保留 navigationBarBackButtonHidden 副作用禁 interactive pop（对齐 [default-swipe-back-on-push-pages] 业务态防误退例外）。
             .navigationBarBackButtonHidden(true)
             .toolbar(.hidden, for: .navigationBar)
+            .sheet(isPresented: $showSettings) { settingsSheet }
             .onAppear(perform: handleAppear)
             .onChange(of: store.seatList, perform: handleSeatListChange)
             .onDisappear(perform: handleDisappear)
@@ -77,8 +82,27 @@ struct PartyRoomView: View {
         ZStack {
             backgroundLayer
             contentColumn
+            // v8：进房 loading overlay（对齐 H5 clickRoomItem 全屏 isSearchLoading 反馈）
+            // 显示条件：preparing / entering 态；joined 或 ended 时消失让房内 UI 显现
+            if store.roomState == .preparing || store.roomState == .entering {
+                enterLoadingOverlay
+            }
         }
         .ignoresSafeArea(.container, edges: .horizontal)
+    }
+
+    /// 进房 loading：半透黑底 + ProgressView + 文案（对齐 PartySearchView loadingOverlay 模式）
+    private var enterLoadingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.4).ignoresSafeArea()
+            VStack(spacing: 12) {
+                ProgressView().tint(.white).scaleEffect(1.3)
+                Text(L10n.Party.enteringRoom)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white)
+            }
+        }
+        .transition(.opacity)
     }
 
     /// 背景层：房间大图 + 深色遮罩
@@ -388,7 +412,34 @@ struct PartyRoomView: View {
         AppLogger.party.notice("[PartyRoom] share tapped (TODO F)")
     }
     private func handleManagementTap() {
-        AppLogger.party.notice("[PartyRoom] management tapped (TODO F)")
+        // v8：房主 → 打开设置 sheet；非房主 → 现有 stub（F 期为房管抽独立菜单）
+        if store.selfRole == .owner {
+            showSettings = true
+        } else {
+            AppLogger.party.notice("[PartyRoom] management tapped by non-owner (TODO F)")
+        }
+    }
+
+    /// v8 房主设置 sheet：内嵌 NavigationStack 支持 Admin 子页 push
+    @ViewBuilder
+    private var settingsSheet: some View {
+        NavigationStack {
+            PartyRoomSettingsView(
+                store: PartyRoomSettingsStore(
+                    roomId: store.roomInfo?.id ?? roomId,
+                    roomName: store.roomInfo?.roomName ?? "",
+                    tagline: store.roomInfo?.greetingMessage ?? "",
+                    languageCode: store.roomInfo?.roomLanguage ?? "",
+                    avatarUrl: store.roomInfo?.roomAvatar,
+                    backgroundId: nil     // 由 Store.loadCurrentBackground 拉 getRoomBgImage 填充
+                ),
+                onSaved: {
+                    // 保存成功后关 sheet；store.roomInfo 刷新由 F 期加接口（reloadRoomInfo）
+                    showSettings = false
+                }
+            )
+        }
+        .preferredColorScheme(.dark)
     }
     private func handleMoreTap() {
         // MVP：顶部更多 = 退房入口（对齐旧版 header 的 ✕ 按钮语义）

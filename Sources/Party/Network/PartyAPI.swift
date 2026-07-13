@@ -123,6 +123,70 @@ enum PartyAPI {
         return try decodeArrayOrEmpty(data, as: PartyBackground.self)
     }
 
+    // MARK: - room settings（设置功能，2026-07-13 v8）
+
+    /// 更新房间信息（房主设置页 save 时调）。
+    /// 对齐 H5 `apiPartyUpdateRoom` 与安卓 `updateRoom`。
+    /// **仅传变更 diff**（对齐 H5 create.vue:296-302；nil 参数跳过 body key）。
+    static func updateRoom(
+        roomId: String,
+        roomName: String? = nil,
+        roomAvatar: String? = nil,
+        greetingMessage: String? = nil,
+        roomLanguage: String? = nil
+    ) async throws {
+        var body: [String: Any] = ["roomId": roomId]
+        if let v = roomName { body["roomName"] = v }
+        if let v = roomAvatar { body["roomAvatar"] = v }
+        if let v = greetingMessage { body["greetingMessage"] = v }
+        if let v = roomLanguage { body["roomLanguage"] = v }
+        _ = try await PartyAPIClient.shared.post("\(pathPrefix)/room/updateRoom", body: body)
+    }
+
+    /// 拉当前房间的背景（编辑态显示 selectedBackground 用）。
+    /// 对齐 H5 `apiGetRoomBgImage`（index.ts:260）。
+    static func getRoomBgImage(roomId: String) async throws -> PartyBackground? {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/getRoomBgImage",
+            body: ["roomId": roomId]
+        )
+        return try? decodeObject(data, as: PartyBackground.self)
+    }
+
+    /// 设置房间背景（编辑态即时保存，选完 sheet close 就调）。
+    /// 对齐 H5 `apiSetPartyBgImage`（index.ts:257）。
+    static func setBgImages(roomId: String, bgImgId: Int) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/setBgImages",
+            body: ["roomId": roomId, "bgImgId": bgImgId]
+        )
+    }
+
+    /// 房管列表（房主设置页 Admin 子页拉）。**待真机验证 path/字段**（对齐 agent-recon-field-names-unverified rule）
+    static func roomAdminList(roomId: String) async throws -> [PartyRoomAdmin] {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/getRoomAdminList",
+            body: ["roomId": roomId]
+        )
+        return try decodeArrayOrEmpty(data, as: PartyRoomAdmin.self)
+    }
+
+    /// 设为房管
+    static func setRoomAdmin(roomId: String, userId: String) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/setRoomAdmin",
+            body: ["roomId": roomId, "userId": userId]
+        )
+    }
+
+    /// 撤销房管
+    static func removeRoomAdmin(roomId: String, userId: String) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/removeRoomAdmin",
+            body: ["roomId": roomId, "userId": userId]
+        )
+    }
+
     /// 创建房间。MVP 仅传 roomName + roomTempId；其他可选字段 F 期补 UI。
     static func createRoom(
         roomName: String,

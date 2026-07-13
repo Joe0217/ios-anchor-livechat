@@ -31,6 +31,12 @@ struct PartyTabRootView: View {
     @State private var permissionDeniedToast: String? = nil
     @State private var checkingPermission = false
 
+    // v8：密码房前置弹窗（对齐 H5 index.vue L178-182 语义）
+    /// 点击密码房时待确认的房间 id（非空时弹密码 alert）
+    @State private var pendingPasswordRoomId: String? = nil
+    /// 密码 alert 用户输入
+    @State private var enteredPassword: String = ""
+
     var body: some View {
         NavigationStack(path: $path) {
             PartyListMainView(
@@ -40,8 +46,8 @@ struct PartyTabRootView: View {
                     // v2：已有 myRoom 时点击浮动按钮直接进自己的房（对齐 H5 index.vue L191-207）
                     path.append(PartyRoute.room(id: roomId, password: nil))
                 },
-                onTapRoom: { roomId in
-                    path.append(PartyRoute.room(id: roomId, password: nil))
+                onTapRoom: { room in
+                    handleTapRoom(room)
                 },
                 onTapSearch: { path.append(PartyRoute.search) }
             )
@@ -61,14 +67,40 @@ struct PartyTabRootView: View {
                             Task { await listStore.reloadMyRoom() }
                         }
                     )
-                case .room(let id, _):
-                    PartyRoomView(roomId: id)
+                case .room(let id, let password):
+                    PartyRoomView(roomId: id, password: password)
                 case .search:
-                    PartySearchView(onTapRoom: { roomId in
-                        path.append(PartyRoute.room(id: roomId, password: nil))
+                    PartySearchView(onTapRoom: { room in
+                        handleTapRoom(room)
                     })
                 }
             }
+        }
+        // v8：密码房前置 alert（对齐 H5 index.vue L178-182 语义）
+        // isPresented 由 pendingPasswordRoomId 非 nil 派生；SecureField 承载输入
+        .alert(
+            L10n.Party.passwordAlertTitle,
+            isPresented: Binding(
+                get: { pendingPasswordRoomId != nil },
+                set: { if !$0 { pendingPasswordRoomId = nil; enteredPassword = "" } }
+            ),
+            presenting: pendingPasswordRoomId
+        ) { roomId in
+            SecureField(L10n.Party.passwordPlaceholder, text: $enteredPassword)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            Button(L10n.Party.passwordConfirm) {
+                let pwd = enteredPassword.trimmingCharacters(in: .whitespaces)
+                pendingPasswordRoomId = nil
+                enteredPassword = ""
+                path.append(PartyRoute.room(id: roomId, password: pwd.isEmpty ? nil : pwd))
+            }
+            Button(L10n.Party.passwordCancel, role: .cancel) {
+                pendingPasswordRoomId = nil
+                enteredPassword = ""
+            }
+        } message: { _ in
+            Text(L10n.Party.passwordAlertMessage)
         }
         .overlay(alignment: .top) {
             if let t = permissionDeniedToast {
@@ -100,6 +132,20 @@ struct PartyTabRootView: View {
     }
 
     // MARK: - Actions
+
+    /// v8：房卡点击统一入口（PartyListMainView + PartySearchView 共用）。
+    /// 密码房 → 弹密码 alert，输入密码后再 push；普通房 → 直接 push。
+    /// 对齐 H5 index.vue L165-188 `clickRoomItem` 密码房判断（H5 那段已注释，iOS 按语义激活）。
+    private func handleTapRoom(_ room: PartyRoomInfo) {
+        guard let rid = room.id, !rid.isEmpty else { return }
+        let isLocked = (room.lockFlag == 1) || (room.needPassword == true)
+        if isLocked {
+            enteredPassword = ""
+            pendingPasswordRoomId = rid
+        } else {
+            path.append(PartyRoute.room(id: rid, password: nil))
+        }
+    }
 
     private func tapCreate() {
         AppLogger.party.info("[PartyTab] tapCreate begin checking=\(self.checkingPermission, privacy: .public)")

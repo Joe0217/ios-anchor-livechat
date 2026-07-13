@@ -392,6 +392,9 @@
 "announcement.popup.sensitiveWord"        = "Sensitive words detected: %@";
 "announcement.popup.saving"               = "Saving...";
 "liveRoom.setting.sheet.title"            = "Settings";
+"liveRoom.endConfirm.title"               = "Kind reminder";
+"liveRoom.endConfirm.message"             = "Are you sure you want to end the live?";
+"liveRoom.endConfirm.confirm"             = "Confirm";
 "publicScreen.translate"                  = "Translate";
 "publicScreen.translating"                = "Translating...";
 "publicScreen.sentAction"                 = "Send";
@@ -822,6 +825,12 @@
 "party.search.noResults"                 = "";
 "party.comingSoon"                       = "Coming soon";
 "party.myRoom"                           = "My Room";
+"party.password.alert.title"             = "Enter room password";
+"party.password.alert.message"           = "This room requires a password to enter.";
+"party.password.placeholder"             = "Password";
+"party.password.confirm"                 = "Enter";
+"party.password.cancel"                  = "Cancel";
+"party.enteringRoom"                     = "Entering room…";
 
 "party.create.navTitle"                  = "Create My Room";
 "party.create.submit"                    = "Create";
@@ -840,6 +849,17 @@
 "party.create.bg.permanent"              = "Permanent";
 "party.create.bg.empty"                  = "No backgrounds available";
 "party.create.permissionDenied"          = "Contact admin to unlock room creation";
+// v8 派对房设置 + 房管管理（2026-07-13）
+"party.settings.navTitle"                = "Room Settings";
+"party.settings.changeAvatar"            = "Change room avatar";
+"party.settings.section.admin"           = "Admins";
+"party.settings.manageAdmins"            = "Manage Admins";
+"party.settings.admin.empty"             = "No admins yet";
+"party.settings.admin.add"               = "Add";
+"party.settings.admin.remove"            = "Remove admin";
+"party.settings.admin.addTitle"          = "Add Admin";
+"party.settings.admin.addHint"           = "Enter the user ID to promote to admin.";
+"party.settings.admin.userIdPlaceholder" = "User ID";
 "party.create.section.name"              = "Room Name";
 "party.create.name.placeholder"          = "Up to 20 characters";
 "party.create.section.template"          = "Select Template";

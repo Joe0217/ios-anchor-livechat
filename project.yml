@@ -28,6 +28,9 @@ targets:
       # v17: GIF 动图资源（钻石收益等 —— Assets.xcassets imageset 不支持 gif，走 bundle resource）
       - path: Sources/Assets/GIFs
         buildPhase: resources
+      # 2026-07-11 PK 动画：H5 6 个 SVGA 拷入 iOS（preparing/matching/last5s/result win/loss/draw）
+      - path: Sources/Assets/SVGA
+        buildPhase: resources
       - Vendor/FaceUnity/FUManager.h
       - Vendor/FaceUnity/FUManager.m
       - Vendor/FaceUnity/FUBeautyRenderer.swift
@@ -228,6 +231,11 @@ targets:
       - path: Sources/Party/Models/PartyLanguage.swift
       # v7 对齐安卓（2026-07-11）：PartyBackground + PartyCreateConditions（纯 Decodable，零 SDK）
       - path: Sources/Party/Models/PartyBackground.swift
+      # v8 派对房设置 + 房管管理（2026-07-13）：纯 Foundation 层
+      - path: Sources/Party/Models/PartyRoomAdmin.swift
+      - path: Sources/Party/Settings/PartyRoomSettingsStore.swift
+      - path: Sources/Party/Settings/PartyRoomSettingsService.swift
+      - path: Sources/Party/Settings/PartyAdminStore.swift
       # G 里程碑 M2：PKCountdownController（纯 Foundation Task；PKStore 状态机依赖 SDK 不入测）
       - path: Sources/PK/PKCountdownController.swift
       # A 里程碑 trial #1 (Circle 朋友圈 tab)：纯枚举 + 状态机 + 服务层 protocol

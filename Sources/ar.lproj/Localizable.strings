@@ -436,6 +436,9 @@
 "announcement.popup.sensitiveWord"        = "تم اكتشاف كلمات حساسة: %@";
 "announcement.popup.saving"               = "جارٍ الحفظ...";
 "liveRoom.setting.sheet.title"            = "الإعدادات";
+"liveRoom.endConfirm.title"               = "تنبيه";
+"liveRoom.endConfirm.message"             = "هل أنت متأكد من إنهاء البث؟";
+"liveRoom.endConfirm.confirm"             = "تأكيد";
 "publicScreen.translate"                  = "ترجمة";
 "publicScreen.translating"                = "جارٍ الترجمة...";
 "publicScreen.sentAction"                 = "أرسل";
@@ -865,6 +868,12 @@
 "party.search.noResults"                 = "";
 "party.comingSoon"                       = "قريبًا";
 "party.myRoom"                           = "غرفتي";
+"party.password.alert.title"             = "أدخل كلمة مرور الغرفة";
+"party.password.alert.message"           = "تتطلب هذه الغرفة كلمة مرور للدخول.";
+"party.password.placeholder"             = "كلمة المرور";
+"party.password.confirm"                 = "دخول";
+"party.password.cancel"                  = "إلغاء";
+"party.enteringRoom"                     = "جارٍ الدخول إلى الغرفة…";
 
 "party.create.navTitle"                  = "إنشاء غرفتي";
 "party.create.submit"                    = "إنشاء";
@@ -884,6 +893,17 @@
 "party.create.bg.permanent"              = "دائم";
 "party.create.bg.empty"                  = "لا توجد خلفيات متاحة";
 "party.create.permissionDenied"          = "تواصل مع المشرف لفتح إنشاء الغرفة";
+// v8 派对房 settings
+"party.settings.navTitle"                = "إعدادات الغرفة";
+"party.settings.changeAvatar"            = "تغيير صورة الغرفة";
+"party.settings.section.admin"           = "المشرفون";
+"party.settings.manageAdmins"            = "إدارة المشرفين";
+"party.settings.admin.empty"             = "لا يوجد مشرفون بعد";
+"party.settings.admin.add"               = "إضافة";
+"party.settings.admin.remove"            = "إزالة المشرف";
+"party.settings.admin.addTitle"          = "إضافة مشرف";
+"party.settings.admin.addHint"           = "أدخل معرف المستخدم لترقيته إلى مشرف.";
+"party.settings.admin.userIdPlaceholder" = "معرف المستخدم";
 "party.create.section.template"          = "اختر القالب";
 "party.create.template.loading"          = "جارٍ تحميل القوالب…";
 "party.create.template.empty"            = "لا توجد قوالب متاحة في dev";

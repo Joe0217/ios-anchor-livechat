@@ -231,6 +231,15 @@ enum L10n {
         static var comingSoon: String { localize("party.comingSoon", comment: "占位 toast 文案 Coming soon") }
         static var myRoom: String { localize("party.myRoom", comment: "浮动按钮 My Room（已创房时展示）") }
 
+        // 密码房前置弹窗（对齐 H5 index.vue L178-182 语义；主播端无充值/升级弹窗）
+        static var passwordAlertTitle: String { localize("party.password.alert.title", comment: "密码框标题") }
+        static var passwordAlertMessage: String { localize("party.password.alert.message", comment: "密码框说明") }
+        static var passwordPlaceholder: String { localize("party.password.placeholder", comment: "密码输入 placeholder") }
+        static var passwordConfirm: String { localize("party.password.confirm", comment: "密码框确认按钮") }
+        static var passwordCancel: String { localize("party.password.cancel", comment: "密码框取消按钮") }
+        // 进房 loading（对齐 H5 clickRoomItem 全屏 isSearchLoading）
+        static var enteringRoom: String { localize("party.enteringRoom", comment: "进房过程 loading 文案") }
+
         // 创建房（PartyCreateRoomView v5 对齐 livechat-h5 用户端，2026-07-10）
         static var createNavTitle: String { localize("party.create.navTitle", comment: "Create My Room") }
         static var createSubmit: String { localize("party.create.submit", comment: "Create") }
@@ -252,6 +261,17 @@ enum L10n {
         static var createBgPermanent: String { localize("party.create.bg.permanent", comment: "永久背景标签") }
         static var createBgEmpty: String { localize("party.create.bg.empty", comment: "背景列表空态") }
         static var createPermissionDenied: String { localize("party.create.permissionDenied", comment: "创房权限被拒 toast") }
+        // v8 设置功能（房主派对房设置 + 房管管理，2026-07-13）
+        static var settingsNavTitle: String { localize("party.settings.navTitle", comment: "Room Settings") }
+        static var settingsChangeAvatar: String { localize("party.settings.changeAvatar", comment: "更换头像 a11y") }
+        static var settingsSectionAdmin: String { localize("party.settings.section.admin", comment: "Admin section 标题") }
+        static var settingsManageAdmins: String { localize("party.settings.manageAdmins", comment: "Manage Admins entry") }
+        static var settingsAdminEmpty: String { localize("party.settings.admin.empty", comment: "无房管空态") }
+        static var settingsAdminAdd: String { localize("party.settings.admin.add", comment: "Add") }
+        static var settingsAdminRemove: String { localize("party.settings.admin.remove", comment: "撤销房管 a11y") }
+        static var settingsAdminAddTitle: String { localize("party.settings.admin.addTitle", comment: "Add Admin sheet 标题") }
+        static var settingsAdminAddHint: String { localize("party.settings.admin.addHint", comment: "Add Admin 提示") }
+        static var settingsAdminUserIdPlaceholder: String { localize("party.settings.admin.userIdPlaceholder", comment: "User ID input placeholder") }
         static var createTemplateLoading: String { localize("party.create.template.loading", comment: "加载模板…") }
         static var createTemplateEmpty: String { localize("party.create.template.empty", comment: "dev 暂无可用模板") }
         static var createTemplateFallbackFormat: String { localize("party.create.template.fallbackFormat", comment: "模板 %d") }
@@ -1055,6 +1075,11 @@ enum L10n {
     static var liveRoomSettingAnnouncement: String { localize("liveRoom.setting.announcement", comment: "设置菜单：公告管理") }
     /// v17 设置弹窗标题
     static var liveRoomSettingSheetTitle: String { localize("liveRoom.setting.sheet.title", comment: "设置弹窗标题") }
+
+    // MARK: 关闭直播二次确认（对齐 H5 endLivePopup.vue）
+    static var liveRoomEndConfirmTitle:   String { localize("liveRoom.endConfirm.title",   comment: "关闭直播确认弹窗标题") }
+    static var liveRoomEndConfirmMessage: String { localize("liveRoom.endConfirm.message", comment: "关闭直播确认弹窗内容") }
+    static var liveRoomEndConfirmConfirm: String { localize("liveRoom.endConfirm.confirm", comment: "关闭直播确认弹窗 Confirm 按钮") }
 
     // MARK: PK 入口按钮 5 态 a11y + 中断/断开确认占位（对齐 H5 pkEntryBtn.vue）
     static var liveRoomPKA11yDefault:   String { localize("liveRoom.pk.a11y.default",   comment: "PK 按钮默认态 a11y") }

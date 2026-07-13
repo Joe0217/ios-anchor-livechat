@@ -436,6 +436,9 @@
 "announcement.popup.sensitiveWord"        = "Hassas kelimeler algılandı: %@";
 "announcement.popup.saving"               = "Kaydediliyor...";
 "liveRoom.setting.sheet.title"            = "Ayarlar";
+"liveRoom.endConfirm.title"               = "Hatırlatma";
+"liveRoom.endConfirm.message"             = "Yayını sonlandırmak istediğinizden emin misiniz?";
+"liveRoom.endConfirm.confirm"             = "Onayla";
 "publicScreen.translate"                  = "Çevir";
 "publicScreen.translating"                = "Çevriliyor...";
 "publicScreen.sentAction"                 = "gönderdi";
@@ -865,6 +868,12 @@
 "party.search.noResults"                 = "";
 "party.comingSoon"                       = "Yakında";
 "party.myRoom"                           = "Odam";
+"party.password.alert.title"             = "Oda şifresini gir";
+"party.password.alert.message"           = "Bu odaya girmek için şifre gerekiyor.";
+"party.password.placeholder"             = "Şifre";
+"party.password.confirm"                 = "Gir";
+"party.password.cancel"                  = "İptal";
+"party.enteringRoom"                     = "Odaya giriliyor…";
 
 "party.create.navTitle"                  = "Odamı Oluştur";
 "party.create.submit"                    = "Oluştur";
@@ -884,6 +893,17 @@
 "party.create.bg.permanent"              = "Kalıcı";
 "party.create.bg.empty"                  = "Kullanılabilir arka plan yok";
 "party.create.permissionDenied"          = "Oda oluşturmayı açmak için yöneticiyle iletişime geçin";
+// v8 parti oda ayarları
+"party.settings.navTitle"                = "Oda Ayarları";
+"party.settings.changeAvatar"            = "Oda avatarını değiştir";
+"party.settings.section.admin"           = "Yöneticiler";
+"party.settings.manageAdmins"            = "Yöneticileri Yönet";
+"party.settings.admin.empty"             = "Henüz yönetici yok";
+"party.settings.admin.add"               = "Ekle";
+"party.settings.admin.remove"            = "Yöneticiyi kaldır";
+"party.settings.admin.addTitle"          = "Yönetici Ekle";
+"party.settings.admin.addHint"           = "Yönetici olarak yükseltmek için kullanıcı kimliğini girin.";
+"party.settings.admin.userIdPlaceholder" = "Kullanıcı Kimliği";
 "party.create.section.template"          = "Şablon Seç";
 "party.create.template.loading"          = "Şablonlar yükleniyor…";
 "party.create.template.empty"            = "dev'de kullanılabilir şablon yok";
