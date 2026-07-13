@@ -272,6 +272,16 @@ enum L10n {
         static var settingsAdminAddTitle: String { localize("party.settings.admin.addTitle", comment: "Add Admin sheet 标题") }
         static var settingsAdminAddHint: String { localize("party.settings.admin.addHint", comment: "Add Admin 提示") }
         static var settingsAdminUserIdPlaceholder: String { localize("party.settings.admin.userIdPlaceholder", comment: "User ID input placeholder") }
+        // v8.1 Room Tools sheet（对齐 H5 room-mana-popup.vue，2026-07-13）
+        static var settingsToolsTitle: String { localize("party.tools.title", comment: "Room Tools sheet 标题") }
+        static var toolLockRoom: String { localize("party.tool.lockRoom", comment: "Lock Room") }
+        static var toolMusic: String { localize("party.tool.music", comment: "Music") }
+        static var toolSettings: String { localize("party.tool.settings", comment: "Settings") }
+        static var toolMicApplication: String { localize("party.tool.micApplication", comment: "Mic Application") }
+        static var toolRoomMode: String { localize("party.tool.roomMode", comment: "Room Mode") }
+        static var toolBlocklist: String { localize("party.tool.blocklist", comment: "Blocklist") }
+        static var toolMCSeat: String { localize("party.tool.mcSeat", comment: "MC Seat") }
+        static var toolComingSoon: String { localize("party.tool.comingSoon", comment: "stub 项 toast") }
         static var createTemplateLoading: String { localize("party.create.template.loading", comment: "加载模板…") }
         static var createTemplateEmpty: String { localize("party.create.template.empty", comment: "dev 暂无可用模板") }
         static var createTemplateFallbackFormat: String { localize("party.create.template.fallbackFormat", comment: "模板 %d") }
@@ -354,6 +364,17 @@ enum L10n {
         static var announcementClose: String { localize("partyRoom.announcement.close", comment: "公告 sheet 关闭按钮") }
         static var moreMenuTitle: String { localize("partyRoom.more.title", comment: "更多菜单标题") }
         static var moreMenuLeave: String { localize("partyRoom.more.leave", comment: "更多菜单：退出房间") }
+
+        // v12 底部工具栏（对齐 H5 用户端 footer-wrap.vue 新增 apply/message/toolMenu）
+        static var a11yApply: String { localize("partyRoom.a11y.apply", comment: "排麦按钮 a11y") }
+        static var a11yMessage: String { localize("partyRoom.a11y.message", comment: "消息按钮 a11y") }
+        static var a11yToolMenu: String { localize("partyRoom.a11y.toolMenu", comment: "更多工具菜单 a11y") }
+        static var applyDialogTitle: String { localize("partyRoom.apply.dialog.title", comment: "排麦 dialog 标题") }
+        static var applyConfirm: String { localize("partyRoom.apply.confirm", comment: "排麦 dialog 确认按钮") }
+        static var toolMenuTitle: String { localize("partyRoom.toolMenu.title", comment: "更多工具菜单标题") }
+        static var toolMenuStartPk: String { localize("partyRoom.toolMenu.startPk", comment: "工具菜单：发起 PK") }
+        static var toolMenuLuckyNumber: String { localize("partyRoom.toolMenu.luckyNumber", comment: "工具菜单：幸运数字") }
+        static var toolMenuRoomMute: String { localize("partyRoom.toolMenu.roomMute", comment: "工具菜单：房间静音") }
     }
 
     // MARK: - Work 工作台（设计稿还原）
@@ -795,6 +816,8 @@ enum L10n {
     static var authPassword: String { localize("auth.password", comment: "密码输入框 placeholder") }
     static var authLogin: String { localize("auth.login", comment: "登录按钮") }
     static var authLoggingIn: String { localize("auth.loggingIn", comment: "登录中 loading 文案") }
+    static var authForgetPassword: String { localize("auth.forgetPassword", comment: "Forget Password? 链接") }
+    static var authTogglePasswordA11y: String { localize("auth.togglePasswordA11y", comment: "密码可见性切换按钮 a11y label") }
 
     // MARK: - LivePrepare 开播准备
     static var livePrepareNavTitle: String { localize("livePrepare.navTitle", comment: "开播 Demo 导航标题") }

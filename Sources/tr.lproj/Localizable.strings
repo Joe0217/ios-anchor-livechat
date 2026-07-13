@@ -241,12 +241,14 @@
 "publish.toast.success"      = "Başarıyla yayınlandı";
 
 // MARK: - Auth 登录页
-"auth.title"                 = "Yayıncı Girişi";
+"auth.title"                 = "E-posta ile giriş yap";
 "auth.envHint"               = "dev · anchor.cphub.link";
-"auth.email"                 = "E-posta";
-"auth.password"              = "Şifre";
-"auth.login"                 = "Giriş Yap";
+"auth.email"                 = "Lütfen e-postanızı girin";
+"auth.password"              = "Şifreyi girin (en az 8 karakter)";
+"auth.login"                 = "Giriş Yap / Kayıt Ol";
 "auth.loggingIn"             = "Giriş yapılıyor...";
+"auth.forgetPassword"        = "Şifreni mi unuttun?";
+"auth.togglePasswordA11y"    = "Şifreyi göster veya gizle";
 
 // MARK: - LivePrepare 开播准备
 "livePrepare.navTitle"       = "Yayın Demo";
@@ -923,6 +925,16 @@
 "party.settings.admin.addTitle"          = "Yönetici Ekle";
 "party.settings.admin.addHint"           = "Yönetici olarak yükseltmek için kullanıcı kimliğini girin.";
 "party.settings.admin.userIdPlaceholder" = "Kullanıcı Kimliği";
+// v8.1 Oda Araçları
+"party.tools.title"                      = "Oda Araçları";
+"party.tool.lockRoom"                    = "Odayı Kilitle";
+"party.tool.music"                       = "Müzik";
+"party.tool.settings"                    = "Ayarlar";
+"party.tool.micApplication"              = "Mikrofon Başvurusu";
+"party.tool.roomMode"                    = "Oda Modu";
+"party.tool.blocklist"                   = "Engellenenler";
+"party.tool.mcSeat"                      = "MC Koltuğu";
+"party.tool.comingSoon"                  = "Yakında";
 "party.create.section.template"          = "Şablon Seç";
 "party.create.template.loading"          = "Şablonlar yükleniyor…";
 "party.create.template.empty"            = "dev'de kullanılabilir şablon yok";
@@ -1233,3 +1245,14 @@
 "partyRoom.announcement.close"           = "Kapat";
 "partyRoom.more.title"                   = "Daha fazla";
 "partyRoom.more.leave"                   = "Odadan çık";
+
+/* v12 PartyRoom footer bar (align livechat-h5 footer-wrap.vue) */
+"partyRoom.a11y.apply"                   = "Koltuk için başvur";
+"partyRoom.a11y.message"                 = "Mesajlar";
+"partyRoom.a11y.toolMenu"                = "Daha fazla araç";
+"partyRoom.apply.dialog.title"           = "Koltuk için başvurulsun mu?";
+"partyRoom.apply.confirm"                = "Başvur";
+"partyRoom.toolMenu.title"               = "Daha Fazla Araç";
+"partyRoom.toolMenu.startPk"             = "PK Başlat";
+"partyRoom.toolMenu.luckyNumber"         = "Şanslı Sayı";
+"partyRoom.toolMenu.roomMute"            = "Odayı Sessize Al";

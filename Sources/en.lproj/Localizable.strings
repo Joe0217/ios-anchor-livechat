@@ -239,12 +239,14 @@
 "publish.toast.success"      = "Successfully published";
 
 // MARK: - Auth 登录页
-"auth.title"                 = "Anchor Login";
+"auth.title"                 = "Login with email";
 "auth.envHint"               = "dev · anchor.cphub.link";
-"auth.email"                 = "Email";
-"auth.password"              = "Password";
-"auth.login"                 = "Login";
+"auth.email"                 = "Please enter your email";
+"auth.password"              = "Enter password (at least 8 characters)";
+"auth.login"                 = "Log in / Register";
 "auth.loggingIn"             = "Logging in...";
+"auth.forgetPassword"        = "Forget Password?";
+"auth.togglePasswordA11y"    = "Show or hide password";
 
 // MARK: - LivePrepare 开播准备
 "livePrepare.navTitle"       = "Go Live Demo";
@@ -879,6 +881,16 @@
 "party.settings.admin.addTitle"          = "Add Admin";
 "party.settings.admin.addHint"           = "Enter the user ID to promote to admin.";
 "party.settings.admin.userIdPlaceholder" = "User ID";
+// v8.1 Room Tools sheet
+"party.tools.title"                      = "Room Tools";
+"party.tool.lockRoom"                    = "Lock Room";
+"party.tool.music"                       = "Music";
+"party.tool.settings"                    = "Settings";
+"party.tool.micApplication"              = "Mic Application";
+"party.tool.roomMode"                    = "Room Mode";
+"party.tool.blocklist"                   = "Blocklist";
+"party.tool.mcSeat"                      = "MC Seat";
+"party.tool.comingSoon"                  = "Coming soon";
 "party.create.section.name"              = "Room Name";
 "party.create.name.placeholder"          = "Up to 20 characters";
 "party.create.section.template"          = "Select Template";
@@ -1272,3 +1284,14 @@
 "partyRoom.announcement.close"           = "Close";
 "partyRoom.more.title"                   = "More";
 "partyRoom.more.leave"                   = "Leave room";
+
+/* v12 PartyRoom footer bar (align livechat-h5 footer-wrap.vue) */
+"partyRoom.a11y.apply"                   = "Apply for seat";
+"partyRoom.a11y.message"                 = "Messages";
+"partyRoom.a11y.toolMenu"                = "More tools";
+"partyRoom.apply.dialog.title"           = "Apply for a seat?";
+"partyRoom.apply.confirm"                = "Apply";
+"partyRoom.toolMenu.title"               = "More Tools";
+"partyRoom.toolMenu.startPk"             = "Start PK";
+"partyRoom.toolMenu.luckyNumber"         = "Lucky Number";
+"partyRoom.toolMenu.roomMute"            = "Mute Room";

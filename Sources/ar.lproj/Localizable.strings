@@ -241,12 +241,14 @@
 "publish.toast.success"      = "تم النشر بنجاح";
 
 // MARK: - Auth 登录页
-"auth.title"                 = "تسجيل دخول المضيف";
+"auth.title"                 = "تسجيل الدخول بالبريد الإلكتروني";
 "auth.envHint"               = "dev · anchor.cphub.link";
-"auth.email"                 = "البريد الإلكتروني";
-"auth.password"              = "كلمة المرور";
-"auth.login"                 = "تسجيل الدخول";
+"auth.email"                 = "يرجى إدخال بريدك الإلكتروني";
+"auth.password"              = "أدخل كلمة المرور (٨ أحرف على الأقل)";
+"auth.login"                 = "تسجيل الدخول / التسجيل";
 "auth.loggingIn"             = "جاري تسجيل الدخول...";
+"auth.forgetPassword"        = "نسيت كلمة المرور؟";
+"auth.togglePasswordA11y"    = "إظهار كلمة المرور أو إخفاؤها";
 
 // MARK: - LivePrepare 开播准备
 "livePrepare.navTitle"       = "تجربة البث";
@@ -923,6 +925,16 @@
 "party.settings.admin.addTitle"          = "إضافة مشرف";
 "party.settings.admin.addHint"           = "أدخل معرف المستخدم لترقيته إلى مشرف.";
 "party.settings.admin.userIdPlaceholder" = "معرف المستخدم";
+// v8.1 أدوات الغرفة
+"party.tools.title"                      = "أدوات الغرفة";
+"party.tool.lockRoom"                    = "قفل الغرفة";
+"party.tool.music"                       = "موسيقى";
+"party.tool.settings"                    = "الإعدادات";
+"party.tool.micApplication"              = "طلب الميكروفون";
+"party.tool.roomMode"                    = "وضع الغرفة";
+"party.tool.blocklist"                   = "قائمة الحظر";
+"party.tool.mcSeat"                      = "مقعد MC";
+"party.tool.comingSoon"                  = "قريبًا";
 "party.create.section.template"          = "اختر القالب";
 "party.create.template.loading"          = "جارٍ تحميل القوالب…";
 "party.create.template.empty"            = "لا توجد قوالب متاحة في dev";
@@ -1233,3 +1245,14 @@
 "partyRoom.announcement.close"           = "إغلاق";
 "partyRoom.more.title"                   = "المزيد";
 "partyRoom.more.leave"                   = "مغادرة الغرفة";
+
+/* v12 PartyRoom footer bar (align livechat-h5 footer-wrap.vue) */
+"partyRoom.a11y.apply"                   = "طلب الانضمام للمقعد";
+"partyRoom.a11y.message"                 = "الرسائل";
+"partyRoom.a11y.toolMenu"                = "المزيد من الأدوات";
+"partyRoom.apply.dialog.title"           = "طلب مقعد؟";
+"partyRoom.apply.confirm"                = "طلب";
+"partyRoom.toolMenu.title"               = "أدوات إضافية";
+"partyRoom.toolMenu.startPk"             = "بدء PK";
+"partyRoom.toolMenu.luckyNumber"         = "الرقم المحظوظ";
+"partyRoom.toolMenu.roomMute"            = "كتم صوت الغرفة";
