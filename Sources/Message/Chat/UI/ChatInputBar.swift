@@ -51,7 +51,7 @@ struct ChatInputBar: View {
     }
 
     private var textField: some View {
-        TextField("", text: $text, prompt: Text("Type a message").foregroundColor(.white.opacity(0.4)))
+        TextField("", text: $text, prompt: Text(L10n.chatInputTypeMessage).foregroundColor(.white.opacity(0.4)))
             .textFieldStyle(.plain)
             .foregroundStyle(.white)
             .padding(.horizontal, 16)
@@ -75,7 +75,7 @@ struct ChatInputBar: View {
 
     /// 语音"按住说话"按钮 —— 用 DragGesture minimumDistance:0 实现按住 + 上滑取消
     private var voicePressButton: some View {
-        Text("Hold to talk")
+        Text(L10n.chatInputHoldToTalk)
             .font(.system(size: 14, weight: .medium))
             .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
@@ -111,7 +111,7 @@ struct ChatInputBar: View {
 
     private var sendButton: some View {
         Button(action: onSend) {
-            Text("Send")
+            Text(L10n.chatInputSend)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 77, height: 34)

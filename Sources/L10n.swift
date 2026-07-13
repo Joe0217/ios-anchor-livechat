@@ -619,6 +619,21 @@ enum L10n {
     // 对方消息气泡内可见"翻译"按钮（对齐 H5 msgItem.vue CTranslate label="Translate"）
     static var chatTranslate: String       { localize("chat.translate", comment: "文字气泡内翻译按钮 label") }
 
+    // MARK: - ChatInputBar 输入栏文案（M-5,对齐 H5 chat/index.vue placeholder + 按钮）
+    static var chatInputTypeMessage: String { localize("chat.input.typeMessage", comment: "输入框 placeholder") }
+    static var chatInputHoldToTalk: String  { localize("chat.input.holdToTalk", comment: "语音按住说话按钮") }
+    static var chatInputSend: String        { localize("chat.input.send", comment: "发送按钮") }
+
+    // MARK: - DiaReceivePopup 钻石到账弹窗（M-6,对齐 H5 diamondGift 弹窗文案）
+    static var diaReceiveCongratulations: String    { localize("dia.receive.congratulations", comment: "钻石弹窗标题") }
+    static var diaReceiveUnlockedAchievement: String { localize("dia.receive.unlockedAchievement", comment: "钻石弹窗副标题") }
+    static var diaReceiveGet: String                 { localize("dia.receive.get", comment: "领取按钮") }
+    static var diaReceiveA11yGet: String             { localize("dia.receive.a11y.get", comment: "a11y 领钻石按钮") }
+    /// 完整句子由 3 语言 strings 各自维护,%d 位置可在 ar/tr 里灵活调整对齐 RTL/复数语序
+    static func diaReceiveReceivedDiamondsFormat(count: Int) -> String {
+        String(format: localize("dia.receive.receivedDiamondsFormat", comment: "钻石到账文案,%d=数量"), count)
+    }
+
     // MARK: - 系统通知会话文案（对齐 H5 systemMsg.vue + cpRankRewardMsg.vue）
     static var chatSystemComingSoon: String     { localize("chat.system.comingSoon", comment: "CP 榜 / View Now / click here 降级 toast") }
     static var chatSystemViewNow: String        { localize("chat.system.viewNow", comment: "虚拟道具 GET 通知里 View Now CTA") }

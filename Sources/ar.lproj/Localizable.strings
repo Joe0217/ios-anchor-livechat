@@ -782,6 +782,18 @@
 // 文字气泡内翻译按钮
 "chat.translate"       = "ترجم";
 
+// M-5 ChatInputBar 输入栏文案
+"chat.input.typeMessage"          = "اكتب رسالة";
+"chat.input.holdToTalk"           = "اضغط للتحدث";
+"chat.input.send"                 = "إرسال";
+
+// M-6 DiaReceivePopup 钻石到账弹窗
+"dia.receive.congratulations"     = "تهانينا";
+"dia.receive.unlockedAchievement" = "لقد فتحت الإنجاز";
+"dia.receive.get"                 = "استلام";
+"dia.receive.a11y.get"            = "استلام الألماس";
+"dia.receive.receivedDiamondsFormat" = "لقد تلقيت %d ماس";
+
 // 系统通知会话文案（对齐 H5 systemMsg.vue + cpRankRewardMsg.vue）
 "chat.system.comingSoon"          = "قريبًا";
 "chat.system.viewNow"             = "عرض الآن";

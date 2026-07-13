@@ -291,15 +291,35 @@ struct ChatTimeSeparator: View {
             .padding(.vertical, 8)
     }
 
+    // M-9:业务时间用 Asia/Shanghai 固定时区(对齐 CLAUDE.md「时区」段),避免跨零点漂移;
+    // 同时抽 static let 复用避免每次 body eval 分配新 DateFormatter(review I-4)。
+    // isDateInToday 判定用同一时区的 Calendar,不用 Calendar.current。
+    private static let calendarCN: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = TimeZone(identifier: "Asia/Shanghai") ?? .current
+        return c
+    }()
+    private static let hhmm: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        f.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+    private static let mmddHHmm: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MM-dd HH:mm"
+        f.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
     private var formatted: String {
         let date = Date(timeIntervalSince1970: TimeInterval(timestamp) / 1000)
-        let formatter = DateFormatter()
-        // 今天：只显示时:分；其他：日期
-        if Calendar.current.isDateInToday(date) {
-            formatter.dateFormat = "HH:mm"
-        } else {
-            formatter.dateFormat = "MM-dd HH:mm"
+        // 今天：只显示时:分；其他：日期(同 Asia/Shanghai 判定"今天")
+        if Self.calendarCN.isDateInToday(date) {
+            return Self.hhmm.string(from: date)
         }
-        return formatter.string(from: date)
+        return Self.mmddHHmm.string(from: date)
     }
 }

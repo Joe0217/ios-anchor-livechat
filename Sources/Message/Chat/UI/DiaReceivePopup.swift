@@ -31,23 +31,20 @@ struct DiaReceivePopup: View {
 
     private var card: some View {
         VStack(spacing: 16) {
-            Text("Congratulations")
+            Text(L10n.diaReceiveCongratulations)
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(.white)
                 .padding(.top, 24)
 
-            Text("Unlocked the Achievement")
+            Text(L10n.diaReceiveUnlockedAchievement)
                 .font(.system(size: 14))
                 .foregroundStyle(.white.opacity(0.8))
 
-            HStack(spacing: 6) {
-                Text("Received")
-                Text("\(diamondCount)")
-                    .foregroundStyle(Color(hex: 0xFEB74C))
-                Text("Diamonds")
-            }
-            .font(.system(size: 16, weight: .medium))
-            .foregroundStyle(.white)
+            // M-6:单一插值 AttributedString 避免 HStack 拆 3 Text 破坏 ar RTL 语序;
+            // 数字保留高亮通过 attributed range 而非拆 Text
+            Text(receivedDiamondsAttributed)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(.white)
 
             getButton
                 .padding(.top, 8)
@@ -64,7 +61,7 @@ struct DiaReceivePopup: View {
 
     private var getButton: some View {
         Button(action: onGet) {
-            Text("Get")
+            Text(L10n.diaReceiveGet)
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
@@ -77,6 +74,17 @@ struct DiaReceivePopup: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Get diamonds")
+        .accessibilityLabel(L10n.diaReceiveA11yGet)
+    }
+
+    /// M-6:数字高亮 attributedString —— 完整句子由 Localizable.strings 维护(3 语可各自调语序),
+    /// 匹配数字子串染 orange 保持视觉;ar RTL 时 SwiftUI 自动镜像语序,数字位置由译文控制
+    private var receivedDiamondsAttributed: AttributedString {
+        var attributed = AttributedString(L10n.diaReceiveReceivedDiamondsFormat(count: diamondCount))
+        let countStr = "\(diamondCount)"
+        if let range = attributed.range(of: countStr) {
+            attributed[range].foregroundColor = Color(hex: 0xFEB74C)
+        }
+        return attributed
     }
 }

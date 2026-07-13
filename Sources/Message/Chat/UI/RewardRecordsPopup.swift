@@ -149,11 +149,18 @@ struct RewardRecordsPopup: View {
     // MARK: - Helpers
 
     /// ms 时间戳 → "yyyy-MM-dd"（对齐 H5 dayjs `YYYY-MM-DD`）
+    /// M-9:业务时间点用 Asia/Shanghai 固定时区(对齐 CLAUDE.md「时区」段 + H5 dayjs 默认服务器时区),
+    /// 不用设备本地时区 —— 美西主播看 CST 23:00 若跟本地不设时区会显示前一天导致运营对账误判。
+    private static let dateFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        df.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        df.locale = Locale(identifier: "en_US_POSIX")
+        return df
+    }()
     private static func formatDate(_ ms: Int64) -> String {
         guard ms > 0 else { return "" }
         let date = Date(timeIntervalSince1970: TimeInterval(ms) / 1000.0)
-        let df = DateFormatter()
-        df.dateFormat = "yyyy-MM-dd"
-        return df.string(from: date)
+        return dateFormatter.string(from: date)
     }
 }
