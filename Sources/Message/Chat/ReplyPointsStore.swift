@@ -213,10 +213,14 @@ final class ReplyPointsStore: ObservableObject {
                 msgType: msgType
             )
             if res.settled {
-                state.currentProgress = res.currentTotalPoints       // 权威覆盖
-                state.hasHistoryReply = true
-                state.replyRemindBaseTs = nil                          // 取消 15min timer
-                sessions[peer] = state
+                // M-7:整块回写 stale state 会覆盖并发的 autoClaimIfNeeded / checkReplyRemindTrigger 修改
+                // (settle 挂起窗口内 messageBoxList 可能被 auto-claim 改成 .claimed / tips 追加 replyRemind)
+                // 只更新本次结算相关的 3 个字段,从 sessions[peer] 读最新态,避免整块覆盖
+                var s = sessions[peer] ?? state
+                s.currentProgress = res.currentTotalPoints       // 权威覆盖
+                s.hasHistoryReply = true
+                s.replyRemindBaseTs = nil                          // 取消 15min timer
+                sessions[peer] = s
                 pendingSettleResult = res                              // 触发 view 跳跃动画
                 logger.info("[ReplyPoints] settle success peer=\(peer, privacy: .private) points=\(res.points) total=\(res.currentTotalPoints)")
             } else {

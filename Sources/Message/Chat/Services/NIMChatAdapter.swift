@@ -154,7 +154,11 @@ final class NIMChatAdapter: NSObject, P2PChatProviderProtocol {
     ///
     /// - Parameter defaultExt: URL 无扩展名时的兜底扩展（图片 jpg / 视频 mp4）。
     /// - Returns: 本地 filesystem path（非 URL）
-    private static func downloadToTmp(remote: URL, defaultExt: String) async throws -> String {
+    ///
+    /// **M-2**:`nonisolated` 卸掉 @MainActor 继承。原本类是 @MainActor,static func 默认继承主线程隔离,
+    /// URLSession.data(from:) await 恢复后回主线程做 try data.write —— 视频转发几十 MB 时可能阻塞 UI 50-200ms。
+    /// Data/String 都是 Sendable,签名无冲突,零副作用。
+    private nonisolated static func downloadToTmp(remote: URL, defaultExt: String) async throws -> String {
         if remote.isFileURL { return remote.path }
         let (data, _) = try await URLSession.shared.data(from: remote)
         let ext = remote.pathExtension.isEmpty ? defaultExt : remote.pathExtension

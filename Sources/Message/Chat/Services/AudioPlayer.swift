@@ -21,6 +21,9 @@ final class ChatAudioPlayer: NSObject, ObservableObject {
     private var player: AVAudioPlayer?
     /// AVPlayer 数据回调用；预取到内存的 downloader
     private var downloadTask: URLSessionDataTask?
+    /// M-1:期望播放的 key —— downloadTask 已 completed 时 cancel() 无效,callback dispatch 到 main 时用它判 stale
+    /// (用户 tap A → 下载完成 → 用户切 B 或 stop → A 的 callback 才被调度 → 若 pendingKey != A 就丢弃)
+    private var pendingKey: String?
 
     private override init() { super.init() }
 
@@ -39,6 +42,7 @@ final class ChatAudioPlayer: NSObject, ObservableObject {
         player = nil
         downloadTask?.cancel()
         downloadTask = nil
+        pendingKey = nil   // M-1:清 stale check 标记,让即将 dispatch 的旧 callback 走 guard fail 分支
         playingKey = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
     }
@@ -78,10 +82,16 @@ final class ChatAudioPlayer: NSObject, ObservableObject {
 
     private func downloadAndPlay(url: URL, key: String) {
         // 小音频 <100KB，一次性拉全后 AVAudioPlayer(data:) 播放；节省流媒体缓冲复杂度
+        pendingKey = key   // M-1:标记期望播放的 key,callback dispatch 到 main 时若已 stale(切别的 or stop)则丢弃
         let task = URLSession.shared.dataTask(with: url) { [weak self] data, _, error in
             Task { @MainActor [weak self] in
                 guard let self, let data, error == nil else {
                     logger.error("audio download failed: \(String(describing: error), privacy: .public)")
+                    return
+                }
+                // M-1:stale check —— 用户在下载中切走 or stop 后,dispatch 到 main 的旧 callback 应丢弃
+                guard self.pendingKey == key else {
+                    logger.info("stale audio callback dropped (pendingKey mismatched)")
                     return
                 }
                 do {
