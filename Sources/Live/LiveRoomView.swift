@@ -228,40 +228,10 @@ struct LiveRoomView: View {
         // **半屏私聊 sheet 挂在 ConversationSheetContent 内部**（sheet-over-sheet），此层只管消息列表。
         // SwiftUI 同一 view 挂多个平行 sheet 同一时刻只显示一个，会出现"点会话 → 消息列表关闭后才显示私聊"的错觉。
         .sheet(isPresented: $showMessageSheet) { messageSheetContent }
-        .animation(.easeInOut(duration: 0.2), value: pkStore.state)
-        .alert(L10n.liveRoomPermissionAlertTitle, isPresented: $store.permissionDeniedAlert) {
-            Button(L10n.liveRoomPermissionAlertOK) { dismiss() }
-        } message: {
-            Text(L10n.liveRoomPermissionAlertMessage)
-        }
-        // 关闭直播二次确认（对齐 H5 endLivePopup.vue：Kind reminder + Are you sure + Cancel/Confirm）
-        // 抽 actions/message 到 @ViewBuilder + Confirm action 到 method — 缓解 body type-check timeout
-        .alert(L10n.liveRoomEndConfirmTitle,
-               isPresented: $showEndLiveConfirm,
-               actions: { endLiveConfirmActions },
-               message: { endLiveConfirmMessage })
-        .onAppear(perform: handleMainOnAppear)
-        .onDisappear(perform: handleOnDisappear)
-        .onChange(of: store.state, perform: handleStoreStateChange)
-        // v5.8：本体 CameraPreview 的帧 sink 由 CameraManager.subscribers 字典持有，
-        // 与 PIP CameraPreview 的 sink 独立共存；PIP 在 dismantleUIView 时精准注销自己那一格，
-        // 本体不再依赖任何 SwiftUI re-eval 时机。详见 Sources/Camera/CameraPreview.swift v5.8 注释。
-        // 美颜参数变化 → renderer 更新已下沉到 BeautyPanel 子 view（throttle 60ms），父 view 不再监听
-        // 直播时长由 LiveStore.elapsedTimerStore 在 attachLiving/teardown 内自管启停；
-        // 时间 capsule 通过独立 LiveElapsedCapsule 子 view 订阅，避免 1Hz 触发本树重渲染。
-        // D 里程碑：CallView + returnLive 倒计时覆盖 —— 合并为单 overlay（rule swiftui-body-type-check-timeout）
-        .overlay { callAndReturnLiveOverlays }
-        .animation(.easeInOut(duration: 0.2), value: callState)
-        .onReceive(callStore.$state) { newState in callState = newState }
-        .onReceive(store.$privateCallOpen, perform: handlePrivateCallOpenChange)
-        .animation(.easeInOut(duration: 0.2), value: store.isWaitingReturnLive)
-        // Task 9：声明本 view 属于 GiftEffect .live 场景 —— onAppear 时 setActiveScene，onDisappear 时 leaveScene（硬中断+清队列）
-        // ⚠️ scopeId 必须用 **yxRoomId**（云信房间 id），与 NIMChatroomManager.enter(roomId:) + IM handler intake.ingest(scopeId:) 完全一致；
-        // 用业务 roomId (store.roomId) 会导致 Center.activeKey ≠ item.sceneKey → enqueue rejected（2026-07-09 真机反悔真根因）
-        .giftEffectScene(.live, scopeId: roomInfo.yxRoomId.map(String.init) ?? "")
-        // v23（2026-07-11）EnterEffect 独立并行 scene modifier —— 与 giftEffectScene 并列驱动 EnterEffectCenter
-        // scopeId 同源 yxRoomId（NIMChatroomManager 入队时 scopeId = self.roomId 云信 id，两侧强对齐）
-        .enterEffectScene(.live, scopeId: roomInfo.yxRoomId.map(String.init) ?? "")
+        // v23（2026-07-13）body-split 重构清理：以下 tail modifier chain（alerts / handleMainOnAppear /
+        // handleOnDisappear / overlays / giftEffectScene / enterEffectScene）已在 body L137-159 挂载。
+        // stage1 内不再重复挂载 —— 之前重复导致 handleMainOnAppear/handleOnDisappear 每次进直播房**双 fire**
+        // → agora.join / nim.enter / camera.start / PK router register 全部双跑（code-review necessary fix）。
     }
 
     private var mainZStack: some View {

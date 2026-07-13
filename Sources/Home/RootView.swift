@@ -7,6 +7,9 @@ struct RootView: View {
     @StateObject private var callStore = CallStore.shared
     @StateObject private var autoOffline = AutoOfflineMonitor.shared
     @Environment(\.scenePhase) private var scenePhase
+    /// v23（2026-07-13）code-review 修复：warmup Task 需要 cancel 入口
+    /// 场景：快速 login→logout→login（token 失效重刷）→ 旧 Task 迟到对新 router 冗余 warmup + 与新 Task 双打
+    @State private var warmupTask: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -32,6 +35,11 @@ struct RootView: View {
                 .transition(.opacity)
                 .zIndex(200)
             }
+
+            // 全局顶部错误通知（envelope 解析失败等）—— 最高层级，
+            // 空态时内部只保留 Spacer 不拦截 hit test，出现时仅胶囊区域可交互
+            GlobalErrorBanner()
+                .zIndex(300)
         }
         .animation(.easeInOut(duration: 0.2), value: callStore.state)
         .animation(.easeInOut(duration: 0.15), value: autoOffline.showDialog)
@@ -45,7 +53,14 @@ struct RootView: View {
         .simultaneousGesture(TapGesture().onEnded { autoOffline.pokeActivity() })
         .simultaneousGesture(DragGesture(minimumDistance: 10).onEnded { _ in autoOffline.pokeActivity() })
         .onChange(of: scenePhase) { newPhase in
-            if newPhase == .active { autoOffline.pokeActivity() }
+            if newPhase == .active {
+                autoOffline.pokeActivity()
+                // sapi token 前后台切回时懒续（对齐 H5 App.vue:247-249 `getBagShopToken()`）
+                // ensureValid 内部走 needsRefresh 判定：距过期 <24h 才真跑 exchange；否则 O(1) 命中缓存
+                if session.isLoggedIn {
+                    Task { try? await SapiTokenStore.shared.ensureValid() }
+                }
+            }
         }
         .task(id: session.isLoggedIn) {
             await syncSessionDependent()
@@ -67,14 +82,29 @@ struct RootView: View {
                 GiftEffectOverlayWindow.shared.show(on: scene)
             }
             GiftEffectCenter.shared.installPlayerRouter(GiftPlayerRouter())
-            Task { @MainActor in
+            // v23（2026-07-11）EnterEffect 独立并行 Player Router 实例
+            // （SVGAAnimationPlayer / YYEVAAnimationPlayer 都是实例字段，第二个 GiftPlayerRouter() 天然独立
+            //  → 与 GiftEffect 可同时播放全屏 SVGA/MP4，对齐用户明示 "队列分开，允许同时播放"）
+            EnterEffectCenter.shared.installPlayerRouter(GiftPlayerRouter())
+            // v23（2026-07-13）store Task handle 供 logout 时 cancel（避免旧 Task 对新 router 冗余 warmup）
+            warmupTask?.cancel()
+            warmupTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 5_000_000_000)
+                guard !Task.isCancelled else { return }
                 GiftEffectCenter.shared.warmupSVGA()
+                // 300ms 间隔避免两组 SDK 实例同时首次分配 GPU 资源 spike 内存
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                guard !Task.isCancelled else { return }
+                EnterEffectCenter.shared.warmupSVGA()
             }
 
             if let uuid = user.loginUuid, !uuid.isEmpty {
                 WSHeartbeat.shared.start(loginUuid: uuid)
             }
+            // sapi token 启动懒续（对齐 H5 App.vue:162-164 冷启动检查）：
+            // ensureValid 内部走 needsRefresh 判定：距过期 <24h / 未取过 才真跑 exchange；否则 O(1) 命中缓存。
+            // 与 applyLogin 尾部的 forceRefresh 并发：SapiTokenStore.runExchange 有 inflightExchange 合并，只会跑一次。
+            Task { try? await SapiTokenStore.shared.ensureValid() }
             if let account = user.yxAccid, !account.isEmpty,
                let token = user.imToken, !token.isEmpty {
                 NIMOnlineKeeper.shared.start(account: account, token: token)
@@ -107,8 +137,13 @@ struct RootView: View {
             NIMOnlineKeeper.shared.stop()
             await callStore.stop()
             AutoOfflineMonitor.shared.stop()
+            // v23（2026-07-13）warmup Task cancel（避免 login→logout 期间旧 Task 对已 reset router 冗余 warmup）
+            warmupTask?.cancel()
+            warmupTask = nil
             // GiftEffect 引擎清理：stop current + clear pending + tearDown players + hide Window
             GiftEffectCenter.shared.reset()
+            // v23 EnterEffect 独立并行 Center 同样清理
+            EnterEffectCenter.shared.reset()
             GiftEffectOverlayWindow.shared.hide()
             // E-spec §0.2 F-05/F-06：派对房残留清理（forceLeaveRoom 覆盖 preparing/leaving 中间态；
             // detachChatRouter 切断跨账号 delegate 调用；PartyListStore 因 MainTabView dismount 自然 deinit）

@@ -26,7 +26,14 @@ enum PartyAttachType: Int {
     /// 2049 礼物压缩版（gzip + Base64；与 1007 双发去重——iOS 只识别 2049）
     case giftCompressed = 2049
 
-    // MARK: - 视频位邀请响应（MVP 9 类；主动发起 inviteOnSeat 推 F）
+    /// 1004 用户进场座驾动画（原 F 期占位 §注释"1004 座驾"）
+    /// v23（2026-07-13）真机 log 揭示：派对房用户带座驾进房走 attachType=1004，
+    /// 与直播 chatroom attachType=80 通道语义相同但**不同 attachType 号**（H5/安卓派对房独立契约）
+    /// payload 结构与直播 attachType=80 类似（data.list[0] JSON 含 itemImg / username / userLevel / isVip）
+    /// TODO: [im-payload-real-log-over-code-assumption] 首次真机接入需通过 payloadKeys log 校对字段名
+    case userEnterVehicle = 1004
+
+    // MARK: - 视频位邀请响应（MVP 9 类;主动发起 inviteOnSeat 推 F）
 
     /// 1040 邀请上视频位（被邀请用户收到 → PartyStore.pendingVideoSeatInvite 弹窗）
     case inviteVideoSeat = 1040
@@ -66,7 +73,8 @@ enum PartyKnownButUnhandledAttachType {
         45, 1029,
         // 派对房 F/H/I/J 期范围
         -10, -11,           // EMOJI / EMOJI_PLAY
-        1004, 1009, 1010, 1011, 1013, 1014, 1017, 1018, 1019, 1021,
+        // v23 移除 1004（原 F 期占位）—— 已接入 .userEnterVehicle 用于座驾进场特效
+        1009, 1010, 1011, 1013, 1014, 1017, 1018, 1019, 1021,
         1022, 1023, 1024, 1025, 1026, 1049,
         1050, 1051, 1052,   // LuckyNumber
         1100, 1101, 1102, 1103, 1104, 1105, 1106,

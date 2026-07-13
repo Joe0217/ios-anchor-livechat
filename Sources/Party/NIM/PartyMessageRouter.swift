@@ -88,6 +88,9 @@ final class PartyMessageRouter: MessageRouter {
             delegate?.partyRoomChat(chat, didReceiveMediaUpdate: payload, raw: m)
         case .giftCompressed:
             delegate?.partyRoomChat(chat, didReceiveGift: payload, raw: m)
+        case .userEnterVehicle:
+            // v23（2026-07-13）用户进场座驾动画 attachType=1004：派对房座驾 SVGA/MP4 全屏特效
+            delegate?.partyRoomChat(chat, didReceiveEnterAnimation: payload, raw: m)
         case .inviteVideoSeat:
             handleVideoSeatInvite(payload: payload, raw: m, chat: chat)
         case .inviteVideoSeatAccept:

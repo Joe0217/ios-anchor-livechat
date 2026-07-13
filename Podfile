@@ -45,4 +45,39 @@ post_install do |installer|
       end
     end
   end
+
+  # 2026-07-13 YYEva regionMode 强制忽略 mp4 effectInfo（座驾特效左右颠倒修复）：
+  # H5 端座驾 mp4 内嵌的 yyeffectmp4json metadata (rgbFrame/alphaFrame) 与实际像素布局标反了：
+  # metadata 声明"左 RGB 右 Alpha"，但 chroma variance 实测左半灰度、右半彩色。
+  # H5 web yyeva.js 默认不读 mp4 metadata（除非显式传 dataUrl）反而歪打正着；iOS Pod 忠实读了错的
+  # metadata → 走 maskFragmentSharder 通用路径按错的 rgbFrame/alphaFrame 采样 → 座驾灰白无色。
+  # 本 patch 让 SDK 判定 hasValidEffectInfo 时加一个闸门：仅 region == NoSpecify 时才允许走 metadata
+  # 路径；业务显式设 region (LGRC=3 / LCRG=2 / TCBG=4 / TGBC=5) → 忽略 metadata，走固定 shader。
+  # 配合 Swift 侧 YYEVAAnimationPlayer.makePlayer 里 p.regionMode = .LGRC(3) 一起使用。
+  # ⚠️ Idempotent marker: patch 后独有子串 `self.playAssets.region == YYEVAColorRegion_NoSpecify`
+  # ⚠️ anchor miss 用 raise fail-fast：SDK 微改（换行/空格/refactor）时 pod install 直接失败，
+  #     不静默 ships (对齐红队 A · Pod patch 稳定性要求)
+  yyeva_alpha_render = File.expand_path('Pods/YYEVA/YYEVA/Classes/Render/YYEVAVideoAlphaRender.m', __dir__)
+  # ⚠️ File.exist? 失败与内层 anchor content miss 对称 fail-fast（对齐 code-review 建议）：
+  # SDK 未来若重排目录（如 Classes/Render/ → Sources/Render/）会静默 skip patch → 座驾颜色反转 bug 悄悄回归。
+  unless File.exist?(yyeva_alpha_render)
+    raise "[Podfile] YYEva 目标源码文件不存在: #{yyeva_alpha_render} — SDK 目录重排后需人工重对齐 anchor（当前锁 ~> 1.1.42）"
+  end
+  content = File.read(yyeva_alpha_render)
+  marker = 'self.playAssets.region == YYEVAColorRegion_NoSpecify'
+  unless content.include?(marker)
+    original = "                             !CGRectIsEmpty(effectInfo.alphaFrame);"
+    replacement = "                             !CGRectIsEmpty(effectInfo.alphaFrame) &&\n" \
+                  "                             self.playAssets.region == YYEVAColorRegion_NoSpecify;"
+    if content.include?(original)
+      content.sub!(original, replacement)
+      # ⚠️ pod cache clean 后重下载的 tarball 里文件权限可能是 read-only (0444) → File.write 报
+      # Permission denied。显式 chmod 让文件可写；已可写则 no-op。
+      File.chmod(0o644, yyeva_alpha_render)
+      File.write(yyeva_alpha_render, content)
+      puts '[Podfile] ✅ YYEva regionMode patched OK'
+    else
+      raise "[Podfile] YYEva regionMode patch anchor MISSING at YYEVAVideoAlphaRender.m — SDK 升级后需人工重对齐 anchor（当前锁版本 ~> 1.1.42）"
+    end
+  end
 end

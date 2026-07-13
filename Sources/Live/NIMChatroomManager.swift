@@ -690,6 +690,58 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                         messageType: inLiveChannel == 1 ? .officialBoostEnter : .enterRoom,
                         itemSmallImg: vehicleItemImg
                     ))
+                    // v23（2026-07-11）用户进场双链路（对齐 H5 userEntranceFloat + giftQueue 分离）：
+                    //   链路 1: EnterRoomFloatQueue —— 公屏上方胶囊 banner（无 vehicle 也播）
+                    //   链路 2: EnterEffectCenter —— 全屏 SVGA/MP4 座驾特效（vehicleItemImg 是 svga/mp4 才播）
+                    //     独立于 GiftEffect 并行播放（用户明示 "不同的特效队列分开，允许同时播放"）
+                    // - 主播自己进场 filter drop（H5 payload 里的 sender 永远是观众/客人，防御性过滤）
+                    // - activeTycoon 大 R 用金色底图（H5 live_userRR_bg.webp）
+                    // - EnterEffectCenter scopeId 与 enterEffectScene modifier 同源用 self.roomId
+                    // TODO: [im-payload-real-log-over-code-assumption] 真机首次收到 attachType=80 通过上方 🚗 log
+                    //   校对 activeTycoon / senderYxAccid 字段真实位置；当前基于 H5 蓝本 + GiftEffect 同款 fallback
+                    let isActiveTycoon = Self.readBool(data["activeTycoon"])
+                        || Self.readBool(payload["activeTycoon"])
+                    let mineYxAccid = SessionStore.shared.user?.yxAccid ?? ""
+                    let senderAccid = (data["senderYxAccid"] as? String)
+                        ?? (data["sendYxAccid"] as? String)
+                        ?? (payload["senderYxAccid"] as? String)
+                        ?? (payload["sendYxAccid"] as? String)
+                        ?? ""
+                    let isSelfSent = !senderAccid.isEmpty
+                        && !mineYxAccid.isEmpty
+                        && senderAccid == mineYxAccid
+                    if !isSelfSent {
+                        // 链路 1: EnterRoomFloat banner（无 vehicle 也播）
+                        enterRoomQueue.addToQueue(EnterRoomFloatQueue.Item(
+                            nickname: nickname ?? "",
+                            avatarUrl: avatar,
+                            userLevel: userLevel ?? 0,
+                            isVip: isVip,
+                            isActiveTycoon: isActiveTycoon
+                        ))
+                        // 链路 2: EnterEffectCenter 全屏 SVGA/MP4（后缀白名单 + 有 URL 才播）
+                        if let vehicleUrl = vehicleItemImg,
+                           let parsed = URL(string: vehicleUrl) {
+                            let ext = parsed.pathExtension.lowercased()
+                            if ext == "svga" || ext == "mp4" {
+                                let item = GiftEffectItem(
+                                    sceneKey: GiftEffectSceneKey(scene: .live, scopeId: self.roomId),
+                                    senderYxAccid: senderAccid,
+                                    senderNickname: nickname ?? "",
+                                    senderAvatarUrl: avatar,
+                                    giftId: 0,
+                                    giftName: "vehicle",
+                                    giftCount: 1,
+                                    giftPrice: 0,
+                                    animationUrl: vehicleUrl,
+                                    staticImgUrl: nil,
+                                    timestamp: Int64(Date().timeIntervalSince1970 * 1000),
+                                    isSelfSent: false   // 已前置 filter
+                                )
+                                EnterEffectCenter.shared.enqueue(item)
+                            }
+                        }
+                    }
                     continue
                 case .knownButUnhandled, .unknown:
                     // 已知但不实现（132/133/1004/1007/1014/...）+ unknown：仅静默 dispatch（router 已分发），不污染公屏

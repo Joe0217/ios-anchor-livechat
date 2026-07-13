@@ -686,6 +686,94 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         }
     }
 
+    /// v23（2026-07-13）派对房用户进场座驾动画 attachType=1004 → EnterEffectCenter 全屏 SVGA/MP4 座驾特效
+    /// 对齐直播 NIMChatroomManager v23 解析逻辑（Sources/Live/NIMChatroomManager.swift:693-745）：
+    /// payload 结构假设：{ username, icon, userLevel, isVip, activeTycoon, list:[JSON string 含 itemImg] }
+    /// - scopeId 与 .enterEffectScene modifier 同源用 roomInfo?.id
+    /// - 主播自己进场 filter drop（防御性；派对房主播身份本就不发但保守）
+    /// - vehicle URL 后缀 svga/mp4 白名单
+    /// - TODO: [im-payload-real-log-over-code-assumption] 真机首次收到 attachType=1004 通过下方 🚗 log
+    ///   校对 payloadKeys / dataKeys 真实字段名；当前基于直播 attachType=80 同款 fallback 假设
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveEnterAnimation payload: [String: Any], raw: NIMMessage) {
+        // payload 已由 PartyRouter 走 unwrapDataField 解压过（gzip / JSON string 双兼容）
+        // 但直播 chatroom attachType=80 的 payload 是 `{ data: {...}, attachType: 80 }` 二级 dict；
+        // 派对房走 unwrapDataField 输出结构可能已经是 data 内层——先兼容两种
+        var data: [String: Any] = payload
+        if let inner = payload["data"] as? [String: Any] {
+            data = inner
+        }
+
+        // 座驾 URL 提取（data.list[0] 是 JSON string 或 dict）
+        var vehicleItemImg: String?
+        if let listStr = data["list"] as? [String], let first = listStr.first,
+           let d = first.data(using: .utf8),
+           let itemDict = try? JSONSerialization.jsonObject(with: d) as? [String: Any] {
+            vehicleItemImg = itemDict["itemImg"] as? String
+        }
+        // dict 数组兜底（部分后端可能不 stringify）
+        if vehicleItemImg == nil,
+           let listDict = data["list"] as? [[String: Any]], let first = listDict.first {
+            vehicleItemImg = first["itemImg"] as? String
+        }
+        // 平铺字段兜底
+        if vehicleItemImg == nil {
+            vehicleItemImg = (data["itemImg"] as? String)
+                ?? (data["itemSmallImg"] as? String)
+                ?? (data["vehicleImg"] as? String)
+        }
+
+        // sender / isSelfSent 判定
+        let mineYxAccid = SessionStore.shared.user?.yxAccid ?? ""
+        let senderAccid = (data["senderYxAccid"] as? String)
+            ?? (data["sendYxAccid"] as? String)
+            ?? (payload["senderYxAccid"] as? String)
+            ?? (payload["sendYxAccid"] as? String)
+            ?? ""
+        let isSelfSent = !senderAccid.isEmpty
+            && !mineYxAccid.isEmpty
+            && senderAccid == mineYxAccid
+
+        // info 级 log 默认可见 (对齐 im-payload-real-log rule §首次接入必抓字段名验证)
+        AppLogger.party.info("🚗 [Party] enterVehicle payloadKeys=\(Array(payload.keys), privacy: .public) dataKeys=\(Array(data.keys), privacy: .public) vehicle=\(vehicleItemImg ?? "nil", privacy: .public) sender=\(senderAccid, privacy: .public) self=\(isSelfSent, privacy: .public)")
+
+        guard !isSelfSent else { return }
+        guard let vehicleUrl = vehicleItemImg,
+              let parsed = URL(string: vehicleUrl) else { return }
+        let ext = parsed.pathExtension.lowercased()
+        guard ext == "svga" || ext == "mp4" else { return }
+
+        // v23（2026-07-13）code-review 修复：scopeId 必须 non-empty。若 roomInfo.id nil（后端 partial payload
+        // 极端场景），此消息入队会与 PartyRoomView modifier 挂载的 scopeId (`??roomId`) 不同源 →
+        // Center.enqueue rejected 静默 drop → 直接 return 免走无效路径。
+        guard let scopeId = roomInfo?.id, !scopeId.isEmpty else {
+            AppLogger.party.warning("[Party] didReceiveEnterAnimation drop: roomInfo.id nil/empty — partial payload?")
+            return
+        }
+        let nickname = (data["username"] as? String)
+            ?? (data["nickname"] as? String)
+            ?? (data["nick"] as? String)
+            ?? ""
+        let avatar = (data["icon"] as? String)
+            ?? (data["avatar"] as? String)
+            ?? (data["headImg"] as? String)
+
+        let item = GiftEffectItem(
+            sceneKey: GiftEffectSceneKey(scene: .party, scopeId: scopeId),
+            senderYxAccid: senderAccid,
+            senderNickname: nickname,
+            senderAvatarUrl: avatar,
+            giftId: 0,
+            giftName: "vehicle",
+            giftCount: 1,
+            giftPrice: 0,
+            animationUrl: vehicleUrl,
+            staticImgUrl: nil,
+            timestamp: Int64(raw.timestamp * 1000),
+            isSelfSent: false
+        )
+        EnterEffectCenter.shared.enqueue(item)
+    }
+
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveVideoSeatInvite invite: PartyVideoSeatInvite) {
         // 仅当邀请对象是自己（房间匹配）才弹窗——roomId 已在 chat 双过滤；
         // seatIndex 范围由 chat 内 handleVideoSeatInvite 校验过。

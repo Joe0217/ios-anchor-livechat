@@ -30,7 +30,10 @@ struct EnterRoomFloat: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .padding(.bottom, 200)   // H5 `bottom-40%` iPhone 上约 200pt
+        // v23（2026-07-11 用户反馈）：banner 位置从底部 200pt 上移到公屏消息 row 之上
+        // 公屏 row 位置 ≈ 底部 150-350pt（含输入框 + emoji row），380pt 让 banner 出现在公屏 row 顶部之上
+        // 对齐 H5 `bottom-40%` 语义（40% × ~950pt safe area ≈ 380pt）
+        .padding(.bottom, 380)
         .allowsHitTesting(false)
     }
 

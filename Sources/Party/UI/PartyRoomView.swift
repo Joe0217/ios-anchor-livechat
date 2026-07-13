@@ -754,6 +754,8 @@ struct PartyRoomView: View {
     }
 
     /// 消息半屏 sheet（复用 Live 侧 ConversationSheetContent 公共组件）
+    /// v13：高度对齐 LiveRoomView.messageSheetContent（fraction 0.55 + drag indicator）
+    /// 内层 sheet-over-sheet 私聊 detent 由 ConversationSheetContent 内部 chatSheetDetent 管理，键盘弹起自动切 .large
     @ViewBuilder
     private var messageSheetContent: some View {
         ConversationSheetContent(
@@ -761,6 +763,8 @@ struct PartyRoomView: View {
             selfYxAccId: SessionStore.shared.user?.yxAccid ?? "",
             onClose: { showMessageSheet = false }
         )
+        .presentationDetents([.fraction(0.55)])
+        .presentationDragIndicator(.visible)
     }
 
     /// 更多工具菜单 dialog（B 档 stub）—— 汇总 PK / Lucky Number / Room Mute 三入口 + Cancel
