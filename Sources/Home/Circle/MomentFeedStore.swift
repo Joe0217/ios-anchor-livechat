@@ -52,6 +52,13 @@ final class MomentFeedStore: ObservableObject {
 
     @Published private(set) var state: State = .idle
 
+    /// 朋友圈动态 textContent 翻译 map(对齐 H5 `c-circleContent.vue` `data.translateText`)。
+    /// key = postId,value = 已翻译文本。内存态,view dismiss / store 释放后自动清。
+    @Published private(set) var translations: [Int: String] = [:]
+
+    /// 防重入 set:正在翻译中的 postId
+    private var pendingTranslateIds: Set<Int> = []
+
     private let service: CircleServiceProtocol
     private let pageSize: Int
     /// 数据源：决定 fetchPage 走哪个 service 方法（official/all/my）。
@@ -195,6 +202,47 @@ final class MomentFeedStore: ObservableObject {
                 try await service.like(postId: postId, optionType: newFlag)
             } catch {
                 logger.warning("like failed postId=\(postId) (trial #1 暂不回滚): \(String(describing: error))")
+            }
+        }
+    }
+
+    /// 翻译朋友圈动态 textContent(对齐 H5 `c-circleContent.vue` translate → `data.translateText = res`)。
+    /// - 防重入:同 postId 二次 tap 直接短路
+    /// - 已翻译:short-circuit(map hit)
+    /// - 空文本:no-op
+    /// - 目标语言:AppLocaleStore.shared.current 派生
+    /// - 失败:静默(对齐 H5 无失败提示)
+    func translateIfNeeded(postId: Int, text: String) {
+        guard !text.isEmpty,
+              translations[postId] == nil,
+              !pendingTranslateIds.contains(postId) else { return }
+        pendingTranslateIds.insert(postId)
+        let key = AppConfigStore.shared.microsoftTranslatorKey ?? AppConfigStore.translatorKeyFallback
+        let area = AppConfigStore.shared.microsoftTranslatorArea ?? AppConfigStore.translatorAreaFallback
+        let targetLang: String = {
+            switch AppLocaleStore.shared.current {
+            case .en: return "en"
+            case .ar: return "ar"
+            case .tr: return "tr"
+            case .system: return Locale.current.language.languageCode?.identifier ?? "en"
+            }
+        }()
+        Task { [weak self] in
+            defer {
+                Task { @MainActor [weak self] in
+                    self?.pendingTranslateIds.remove(postId)
+                }
+            }
+            do {
+                let translated = try await MicrosoftTranslateService.shared.translate(
+                    text: text, targetLang: targetLang, key: key, area: area
+                )
+                await MainActor.run { [weak self] in
+                    self?.translations[postId] = translated
+                }
+            } catch {
+                logger.warning("[Moment] translate failed postId=\(postId): \(String(describing: error))")
+                // 静默失败(对齐 H5 c-circleContent + PublicChatListView)
             }
         }
     }

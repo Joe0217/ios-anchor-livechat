@@ -17,6 +17,10 @@ struct MomentPostRow: View {
     var showComment: Bool = true
     /// 图片/视频 cell 点击回调（父 view 拉起大图预览）。参数：`imgUrls` 中的 index。
     var onImageTap: ((Int) -> Void)? = nil
+    /// v23（2026-07-13）：翻译文本(对齐 H5 c-circleContent.vue `data.translateText`)。nil = 未翻译
+    var translation: String? = nil
+    /// v23（2026-07-13）：tap 翻译按钮回调。nil = 不显示按钮(如 textContent 为空)
+    var onTapTranslate: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -27,6 +31,8 @@ struct MomentPostRow: View {
                     .foregroundColor(.white.opacity(0.92))
                     // 对齐 H5 `whitespace-pre-wrap break-all`，不截断
                     .fixedSize(horizontal: false, vertical: true)
+                // 翻译按钮 / 译文(对齐 H5 c-circleContent.vue L204-210)
+                translationSection(originalText: text)
             }
             if let urls = post.imgUrls, !urls.isEmpty {
                 imageGrid(urls: urls)
@@ -41,6 +47,34 @@ struct MomentPostRow: View {
         .padding(12)
         .background(Theme.Palette.cardFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .padding(.horizontal, Theme.Metric.profileDescPadding)
+    }
+
+    /// v23（2026-07-13）：翻译区(对齐 H5 c-circleContent.vue L204-210)。
+    /// - 已翻译:显示译文
+    /// - 未翻译 + `onTapTranslate` non-nil:显示绿色 "Translate" 文字按钮(对齐 H5 label="Translate" color=#15FF3E)
+    /// - 未翻译 + `onTapTranslate` nil:不显示(caller 未接入翻译能力,如未来某个 preview 或 mock 入口)
+    @ViewBuilder
+    private func translationSection(originalText: String) -> some View {
+        if let t = translation, !t.isEmpty {
+            // 已翻译:H5 mt-8 text-14 color-#fff
+            Text(t)
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+                .fixedSize(horizontal: false, vertical: true)
+        } else if let onTap = onTapTranslate {
+            // 未翻译:显示 Translate 按钮(对齐 H5 CTranslate label="Translate" color=#15FF3E)
+            Button(action: onTap) {
+                HStack(spacing: 4) {
+                    Image(systemName: "character.book.closed.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                    Text(L10n.publicScreenTranslate)
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundColor(Color(red: 21/255, green: 1.0, blue: 62/255)) // #15FF3E
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private var header: some View {

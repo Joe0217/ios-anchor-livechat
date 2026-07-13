@@ -1382,6 +1382,8 @@ private struct CongratsBonusSheet: View {
 /// 翻译行（可选）：`content.translation != nil` → 消息下方追加 A 头像 icon + 灰色翻译文字。
 private struct CallMessageScroller: View {
     @ObservedObject var store: CallStore
+    /// 防重入 map:正在翻译中的 msgId(对齐 PublicChatListView.pendingTranslateIds)
+    @State private var pendingTranslateIds: Set<UUID> = []
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -1410,7 +1412,7 @@ private struct CallMessageScroller: View {
     private func messageCell(_ msg: CallChatMessage) -> some View {
         switch msg.payload {
         case let .text(content, translation):
-            textCell(sender: msg.sender, content: content, translation: translation)
+            textCell(msg: msg, content: content, translation: translation)
         case let .gift(imageURL, count):
             giftCell(sender: msg.sender, imageURL: imageURL, count: count)
         case let .bonus(amount):
@@ -1421,9 +1423,13 @@ private struct CallMessageScroller: View {
     // MARK: - text cell（含 5 变体分支）
 
     @ViewBuilder
-    private func textCell(sender: CallChatMessage.Sender,
+    private func textCell(msg: CallChatMessage,
                           content: String,
                           translation: String?) -> some View {
+        let sender = msg.sender
+        // 翻译图标只对"对方消息 + 未翻译"显示(对齐 H5 messageScroller `!item.isSelf`)
+        // v24（2026-07-13）:改 inline 图标跟随文字末尾(用户反馈)
+        let showTranslateInline = !sender.isSelf && translation == nil && !content.isEmpty
         VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .center, spacing: 4) {
                 if let level = sender.level {
@@ -1440,7 +1446,8 @@ private struct CallMessageScroller: View {
                 }
                 nicknameContentText(nickname: sender.nickname.isEmpty ? L10n.callSignalLabelUser : sender.nickname,
                                     nicknameColor: resolveNicknameColor(sender.nicknameColor, isSpecial: sender.isSpecial),
-                                    content: content)
+                                    content: content,
+                                    showTranslateInline: showTranslateInline)
             }
             if let translation, !translation.isEmpty {
                 translationRow(translation: translation,
@@ -1450,16 +1457,61 @@ private struct CallMessageScroller: View {
         .padding(.horizontal, 10).padding(.vertical, 6)
         .background(textCellBackground(sender: sender))
         .frame(maxWidth: 270, alignment: .leading)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if showTranslateInline { handleTapTranslate(msg: msg, text: content) }
+        }
+        .accessibilityAddTraits(showTranslateInline ? .isButton : [])
     }
 
-    /// 昵称 + `:  ` + 内容（Text 插值嵌套，禁 `+` 拼接对齐 rule swiftui-body-type-check-timeout.md）
+    /// tap 翻译处理:防重入 + 调 MicrosoftTranslateService + Store setChatTranslation(对齐 PublicChatListView.handleTapTranslate)
+    private func handleTapTranslate(msg: CallChatMessage, text: String) {
+        guard !pendingTranslateIds.contains(msg.id) else { return }
+        pendingTranslateIds.insert(msg.id)
+        let key = AppConfigStore.shared.microsoftTranslatorKey ?? AppConfigStore.translatorKeyFallback
+        let area = AppConfigStore.shared.microsoftTranslatorArea ?? AppConfigStore.translatorAreaFallback
+        let targetLang: String = {
+            switch AppLocaleStore.shared.current {
+            case .en: return "en"
+            case .ar: return "ar"
+            case .tr: return "tr"
+            case .system: return Locale.current.language.languageCode?.identifier ?? "en"
+            }
+        }()
+        Task { @MainActor in
+            defer { pendingTranslateIds.remove(msg.id) }
+            do {
+                let translated = try await MicrosoftTranslateService.shared.translate(
+                    text: text, targetLang: targetLang, key: key, area: area
+                )
+                store.setChatTranslation(messageId: msg.id, translation: translated)
+            } catch {
+                AppLogger.call.warning("[CallStore] translate failed msgId=\(msg.id.uuidString, privacy: .public)")
+                // 静默失败(对齐 H5 messageScroller + PublicChatListView)
+            }
+        }
+    }
+
+    /// 昵称 + `:  ` + 内容 + (可选)inline 翻译图标(Text 插值嵌套,禁 `+` 拼接对齐 swiftui-body-type-check-timeout.md)
+    /// v24：翻译图标 SF Symbol 作为 attachment 内联在 content 末尾,随 wrap 到最后一行末
     private func nicknameContentText(nickname: String,
                                      nicknameColor: Color,
-                                     content: String) -> some View {
-        Text("\(Text(nickname).foregroundColor(nicknameColor))\(Text(":  \(content)").foregroundColor(.white))")
-            .font(.system(size: 13, weight: .medium))
-            .lineLimit(3)
-            .multilineTextAlignment(.leading)
+                                     content: String,
+                                     showTranslateInline: Bool = false) -> some View {
+        let nickTx = Text(nickname).foregroundColor(nicknameColor)
+        let bodyTx = Text(":  \(content)").foregroundColor(.white)
+        let iconTx = Text(" ") + Text(Image(systemName: "character.book.closed.fill"))
+            .foregroundColor(Color(red: 196/255, green: 155/255, blue: 1.0)) // #C49BFF
+        return Group {
+            if showTranslateInline {
+                Text("\(nickTx)\(bodyTx)\(iconTx)")
+            } else {
+                Text("\(nickTx)\(bodyTx)")
+            }
+        }
+        .font(.system(size: 13, weight: .medium))
+        .lineLimit(3)
+        .multilineTextAlignment(.leading)
     }
 
     private func resolveNicknameColor(_ kind: CallChatMessage.Sender.NicknameColor,

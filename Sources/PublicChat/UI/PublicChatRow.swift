@@ -5,6 +5,8 @@ import SwiftUI
 struct PublicChatRow: View {
     let message: UnifiedPublicChatMessage
     let theme: PublicChatTheme
+    /// tap 翻译图标回调；non-nil 才在 `.text` variant + `sender?.isSelf == false` + `translation == nil` 时显示图标
+    var onTapTranslate: ((UnifiedPublicChatMessage) -> Void)? = nil
 
     var body: some View {
         Group {
@@ -24,8 +26,13 @@ struct PublicChatRow: View {
     @ViewBuilder private var textGiftGroup: some View {
         switch message.variant {
         case .text(let c, let mentions, let translation, let replyToNick):
-            RowRegularText(sender: message.sender, content: c, mentions: mentions,
-                           translation: translation, replyToNick: replyToNick, theme: theme)
+            // 翻译图标只对"别人发的 + 未翻译"消息显示（对齐 H5 `!item.isSelf` + `!item.isShow`）
+            let showTranslate = (message.sender?.isSelf == false) && translation == nil && onTapTranslate != nil
+            RowRegularText(
+                sender: message.sender, content: c, mentions: mentions,
+                translation: translation, replyToNick: replyToNick, theme: theme,
+                onTapTranslate: showTranslate ? { onTapTranslate?(message) } : nil
+            )
         case .anchor(let c, let translation):
             RowAnchor(sender: message.sender, content: c, translation: translation, theme: theme)
         case .gift(let url, let name, let count):

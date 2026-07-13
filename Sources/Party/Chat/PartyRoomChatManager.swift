@@ -3,7 +3,7 @@ import NIMSDK
 
 /// 派对房公屏一条消息（UI 模型，非持久化）。
 struct PartyChatMessage: Identifiable, Equatable {
-    let id = UUID()
+    let id: UUID
     let userId: String?
     let nickname: String?
     let role: PartyRoomRoleType?
@@ -11,6 +11,29 @@ struct PartyChatMessage: Identifiable, Equatable {
     let msgType: PartyMsgType
     let isLocal: Bool                  // 本端回显（未等服务端广播即先 push 的消息）
     let timestamp: TimeInterval
+    /// 用户 tap 翻译图标后填入(对齐 H5 `messageScroller.vue` translatedClick + PublicChatListView.setTranslation)。
+    /// nil = 未翻译；非 nil = 显示译文（内存态，不持久化）
+    let translation: String?
+
+    init(id: UUID = UUID(),
+         userId: String?,
+         nickname: String?,
+         role: PartyRoomRoleType?,
+         text: String,
+         msgType: PartyMsgType,
+         isLocal: Bool,
+         timestamp: TimeInterval,
+         translation: String? = nil) {
+        self.id = id
+        self.userId = userId
+        self.nickname = nickname
+        self.role = role
+        self.text = text
+        self.msgType = msgType
+        self.isLocal = isLocal
+        self.timestamp = timestamp
+        self.translation = translation
+    }
 }
 
 /// 派对房云信聊天室封装（spec §1.4.4）。与直播 `NIMChatroomManager` 并存。
@@ -209,6 +232,25 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
     private func push(_ msg: PartyChatMessage) {
         messages.append(msg)
         trimIfNeeded()
+    }
+
+    /// 更新指定消息的 translation 字段(对齐 H5 messageScroller.vue translatedClick + PublicChatListView.setTranslation)。
+    /// 命中不到 msgId 或非 `.text` msgType 时静默 no-op。
+    func setTranslation(messageId: UUID, translation: String) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        let old = messages[idx]
+        guard old.msgType == .text else { return }
+        messages[idx] = PartyChatMessage(
+            id: old.id,
+            userId: old.userId,
+            nickname: old.nickname,
+            role: old.role,
+            text: old.text,
+            msgType: old.msgType,
+            isLocal: old.isLocal,
+            timestamp: old.timestamp,
+            translation: translation
+        )
     }
 
     private func trimIfNeeded() {

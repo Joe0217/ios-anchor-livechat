@@ -30,6 +30,26 @@ final class UnifiedPublicChatFeed: ObservableObject {
         messages.removeAll()
     }
 
+    /// 更新 `.text` variant 的 translation 字段（对齐 H5 `messageScroller.vue` translatedClick）。
+    /// 命中不到 msgId 或非 `.text` variant 时静默 no-op。
+    func setTranslation(messageId: UUID, translation: String) {
+        guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
+        let old = messages[idx]
+        guard case .text(let content, let mentions, _, let replyToNick) = old.variant else { return }
+        let newVariant: PublicChatVariant = .text(
+            content: content,
+            mentions: mentions,
+            translation: translation,
+            replyToNick: replyToNick
+        )
+        messages[idx] = UnifiedPublicChatMessage(
+            id: old.id,
+            timestamp: old.timestamp,
+            sender: old.sender,
+            variant: newVariant
+        )
+    }
+
     private func trimIfNeeded() {
         if messages.count > limit {
             messages.removeFirst(messages.count - limit)

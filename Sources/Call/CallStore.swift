@@ -1388,9 +1388,24 @@ extension CallStore {
             isVip: false,
             isSpecial: false,
             chatBubble: mine?.chatBubble,
-            nicknameColor: .default   // 本端消息用白色（H5 my 语义），非 .her 橙色
+            nicknameColor: .default,   // 本端消息用白色（H5 my 语义），非 .her 橙色
+            isSelf: true               // 本端主播发的 → UI 不显示翻译图标（对齐 H5 !isSelf 条件）
         )
         appendChatMessage(.text(sender: sender, content: text, translation: nil))
+    }
+
+    /// 追加对方消息翻译结果(对齐 H5 messageScroller.vue translatedClick + PublicChatListView.setTranslation)。
+    /// 命中不到 msgId 或非 `.text` payload 时静默 no-op。
+    func setChatTranslation(messageId: UUID, translation: String) {
+        guard let idx = callChatMessages.firstIndex(where: { $0.id == messageId }) else { return }
+        let old = callChatMessages[idx]
+        guard case .text(let content, _) = old.payload else { return }
+        callChatMessages[idx] = CallChatMessage(
+            id: old.id,
+            timestamp: old.timestamp,
+            sender: old.sender,
+            payload: .text(content: content, translation: translation)
+        )
     }
 
     /// sysMsg 4 liveCallGift payload 消费：追加礼物 cell 到公屏（Phase A4）。

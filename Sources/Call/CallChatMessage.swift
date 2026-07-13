@@ -31,13 +31,15 @@ struct CallChatMessage: Identifiable, Equatable {
         var level: Int?
         /// VIP 用户 → 渲染金色 VIP 徽章。
         var isVip: Bool = false
-        /// levelName == "SS" 等最高档 → 渲染深紫渐变特殊气泡（Angelica 样式）。
+        /// levelName == "SS" 等最高档 → 渲染深紫渐变特殊气泡(Angelica 样式)。
         var isSpecial: Bool = false
-        /// VIP 用户特有的自定义气泡边框图 URL（H5 `chatBubble` 字段）。
-        /// 当前 iOS 未渲染 border-image（Wave 6 backlog），保留字段供未来接入。
+        /// VIP 用户特有的自定义气泡边框图 URL(H5 `chatBubble` 字段)。
+        /// 当前 iOS 未渲染 border-image(Wave 6 backlog),保留字段供未来接入。
         var chatBubble: String?
-        /// 昵称色（H5 `user === 'her'` → 橙色，其他 → 绿色）。默认 nil → UI 层按 sender kind 派色。
+        /// 昵称色(H5 `user === 'her'` → 橙色,其他 → 绿色)。默认 nil → UI 层按 sender kind 派色。
         var nicknameColor: NicknameColor = .default
+        /// 是否本机主播发的消息(对齐 H5 `isSelf`)。true 时 UI 层不显示翻译图标——只翻译对方消息。
+        var isSelf: Bool = false
 
         enum NicknameColor: Equatable {
             case `default`    // 品牌绿
