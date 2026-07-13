@@ -598,7 +598,14 @@ struct PartyRoomView: View {
                         avatarUrl: store.roomInfo?.roomAvatar,
                         backgroundId: nil
                     ),
-                    onSaved: {
+                    onSaved: { snapshot in
+                        // v8.2：同步 PartyStore.roomInfo → 顶栏立即刷新
+                        store.applyRoomSettingsChanges(
+                            roomName: snapshot.roomName,
+                            roomAvatar: snapshot.avatarUrl,
+                            greetingMessage: snapshot.tagline,
+                            roomLanguage: snapshot.languageCode
+                        )
                         activeRoomTool = nil
                     }
                 )
@@ -627,7 +634,13 @@ struct PartyRoomView: View {
                     avatarUrl: store.roomInfo?.roomAvatar,
                     backgroundId: nil
                 ),
-                onSaved: {
+                onSaved: { snapshot in
+                    store.applyRoomSettingsChanges(
+                        roomName: snapshot.roomName,
+                        roomAvatar: snapshot.avatarUrl,
+                        greetingMessage: snapshot.tagline,
+                        roomLanguage: snapshot.languageCode
+                    )
                     showSettings = false
                 }
             )

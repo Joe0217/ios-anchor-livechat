@@ -51,6 +51,9 @@ struct PartyRoomInfo: Codable, Equatable {
     let gemsTotal: Int?
     let pkStatus: Int?
     let pkId: String?
+    /// 房间关注态（对齐 H5 `currentPartyInfo.isFollowOwner`；仅 `room/enter` 接口返）。
+    /// `nil` 视为未关注（保守 fallback）。
+    let isFollowOwner: Bool?
     /// 麦位列表（dev 实测 `room/enter` 接口返字段名是 `roomSeatList`，与 spec 反推的 seatList 不符）；
     /// `room/list` 不返麦位列表。
     let roomSeatList: [PartyRoomSeat]?
@@ -93,5 +96,45 @@ struct PartyRoomInfo: Codable, Equatable {
             return .audience
         }
         return owner == me ? .owner : .audience
+    }
+
+    /// 房主保存设置后回写 4 字段（其他字段保留）。传 nil 表示不改；传新值覆盖。
+    /// SwiftUI Store 侧用：`store.roomInfo = info.withUpdated(...)`
+    func withUpdated(
+        roomName: String? = nil,
+        roomAvatar: String? = nil,
+        greetingMessage: String? = nil,
+        roomLanguage: String? = nil
+    ) -> PartyRoomInfo {
+        PartyRoomInfo(
+            id: id,
+            ownerId: ownerId,
+            roomRoleType: roomRoleType,
+            isPlatformAdmin: isPlatformAdmin,
+            roomName: roomName ?? self.roomName,
+            roomAvatar: roomAvatar ?? self.roomAvatar,
+            greetingMessage: greetingMessage ?? self.greetingMessage,
+            roomLanguage: roomLanguage ?? self.roomLanguage,
+            heatValue: heatValue,
+            roomStatus: roomStatus,
+            lockFlag: lockFlag,
+            yxRoomId: yxRoomId,
+            agoraChannelId: agoraChannelId,
+            rtcToken: rtcToken,
+            onlineUserList: onlineUserList,
+            score: score,
+            createTime: createTime,
+            needPassword: needPassword,
+            snapshotId: snapshotId,
+            roomTempId: roomTempId,
+            roomTempType: roomTempType,
+            rangIndex: rangIndex,
+            showChest: showChest,
+            gemsTotal: gemsTotal,
+            pkStatus: pkStatus,
+            pkId: pkId,
+            isFollowOwner: isFollowOwner,
+            roomSeatList: roomSeatList
+        )
     }
 }

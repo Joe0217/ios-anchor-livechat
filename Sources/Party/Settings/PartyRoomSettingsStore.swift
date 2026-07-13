@@ -1,5 +1,18 @@
 import Foundation
 
+/// 保存成功后回传给上层的 diff 快照（nil 表示未变化，非 nil 表示已实际保存的新值）。
+/// 上层 PartyRoomView 用它调 `PartyStore.applyRoomSettingsChanges(...)` 同步 `roomInfo`。
+struct PartyRoomSettingsSnapshot: Equatable {
+    let roomName: String?
+    let tagline: String?
+    let languageCode: String?
+    let avatarUrl: String?
+
+    var hasAnyChange: Bool {
+        roomName != nil || tagline != nil || languageCode != nil || avatarUrl != nil
+    }
+}
+
 /// 派对房设置页状态机（房主编辑房间信息）。
 ///
 /// **对齐 H5 create.vue 编辑态**：
@@ -219,4 +232,18 @@ final class PartyRoomSettingsStore: ObservableObject {
 
     func clearSaveError() { saveError = "" }
     func clearDidSaveSuccessfully() { didSaveSuccessfully = false }
+
+    /// 保存成功后回传的 diff 快照。仅返回**实际保存的字段**（nil 表示未变化）。
+    /// 与 `save()` 内的 diff 判断保持一致语义 —— 供 View 调 `onSaved(snapshot)` 通知上层。
+    func savedDiffSnapshot() -> PartyRoomSettingsSnapshot {
+        let curName = roomName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let curTag = roomTagline.trimmingCharacters(in: .whitespacesAndNewlines)
+        let curLang = selectedLanguage?.languageCode ?? ""
+        return PartyRoomSettingsSnapshot(
+            roomName: curName != originalRoomName ? curName : nil,
+            tagline: curTag != originalTagline ? curTag : nil,
+            languageCode: curLang != originalLanguageCode ? curLang : nil,
+            avatarUrl: uploadedAvatarUrl
+        )
+    }
 }

@@ -42,6 +42,12 @@ final class PartyStore: ObservableObject {
     @Published private(set) var lastInviteResult: PartyVideoSeatInviteResult?
     @Published private(set) var lastError: PartyRoomError?
 
+    /// 是否已关注当前房主（对齐 H5 `currentPartyInfo.isFollowOwner`）。
+    /// 进房时初始化自 `roomInfo.isFollowOwner`；`toggleFollowAnchor()` 后翻转。
+    @Published private(set) var isFollowingAnchor: Bool = false
+    /// 关注切换请求是否在飞（防连点重复请求）
+    @Published private(set) var isTogglingFollow: Bool = false
+
     // MARK: - 子模块
 
     let rtc = PartyRTCEngine()
@@ -144,6 +150,8 @@ final class PartyStore: ObservableObject {
         roomInfo = info
         seatList = info.roomSeatList ?? []
         onlineUserCount = info.onlineCount
+        // 初始化关注态（对齐 H5 `currentPartyInfo.isFollowOwner`；nil 视为未关注）
+        isFollowingAnchor = info.isFollowOwner ?? false
         roomState = .entering
 
         // Step 3: RTC join
@@ -279,6 +287,52 @@ final class PartyStore: ObservableObject {
         lastGiftEvent = nil
         pendingVideoSeatInvite = nil
         lastInviteResult = nil
+        isFollowingAnchor = false
+        isTogglingFollow = false
+    }
+
+    // MARK: - 房主保存设置后本地同步（v8.2）
+
+    /// 房主 `PartyRoomSettingsView` 保存成功后回写本地 `roomInfo` —— 顶栏/房间信息立即刷新，
+    /// 不必等下次 enter 或 IM 广播。
+    /// 传 nil 表示未变化不覆盖；传新值覆盖对应字段。
+    func applyRoomSettingsChanges(
+        roomName: String? = nil,
+        roomAvatar: String? = nil,
+        greetingMessage: String? = nil,
+        roomLanguage: String? = nil
+    ) {
+        guard let info = roomInfo else { return }
+        roomInfo = info.withUpdated(
+            roomName: roomName,
+            roomAvatar: roomAvatar,
+            greetingMessage: greetingMessage,
+            roomLanguage: roomLanguage
+        )
+    }
+
+    // MARK: - 关注房主（对齐 H5 header-wrap.vue L139-140 handleFollowOrNo）
+
+    /// 切换关注状态。请求成功后翻转 `isFollowingAnchor`；失败静默保留原状态。
+    /// followType：**已关注 → 2（取关）；未关注 → 1（关注）**（对齐 FollowListService.followUser 语义）。
+    func toggleFollowAnchor() async {
+        guard !isTogglingFollow else { return }
+        guard let owner = roomInfo?.ownerId, let ownerIdInt = Int(owner), ownerIdInt > 0 else {
+            AppLogger.party.error("[PartyStore] toggleFollow skip: ownerId invalid")
+            return
+        }
+        let willFollow = !isFollowingAnchor
+        let type = willFollow ? 1 : 2
+        isTogglingFollow = true
+        defer { isTogglingFollow = false }
+        do {
+            try await FollowListService.followUser(followUserId: ownerIdInt, followType: type)
+            isFollowingAnchor = willFollow
+            AppLogger.party.info("[PartyStore] toggleFollow ok uid=\(ownerIdInt) willFollow=\(willFollow, privacy: .public)")
+        } catch {
+            AppLogger.party.error("[PartyStore] toggleFollow failed: \(String(describing: error), privacy: .public)")
+            // 静默失败：不 lastError = ...（关注失败不阻塞房间业务；UI 层可通过 isFollowingAnchor 未翻转感知）
+        }
     }
 
     /// RTC + Chat 双 ready 才标 .joined

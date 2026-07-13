@@ -5,9 +5,12 @@ import PhotosUI
 ///
 /// 5 字段编辑：房名 / Tagline / 头像 / 语言 / 背景 + Set as Admin 入口。
 /// 保存策略：只传 diff。背景是独立 setter（选完 sheet 就即时保存）。
+///
+/// `onSaved(snapshot)` v8.2：保存成功回传实际已保存的字段（nil 表示未变化），
+/// 供上层同步 `PartyStore.roomInfo` —— 顶栏立即刷新，不必等下次 enter/IM 广播。
 struct PartyRoomSettingsView: View {
     @StateObject var store: PartyRoomSettingsStore
-    var onSaved: () -> Void
+    var onSaved: (PartyRoomSettingsSnapshot) -> Void
 
     @State private var showLanguagePicker = false
     @State private var showBackgroundPicker = false
@@ -16,7 +19,7 @@ struct PartyRoomSettingsView: View {
     @FocusState private var textFieldFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
-    init(store: PartyRoomSettingsStore, onSaved: @escaping () -> Void = {}) {
+    init(store: PartyRoomSettingsStore, onSaved: @escaping (PartyRoomSettingsSnapshot) -> Void = { _ in }) {
         _store = StateObject(wrappedValue: store)
         self.onSaved = onSaved
     }
@@ -74,22 +77,19 @@ struct PartyRoomSettingsView: View {
         }
         .onChange(of: store.didSaveSuccessfully) { done in
             if done {
+                let snapshot = store.savedDiffSnapshot()
                 store.clearDidSaveSuccessfully()
-                onSaved()
+                onSaved(snapshot)
                 dismiss()
             }
         }
         .overlay(alignment: .top) {
             if !store.saveError.isEmpty {
                 Text(store.saveError)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(Capsule().fill(Color.black.opacity(0.85)))
-                    .padding(.top, 60)
-                    .transition(.opacity)
+                    .toastStyle()
+                    .transition(Toast.transition)
                     .task(id: store.saveError) {
-                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        try? await Task.sleep(nanoseconds: Toast.dismissDurationLongNanos)
                         store.clearSaveError()
                     }
             }
