@@ -59,13 +59,8 @@ struct LiveSettingsView: View {
             // stage 3：toast 覆盖层（对齐 H5 showToast）—— checkCanLive 4 项失败时短暂显示
             if let toast = store.toastMessage {
                 VStack {
+                    Text(toast).toastStyle()
                     Spacer()
-                    Text(toast)
-                        .font(.footnote)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16).padding(.vertical, 10)
-                        .background(Color.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 8))
-                        .padding(.bottom, 120)
                 }
                 .frame(maxWidth: .infinity)
                 .transition(.opacity)
@@ -127,7 +122,7 @@ struct LiveSettingsView: View {
                 onConfirm: { store.setSelectedGift($0) }
             ))
             .sheetTopInset()
-            .presentationDetents([.fraction(0.5), .large])
+            .presentationDetents([.fraction(0.5), .fraction(0.8)])
             .presentationDragIndicator(.visible)
         }
         // 心愿承诺规范弹窗（对齐 H5 wishlist-rule-modal.vue）—— 首次开播含 wishlist+promise 时弹

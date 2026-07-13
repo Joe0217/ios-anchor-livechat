@@ -1226,3 +1226,10 @@
 "partyRoom.a11y.mic.off"                 = "الميكروفون مغلق";
 "partyRoom.a11y.game"                    = "الألعاب";
 "partyRoom.a11y.gift"                    = "إرسال هدية";
+
+/* v9 PartyRoom biz logic */
+"partyRoom.announcement.title"           = "الإعلان";
+"partyRoom.announcement.empty"           = "لا يوجد إعلان بعد";
+"partyRoom.announcement.close"           = "إغلاق";
+"partyRoom.more.title"                   = "المزيد";
+"partyRoom.more.leave"                   = "مغادرة الغرفة";

@@ -117,8 +117,13 @@ struct LiveRoomView: View {
     /// 半屏消息列表 sheet 显隐（对齐 H5 messagePopup） —— 底部工具栏消息按钮触发。
     /// **半屏私聊 sheet 挂在 ConversationSheetContent 内部**（sheet-over-sheet），不在此层。
     @State private var showMessageSheet: Bool = false
-    /// 半屏消息列表数据源（订阅未读计数用于消息按钮红点）。
-    @ObservedObject private var sessionStore: MessageSessionStore = .shared
+    /// 消息按钮红点未读桥（仅暴露 totalUnread + removeDuplicates 拦截无关变化）。
+    /// **不直接 @ObservedObject MessageSessionStore.shared**：大单例 publish 会触发整个 LiveRoomView 重算，
+    /// 违反 [swiftui-keepalive-publisher-isolation.md §方案 A](../../.claude/rules/swiftui-keepalive-publisher-isolation.md)。
+    @StateObject private var unreadBridge = MessageEntryUnreadBridge()
+
+    /// 关闭直播确认 alert（对齐 H5 `endLivePopup.vue` 二次确认逻辑，避免误点 close X 直接下播）
+    @State private var showEndLiveConfirm: Bool = false
 
     /// body 里若写 `let isPKActive = ...`，body 会从"单表达式 @ViewBuilder"降级为"多语句 closure"，
     /// SwiftUI 类型推导复杂度剧增；抽 computed property 让 body 保持单表达式（rule swiftui-body-type-check-timeout §4）
@@ -126,21 +131,37 @@ struct LiveRoomView: View {
         pkStore.state == .starting || pkStore.state == .inPK || pkStore.state == .punishing
     }
 
-    /// 半屏消息列表未读合计（对齐 H5 sessionStore.newMsg red-dot + messagePopup 数据源过滤语义）。
-    /// **不用** `unreadCount(in: .flame)` —— 那含 systemInboxEntries（sheet 里已过滤掉），
-    /// 会导致红点显示 ≠ sheet 内容，用户点开看不到"未读源"。
-    /// 语义：与 ConversationSheetContent.allSessions 对齐（3 类并集去重 → 累加 unreadCount）
-    private var liveMessageUnreadTotal: Int {
-        let all = sessionStore.sessions(in: .flame)
-            + sessionStore.sessions(in: .prime)
-            + sessionStore.sessions(in: .stranger)
-        var seen = Set<String>()
-        return all
-            .filter { seen.insert($0.id).inserted }
-            .reduce(0) { $0 + $1.unreadCount }
+    // 2026-07-13 body 又超时（32+ modifier）—— 拆两段 bodyStage1 + body 后半，各自类型推导独立
+    var body: some View {
+        bodyStage1
+            .animation(.easeInOut(duration: 0.2), value: pkStore.state)
+            .alert(L10n.liveRoomPermissionAlertTitle, isPresented: $store.permissionDeniedAlert) {
+                Button(L10n.liveRoomPermissionAlertOK) { dismiss() }
+            } message: {
+                Text(L10n.liveRoomPermissionAlertMessage)
+            }
+            // 关闭直播二次确认（对齐 H5 endLivePopup.vue：Kind reminder + Are you sure + Cancel/Confirm）
+            .alert(L10n.liveRoomEndConfirmTitle,
+                   isPresented: $showEndLiveConfirm,
+                   actions: { endLiveConfirmActions },
+                   message: { endLiveConfirmMessage })
+            .onAppear(perform: handleMainOnAppear)
+            .onDisappear(perform: handleOnDisappear)
+            .onChange(of: store.state, perform: handleStoreStateChange)
+            // D 里程碑：CallView + returnLive 倒计时覆盖 —— 合并为单 overlay
+            .overlay { callAndReturnLiveOverlays }
+            .animation(.easeInOut(duration: 0.2), value: callState)
+            .onReceive(callStore.$state) { newState in callState = newState }
+            .onReceive(store.$privateCallOpen, perform: handlePrivateCallOpenChange)
+            .animation(.easeInOut(duration: 0.2), value: store.isWaitingReturnLive)
+            // Task 9：GiftEffect / EnterEffect scope 均用 yxRoomId（云信房间 id）
+            .giftEffectScene(.live, scopeId: roomInfo.yxRoomId.map(String.init) ?? "")
+            .enterEffectScene(.live, scopeId: roomInfo.yxRoomId.map(String.init) ?? "")
     }
 
-    var body: some View {
+    /// body 前段：navigation + sheets + overlays + PK/Live modifier + TopSheets（约 15 个 modifier）
+    /// 与 body 后段（alerts + lifecycle + effects）分开，让编译器分段推导 SwiftUI 泛型嵌套
+    private var bodyStage1: some View {
         mainZStack
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
@@ -152,22 +173,7 @@ struct LiveRoomView: View {
         #if DEBUG
         .sheet(isPresented: $showPKDebug) { pkDebugPanel }   // M0 调试入口（仅 DEBUG，不限高）
         #endif
-        .sheet(isPresented: $showInviteSheet) {
-            PKInviteSheet(store: pkStore,
-                          isPresented: $showInviteSheet,
-                          onTapAvatar: { uid in
-                              // tap anchor avatar → 关邀请 sheet + 打开 UserCard popup（对齐 H5 openAnchorProfile）
-                              showInviteSheet = false
-                              userCardUserId = uid
-                          },
-                          selfAvatarURL: AnchorInfoStore.shared.iconURL?.absoluteString,
-                          onRequestOpenWaiting: {
-                              // v22（2026-07-11）：Waiting 按钮 tap 时才打开 waiting popup（不自动触发）
-                              showPKInviteWaiting = true
-                          })
-                .presentationDetents([.fraction(0.6), .fraction(0.8)])
-                .presentationDragIndicator(.visible)
-        }
+        .sheet(isPresented: $showInviteSheet) { inviteSheetContent }
         // G M3 / spec §6.1：PK 各态 overlay 合并为单一 PKOverlayHost，避免 5 层 _OverlayModifier
         // 链路 layout pass + 多 overlay 同时订阅 pkStore 触发 body 重算。
         .overlay { PKOverlayHost(pkStore: pkStore, resultBridge: pkResultBridge) }
@@ -203,52 +209,37 @@ struct LiveRoomView: View {
             uidStr: SessionStore.shared.user?.userId.map(String.init) ?? "",
             roomIdStr: "\(roomInfo.id ?? 0)",
             showContribution: $showContributionSheet,
-            showRank: $showRankSheet,                                  // v16 girlWeeklyRank
-            showUserWeeklyRank: $showUserWeeklyRankSheet,              // v16 userWeeklyRank
-            // v14 Q3 sheet load 完成后回填顶部 rank 徽章（对齐 H5 "无推送→查看后更新"）
-            onRankUpdate: { [weak nim = nim] rank in nim?.anchorRankStore.setRank(rank) },
+            showRank: $showRankSheet,
+            showUserWeeklyRank: $showUserWeeklyRankSheet,
+            onRankUpdate: handleRankUpdate,
             showRouletteSetting: $showRouletteSetting,
             showRouletteIntro: $showRouletteIntro,
-            onRouletteEnabledChanged: { newValue in isRouletteEnabled = newValue },
-            onRouletteToast: { msg in withAnimation { comingSoonToast = msg } }
+            onRouletteEnabledChanged: handleRouletteEnabledChanged,
+            onRouletteToast: handleRouletteToast
         ))
         // 依 pkStore.state 转换自动挂载 InviteWaiting / MatchFailed
         // - inviting：发出邀请后自动挂载 InviteWaiting（对齐 H5 pkInviteWaitingPopup）
         // - matching → idle/failed：视为匹配失败，自动挂载 MatchFailed（对齐 H5 pkMatchFailedPopup）
         .onChange(of: pkStore.state, perform: handlePKStateChange)
         // v17 设置弹窗改 Bottom Sheet + 3 列 Grid（对齐 H5 liveSettingPopup.vue）
-        .sheet(isPresented: $showSettingSheet) {
-            LiveSettingBottomSheet(
-                isPresented: $showSettingSheet,
-                beautyAvailable: store.beautyAvailable,
-                onOpenBeauty:       { showBeauty = true },
-                onOpenEffects:      { showEffectSwitchPopup = true },
-                onOpenAnnouncement: { showAnnouncementPopup = true },
-                onEndLive:          { Task { await store.endLive() } }
-            )
-            .sheetTopInset()
-            .presentationDetents([.fraction(0.32)])
-            .presentationDragIndicator(.visible)
-        }
+        .sheet(isPresented: $showSettingSheet) { settingSheetContent }
         // 直播间半屏消息列表（对齐 H5 messagePopup 408pt） —— 底部工具栏消息按钮触发；
         // 直播 RTC 全程不中断（sheet 保留底层可见，@StateObject camera/agora 生命周期独立）。
         // **半屏私聊 sheet 挂在 ConversationSheetContent 内部**（sheet-over-sheet），此层只管消息列表。
         // SwiftUI 同一 view 挂多个平行 sheet 同一时刻只显示一个，会出现"点会话 → 消息列表关闭后才显示私聊"的错觉。
-        .sheet(isPresented: $showMessageSheet) {
-            ConversationSheetContent(
-                store: sessionStore,
-                selfYxAccId: SessionStore.shared.user?.yxAccid ?? "",
-                onClose: { showMessageSheet = false }
-            )
-            .presentationDetents([.fraction(0.55)])
-            .presentationDragIndicator(.visible)
-        }
+        .sheet(isPresented: $showMessageSheet) { messageSheetContent }
         .animation(.easeInOut(duration: 0.2), value: pkStore.state)
         .alert(L10n.liveRoomPermissionAlertTitle, isPresented: $store.permissionDeniedAlert) {
             Button(L10n.liveRoomPermissionAlertOK) { dismiss() }
         } message: {
             Text(L10n.liveRoomPermissionAlertMessage)
         }
+        // 关闭直播二次确认（对齐 H5 endLivePopup.vue：Kind reminder + Are you sure + Cancel/Confirm）
+        // 抽 actions/message 到 @ViewBuilder + Confirm action 到 method — 缓解 body type-check timeout
+        .alert(L10n.liveRoomEndConfirmTitle,
+               isPresented: $showEndLiveConfirm,
+               actions: { endLiveConfirmActions },
+               message: { endLiveConfirmMessage })
         .onAppear(perform: handleMainOnAppear)
         .onDisappear(perform: handleOnDisappear)
         .onChange(of: store.state, perform: handleStoreStateChange)
@@ -262,15 +253,15 @@ struct LiveRoomView: View {
         .overlay { callAndReturnLiveOverlays }
         .animation(.easeInOut(duration: 0.2), value: callState)
         .onReceive(callStore.$state) { newState in callState = newState }
-        // v22 私 call 开关反向同步：IM attachType 52（后端广播）走 store 更新，UI 层跟随
-        .onReceive(store.$privateCallOpen) { open in
-            if privateCallOn != open { privateCallOn = open }
-        }
+        .onReceive(store.$privateCallOpen, perform: handlePrivateCallOpenChange)
         .animation(.easeInOut(duration: 0.2), value: store.isWaitingReturnLive)
         // Task 9：声明本 view 属于 GiftEffect .live 场景 —— onAppear 时 setActiveScene，onDisappear 时 leaveScene（硬中断+清队列）
         // ⚠️ scopeId 必须用 **yxRoomId**（云信房间 id），与 NIMChatroomManager.enter(roomId:) + IM handler intake.ingest(scopeId:) 完全一致；
         // 用业务 roomId (store.roomId) 会导致 Center.activeKey ≠ item.sceneKey → enqueue rejected（2026-07-09 真机反悔真根因）
         .giftEffectScene(.live, scopeId: roomInfo.yxRoomId.map(String.init) ?? "")
+        // v23（2026-07-11）EnterEffect 独立并行 scene modifier —— 与 giftEffectScene 并列驱动 EnterEffectCenter
+        // scopeId 同源 yxRoomId（NIMChatroomManager 入队时 scopeId = self.roomId 云信 id，两侧强对齐）
+        .enterEffectScene(.live, scopeId: roomInfo.yxRoomId.map(String.init) ?? "")
     }
 
     private var mainZStack: some View {
@@ -384,7 +375,7 @@ struct LiveRoomView: View {
                                        action: { showMessageSheet = true })
                         .overlay(alignment: .topTrailing) {
                             // 未读红点（对齐 H5 sessionStore.newMsg），3 类会话未读合计 > 0 显示
-                            if liveMessageUnreadTotal > 0 {
+                            if unreadBridge.totalUnread > 0 {
                                 Circle()
                                     .fill(Color.red)
                                     .frame(width: 8, height: 8)
@@ -439,6 +430,92 @@ struct LiveRoomView: View {
         if store.isWaitingReturnLive {
             returnLiveCountdownOverlay.transition(.opacity)
         }
+    }
+
+    /// PKInviteSheet content —— 3 closure（tap avatar 关 sheet 开 UserCard / open Waiting popup）拆到 method
+    @ViewBuilder private var inviteSheetContent: some View {
+        PKInviteSheet(
+            store: pkStore,
+            isPresented: $showInviteSheet,
+            onTapAvatar: handleInviteAvatarTap,
+            selfAvatarURL: AnchorInfoStore.shared.iconURL?.absoluteString,
+            onRequestOpenWaiting: handleInviteOpenWaiting,
+            showMatchFailed: $showPKMatchFailed,
+            showInviteWaiting: $showPKInviteWaiting
+        )
+        // v23（2026-07-13 用户明示）：固定 70%，无多档
+        .presentationDetents([.fraction(0.7)])
+        .presentationDragIndicator(.visible)
+    }
+
+    /// v17 设置弹窗 Bottom Sheet content —— 4 个 open callback 抽 method
+    @ViewBuilder private var settingSheetContent: some View {
+        LiveSettingBottomSheet(
+            isPresented: $showSettingSheet,
+            beautyAvailable: store.beautyAvailable,
+            onOpenBeauty:       handleOpenBeauty,
+            onOpenEffects:      handleOpenEffects,
+            onOpenAnnouncement: handleOpenAnnouncement,
+            onEndLive:          handleEndLive
+        )
+        .sheetTopInset()
+        .presentationDetents([.fraction(0.32)])
+        .presentationDragIndicator(.visible)
+    }
+
+    /// 直播间半屏消息列表（对齐 H5 messagePopup 408pt）—— 底部工具栏消息按钮触发；
+    /// 直播 RTC 全程不中断（sheet 保留底层可见，@StateObject camera/agora 生命周期独立）。
+    /// 半屏私聊 sheet 挂在 ConversationSheetContent 内部（sheet-over-sheet），此层只管消息列表。
+    @ViewBuilder private var messageSheetContent: some View {
+        // sheet content 直接 subscribe MessageSessionStore.shared —— sheet 短生命周期（用户主动打开时才挂载），
+        // 消息 row 变化需要实时反映，body 重算成本可接受；不需要 bridge 拦截
+        ConversationSheetContent(
+            store: .shared,
+            selfYxAccId: SessionStore.shared.user?.yxAccid ?? "",
+            onClose: handleMessageSheetClose
+        )
+        .presentationDetents([.fraction(0.55)])
+        .presentationDragIndicator(.visible)
+    }
+
+    // tap 主播头像 → 关邀请 sheet + 打开 UserCard popup（对齐 H5 openAnchorProfile）
+    private func handleInviteAvatarTap(_ uid: String) {
+        showInviteSheet = false
+        userCardUserId = uid
+    }
+    // v22（2026-07-11）：Waiting 按钮 tap 时才打开 waiting popup（不自动触发）
+    private func handleInviteOpenWaiting() { showPKInviteWaiting = true }
+
+    private func handleOpenBeauty()       { showBeauty = true }
+    private func handleOpenEffects()      { showEffectSwitchPopup = true }
+    private func handleOpenAnnouncement() { showAnnouncementPopup = true }
+    private func handleEndLive()          { Task { await store.endLive() } }
+    /// close X tap → 弹 alert 确认（不再直接调 endLive）
+    private func handleConfirmEndLive()   { Task { await store.endLive() } }
+
+    /// 关闭直播确认 alert actions（Cancel / Confirm 双按钮）
+    @ViewBuilder
+    private var endLiveConfirmActions: some View {
+        Button(L10n.settingsCancel, role: .cancel) {}
+        Button(L10n.liveRoomEndConfirmConfirm, role: .destructive, action: handleConfirmEndLive)
+    }
+
+    /// 关闭直播确认 alert message
+    @ViewBuilder
+    private var endLiveConfirmMessage: some View {
+        Text(L10n.liveRoomEndConfirmMessage)
+    }
+
+    private func handleMessageSheetClose() { showMessageSheet = false }
+
+    // v14 Q3 sheet load 完成后回填顶部 rank 徽章（对齐 H5 "无推送→查看后更新"）
+    private func handleRankUpdate(_ rank: Int?) { nim.anchorRankStore.setRank(rank) }
+    private func handleRouletteEnabledChanged(_ newValue: Bool) { isRouletteEnabled = newValue }
+    private func handleRouletteToast(_ msg: String) { withAnimation { comingSoonToast = msg } }
+
+    // v22 私 call 开关反向同步：IM attachType 52（后端广播）走 store 更新，UI 层跟随
+    private func handlePrivateCallOpenChange(_ open: Bool) {
+        if privateCallOn != open { privateCallOn = open }
     }
 
     /// v20 公告保存成功后：立即往公屏插入 announcement 消息（对齐 H5 pushRoomAnnouncementMsg）
@@ -805,7 +882,8 @@ struct LiveRoomView: View {
             isPKActive: pkStore.state == .starting
                         || pkStore.state == .inPK
                         || pkStore.state == .punishing,
-            onClose: { Task { await store.endLive() } },
+            // v22（2026-07-11 用户明示）：对齐 H5 `endLivePopup.vue` —— 点关闭 X 不直接下播，弹确认
+            onClose: { showEndLiveConfirm = true },
             onTaskTap:         { showTaskPopup = true },
             onContributionTap: { showContributionSheet = true },
             // v16 入口分派：Rank 徽章 → RankSheetView（girlWeeklyRank）；观众数 → UserWeeklyRankSheet（userWeeklyRank）
@@ -1213,12 +1291,13 @@ fileprivate struct LiveRoomBadgeRow: View {
                         .resizable()
                         .frame(width: 18, height: 18)
                         .accessibilityHidden(true)
-                    if let rank = rankPosition {
+                    // rank 为 nil 或 ≤0（无效值/未上榜）统一显示 "--"，对齐 LiveAnchorRankStore.displayText 语义
+                    if let rank = rankPosition, rank > 0 {
                         Text(String(format: L10n.liveRoomRankFormat, rank))
                             .font(Theme.Typography.liveRoomBadgeText)
                             .foregroundColor(Theme.Palette.liveRoomRankNumber)
                     } else {
-                        Text(L10n.liveRoomRankUnlisted)
+                        Text("--")
                             .font(Theme.Typography.liveRoomBadgeText)
                             .foregroundColor(Theme.Palette.liveRoomBadgeNumber)
                     }

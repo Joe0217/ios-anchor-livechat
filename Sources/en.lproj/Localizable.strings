@@ -1265,3 +1265,10 @@
 "partyRoom.a11y.mic.off"                 = "Mic off";
 "partyRoom.a11y.game"                    = "Games";
 "partyRoom.a11y.gift"                    = "Send gift";
+
+/* v9 PartyRoom biz logic */
+"partyRoom.announcement.title"           = "Announcement";
+"partyRoom.announcement.empty"           = "No announcement yet";
+"partyRoom.announcement.close"           = "Close";
+"partyRoom.more.title"                   = "More";
+"partyRoom.more.leave"                   = "Leave room";

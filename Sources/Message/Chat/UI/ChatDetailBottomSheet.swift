@@ -17,7 +17,7 @@ import SwiftUI
 /// - `.sheet(item:)` 保证同一时刻只弹一个（`swiftui-fullscreencover-hoist.md` 规则 1
 ///   要求 modal modifier hoist 到单一容器 —— 本 modifier **必须由调用方挂到 view 顶层**，
 ///   不能挂到 ForEach / 各消息列表 row 上）
-/// - `presentationDetents([.medium, .large])` 支持半屏拖到全屏
+/// - `presentationDetents([.fraction(0.4)])` —— 直播/派对房内 sheet 上限 40%（2026-07-10 政策）
 /// - 半屏模式内 `ChatDetailView` 顶部左侧图标从 back(chevron.left) 切换为 close(xmark)
 ///
 /// **与全屏 push 差异**：
@@ -46,7 +46,7 @@ struct ChatDetailBottomSheet: ViewModifier {
             selfYxAccId: selfYxAccId,
             onClose: { peerYxAccId = nil }
         )
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.fraction(0.4)])
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(false)
     }

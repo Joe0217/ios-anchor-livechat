@@ -81,6 +81,55 @@ final class P2PChatStore: ObservableObject {
         provider.unsubscribe()
     }
 
+    // MARK: - 私密消息 lockStatus 批量应用（对齐 H5 chat/index.vue checkPrivateInfo）
+
+    /// 收集当前 state 里的 private 消息 privateId 集合(caller 传给 CheckPrivateInfoService)。
+    /// 空数组 → caller 跳过打网。
+    var currentPrivateMessageIds: [String] {
+        guard case .loaded(let msgs) = state else { return [] }
+        return msgs.compactMap { m -> String? in
+            guard let pid = m.privateId, !pid.isEmpty else { return nil }
+            switch m.content {
+            case .privateImage, .privateVideo: return pid
+            default: return nil
+            }
+        }
+    }
+
+    /// 用 checkPrivateInfo 返回的 lockStatus 批量更新私密消息。
+    /// - 未命中的 privateId → 保持原 lockStatus(可能是 .unknown)
+    /// - 命中但 lockStatus 未变 → 短路(避免无谓 state 重赋)
+    /// `ChatMessage.content` 是 `let`,更新走 struct 完整重建(保留 status/chatBubble/privateId 等 var 字段)。
+    func applyPrivateLockStatuses(_ statuses: [String: PrivateLockStatus]) {
+        guard case .loaded(let current) = state, !statuses.isEmpty else { return }
+        var changed = false
+        let updated = current.map { m -> ChatMessage in
+            guard let pid = m.privateId, let newStatus = statuses[pid] else { return m }
+            let newContent: ChatMessageContent
+            switch m.content {
+            case .privateImage(let url, let lockStatus):
+                guard lockStatus != newStatus else { return m }
+                newContent = .privateImage(url: url, lockStatus: newStatus)
+            case .privateVideo(let url, let cover, let dur, let lockStatus):
+                guard lockStatus != newStatus else { return m }
+                newContent = .privateVideo(url: url, coverUrl: cover, dur: dur, lockStatus: newStatus)
+            default:
+                return m
+            }
+            changed = true
+            var rebuilt = ChatMessage(
+                id: m.id, clientMsgId: m.clientMsgId,
+                from: m.from, to: m.to,
+                content: newContent, status: m.status,
+                timestamp: m.timestamp, isOutgoing: m.isOutgoing
+            )
+            rebuilt.chatBubble = m.chatBubble
+            rebuilt.privateId = m.privateId
+            return rebuilt
+        }
+        if changed { state = .loaded(updated) }
+    }
+
     // MARK: - 加载
 
     /// 首屏 load + markAllRead + sendReceipt(最新非我消息)。
@@ -507,10 +556,10 @@ final class P2PChatStore: ObservableObject {
                     timestamp: copy.timestamp,
                     isOutgoing: copy.isOutgoing
                 )
-                // H-3：ChatMessage 新增 var 字段（chatBubble / privateId）需同步保留（Major-5：新加字段必须在所有构造点同步）
+                // H-3：ChatMessage 新增 var 字段（chatBubble / privateId / msgType）需同步保留（Major-5：新加字段必须在所有构造点同步）
                 reconstructed.chatBubble = m.chatBubble
                 reconstructed.privateId = m.privateId
-                reconstructed.msgType = m.msgType   // P1-1：保留 pay/free 属性（同 chatBubble/privateId 一并保留）
+                reconstructed.msgType = m.msgType
                 copy = reconstructed
                 clientToServerId[clientMsgId] = messageId
                 sentMessageForPropagate = copy
@@ -534,7 +583,7 @@ final class P2PChatStore: ObservableObject {
     /// - .text/.image/.video/.audio → 参与结算（ReplyPointsStore 内部用 `state.lastUserMsgInfo.msgType` 传给后端）
     /// - .privateImage/.privateVideo/.systemGift/.missedCall/.systemTip/.system/.chatTip → 短路（对齐 H5 isGift/系统消息不结算）
     ///
-    /// **P1-1 修**：msgType 参数**不再传** —— H5 `message.js:1108` 传的是**用户上一条消息**的 pay/free 属性，
+    /// **P1-1 修**：msgType 参数**改为不传** —— H5 `message.js:1108` 传的是**用户上一条消息**的 pay/free 属性，
     /// 不是主播这次回复的媒介类型。ReplyPointsStore.onSendAnchorMsg 内部现从 lastUserMsgInfo.msgType 派生。
     private func triggerSettleReplyPoints(for sent: ChatMessage) {
         switch sent.content {

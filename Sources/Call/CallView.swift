@@ -1430,6 +1430,8 @@ private struct CallMessageScroller: View {
         // 翻译图标只对"对方消息 + 未翻译"显示(对齐 H5 messageScroller `!item.isSelf`)
         // v24（2026-07-13）:改 inline 图标跟随文字末尾(用户反馈)
         let showTranslateInline = !sender.isSelf && translation == nil && !content.isEmpty
+        // v25:翻译中沙漏(pendingTranslateIds hit)
+        let isTranslating = pendingTranslateIds.contains(msg.id)
         VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .center, spacing: 4) {
                 if let level = sender.level {
@@ -1447,7 +1449,8 @@ private struct CallMessageScroller: View {
                 nicknameContentText(nickname: sender.nickname.isEmpty ? L10n.callSignalLabelUser : sender.nickname,
                                     nicknameColor: resolveNicknameColor(sender.nicknameColor, isSpecial: sender.isSpecial),
                                     content: content,
-                                    showTranslateInline: showTranslateInline)
+                                    showTranslateInline: showTranslateInline,
+                                    isTranslating: isTranslating)
             }
             if let translation, !translation.isEmpty {
                 translationRow(translation: translation,
@@ -1459,7 +1462,7 @@ private struct CallMessageScroller: View {
         .frame(maxWidth: 270, alignment: .leading)
         .contentShape(Rectangle())
         .onTapGesture {
-            if showTranslateInline { handleTapTranslate(msg: msg, text: content) }
+            if showTranslateInline && !isTranslating { handleTapTranslate(msg: msg, text: content) }
         }
         .accessibilityAddTraits(showTranslateInline ? .isButton : [])
     }
@@ -1494,14 +1497,20 @@ private struct CallMessageScroller: View {
 
     /// 昵称 + `:  ` + 内容 + (可选)inline 翻译图标(Text 插值嵌套,禁 `+` 拼接对齐 swiftui-body-type-check-timeout.md)
     /// v24：翻译图标 SF Symbol 作为 attachment 内联在 content 末尾,随 wrap 到最后一行末
+    /// v25：loading 时图标切换为 hourglass + 灰色,tap 期间视觉反馈
     private func nicknameContentText(nickname: String,
                                      nicknameColor: Color,
                                      content: String,
-                                     showTranslateInline: Bool = false) -> some View {
+                                     showTranslateInline: Bool = false,
+                                     isTranslating: Bool = false) -> some View {
         let nickTx = Text(nickname).foregroundColor(nicknameColor)
         let bodyTx = Text(":  \(content)").foregroundColor(.white)
-        let iconTx = Text(" ") + Text(Image(systemName: "character.book.closed.fill"))
-            .foregroundColor(Color(red: 196/255, green: 155/255, blue: 1.0)) // #C49BFF
+        let iconName = isTranslating ? "hourglass" : "character.book.closed.fill"
+        let iconColor: Color = isTranslating
+            ? Color.white.opacity(0.5)
+            : Color(red: 196/255, green: 155/255, blue: 1.0) // #C49BFF
+        let iconTx = Text(" ") + Text(Image(systemName: iconName))
+            .foregroundColor(iconColor)
         return Group {
             if showTranslateInline {
                 Text("\(nickTx)\(bodyTx)\(iconTx)")

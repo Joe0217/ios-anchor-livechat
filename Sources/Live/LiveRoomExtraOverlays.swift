@@ -34,7 +34,7 @@ struct LiveRoomExtraOverlaysModifier: ViewModifier {
                 // H-4 迁移：直播中礼物入口 = 纯展示（interaction=.readonly + footer=.none）
                 CommonGiftPanel(config: .liveDisplayOnly)
                     .sheetTopInset()
-                    .presentationDetents([.medium])
+                    .presentationDetents([.fraction(0.4)])
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showWishlistPanel) {
@@ -42,7 +42,7 @@ struct LiveRoomExtraOverlaysModifier: ViewModifier {
                                     isPresented: $showWishlistPanel,
                                     liveRecordId: liveRecordId)
                     .sheetTopInset()
-                    .presentationDetents([.medium])
+                    .presentationDetents([.fraction(0.4)])
                     .presentationDragIndicator(.visible)
             }
     }

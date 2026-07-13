@@ -32,6 +32,11 @@ struct PKInviteSheet: View {
     let selfAvatarURL: String?
     /// v22（2026-07-11）：Waiting 按钮 tap 时通知外部打开 waiting popup（不再由 state 自动触发）
     let onRequestOpenWaiting: () -> Void
+    /// v22（2026-07-11）："所有 PK 弹窗层级 > sheet" —— MatchFailed/InviteWaiting 通过 Binding 传入本 sheet，
+    /// sheet 内 `.fullScreenCover` 挂载盖过 sheet；state 与 LiveRoomView 共享，sheet 关闭时由 LiveRoomView.overlay
+    /// 挂载兜底（LiveRoomView 侧用 `if !showInviteSheet` 互斥 guard 避免双实例 side effect）
+    @Binding var showMatchFailed: Bool
+    @Binding var showInviteWaiting: Bool
     @State private var inputKeyword: String = ""
 
     // sub-sheet / popup 显隐
@@ -49,12 +54,16 @@ struct PKInviteSheet: View {
          isPresented: Binding<Bool>,
          onTapAvatar: @escaping (String) -> Void,
          selfAvatarURL: String?,
-         onRequestOpenWaiting: @escaping () -> Void = {}) {
+         onRequestOpenWaiting: @escaping () -> Void = {},
+         showMatchFailed: Binding<Bool>,
+         showInviteWaiting: Binding<Bool>) {
         self.store = store
         self._isPresented = isPresented
         self.onTapAvatar = onTapAvatar
         self.selfAvatarURL = selfAvatarURL
         self.onRequestOpenWaiting = onRequestOpenWaiting
+        self._showMatchFailed = showMatchFailed
+        self._showInviteWaiting = showInviteWaiting
     }
 
     var body: some View {
@@ -93,11 +102,27 @@ struct PKInviteSheet: View {
                 ruleFirstTimeShown = true
             }
         }
-        .overlay { historyPopupOverlay }
+        // v23（2026-07-12）：History popup 从 sheet 内 overlay 改为 `.sheet`（sheet-inside-sheet
+        // 层级 > invite sheet；视觉从底部滑起对齐 H5 pkHistoryPopup.vue `position="bottom"`）
+        .sheet(isPresented: $showHistory) {
+            PKHistoryPopup(isPresented: $showHistory)
+                // v23（2026-07-13 用户明示）：与 PK 邀请 sheet 一致 —— 固定 70%，无多档
+                .presentationDetents([.fraction(0.7)])
+                .presentationDragIndicator(.visible)
+        }
         // Rule popup 用 fullScreenCover 挂在本 sheet 内部：SwiftUI fullScreenCover 会**盖过** sheet 层级；
         // 内容 view 内加 ClearBackgroundHelper 让 fullScreenCover 背景透明，露出半透黑蒙层 + 中央卡片视觉
         .fullScreenCover(isPresented: $showRule) {
             PKRulePopup(isPresented: $showRule)
+        }
+        // v22（2026-07-11）：MatchFailed / InviteWaiting 用 fullScreenCover 挂在 sheet 内保证层级 > sheet。
+        // **不加** ClearFullScreenCoverBackground（rule popup 用了导致视觉透明感 → 用户误以为 popup 被 sheet 挡）：
+        // 让 fullScreenCover 用默认全屏背景遮盖 sheet + PKPopupCard 自带半透黑蒙层 + 中央卡片 = 明确的 modal 视觉
+        .fullScreenCover(isPresented: $showMatchFailed) {
+            PKMatchFailedPopup(isPresented: $showMatchFailed, onInitiate: {})
+        }
+        .fullScreenCover(isPresented: $showInviteWaiting) {
+            PKInviteWaitingPopup(store: store, isPresented: $showInviteWaiting)
         }
         .sheet(isPresented: $showDurationPicker) {
             PKDurationPickerSheet(store: store, isPresented: $showDurationPicker)
@@ -317,9 +342,10 @@ struct PKInviteSheet: View {
         if store.state == .matching {
             return
         }
-        // v22（2026-07-11）：已邀请 → tap Waiting 显式请求 LiveRoomView 打开 waiting popup（不再靠 state 自动触发）
+        // v22（2026-07-11 用户明示）：已邀请 → tap Waiting 只弹取消窗，**不关闭邀请 sheet**（sheet 保留）；
+        // waiting popup 通过 `onRequestOpenWaiting()` callback 触发 `showPKInviteWaiting=true` →
+        // PKInviteSheet 内 `.fullScreenCover` 挂载 popup 层级盖过本 sheet（对齐 H5 弹窗嵌 popup 语义）
         if store.invitedAnchors[anchor.userId] != nil {
-            isPresented = false
             onRequestOpenWaiting()
             return
         }

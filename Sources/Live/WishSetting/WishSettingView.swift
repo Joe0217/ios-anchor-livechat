@@ -44,13 +44,8 @@ struct WishSettingView: View {
             // 承诺审核中（20004）等可修正边界提示；无 hit test，2s 自清
             if let toast = store.toastMessage {
                 VStack {
+                    Text(toast).toastStyle()
                     Spacer()
-                    Text(toast)
-                        .font(.footnote)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16).padding(.vertical, 10)
-                        .background(Color.black.opacity(0.8), in: RoundedRectangle(cornerRadius: 8))
-                        .padding(.bottom, 120)
                 }
                 .frame(maxWidth: .infinity)
                 .transition(.opacity)
@@ -67,7 +62,7 @@ struct WishSettingView: View {
                 store.addGift(gift, count: count)
             }))
             .sheetTopInset()
-            .presentationDetents([.fraction(0.5), .large])
+            .presentationDetents([.fraction(0.5), .fraction(0.8)])
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $store.showRuleDoc) {

@@ -347,6 +347,13 @@ enum L10n {
         static var a11yMicOff: String { localize("partyRoom.a11y.mic.off", comment: "麦克风已关 a11y") }
         static var a11yGame: String { localize("partyRoom.a11y.game", comment: "游戏按钮 a11y") }
         static var a11yGift: String { localize("partyRoom.a11y.gift", comment: "礼物按钮 a11y") }
+
+        // v9：业务逻辑补齐相关文案
+        static var announcementTitle: String { localize("partyRoom.announcement.title", comment: "公告 sheet 标题") }
+        static var announcementEmpty: String { localize("partyRoom.announcement.empty", comment: "公告空态文案") }
+        static var announcementClose: String { localize("partyRoom.announcement.close", comment: "公告 sheet 关闭按钮") }
+        static var moreMenuTitle: String { localize("partyRoom.more.title", comment: "更多菜单标题") }
+        static var moreMenuLeave: String { localize("partyRoom.more.leave", comment: "更多菜单：退出房间") }
     }
 
     // MARK: - Work 工作台（设计稿还原）

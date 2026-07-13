@@ -1226,3 +1226,10 @@
 "partyRoom.a11y.mic.off"                 = "Mikrofon kapalı";
 "partyRoom.a11y.game"                    = "Oyunlar";
 "partyRoom.a11y.gift"                    = "Hediye gönder";
+
+/* v9 PartyRoom biz logic */
+"partyRoom.announcement.title"           = "Duyuru";
+"partyRoom.announcement.empty"           = "Henüz duyuru yok";
+"partyRoom.announcement.close"           = "Kapat";
+"partyRoom.more.title"                   = "Daha fazla";
+"partyRoom.more.leave"                   = "Odadan çık";

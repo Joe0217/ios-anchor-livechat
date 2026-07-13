@@ -112,7 +112,7 @@ struct GiftMessageView: View {
                 onCancel: { vm.cancelGiftBinding() }
             ))
             .sheetTopInset()
-            .presentationDetents([.large])
+            .presentationDetents([.fraction(0.8)])
             .presentationDragIndicator(.visible)
         }
         .overlay(alignment: .top) { transientErrorToast }
@@ -185,7 +185,7 @@ struct GiftMessageView: View {
                 .padding(.horizontal, 18).padding(.vertical, 12)
                 .background(
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Color.black.opacity(0.75))
+                        .fill(Color.black.opacity(0.6))
                 )
             }
             .transition(.opacity)
