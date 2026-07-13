@@ -111,15 +111,8 @@ struct PKRulePopup: View {
     }
 
     private var emptyView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "doc.text.magnifyingglass")
-                .font(.system(size: 40))
-                .foregroundColor(.white.opacity(0.3))
-            Text(L10n.PK.rankSheetEmpty)
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.5))
-        }
-        .frame(maxWidth: .infinity, minHeight: 200)
+        EmptyStateView()
+            .frame(maxWidth: .infinity, minHeight: 200)
     }
 
     private var failedView: some View {

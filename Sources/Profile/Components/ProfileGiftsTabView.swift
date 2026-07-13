@@ -54,15 +54,8 @@ struct ProfileGiftsTabView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "gift")
-                .font(.system(size: 32))
-                .foregroundStyle(.white.opacity(0.3))
-            Text(L10n.profileGiftsEmpty)
-                .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.5))
-        }
-        .padding(.vertical, 50)
-        .frame(maxWidth: .infinity)
+        EmptyStateView()
+            .padding(.vertical, 50)
+            .frame(maxWidth: .infinity)
     }
 }

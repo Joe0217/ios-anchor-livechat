@@ -107,14 +107,9 @@ struct LiveListView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
+        VStack {
             Spacer(minLength: 80)
-            Image(systemName: "person.2")
-                .font(.system(size: 32))
-                .foregroundStyle(.white.opacity(0.3))
-            Text(L10n.liveListEmpty)
-                .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.5))
+            EmptyStateView()
             Spacer()
         }
     }

@@ -135,16 +135,8 @@ struct MomentTabView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 32))
-                .foregroundStyle(.white.opacity(0.3))
-                .accessibilityHidden(true)
-            Text(L10n.profileEmptyPlaceholder)
-                .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.5))
-        }
-        .padding(.vertical, 50)
+        EmptyStateView()
+            .padding(.vertical, 50)
     }
 
     private var errorState: some View {

@@ -135,17 +135,8 @@ struct PartyRoomListView: View {
     }
 
     private var emptyView: some View {
-        VStack(spacing: 14) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 42))
-                .foregroundColor(Theme.Palette.partyGreeting)
-            Text(L10n.Party.listEmpty)
-                .font(.system(size: 14))
-                .foregroundColor(Theme.Palette.partyGreeting)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyStateView(textColor: Theme.Palette.partyGreeting)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func errorView(message: String) -> some View {

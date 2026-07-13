@@ -167,14 +167,9 @@ struct FollowListView: View {
     }
 
     private var emptyView: some View {
-        VStack(spacing: 12) {
+        VStack {
             Spacer()
-            Image(systemName: "person.2.slash")
-                .font(.system(size: 36))
-                .foregroundStyle(.white.opacity(0.3))
-            Text(L10n.followListEmpty)
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.5))
+            EmptyStateView()
             Spacer()
         }
     }

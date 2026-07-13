@@ -265,15 +265,9 @@ struct UserWeeklyRankSheetView: View {
     // MARK: - Empty state
 
     private func emptyView(text: String, icon: String) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 40))
-                .foregroundColor(.white.opacity(0.25))
-            Text(text)
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.5))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // 保留 text/icon 形参签名以兼容既有 call site；统一空态里 text/icon 被 EmptyStateView 忽略
+        EmptyStateView()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Data loading

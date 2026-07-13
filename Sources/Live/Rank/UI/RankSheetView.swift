@@ -125,15 +125,8 @@ struct RankSheetView: View {
     }
 
     private var emptyView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "trophy")
-                .font(.system(size: 40))
-                .foregroundColor(.white.opacity(0.2))
-            Text(L10n.liveRoomRankEmpty)
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.5))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyStateView()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var errorView: some View {

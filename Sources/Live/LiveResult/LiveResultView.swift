@@ -305,14 +305,10 @@ struct LiveResultView: View {
     }
 
     private var emptyRow: some View {
-        HStack {
-            Spacer()
-            Text(L10n.liveResultEmpty)
-                .font(.footnote)
-                .foregroundStyle(.white.opacity(0.5))
-                .padding(.vertical, 16)
-            Spacer()
-        }
+        // 结算页 gifter 列表 inline 空行——用 .textOnly 保持单行紧凑（icon 会撑高卡片）
+        EmptyStateView(style: .textOnly, textFont: .footnote)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
     }
 
     // MARK: - Full sheet: all gifters

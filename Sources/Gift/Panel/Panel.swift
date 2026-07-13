@@ -143,9 +143,7 @@ struct CommonGiftPanel: View {
     }
 
     private var emptyView: some View {
-        Text(L10n.giftPickerEmpty)
-            .font(.system(size: 13))
-            .foregroundColor(.white.opacity(0.5))
+        EmptyStateView(style: .compact, textFont: .system(size: 13))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 

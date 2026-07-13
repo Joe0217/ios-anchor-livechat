@@ -223,24 +223,10 @@ struct MessageListView: View {
     }
 
     private func emptyState(for category: MessageSessionCategory) -> some View {
-        let text: String = {
-            switch category {
-            case .flame:    return L10n.messageEmptyFlame
-            case .stranger: return L10n.messageEmptyStranger
-            case .prime:    return L10n.messageEmptyPrime
-            }
-        }()
-        return VStack(spacing: 16) {
+        // 消息 tab 是浅色背景，用 .secondary 自适应文案色（旧行为保留 category-无关的统一占位）
+        VStack {
             Spacer()
-            Image(systemName: "tray")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 88, height: 88)
-                .foregroundStyle(.secondary.opacity(0.5))
-                .accessibilityHidden(true)
-            Text(text)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            EmptyStateView(textColor: .secondary, textFont: .subheadline)
             Spacer()
         }
         .frame(maxWidth: .infinity)

@@ -72,15 +72,8 @@ struct MediaPickerSheet: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "photo.on.rectangle")
-                .font(.system(size: 40))
-                .foregroundStyle(.white.opacity(0.4))
-            Text("No media available")
-                .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.6))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyStateView()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var grid: some View {

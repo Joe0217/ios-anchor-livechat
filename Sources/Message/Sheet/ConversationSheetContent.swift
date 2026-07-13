@@ -101,17 +101,9 @@ struct ConversationSheetContent: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
+        VStack {
             Spacer()
-            Image(systemName: "tray")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 60, height: 60)
-                .foregroundStyle(.white.opacity(0.4))
-                .accessibilityHidden(true)
-            Text(L10n.messageEmptyFlame)
-                .font(.subheadline)
-                .foregroundStyle(.white.opacity(0.6))
+            EmptyStateView(textFont: .subheadline)
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

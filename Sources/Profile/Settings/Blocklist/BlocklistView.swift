@@ -158,16 +158,9 @@ struct BlocklistView: View {
     }
 
     private var emptyView: some View {
-        VStack(spacing: Theme.Metric.blocklistErrorVStackSpacing) {
+        VStack {
             Spacer()
-            Image(systemName: "person.crop.circle.badge.xmark")
-                .font(.system(size: Theme.Metric.blocklistEmptyIconSize))
-                .foregroundStyle(Theme.Palette.blocklistEmptyIcon)
-            Text(L10n.blocklistEmptyDescription)
-                .font(Theme.Typography.blocklistEmpty)
-                .foregroundColor(Theme.Palette.blocklistTertiary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, Theme.Metric.blocklistEmptyTextHPadding)
+            EmptyStateView(textColor: Theme.Palette.blocklistTertiary, textFont: Theme.Typography.blocklistEmpty)
             Spacer()
         }
     }

@@ -109,15 +109,8 @@ struct PKRankSheetView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "person.3.sequence.fill")
-                .font(.system(size: 40))
-                .foregroundColor(.white.opacity(0.2))
-            Text(L10n.PK.rankSheetEmpty)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundColor(.white.opacity(0.5))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyStateView()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var errorState: some View {

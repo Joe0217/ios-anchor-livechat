@@ -278,9 +278,7 @@ struct PKInviteSheet: View {
             if store.recommendLoading {
                 ProgressView().tint(.white)
             } else {
-                Text(L10n.PK.inviteEmpty)
-                    .foregroundStyle(.white.opacity(0.5))
-                    .font(.subheadline)
+                EmptyStateView(textFont: .subheadline)
             }
             Spacer()
         }

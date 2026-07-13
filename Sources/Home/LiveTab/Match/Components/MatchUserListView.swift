@@ -47,9 +47,8 @@ struct MatchUserListView: View {
     }
 
     private var emptyState: some View {
-        Text(L10n.matchUserListEmpty)
-            .font(.system(size: 13))
-            .foregroundColor(Theme.Palette.matchSubtitle)
+        // marquee 里的 inline 占位——用 .textOnly 保持单行布局，icon 会破坏横向 marquee
+        EmptyStateView(style: .textOnly, textColor: Theme.Palette.matchSubtitle, textFont: .system(size: 13))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
     }

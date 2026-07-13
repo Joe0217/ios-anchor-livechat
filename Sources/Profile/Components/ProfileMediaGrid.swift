@@ -46,15 +46,10 @@ struct ProfileMediaGrid: View {
 
     private var emptyState: some View {
         // 同样占 3 列网格高度的空态，避免 Album tab 上下抖动
-        HStack {
-            Spacer()
-            Text(L10n.profileEmptyPlaceholder)
-                .font(.system(size: 12))
-                .foregroundColor(Theme.Palette.profileTabInactive)
-            Spacer()
-        }
-        .padding(.vertical, 28)
-        .padding(.horizontal, Theme.Metric.profileDescPadding)
+        EmptyStateView(style: .compact, textColor: Theme.Palette.profileTabInactive, textFont: .system(size: 12))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 28)
+            .padding(.horizontal, Theme.Metric.profileDescPadding)
     }
 
     /// 单个 cell：`Color.clear.aspectRatio(1, .fit).overlay { ... }` 严格骨架。

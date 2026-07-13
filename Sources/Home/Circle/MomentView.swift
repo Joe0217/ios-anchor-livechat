@@ -123,15 +123,9 @@ struct MomentView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 8) {
+        VStack {
             Spacer()
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 32))
-                .foregroundStyle(.white.opacity(0.3))
-                .accessibilityHidden(true)  // A2：装饰图标，VoiceOver 忽略避免与紧邻 Text 冗读
-            Text(L10n.profileEmptyPlaceholder)
-                .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.5))
+            EmptyStateView()
             Spacer()
         }
     }

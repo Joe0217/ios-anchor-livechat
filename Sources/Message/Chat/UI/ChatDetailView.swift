@@ -401,15 +401,8 @@ struct ChatDetailView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "text.bubble")
-                .font(.system(size: 40))
-                .foregroundStyle(.white.opacity(0.4))
-            Text("Say hi to start chatting")
-                .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.6))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyStateView()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func errorState(_ msg: String) -> some View {

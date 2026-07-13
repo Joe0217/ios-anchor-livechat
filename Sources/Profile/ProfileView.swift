@@ -178,9 +178,7 @@ struct ProfileView: View {
     }
 
     private var emptyPlaceholder: some View {
-        Text(L10n.profileEmptyPlaceholder)
-            .font(Theme.Typography.profileDesc)
-            .foregroundColor(Theme.Palette.profileTabInactive)
+        EmptyStateView(style: .compact, textColor: Theme.Palette.profileTabInactive, textFont: Theme.Typography.profileDesc)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 60)
     }

@@ -148,27 +148,13 @@ struct ContributionSheetView: View {
     }
 
     private var emptyStateRanking: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "star.leadinghalf.filled")
-                .font(.system(size: 40))
-                .foregroundColor(.white.opacity(0.2))
-            Text(L10n.liveRoomContributionEmptyRanking)
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.5))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyStateView()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var emptyStateRecord: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "gift")
-                .font(.system(size: 40))
-                .foregroundColor(.white.opacity(0.2))
-            Text(L10n.liveRoomContributionEmptyRecord)
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.5))
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        EmptyStateView()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func errorState(retry: @escaping () -> Void) -> some View {
