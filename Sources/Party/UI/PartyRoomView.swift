@@ -69,8 +69,6 @@ struct PartyRoomView: View {
     @State private var showGiftPanel: Bool = false
     /// H-5：送礼成功 toast（sheet 内触发；主 body overlay 显示避免被 sheet 遮挡）
     @State private var giftSentToast: String? = nil
-    /// H-5：Recharge 按钮 toast（充值功能未接入前的占位提示）
-    @State private var giftRechargeToast: String? = nil
     /// v16 键盘避让：整个 stageContent `.ignoresSafeArea(.keyboard)` 阻止 SwiftUI 默认键盘避让，
     /// 单独订阅 `UIResponder.keyboardWillShow/Hide` 让 inputBar 手动 `.padding(.bottom, keyboardHeight)` 上移。
     @State private var keyboardHeight: CGFloat = 0
@@ -282,10 +280,10 @@ struct PartyRoomView: View {
             audienceCountText: "\(store.roomInfo?.onlineCount ?? 0)",
             isFollowing: store.isFollowingAnchor,
             isSelfRoom: store.selfRole == .owner,
-            // v7.4 用户明示：右上"设置入口"仅房主本人显示，房管/观众不看到
-            // （房管的管理动作走麦位 tap → adminSeatActionsTarget dialog，不通过 tools sheet）
-            canManage: store.selfRole == .owner,
-            canStartPk: store.selfRole == .owner && (store.roomInfo?.roomTempIdInt == 1),
+            // v7.4.1 用户明示修正：房主本人 + admin 都可见"设置入口"；仅观众不显示
+            // （Bug 1a 已修 selfRole 优先 selfSeat.roomRoleType 派生 → admin 权限实时生效）
+            canManage: store.selfRole == .owner || store.selfRole == .admin,
+            canStartPk: (store.selfRole == .owner || store.selfRole == .admin) && (store.roomInfo?.roomTempIdInt == 1),
             onFollowTap: handleFollowTap,
             onPkTap: handlePkTap,
             onAnnouncementTap: handleAnnouncementTap,
@@ -977,11 +975,9 @@ struct PartyRoomView: View {
                 .presentationDetents([.medium, .large])
                 .preferredColorScheme(.dark)
         case .privateCall:
-            // F-spec §5.3 Party Call：房主 tap 私 call 入口占位（F 里程碑独立 sheet 后接入）
-            Text(L10n.Party.toolComingSoon)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Theme.Palette.partyListBackground.ignoresSafeArea())
+            // F-spec §5.1 房主私 call 设置 sheet（Toggle + Gift Grid + optimistic UI）
+            PartyPrivateCallSettingSheet(roomInfo: store.roomInfo)
+                .presentationDetents([.medium, .large])
                 .preferredColorScheme(.dark)
         }
     }
@@ -1071,6 +1067,9 @@ struct PartyRoomView: View {
 
     /// H-5：礼物面板 sheet 内容 —— CommonGiftPanel + `.partySend` 工厂配置。
     /// receivers 由 [PartyGiftPanelBridge.makeReceiversConfig] 从 seatList 派生（过滤空 yxAccid/自己）。
+    ///
+    /// **主播端无充值功能**：`onRechargeRequested` 用 factory 默认空 closure，
+    /// balance 胶囊 tap 走 Footer 内 `store.refreshBalance()`（刷新余额）。
     @ViewBuilder
     private var giftPanelSheet: some View {
         let receivers = PartyGiftPanelBridge.makeReceiversConfig(
@@ -1080,28 +1079,13 @@ struct PartyRoomView: View {
         let config = CommonGiftPanelConfig.partySend(
             roomId: store.roomInfo?.id ?? roomId,
             receivers: receivers,
-            onRechargeRequested: {
-                giftRechargeToast = L10n.giftPickerRechargeToast
-            },
             onSend: { _, _, _ in
                 giftSentToast = L10n.giftPickerSentToast
             }
         )
         CommonGiftPanel(config: config)
-            .overlay(alignment: .top) {
-                if let t = giftRechargeToast {
-                    Text(t)
-                        .toastStyle()
-                        .transition(Toast.transition)
-                        .task(id: t) {
-                            try? await Task.sleep(nanoseconds: Toast.dismissDurationNanos)
-                            giftRechargeToast = nil
-                        }
-                }
-            }
-            .animation(.easeInOut(duration: 0.2), value: giftRechargeToast == nil)
-            // 固定高度 600pt（对齐 H5 party-gift-popup.vue 半屏视觉；不允许拖到 large 避免布局跳动）
-            .presentationDetents([.height(600)])
+            // 高度 40%（对齐产品需求 · 由 [.height(600)] 改 fraction）
+            .presentationDetents([.fraction(0.4)])
             .preferredColorScheme(.dark)
     }
 
@@ -1145,10 +1129,10 @@ struct PartyRoomView: View {
     @ViewBuilder
     private var moreActionsButtons: some View {
         Button(L10n.PartyRoom.moreMenuLeave, role: .destructive) {
-            Task {
-                await store.leaveRoom()
-                dismiss()
-            }
+            // 退房逻辑（HTTP + RTC + Chat）后台跑；立即 dismiss 让用户感知不到接口延迟。
+            // leaveRoom 内同步转 roomState = .leaving，handleDisappear guard 会拒绝重入，无重复请求。
+            Task { await store.leaveRoom() }
+            dismiss()
         }
         Button(L10n.Party.cancel, role: .cancel) {}
     }
