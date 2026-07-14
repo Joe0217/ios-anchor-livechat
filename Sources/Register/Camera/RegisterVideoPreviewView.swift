@@ -6,8 +6,11 @@ struct RegisterVideoPreviewView: View {
     @EnvironmentObject var store: RegisterStore
     @EnvironmentObject var pathHolder: RegisterPathHolder
 
-    // Bug fix 2026-07-09：AVPlayer 存 @State 稳定引用，避免每次 body re-eval 重建 player 消耗资源 + 加载不同步 crash
+    // Bug fix 2026-07-09：AVPlayer 存 @State 稳定引用,避免每次 body re-eval 重建 player 消耗资源 + 加载不同步 crash
     @State private var player: AVPlayer? = nil
+    /// 2026-07-14 review finding P0 修:preview 页 upload/compress fail 时 store.submitError 被 set 但无展示,
+    /// 因用户还站在 preview 页(RequiredView 底层 onChange 拿不到).加本地 toast 与 RequiredView 一致的展示交互
+    @State private var toastMsg: String? = nil
 
     var body: some View {
         ZStack {
@@ -57,11 +60,37 @@ struct RegisterVideoPreviewView: View {
                 .padding(.horizontal, 30)
                 .padding(.bottom, 20)
             }
+
+            // 2026-07-14 review finding P0 修:preview 页本地 toast(与 RequiredView 一致的展示)
+            if let msg = toastMsg {
+                VStack {
+                    Text(msg).font(.footnote)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .background(
+                            LinearGradient(colors: [.pink, .purple], startPoint: .leading, endPoint: .trailing),
+                            in: Capsule()
+                        )
+                        .padding(.top, 100)
+                    Spacer()
+                }
+            }
         }
-        .navigationBarBackButtonHidden(true)   // Bug fix 2026-07-08：隐藏系统 back，只用自定义 chevron.left
+        .onChange(of: store.submitError) { err in
+            // 2026-07-14 review finding P0 修:preview 页 upload/compress fail 时展示 toast(否则用户只见 button spinner 停但无错误提示)
+            if let err {
+                showToast(err)
+                store.submitError = nil
+            }
+        }
+        .navigationBarBackButtonHidden(true)   // Bug fix 2026-07-08：隐藏系统 back，只用自定义 chevron.left；副作用禁左滑（2026-07-11 用户明示注册所有页禁左滑关闭）
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button { pathHolder.path.removeLast() } label: {
+                Button {
+                    // Finding #6 修 2026-07-10：guard path 非空，避免 logout/reset 后 tap back 触发 NavigationPath precondition crash
+                    guard !pathHolder.path.isEmpty else { return }
+                    pathHolder.path.removeLast()
+                } label: {
                     Image(systemName: "chevron.left").foregroundStyle(.white)
                 }
             }
@@ -73,8 +102,15 @@ struct RegisterVideoPreviewView: View {
             }
         }
         .onChange(of: store.localVideoCompressedUrl) { compressedUrl in
-            // 压缩完成后切换到压缩版视频（更小画质相近，播放更流畅）
-            if let compressedUrl { player = AVPlayer(url: compressedUrl) }
+            // Finding #11 修 2026-07-10：用 replaceCurrentItem 保 player 上下文（复用 decoder / 播放位置/暂停态），
+            // 避免整个新 AVPlayer 替换让旧 player deinit + 黑帧闪烁
+            if let compressedUrl {
+                if let existing = player {
+                    existing.replaceCurrentItem(with: AVPlayerItem(url: compressedUrl))
+                } else {
+                    player = AVPlayer(url: compressedUrl)
+                }
+            }
         }
         .onDisappear { player?.pause() }
     }
@@ -83,6 +119,10 @@ struct RegisterVideoPreviewView: View {
         store.localVideoOriginalUrl = nil
         store.localVideoCompressedUrl = nil
         store.videoCompressProgress = nil
+        // Finding #2 修 2026-07-10：递增 epoch 让旧压缩 Task 完成时 guard 判 stale 丢弃结果
+        store.videoCompressEpoch += 1
+        // Finding #6 修 2026-07-10：guard path 非空
+        guard !pathHolder.path.isEmpty else { return }
         pathHolder.path.removeLast()
     }
 
@@ -99,10 +139,19 @@ struct RegisterVideoPreviewView: View {
             let ossUrl = try await PublicVideoUploader.shared.upload(videoData: data, fileExtension: "mp4")
             store.videoUrl = ossUrl
             RegisterAnalytics.report(.videoInf)
-            // pop 两次回 Required（.videoRecord → .videoPreview 两层）
-            pathHolder.path.removeLast(2)
+            // Finding #6 修 2026-07-10：guard path 层数 ≥2 避免 logout/reset 后 upload 完成触发 precondition crash
+            let popCount = min(2, pathHolder.path.count)
+            if popCount > 0 { pathHolder.path.removeLast(popCount) }
         } catch {
             store.submitError = L10n.Register.errorUploadFailed
+        }
+    }
+
+    private func showToast(_ msg: String) {
+        toastMsg = msg
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            toastMsg = nil
         }
     }
 }

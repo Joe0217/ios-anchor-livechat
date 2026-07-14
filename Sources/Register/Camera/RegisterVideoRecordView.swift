@@ -36,22 +36,33 @@ struct RegisterVideoRecordView: View {
         }
         .navigationBarBackButtonHidden(true)
         .task { await recorder.prepare() }
+        .onAppear {
+            // Bug fix 2026-07-10：用户 Re-record 后 pop 回来，若 recorder 处于 .finished 或 session 被意外停（push preview 触发 onDisappear teardown），
+            // 需 restartForRecording 重启 session + 重置 state 到 .ready；否则画面卡死 + tap Record 按钮无反应
+            // 首次 appear 时 state 是 .idle，会走 .task prepare()；pop 回来时 state 已经是 .finished，走此分支
+            if case .finished = recorder.state {
+                Task { await recorder.restartForRecording() }
+            }
+        }
         .onChange(of: recorder.state) { newState in
             guard !isDiscarding else { return }   // Bug fix 2026-07-09：Discard 后 delegate 仍 fire，忽略避免 pop→append 冲突 crash
             if case .finished(let url) = newState {
                 store.localVideoOriginalUrl = url
                 store.videoCompressProgress = 0
                 pathHolder.path.append(RegisterRoute.videoPreview)
-                // Bug fix 2026-07-09：Task { @MainActor in ... } 显式隔离，避免 detached Task 访问
-                // store.localVideoCompressedUrl (@MainActor property) 触发 assertion crash
+                // Finding #2 修 2026-07-10：压缩 Task capture epoch，完成时判 epoch 不一致（用户 Re-record 递增）→ 忽略结果避免覆盖 store
+                let epoch = store.videoCompressEpoch
                 Task { @MainActor in
                     do {
                         let compressed = try await RegisterVideoCompressor.compress(sourceUrl: url) { p in
+                            guard epoch == store.videoCompressEpoch else { return }   // 旧 Task 的 progress 更新丢弃
                             store.videoCompressProgress = p
                         }
+                        guard epoch == store.videoCompressEpoch else { return }        // 旧 Task 完成结果丢弃
                         store.localVideoCompressedUrl = compressed
                         store.videoCompressProgress = 1.0
                     } catch {
+                        guard epoch == store.videoCompressEpoch else { return }        // 旧 Task 抛错丢弃
                         store.videoCompressProgress = nil
                         store.submitError = L10n.Register.errorCompressFailed
                     }
@@ -61,19 +72,25 @@ struct RegisterVideoRecordView: View {
                 store.submitError = err == .cameraDenied ? L10n.Register.errorCameraDenied
                     : err == .microphoneDenied ? L10n.Register.errorMicDenied
                     : L10n.Register.errorRecordInterrupted
-                pathHolder.path.removeLast()
+                // Finding #6 修：guard path 非空
+                if !pathHolder.path.isEmpty { pathHolder.path.removeLast() }
             }
         }
         .onDisappear {
             // spec v3 MAJOR-3：切后台不 tearDown（会破坏 preview 恢复）；仅真正离开页面才清
             guard scenePhase != .background else { return }
-            recorder.teardown()
+            // Bug fix 2026-07-11：改 suspend 替代 teardown。teardown → camera.tearDown() → subscribers.removeAll()
+            // 会清掉 CameraPreview 的 subscribe，Re-record pop 回来时 SwiftUI 不保证 updateUIView fire
+            // → Coordinator 无法 re-attach → 画面卡最后一帧（rule swiftui-camera-preview §3）
+            // suspend 只 stop session 保留 subscribers；真最终清理由 @StateObject deinit → camera.tearDown() 触发
+            recorder.suspend()
         }
         .alert(L10n.Register.videoDiscardConfirm, isPresented: $showBackConfirm) {
             Button("Discard", role: .destructive) {
                 isDiscarding = true       // 立即 set 防 onChange 尝试 push preview
                 recorder.stopRecording()
-                pathHolder.path.removeLast()
+                // Finding #6 修：guard path 非空
+                if !pathHolder.path.isEmpty { pathHolder.path.removeLast() }
             }
             Button(L10n.Register.actionCancel, role: .cancel) {}
         }
@@ -81,7 +98,11 @@ struct RegisterVideoRecordView: View {
 
     private var topBar: some View {
         HStack {
-            Button { handleBackTap() } label: {
+            Button {
+                // Finding #6 修 2026-07-10：guard path 非空
+                guard !pathHolder.path.isEmpty else { return }
+                handleBackTap()
+            } label: {
                 Image(systemName: "chevron.left")
                     .foregroundStyle(.white)
                     .padding(10)
@@ -141,6 +162,7 @@ struct RegisterVideoRecordView: View {
         if case .recording = recorder.state {
             showBackConfirm = true
         } else {
+            guard !pathHolder.path.isEmpty else { return }
             pathHolder.path.removeLast()
         }
     }

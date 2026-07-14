@@ -175,6 +175,54 @@ final class CameraManager: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - A-2 code-review Finding #4 修 2026-07-10：audio I/O 走 sessionQueue 串行
+
+    /// 注册场景加 audio input + output（走 sessionQueue 内部串行，与 configureIfNeeded/handleInterruption 争用）
+    ///
+    /// - parameter delegate: audio sample buffer delegate（recorder 处理写 mp4）
+    /// - parameter deliveryQueue: audio sample buffer 回调 queue
+    /// - returns: (addedInput, addedOutput) 供 caller teardown 时 removeAudioIO 传回
+    func addAudioIO(sampleBufferDelegate delegate: AVCaptureAudioDataOutputSampleBufferDelegate,
+                    deliveryQueue: DispatchQueue) async -> (input: AVCaptureDeviceInput?, output: AVCaptureAudioDataOutput?) {
+        await withCheckedContinuation { cont in
+            sessionQueue.async { [weak self] in
+                guard let self else {
+                    cont.resume(returning: (nil, nil))
+                    return
+                }
+                self.session.beginConfiguration()
+                defer { self.session.commitConfiguration() }
+
+                var addedInput: AVCaptureDeviceInput?
+                if let mic = AVCaptureDevice.default(for: .audio),
+                   let input = try? AVCaptureDeviceInput(device: mic),
+                   self.session.canAddInput(input) {
+                    self.session.addInput(input)
+                    addedInput = input
+                }
+                var addedOutput: AVCaptureAudioDataOutput?
+                let output = AVCaptureAudioDataOutput()
+                output.setSampleBufferDelegate(delegate, queue: deliveryQueue)
+                if self.session.canAddOutput(output) {
+                    self.session.addOutput(output)
+                    addedOutput = output
+                }
+                cont.resume(returning: (addedInput, addedOutput))
+            }
+        }
+    }
+
+    /// 注册场景 teardown 时移除 audio I/O（同样走 sessionQueue）
+    func removeAudioIO(input: AVCaptureDeviceInput?, output: AVCaptureAudioDataOutput?) {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.session.beginConfiguration()
+            if let input = input { self.session.removeInput(input) }
+            if let output = output { self.session.removeOutput(output) }
+            self.session.commitConfiguration()
+        }
+    }
+
     // MARK: - 配置
 
     private func configureIfNeeded() {

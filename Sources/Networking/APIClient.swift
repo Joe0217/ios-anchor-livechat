@@ -66,15 +66,24 @@ final class APIClient {
         AppLogger.net.debug("POST \(path, privacy: .public) loginToken=\(tkInfo, privacy: .private) appid=\(headers["appid"] ?? "-", privacy: .public)")
         #endif
 
-        let (data, _) = try await session.data(for: req)
+        let (data, resp) = try await session.data(for: req)
 
         #if DEBUG
         let respPreview = String(data: data, encoding: .utf8)?.prefix(300) ?? "<binary>"
-        AppLogger.net.debug("RESP \(path, privacy: .public) body=\(String(respPreview), privacy: .private)")
+        let statusCode = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        AppLogger.net.debug("RESP \(path, privacy: .public) status=\(statusCode, privacy: .public) len=\(data.count, privacy: .public) body=\(String(respPreview), privacy: .private)")
         #endif
 
         guard let env = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw APIError(code: "-1", message: "响应解析失败")
+            // 2026-07-12 诊断增强：envelope 解析失败时打 status code + body len 供追后端问题（用户 register submit 空 body 场景）
+            let sc = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            AppLogger.net.error("envelope parse failed path=\(path, privacy: .public) status=\(sc, privacy: .public) len=\(data.count, privacy: .public)")
+            NotificationCenter.default.post(name: .apiResponseParseFailed, object: nil, userInfo: ["path": path, "status": sc])
+            #if HILY_TESTS
+            throw APIError(code: "-1", message: "response parse failed")  // test target 无 L10n
+            #else
+            throw APIError(code: "-1", message: L10n.apiResponseParseFailed)
+            #endif
         }
         let code = env["code"] as? String ?? ""
         let message = env["message"] as? String ?? ""
@@ -131,14 +140,15 @@ final class APIClient {
         AppLogger.net.debug("GET \(path, privacy: .public) query=\(String(describing: query), privacy: .public)")
         #endif
 
-        let (data, _) = try await session.data(for: req)
+        let (data, resp) = try await session.data(for: req)
 
         #if DEBUG
         let respPreview = String(data: data, encoding: .utf8)?.prefix(300) ?? "<binary>"
-        AppLogger.net.debug("RESP \(path, privacy: .public) body=\(String(respPreview), privacy: .private)")
+        let statusCode = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        AppLogger.net.debug("RESP \(path, privacy: .public) status=\(statusCode, privacy: .public) len=\(data.count, privacy: .public) body=\(String(respPreview), privacy: .private)")
         #endif
 
-        return try decodeEnvelope(data, path: path, suppressCodes: suppressCodes)
+        return try decodeEnvelope(data, path: path, httpStatus: (resp as? HTTPURLResponse)?.statusCode, suppressCodes: suppressCodes)
     }
 
     /// DELETE 请求。id 走 URL path（对齐 H5 `http.delete(<path>/<id>)`），无请求体，响应处理同 POST。
@@ -157,23 +167,32 @@ final class APIClient {
         AppLogger.net.debug("DELETE \(path, privacy: .public)")
         #endif
 
-        let (data, _) = try await session.data(for: req)
+        let (data, resp) = try await session.data(for: req)
 
         #if DEBUG
         let respPreview = String(data: data, encoding: .utf8)?.prefix(300) ?? "<binary>"
-        AppLogger.net.debug("RESP \(path, privacy: .public) body=\(String(respPreview), privacy: .private)")
+        let statusCode = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        AppLogger.net.debug("RESP \(path, privacy: .public) status=\(statusCode, privacy: .public) len=\(data.count, privacy: .public) body=\(String(respPreview), privacy: .private)")
         #endif
 
-        return try decodeEnvelope(data, path: path, suppressCodes: suppressCodes)
+        return try decodeEnvelope(data, path: path, httpStatus: (resp as? HTTPURLResponse)?.statusCode, suppressCodes: suppressCodes)
     }
 
     /// Envelope 解析 + 1004/1005 分流 + result Hex 解密。POST/GET/DELETE 三个 method 共用。
     /// 抽出为 private helper 避免代码重复（原 POST 内联相同逻辑保留不动，防止意外破坏稳定路径）。
     ///
+    /// - parameter httpStatus: HTTP status code（可选，用于诊断日志区分"200 body 空"vs"5xx body 空"）
     /// - parameter suppressCodes: 对指定错误码不 post `.apiSessionInvalidated` 通知（A-2 spec v3 BLOCK-1）
-    private func decodeEnvelope(_ data: Data, path: String, suppressCodes: Set<String> = []) throws -> Data {
+    private func decodeEnvelope(_ data: Data, path: String, httpStatus: Int? = nil, suppressCodes: Set<String> = []) throws -> Data {
         guard let env = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw APIError(code: "-1", message: "响应解析失败")
+            // 2026-07-12 诊断增强：envelope 解析失败时打 status code + body len，供追后端问题
+            AppLogger.net.error("envelope parse failed path=\(path, privacy: .public) status=\(httpStatus ?? 0, privacy: .public) len=\(data.count, privacy: .public)")
+            NotificationCenter.default.post(name: .apiResponseParseFailed, object: nil, userInfo: ["path": path, "status": httpStatus ?? 0])
+            #if HILY_TESTS
+            throw APIError(code: "-1", message: "response parse failed")  // test target 无 L10n
+            #else
+            throw APIError(code: "-1", message: L10n.apiResponseParseFailed)
+            #endif
         }
         let code = env["code"] as? String ?? ""
         let message = env["message"] as? String ?? ""
@@ -228,6 +247,11 @@ final class APIClient {
 /// SessionStore 在 init 时挂 observer → 自动 logout + 设置 errorMessage 给 UI。
 extension Notification.Name {
     static let apiSessionInvalidated = Notification.Name("APIClient.sessionInvalidated")
+
+    /// envelope 解析失败 → 全局顶部错误 banner（GlobalErrorBannerStore observer 消费）。
+    /// APIClient / PartyAPIClient / SapiTokenStore 三链路的 envelope 解析失败点共用。
+    /// `userInfo["path"]` 为触发路径，便于诊断（banner 内不展示，仅供 log 关联）。
+    static let apiResponseParseFailed = Notification.Name("APIClient.responseParseFailed")
 }
 
 /// 设备标识：本地生成一次并持久化（对应 H5 deviceInfo-V2）。

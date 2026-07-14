@@ -37,11 +37,7 @@ struct RegisterBasicInfoView: View {
 
             if let msg = toastMsg {
                 VStack {
-                    Text(msg)
-                        .font(.footnote)
-                        .padding(10)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .padding(.top, 100)
+                    Text(msg).toastStyle()
                     Spacer()
                 }
             }
@@ -49,7 +45,7 @@ struct RegisterBasicInfoView: View {
         .onChange(of: store.avatarUploadError) { err in
             if let err { showToast(err) }
         }
-        .navigationBarBackButtonHidden(true)
+        .navigationBarBackButtonHidden(true)   // 副作用禁左滑关闭，业务态防误退（2026-07-11 用户明示注册所有页禁左滑）
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button {
@@ -174,7 +170,7 @@ struct RegisterBasicInfoView: View {
     private func showToast(_ msg: String) {
         toastMsg = msg
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            try? await Task.sleep(nanoseconds: Toast.dismissDurationNanos)
             toastMsg = nil
         }
     }

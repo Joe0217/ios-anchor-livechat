@@ -13,12 +13,13 @@ struct VideoSlotView: View {
                 .frame(width: 150, height: 200)
                 .overlay(content)
                 .onTapGesture {
-                    if store.videoUrl == nil && store.localVideoOriginalUrl == nil {
+                    // Finding #12 修：用 store.hasVideo 派生态，避免 view 内多处判定不一致
+                    if !store.hasVideo {
                         onTap()
                     }
                 }
 
-            if store.videoUrl != nil || store.localVideoOriginalUrl != nil {
+            if store.hasVideo {
                 Button {
                     // 清视频状态
                     store.videoUrl = nil
@@ -37,7 +38,8 @@ struct VideoSlotView: View {
 
     @ViewBuilder
     private var content: some View {
-        if store.videoUrl != nil || store.localVideoCompressedUrl != nil {
+        // Finding #12 修：用 store.hasVideo 派生态，与 outer .onTapGesture 判定一致
+        if store.hasVideo {
             // 已上传或已压缩 → 显示首帧 + 播放图标
             ZStack {
                 Color.black

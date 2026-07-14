@@ -50,14 +50,6 @@ struct RegisterRequiredView: View {
 
             VStack {
                 Spacer()
-                if let banner = store.submitError {
-                    Text(banner)
-                        .font(.footnote).foregroundStyle(.white)
-                        .padding(.horizontal, 16).padding(.vertical, 10)
-                        .background(Color.red, in: Capsule())
-                        .padding(.horizontal, 30)
-                        .padding(.bottom, 10)
-                }
                 submitButton
                     .padding(.horizontal, 30)
                     .padding(.bottom, 20)
@@ -65,20 +57,29 @@ struct RegisterRequiredView: View {
 
             if let msg = toastMsg {
                 VStack {
-                    Text(msg).font(.footnote)
-                        .padding(10)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .padding(.top, 100)
+                    Text(msg).toastStyle()
                     Spacer()
                 }
             }
         }
+        .onChange(of: store.submitError) { err in
+            // 2026-07-12 同步 H5：原红色 banner 常驻 → 改 toast 2s 自动消失（对齐 H5 showNotify 交互 duration 1500ms）
+            // 内容保持后端 message 原文（H5 拦截器 line 124-130 也是直显后端 message 字面，如 1076 → "invite.code.not.exist"）
+            if let err {
+                showToast(err)
+                store.submitError = nil   // 立即清掉，避免下一次 onChange 或 view rebuild 重复
+            }
+        }
         .navigationTitle(L10n.Register.titleRequired)
         .navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(true)   // Bug fix 2026-07-08：隐藏系统 back，用自定义 chevron.left 单一 back
+        .navigationBarBackButtonHidden(true)   // Bug fix 2026-07-08：隐藏系统 back，用自定义 chevron.left 单一 back；副作用禁左滑（2026-07-11 业务态防误退）
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button { pathHolder.path.removeLast() } label: {
+                Button {
+                    // Finding #6 修：guard path 非空
+                    guard !pathHolder.path.isEmpty else { return }
+                    pathHolder.path.removeLast()
+                } label: {
                     Image(systemName: "chevron.left").foregroundStyle(.white)
                 }
             }
@@ -144,7 +145,7 @@ struct RegisterRequiredView: View {
     private func showToast(_ msg: String) {
         toastMsg = msg
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            try? await Task.sleep(nanoseconds: Toast.dismissDurationNanos)
             toastMsg = nil
         }
     }

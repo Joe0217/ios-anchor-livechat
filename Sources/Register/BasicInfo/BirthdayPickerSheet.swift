@@ -4,7 +4,9 @@ import SwiftUI
 struct BirthdayPickerSheet: View {
     @Binding var isPresented: Bool
     @Binding var birthday: String       // "yyyy-MM-dd"
-    @State private var date: Date = Date()
+    /// 首次打开默认停在 2000-01-01（对齐 2026-07-11 用户决策：非注册主播画风典型年龄段的合理默认）；
+    /// 若已填过 birthday，onAppear 会覆盖为已选值
+    @State private var date: Date = DateComponents(calendar: .init(identifier: .gregorian), year: 2000, month: 1, day: 1).date ?? Date()
 
     private let dateRange: ClosedRange<Date> = {
         let start = DateComponents(calendar: .init(identifier: .gregorian), year: 1970, month: 1, day: 1).date!

@@ -35,10 +35,15 @@ final class RegisterStore: ObservableObject {
     @Published var isAvatarUploading: Bool = false
     /// Avatar 上传失败错误（与 submitError 分离，避免 Page 1 错误穿到 Page 2 banner）
     @Published var avatarUploadError: String? = nil
+    /// P1-2 修 2026-07-12：快速切换头像 A→B 若 B 先完成 A 后到 → iconUrl 被 A 覆盖 race。
+    /// upload Task 完成时判 epoch 不一致 → 丢弃结果（对齐 videoCompressEpoch 模式）
+    @Published var avatarUploadEpoch: Int = 0
     @Published var picUploadTasks: [PhotoUploadTask] = []
     @Published var localVideoOriginalUrl: URL? = nil
     @Published var localVideoCompressedUrl: URL? = nil
     @Published var videoCompressProgress: Double? = nil     // nil 未开始 / 0..1 / 1.0 完成
+    /// Finding #2 修 2026-07-10：Re-record 时递增，让在飞的旧压缩 Task 完成时判 epoch 不一致 → 丢弃结果不覆盖 store
+    @Published var videoCompressEpoch: Int = 0
     @Published var isVideoUploading: Bool = false
     @Published var isSubmitting: Bool = false
     @Published var submitError: String? = nil
@@ -48,10 +53,20 @@ final class RegisterStore: ObservableObject {
     /// 被拒重录场景：session.needsResubmit trigger → hydrate 后置 true → Submit 走 A3 hostReSubmitView
     @Published var isResubmit: Bool = false
 
+    /// Finding #12 修 2026-07-10：VideoSlotView 判"是否已录"派生态；
+    /// 原 view 层同 view 内 2 处判定条件不一致（× 按钮 vs 缩略图），此处统一"有任何视频状态"即视为已录
+    var hasVideo: Bool {
+        videoUrl != nil || localVideoOriginalUrl != nil || localVideoCompressedUrl != nil
+    }
+
     // MARK: - 生命周期
 
     /// 首次注册进入前：LoginView 监听 session.pendingRegister → 携 email/password
+    ///
+    /// Finding #3 修 2026-07-10：先 reset() 再赋 email/password，避免 A 用户半途放弃后 B 用户进注册看到 A 的 stale 头像/昵称/生日
+    /// （原实现只覆盖 email/password/isResubmit 3 字段，其它保留跨账号）
     func begin(email: String, password: String) {
+        reset()
         self.email = email
         self.password = password
         self.isResubmit = false
@@ -105,10 +120,12 @@ final class RegisterStore: ObservableObject {
 
         isAvatarUploading = false
         avatarUploadError = nil
+        avatarUploadEpoch = 0
         picUploadTasks = []
         localVideoOriginalUrl = nil
         localVideoCompressedUrl = nil
         videoCompressProgress = nil
+        videoCompressEpoch = 0
         isVideoUploading = false
         isSubmitting = false
         submitError = nil
@@ -160,7 +177,14 @@ final class RegisterStore: ObservableObject {
             logger.info("[RegisterStore] submit success userId=\(result.userId ?? -1, privacy: .private) isResubmit=\(self.isResubmit, privacy: .public)")
             reset()
         } catch let e as APIError {
-            submitError = e.message
+            // 2026-07-12 修：APIError code=-1 是 iOS 内部客户端错误（envelope 解析失败——服务端空 body / 非 JSON / gateway 崩溃）
+            // 而非后端业务码；e.message 是内部化文案 "Server response error"，用户看到不 actionable
+            // 换成友好 retry 文案，对齐 H5 拦截器 line 133-152 error 分支的 status-mapped 友好文案精神
+            if e.code == "-1" {
+                submitError = L10n.Register.errorServerTemporary
+            } else {
+                submitError = e.message   // 后端业务 message 原文（如 1076 → "invite.code.not.exist"，对齐 H5 line 124-130）
+            }
             logger.error("[RegisterStore] submit APIError code=\(e.code, privacy: .public) msg=\(e.message, privacy: .public)")
         } catch {
             submitError = String(format: L10n.authErrorNetworkFormat, error.localizedDescription)
