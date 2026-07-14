@@ -530,7 +530,11 @@ struct PartyCreateModePickerSheet: View {
                 .padding(.top, 40)
         } else {
             ScrollView {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                // v7.8：spacing 12→20（用户明示"间距加多"）；列 GridItem 也加 spacing:20 让水平/垂直一致
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: 20), GridItem(.flexible(), spacing: 20)],
+                    spacing: 20
+                ) {
                     ForEach(store.templates) { temp in
                         templateCard(temp)
                     }
@@ -663,7 +667,8 @@ struct PartyCreateBackgroundPickerSheet: View {
     @ObservedObject var store: PartyCreateStore
     var onConfirm: () -> Void
 
-    private let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
+    // v7.8：spacing 10→14（加大间距），列 GridItem 也 spacing:14 让水平/垂直一致
+    private let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 14), count: 3)
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -692,7 +697,7 @@ struct PartyCreateBackgroundPickerSheet: View {
                 .padding(.top, 40)
         } else {
             ScrollView {
-                LazyVGrid(columns: columns, spacing: 10) {
+                LazyVGrid(columns: columns, spacing: 14) {
                     ForEach(store.backgrounds) { bg in
                         backgroundCard(bg)
                     }
@@ -709,19 +714,19 @@ struct PartyCreateBackgroundPickerSheet: View {
             store.selectedBackground = bg
         } label: {
             ZStack(alignment: .topTrailing) {
-                Group {
-                    if let urlStr = bg.imgUrl ?? bg.bigImgUrl,
-                       !urlStr.isEmpty,
-                       let u = URL(string: urlStr) {
-                        CachedAsyncImage(url: u, contentMode: .fill, persistent: true, cdn: (.avatarLarge, .fill)) {
-                            Rectangle().fill(Theme.Palette.partyCreateTempFill)
-                        }
-                    } else {
-                        Rectangle().fill(Theme.Palette.partyCreateTempFill)
+                // v7.8：底色 fill 让 letterbox 空白有 card 边界（对齐 templateCard），
+                // 图片 .fit 完整显示（不 crop），不同原比例图不再 crop 位置错乱
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Theme.Palette.partyCreateTempFill)
+
+                if let urlStr = bg.imgUrl ?? bg.bigImgUrl,
+                   !urlStr.isEmpty,
+                   let u = URL(string: urlStr) {
+                    CachedAsyncImage(url: u, contentMode: .fit, persistent: true, cdn: (.avatarLarge, .fit)) {
+                        Color.clear
                     }
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                 if selected {
                     Image("partyTemplateSelected")
@@ -730,17 +735,23 @@ struct PartyCreateBackgroundPickerSheet: View {
                         .padding(6)
                 }
                 if !bg.isPermanent, let d = bg.duration, d > 0 {
-                    Text("\(d)s")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Capsule().fill(Color.black.opacity(0.55)))
-                        .padding(6)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    // duration chip：VStack + Spacer 定位左下角，不用 frame(maxHeight: .infinity)
+                    // （避免撑满 ZStack 干扰 image sizing）
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Text("\(d)s")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(Capsule().fill(Color.black.opacity(0.55)))
+                            Spacer()
+                        }
+                    }
+                    .padding(6)
                 }
             }
-            // v7.7：固定 grid item 高度 160pt（3:4 竖向感觉）—— aspectRatio(.fit) 会让 LazyVGrid
-            // flex column 里高度崩塌到 0 造成堆叠；改 flex 宽 + fixed height 保证每行 3 格一致
+            // 固定 grid item：flex 宽 + fixed height 160pt（3 列 flex 宽约 100pt，160 高 = 5:8 竖）
             .frame(maxWidth: .infinity)
             .frame(height: 160)
             .overlay(
