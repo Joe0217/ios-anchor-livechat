@@ -326,14 +326,14 @@ struct PartyCreateRoomView: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Theme.Palette.partyCreateChevron)
                     }
-                    // 已选模板 preview（v6.1：去 hardcode 高度，用 aspectRatio 保持切图原比例，避免裁剪）
+                    // 已选模板 preview（v7.3：改 height=100pt 固定，宽度由 image 内在 aspect ratio 自适应）
                     if let temp = store.selectedTemplate {
                         Divider().background(Theme.Palette.partyCardBorder)
                         HStack {
                             Spacer()
                             templateThumbnail(temp)
-                                .frame(width: 240)
-                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(height: 100)
+                                .fixedSize(horizontal: true, vertical: false)
                             Spacer()
                         }
                         .padding(.vertical, 8)
@@ -412,11 +412,15 @@ struct PartyCreateRoomView: View {
     }
 
     /// 模板缩略图：优先服务端 imgUrl（coverImage）；否则按 videoSeatCount / seatCount 选切图
+    /// v7.3：调用点用 `.frame(height: 100).fixedSize(horizontal: true, vertical: false)` 组合让
+    /// 宽度按 image aspect ratio 自适应；CachedAsyncImage 分支必须 `contentMode: .fit` 否则
+    /// 加载中 placeholder 无 intrinsic width，`fixedSize(horizontal: true)` 会 collapse 到 0
     @ViewBuilder
     private func templateThumbnail(_ temp: PartyRoomTemplate) -> some View {
         if let url = temp.coverImage, !url.isEmpty, let u = URL(string: url) {
-            CachedAsyncImage(url: u, persistent: true, cdn: (.avatarSmall, .fill)) {
-                Color.clear
+            CachedAsyncImage(url: u, contentMode: .fit, persistent: true, cdn: (.avatarSmall, .fit)) {
+                // Placeholder 用固定宽度矩形（100:100 方形）避免 loading 期宽度坍缩
+                Rectangle().fill(Theme.Palette.partyCreateTempFill).frame(width: 100)
             }
         } else if let asset = Self.assetNameForTemplate(temp) {
             Image(asset).resizable().scaledToFit()
