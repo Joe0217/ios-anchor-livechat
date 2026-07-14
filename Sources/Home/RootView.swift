@@ -41,6 +41,21 @@ struct RootView: View {
             GlobalErrorBanner()
                 .zIndex(300)
         }
+        // v16：全局 toast overlay（AppToastCenter.shared） —— 关注/取关等 service 层触发的
+        // 跨场景成功反馈统一走此挂点；对齐 H5 全局 `showNotify(...)` 模式
+        .appToastOverlay()
+        // P1-6（2026-07-14）主播审核结果弹窗（sysMsg attachType=58）。
+        // 挂 RootView 而非 MainTabView：logout 后 MainTabView dismantle 会闪一下，
+        // RootView 一直存活（登录前后都在），alert 生命周期与 SessionStore 一致。
+        .alert(item: $session.auditAlert) { ctx in
+            Alert(
+                title: Text(L10n.commonKindReminder),
+                message: Text(ctx.content),
+                dismissButton: .default(Text(L10n.commonConfirm)) {
+                    session.confirmAuditAlert(ctx)
+                }
+            )
+        }
         .animation(.easeInOut(duration: 0.2), value: callStore.state)
         .animation(.easeInOut(duration: 0.15), value: autoOffline.showDialog)
         // 全局交互兜底：任何 tap / drag 都视为活动信号
@@ -65,8 +80,7 @@ struct RootView: View {
         .task(id: session.isLoggedIn) {
             await syncSessionDependent()
         }
-        // App 级语言环境注入（Settings → Language 切换后立即生效）；
-        // DEBUG 版额外含 Work Hi 按钮触发的 confirmationDialog（`AppLocaleStore.shared.showSheet = true`）
+        // App 级语言环境注入（Settings → Language 切换后立即生效）
         .appLocaleEnvironment()
     }
 

@@ -9,7 +9,11 @@ enum FollowListService {
 
     /// 关注 / 取关 / 拉黑：`/api/user/followUser`（蓝本 02-11 §2.2 / 08 §3.2）。
     /// `followType`：1=关注 / 2=取关 / 3=拉黑（与 H5/安卓对齐）。
-    /// 接口本身仅校验后端状态，不返回业务数据；非 0000 由 APIClient 抛 APIError。
+    /// 接口本身仅校验后端状态,不返回业务数据；非 0000 由 APIClient 抛 APIError。
+    ///
+    /// **v16 全局 toast**（对齐 H5 `stores/modules/user.js followOrNo` L355-359）：
+    /// followType=1 → 弹"关注成功"；followType=2 → 弹"取消关注成功"；
+    /// followType=3 拉黑 → 不弹 follow toast（拉黑另有独立提示）。
     static func followUser(followUserId: Int, followType: Int) async throws {
         let body: [String: Any] = [
             "followUserId": followUserId,
@@ -17,6 +21,14 @@ enum FollowListService {
         ]
         _ = try await APIClient.shared.post("/api/user/followUser", body: body)
         logger.info("followUser uid=\(followUserId) type=\(followType) ok")
+        // 全局 toast —— 与 H5 `followOrNo` 语义一致：1 关注 / 2 取关成功后统一弹
+        if followType == 1 || followType == 2 {
+            await MainActor.run {
+                AppToastCenter.shared.show(
+                    followType == 1 ? L10n.commonFollowSuccess : L10n.commonUnfollowSuccess
+                )
+            }
+        }
     }
 
     /// 单页拉取。返回 (users, hasMore)；hasMore 判定：返回数组长度 < pageSize。

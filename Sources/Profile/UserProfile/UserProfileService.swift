@@ -26,6 +26,9 @@ final class UserProfileService: UserProfileServiceProtocol {
 
     /// 关注 / 取关（spec §2.1，trial #3 step 3 真机反悔 #2 修订）。
     /// **字段名 `followUserId` + `followType`**（H5 type.ts:58 FollowUserOpt 真契约）。
+    ///
+    /// **v16 全局 toast**（对齐 H5 `stores/modules/user.js followOrNo` L355-359）：
+    /// followType=1 → 弹"关注成功"；followType=2 → 弹"取消关注成功"。
     func follow(request: FollowUserRequest) async throws {
         let body: [String: Any] = [
             "followUserId": request.followUserId,
@@ -33,6 +36,14 @@ final class UserProfileService: UserProfileServiceProtocol {
         ]
         _ = try await APIClient.shared.post("/api/user/followUser", body: body)
         logger.info("follow uid=\(request.followUserId, privacy: .private) followType=\(request.followType) ok")
+        // 全局 toast —— 与 H5 `followOrNo` 语义一致：1/2 弹，其他（3=拉黑）不弹
+        if request.followType == 1 || request.followType == 2 {
+            await MainActor.run {
+                AppToastCenter.shared.show(
+                    request.followType == 1 ? L10n.commonFollowSuccess : L10n.commonUnfollowSuccess
+                )
+            }
+        }
     }
 
     /// 拉黑（spec §1.5 / §2.1）。**含 isLive 字段，与 BlocklistService.removeBlock 不同 body**。

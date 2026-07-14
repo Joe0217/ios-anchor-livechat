@@ -65,6 +65,12 @@ struct PartyRoomView: View {
     @State private var adminSeatActionsTarget: PartyRoomSeat? = nil
     /// v15：房主/房管点他人占用位 → 弹管理动作 dialog（Mute/Unmute + View Profile；对齐 H5 feachProhibitSeat 语义）
     @State private var otherSeatAdminActionsTarget: PartyRoomSeat? = nil
+    /// H-5：礼物面板 sheet 显隐（点底部礼物 icon 触发；对齐 H5 party-gift-popup.vue showPartyGiftPopup）
+    @State private var showGiftPanel: Bool = false
+    /// H-5：送礼成功 toast（sheet 内触发；主 body overlay 显示避免被 sheet 遮挡）
+    @State private var giftSentToast: String? = nil
+    /// H-5：Recharge 按钮 toast（充值功能未接入前的占位提示）
+    @State private var giftRechargeToast: String? = nil
 
     // MARK: - 顶层 body
 
@@ -90,6 +96,21 @@ struct PartyRoomView: View {
             .sheet(item: $activeRoomTool) { kind in
                 roomToolContent(kind: kind)
             }
+            // H-5：底部礼物 icon → CommonGiftPanel sheet（对齐 H5 party-gift-popup.vue）
+            .sheet(isPresented: $showGiftPanel) { giftPanelSheet }
+            // H-5：送礼成功 toast（sheet 内触发，主 body overlay 避免被 sheet 遮挡）
+            .overlay(alignment: .top) {
+                if let t = giftSentToast {
+                    Text(t)
+                        .toastStyle()
+                        .transition(Toast.transition)
+                        .task(id: t) {
+                            try? await Task.sleep(nanoseconds: Toast.dismissDurationNanos)
+                            giftSentToast = nil
+                        }
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: giftSentToast == nil)
             .overlay(alignment: .top) {
                 if let t = stubToolToast {
                     Text(t)
@@ -669,37 +690,12 @@ struct PartyRoomView: View {
         inputText = ""
     }
 
-    /// 送礼骨架：固定 demo giftId=1 num=1 → 当前在麦第一个非自己用户
-    private func sendDemoGift() {
-        guard let info = store.roomInfo else { return }
-        let target = store.seatList.first { seat in
-            guard let accid = seat.yxAccid, !accid.isEmpty else { return false }
-            guard let uid = seat.userId, !uid.isEmpty else { return false }
-            return uid != store.myUserIdString
-        }
-        guard let targetAccid = target?.yxAccid else {
-            AppLogger.party.notice("[PartyRoom] no gift target (need yxAccid); skip")
-            return
-        }
-        Task {
-            do {
-                _ = try await PartyAPI.sendGift(
-                    roomId: info.id ?? "",
-                    giftId: 1,
-                    num: 1,
-                    yxAccidList: [targetAccid]
-                )
-            } catch {
-                AppLogger.party.error("[PartyRoom] sendGift failed: \(String(describing: error), privacy: .private)")
-            }
-        }
-    }
-
     // MARK: - 顶部工具栏 handler
 
     /// v16：关注/取关房主（对齐 H5 header-wrap.vue userStore.followOrNo）
-    /// 走 `store.toggleFollowAnchor()` 统一维护 `isFollowingAnchor`；成功后弹通用 toast
-    /// （对齐 H5 `jsToast.userFollow` / `userCancelFollow`）。
+    /// 走 `store.toggleFollowAnchor()` 统一维护 `isFollowingAnchor`；
+    /// **成功 toast 由 [FollowListService.followUser] service 层触发 [AppToastCenter] 全局弹出**，
+    /// 本 view 不再本地弹（避免与全局 toast 重复展示）。
     /// 进房关注态由 room/enter 接口 `isFollowOwner` 字段初始化，退出重进保持一致。
     private func handleFollowTap() {
         guard store.selfRole != .owner else {
@@ -707,8 +703,7 @@ struct PartyRoomView: View {
             return
         }
         Task { @MainActor in
-            guard let result = await store.toggleFollowAnchor(), result.success else { return }
-            stubToolToast = result.willFollow ? L10n.commonFollowSuccess : L10n.commonUnfollowSuccess
+            _ = await store.toggleFollowAnchor()
         }
     }
 
@@ -1017,12 +1012,45 @@ struct PartyRoomView: View {
         // TODO(J 里程碑)：若产品要求主播端也有游戏入口，走 H5 iframe pattern
         AppLogger.party.notice("[PartyRoom] game tapped (should be hidden on anchor-end)")
     }
+    /// H-5：底部礼物 icon tap → 拉起礼物面板（对齐 H5 party-gift-popup.vue showPartyGiftPopup=true）。
+    /// 面板内首次 `.onAppear` 触发 `PartyGiftDataSource.load` → sapi `getPartyRoomGift` 拉列表。
     private func handleGiftTap() {
-        // TODO(H 里程碑，礼物+虚拟道具+IM 完善)：接入 CommonGiftPanelConfig.partySend(roomId:receivers:...) 已就绪
-        // receivers 装配 = sortedSeatsCache.compactMap { yxAccid+userId 均非空 && 非自己 }
-        // balance/backpack/onSend 路由参照 Live 侧 GiftPanel usage
-        // MVP 保留 demo 骨架验证 IM/RTC 通路
-        sendDemoGift()
+        showGiftPanel = true
+    }
+
+    /// H-5：礼物面板 sheet 内容 —— CommonGiftPanel + `.partySend` 工厂配置。
+    /// receivers 由 [PartyGiftPanelBridge.makeReceiversConfig] 从 seatList 派生（过滤空 yxAccid/自己）。
+    @ViewBuilder
+    private var giftPanelSheet: some View {
+        let receivers = PartyGiftPanelBridge.makeReceiversConfig(
+            seatList: store.seatList,
+            selfUserId: store.myUserIdString
+        )
+        let config = CommonGiftPanelConfig.partySend(
+            roomId: store.roomInfo?.id ?? roomId,
+            receivers: receivers,
+            onRechargeRequested: {
+                giftRechargeToast = L10n.giftPickerRechargeToast
+            },
+            onSend: { _, _, _ in
+                giftSentToast = L10n.giftPickerSentToast
+            }
+        )
+        CommonGiftPanel(config: config)
+            .overlay(alignment: .top) {
+                if let t = giftRechargeToast {
+                    Text(t)
+                        .toastStyle()
+                        .transition(Toast.transition)
+                        .task(id: t) {
+                            try? await Task.sleep(nanoseconds: Toast.dismissDurationNanos)
+                            giftRechargeToast = nil
+                        }
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: giftRechargeToast == nil)
+            .presentationDetents([.medium, .large])
+            .preferredColorScheme(.dark)
     }
 
     // MARK: - v9 sheets & action dialogs
