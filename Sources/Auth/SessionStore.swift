@@ -17,6 +17,24 @@ final class SessionStore: ObservableObject {
     /// sysMsg 58 主播审核状态变更最近一次 payload（applyStatus + content）
     @Published private(set) var lastAuditStatus: (applyStatus: Int, content: String)?
 
+    // MARK: - P1-6（2026-07-14）主播审核弹窗
+
+    /// 审核结果弹窗上下文（Identifiable → RootView 挂 .alert(item:)）。
+    /// **多条 58 时**：SwiftUI `.alert(item:)` 契约新 item 覆盖旧 item —— iOS 主动简化"只保留最后一条"；
+    /// H5 是 Vant showDialog 队列化按序展示。产品认可"最后一条已足够传达最新审核态"，不做队列化对齐。
+    struct AuditAlertContext: Identifiable, Equatable {
+        let id = UUID()
+        let applyStatus: Int   // 0=passed, other=rejected
+        let content: String    // passed 用固定 L10n，rejected 用后端 content 或 fallback
+    }
+
+    /// UI 层订阅；nil = 无弹窗，非 nil = 展示 alert
+    @Published var auditAlert: AuditAlertContext?
+    /// **仅 passed 分支**置 true → handleSessionInvalidated 顶部闸门吞 1004/1005
+    /// （对齐 H5 `reviewPassedDialogShowing`：防审核通过后旧 token 立即失效弹窗盖掉审核弹窗）
+    /// 拒绝分支 H5 无闸门（`reviewPassedDialogShowing` 只在 applyStatus=0 置 true），iOS 同步。
+    @Published private(set) var auditDialogShowing: Bool = false
+
     // MARK: - A-2 新主播注册流程（spec §3.2 v3）
 
     /// login catch 1005 时携入；LoginView.onChange 消费 → push Register + reset
@@ -80,11 +98,22 @@ final class SessionStore: ObservableObject {
         let code = (userInfo?["code"] as? String) ?? ""
         let backend = (userInfo?["message"] as? String) ?? ""
         AppLogger.auth.error("session invalidated code=\(code, privacy: .public) backend=\(backend, privacy: .private)")
-        logout()
+
+        // 用户可感知反馈（GlobalErrorBanner）**独立于闸门**触发 —— 对齐 H5 `request/index.ts:96-108`：
+        // showNotify 弹 toast 与 logOut() 分开调用，闸门 `reviewPassedDialogShowing` 只跳过 logOut，
+        // 用户仍能看到 "session expired" 提示。
         let codeSuffix = code.isEmpty ? "" : " [\(code)]"
         errorMessage = backend.isEmpty
             ? "\(L10n.authErrorSessionInvalidated)\(codeSuffix)"
             : "\(L10n.authErrorSessionInvalidated)\(codeSuffix) (\(backend))"
+
+        // P1-6 闸门：审核通过弹窗展示期间跳过 logout（对齐 H5 `logOut()` helper 内 return）
+        // 防审核通过后旧 token 立即失效弹窗盖掉审核弹窗
+        guard !auditDialogShowing else {
+            AppLogger.auth.notice("[Session] logout suppressed by audit dialog; banner still shown; code=\(code, privacy: .public)")
+            return
+        }
+        logout()
     }
 
     func login(email: String, password: String) async {
@@ -175,11 +204,18 @@ final class SessionStore: ObservableObject {
         // Batch 6.1.3：全局 P2P 消息监听（充值通知 attachType=35 → 合成塞进 notification 会话）
         // 挂 session-scoped rule 双入口之 login activate；SDK 已完成 login 后 add delegate 才能收消息
         GlobalP2PMessageObserver.shared.activate()
+        // sapi（vvi 派对房/背包等链路）token 主动预取，对齐 H5 login/index.vue:86 `await getBagShopToken()`
+        // forceRefresh=true 保证换账号后不复用上个账号残留（虽 logout 已 clear，双保险）
+        Task { try? await SapiTokenStore.shared.ensureValid(forceRefresh: true) }
         _ = token   // 消除 unused warning（token 是 guard 的语义约束，不需要真使用）
         return true
     }
 
     func logout() {
+        // P1-6：防未来新调用路径经 logout 时残留 audit alert / 闸门
+        // （当前链 confirmAuditAlert 已先手清 auditDialogShowing；这里是防御式绑生命周期）
+        auditAlert = nil
+        auditDialogShowing = false
         user = nil
         isLoggedIn = false
         errorMessage = ""
@@ -209,6 +245,9 @@ final class SessionStore: ObservableObject {
         // H-3: AppConfigStore 横断基建（session-scoped rule 双入口之 logout clear）
         // 未清则 A 账号的 achorHideButton / 微软 key 残留到 B 首屏，通话按钮显隐 / 翻译走错 key
         AppConfigStore.shared.clear()
+        // H-5 v2: 礼物列表 in-memory 缓存（跨场景 party/live/call）— session-scoped rule 应用
+        // 未清则 A 账号的礼物架数据/余额残留到 B 首屏面板（余额值尤其敏感 · session 隔离要求）
+        GiftCatalogCache.shared.clear()
         // Batch 6.1.3: 全局 P2P 消息 delegate 解注册（session-scoped rule 双入口之 logout deactivate）
         // 防跨账号后 B 账号仍触发 A 账号的合成路径
         GlobalP2PMessageObserver.shared.deactivate()
@@ -231,12 +270,43 @@ final class SessionStore: ObservableObject {
         AppLogger.auth.info("[Session] follow incr total=\(self.followIncrementCount, privacy: .public)")
     }
 
-    /// sysMsg 58：主播审核状态变更（applyStatus 0=通过 / 1=拒绝）。
-    /// - 0 通过：H5 行为是 logOut 让主播重登；J 期产品确认后再决定是否自动 logout
-    /// - 1 拒绝：UI 弹 content 提示；本方法仅落 @Published 字段
+    /// sysMsg 58：主播审核状态变更（applyStatus 0=通过 / 非 0=拒绝 / -1=payload 缺失）。
+    /// - **0 通过**：弹固定英文 alert → 用户 tap Confirm → logout 回登录页；期间闸门吞 1004/1005
+    /// - **非 0 拒绝**：弹 payload.content（空则 fallback）→ 用户 tap Confirm → 仅 dismiss 无 side effect
+    ///   （H5 是 `isHost=true + forcePageReload`；iOS 无 reload 概念，主播态由 isLoggedIn 已维持）
+    /// - **-1 缺失**：warning log return，不弹
+    ///
+    /// P1-6（2026-07-14）从原"仅落 @Published 字段"扩展为 UI 联动 + logout 联动。
     func handleAuditStatus(applyStatus: Int, content: String) {
         lastAuditStatus = (applyStatus, content)
         AppLogger.auth.notice("[Session] audit status=\(applyStatus, privacy: .public) content=\(content, privacy: .public)")
+
+        if applyStatus == -1 {
+            AppLogger.auth.notice("[Session] audit payload missing applyStatus; skip alert")
+            return
+        }
+
+        if applyStatus == 0 {
+            auditAlert = AuditAlertContext(applyStatus: 0, content: L10n.auditPassedMessage)
+            auditDialogShowing = true
+        } else {
+            let msg = content.isEmpty ? L10n.auditRejectedFallback : content
+            auditAlert = AuditAlertContext(applyStatus: applyStatus, content: msg)
+        }
+    }
+
+    /// RootView `.alert(item:)` dismissButton 回调；根据 applyStatus 分流 logout / refresh。
+    /// SwiftUI 会在 tap 后自动置 auditAlert=nil（`.alert(item:)` 契约），本方法不再手动置 nil 避免双写。
+    func confirmAuditAlert(_ ctx: AuditAlertContext) {
+        if ctx.applyStatus == 0 {
+            auditDialogShowing = false
+            logout()
+        } else {
+            // 拒绝分支：H5 走 forcePageReload() 强制重新拉 mineInfo；iOS 无 reload 概念，
+            // 通过 AnchorInfoStore.refresh() 让本地 anchor 态与后端 rejected 后的 userType 对齐，
+            // Publisher 驱动 UI 自动刷新（tab 顺序 / 可播按钮 enable 状态 等）。
+            Task { await AnchorInfoStore.shared.refresh() }
+        }
     }
 
     // MARK: - 持久化

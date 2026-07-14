@@ -62,6 +62,10 @@ final class PartyAPIClient {
             }
             let jsonData = try JSONSerialization.data(withJSONObject: body)
             let jsonStr = String(decoding: jsonData, as: UTF8.self)
+            #if DEBUG
+            // 加密前明文 payload —— 排查"请求参数与 H5 是否一致"用
+            AppLogger.party.debug("REQ-PAYLOAD \(path, privacy: .public) body=\(jsonStr, privacy: .private)")
+            #endif
             guard let encrypted = CryptoUtil.aesEncryptToBase64(jsonStr, key: AppConfig.sapiAesKey, iv: AppConfig.sapiAesIV) else {
                 throw PartyAPIError.encryptFailed
             }
@@ -114,6 +118,7 @@ final class PartyAPIClient {
 
         // envelope: { code: '200'(字符串), message, result(hex) }
         guard let env = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            NotificationCenter.default.post(name: .apiResponseParseFailed, object: nil, userInfo: ["path": path])
             throw PartyAPIError.envelopeParseFailed
         }
         let code = env["code"] as? String ?? ""
@@ -153,7 +158,7 @@ enum PartyAPIError: Error, LocalizedError {
         case .encryptFailed: return "sapi: 请求加密失败"
         case .networkError: return "sapi: 网络错误"
         case .httpStatus(let code): return "sapi: HTTP \(code)"
-        case .envelopeParseFailed: return "sapi: 响应解析失败"
+        case .envelopeParseFailed: return L10n.apiResponseParseFailed
         case .business(let code, let message): return message.isEmpty ? "sapi: 业务失败 [\(code)]" : "sapi: [\(code)] \(message)"
         case .tokenExchangeFailed: return "sapi: token 续接失败"
         }

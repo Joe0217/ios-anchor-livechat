@@ -79,7 +79,7 @@ struct CommonGiftPanel: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loadFailed(let msg):
             errorView(msg)
-        case .loaded, .sending, .sent, .sendFailed:
+        case .loaded, .sending, .sent, .sendFailed, .insufficientBalance:
             loadedGridArea
         }
     }

@@ -64,6 +64,10 @@
 "work.onlineTime"            = "Çevrimiçi Süre (g)";
 "work.avgCallDuration"       = "Ort. Arama Süresi (g)";
 "work.positiveRating"        = "Olumlu Değerlendirme";
+"work.callsToday"            = "Bugünkü Aramalar";
+"work.coins"                 = "Coin";
+"work.diamonds"              = "Elmas";
+"work.gems"                  = "Cevher";
 
 "work.todaysIncome"          = "Bugünkü Gelir";
 "work.withdrawal"            = "Çekim";
@@ -92,6 +96,8 @@
 "work.tool.workingGuide"     = "Çalışma Rehberi";
 "work.tool.backpack"         = "Çanta";
 "work.tool.liveData"         = "Yayın Verileri";
+"work.tool.partyData"        = "Parti Verileri";
+"work.tool.myGuardian"       = "Koruyucum";
 
 "work.invite.earnMoney"      = "Para Kazan";
 
@@ -297,6 +303,7 @@
 "giftPicker.recharge"                = "Yükle";
 "giftPicker.recharge.toast"          = "Yükleme yakında geliyor";
 "giftPicker.sent.toast"              = "Hediye gönderildi";
+"giftPicker.recipients.empty"        = "Mikrofonda kimse yok";
 
 // MARK: - L-spec-愿望单设置页 v1
 "wishSetting.navTitle"               = "Dilek Ayarları";
@@ -439,6 +446,29 @@
 "announcement.popup.saveSuccess"          = "Başarıyla kaydedildi";
 "announcement.popup.sensitiveWord"        = "Hassas kelimeler algılandı: %@";
 "announcement.popup.saving"               = "Kaydediliyor...";
+
+// MARK: - UserCard kullanıcı kartı
+"userCard.title"                          = "Profil";
+"userCard.follow"                         = "Takip Et";
+"userCard.unfollow"                       = "Takip Ediliyor";
+"userCard.block"                          = "Engelle";
+"userCard.unblock"                        = "Engellendi";
+"userCard.followers"                      = "Takipçi";
+"userCard.following"                      = "Takip Edilen";
+"userCard.giftWall"                       = "Hediye gönder";
+"userCard.errorRetry"                     = "Profil yüklenemedi";
+"userCard.message"                        = "Mesaj";
+"userCard.emptyGifts"                     = "Henüz hediye yok!";
+"userCard.uidPrefix"                      = "UID: ";
+"userCard.unblockConfirm.title"           = "Engel listesinden kaldır";
+"userCard.unblockConfirm.message"         = "Bu kullanıcıyı engel listenizden kaldırmak istediğinizden emin misiniz?";
+"userCard.unblockConfirm.confirm"         = "Kaldır";
+"userCard.unblockConfirm.cancel"          = "İptal";
+"userCard.blockSuccess"                   = "Engellendi";
+"userCard.blockFail"                      = "Engellenemedi, lütfen tekrar deneyin";
+"userCard.unblockSuccess"                 = "Engel listesinden kaldırıldı";
+"userCard.unblockFail"                    = "Kaldırılamadı, lütfen tekrar deneyin";
+
 "liveRoom.setting.sheet.title"            = "Ayarlar";
 "liveRoom.endConfirm.title"               = "Hatırlatma";
 "liveRoom.endConfirm.message"             = "Yayını sonlandırmak istediğinizden emin misiniz?";
@@ -941,7 +971,16 @@
 "party.tool.roomMode"                    = "Oda Modu";
 "party.tool.blocklist"                   = "Engellenenler";
 "party.tool.mcSeat"                      = "MC Koltuğu";
+"party.tool.privateCall"                 = "Parti Araması";
 "party.tool.comingSoon"                  = "Yakında";
+// F-spec §5.1 Parti Araması Ayarları
+"party.privateCall.settingTitle"         = "Parti Araması";
+"party.privateCall.enableToggleTitle"    = "Parti Aramasını Etkinleştir";
+"party.privateCall.giftSectionTitle"     = "Arama Hediyesi";
+"party.privateCall.giftEmpty"            = "Kullanılabilir hediye yok";
+"party.privateCall.loadError"            = "Yüklenemedi, yeniden denemek için dokunun";
+"party.privateCall.saveSuccess"          = "Kaydedildi";
+"party.privateCall.saveFailed"           = "Kayıt başarısız, lütfen tekrar deneyin";
 // E spec 2026-07-14 Parti odası engellenenler listesi
 "party.blocklist.navTitle"               = "Engellenenler";
 "party.blocklist.empty"                  = "Engellenmiş kullanıcı yok";
@@ -973,6 +1012,14 @@
 "party.mcSeat.setSuccess"                = "MC koltuğu ayarlandı";
 "party.mcSeat.closeSuccess"              = "MC koltuğu kapatıldı";
 "party.mcSeat.operationFailed"           = "İşlem başarısız oldu, lütfen tekrar deneyin";
+
+// v3（2026-07-15）Step 2 通知公屏系统消息
+"party.videoSeat.inviteAcceptedFormat"   = "%@ video koltuğuna katıldı";
+"party.authUpdate.setAdmin"              = "Oda yöneticisi olarak atandınız";
+"party.authUpdate.removeAdmin"           = "Artık oda yöneticisi değilsiniz";
+"party.roomAnnouncement.format"          = "Oda duyurusu: %@";
+"party.luckyNumber.drawFormat"           = "%1$@ %2$d şanslı sayısını çekti";
+"party.luckyNumber.winFormat"            = "%1$@ %2$d şanslı sayısını kazandı";
 "party.create.section.template"          = "Şablon Seç";
 "party.create.template.loading"          = "Şablonlar yükleniyor…";
 "party.create.template.empty"            = "dev'de kullanılabilir şablon yok";
@@ -1114,6 +1161,32 @@
 "liveData.days"                          = "gün";
 "liveData.expand"                        = "Genişlet";
 "liveData.collapse"                      = "Daralt";
+
+// LiveData 规则 sheet（对齐 H5 liveRule/index.vue 默认分支）
+"liveData.rule.navTitle"                 = "Yayın Kuralları";
+"liveData.rule.section1"                 = "Temel Bilgiler:";
+"liveData.rule.section2"                 = "Veri Güncelleme ve İstatistik Döngüsü:";
+"liveData.rule.section3"                 = "Gelir Hesaplama Kuralları:";
+"liveData.rule.section4"                 = "İstisna İşleme:";
+"liveData.rule.calcMethod"               = "2. Hesaplama Yöntemi:";
+"liveData.rule.title1"                   = "1. Uygulama Kapsamı:";
+"liveData.rule.title2"                   = "1. Güncelleme Sıklığı:";
+"liveData.rule.title3"                   = "2. İstatistik Döngüsü:";
+"liveData.rule.title4"                   = "1. Dahil Edilen Gelir:";
+"liveData.rule.title7"                   = "1. Gelir Gecikmesi:";
+"liveData.rule.title8"                   = "2. Veri Anlaşmazlığı:";
+"liveData.rule.content1"                 = "Normal video ve sesli, platform yayın yönergelerine ve geçerli süre gereksinimlerine uyan resmi canlı yayın oturumlarına uygulanır.";
+"liveData.rule.content2"                 = "Veriler her saat güncellenir. Bir günden uzun süren yayınlar için süre ve hediye geliri, oturum başlangıç tarihi altında hesaplanır.";
+"liveData.rule.content3"                 = "Haftalık ve aylık istatistikleri destekler. Kullanıcılar son iki hafta ve son üç ayın verilerini görüntüleyebilir. Veriler ilgili döngüye göre otomatik olarak güncellenir.";
+"liveData.rule.content4"                 = "Canlı yayın sırasında hediye geliri, özel aramalar sırasında hediye geliri ve özel aramalarda elmas harcamasından elde edilen gelir.";
+"liveData.rule.content5"                 = "a. Canlı gelir = Canlı yayın sırasında hediye geliri (özel arama hediyeleri dahil). b. Özel arama geliri = Özel aramalar sırasında tüketilen elmaslar.";
+"liveData.rule.content7"                 = "Veri güncelleme gecikmesi genellikle 24 saati aşmaz.";
+"liveData.rule.content8"                 = "Veriler hakkında sorularınız varsa, doğrulama için resmi müşteri hizmetlerine itirazda bulunabilirsiniz.";
+
+// Work 底部 sysInfo 组件（对齐 H5 work/sysInfo.vue）
+"system.serverTime"                      = "Sunucu Saati";
+"contact.officialWhatsapp"               = "Resmi WhatsApp: %@";
+"common.copySuccess"                     = "Kopyalama Başarılı";
 
 // MARK: - K 里程碑 美颜设置页（en 英文兜底，J 里程碑翻译团队补齐 tr）
 "beautySettings.pageTitle"                                  = "Beauty";

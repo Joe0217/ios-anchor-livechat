@@ -18,48 +18,74 @@ struct GiftPanelReceiverRow: View {
 
     @ViewBuilder
     private func content(cfg: ReceiversConfig) -> some View {
-        HStack(spacing: 10) {
-            // 计数显示（左）
-            if cfg.allowMultiSelect {
-                Text("\(store.receiversSelection.count)")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.85))
-                    .frame(minWidth: 22)
+        if cfg.items.isEmpty {
+            // 空态占位（对齐 H5 hasRecipient=false 语义；避免用户误以为 UI bug）
+            HStack {
+                Spacer()
+                Text(L10n.giftPickerRecipientsEmpty)
+                    .font(.system(size: 12))
+                    .foregroundColor(.white.opacity(0.5))
+                Spacer()
             }
-
-            // 头像横滑
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(cfg.items) { item in
-                        avatarCell(item)
-                    }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        } else {
+            HStack(spacing: 10) {
+                // 计数显示（左）
+                if cfg.allowMultiSelect {
+                    Text("\(store.receiversSelection.count)")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.85))
+                        .frame(minWidth: 22)
                 }
-                .padding(.horizontal, 2)
-            }
 
-            // All 按钮（右）
-            if cfg.allowMultiSelect && cfg.showAllButton {
-                allButton(cfg: cfg)
+                // 头像横滑
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(cfg.items) { item in
+                            avatarCell(item)
+                        }
+                    }
+                    .padding(.horizontal, 2)
+                }
+
+                // All 按钮（右）
+                if cfg.allowMultiSelect && cfg.showAllButton {
+                    allButton(cfg: cfg)
+                }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 4)  // 高度压缩：10 → 4
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
     }
 
+    /// PA-4（对齐 H5 party-gift-popup.vue L921-925 avator-num）：头像下方叠麦位序号胶囊。
+    /// H5 seatIndex 1-indexed（PartyRoomSeat.stableId 注释"麦位 1-13"）；直显不转换。
     private func avatarCell(_ item: ReceiverItem) -> some View {
         let selected = store.receiversSelection.contains(item.id)
         return Button(action: { store.toggleReceiver(item.id) }) {
-            ZStack(alignment: .topTrailing) {
-                AvatarView(url: item.avatarURL, size: 34, kind: .user, persistent: false)
-                    .overlay(
-                        Circle().stroke(selected ? Color.pink : Color.clear, lineWidth: 2)
-                    )
+            VStack(spacing: 0) {
+                ZStack(alignment: .topTrailing) {
+                    AvatarView(url: item.avatarURL, size: 34, kind: .user, persistent: false)
+                        .overlay(
+                            Circle().stroke(selected ? Color.pink : Color.clear, lineWidth: 2)
+                        )
 
-                if selected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(.white, Color.pink)
-                        .offset(x: 2, y: -2)
+                    if selected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.white, Color.pink)
+                            .offset(x: 2, y: -2)
+                    }
+                }
+                // 麦位序号胶囊（重叠在头像底部；nil 时隐藏留白等宽）
+                if let idx = item.seatIndex {
+                    Text("\(idx)")
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Capsule().fill(Color.black.opacity(0.5)))
+                        .offset(y: -6)
                 }
             }
             .contentShape(Rectangle())

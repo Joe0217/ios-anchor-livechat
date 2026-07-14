@@ -287,7 +287,16 @@ enum L10n {
         static var toolRoomMode: String { localize("party.tool.roomMode", comment: "Room Mode") }
         static var toolBlocklist: String { localize("party.tool.blocklist", comment: "Blocklist") }
         static var toolMCSeat: String { localize("party.tool.mcSeat", comment: "MC Seat") }
+        static var toolPrivateCall: String { localize("party.tool.privateCall", comment: "Party Call") }
         static var toolComingSoon: String { localize("party.tool.comingSoon", comment: "stub 项 toast") }
+        // F-spec §5.1 PartyPrivateCallSettingSheet
+        static var privateCallSettingTitle: String { localize("party.privateCall.settingTitle", comment: "私 call 设置 sheet 标题") }
+        static var privateCallEnableToggleTitle: String { localize("party.privateCall.enableToggleTitle", comment: "允许接受私 call 开关标签") }
+        static var privateCallGiftSectionTitle: String { localize("party.privateCall.giftSectionTitle", comment: "选择通话礼物区标题") }
+        static var privateCallGiftEmpty: String { localize("party.privateCall.giftEmpty", comment: "礼物列表空态") }
+        static var privateCallLoadError: String { localize("party.privateCall.loadError", comment: "礼物列表加载失败错态") }
+        static var privateCallSaveSuccess: String { localize("party.privateCall.saveSuccess", comment: "设置保存成功 toast") }
+        static var privateCallSaveFailed: String { localize("party.privateCall.saveFailed", comment: "设置保存失败 banner") }
         // 派对房 Blocklist（E spec 2026-07-14；房主/管理员查看+解除房间维度黑名单）
         static var blocklistNavTitle: String { localize("party.blocklist.navTitle", comment: "Blocklist 页面标题") }
         static var blocklistEmpty: String { localize("party.blocklist.empty", comment: "无黑名单空态") }
@@ -397,6 +406,20 @@ enum L10n {
         static var mcSeatSetSuccess: String { localize("party.mcSeat.setSuccess", comment: "设置成功 toast") }
         static var mcSeatCloseSuccess: String { localize("party.mcSeat.closeSuccess", comment: "取消 MC 成功 toast") }
         static var mcSeatOperationFailed: String { localize("party.mcSeat.operationFailed", comment: "API 失败通用兜底 toast") }
+
+        // MARK: - v3（2026-07-15）Step 2 通知公屏系统消息 · 对齐 H5 chat-list.vue 系统消息文案
+        /// 1047 视频位邀请被接受公屏文案（%@ = 被邀请者昵称）
+        static var videoSeatInviteAcceptedFormat: String { localize("party.videoSeat.inviteAcceptedFormat", comment: "1047 视频位邀请接受公屏（%@ 昵称）") }
+        /// 1019 本人被设为房管公屏
+        static var authUpdateSetAdmin: String { localize("party.authUpdate.setAdmin", comment: "1019 本人被设为房管公屏") }
+        /// 1019 本人被取消房管公屏
+        static var authUpdateRemoveAdmin: String { localize("party.authUpdate.removeAdmin", comment: "1019 本人被取消房管公屏") }
+        /// 1049 房间通告公屏（%@ = 公告文本）
+        static var roomAnnouncementFormat: String { localize("party.roomAnnouncement.format", comment: "1049 房间通告公屏（%@）") }
+        /// 1050 幸运数字抽数公屏（%1$@ = 昵称 · %2$d = 数字）
+        static var luckyNumberDrawFormat: String { localize("party.luckyNumber.drawFormat", comment: "1050 幸运数字抽数（%1$@ 昵称 · %2$d 数字）") }
+        /// 1051 幸运数字中奖公屏（%1$@ = 昵称 · %2$d = 数字）
+        static var luckyNumberWinFormat: String { localize("party.luckyNumber.winFormat", comment: "1051 幸运数字中奖（%1$@ 昵称 · %2$d 数字）") }
     }
 
     // MARK: - PartyRoom 房间内 UI（AnchorBar / ChatTabStrip / InputBar 使用）
@@ -497,6 +520,11 @@ enum L10n {
     static var workAvgCallDuration: String { localize("work.avgCallDuration", comment: "平均通话时长") }
     static var workPositiveRating: String { localize("work.positiveRating", comment: "好评率") }
 
+    static var workCallsToday: String { localize("work.callsToday", comment: "今日通话数") }
+    static var workCoins: String { localize("work.coins", comment: "Coins") }
+    static var workDiamonds: String { localize("work.diamonds", comment: "钻石") }
+    static var workGems: String { localize("work.gems", comment: "Gems") }
+
     static var workTodaysIncome: String { localize("work.todaysIncome", comment: "今日收益") }
     static var workWithdrawal: String { localize("work.withdrawal", comment: "提现") }
     static var workCallIncomes: String { localize("work.callIncomes", comment: "通话收益") }
@@ -524,6 +552,34 @@ enum L10n {
     static var toolWorkingGuide: String { localize("work.tool.workingGuide", comment: "工作指南") }
     static var toolBackpack: String { localize("work.tool.backpack", comment: "背包") }
     static var toolLiveData: String { localize("work.tool.liveData", comment: "直播数据") }
+    static var toolPartyData: String { localize("work.tool.partyData", comment: "派对数据") }
+    static var toolMyGuardian: String { localize("work.tool.myGuardian", comment: "我的守护") }
+
+    // LiveData 规则 sheet(对齐 H5 liveRule/index.vue 默认分支)
+    static var liveDataRuleNavTitle: String { localize("liveData.rule.navTitle", comment: "规则标题") }
+    static var liveDataRuleSection1: String { localize("liveData.rule.section1", comment: "I. 基本信息") }
+    static var liveDataRuleSection2: String { localize("liveData.rule.section2", comment: "II. 数据更新与统计周期") }
+    static var liveDataRuleSection3: String { localize("liveData.rule.section3", comment: "III. 收益计算规则") }
+    static var liveDataRuleSection4: String { localize("liveData.rule.section4", comment: "IV. 异常处理") }
+    static var liveDataRuleCalcMethod: String { localize("liveData.rule.calcMethod", comment: "计算方式") }
+    static var liveDataRuleTitle1: String { localize("liveData.rule.title1", comment: "规则子标题 1") }
+    static var liveDataRuleTitle2: String { localize("liveData.rule.title2", comment: "规则子标题 2") }
+    static var liveDataRuleTitle3: String { localize("liveData.rule.title3", comment: "规则子标题 3") }
+    static var liveDataRuleTitle4: String { localize("liveData.rule.title4", comment: "规则子标题 4") }
+    static var liveDataRuleTitle7: String { localize("liveData.rule.title7", comment: "规则子标题 7") }
+    static var liveDataRuleTitle8: String { localize("liveData.rule.title8", comment: "规则子标题 8") }
+    static var liveDataRuleContent1: String { localize("liveData.rule.content1", comment: "规则内容 1") }
+    static var liveDataRuleContent2: String { localize("liveData.rule.content2", comment: "规则内容 2") }
+    static var liveDataRuleContent3: String { localize("liveData.rule.content3", comment: "规则内容 3") }
+    static var liveDataRuleContent4: String { localize("liveData.rule.content4", comment: "规则内容 4") }
+    static var liveDataRuleContent5: String { localize("liveData.rule.content5", comment: "规则内容 5") }
+    static var liveDataRuleContent7: String { localize("liveData.rule.content7", comment: "规则内容 7") }
+    static var liveDataRuleContent8: String { localize("liveData.rule.content8", comment: "规则内容 8") }
+
+    // Work 底部 sysInfo 组件(对齐 H5 work/sysInfo.vue)
+    static var systemServerTime: String { localize("system.serverTime", comment: "服务器时间") }
+    static var contactOfficialWhatsapp: String { localize("contact.officialWhatsapp", comment: "官方 WhatsApp: %@") }
+    static var commonCopySuccess: String { localize("common.copySuccess", comment: "复制成功") }
     static var toolNewbie: String { localize("work.tool.newbie", comment: "新手") }
     static var toolBigR: String { localize("work.tool.bigR", comment: "大R") }
 
@@ -966,6 +1022,8 @@ enum L10n {
     static var giftPickerRechargeToast: String { localize("giftPicker.recharge.toast", comment: "H-5 Recharge tap toast · 充值功能开发中") }
     /// H-5 派对房送礼：sendGift 成功后 PartyRoomView 顶部 toast 反馈（对齐 H5 party-gift-popup.vue showNotify）
     static var giftPickerSentToast: String { localize("giftPicker.sent.toast", comment: "H-5 sendGift 成功 toast · Gift sent") }
+    /// H-5 派对房送礼：麦上无收礼人时的空态占位（items 为空时 receiver row 显示）
+    static var giftPickerRecipientsEmpty: String { localize("giftPicker.recipients.empty", comment: "H-5 麦上无收礼人空态占位") }
 
     // MARK: - L-spec-愿望单设置页 v1
     static var wishSettingNavTitle: String { localize("wishSetting.navTitle", comment: "Wish Setting 页顶部") }
@@ -1202,13 +1260,31 @@ enum L10n {
     static var announcementSaving: String { localize("announcement.popup.saving", comment: "保存中") }
     static var userCardTitle: String { localize("userCard.title", comment: "名片卡标题") }
     static var userCardFollow: String { localize("userCard.follow", comment: "关注") }
-    static var userCardUnfollow: String { localize("userCard.unfollow", comment: "取关") }
-    static var userCardBlock: String { localize("userCard.block", comment: "拉黑") }
-    static var userCardUnblock: String { localize("userCard.unblock", comment: "取消拉黑") }
+    static var userCardUnfollow: String { localize("userCard.unfollow", comment: "取关(已关注 pill 态)") }
+    static var userCardBlock: String { localize("userCard.block", comment: "拉黑(未拉黑 pill 态)") }
+    static var userCardUnblock: String { localize("userCard.unblock", comment: "已拉黑 pill 态文案") }
     static var userCardFollowers: String { localize("userCard.followers", comment: "粉丝") }
     static var userCardFollowing: String { localize("userCard.following", comment: "关注数") }
-    static var userCardGiftWall: String { localize("userCard.giftWall", comment: "礼物墙") }
+    /// 礼物墙 title:主播端看用户 → "Sent gifts"(该用户送出的礼物列表)
+    /// H5 template `isAnchor ? 'Received gifts' : 'Send gifts'`,iOS 主播端定位永远走 !isAnchor 分支
+    static var userCardGiftWall: String { localize("userCard.giftWall", comment: "礼物墙 title:用户送出过的礼物") }
     static var userCardErrorRetry: String { localize("userCard.errorRetry", comment: "名片卡加载失败") }
+    /// Block/Unblock 4 类 toast(H5 line 254/256/276 显式 showToast)
+    static var userCardBlockSuccess: String { localize("userCard.blockSuccess", comment: "拉黑成功 toast") }
+    static var userCardBlockFail: String { localize("userCard.blockFail", comment: "拉黑失败 toast") }
+    static var userCardUnblockSuccess: String { localize("userCard.unblockSuccess", comment: "移除黑名单成功 toast") }
+    static var userCardUnblockFail: String { localize("userCard.unblockFail", comment: "移除黑名单失败 toast") }
+    /// H5 对齐:私聊按钮
+    static var userCardMessage: String { localize("userCard.message", comment: "私聊按钮") }
+    /// H5 对齐:礼物墙空态文案 "No gifts sent yet!"
+    static var userCardEmptyGifts: String { localize("userCard.emptyGifts", comment: "礼物墙空态") }
+    /// H5 对齐:UID 前缀 "UID: xxx"(冒号后跟 userId,数字不 i18n)
+    static var userCardUidPrefix: String { localize("userCard.uidPrefix", comment: "UID 展示前缀") }
+    /// unblock 二次确认 dialog(H5 "Are you sure to remove the user from the blacklist?")
+    static var userCardUnblockConfirmTitle: String { localize("userCard.unblockConfirm.title", comment: "移除黑名单二次确认标题") }
+    static var userCardUnblockConfirmMessage: String { localize("userCard.unblockConfirm.message", comment: "移除黑名单二次确认正文") }
+    static var userCardUnblockConfirmButton: String { localize("userCard.unblockConfirm.confirm", comment: "移除黑名单二次确认按钮") }
+    static var userCardUnblockConfirmCancel: String { localize("userCard.unblockConfirm.cancel", comment: "移除黑名单二次确认取消") }
     static var paidBulletDislike: String { localize("paidBullet.dislike", comment: "不喜欢") }
 
     // MARK: - LiveRoom H5 交互对齐（2026-07-06 restore-design iteration 2）

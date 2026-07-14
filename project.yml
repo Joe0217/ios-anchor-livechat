@@ -48,10 +48,11 @@ targets:
       - framework: Vendor/FaceUnity/FURenderKit.framework
         embed: true
         codeSign: true
-    # 多环境密钥：Debug/Release 当前都绑 dev；prod 上线时新建 Config-Prod.xcconfig 并改 Release
+    # 多环境密钥：当前 Debug→Test（预发布调试），Release→Prod（archive 上线）
+    # 切回 dev 调试：改 Debug 一行为 Config/Config-Dev.xcconfig，./bin/regen.sh
     configFiles:
       Debug: Config/Config-Dev.xcconfig
-      Release: Config/Config-Dev.xcconfig
+      Release: Config/Config-Prod.xcconfig
     settings:
       base:
         # 相芯授权证书 authpack 绑定的就是这个包名，给相芯时必须原样一致
@@ -100,6 +101,7 @@ targets:
         HilyOcpApimKey: $(HILY_OCP_APIM_KEY)
         HilyAppVersion: $(HILY_APP_VERSION)
         HilyNIMAppKey: $(HILY_NIM_APP_KEY)
+        HilyNotificationYxAccId: $(HILY_NOTIFICATION_YX_ACC_ID)
         HilyAESKey: $(HILY_AES_KEY)
         HilyAESIV: $(HILY_AES_IV)
         # sapi（vvi 派对房/背包商城）AES-128-CBC：dev 巧合与主接口同套；test/prod 是独立的另一套，必须在对应 xcconfig 切
@@ -213,6 +215,14 @@ targets:
       # H 里程碑 M3：派对房 attachType 枚举（纯 Int rawValue，无 NIMSDK 依赖）
       - path: Sources/Party/Models/PartyAttachType.swift
       - path: Sources/Party/Models/PartyMsgType.swift
+      # v3（2026-07-15）Party 公屏适配器 pure 层（NIM 相关 API 拆到 +NIM.swift 不入 test）
+      - path: Sources/Party/Chat/PartyPublicChatAdapter.swift
+      # PublicChat unified 层（Adapter 依赖 zero SDK 类型）
+      - path: Sources/PublicChat/Model/UnifiedPublicChatMessage.swift
+      - path: Sources/PublicChat/Model/PublicChatVariant.swift
+      - path: Sources/PublicChat/Model/SenderProfile.swift
+      - path: Sources/PublicChat/Model/Enums.swift
+      - path: Sources/PublicChat/Model/RichSegment.swift
       # E 里程碑 C 档单测（2026-06-26）：派对房 model / 解析 / Identity / 跨通道归一化（纯 Foundation + Codable，零 SDK 依赖）
       - path: Sources/Party/Models/PartyEnums.swift
       - path: Sources/Party/Models/PartyEvents.swift
@@ -233,6 +243,15 @@ targets:
       - path: Sources/Party/Models/PartyBackground.swift
       # v8 派对房设置 + 房管管理（2026-07-13）：纯 Foundation 层
       - path: Sources/Party/Models/PartyRoomAdmin.swift
+      # PartyRoomListKind 是 zero SDK 依赖 enum，PartyListService protocol 依赖
+      - path: Sources/Party/Models/PartyRoomListKind.swift
+      # PartyRoomTemplate / PartyMyRoomInfo zero SDK 依赖，PartyListStore + PartyCreateStore 依赖
+      - path: Sources/Party/Models/PartyRoomTemplate.swift
+      - path: Sources/Party/Models/PartyMyRoomInfo.swift
+      # AppLocaleStore（zero SDK 依赖 · MomentFeedStore 依赖）
+      - path: Sources/Core/AppLocale.swift
+      # FirstLiveTracker（zero SDK 依赖 · AppLocale.swift 依赖）
+      - path: Sources/Live/LiveSettings/FirstLiveTracker.swift
       - path: Sources/Party/Settings/PartyRoomSettingsStore.swift
       - path: Sources/Party/Settings/PartyRoomSettingsService.swift
       - path: Sources/Party/Settings/PartyAdminStore.swift
@@ -316,6 +335,8 @@ targets:
       - path: Sources/Gift/Panel/BalanceSource.swift
       - path: Sources/Gift/Panel/Config.swift
       - path: Sources/Gift/Panel/Store.swift
+      # H-5 · GiftSendError sentinel（Store 层 phase 分流，无 SDK 依赖）
+      - path: Sources/Gift/Panel/GiftSendError.swift
       # GiftEffect Models（H 里程碑跨场景礼物特效引擎 Task 2）：纯 Foundation model + decoder，零 SDK 依赖
       - path: Sources/GiftEffect/Models/GiftEffectScene.swift
       - path: Sources/GiftEffect/Models/GiftEffectItem.swift
@@ -325,6 +346,11 @@ targets:
       - path: Sources/GiftEffect/Players/GiftAnimationPlayer.swift
       # Task 8：GiftEffectIntake（4 场景 IM payload 统一入口，纯 Foundation + Center 依赖）
       - path: Sources/GiftEffect/IM/GiftEffectIntake.swift
+      # H-5 里程碑（派对房礼物面板 step 1）：protocol + 纯逻辑 bridge（zero SDK 依赖）
+      # PartyGiftSendService.swift / PartyBalanceService.swift 里 Default 实作依赖 PartyAPIClient 不入白名单
+      - path: Sources/Party/Network/PartyGiftSendServiceProtocol.swift
+      - path: Sources/Party/Network/PartyBalanceServiceProtocol.swift
+      - path: Sources/Party/UI/Gift/PartyGiftPanelBridge.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.anchor.livechat.tests

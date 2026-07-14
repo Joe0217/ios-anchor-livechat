@@ -6,26 +6,29 @@ import Foundation
 ///
 /// 场景差异**全部**通过 config 表达；View / Store 内不写场景专有分支（避免 flag 硬编码）。
 /// 便利工厂见 `CommonGiftPanelConfig.callGate / wishGift / liveDisplayOnly / imBind / partySend / callAskFor`。
-public struct CommonGiftPanelConfig {
-    public var tabs: [GiftPanelTab]
+struct CommonGiftPanelConfig {
+    var tabs: [GiftPanelTab]
     /// 初始 tab；nil = tabs.first；不合法（不在 tabs 里）降级 tabs.first
-    public var initialTab: GiftPanelTab?
-    public var footer: FooterMode
-    public var countStepper: CountStepperConfig
-    public var balance: BalancePolicy
-    public var backpack: BackpackEntryPolicy
-    public var receivers: ReceiversConfig?
-    public var minPrice: Int64?
-    public var maxPrice: Int64?
-    public var initialSelection: GiftListData?
-    public var interaction: InteractionMode
+    var initialTab: GiftPanelTab?
+    var footer: FooterMode
+    var countStepper: CountStepperConfig
+    var balance: BalancePolicy
+    var backpack: BackpackEntryPolicy
+    var receivers: ReceiversConfig?
+    var minPrice: Int64?
+    var maxPrice: Int64?
+    var initialSelection: GiftListData?
+    var interaction: InteractionMode
     /// sheet 顶部标题；nil = 无 title
-    public var title: String?
-    public var dataSource: GiftPanelDataSource
+    var title: String?
+    var dataSource: GiftPanelDataSource
     /// ×/swipe-down dismiss 触发；IM 场景借这个走 onCancel
-    public var onDismiss: (() -> Void)?
+    var onDismiss: (() -> Void)?
+    /// tap "Recharge" 按钮触发（phase = insufficientBalance 时 · H-5）；
+    /// 主动重拉一次 balance；若仍不足 caller 可挂 toast/CTA
+    var onRechargeRequested: (() -> Void)?
 
-    public init(tabs: [GiftPanelTab] = [.popular],
+    init(tabs: [GiftPanelTab] = [.popular],
                 initialTab: GiftPanelTab? = nil,
                 footer: FooterMode,
                 countStepper: CountStepperConfig = .hidden,
@@ -38,7 +41,8 @@ public struct CommonGiftPanelConfig {
                 interaction: InteractionMode = .selectable,
                 title: String? = nil,
                 dataSource: GiftPanelDataSource,
-                onDismiss: (() -> Void)? = nil) {
+                onDismiss: (() -> Void)? = nil,
+                onRechargeRequested: (() -> Void)? = nil) {
         self.tabs = tabs
         self.initialTab = initialTab
         self.footer = footer
@@ -53,10 +57,11 @@ public struct CommonGiftPanelConfig {
         self.title = title
         self.dataSource = dataSource
         self.onDismiss = onDismiss
+        self.onRechargeRequested = onRechargeRequested
     }
 
     /// 校验后的 initialTab（不在 tabs 里 → 降 tabs.first；tabs 为空 → .popular）
-    public var resolvedInitialTab: GiftPanelTab {
+    var resolvedInitialTab: GiftPanelTab {
         if let t = initialTab, tabs.contains(t) { return t }
         return tabs.first ?? .popular
     }
@@ -65,21 +70,22 @@ public struct CommonGiftPanelConfig {
 // MARK: - Enums
 
 /// 底部动作条模式（spec §1.4）。
-public enum FooterMode {
+enum FooterMode {
     /// 无 footer 按钮（直播中纯展示）
     case none
     /// Confirm 按钮（开播设置/心愿单）；label 由调用方传；回调返回可选 gift + count（callGate 允许 nil = "移除选中"）
     case confirm(label: String, onConfirm: (GiftListData?, Int) -> Void)
     /// tap cell 即触发（IM 场景），不渲染主按钮
     case instantSelect(onSelect: (GiftListData) -> Void)
-    /// H+ 派对房送礼占位（本轮 factory 声明；触发走 sending mock）
-    case send(onSend: (GiftListData, Int, [String]) -> Void)
+    /// 派对房送礼（H-5 接入 `PartyGiftSendService`）；service=nil 时回退 300ms mock（历史 pattern 保底）。
+    /// Store 内部：真 service → 真调用 + phase 分流（sent/sendFailed/insufficientBalance）；mock → 直接 sent
+    case send(onSend: (GiftListData, Int, [String]) -> Void, service: PartyGiftSendService?)
     /// H+ 1v1 索要礼物占位
     case askFor(onAsk: (GiftListData) -> Void)
 }
 
 /// grid tap 交互模式（spec §2.4 不变量）。
-public enum InteractionMode {
+enum InteractionMode {
     /// 正常选中/反选
     case selectable
     /// tap cell no-op；selectedId 恒 nil（直播中纯展示，替换旧 displayOnly flag）
@@ -87,7 +93,7 @@ public enum InteractionMode {
 }
 
 /// 数量 stepper（spec §2.4 range clamp）。
-public enum CountStepperConfig {
+enum CountStepperConfig {
     case hidden
     case visible(range: ClosedRange<Int>)
 
@@ -96,7 +102,7 @@ public enum CountStepperConfig {
 }
 
 /// 余额展示策略（spec §2.2）。
-public enum BalancePolicy {
+enum BalancePolicy {
     case hidden
     case visible(source: GiftPanelBalanceSource)
 
@@ -108,7 +114,7 @@ public enum BalancePolicy {
 }
 
 /// Backpack 右上角入口策略。
-public enum BackpackEntryPolicy {
+enum BackpackEntryPolicy {
     case hidden
     case visible(onTap: () -> Void)
 
@@ -122,13 +128,13 @@ public enum BackpackEntryPolicy {
 // MARK: - Receivers config
 
 /// 派对房受者头像行配置（spec §2.2）。本轮 UI 完成、数据源由调用方注入 mock。
-public struct ReceiversConfig {
-    public var items: [ReceiverItem]
-    public var allowMultiSelect: Bool
-    public var initialSelection: Set<String>
-    public var showAllButton: Bool
+struct ReceiversConfig {
+    var items: [ReceiverItem]
+    var allowMultiSelect: Bool
+    var initialSelection: Set<String>
+    var showAllButton: Bool
 
-    public init(items: [ReceiverItem],
+    init(items: [ReceiverItem],
                 allowMultiSelect: Bool = false,
                 initialSelection: Set<String> = [],
                 showAllButton: Bool = false) {
@@ -140,13 +146,13 @@ public struct ReceiversConfig {
 }
 
 /// 单个受者项（对齐派对房麦位模型；派对房外场景 seatIndex=nil）。
-public struct ReceiverItem: Identifiable, Equatable {
+struct ReceiverItem: Identifiable, Equatable {
     /// yxAccid（IM 唯一 id）
-    public let id: String
-    public let avatarURL: URL?
-    public let seatIndex: Int?
+    let id: String
+    let avatarURL: URL?
+    let seatIndex: Int?
 
-    public init(id: String, avatarURL: URL?, seatIndex: Int? = nil) {
+    init(id: String, avatarURL: URL?, seatIndex: Int? = nil) {
         self.id = id
         self.avatarURL = avatarURL
         self.seatIndex = seatIndex
@@ -156,7 +162,7 @@ public struct ReceiverItem: Identifiable, Equatable {
 // MARK: - Preset factories
 
 #if !HILY_TESTS
-public extension CommonGiftPanelConfig {
+extension CommonGiftPanelConfig {
     /// 开播设置私 call 门槛（对齐旧 GiftPickerSheet(minPrice:...)）
     ///
     /// - Parameter minPrice: 门槛下限，展示层过滤
@@ -229,24 +235,40 @@ public extension CommonGiftPanelConfig {
         )
     }
 
-    // MARK: - H+ 占位（本轮 factory 声明，无场景 wire）
-
-    /// 派对房送礼（H+ 派对房送礼里程碑接入；本轮 factory 声明保 API 稳定，`onSend` 需接 `PartyAPI.sendGift`）
+    /// 派对房送礼（H-5 接入 · spec §4.3）—— 走 `PartyGiftSendService` 真调用 + `PartyBalanceSource` 真余额。
+    ///
+    /// - Parameter roomId: 派对房 id（DefaultPartyGiftSendService 内部 capture）
+    /// - Parameter receivers: 麦位接受者列表（由 PartyGiftPanelBridge 构造）
+    /// - Parameter sendService: 送礼 service（默认 `DefaultPartyGiftSendService(roomId:)`）
+    /// - Parameter balance: 余额 source（默认 `PartyBalanceSource(service:)`）
+    /// - Parameter onRecharge: tap "Recharge" 按钮触发；本轮建议挂 toast "充值功能开发中"
+    /// - Parameter onSend: sendGift 成功回调（Store 内部已处理 phase.sent + 余额更新，此处仅供 caller 通知 UI 关面板等）
+    ///
+    /// MVP 收敛（spec §0.3）：仅 popular tab · 无背包（backpack .hidden）· 无 exclusive/lucky tab；
+    /// H5 用户端 party-gift-popup.vue 3+ tab 待未来里程碑扩展
     static func partySend(roomId: String,
                           receivers: ReceiversConfig,
-                          balance: GiftPanelBalanceSource,
-                          backpackOnTap: @escaping () -> Void,
+                          sendService: PartyGiftSendService? = nil,
+                          balance: GiftPanelBalanceSource? = nil,
+                          onRechargeRequested: @escaping () -> Void = {},
                           onSend: @escaping (_ gift: GiftListData, _ count: Int, _ yxAccidList: [String]) -> Void) -> Self {
-        Self(
-            tabs: [.popular, .exclusiveGift],
-            footer: .send(onSend: onSend),
+        let effectiveSendService = sendService ?? DefaultPartyGiftSendService(roomId: roomId)
+        // review #2 · balance 一体化：单一 PartyGiftDataSource 实例同时作 dataSource + balance source
+        // response.userDiamond 内嵌 → 不额外调 gem/getBalance；避免余额展示与 sendGift 扣款域可能不一致的风险
+        // caller 若显式传 balance 参数（如测试注入 mock）则优先使用
+        let sharedDataSource = PartyGiftDataSource()
+        let effectiveBalance: GiftPanelBalanceSource = balance ?? sharedDataSource
+        return Self(
+            tabs: [.popular],  // MVP: 仅 popular（spec §0.3）
+            footer: .send(onSend: onSend, service: effectiveSendService),
             countStepper: .visible(range: 1...99),
-            balance: .visible(source: balance),
-            backpack: .visible(onTap: backpackOnTap),
+            balance: .visible(source: effectiveBalance),
+            backpack: .hidden,  // MVP 无背包（spec §0.3）
             receivers: receivers,
             interaction: .selectable,
             title: nil,
-            dataSource: DefaultGiftDataSource(scene: .call)  // 派对房 scene 后端未验证，先用 call；H+ 接入时改
+            dataSource: sharedDataSource,  // H-5 · 走 sapi 域 PartyAPI.getPartyRoomGift（不走 /api/gift/v3/getGiftList，后端不识别 PARTY_ROOM）
+            onRechargeRequested: onRechargeRequested
         )
     }
 

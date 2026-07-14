@@ -39,12 +39,43 @@ enum PartyVideoSeatInviteResult: Equatable {
     case joinFailed    // 1048 接受后上位失败
 }
 
-/// 送礼接口 `gift/sendGift` 返回（占位结构，字段实测后补）。
-struct PartySendGiftResult: Codable, Equatable {
+/// 送礼接口 `gift/sendGift` 返回。
+///
+/// **H-5 扩展 userDiamond（送礼后新余额）**：H5 用户端字段名是 `userDiamond`（stores/modules/gift.js:1620）；
+/// 主播端后端字段名未真机验证 → 走 CodingKeys 多别名 fallback（对齐 `agent-recon-field-names-unverified` rule）。
+struct PartySendGiftResult: Equatable, Decodable {
     let success: Bool?
     let giftId: Int?
     let num: Int?
     let totalValue: Int?
+    /// 送礼后新余额（对齐 H5 res.userDiamond）；后端字段名多候选兜底
+    let userDiamond: Int64?
+
+    private enum CodingKeys: String, CodingKey {
+        case success, giftId, num, totalValue
+        // 多别名 fallback：H5 用 userDiamond；安卓 归档未点名 → 保守兜底 4 候选
+        case userDiamond, userDiamonds, newDiamond, remainDiamond
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        success = try? c.decode(Bool.self, forKey: .success)
+        giftId = try? c.decode(Int.self, forKey: .giftId)
+        num = try? c.decode(Int.self, forKey: .num)
+        totalValue = try? c.decode(Int.self, forKey: .totalValue)
+        userDiamond = (try? c.decode(Int64.self, forKey: .userDiamond))
+                   ?? (try? c.decode(Int64.self, forKey: .userDiamonds))
+                   ?? (try? c.decode(Int64.self, forKey: .newDiamond))
+                   ?? (try? c.decode(Int64.self, forKey: .remainDiamond))
+    }
+
+    init(success: Bool?, giftId: Int?, num: Int?, totalValue: Int?, userDiamond: Int64?) {
+        self.success = success
+        self.giftId = giftId
+        self.num = num
+        self.totalValue = totalValue
+        self.userDiamond = userDiamond
+    }
 }
 
 // MARK: - 纯解析（脱 NIMSDK 单测覆盖）

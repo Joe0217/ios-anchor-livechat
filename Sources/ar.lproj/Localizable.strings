@@ -64,6 +64,10 @@
 "work.onlineTime"            = "وقت الاتصال (يوم)";
 "work.avgCallDuration"       = "متوسط مدة المكالمة (يوم)";
 "work.positiveRating"        = "تقييم إيجابي";
+"work.callsToday"            = "المكالمات اليوم";
+"work.coins"                 = "العملات";
+"work.diamonds"              = "الماس";
+"work.gems"                  = "الجواهر";
 
 "work.todaysIncome"          = "أرباح اليوم";
 "work.withdrawal"            = "سحب";
@@ -92,6 +96,8 @@
 "work.tool.workingGuide"     = "دليل العمل";
 "work.tool.backpack"         = "الحقيبة";
 "work.tool.liveData"         = "بيانات البث";
+"work.tool.partyData"        = "بيانات الحفلة";
+"work.tool.myGuardian"       = "الحارس الخاص بي";
 
 "work.invite.earnMoney"      = "اكسب المال";
 
@@ -297,6 +303,7 @@
 "giftPicker.recharge"                = "إعادة الشحن";
 "giftPicker.recharge.toast"          = "إعادة الشحن قادمة قريبًا";
 "giftPicker.sent.toast"              = "تم إرسال الهدية";
+"giftPicker.recipients.empty"        = "لا أحد على الميكروفون";
 
 // MARK: - L-spec-愿望单设置页 v1
 "wishSetting.navTitle"               = "إعدادات قائمة الأمنيات";
@@ -439,6 +446,29 @@
 "announcement.popup.saveSuccess"          = "تم الحفظ بنجاح";
 "announcement.popup.sensitiveWord"        = "تم اكتشاف كلمات حساسة: %@";
 "announcement.popup.saving"               = "جارٍ الحفظ...";
+
+// MARK: - UserCard اسم البطاقة
+"userCard.title"                          = "الملف الشخصي";
+"userCard.follow"                         = "متابعة";
+"userCard.unfollow"                       = "تمت المتابعة";
+"userCard.block"                          = "حظر";
+"userCard.unblock"                        = "محظور";
+"userCard.followers"                      = "المتابعون";
+"userCard.following"                      = "يتابع";
+"userCard.giftWall"                       = "أرسل هدايا";
+"userCard.errorRetry"                     = "فشل تحميل الملف";
+"userCard.message"                        = "رسالة";
+"userCard.emptyGifts"                     = "لا توجد هدايا بعد!";
+"userCard.uidPrefix"                      = "المعرف: ";
+"userCard.unblockConfirm.title"           = "إزالة من قائمة الحظر";
+"userCard.unblockConfirm.message"         = "هل تريد إزالة هذا المستخدم من قائمة الحظر لديك؟";
+"userCard.unblockConfirm.confirm"         = "إزالة";
+"userCard.unblockConfirm.cancel"          = "إلغاء";
+"userCard.blockSuccess"                   = "تم الحظر";
+"userCard.blockFail"                      = "فشل الحظر، يرجى المحاولة مرة أخرى";
+"userCard.unblockSuccess"                 = "تمت الإزالة من قائمة الحظر";
+"userCard.unblockFail"                    = "فشل الإزالة، يرجى المحاولة مرة أخرى";
+
 "liveRoom.setting.sheet.title"            = "الإعدادات";
 "liveRoom.endConfirm.title"               = "تنبيه";
 "liveRoom.endConfirm.message"             = "هل أنت متأكد من إنهاء البث؟";
@@ -941,7 +971,16 @@
 "party.tool.roomMode"                    = "وضع الغرفة";
 "party.tool.blocklist"                   = "قائمة الحظر";
 "party.tool.mcSeat"                      = "مقعد MC";
+"party.tool.privateCall"                 = "مكالمة الحفلة";
 "party.tool.comingSoon"                  = "قريبًا";
+// F-spec §5.1 إعدادات مكالمة الحفلة
+"party.privateCall.settingTitle"         = "مكالمة الحفلة";
+"party.privateCall.enableToggleTitle"    = "تفعيل مكالمة الحفلة";
+"party.privateCall.giftSectionTitle"     = "هدية المكالمة";
+"party.privateCall.giftEmpty"            = "لا توجد هدايا متاحة";
+"party.privateCall.loadError"            = "فشل التحميل، انقر لإعادة المحاولة";
+"party.privateCall.saveSuccess"          = "تم الحفظ";
+"party.privateCall.saveFailed"           = "فشل الحفظ، يرجى المحاولة مرة أخرى";
 // E spec 2026-07-14 قائمة حظر غرفة الحفلة
 "party.blocklist.navTitle"               = "قائمة الحظر";
 "party.blocklist.empty"                  = "لا يوجد مستخدمون محظورون";
@@ -973,6 +1012,14 @@
 "party.mcSeat.setSuccess"                = "تم تعيين مقعد MC";
 "party.mcSeat.closeSuccess"              = "تم إغلاق مقعد MC";
 "party.mcSeat.operationFailed"           = "فشلت العملية، يرجى المحاولة مرة أخرى";
+
+// v3（2026-07-15）Step 2 通知公屏系统消息
+"party.videoSeat.inviteAcceptedFormat"   = "انضم %@ إلى مقعد الفيديو";
+"party.authUpdate.setAdmin"              = "لقد تم تعيينك كمشرف على الغرفة";
+"party.authUpdate.removeAdmin"           = "لم تعد مشرفًا على الغرفة";
+"party.roomAnnouncement.format"          = "إعلان الغرفة: %@";
+"party.luckyNumber.drawFormat"           = "سحب %1$@ الرقم المحظوظ %2$d";
+"party.luckyNumber.winFormat"            = "فاز %1$@ بالرقم المحظوظ %2$d";
 "party.create.section.template"          = "اختر القالب";
 "party.create.template.loading"          = "جارٍ تحميل القوالب…";
 "party.create.template.empty"            = "لا توجد قوالب متاحة في dev";
@@ -1114,6 +1161,32 @@
 "liveData.days"                          = "أيام";
 "liveData.expand"                        = "توسيع";
 "liveData.collapse"                      = "طي";
+
+// LiveData 规则 sheet（对齐 H5 liveRule/index.vue 默认分支）
+"liveData.rule.navTitle"                 = "قواعد البث";
+"liveData.rule.section1"                 = "المعلومات الأساسية:";
+"liveData.rule.section2"                 = "دورة تحديث البيانات والإحصاء:";
+"liveData.rule.section3"                 = "قواعد حساب الدخل:";
+"liveData.rule.section4"                 = "معالجة الاستثناءات:";
+"liveData.rule.calcMethod"               = "٢. طريقة الحساب:";
+"liveData.rule.title1"                   = "١. نطاق التطبيق:";
+"liveData.rule.title2"                   = "١. تكرارية التحديث:";
+"liveData.rule.title3"                   = "٢. دورة الإحصاء:";
+"liveData.rule.title4"                   = "١. الدخل المشمول:";
+"liveData.rule.title7"                   = "١. تأخير الدخل:";
+"liveData.rule.title8"                   = "٢. نزاع البيانات:";
+"liveData.rule.content1"                 = "تنطبق على جلسات البث المباشر الرسمية ذات الفيديو والصوت الطبيعيين، والتي تلتزم بإرشادات البث الخاصة بالمنصة ومتطلبات المدة الزمنية الصالحة.";
+"liveData.rule.content2"                 = "يتم تحديث البيانات كل ساعة. بالنسبة للبث الممتد لأكثر من يوم، يتم احتساب المدة ودخل الهدايا تحت تاريخ بدء الجلسة.";
+"liveData.rule.content3"                 = "يدعم الإحصائيات الأسبوعية والشهرية. يمكن للمستخدمين عرض بيانات آخر أسبوعين وآخر ثلاثة أشهر. يتم تحديث البيانات تلقائياً بناءً على الدورة المقابلة.";
+"liveData.rule.content4"                 = "دخل الهدايا أثناء البث المباشر، ودخل الهدايا أثناء المكالمات الخاصة، والدخل الناتج عن إنفاق الماس في المكالمات الخاصة.";
+"liveData.rule.content5"                 = "أ. دخل البث المباشر = دخل الهدايا أثناء البث المباشر (بما في ذلك هدايا المكالمات الخاصة). ب. دخل المكالمات الخاصة = الماس المستهلك أثناء المكالمات الخاصة.";
+"liveData.rule.content7"                 = "لا يتجاوز تأخير تحديث البيانات 24 ساعة بشكل عام.";
+"liveData.rule.content8"                 = "إذا كانت لديك أسئلة حول البيانات، يمكنك تقديم استئناف إلى خدمة العملاء الرسمية للتحقق منها.";
+
+// Work 底部 sysInfo 组件（对齐 H5 work/sysInfo.vue）
+"system.serverTime"                      = "الوقت العالمي";
+"contact.officialWhatsapp"               = "WhatsApp الرسمي: %@";
+"common.copySuccess"                     = "تم النسخ بنجاح";
 
 // MARK: - K 里程碑 美颜设置页（en 英文兜底，J 里程碑翻译团队补齐 ar）
 "beautySettings.pageTitle"                                  = "Beauty";

@@ -114,10 +114,13 @@ struct PartyRoomSeat: Codable, Equatable, Identifiable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try? c.decode(String.self, forKey: .id)
-        roomId = try? c.decode(String.self, forKey: .roomId)
+        // id / roomId / userId 都可能被后端返 Number（对齐 [ios-decode-userid-compat.md] rule）
+        // 严格 String decode 会 fail-loud 静默返回 nil → Bridge filter 命中 → 礼物面板收礼人空
+        // trial 修复：三个 ID 字段一律走 String/Int64 双兼容
+        id = Self.decodeIdString(c, key: .id)
+        roomId = Self.decodeIdString(c, key: .roomId)
         seatIndex = try? c.decode(Int.self, forKey: .seatIndex)
-        userId = try? c.decode(String.self, forKey: .userId)
+        userId = Self.decodeIdString(c, key: .userId)
         avatar = try? c.decode(String.self, forKey: .avatar)
         nickname = try? c.decode(String.self, forKey: .nickname)
         seatType = try? c.decode(Int.self, forKey: .seatType)
@@ -137,6 +140,15 @@ struct PartyRoomSeat: Codable, Equatable, Identifiable {
         isPlatformAdmin = try? c.decode(Int.self, forKey: .isPlatformAdmin)
         showBubble = try? c.decode(Bool.self, forKey: .showBubble)
         anchorTaskRewardExt = try? c.decode(PartyAnchorTaskRewardExt.self, forKey: .anchorTaskRewardExt)
+    }
+
+    /// ID 字段 String/Int64 双兼容 decode（对齐 [ios-decode-userid-compat.md] rule §Decoder 模板）
+    /// 后端可能返 String 或 Number；严格 `decode(String.self)` 遇 Number 会 fail-loud 静默返 nil。
+    /// - Bool 桥接排除：NSNumber objCType "c"/"B" = Bool，避免 `1.stringValue = "1"` 但语义错的场景
+    private static func decodeIdString(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> String? {
+        if let s = try? c.decode(String.self, forKey: key), !s.isEmpty { return s }
+        if let n = try? c.decode(Int64.self, forKey: key) { return String(n) }
+        return nil
     }
 
     /// isHostSeat 字段真机未验证；用双 container 尝试 alias 兜底

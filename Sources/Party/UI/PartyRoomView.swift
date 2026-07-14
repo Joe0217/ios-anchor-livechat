@@ -228,15 +228,23 @@ struct PartyRoomView: View {
 
     /// 背景层：房主自定义大图（bigImgUrl 优先）→ H5 DEFAULT_BG 兜底 → partyRoomBg asset placeholder。
     ///
+    /// **v16.3 真根因修复**：CachedAsyncImage 加载完的 `Image(uiImage:).aspectRatio(.fill)` **没 frame 约束时**
+    /// 会按图片 intrinsic size 显示（网络图 1080×2340pt 巨大）→ 溢出屏幕视觉变大。必须外挂：
+    /// `.frame(maxWidth: .infinity, maxHeight: .infinity) + .clipped()` 显式约束到屏幕大小。
+    ///
     /// **v16 对齐 H5 `room-bg.vue`**：
     /// - `bigImgUrl` 优先（`partyStore.currentPartyInfo?.bigImgUrl || bgImgUrl`）
     /// - 未设房间背景时走 H5 `DEFAULT_BG = 'https://img.hnhily.link/mstatic/party/bg_party.png'`
-    ///   （对齐用户端视觉；本地 asset `partyRoomBg` 与 H5 默认背景图案不一致）
     /// - CachedAsyncImage placeholder 用本地 asset，网络加载完前显示避免白屏
-    ///
-    /// 键盘防变形不放这里 —— 挂在 stageContent 外层 `.ignoresSafeArea(.keyboard)` 阻止整个 view tree 键盘避让
     private var backgroundLayer: some View {
-        let bgURLStr = store.roomInfo?.bigImgUrl
+        // v16.4 URL 优先级（真根因修复）：
+        // 1. `currentRoomBackground.bigImgUrl` —— 独立 `getRoomBgImage` 接口拉的房主已设背景（**主要来源**）
+        // 2. `currentRoomBackground.imgUrl` —— 缩略图兜底
+        // 3. `roomInfo.bigImgUrl` / `bgImgUrl` —— enterRoom response 兜底（dev 实测通常 null）
+        // 4. H5 `DEFAULT_BG` —— 未设背景时的通用默认图
+        let bgURLStr = store.currentRoomBackground?.bigImgUrl
+            ?? store.currentRoomBackground?.imgUrl
+            ?? store.roomInfo?.bigImgUrl
             ?? store.roomInfo?.bgImgUrl
             ?? "https://img.hnhily.link/mstatic/party/bg_party.png"
         return ZStack {
@@ -244,8 +252,15 @@ struct PartyRoomView: View {
                 Image("partyRoomBg")
                     .resizable()
                     .scaledToFill()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .clipped()
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
             .ignoresSafeArea()
+            .onAppear {
+                AppLogger.party.info("[PartyRoom] bg URL=\(bgURLStr, privacy: .public)")
+            }
             Theme.Palette.partyRoomOverlay
                 .ignoresSafeArea()
         }

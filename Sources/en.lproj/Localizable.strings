@@ -62,6 +62,10 @@
 "work.onlineTime"            = "Online Time (d)";
 "work.avgCallDuration"       = "Avg Call Duration (d)";
 "work.positiveRating"        = "Positive Rating";
+"work.callsToday"            = "Calls Today";
+"work.coins"                 = "Coins";
+"work.diamonds"              = "Diamonds";
+"work.gems"                  = "Gems";
 
 "work.todaysIncome"          = "Today's Income";
 "work.withdrawal"            = "Withdrawal";
@@ -90,6 +94,8 @@
 "work.tool.workingGuide"     = "Working Guide";
 "work.tool.backpack"         = "Backpack";
 "work.tool.liveData"         = "Live Data";
+"work.tool.partyData"        = "Party Data";
+"work.tool.myGuardian"       = "My Guardian";
 
 "work.invite.earnMoney"      = "Earn Money";
 
@@ -295,6 +301,7 @@
 "giftPicker.recharge"                = "Recharge";
 "giftPicker.recharge.toast"          = "Recharge is coming soon";
 "giftPicker.sent.toast"              = "Gift sent";
+"giftPicker.recipients.empty"        = "No one is on mic";
 
 // MARK: - L-spec-愿望单设置页 v1（对齐 H5 wishSetting）
 "wishSetting.navTitle"               = "Wish Setting";
@@ -395,6 +402,29 @@
 "announcement.popup.saveSuccess"          = "Saved successfully";
 "announcement.popup.sensitiveWord"        = "Sensitive words detected: %@";
 "announcement.popup.saving"               = "Saving...";
+
+// MARK: - UserCard 名片卡(对齐 H5 userCard.vue,主播端看用户场景)
+"userCard.title"                          = "Profile";
+"userCard.follow"                         = "Follow";
+"userCard.unfollow"                       = "Followed";
+"userCard.block"                          = "Block";
+"userCard.unblock"                        = "Blocked";
+"userCard.followers"                      = "Followers";
+"userCard.following"                      = "Following";
+"userCard.giftWall"                       = "Send gifts";
+"userCard.errorRetry"                     = "Failed to load profile";
+"userCard.message"                        = "Message";
+"userCard.emptyGifts"                     = "No gifts sent yet!";
+"userCard.uidPrefix"                      = "UID: ";
+"userCard.unblockConfirm.title"           = "Remove from blocklist";
+"userCard.unblockConfirm.message"         = "Are you sure you want to remove this user from your blocklist?";
+"userCard.unblockConfirm.confirm"         = "Remove";
+"userCard.unblockConfirm.cancel"          = "Cancel";
+"userCard.blockSuccess"                   = "Blocked";
+"userCard.blockFail"                      = "Failed to block, please retry";
+"userCard.unblockSuccess"                 = "Removed from blocklist";
+"userCard.unblockFail"                    = "Failed to remove, please retry";
+
 "liveRoom.setting.sheet.title"            = "Settings";
 "liveRoom.endConfirm.title"               = "Kind reminder";
 "liveRoom.endConfirm.message"             = "Are you sure you want to end the live?";
@@ -892,7 +922,16 @@
 "party.tool.roomMode"                    = "Room Mode";
 "party.tool.blocklist"                   = "Blocklist";
 "party.tool.mcSeat"                      = "MC Seat";
+"party.tool.privateCall"                 = "Party Call";
 "party.tool.comingSoon"                  = "Coming soon";
+// F-spec §5.1 PartyPrivateCallSettingSheet
+"party.privateCall.settingTitle"         = "Party Call";
+"party.privateCall.enableToggleTitle"    = "Enable Party Call";
+"party.privateCall.giftSectionTitle"     = "Call Gift";
+"party.privateCall.giftEmpty"            = "No gifts available";
+"party.privateCall.loadError"            = "Failed to load, tap to retry";
+"party.privateCall.saveSuccess"          = "Saved";
+"party.privateCall.saveFailed"           = "Save failed, please try again";
 // E spec 2026-07-14 派对房 Blocklist（房主/管理员查看+解除房间维度黑名单）
 "party.blocklist.navTitle"               = "Blocklist";
 "party.blocklist.empty"                  = "No blocked users";
@@ -924,6 +963,14 @@
 "party.mcSeat.setSuccess"                = "MC seat set";
 "party.mcSeat.closeSuccess"              = "MC seat closed";
 "party.mcSeat.operationFailed"           = "Operation failed, please try again";
+
+// v3（2026-07-15）Step 2 通知公屏系统消息
+"party.videoSeat.inviteAcceptedFormat"   = "%@ joined the video seat";
+"party.authUpdate.setAdmin"              = "You have been set as room admin";
+"party.authUpdate.removeAdmin"           = "You are no longer a room admin";
+"party.roomAnnouncement.format"          = "Room announcement: %@";
+"party.luckyNumber.drawFormat"           = "%1$@ drew lucky number %2$d";
+"party.luckyNumber.winFormat"            = "%1$@ won lucky number %2$d";
 "party.create.section.name"              = "Room Name";
 "party.create.name.placeholder"          = "Up to 20 characters";
 "party.create.hint.needName"             = "Enter room name to continue";
@@ -1072,6 +1119,32 @@
 "liveData.days"                          = "days";
 "liveData.expand"                        = "Expand";
 "liveData.collapse"                      = "Collapse";
+
+// LiveData 规则 sheet（对齐 H5 liveRule/index.vue 默认分支）
+"liveData.rule.navTitle"                 = "Live Rules";
+"liveData.rule.section1"                 = "Basic Information:";
+"liveData.rule.section2"                 = "Data Update and Statistical Cycle:";
+"liveData.rule.section3"                 = "Income Calculation Rules:";
+"liveData.rule.section4"                 = "Exception Handling:";
+"liveData.rule.calcMethod"               = "2. Calculation Method:";
+"liveData.rule.title1"                   = "1. Scope of Application:";
+"liveData.rule.title2"                   = "1. Update Frequency:";
+"liveData.rule.title3"                   = "2. Statistical Cycle:";
+"liveData.rule.title4"                   = "1. Income Included:";
+"liveData.rule.title7"                   = "1. Income Delay:";
+"liveData.rule.title8"                   = "2. Data Dispute:";
+"liveData.rule.content1"                 = "Applies to official live streaming sessions with normal video and audio, which comply with platform streaming guidelines and valid duration requirements.";
+"liveData.rule.content2"                 = "Data is updated every hour. For broadcasts extending beyond one day, duration and gift income are calculated under the session start date.";
+"liveData.rule.content3"                 = "Supports weekly and monthly statistics. Users can view data for the last two weeks and last three months. Data is automatically updated based on the corresponding cycle.";
+"liveData.rule.content4"                 = "Gift income during live streaming, gift income during private calls, and income from diamond spending in private calls.";
+"liveData.rule.content5"                 = "a. Live income = Gift income during live streaming (including private call gifts). b. Private call income = Diamonds consumed during private calls.";
+"liveData.rule.content7"                 = "Data update delay generally does not exceed 24 hours.";
+"liveData.rule.content8"                 = "If you have questions about the data, you can submit an appeal to official customer service for verification.";
+
+// Work 底部 sysInfo 组件（对齐 H5 work/sysInfo.vue）
+"system.serverTime"                      = "Server Time";
+"contact.officialWhatsapp"               = "Official WhatsApp: %@";
+"common.copySuccess"                     = "Copied";
 
 // MARK: - K 里程碑 美颜设置页
 "beautySettings.pageTitle"                                  = "Beauty";

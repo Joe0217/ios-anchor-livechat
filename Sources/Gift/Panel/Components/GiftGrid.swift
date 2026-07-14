@@ -16,27 +16,36 @@ struct GiftPanelGrid: View {
 
     var body: some View {
         ScrollView {
-            LazyVGrid(columns: columns, spacing: 10) {
+            LazyVGrid(columns: columns, spacing: 6) {
                 ForEach(store.gifts(for: tab)) { gift in
                     cell(gift)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            // 内边距压缩：16/12 → 8/6（让礼物 grid 视觉更紧凑）
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
         }
     }
 
     private func cell(_ gift: GiftListData) -> some View {
         let isSelected = store.config.interaction == .selectable && store.selectedId == gift.id
+        // Party 场景（FooterMode.send）用紫色钻石 partyGems；其他场景（callGate/wishGift/liveDisplayOnly/imBind/callAskFor）
+        // 沿用黄色 SF Symbol diamond.fill（本地 fallback，未来可视觉统一时集中改）
+        let isPartySend: Bool = {
+            if case .send = store.config.footer { return true }
+            return false
+        }()
         return Button(action: { handleTap(gift) }) {
             VStack(spacing: 4) {
+                // persistent=true：礼物图片高频复用 + 跨会话持久（NSCache 150MB 内存 + URLCache 磁盘）
+                //   ImageCache.shared 已按 URL LRU；礼物图数量有限（几十个）大小小（几十 KB）总占用可控
                 CachedAsyncImage(url: URL(string: gift.giftSmallImg.isEmpty ? gift.giftImg : gift.giftSmallImg),
                                  contentMode: .fit,
-                                 persistent: false,
+                                 persistent: true,
                                  cdn: (.gift, .fit)) {
                     Color.white.opacity(0.06)
                 }
-                .frame(width: 56, height: 56)
+                .frame(width: 50, height: 50)  // 统一 50x50
 
                 Text(gift.name)
                     .font(.system(size: 11, weight: .medium))
@@ -45,9 +54,17 @@ struct GiftPanelGrid: View {
                     .padding(.horizontal, 4)
 
                 HStack(spacing: 2) {
-                    Image(systemName: "diamond.fill")
-                        .font(.system(size: 9))
-                        .foregroundColor(.yellow)
+                    if isPartySend {
+                        // Party 房紫钻资源
+                        Image("partyGems")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 10, height: 10)
+                    } else {
+                        Image(systemName: "diamond.fill")
+                            .font(.system(size: 9))
+                            .foregroundColor(.yellow)
+                    }
                     Text("\(gift.giftPrice)")
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.white)
@@ -56,12 +73,13 @@ struct GiftPanelGrid: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .background(
+                // 未选中：无背景色（对齐产品需求·仅选中时用淡粉底 + 边框视觉高亮）
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(isSelected ? Color.pink.opacity(0.18) : Color.white.opacity(0.05))
+                    .fill(isSelected ? Theme.Palette.brandPink.opacity(0.18) : Color.clear)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(isSelected ? Color.pink : Color.clear, lineWidth: 1.5)
+                    .stroke(isSelected ? Theme.Palette.brandPink : Color.clear, lineWidth: 1.5)
             )
             .contentShape(Rectangle())
         }

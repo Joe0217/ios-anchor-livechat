@@ -1,0 +1,108 @@
+import Foundation
+import os
+
+private let logger = Logger(subsystem: "com.anchor.livechat", category: "Party.GiftDataSource")
+
+/// 派对房礼物列表数据源（H-5 · GiftPanelDataSource + GiftPanelBalanceSource 双 protocol）。
+///
+/// **走 sapi 域 `PartyAPI.getPartyRoomGift`** —— 不走主接口 `/api/gift/v3/getGiftList`（后端不识别 PARTY_ROOM/PARTY_GIFT scene → parameter.error）。
+///
+/// **balance 一体化**（review #2）：response 里已经带 `userDiamond`，DataSource 内部缓存 → 同时实作
+/// `GiftPanelBalanceSource.currentBalance()`。避免 `gem/getBalance` 额外 HTTP + 消除余额展示与 sendGift
+/// 扣款域可能不匹配的风险（H5 gift.js:1359 就是这么做的）。
+///
+/// **v2/v1 双 fallback**（review #1）：response.tabs 优先 · 缺失 → 走 v1 giftInfoDtoList 兜底（后端灰度关闭时）。
+///
+/// **本轮 MVP 约束**：Config.partySend factory 只挂 `[.popular]` tab，`load()` 返回全部 tabs 但
+/// Store 层按 `config.tabs` 过滤（`Store.gifts(for tab:)`），未开 tab 静默隐藏。
+///
+/// **线程安全**：`loadGifts()` 与 `currentBalance()` 都在 async 上下文，`_latestBalance` 用 NSLock 保护
+/// 双 queue 竞态（DataSource 单例被 Store + BalancePolicy 双引用）。
+final class PartyGiftDataSource: GiftPanelDataSource, GiftPanelBalanceSource {
+
+    private let lock = NSLock()
+    private var _latestBalance: Int64?
+
+    init() {}
+
+    /// 同步 fast path（Store.load 入口调）：命中 GiftCatalogCache 直接返 + sync balance；无网络
+    /// 让面板打开时秒显礼物 grid，跳过 loading 转圈
+    func syncCachedGroups() -> [GiftPanelGroup]? {
+        guard let entry = GiftCatalogCache.shared.get(scene: .party) else { return nil }
+        if let b = entry.userDiamond {
+            lock.lock(); _latestBalance = b; lock.unlock()
+        }
+        logger.info("[PartyGift] sync cache hit groups=\(entry.groups.count, privacy: .public)")
+        return entry.groups
+    }
+
+    func loadGifts() async throws -> [GiftPanelGroup] {
+        // 缓存命中 fast path：TTL 5min 内直接返 + sync balance；跨面板反复打开秒开
+        if let entry = GiftCatalogCache.shared.get(scene: .party) {
+            if let b = entry.userDiamond {
+                lock.lock(); _latestBalance = b; lock.unlock()
+            }
+            logger.info("[PartyGift] cache hit groups=\(entry.groups.count, privacy: .public)")
+            return entry.groups
+        }
+
+        let response = try await PartyAPI.getPartyRoomGift(showType: 0, apiVersion: 2)
+
+        // 缓存 balance（review #2 · 与 send response 里 userDiamond 同源，避免扣款/展示不一致）
+        if let b = response.userDiamond {
+            lock.lock(); _latestBalance = b; lock.unlock()
+        }
+
+        var groups: [GiftPanelGroup] = []
+
+        // v2 优先（review #1 · 灰度开启时的主路径）
+        if let tabs = response.tabs, !tabs.isEmpty {
+            let sortedTabs = tabs.sorted { (a, b) -> Bool in
+                (a.tabSort ?? 0) < (b.tabSort ?? 0)
+            }
+            for tab in sortedTabs {
+                let rawName = tab.tabCode ?? tab.tabName ?? ""
+                guard let mappedTab = GiftPanelTab.fromGroupName(rawName) else {
+                    logger.info("[PartyGift] unknown v2 tab code=\(rawName, privacy: .public); dropping")
+                    continue
+                }
+                groups.append(GiftPanelGroup(tab: mappedTab, gifts: tab.gifts ?? []))
+            }
+            logger.info("[PartyGift] v2 loaded groups=\(groups.count, privacy: .public) balance=\(response.userDiamond ?? -1, privacy: .public)")
+            GiftCatalogCache.shared.set(scene: .party, groups: groups, userDiamond: response.userDiamond)
+            return groups
+        }
+
+        // v1 fallback（review #1 · 灰度关闭 apiVersion=2 → 后端回退 giftInfoDtoList · party.js:1347）
+        if let v1Tabs = response.giftInfoDtoList, !v1Tabs.isEmpty {
+            for tab in v1Tabs {
+                let rawName = tab.tabName ?? ""
+                guard let mappedTab = GiftPanelTab.fromGroupName(rawName) else {
+                    logger.info("[PartyGift] unknown v1 tabName=\(rawName, privacy: .public); dropping")
+                    continue
+                }
+                groups.append(GiftPanelGroup(tab: mappedTab, gifts: tab.giftVoList ?? []))
+            }
+            logger.info("[PartyGift] v1 fallback loaded groups=\(groups.count, privacy: .public)")
+            GiftCatalogCache.shared.set(scene: .party, groups: groups, userDiamond: response.userDiamond)
+            return groups
+        }
+
+        logger.notice("[PartyGift] both v2 tabs and v1 giftInfoDtoList empty; returning empty groups")
+        return []
+    }
+
+    /// GiftPanelBalanceSource · 直接返回 loadGifts() 缓存的 userDiamond
+    /// - nil = 尚未 loadGifts 或 response 未携带 userDiamond → UI 显 `--`（对齐 spec R6）
+    func currentBalance() async -> Int64? {
+        lock.lock(); defer { lock.unlock() }
+        return _latestBalance
+    }
+
+    /// sendGift 成功后 Store 侧从 response.userDiamond 更新余额；同步到 DataSource 缓存 + GiftCatalogCache
+    /// 让下次 currentBalance() 返回最新值（若面板 reopen 不需要重拉 API）
+    func updateBalanceFromSend(_ balance: Int64) {
+        lock.lock(); _latestBalance = balance; lock.unlock()
+        GiftCatalogCache.shared.updateBalance(scene: .party, userDiamond: balance)
+    }
+}
