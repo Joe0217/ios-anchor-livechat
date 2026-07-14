@@ -134,13 +134,15 @@ final class PartyCreateStore: ObservableObject {
         defer { backgroundsLoading = false }
         do {
             let list = try await service.fetchBackgrounds()
+            AppLogger.party.info("[PartyCreate] loadBackgrounds ok count=\(list.count, privacy: .public)")
             backgrounds = list
             // 首张自动选中（对齐安卓）
             if selectedBackground == nil { selectedBackground = list.first }
         } catch is CancellationError {
             return
         } catch {
-            // 静默降级：View 层显示占位（对齐 H5 create.vue 兜底 DEFAULT_BG）
+            // v7.5：从静默降级改为 log 记录（原静默让用户"backgrounds picker 空态"无法排查）
+            AppLogger.party.error("[PartyCreate] loadBackgrounds failed: \(String(describing: error), privacy: .private)")
         }
     }
 
@@ -213,20 +215,20 @@ final class PartyCreateStore: ObservableObject {
 
     // MARK: - Submit
 
-    /// 提交条件：房名 + tagline + language + template + background 都非空/nil；头像上传中禁提交
-    /// v7.1：加 selectedBackground 检查（对齐安卓 6 字段全必填 checkConfirmEnable）
+    /// 提交条件：房名 + tagline + language + template 4 字段；头像上传中禁提交
+    /// v7.5 反悔：**背景改 optional**（对齐 H5 create.vue:267 `bgImgId: selectedBg.value?.id`
+    /// optional chaining，后端 nil 时用 default） —— 修复"backgrounds API 拉不到就无法创房"死锁
     var canSubmit: Bool {
         !roomName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && !roomTagline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && selectedLanguage != nil
             && selectedTemplate != nil
-            && selectedBackground != nil
             && !isSubmitting
             && !isUploadingAvatar
     }
 
     /// canSubmit=false 时缺失字段的 L10n hint —— UI 层 disable Create 按钮下方展示，
-    /// 帮用户定位缺什么（v7.2 真机反悔：backgrounds API 失败时用户不知道该选背景）
+    /// 帮用户定位缺什么（v7.5 去掉 needBackground 分支，对齐 canSubmit）
     var missingFieldHint: String? {
         if roomName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return L10n.Party.createHintNeedName
@@ -236,7 +238,6 @@ final class PartyCreateStore: ObservableObject {
         }
         if selectedLanguage == nil { return L10n.Party.createHintNeedLanguage }
         if selectedTemplate == nil { return L10n.Party.createHintNeedTemplate }
-        if selectedBackground == nil { return L10n.Party.createHintNeedBackground }
         return nil
     }
 

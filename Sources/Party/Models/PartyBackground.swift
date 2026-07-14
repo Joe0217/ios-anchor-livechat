@@ -16,6 +16,34 @@ struct PartyBackground: Decodable, Identifiable, Equatable, Hashable {
     let duration: Int?
 
     var isPermanent: Bool { (duration ?? 0) <= 0 }
+
+    /// v7.5：手写 init 让 id / duration String/Int 双兼容 —— 若真机后端返 `"12"` 字符串会让
+    /// 默认 Codable 挂（`Expected Int, found String`）→ decodeArrayOrEmpty 整个数组 fail →
+    /// backgrounds 恒空 → 用户无法选背景。ios-decode-userid-compat rule 同源精神。
+    enum CodingKeys: String, CodingKey {
+        case id, imgUrl, bigImgUrl, bgImgName, duration
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let n = try? c.decode(Int.self, forKey: .id) {
+            id = n
+        } else if let s = try? c.decode(String.self, forKey: .id), let n = Int(s) {
+            id = n
+        } else {
+            throw DecodingError.dataCorruptedError(forKey: .id, in: c, debugDescription: "id neither Int nor Int-string")
+        }
+        imgUrl = try? c.decode(String.self, forKey: .imgUrl)
+        bigImgUrl = try? c.decode(String.self, forKey: .bigImgUrl)
+        bgImgName = try? c.decode(String.self, forKey: .bgImgName)
+        if let n = try? c.decode(Int.self, forKey: .duration) {
+            duration = n
+        } else if let s = try? c.decode(String.self, forKey: .duration), let n = Int(s) {
+            duration = n
+        } else {
+            duration = nil
+        }
+    }
 }
 
 /// 创房权限校验（`room/getCreateRoomConditions` 返回）。

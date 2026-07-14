@@ -552,11 +552,12 @@ struct PartyCreateModePickerSheet: View {
             ZStack(alignment: .topTrailing) {
                 Group {
                     if let cover = temp.coverImage, !cover.isEmpty, let u = URL(string: cover) {
-                        CachedAsyncImage(url: u, contentMode: .fit, cdn: (.avatarLarge, .fit)) {
+                        // v7.5：铺满容器（.fill）+ clipped 裁剪超出，对齐用户要求
+                        CachedAsyncImage(url: u, contentMode: .fill, cdn: (.avatarLarge, .fill)) {
                             Rectangle().fill(Theme.Palette.partyCreateTempFill)
                         }
                     } else if let asset = PartyCreateRoomView.assetNameForTemplate(temp) {
-                        Image(asset).resizable().scaledToFit()
+                        Image(asset).resizable().scaledToFill()
                     } else {
                         Image(systemName: "square.grid.2x2")
                             .resizable().scaledToFit()
@@ -566,6 +567,7 @@ struct PartyCreateModePickerSheet: View {
                 }
                 .frame(maxWidth: .infinity)
                 .aspectRatio(1, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 if selected {
                     Image("partyTemplateSelected")
                         .resizable()
