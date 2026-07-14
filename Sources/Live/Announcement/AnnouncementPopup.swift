@@ -35,6 +35,17 @@ struct AnnouncementPopup: View {
             .padding(.horizontal, 8)
             .frame(height: 200)   // v20 明示高度
             .onAppear { store.loadIfNeeded() }
+            // v21 修 bug：原来把"保存完成"副作用挂在 saveStatusLabel 的 `Color.clear.onAppear` 里，
+            // popup 是 .overlay 永久挂载 + @StateObject 复用 → saveState 停在 .saved 未 reset →
+            // 再次打开 popup 时 view 重建触发 .onAppear 副作用重放 → 自动 onSaved + 关闭。
+            // 改为 onChange 观察状态转移，并立即 resetSaveState 避免 stale。
+            .onChange(of: store.saveState) { newState in
+                guard case .saved = newState else { return }
+                let content = store.draftContent
+                store.resetSaveState()
+                onSaved(content)
+                withAnimation { isPresented = false }
+            }
         }
     }
 
@@ -86,14 +97,8 @@ struct AnnouncementPopup: View {
                     .font(.system(size: 11)).foregroundColor(.white.opacity(0.6))
             }
         case .saved:
-            // v20：保存成功后**立即关闭 popup + 通过 onSaved 回调让父层往公屏 append 公告消息**
-            // 对齐 H5 liveAnnouncementPopup.vue save 成功后关闭 + pushRoomAnnouncementMsg
-            Color.clear.frame(height: 0)
-                .onAppear {
-                    let content = store.draftContent
-                    onSaved(content)
-                    withAnimation { isPresented = false }
-                }
+            // v21：副作用（onSaved + 关闭）已迁到 body 的 onChange(of: saveState)；这里保持无视觉
+            EmptyView()
         case .sensitiveWords(let hits):
             Text(String(format: L10n.announcementSensitiveWord, hits.joined(separator: ", ")))
                 .font(.system(size: 11))
