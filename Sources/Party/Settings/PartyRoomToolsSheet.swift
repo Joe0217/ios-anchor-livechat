@@ -11,6 +11,8 @@ enum PartyRoomToolSheetKind: String, Identifiable {
     case micApplicationSwitchConfirm
     // E-spec Lock Room：房主 tap Lock Room → 关 tools sheet → 350ms 后打开 .lockRoom（PartyLockRoomSheet）
     case lockRoom
+    // E-spec MC Seat：房主/平台管理员 tap MC Seat → 关 tools sheet → 350ms 后打开 .mcSeat（PartyMCSeatSheet）
+    case mcSeat
     var id: String { rawValue }
 }
 
@@ -35,6 +37,8 @@ struct PartyRoomToolsSheet: View {
     let onTapMicApplication: () -> Void
     /// E-spec Lock Room wire：房主 tap Lock Room → 关本 sheet + 350ms 后打开 activeRoomTool = .lockRoom
     let onTapLockRoom: () -> Void
+    /// E-spec MC Seat wire：房主/平台管理员 tap MC Seat → 关本 sheet + 350ms 后打开 activeRoomTool = .mcSeat
+    let onTapMCSeat: () -> Void
     /// 其他 stub 项 tap 通用回调（View 可 toast "Coming soon"）
     let onTapStub: (String) -> Void
 
@@ -74,7 +78,7 @@ struct PartyRoomToolsSheet: View {
                     }
                     if isOwner || isPlatformAdmin {
                         toolItem(icon: "mic.fill", label: L10n.Party.toolMCSeat) {
-                            onTapStub(L10n.Party.toolMCSeat)
+                            onTapMCSeat()
                         }
                     }
                 }

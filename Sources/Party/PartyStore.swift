@@ -108,6 +108,14 @@ final class PartyStore: ObservableObject {
     /// 房间加/解锁 API 幂等 flag（spec §4 R3；防 Save/Lock Room icon 连点双请求）
     private var isBusyLockRoom: Bool = false
 
+    // MARK: - MC Seat (E spec §3 MC Seat, 2026-07-14)
+
+    /// setMCSeat 幂等 flag（per-seatIndex；防同 seat 快速双点双请求）。
+    /// 全房至多 1 个 MC，但 picker sheet 内切换目标 seatIndex 时允许对不同 seat 并发（服务端会覆盖）。
+    /// spec §0.2 "MC 全房至多 1 个"：set/close 共用房间级 flag 避免 set A + close race
+    /// （原 per-seatIndex Set 只防同 seat 双点，不防跨 set A + set B or set A + close）
+    private var isBusyMCSeat: Bool = false  // set + close 共用（防 set A + close race）
+
     /// partySaveInfo（对齐 H5 stores/modules/user.js partySaveInfo）：本地长驻两个 Bool flag，
     /// 用户是否已经首次协议确认过 "打开申请" / "关闭申请"；二次同方向切换 UI 直接调 API 不弹协议弹窗。
     /// 说明：@AppStorage 在 ObservableObject 中不触发 objectWillChange（与视图订阅相反），
@@ -219,6 +227,9 @@ final class PartyStore: ObservableObject {
         onlineUserCount = info.onlineCount
         // 初始化关注态（对齐 H5 `currentPartyInfo.isFollowOwner`；nil 视为未关注）
         isFollowingAnchor = info.isFollowOwner ?? false
+        // v16：字段真机对齐诊断 —— 若后端 `isFollowOwner` 字段名不匹配 / 不返回，
+        // 用户报"已关注房间重进显示未关注"时可查此 log 确认后端行为
+        AppLogger.party.info("[PartyStore] enter isFollowOwner raw=\(String(describing: info.isFollowOwner), privacy: .public) → isFollowingAnchor=\(self.isFollowingAnchor, privacy: .public)")
         // v12：房主头像框 async 拉（不阻塞进房主流程）
         Task { [weak self] in await self?.loadOwnerInfoIfNeeded() }
         roomState = .entering
@@ -381,6 +392,8 @@ final class PartyStore: ObservableObject {
         loadBlocklistTask = nil
         // E spec §3 Lock Room：幂等 flag 清（退房若正好卡在请求中，下次进新房重置为可用）
         isBusyLockRoom = false
+        // E spec §3 MC Seat：幂等 flag 清（退房重置）
+        isBusyMCSeat = false
     }
 
     // MARK: - 房主保存设置后本地同步（v8.2）
@@ -426,11 +439,15 @@ final class PartyStore: ObservableObject {
 
     /// 切换关注状态。请求成功后翻转 `isFollowingAnchor`；失败静默保留原状态。
     /// followType：**已关注 → 2（取关）；未关注 → 1（关注）**（对齐 FollowListService.followUser 语义）。
-    func toggleFollowAnchor() async {
-        guard !isTogglingFollow else { return }
+    ///
+    /// 返回值：`nil` = skip（重入 / owner 非法）；非 nil 时 `success=true` 代表接口成功，
+    /// `willFollow` 反映**成功后的目标状态**（true=已关注 / false=已取关），View 层据此决定 toast 文案。
+    @discardableResult
+    func toggleFollowAnchor() async -> (success: Bool, willFollow: Bool)? {
+        guard !isTogglingFollow else { return nil }
         guard let owner = roomInfo?.ownerId, let ownerIdInt = Int(owner), ownerIdInt > 0 else {
             AppLogger.party.error("[PartyStore] toggleFollow skip: ownerId invalid")
-            return
+            return nil
         }
         let willFollow = !isFollowingAnchor
         let type = willFollow ? 1 : 2
@@ -440,9 +457,11 @@ final class PartyStore: ObservableObject {
             try await FollowListService.followUser(followUserId: ownerIdInt, followType: type)
             isFollowingAnchor = willFollow
             AppLogger.party.info("[PartyStore] toggleFollow ok uid=\(ownerIdInt) willFollow=\(willFollow, privacy: .public)")
+            return (true, willFollow)
         } catch {
             AppLogger.party.error("[PartyStore] toggleFollow failed: \(String(describing: error), privacy: .public)")
             // 静默失败：不 lastError = ...（关注失败不阻塞房间业务；UI 层可通过 isFollowingAnchor 未翻转感知）
+            return (false, willFollow)
         }
     }
 
@@ -1293,6 +1312,93 @@ final class PartyStore: ObservableObject {
         } catch {
             AppLogger.party.error("[PartyStore] unlockRoom failed: \(String(describing: error), privacy: .private)")
             lastError = .underlying((error as? PartyAPIError) ?? .networkError)
+        }
+    }
+
+    // MARK: - MC Seat (E spec §3 MC Seat, 2026-07-14)
+
+    /// 房主/房管设置接待位（E spec §3）。
+    /// - 权限：Owner / PlatformAdmin（UI 层 tools sheet 已门控；后端强校验）
+    /// - 幂等：`isBusyMCSeat` 房间级（set + close 共用；防 set A + set B / set + close race）
+    /// - 成功后**不本地乐观更新**，等 IM 1001 广播回来自然刷新 seatList
+    /// - **返回 Bool 明示成功/失败** —— verify P0 fix：sheet 用来做 toast 判定，
+    ///   不再 lastError.localizedDescription diff（同错误消息连续两次会误判成功）
+    @discardableResult
+    func setMCSeat(seatIndex: Int) async -> Bool {
+        guard !isBusyMCSeat else {
+            AppLogger.party.notice("[PartyStore] setMCSeat skip: busy")
+            return false
+        }
+        guard let info = roomInfo, roomState == .joined else {
+            AppLogger.party.notice("[PartyStore] setMCSeat skip: not joined")
+            return false
+        }
+        guard let roomId = info.id, !roomId.isEmpty else {
+            AppLogger.party.error("[PartyStore] setMCSeat bad roomId")
+            lastError = .underlying(.networkError)
+            return false
+        }
+        isBusyMCSeat = true
+        defer { isBusyMCSeat = false }
+        do {
+            try await PartyAPI.setMCSeat(
+                roomId: roomId,
+                seatIndex: seatIndex,
+                yxRoomId: info.yxRoomId ?? "",
+                roomTempId: info.roomTempIdInt
+            )
+            AppLogger.party.info("[PartyStore] setMCSeat ok seatIndex=\(seatIndex, privacy: .public)")
+            return true
+        } catch let api as PartyAPIError {
+            AppLogger.party.error("[PartyStore] setMCSeat failed: \(String(describing: api), privacy: .private)")
+            lastError = PartyRoomErrorMapper.map(api)
+            return false
+        } catch {
+            AppLogger.party.error("[PartyStore] setMCSeat failed: \(String(describing: error), privacy: .private)")
+            lastError = .underlying(.networkError)
+            return false
+        }
+    }
+
+    /// 房主/房管关闭接待位（E spec §3）。
+    /// - 权限：Owner / PlatformAdmin
+    /// - 无二次确认：UI 层 tap ON cell 直接调（对齐 H5 无二次确认弹窗）
+    /// - 幂等：与 setMCSeat 共用 `isBusyMCSeat` 房间级（防 set + close race）
+    /// - 成功后**不本地乐观更新**，等 IM 1001 广播回来自然刷新 seatList
+    /// - **返回 Bool 明示成功/失败**（verify P0 fix）
+    @discardableResult
+    func closeMCSeat() async -> Bool {
+        guard !isBusyMCSeat else {
+            AppLogger.party.notice("[PartyStore] closeMCSeat skip: busy")
+            return false
+        }
+        guard let info = roomInfo, roomState == .joined else {
+            AppLogger.party.notice("[PartyStore] closeMCSeat skip: not joined")
+            return false
+        }
+        guard let roomId = info.id, !roomId.isEmpty else {
+            AppLogger.party.error("[PartyStore] closeMCSeat bad roomId")
+            lastError = .underlying(.networkError)
+            return false
+        }
+        isBusyMCSeat = true
+        defer { isBusyMCSeat = false }
+        do {
+            try await PartyAPI.closeMCSeat(
+                roomId: roomId,
+                yxRoomId: info.yxRoomId ?? "",
+                roomTempId: info.roomTempIdInt
+            )
+            AppLogger.party.info("[PartyStore] closeMCSeat ok roomId=\(roomId, privacy: .public)")
+            return true
+        } catch let api as PartyAPIError {
+            AppLogger.party.error("[PartyStore] closeMCSeat failed: \(String(describing: api), privacy: .private)")
+            lastError = PartyRoomErrorMapper.map(api)
+            return false
+        } catch {
+            AppLogger.party.error("[PartyStore] closeMCSeat failed: \(String(describing: error), privacy: .private)")
+            lastError = .underlying(.networkError)
+            return false
         }
     }
 

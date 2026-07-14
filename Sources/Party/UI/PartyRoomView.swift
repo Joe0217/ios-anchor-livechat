@@ -44,8 +44,8 @@ struct PartyRoomView: View {
     @State private var showAnnouncement: Bool = false
     /// v9：更多菜单 action sheet 显隐（对齐 H5 more-tool-popup.vue Minimize/Exit）
     @State private var showMoreActions: Bool = false
-    /// v9：关注态本地缓存（进房后 FollowListService 拉不到，采用乐观切换；F 期加接口拉初始态）
-    @State private var isFollowingOwner: Bool = false
+    // v16（2026-07-14）：关注态改从 `store.isFollowingAnchor` 读，进房时 room/enter 接口的
+    // `isFollowOwner` 字段初始化；本地 @State 已删除以避免"退出重进显示未关注"的状态漂移。
     /// v12：底部工具栏 message 按钮 → 复用 Live 侧 ConversationSheetContent 半屏消息列表
     @State private var showMessageSheet: Bool = false
     /// v12：底部工具栏 toolMenu 按钮 confirmationDialog（对齐 H5 party-tool-menu.vue PK/Lucky Number/Room Mute）
@@ -219,7 +219,7 @@ struct PartyRoomView: View {
             wealthText: heatText,
             honorText: heatText,
             audienceCountText: "\(store.roomInfo?.onlineCount ?? 0)",
-            isFollowing: isFollowingOwner,
+            isFollowing: store.isFollowingAnchor,
             isSelfRoom: store.selfRole == .owner,
             canManage: store.selfRole == .owner || store.selfRole == .admin,
             canStartPk: (store.selfRole == .owner || store.selfRole == .admin) && (store.roomInfo?.roomTempIdInt == 1),
@@ -697,30 +697,18 @@ struct PartyRoomView: View {
 
     // MARK: - 顶部工具栏 handler
 
-    /// v9：关注/取关房主（对齐 H5 header-wrap.vue userStore.followOrNo）
-    /// 走 FollowListService.followUser(followUserId:followType:) 已封装的 /api/user/followUser。
-    /// **乐观切换**：tap 后立即翻转 UI 态，接口失败静默回滚（提示待 F 期加 toast 基建）。
-    /// 初始态 F 期加接口 /api/user/isFollowUser 拉取；MVP 默认 false。
+    /// v16：关注/取关房主（对齐 H5 header-wrap.vue userStore.followOrNo）
+    /// 走 `store.toggleFollowAnchor()` 统一维护 `isFollowingAnchor`；成功后弹通用 toast
+    /// （对齐 H5 `jsToast.userFollow` / `userCancelFollow`）。
+    /// 进房关注态由 room/enter 接口 `isFollowOwner` 字段初始化，退出重进保持一致。
     private func handleFollowTap() {
-        guard let ownerIdStr = store.roomInfo?.ownerId,
-              let ownerId = Int(ownerIdStr),
-              store.selfRole != .owner
-        else {
-            AppLogger.party.notice("[PartyRoom] follow: no ownerId or is owner; skip")
+        guard store.selfRole != .owner else {
+            AppLogger.party.notice("[PartyRoom] follow: is owner; skip")
             return
         }
-        let willFollow = !isFollowingOwner
-        isFollowingOwner = willFollow // 乐观切换
         Task { @MainActor in
-            do {
-                try await FollowListService.followUser(
-                    followUserId: ownerId,
-                    followType: willFollow ? 1 : 2
-                )
-            } catch {
-                AppLogger.party.error("[PartyRoom] follow failed: \(String(describing: error), privacy: .private)")
-                isFollowingOwner = !willFollow // 回滚
-            }
+            guard let result = await store.toggleFollowAnchor(), result.success else { return }
+            stubToolToast = result.willFollow ? L10n.commonFollowSuccess : L10n.commonUnfollowSuccess
         }
     }
 
@@ -803,6 +791,14 @@ struct PartyRoomView: View {
                             try? await Task.sleep(nanoseconds: 350_000_000)
                             activeRoomTool = .lockRoom
                         }
+                    }
+                },
+                onTapMCSeat: {
+                    // E-spec MC Seat：关 tools sheet + 350ms 后打开 PartyMCSeatSheet
+                    Task { @MainActor in
+                        activeRoomTool = nil
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        activeRoomTool = .mcSeat
                     }
                 },
                 onTapStub: { label in
@@ -937,6 +933,10 @@ struct PartyRoomView: View {
             }
             .presentationDetents([.height(320)])
             .preferredColorScheme(.dark)
+        case .mcSeat:
+            NavigationStack { PartyMCSeatSheet(store: store) }
+                .presentationDetents([.medium, .large])
+                .preferredColorScheme(.dark)
         }
     }
 

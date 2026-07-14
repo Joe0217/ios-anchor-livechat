@@ -474,6 +474,58 @@ enum PartyAPI {
         )
     }
 
+    // MARK: - MC Seat (E spec §3, 2026-07-14)
+
+    /// 设置接待位 MC Seat（E spec §3）。对齐 H5 `apiSetHostSeat`。
+    ///
+    /// **path**：`/sapi/weidou/v1/client/party/seat/setHostSeat`
+    /// **body**：`{ roomId, seatIndex, yxRoomId, roomTempId }`
+    ///
+    /// - 权限：Owner / PlatformAdmin（后端强校验；前端 tools sheet 已门控）
+    /// - 全房至多 1 个 MC 位（服务端保证）；重复设置不同 seatIndex 时后端会自动清旧
+    /// - 成功后服务端下发 1001 seat/update 广播 → 前端 seatList 全量替换自然刷新
+    /// - **字段名/method/path 未真机验证**（agent-recon-field-names-unverified rule）；
+    ///   首次真机拉取后按 Console log 回写 alias 兜底
+    static func setMCSeat(
+        roomId: String,
+        seatIndex: Int,
+        yxRoomId: String,
+        roomTempId: Int
+    ) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/seat/setHostSeat",
+            body: [
+                "roomId": roomId,
+                "seatIndex": seatIndex,
+                "yxRoomId": yxRoomId,
+                "roomTempId": roomTempId,
+            ]
+        )
+    }
+
+    /// 关闭接待位 MC Seat（E spec §3）。对齐 H5 `apiCloseHostSeat`。
+    ///
+    /// **path**：`/sapi/weidou/v1/client/party/seat/closeHostSeat`
+    /// **body**：`{ roomId, yxRoomId, roomTempId }`（**无 seatIndex** —— MC 全房唯一，服务端按 roomId 定位）
+    ///
+    /// - 权限：Owner / PlatformAdmin
+    /// - 成功后服务端下发 1001 seat/update 广播 → 前端 seatList 全量替换自然刷新
+    /// - 无二次确认由 UI 层遵循（对齐 H5）
+    static func closeMCSeat(
+        roomId: String,
+        yxRoomId: String,
+        roomTempId: Int
+    ) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/seat/closeHostSeat",
+            body: [
+                "roomId": roomId,
+                "yxRoomId": yxRoomId,
+                "roomTempId": roomTempId,
+            ]
+        )
+    }
+
     // MARK: - room mode (E v2 §1)
 
     /// 切换房间模板（Room Mode 切模式）。spec §1 契约。

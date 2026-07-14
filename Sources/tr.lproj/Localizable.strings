@@ -81,7 +81,6 @@
 "work.offline"               = "Çevrimdışı";
 
 // 工具图标标签
-"work.tool.hi"               = "Merhaba";
 "work.tool.goLive"           = "Yayına Geç";
 "work.tool.match"            = "Eşleş";
 "work.tool.task"             = "Görev";
@@ -958,6 +957,17 @@
 "party.lockRoom.lockSuccess"             = "Oda kilitlendi";
 "party.lockRoom.unlockSuccess"           = "Odanın kilidi açıldı";
 "party.lockRoom.operationFailed"         = "İşlem başarısız oldu, lütfen tekrar deneyin";
+// E spec 2026-07-14 派对房 MC Seat（接待位）
+"party.mcSeat.sheetTitle"                = "MC Koltuğu";
+"party.mcSeat.submit"                    = "MC Koltuğunu Ayarla";
+"party.mcSeat.tips"                      = "MC koltuğuna yalnızca sahip ve yöneticiler oturabilir";
+"party.mcSeat.badge"                     = "MC";
+"party.mcSeat.confirmEmpty"              = "Bu boş koltuk MC koltuğu olarak ayarlansın mı?";
+"party.mcSeat.confirmPrivilegedFormat"   = "%@ şu anda yönetici. Bu koltuk MC koltuğu olarak ayarlansın mı?";
+"party.mcSeat.confirmNormalFormat"       = "%@ koltuktan çıkarılacak. Bu koltuk MC koltuğu olarak ayarlansın mı?";
+"party.mcSeat.setSuccess"                = "MC koltuğu ayarlandı";
+"party.mcSeat.closeSuccess"              = "MC koltuğu kapatıldı";
+"party.mcSeat.operationFailed"           = "İşlem başarısız oldu, lütfen tekrar deneyin";
 "party.create.section.template"          = "Şablon Seç";
 "party.create.template.loading"          = "Şablonlar yükleniyor…";
 "party.create.template.empty"            = "dev'de kullanılabilir şablon yok";
@@ -1053,6 +1063,13 @@
 "userProfile.loadError.retry"            = "Yeniden Dene";
 "common.comingSoon"                      = "Yakında";
 "common.back"                            = "Geri";
+"common.followSuccess"                   = "Takip edildi";
+"common.unfollowSuccess"                 = "Takipten çıkıldı";
+// P1-6 (2026-07-14) 主播审核弹窗
+"common.kindReminder"                    = "Uyarı";
+"common.confirm"                         = "Onayla";
+"audit.passed.message"                   = "Tebrikler, incelemeniz onaylandı. Lütfen uygulamaya tekrar giriş yapın.";
+"audit.rejected.fallback"                = "İncelemeniz reddedildi.";
 "userProfile.a11y.avatar"                = "Avatar";
 "userProfile.a11y.menu"                  = "Daha fazla seçenek";
 "userProfile.a11y.giftFallback"          = "Hediye";

@@ -377,6 +377,20 @@ enum L10n {
         static var micApplicationSwitchOffBody: String { localize("party.micApplication.switchOffBody", comment: "关闭 Mic Application 确认正文") }
         static var micApplicationSwitchOnSystemMsg: String { localize("party.micApplication.switchOnSystemMsg", comment: "开启 Mic Application 公屏系统消息") }
         static var micApplicationSwitchOffSystemMsg: String { localize("party.micApplication.switchOffSystemMsg", comment: "关闭 Mic Application 公屏系统消息") }
+
+        // MARK: - E spec §3 MC Seat（接待位 · 2026-07-14）
+        static var mcSeatSheetTitle: String { localize("party.mcSeat.sheetTitle", comment: "MC Seat 选择 sheet 标题") }
+        static var mcSeatSubmit: String { localize("party.mcSeat.submit", comment: "MC Seat 底部 CTA · Set MC Seat") }
+        static var mcSeatTips: String { localize("party.mcSeat.tips", comment: "MC Seat 提示：仅房主/管理员可占接待位") }
+        static var mcSeatBadge: String { localize("party.mcSeat.badge", comment: "麦位 cell MC 徽章文案") }
+        static var mcSeatConfirmEmpty: String { localize("party.mcSeat.confirmEmpty", comment: "二次确认 · 空位") }
+        /// %@ = 用户昵称
+        static var mcSeatConfirmPrivilegedFormat: String { localize("party.mcSeat.confirmPrivilegedFormat", comment: "二次确认 · 特权用户（OWNER/ADMIN）") }
+        /// %@ = 用户昵称
+        static var mcSeatConfirmNormalFormat: String { localize("party.mcSeat.confirmNormalFormat", comment: "二次确认 · 普通用户（会被赶下麦）") }
+        static var mcSeatSetSuccess: String { localize("party.mcSeat.setSuccess", comment: "设置成功 toast") }
+        static var mcSeatCloseSuccess: String { localize("party.mcSeat.closeSuccess", comment: "取消 MC 成功 toast") }
+        static var mcSeatOperationFailed: String { localize("party.mcSeat.operationFailed", comment: "API 失败通用兜底 toast") }
     }
 
     // MARK: - PartyRoom 房间内 UI（AnchorBar / ChatTabStrip / InputBar 使用）
@@ -493,7 +507,6 @@ enum L10n {
     static var workOffline: String { localize("work.offline", comment: "离线（开关关态文字）") }
 
     // 工具图标标签
-    static var toolHi: String { localize("work.tool.hi", comment: "打招呼") }
     static var toolGoLive: String { localize("work.tool.goLive", comment: "开播") }
     static var toolMatch: String { localize("work.tool.match", comment: "匹配") }
     static var toolTask: String { localize("work.tool.task", comment: "任务") }
@@ -1400,6 +1413,14 @@ enum L10n {
     static var userProfileLoadErrorRetry: String    { localize("userProfile.loadError.retry", comment: "加载失败 retry") }
     static var commonComingSoon: String             { localize("common.comingSoon", comment: "占位按钮 toast") }
     static var commonBack: String                   { localize("common.back", comment: "无障碍：返回按钮 label") }
+    /// 通用关注/取关成功 toast（对齐 H5 `jsToast.userFollow` / `userCancelFollow`，所有场景共用）
+    static var commonFollowSuccess: String          { localize("common.followSuccess", comment: "关注成功 toast") }
+    static var commonUnfollowSuccess: String        { localize("common.unfollowSuccess", comment: "取消关注成功 toast") }
+    // P1-6（2026-07-14）主播审核弹窗
+    static var commonKindReminder: String           { localize("common.kindReminder", comment: "通用弹窗提示 title（对齐 H5 Vant showDialog 默认）") }
+    static var commonConfirm: String                { localize("common.confirm", comment: "通用 Confirm 按钮") }
+    static var auditPassedMessage: String           { localize("audit.passed.message", comment: "主播审核通过 alert 文案（H5 固定英文原文）") }
+    static var auditRejectedFallback: String        { localize("audit.rejected.fallback", comment: "主播审核拒绝 payload.content 空时 fallback") }
     static var userProfileA11yAvatar: String        { localize("userProfile.a11y.avatar", comment: "无障碍：头像 label") }
     static var userProfileA11yMenu: String          { localize("userProfile.a11y.menu", comment: "无障碍：菜单按钮 label") }
     static var userProfileA11yGiftFallback: String  { localize("userProfile.a11y.giftFallback", comment: "无障碍：礼物 name 为 nil 时兜底") }

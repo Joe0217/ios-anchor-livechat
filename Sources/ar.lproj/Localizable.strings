@@ -81,7 +81,6 @@
 "work.offline"               = "غير متصل";
 
 // 工具图标标签
-"work.tool.hi"               = "مرحبا";
 "work.tool.goLive"           = "بث مباشر";
 "work.tool.match"            = "مطابقة";
 "work.tool.task"             = "مهمة";
@@ -958,6 +957,17 @@
 "party.lockRoom.lockSuccess"             = "تم قفل الغرفة";
 "party.lockRoom.unlockSuccess"           = "تم فتح الغرفة";
 "party.lockRoom.operationFailed"         = "فشلت العملية، يرجى المحاولة مرة أخرى";
+// E spec 2026-07-14 派对房 MC Seat（接待位）
+"party.mcSeat.sheetTitle"                = "مقعد MC";
+"party.mcSeat.submit"                    = "تعيين مقعد MC";
+"party.mcSeat.tips"                      = "يمكن للمالك والمشرفين فقط الجلوس في مقعد MC";
+"party.mcSeat.badge"                     = "MC";
+"party.mcSeat.confirmEmpty"              = "هل تريد تعيين هذا المقعد الفارغ كمقعد MC؟";
+"party.mcSeat.confirmPrivilegedFormat"   = "‏%@ مدير حالياً. هل تريد تعيين هذا المقعد كمقعد MC؟";
+"party.mcSeat.confirmNormalFormat"       = "سيتم إخراج ‏%@ من المقعد. هل تريد تعيين هذا المقعد كمقعد MC؟";
+"party.mcSeat.setSuccess"                = "تم تعيين مقعد MC";
+"party.mcSeat.closeSuccess"              = "تم إغلاق مقعد MC";
+"party.mcSeat.operationFailed"           = "فشلت العملية، يرجى المحاولة مرة أخرى";
 "party.create.section.template"          = "اختر القالب";
 "party.create.template.loading"          = "جارٍ تحميل القوالب…";
 "party.create.template.empty"            = "لا توجد قوالب متاحة في dev";
@@ -1053,6 +1063,13 @@
 "userProfile.loadError.retry"            = "إعادة المحاولة";
 "common.comingSoon"                      = "قريباً";
 "common.back"                            = "رجوع";
+"common.followSuccess"                   = "تمت المتابعة";
+"common.unfollowSuccess"                 = "تم إلغاء المتابعة";
+// P1-6 (2026-07-14) 主播审核弹窗
+"common.kindReminder"                    = "تنبيه";
+"common.confirm"                         = "تأكيد";
+"audit.passed.message"                   = "تهانينا، تمت الموافقة على مراجعتك. يرجى تسجيل الدخول إلى التطبيق مرة أخرى.";
+"audit.rejected.fallback"                = "تم رفض مراجعتك.";
 "userProfile.a11y.avatar"                = "الصورة الرمزية";
 "userProfile.a11y.menu"                  = "المزيد من الخيارات";
 "userProfile.a11y.giftFallback"          = "هدية";

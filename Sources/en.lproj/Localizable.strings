@@ -79,7 +79,6 @@
 "work.offline"               = "Offline";
 
 // 工具图标标签
-"work.tool.hi"               = "Hi";
 "work.tool.goLive"           = "Go Live";
 "work.tool.match"            = "Match";
 "work.tool.task"             = "Task";
@@ -914,6 +913,17 @@
 "party.lockRoom.lockSuccess"             = "Room locked";
 "party.lockRoom.unlockSuccess"           = "Room unlocked";
 "party.lockRoom.operationFailed"         = "Operation failed, please try again";
+// E spec 2026-07-14 派对房 MC Seat（接待位）
+"party.mcSeat.sheetTitle"                = "MC Seat";
+"party.mcSeat.submit"                    = "Set MC Seat";
+"party.mcSeat.tips"                      = "Only the owner and admins can take the MC seat";
+"party.mcSeat.badge"                     = "MC";
+"party.mcSeat.confirmEmpty"              = "Set this empty seat as the MC seat?";
+"party.mcSeat.confirmPrivilegedFormat"   = "%@ is currently a manager. Set this seat as the MC seat?";
+"party.mcSeat.confirmNormalFormat"       = "%@ will be removed from the seat. Set this seat as the MC seat?";
+"party.mcSeat.setSuccess"                = "MC seat set";
+"party.mcSeat.closeSuccess"              = "MC seat closed";
+"party.mcSeat.operationFailed"           = "Operation failed, please try again";
 "party.create.section.name"              = "Room Name";
 "party.create.name.placeholder"          = "Up to 20 characters";
 "party.create.section.template"          = "Select Template";
@@ -1011,6 +1021,13 @@
 "userProfile.loadError.retry"            = "Retry";
 "common.comingSoon"                      = "Coming soon";
 "common.back"                            = "Back";
+"common.followSuccess"                   = "Followed";
+"common.unfollowSuccess"                 = "Unfollowed";
+// P1-6 (2026-07-14) 主播审核弹窗
+"common.kindReminder"                    = "Kind reminder";
+"common.confirm"                         = "Confirm";
+"audit.passed.message"                   = "Congratulations, your review has been approved. Please log in to the APP again.";
+"audit.rejected.fallback"                = "Your review was rejected.";
 "userProfile.a11y.avatar"                = "Avatar";
 "userProfile.a11y.menu"                  = "More options";
 "userProfile.a11y.giftFallback"          = "Gift";
