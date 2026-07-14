@@ -267,7 +267,12 @@ enum PartyAPI {
         if let v = offset { body["offset"] = v }
         if let v = queryParam { body["queryParam"] = v }
         let data = try await PartyAPIClient.shared.post("\(pathPrefix)\(kind.endpointSuffix)", body: body)
-        return try decodeArrayOrEmpty(data, as: PartyRoomInfo.self)
+        let rooms = try decodeArrayOrEmpty(data, as: PartyRoomInfo.self)
+        // v7 诊断（2026-07-14）：后端可能对主播端账号返 [] —— 打 log 让真机能确认到底是 rooms=[] 还是 decode 失败
+        // rawPreview 是 AES 解密后明文；Release 打脱敏
+        let rawPreview = String(data: data, encoding: .utf8) ?? "<binary>"
+        AppLogger.party.info("[PartyAPI] roomList kind=\(kind.endpointSuffix, privacy: .public) count=\(rooms.count) raw=\(rawPreview, privacy: .private)")
+        return rooms
     }
 
     /// 我的派对房 + 家族信息（H5 `apiGetPartyRoomInfo`）。无 body，返回可能为 null/空对象（视为无 room）。
@@ -723,6 +728,51 @@ enum PartyAPI {
         }
         let data = try await PartyAPIClient.shared.post("\(pathPrefix)/gift/sendGift", body: body)
         return try decodeObject(data, as: PartySendGiftResult.self)
+    }
+
+    // MARK: - party call (F spec §4.3)
+
+    /// 更新房间私 call 开关（房主设置弹窗调用）。对齐安卓 `HttpHelper.updatePartyPrivateCall`。
+    ///
+    /// **path**：`/sapi/weidou/v1/client/party/room/updatePartyPrivateCall`
+    /// **body**：`{ roomId: String, enable: Int(0/1), giftId: String? }`
+    ///
+    /// - 权限：Owner / RoomAdmin / PlatformAdmin（后端强校验）
+    /// - 关闭状态下用户端拨打时后端拦截，主播端不收 RTM VideoCall
+    /// - 成功后可能下发 1029 payload `status=calling/ended` 更新其他客户端（本 spec 不做本地乐观回写）
+    ///
+    /// **⚠️ 字段名/method 未真机验证**（agent-recon-field-names-unverified rule）；
+    /// Step 3 真机首次调用后按 log 补 alias 兼容。
+    static func updatePartyPrivateCall(
+        roomId: String,
+        enable: Int,
+        giftId: String? = nil
+    ) async throws {
+        var body: [String: Any] = [
+            "roomId": roomId,
+            "enable": enable,
+        ]
+        if let v = giftId { body["giftId"] = v }
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/updatePartyPrivateCall",
+            body: body
+        )
+    }
+
+    /// 拉私 call 礼物列表（房主设置弹窗内选礼物用）。对齐安卓 `ApiService.getPartyCallGiftList`。
+    ///
+    /// **path**：`/sapi/weidou/v1/client/party/room/getPartyCallGiftList`
+    /// **body**：`{ scene: Int }` —— `scene=2` 设置弹窗（本 spec 仅用此场景）；`scene=1` 通话内送礼（后续里程碑）
+    /// **response**：`[PartyCallGiftItem]`
+    ///
+    /// **⚠️ 字段名/scene 语义未真机验证**（agent-recon-field-names-unverified rule）；
+    /// Step 3 真机首次拉取后按 log 补 alias 兼容 PartyCallGiftItem 字段。
+    static func getPartyCallGiftList(scene: Int = 2) async throws -> [PartyCallGiftItem] {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/getPartyCallGiftList",
+            body: ["scene": scene]
+        )
+        return try decodeArrayOrEmpty(data, as: PartyCallGiftItem.self)
     }
 }
 
