@@ -573,9 +573,10 @@ struct PartyCreateModePickerSheet: View {
                         .padding(6)
                 }
             }
-            // v7.6：外层 aspectRatio(1, .fit) 锁 1:1 正方形 grid item —— 每行 2 格严格一样大
-            // 内部图片 fill 撑满 clipped 裁剪超出，图片原比例差异不再造成 grid item 高度错位
-            .aspectRatio(1, contentMode: .fit)
+            // v7.7：固定 grid item 高度 140pt（对齐用户"固定大小"要求）—— aspectRatio(.fit) 在
+            // LazyVGrid flex column 里会让高度崩塌到 0 造成堆叠；改为 flex 宽 + fixed height
+            .frame(maxWidth: .infinity)
+            .frame(height: 140)
             .padding(8)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -738,9 +739,10 @@ struct PartyCreateBackgroundPickerSheet: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 }
             }
-            // v7.6：外层 aspectRatio(0.75, .fit) 锁 3:4 竖向 grid item —— 保证每行 3 格高度一致，
-            // 内部 CachedAsyncImage fill 撑满 clipped，图片超出被裁剪不错位
-            .aspectRatio(0.75, contentMode: .fit)
+            // v7.7：固定 grid item 高度 160pt（3:4 竖向感觉）—— aspectRatio(.fit) 会让 LazyVGrid
+            // flex column 里高度崩塌到 0 造成堆叠；改 flex 宽 + fixed height 保证每行 3 格一致
+            .frame(maxWidth: .infinity)
+            .frame(height: 160)
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(selected ? Theme.Palette.partyCreateTempSelected : Color.clear, lineWidth: 1.5)
