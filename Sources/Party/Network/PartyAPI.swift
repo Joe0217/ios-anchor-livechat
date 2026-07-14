@@ -329,6 +329,52 @@ enum PartyAPI {
         )
     }
 
+    /// 禁麦/解禁麦（房主/房管专用；对齐 H5 apiPartyProhibitSeat + usePartyHooks.js:1157 `feachProhibitSeat`）。
+    /// - operatorType: **6=禁麦，7=解禁麦**（H5 硬编码 magic number；后端 DTO 强校验）
+    /// - 作用于**占用位**（切换 seatMicrophoneEnabled 服务端管理态，独立于用户自身 microphoneEnabled）
+    /// - 成功后服务端下发 1008 updateMedia 广播全员（seat.seatMicrophoneEnabled 切换），前端不做乐观更新
+    static func prohibitSeat(
+        roomId: String,
+        seatIndex: Int,
+        yxRoomId: String,
+        operatorType: Int,
+        roomTempId: Int
+    ) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/seat/prohibitSeat",
+            body: [
+                "roomId": roomId,
+                "seatIndex": seatIndex,
+                "yxRoomId": yxRoomId,
+                "operatorType": operatorType,
+                "roomTempId": roomTempId,
+            ]
+        )
+    }
+
+    /// 锁麦/解锁麦（房主/房管专用；对齐 H5 apiPartylockSeat + usePartyHooks.js:1205 `feachLockSeat`）。
+    /// - operatorType: **8=锁麦，9=解锁**（H5 硬编码 magic number；后端 DTO 强校验）
+    /// - 只作用于**空位**（有人时后端会拒；调用方需前置校验）
+    /// - 成功后服务端下发 1001 seat/update 广播全员（seat.lockFlag 切换），前端不做乐观更新
+    static func lockSeat(
+        roomId: String,
+        seatIndex: Int,
+        yxRoomId: String,
+        operatorType: Int,
+        roomTempId: Int
+    ) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/seat/lockSeat",
+            body: [
+                "roomId": roomId,
+                "seatIndex": seatIndex,
+                "yxRoomId": yxRoomId,
+                "operatorType": operatorType,
+                "roomTempId": roomTempId,
+            ]
+        )
+    }
+
     /// 切麦：从当前麦位切到目标 seatIndex（对齐 H5 apiPartyExchangeSeat + usePartyHooks.js:1322）。
     /// - operatorType 固定 10（H5 硬编码）
     /// - seatType 传目标麦位的 seatType（1=video / 2=voice）
@@ -490,6 +536,61 @@ enum PartyAPI {
         )
     }
 
+    // MARK: - blocklist (E spec §1，房主/房管房间维度黑名单)
+
+    /// 拉房间黑名单列表（E spec §1）。对齐 H5 `apiGetKickOutBlacklist`。
+    ///
+    /// **path**：`/sapi/weidou/v1/client/party/room/getKickOutBlacklist`
+    /// **body**：`{ roomId: Int }` —— roomId 传业务 db id（H5 `currentPartyInfo.id`，**非**云信 yxRoomId）
+    /// **response**：**直接数组** `[PartyBlocklistItem]`（无 list/records 包装；spec §0 校验 point 2）
+    ///
+    /// 无分页（H5 全量拉，van-list 只做壳未配 finished/loading —— iOS 沿用全量策略，量级由后端保证）。
+    static func getKickOutBlacklist(roomId: Int) async throws -> [PartyBlocklistItem] {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/getKickOutBlacklist",
+            body: ["roomId": roomId]
+        )
+        return try decodeArrayOrEmpty(data, as: PartyBlocklistItem.self)
+    }
+
+    /// 解除封禁（E spec §1）。对齐 H5 `apiRemoveKickOutBlacklist`。
+    ///
+    /// **path**：`/sapi/weidou/v1/client/party/room/removeKickOutBlacklist`
+    /// **body**：`{ roomId: Int, targetUserId: String }`
+    /// **response**：Bool（真为成功；后端可能返裸 `true` / envelope 包装 `{data: true}` / `{result: true}`）
+    ///
+    /// H5 存在 bug：`.then/.finally` 均弹"Removed successfully"，失败静默 —— iOS 修正走 error toast
+    /// （spec §0 校验 point 6）。此方法失败抛异常由调用方转 error toast。
+    ///
+    /// 加/解黑本 spec 范围内**无 IM 广播**（H5 blocklist.vue 无订阅；spec §2）——调用成功后由 Store 层
+    /// 乐观 filter 本地 items，其他管理员端下次开 popup 才见新态。
+    static func removeKickOutBlacklist(roomId: Int, targetUserId: String) async throws -> Bool {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/removeKickOutBlacklist",
+            body: [
+                "roomId": roomId,
+                "targetUserId": targetUserId,
+            ]
+        )
+        // 1. 裸 Bool
+        if let b = try? decoder.decode(Bool.self, from: data) { return b }
+        // 2. 单层包装 {data|result|success: true}
+        if let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            for key in ["data", "result", "success"] {
+                if let v = dict[key] as? Bool { return v }
+                if let n = dict[key] as? NSNumber { return n.boolValue }
+            }
+        }
+        // 3. 字符串 "true" / "1"
+        if let s = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) {
+            if s == "true" || s == "1" { return true }
+            if s == "false" || s == "0" { return false }
+        }
+        // 4. 空 / 未识别 —— 后端 sapi envelope code==200 已由 PartyAPIClient 层过滤成功，
+        //    到这里说明 HTTP 层成功但 body 无明确 Bool；默认视为成功
+        return true
+    }
+
     // MARK: - gift
 
     /// 派对房礼物架列表（H-5 · 对齐 H5 用户端 `apiPartyGetRoomGift`）。
@@ -514,17 +615,26 @@ enum PartyAPI {
         return try decodeObject(data, as: PartyGiftV2Response.self)
     }
 
-    /// 派对房送礼（普通骨架）。`scene` 固定 "PARTY_ROOM"。
+    /// 派对房送礼。`scene` 固定 "PARTY_ROOM"（对齐 H5 party-gift-popup.vue L417 字面值）。
     /// 服务端成功后下发 NIM `2049 RECEIVE_PARTY_ROOM_GIFT_COMPRESSED` 广播；
     /// 客户端按 2049 渲染（**不识别** 1007 老版双发，spec §1.2 决策）。
+    ///
+    /// **⚠️ roomId 类型陷阱**（2026-07-14 真机 400 修复）：H5 用户端 `partyStore.currentPartyInfo.id * 1` 把
+    /// roomId 数字化再传（party-gift-popup.vue L419）。iOS 若传 String → JSON 序列化成 `"roomId":"1234567"`
+    /// → 后端 code=400 "Illegal parameter"。**必须转 Int64 传数字**。
     static func sendGift(roomId: String, giftId: Int, num: Int, yxAccidList: [String]) async throws -> PartySendGiftResult {
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "scene": "PARTY_ROOM",
-            "roomId": roomId,
             "giftId": giftId,
             "num": num,
             "yxAccidList": yxAccidList,
         ]
+        // roomId 数字化（H5 `id * 1` 对齐）—— fallback 到 String 兼容非数字 id 极端场景
+        if let roomIdInt = Int64(roomId) {
+            body["roomId"] = roomIdInt
+        } else {
+            body["roomId"] = roomId
+        }
         let data = try await PartyAPIClient.shared.post("\(pathPrefix)/gift/sendGift", body: body)
         return try decodeObject(data, as: PartySendGiftResult.self)
     }

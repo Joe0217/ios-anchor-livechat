@@ -93,6 +93,16 @@ final class PartyStore: ObservableObject {
     /// agreeMicApplication 用 per-userId set 幂等（同一申请者不重复批准，不同申请者可并发）
     private var pendingApproveUserId: Set<String> = []
 
+    // MARK: - Blocklist (E spec §3，房间维度黑名单)
+
+    /// 房间黑名单状态机（房主/房管端），套 list-refresh-preserve-items rule（保留 refreshing 视觉）
+    @Published private(set) var blocklistState: PartyBlocklistState = .idle
+    /// per-userId 幂等守护：同一 userId 快速连点 remove 只发一次请求（spec §4 R3）；
+    /// 不同 userId 允许并发（每个 row 独立 isBusy）
+    private var isBusyRemoveBlocklist: Set<String> = []
+    /// spec §3：sheet 快关快开时 cancel 上一次未完成的 load，防 CancellationError 污染新 state
+    private var loadBlocklistTask: Task<Result<[PartyBlocklistItem], Error>, Never>? = nil
+
     /// partySaveInfo（对齐 H5 stores/modules/user.js partySaveInfo）：本地长驻两个 Bool flag，
     /// 用户是否已经首次协议确认过 "打开申请" / "关闭申请"；二次同方向切换 UI 直接调 API 不弹协议弹窗。
     /// 说明：@AppStorage 在 ObservableObject 中不触发 objectWillChange（与视图订阅相反），
@@ -359,6 +369,11 @@ final class PartyStore: ObservableObject {
         applyingTimeoutTask?.cancel()
         applyingTimeoutTask = nil
         isBusyMicSwitch = false
+        // E spec §3：黑名单状态清 —— 退房需清残留，避免下次进新房带入旧列表
+        blocklistState = .idle
+        isBusyRemoveBlocklist = []
+        loadBlocklistTask?.cancel()
+        loadBlocklistTask = nil
     }
 
     // MARK: - 房主保存设置后本地同步（v8.2）
@@ -490,6 +505,61 @@ final class PartyStore: ObservableObject {
             if case .seatEmpty = mapped { await reloadSeatListFromServer() }
         } catch {
             lastError = .underlying(.networkError)
+        }
+    }
+
+    /// v15 房主/房管：禁 / 解禁他人麦位（对齐 H5 feachProhibitSeat + usePartyHooks.js:1157）。
+    /// - mute=true → operatorType=6（禁麦）；mute=false → operatorType=7（解禁麦）
+    /// - 前置：selfRole==.owner || .admin；seatIndex 是**占用位**（seatMicrophoneEnabled 是服务端管理态）
+    /// - 服务端下发 1008 广播 → seat.seatMicrophoneEnabled 切换 → isSpeaking 派生自动过滤禁麦位不显 pulse
+    func requestProhibitSeat(seatIndex: Int, mute: Bool) async {
+        guard let info = roomInfo, roomState == .joined else { return }
+        guard selfRole == .owner || selfRole == .admin else {
+            AppLogger.party.notice("[PartyStore] prohibitSeat rejected: not owner/admin")
+            return
+        }
+        do {
+            try await PartyAPI.prohibitSeat(
+                roomId: info.id ?? "",
+                seatIndex: seatIndex,
+                yxRoomId: info.yxRoomId ?? "",
+                operatorType: mute ? 6 : 7,
+                roomTempId: info.roomTempIdInt
+            )
+        } catch let api as PartyAPIError {
+            lastError = PartyRoomErrorMapper.map(api)
+        } catch {
+            lastError = .underlying(.networkError)
+            AppLogger.party.error("[PartyStore] prohibitSeat failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    /// v15 房主/房管：锁 / 解锁空麦位（对齐 H5 feachLockSeat + usePartyHooks.js:1205）。
+    /// - lock=true → operatorType=8（锁）；lock=false → operatorType=9（解锁）
+    /// - 前置：selfRole==.owner || .admin；seatIndex 是空位（有人时后端拒）
+    /// - 成功后等服务端 1001 seat/update 广播 → seat.lockFlag 切换 → UI 视觉更新
+    func requestLockSeat(seatIndex: Int, lock: Bool) async {
+        guard let info = roomInfo, roomState == .joined else { return }
+        guard selfRole == .owner || selfRole == .admin else {
+            AppLogger.party.notice("[PartyStore] lockSeat rejected: not owner/admin")
+            return
+        }
+        do {
+            try await PartyAPI.lockSeat(
+                roomId: info.id ?? "",
+                seatIndex: seatIndex,
+                yxRoomId: info.yxRoomId ?? "",
+                operatorType: lock ? 8 : 9,
+                roomTempId: info.roomTempIdInt
+            )
+        } catch let api as PartyAPIError {
+            let mapped = PartyRoomErrorMapper.map(api)
+            lastError = mapped
+            // 麦位状态可能已变（并发有人上麦）→ 触发 reload 对账
+            if case .seatOccupied = mapped { await reloadSeatListFromServer() }
+        } catch {
+            lastError = .underlying(.networkError)
+            AppLogger.party.error("[PartyStore] lockSeat failed: \(String(describing: error), privacy: .private)")
         }
     }
 
@@ -1025,6 +1095,130 @@ final class PartyStore: ObservableObject {
             lastError = .underlying((error as? PartyAPIError) ?? .networkError)
         }
     }
+
+    // MARK: - Blocklist (E spec §3)
+
+    /// 拉取房间黑名单列表（房主/房管）。
+    /// - `.initial`：首次开面板 → `.loading`
+    /// - `.refresh`：下拉刷新 → 有 items 时保留视觉走 `.refreshing(items)`（list-refresh-preserve-items rule）
+    ///
+    /// roomId 传业务 db id（H5 `currentPartyInfo.id`，非云信 yxRoomId；spec §0 校验 point 7）。
+    /// `roomInfo.id` 是 String? —— 转 Int64 传后端；转失败静默降为 error 态（防 crash）。
+    ///
+    /// spec §3：`loadBlocklistTask` cancel 上一次未完成的拉取，防 sheet 快关快开时旧 API cancel
+    /// 抛错走 catch 分支污染新 sheet 状态（verify P1 #3 PLAUSIBLE）。CancellationError 静默丢弃。
+    func loadBlocklist(reason: PartyBlocklistLoadReason) async {
+        guard let info = roomInfo, roomState == .joined else { return }
+        guard let idStr = info.id, let roomIdInt = Int(idStr) else {
+            AppLogger.party.error("[PartyStore] loadBlocklist bad roomId=\(info.id ?? "nil", privacy: .public)")
+            blocklistState = .error(L10n.Party.errorNetworkLost)
+            return
+        }
+
+        // Cancel 上一个未完成 load Task，避免竞态（verify P1 #3）
+        loadBlocklistTask?.cancel()
+
+        // list-refresh-preserve-items rule：refresh 时保留视觉
+        switch (reason, blocklistState) {
+        case (.refresh, .loaded(let old)):
+            blocklistState = .refreshing(old)
+        case (.refresh, .refreshing(let old)):
+            blocklistState = .refreshing(old)
+        default:
+            blocklistState = .loading
+        }
+
+        let task = Task { [weak self] () -> Result<[PartyBlocklistItem], Error> in
+            do {
+                let items = try await PartyAPI.getKickOutBlacklist(roomId: roomIdInt)
+                try Task.checkCancellation()
+                _ = self
+                return .success(items)
+            } catch {
+                return .failure(error)
+            }
+        }
+        loadBlocklistTask = task
+        // 记录本次 Task 生成时的 state 序列号，便于后续判断"是否为最新"
+        // Task 是 struct 不能用 === 比对；改用 Task.isCancelled 判定即可 —— 被 cancel 就丢弃结果
+        let outcome = await task.value
+        // 若本 task 已被更新的 load cancel（外层 cancel），outcome 是 CancellationError
+        // 走下面 CancellationError 静默丢弃分支即可
+
+        switch outcome {
+        case .success(let items):
+            if items.isEmpty {
+                blocklistState = .empty
+            } else {
+                blocklistState = .loaded(items)
+            }
+            AppLogger.party.info("[PartyStore] getKickOutBlacklist ok count=\(items.count, privacy: .public)")
+        case .failure(let error):
+            // CancellationError 静默丢弃（旧 Task 被 cancel）—— 不覆盖新 state
+            if error is CancellationError {
+                AppLogger.party.info("[PartyStore] loadBlocklist cancelled (superseded)")
+                return
+            }
+            AppLogger.party.error("[PartyStore] getKickOutBlacklist failed: \(String(describing: error), privacy: .private)")
+            blocklistState = .error(L10n.Party.errorNetworkLost)
+        }
+    }
+
+    /// list-refresh-preserve-items rule：`.refreshable` closure 必须 await 到任务完成，
+    /// 否则顶部 spinner 立即消失。
+    func refreshBlocklist() async {
+        await loadBlocklist(reason: .refresh)
+    }
+
+    /// 解除封禁（房主/房管操作，spec §3）。
+    /// - per-userId 幂等：`isBusyRemoveBlocklist` set 拦截同 userId 快速连点（spec §4 R3）
+    /// - 成功后**乐观本地 filter** —— 无 IM 广播（spec §2），其他管理员端下次刷新才同步
+    /// - 失败抛 throws 让 view 层做 error toast（与 H5 差异化：H5 无差别弹成功，spec §0 校验 point 6）
+    func removeFromBlocklist(userId: String) async throws {
+        // per-userId 幂等
+        guard !isBusyRemoveBlocklist.contains(userId) else {
+            AppLogger.party.notice("[PartyStore] removeFromBlocklist skip: userId=\(userId, privacy: .public) in-flight")
+            return
+        }
+        guard let info = roomInfo, roomState == .joined else {
+            // spec §4 R2：失败必走 error toast —— throw 而非静默 return，防 sheet 层
+            // try await 认为成功误弹"解除成功"toast（verify P1 #2 CONFIRMED）
+            AppLogger.party.notice("[PartyStore] removeFromBlocklist not joined; throw to view")
+            throw PartyAPIError.networkError
+        }
+        guard let idStr = info.id, let roomIdInt = Int(idStr) else {
+            AppLogger.party.error("[PartyStore] removeFromBlocklist bad roomId=\(info.id ?? "nil", privacy: .public)")
+            throw PartyAPIError.networkError
+        }
+
+        isBusyRemoveBlocklist.insert(userId)
+        defer { isBusyRemoveBlocklist.remove(userId) }
+
+        do {
+            let ok = try await PartyAPI.removeKickOutBlacklist(roomId: roomIdInt, targetUserId: userId)
+            guard ok else {
+                AppLogger.party.error("[PartyStore] removeKickOutBlacklist returned false userId=\(userId, privacy: .public)")
+                throw PartyAPIError.networkError
+            }
+            // 乐观本地 filter：从 loaded/refreshing 里剔除该 userId；空则转 .empty
+            switch blocklistState {
+            case .loaded(let items):
+                let next = items.filter { $0.userId != userId }
+                blocklistState = next.isEmpty ? .empty : .loaded(next)
+            case .refreshing(let items):
+                let next = items.filter { $0.userId != userId }
+                blocklistState = next.isEmpty ? .empty : .refreshing(next)
+            default:
+                break
+            }
+            AppLogger.party.info("[PartyStore] removeKickOutBlacklist ok userId=\(userId, privacy: .public)")
+        } catch {
+            AppLogger.party.error("[PartyStore] removeKickOutBlacklist failed: \(String(describing: error), privacy: .private)")
+            throw error
+        }
+    }
+
+    // MARK: - Mic Application helpers
 
     /// 挑首空位（排除 `pendingApproveSeatIndex` 已占位），供 `agreeMicApplication` seatIndex=nil 分支用。
     /// nil 表示无可用空位。

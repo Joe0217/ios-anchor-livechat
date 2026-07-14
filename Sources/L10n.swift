@@ -282,6 +282,17 @@ enum L10n {
         static var toolBlocklist: String { localize("party.tool.blocklist", comment: "Blocklist") }
         static var toolMCSeat: String { localize("party.tool.mcSeat", comment: "MC Seat") }
         static var toolComingSoon: String { localize("party.tool.comingSoon", comment: "stub 项 toast") }
+        // 派对房 Blocklist（E spec 2026-07-14；房主/管理员查看+解除房间维度黑名单）
+        static var blocklistNavTitle: String { localize("party.blocklist.navTitle", comment: "Blocklist 页面标题") }
+        static var blocklistEmpty: String { localize("party.blocklist.empty", comment: "无黑名单空态") }
+        static var blocklistLoadError: String { localize("party.blocklist.loadError", comment: "加载失败错态 banner") }
+        static var blocklistLoadErrorFormat: String { localize("party.blocklist.loadErrorFormat", comment: "加载失败错态 banner 带 message，参数：message") }
+        static var blocklistRemoveConfirmTitle: String { localize("party.blocklist.removeConfirmTitle", comment: "移除二次确认弹窗标题") }
+        static var blocklistRemoveConfirmMessage: String { localize("party.blocklist.removeConfirmMessage", comment: "移除二次确认弹窗正文") }
+        static var blocklistRemoveSuccess: String { localize("party.blocklist.removeSuccess", comment: "移除成功 toast") }
+        static var blocklistRemoveFailed: String { localize("party.blocklist.removeFailed", comment: "移除失败 toast（与 H5 差异化，H5 无差别提示成功）") }
+        static var blocklistBanTypePermanent: String { localize("party.blocklist.banTypePermanent", comment: "永久封禁标签") }
+        static var blocklistAutoUnbanFormat: String { localize("party.blocklist.autoUnbanFormat", comment: "限时封禁倒计时前缀，参数：剩余时间字符串（如 12:34）") }
         static var createTemplateLoading: String { localize("party.create.template.loading", comment: "加载模板…") }
         static var createTemplateEmpty: String { localize("party.create.template.empty", comment: "dev 暂无可用模板") }
         static var createTemplateFallbackFormat: String { localize("party.create.template.fallbackFormat", comment: "模板 %d") }
@@ -416,6 +427,19 @@ enum L10n {
         static var videoSeatNeedsInviteToast: String { localize("partyRoom.seat.videoNeedsInvite", comment: "视频位需邀请 toast") }
         static var switchSeatTitle: String { localize("partyRoom.switchSeat.title", comment: "切麦确认弹窗标题") }
         static var switchSeatConfirm: String { localize("partyRoom.switchSeat.confirm", comment: "切麦确认按钮") }
+
+        // v15：房主/房管空位管理动作（对齐 H5 my-mic-tool.vue 简化版）
+        static var adminSeatActionsTitle: String { localize("partyRoom.adminSeat.title", comment: "空位管理动作标题") }
+        static var adminActionTake: String { localize("partyRoom.adminSeat.take", comment: "上麦按钮") }
+        static var adminActionSwitchHere: String { localize("partyRoom.adminSeat.switchHere", comment: "切到此麦位") }
+        static var adminActionLock: String { localize("partyRoom.adminSeat.lock", comment: "锁麦位按钮") }
+        static var adminActionUnlock: String { localize("partyRoom.adminSeat.unlock", comment: "解锁麦位按钮") }
+
+        // v15：房主/房管他人占用位管理动作（对齐 H5 my-mic-tool.vue Mute/Unmute + openUserCard）
+        static var otherSeatAdminActionsTitle: String { localize("partyRoom.otherSeat.title", comment: "他人麦位管理动作标题") }
+        static var adminActionMute: String { localize("partyRoom.otherSeat.mute", comment: "禁麦按钮") }
+        static var adminActionUnmute: String { localize("partyRoom.otherSeat.unmute", comment: "解禁麦按钮") }
+        static var adminActionViewProfile: String { localize("partyRoom.otherSeat.viewProfile", comment: "查看用户资料按钮") }
     }
 
     // MARK: - Work 工作台（设计稿还原）

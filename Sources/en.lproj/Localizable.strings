@@ -894,6 +894,17 @@
 "party.tool.blocklist"                   = "Blocklist";
 "party.tool.mcSeat"                      = "MC Seat";
 "party.tool.comingSoon"                  = "Coming soon";
+// E spec 2026-07-14 派对房 Blocklist（房主/管理员查看+解除房间维度黑名单）
+"party.blocklist.navTitle"               = "Blocklist";
+"party.blocklist.empty"                  = "No blocked users";
+"party.blocklist.loadError"              = "Failed to load blocklist";
+"party.blocklist.loadErrorFormat"        = "Failed to load: %@";
+"party.blocklist.removeConfirmTitle"     = "Remove from blocklist?";
+"party.blocklist.removeConfirmMessage"   = "This user will be able to enter the room again.";
+"party.blocklist.removeSuccess"          = "Removed successfully";
+"party.blocklist.removeFailed"           = "Failed to remove, please try again";
+"party.blocklist.banTypePermanent"       = "Permanent";
+"party.blocklist.autoUnbanFormat"        = "Auto unban in %@";
 "party.create.section.name"              = "Room Name";
 "party.create.name.placeholder"          = "Up to 20 characters";
 "party.create.section.template"          = "Select Template";
@@ -1335,3 +1346,12 @@
 "partyRoom.seat.videoNeedsInvite"        = "Requires invitation from the Room Owner/Admin";
 "partyRoom.switchSeat.title"             = "Switch to this seat?";
 "partyRoom.switchSeat.confirm"           = "Switch";
+"partyRoom.adminSeat.title"              = "Manage seat";
+"partyRoom.adminSeat.take"               = "Take seat";
+"partyRoom.adminSeat.switchHere"         = "Switch here";
+"partyRoom.adminSeat.lock"               = "Lock seat";
+"partyRoom.adminSeat.unlock"             = "Unlock seat";
+"partyRoom.otherSeat.title"              = "Manage user";
+"partyRoom.otherSeat.mute"               = "Mute seat";
+"partyRoom.otherSeat.unmute"             = "Unmute seat";
+"partyRoom.otherSeat.viewProfile"        = "View profile";

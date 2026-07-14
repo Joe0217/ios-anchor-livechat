@@ -938,6 +938,17 @@
 "party.tool.blocklist"                   = "Engellenenler";
 "party.tool.mcSeat"                      = "MC Koltuğu";
 "party.tool.comingSoon"                  = "Yakında";
+// E spec 2026-07-14 Parti odası engellenenler listesi
+"party.blocklist.navTitle"               = "Engellenenler";
+"party.blocklist.empty"                  = "Engellenmiş kullanıcı yok";
+"party.blocklist.loadError"              = "Engellenenler listesi yüklenemedi";
+"party.blocklist.loadErrorFormat"        = "Yüklenemedi: %@";
+"party.blocklist.removeConfirmTitle"     = "Engellenenler listesinden kaldırılsın mı?";
+"party.blocklist.removeConfirmMessage"   = "Bu kullanıcı odaya tekrar girebilecek.";
+"party.blocklist.removeSuccess"          = "Başarıyla kaldırıldı";
+"party.blocklist.removeFailed"           = "Kaldırılamadı, lütfen tekrar deneyin";
+"party.blocklist.banTypePermanent"       = "Kalıcı";
+"party.blocklist.autoUnbanFormat"        = "%@ sonra otomatik olarak kaldırılacak";
 "party.create.section.template"          = "Şablon Seç";
 "party.create.template.loading"          = "Şablonlar yükleniyor…";
 "party.create.template.empty"            = "dev'de kullanılabilir şablon yok";
@@ -1295,3 +1306,12 @@
 "partyRoom.seat.videoNeedsInvite"        = "Oda Sahibi/Yöneticiden davet gerekli";
 "partyRoom.switchSeat.title"             = "Bu koltuğa geçilsin mi?";
 "partyRoom.switchSeat.confirm"           = "Geç";
+"partyRoom.adminSeat.title"              = "Koltuğu yönet";
+"partyRoom.adminSeat.take"               = "Koltuğa geç";
+"partyRoom.adminSeat.switchHere"         = "Buraya geç";
+"partyRoom.adminSeat.lock"               = "Koltuğu kilitle";
+"partyRoom.adminSeat.unlock"             = "Kilidi aç";
+"partyRoom.otherSeat.title"              = "Kullanıcıyı yönet";
+"partyRoom.otherSeat.mute"               = "Koltuğu sessize al";
+"partyRoom.otherSeat.unmute"             = "Sessizden çıkar";
+"partyRoom.otherSeat.viewProfile"        = "Profili görüntüle";

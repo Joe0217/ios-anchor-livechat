@@ -57,6 +57,14 @@ struct PartyRoomView: View {
     /// 聊天区 tab（视觉状态本地维护；MVP 阶段 All/Chat/Gift 共用同一消息列表，
     /// 实际按 kind 过滤留待 F 期在 PartyMessageListView 内实现）
     @State private var chatFilter: PartyRoomChatFilter = .all
+    /// v15：他人麦位 tap → UserCardPopup 显示（对齐 H5 openUserCard；nil = 不显示）
+    @State private var userCardForUserId: String? = nil
+    /// v15：已在 A 麦位点 B 空位 → 切麦确认（对齐 H5 EnterSwitchPopup；nil = 不显示）
+    @State private var switchSeatPendingTarget: PartyRoomSeat? = nil
+    /// v15：房主/房管点空位 → 弹管理动作 dialog（Take/Lock/Unlock；对齐 H5 my-mic-tool.vue 简化版）
+    @State private var adminSeatActionsTarget: PartyRoomSeat? = nil
+    /// v15：房主/房管点他人占用位 → 弹管理动作 dialog（Mute/Unmute + View Profile；对齐 H5 feachProhibitSeat 语义）
+    @State private var otherSeatAdminActionsTarget: PartyRoomSeat? = nil
 
     // MARK: - 顶层 body
 
@@ -113,6 +121,32 @@ struct PartyRoomView: View {
             .onChange(of: store.lastError?.errorDescription ?? "", perform: handleLastErrorChange)
             .confirmationDialog(L10n.Party.selfActionsTitle, isPresented: $showSelfActions) {
                 selfActionsButtons
+            }
+            // v15：他人麦位 tap → UserCardPopup（对齐 H5 openUserCard）
+            .overlay { userCardOverlay }
+            // v15：已在麦位点空位 → 切麦确认（对齐 H5 EnterSwitchPopup）
+            .confirmationDialog(
+                L10n.PartyRoom.switchSeatTitle,
+                isPresented: switchSeatDialogPresented,
+                titleVisibility: .visible
+            ) {
+                switchSeatDialogButtons
+            }
+            // v15：房主/房管点空位 → 管理动作 dialog（Take / Lock / Unlock）
+            .confirmationDialog(
+                L10n.PartyRoom.adminSeatActionsTitle,
+                isPresented: adminSeatActionsPresented,
+                titleVisibility: .visible
+            ) {
+                adminSeatActionsButtons
+            }
+            // v15：房主/房管点他人占用位 → 管理动作 dialog（Mute / Unmute / View Profile）
+            .confirmationDialog(
+                L10n.PartyRoom.otherSeatAdminActionsTitle,
+                isPresented: otherSeatAdminActionsPresented,
+                titleVisibility: .visible
+            ) {
+                otherSeatAdminActionsButtons
             }
             .preferredColorScheme(.dark)
     }
@@ -180,6 +214,8 @@ struct PartyRoomView: View {
             roomName: store.roomInfo?.roomName ?? L10n.Party.defaultRoomName,
             roomId: store.roomInfo?.id ?? roomId,
             anchorAvatarURL: store.roomInfo?.roomAvatar,
+            // v12：头像装饰框 URL（async 从 apiPartyGetUser 拉；对齐 H5 head-frame.vue）
+            headFrameURL: store.ownerHeadFrameURL,
             wealthText: heatText,
             honorText: heatText,
             audienceCountText: "\(store.roomInfo?.onlineCount ?? 0)",
@@ -464,15 +500,164 @@ struct PartyRoomView: View {
         return seat.userId == me
     }
 
+    /// v15：麦位点击分流（对齐 H5 g-agora-party.vue `joinOrOutMic` 完整语义）。
+    ///
+    /// 分支优先级（从上到下）：
+    /// 1. 自己麦位 → showSelfActions（sheet: mic/cam/leave）
+    /// 2. 他人占用麦位 → userCard（弹 UserCardPopup）
+    /// 3. **管理员（房主/房管）点空位 → adminSeatActionsTarget（Take/Lock/Unlock dialog）**
+    /// 4. 空锁麦位 (lockFlag=1) → toast "The seat is locked"（非管理员）
+    /// 5. 空视频位 + 非管理员 → toast "Requires invitation..."
+    /// 6. 空语音位 + 已在其他麦位 → switchSeatPendingTarget（切麦确认）
+    /// 7. 空语音位 + 未在任何麦位 → 直接 onSeat
     private func handleSeatTap(_ seat: PartyRoomSeat) {
         if isSelf(seat) {
             showSelfActions = true
             return
         }
-        if store.selfSeat == nil, !seat.occupied, let idx = seat.seatIndex {
-            Task { await store.requestOnSeat(seatIndex: idx) }
+        let isManager = store.selfRole == .owner || store.selfRole == .admin
+        if seat.occupied, let uid = seat.userId, !uid.isEmpty {
+            // v15：房主/房管点他人占用位 → 管理 dialog（Mute/Unmute + View Profile）
+            // 非管理员 → 直接 UserCard（对齐 H5 openUserCard）
+            if isManager {
+                otherSeatAdminActionsTarget = seat
+            } else {
+                userCardForUserId = uid
+            }
             return
         }
+        guard let idx = seat.seatIndex else { return }
+        if isManager {
+            adminSeatActionsTarget = seat
+            return
+        }
+        if (seat.lockFlag ?? 0) == 1 {
+            stubToolToast = L10n.PartyRoom.seatLockedToast
+            return
+        }
+        if seat.seatType == PartyRoomSeatType.video.rawValue {
+            stubToolToast = L10n.PartyRoom.videoSeatNeedsInviteToast
+            return
+        }
+        // 空语音位（非管理员）
+        if store.selfSeat != nil {
+            switchSeatPendingTarget = seat
+            return
+        }
+        Task { await store.requestOnSeat(seatIndex: idx) }
+    }
+
+    // MARK: - v15 UserCard overlay
+
+    @ViewBuilder
+    private var userCardOverlay: some View {
+        if let uid = userCardForUserId {
+            UserCardPopup(
+                userId: uid,
+                isPresented: Binding(
+                    get: { userCardForUserId != nil },
+                    set: { if !$0 { userCardForUserId = nil } }
+                )
+            )
+        }
+    }
+
+    // MARK: - v15 切麦确认
+
+    private var switchSeatDialogPresented: Binding<Bool> {
+        Binding(
+            get: { switchSeatPendingTarget != nil },
+            set: { if !$0 { switchSeatPendingTarget = nil } }
+        )
+    }
+
+    @ViewBuilder private var switchSeatDialogButtons: some View {
+        Button(L10n.PartyRoom.switchSeatConfirm) {
+            guard let target = switchSeatPendingTarget,
+                  let idx = target.seatIndex,
+                  let type = target.seatType else { return }
+            switchSeatPendingTarget = nil
+            Task { await store.requestExchangeSeat(targetSeatIndex: idx, targetSeatType: type) }
+        }
+        Button(L10n.Party.cancel, role: .cancel) { switchSeatPendingTarget = nil }
+    }
+
+    // MARK: - v15 房主/房管空位管理
+
+    private var adminSeatActionsPresented: Binding<Bool> {
+        Binding(
+            get: { adminSeatActionsTarget != nil },
+            set: { if !$0 { adminSeatActionsTarget = nil } }
+        )
+    }
+
+    /// 房主/房管点空位的动作 sheet：
+    /// - 未在任何麦位 → Take Seat（视频位管理员可自上，绕过普通用户"需邀请"限制）
+    /// - 已在其他麦位 → Switch Here（走切麦）
+    /// - Lock/Unlock（按 seat.lockFlag 动态切换文案）
+    @ViewBuilder private var adminSeatActionsButtons: some View {
+        if let seat = adminSeatActionsTarget, let idx = seat.seatIndex {
+            let locked = (seat.lockFlag ?? 0) == 1
+            let type = seat.seatType ?? PartyRoomSeatType.voice.rawValue
+            // Take / Switch 按钮（锁麦位不给 Take 入口，需要先 Unlock）
+            if !locked {
+                if store.selfSeat == nil {
+                    Button(L10n.PartyRoom.adminActionTake) {
+                        adminSeatActionsTarget = nil
+                        Task { await store.requestOnSeat(seatIndex: idx) }
+                    }
+                } else {
+                    Button(L10n.PartyRoom.adminActionSwitchHere) {
+                        adminSeatActionsTarget = nil
+                        Task { await store.requestExchangeSeat(targetSeatIndex: idx, targetSeatType: type) }
+                    }
+                }
+            }
+            // Lock / Unlock
+            Button(locked ? L10n.PartyRoom.adminActionUnlock : L10n.PartyRoom.adminActionLock) {
+                adminSeatActionsTarget = nil
+                Task { await store.requestLockSeat(seatIndex: idx, lock: !locked) }
+            }
+        }
+        Button(L10n.Party.cancel, role: .cancel) { adminSeatActionsTarget = nil }
+    }
+
+    // MARK: - v15 房主/房管他人占用位管理
+
+    private var otherSeatAdminActionsPresented: Binding<Bool> {
+        Binding(
+            get: { otherSeatAdminActionsTarget != nil },
+            set: { if !$0 { otherSeatAdminActionsTarget = nil } }
+        )
+    }
+
+    /// 房主/房管点他人占用位的动作 dialog：
+    /// - **Mute/Unmute（仅语音麦位）**：调 prohibitSeat 切 seatMicrophoneEnabled（对齐 H5 my-mic-tool `!nowSeatIsVideo` 条件）
+    /// - **View Profile**：dismiss dialog + 弹 UserCardPopup（保留原查看用户资料能力）
+    /// - Kick / Manager 等入口留 Phase 2（需 UserCard 内做，跨场景组件不改）
+    @ViewBuilder private var otherSeatAdminActionsButtons: some View {
+        if let seat = otherSeatAdminActionsTarget, let idx = seat.seatIndex {
+            // Mute/Unmute 仅语音麦位（对齐 H5 v-if=!nowSeatIsVideo）
+            if seat.seatType == PartyRoomSeatType.voice.rawValue {
+                let muted = (seat.seatMicrophoneEnabled ?? 1) == 0
+                Button(muted ? L10n.PartyRoom.adminActionUnmute : L10n.PartyRoom.adminActionMute) {
+                    otherSeatAdminActionsTarget = nil
+                    Task { await store.requestProhibitSeat(seatIndex: idx, mute: !muted) }
+                }
+            }
+            // View Profile - dismiss + open UserCard
+            if let uid = seat.userId, !uid.isEmpty {
+                Button(L10n.PartyRoom.adminActionViewProfile) {
+                    otherSeatAdminActionsTarget = nil
+                    // iOS 16 sheet/dialog race 规避：延一帧再挂 UserCard overlay
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 200_000_000)
+                        userCardForUserId = uid
+                    }
+                }
+            }
+        }
+        Button(L10n.Party.cancel, role: .cancel) { otherSeatAdminActionsTarget = nil }
     }
 
     // MARK: - 发送公屏 / demo 送礼
@@ -585,7 +770,7 @@ struct PartyRoomView: View {
                     Task { @MainActor in
                         activeRoomTool = nil
                         try? await Task.sleep(nanoseconds: 350_000_000)
-                        stubToolToast = L10n.Party.toolComingSoon
+                        activeRoomTool = .blocklist
                     }
                 },
                 onTapRoomMode: {
@@ -639,12 +824,11 @@ struct PartyRoomView: View {
             }
             .preferredColorScheme(.dark)
         case .blocklist:
-            // TODO(F 期)：接入 PartyRoomBlocklistView（H5 blocklist.vue 对应）
-            Text("Blocklist coming soon")
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Theme.Palette.partyListBackground.ignoresSafeArea())
-                .preferredColorScheme(.dark)
+            NavigationStack {
+                PartyBlocklistSheet(store: store)
+            }
+            .preferredColorScheme(.dark)
+            .presentationDetents([.medium, .large])
         case .roomMode:
             // E v2 §1 + §3 Sheet Mount Hoist：Room Mode 模板 grid → onConfirmRequest 上抛 → 切 .roomModeConfirm
             NavigationStack {

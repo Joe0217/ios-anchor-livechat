@@ -938,6 +938,17 @@
 "party.tool.blocklist"                   = "قائمة الحظر";
 "party.tool.mcSeat"                      = "مقعد MC";
 "party.tool.comingSoon"                  = "قريبًا";
+// E spec 2026-07-14 قائمة حظر غرفة الحفلة
+"party.blocklist.navTitle"               = "قائمة الحظر";
+"party.blocklist.empty"                  = "لا يوجد مستخدمون محظورون";
+"party.blocklist.loadError"              = "فشل تحميل قائمة الحظر";
+"party.blocklist.loadErrorFormat"        = "فشل التحميل: %@";
+"party.blocklist.removeConfirmTitle"     = "إزالة من قائمة الحظر؟";
+"party.blocklist.removeConfirmMessage"   = "سيتمكن هذا المستخدم من دخول الغرفة مرة أخرى.";
+"party.blocklist.removeSuccess"          = "تمت الإزالة بنجاح";
+"party.blocklist.removeFailed"           = "فشلت الإزالة، يرجى المحاولة مرة أخرى";
+"party.blocklist.banTypePermanent"       = "دائم";
+"party.blocklist.autoUnbanFormat"        = "إلغاء الحظر تلقائياً خلال %@";
 "party.create.section.template"          = "اختر القالب";
 "party.create.template.loading"          = "جارٍ تحميل القوالب…";
 "party.create.template.empty"            = "لا توجد قوالب متاحة في dev";
@@ -1295,3 +1306,12 @@
 "partyRoom.seat.videoNeedsInvite"        = "يتطلب دعوة من مالك الغرفة/المسؤول";
 "partyRoom.switchSeat.title"             = "التبديل إلى هذا المقعد؟";
 "partyRoom.switchSeat.confirm"           = "تبديل";
+"partyRoom.adminSeat.title"              = "إدارة المقعد";
+"partyRoom.adminSeat.take"               = "اجلس على المقعد";
+"partyRoom.adminSeat.switchHere"         = "التبديل إلى هنا";
+"partyRoom.adminSeat.lock"               = "قفل المقعد";
+"partyRoom.adminSeat.unlock"             = "فتح المقعد";
+"partyRoom.otherSeat.title"              = "إدارة المستخدم";
+"partyRoom.otherSeat.mute"               = "كتم صوت المقعد";
+"partyRoom.otherSeat.unmute"             = "إلغاء كتم المقعد";
+"partyRoom.otherSeat.viewProfile"        = "عرض الملف الشخصي";

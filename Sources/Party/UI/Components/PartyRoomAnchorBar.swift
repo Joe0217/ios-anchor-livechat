@@ -67,11 +67,39 @@ struct PartyRoomAnchorBar: View {
 
     // MARK: - 头像
 
-    /// 移除头像顶部装饰奖杯（原 partyTrophy 与设计稿 Component 定位冲突，误读为"左上角大榜单图标"）
+    /// v12：头像 + 装饰框（对齐 H5 header-wrap.vue L148-151：v-image 36×36 头像 + head-frame 45×45 装饰覆盖）
+    /// iOS 主播端派对房头像 44pt；装饰框 55pt 略大覆盖形成"装饰环"视觉
     private var anchorAvatarBlock: some View {
-        avatarCircle
-            .frame(width: Theme.Metric.partyRoomAnchorAvatar,
-                   height: Theme.Metric.partyRoomAnchorAvatar)
+        ZStack {
+            avatarCircle
+            headFrameDecoration
+        }
+        // 装饰框比头像大 → block 尺寸取装饰框；用 fixedSize 避免装饰框撑破外层 HStack
+        .frame(width: Theme.Metric.partyRoomAnchorAvatar + 12,
+               height: Theme.Metric.partyRoomAnchorAvatar + 12)
+    }
+
+    /// 头像装饰框（源自后端 `headFrameSmallImg`；对齐 H5 head-frame.vue 双路径：
+    /// - `.svga` 结尾 → RemoteSVGAImageView 循环播放
+    /// - `.png/.webp` 等静态图 → CachedAsyncImage）
+    @ViewBuilder
+    private var headFrameDecoration: some View {
+        if let raw = headFrameURL, !raw.isEmpty {
+            let frameSize = Theme.Metric.partyRoomAnchorAvatar + 12
+            if raw.lowercased().hasSuffix(".svga") {
+                RemoteSVGAImageView(url: URL(string: raw), loops: 0, contentMode: .scaleAspectFit)
+                    .frame(width: frameSize, height: frameSize)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            } else {
+                CachedAsyncImage(url: URL(string: raw), contentMode: .fit, persistent: true) {
+                    Color.clear
+                }
+                .frame(width: frameSize, height: frameSize)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+        }
     }
 
     private var avatarCircle: some View {
