@@ -14,7 +14,7 @@ struct PartyRoomAnchorBar: View {
     let roomId: String
     let anchorAvatarURL: String?
     /// v12：房主头像装饰框 URL（对齐 H5 head-frame.vue，源自 `apiPartyGetUser.headFrameSmallImg`）
-    /// `.svga` 结尾 iOS 暂不支持渲染（fallback 无装饰）；.png/.webp 走 CachedAsyncImage
+    /// SVGA / 静态图统一由 `HeadFrameView` 分流（v16 SVGA 已接 RemoteSVGAImageView 循环播放）
     let headFrameURL: String?
     /// v11 对齐 H5 header-wrap.vue：统计条从 heat+viewers 改为 wealth/honor 轮播 + audience
     let wealthText: String
@@ -79,27 +79,12 @@ struct PartyRoomAnchorBar: View {
                height: Theme.Metric.partyRoomAnchorAvatar + 12)
     }
 
-    /// 头像装饰框（源自后端 `headFrameSmallImg`；对齐 H5 head-frame.vue 双路径：
-    /// - `.svga` 结尾 → RemoteSVGAImageView 循环播放
-    /// - `.png/.webp` 等静态图 → CachedAsyncImage）
-    @ViewBuilder
+    /// 头像装饰框（源自后端 `headFrameSmallImg`；对齐 H5 head-frame.vue 双路径 —— SVGA / 静态图）
     private var headFrameDecoration: some View {
-        if let raw = headFrameURL, !raw.isEmpty {
-            let frameSize = Theme.Metric.partyRoomAnchorAvatar + 12
-            if raw.lowercased().hasSuffix(".svga") {
-                RemoteSVGAImageView(url: URL(string: raw), loops: 0, contentMode: .scaleAspectFit)
-                    .frame(width: frameSize, height: frameSize)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            } else {
-                CachedAsyncImage(url: URL(string: raw), contentMode: .fit, persistent: true) {
-                    Color.clear
-                }
-                .frame(width: frameSize, height: frameSize)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-            }
-        }
+        HeadFrameView(urlString: headFrameURL,
+                      size: Theme.Metric.partyRoomAnchorAvatar + 12)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
     private var avatarCircle: some View {
