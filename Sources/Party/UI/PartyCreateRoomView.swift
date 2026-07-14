@@ -552,7 +552,6 @@ struct PartyCreateModePickerSheet: View {
             ZStack(alignment: .topTrailing) {
                 Group {
                     if let cover = temp.coverImage, !cover.isEmpty, let u = URL(string: cover) {
-                        // v7.5：铺满容器（.fill）+ clipped 裁剪超出，对齐用户要求
                         CachedAsyncImage(url: u, contentMode: .fill, cdn: (.avatarLarge, .fill)) {
                             Rectangle().fill(Theme.Palette.partyCreateTempFill)
                         }
@@ -565,8 +564,7 @@ struct PartyCreateModePickerSheet: View {
                             .padding(20)
                     }
                 }
-                .frame(maxWidth: .infinity)
-                .aspectRatio(1, contentMode: .fit)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 if selected {
                     Image("partyTemplateSelected")
@@ -575,7 +573,9 @@ struct PartyCreateModePickerSheet: View {
                         .padding(6)
                 }
             }
-            .frame(maxWidth: .infinity)
+            // v7.6：外层 aspectRatio(1, .fit) 锁 1:1 正方形 grid item —— 每行 2 格严格一样大
+            // 内部图片 fill 撑满 clipped 裁剪超出，图片原比例差异不再造成 grid item 高度错位
+            .aspectRatio(1, contentMode: .fit)
             .padding(8)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -712,14 +712,14 @@ struct PartyCreateBackgroundPickerSheet: View {
                     if let urlStr = bg.imgUrl ?? bg.bigImgUrl,
                        !urlStr.isEmpty,
                        let u = URL(string: urlStr) {
-                        CachedAsyncImage(url: u, persistent: true, cdn: (.avatarLarge, .fill)) {
+                        CachedAsyncImage(url: u, contentMode: .fill, persistent: true, cdn: (.avatarLarge, .fill)) {
                             Rectangle().fill(Theme.Palette.partyCreateTempFill)
                         }
                     } else {
                         Rectangle().fill(Theme.Palette.partyCreateTempFill)
                     }
                 }
-                .aspectRatio(0.75, contentMode: .fill)   // 3:4 竖向缩略图
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
                 if selected {
@@ -738,6 +738,9 @@ struct PartyCreateBackgroundPickerSheet: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 }
             }
+            // v7.6：外层 aspectRatio(0.75, .fit) 锁 3:4 竖向 grid item —— 保证每行 3 格高度一致，
+            // 内部 CachedAsyncImage fill 撑满 clipped，图片超出被裁剪不错位
+            .aspectRatio(0.75, contentMode: .fit)
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .stroke(selected ? Theme.Palette.partyCreateTempSelected : Color.clear, lineWidth: 1.5)
