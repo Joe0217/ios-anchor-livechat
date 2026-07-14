@@ -12,7 +12,13 @@ struct PartyRemoteVideoView: UIViewRepresentable {
     let engine: PartyRTCEngine
 
     func makeUIView(context: Context) -> UIView {
-        engine.acquireRemoteView(seatIndex: seatIndex)
+        let view = engine.acquireRemoteView(seatIndex: seatIndex)
+        // 视频填充满 seat + 超出裁剪（aspect fill + clipped）—— 用户 2026-07-14 requirement：
+        // AgoraRtcVideoCanvas.renderMode=.hidden 已在 PartyRTCEngine.setupRemoteVideo 设为等比裁剪；
+        // 此处 UIView layer 加 masksToBounds=true 双保险，防 SDK 内部 subview 超出边界溢出
+        view.clipsToBounds = true
+        view.contentMode = .scaleAspectFill
+        return view
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {

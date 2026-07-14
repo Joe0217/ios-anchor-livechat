@@ -118,18 +118,13 @@ struct PartyRoomBigSeatCell: View {
     }
 
     private var cameraOffPlaceholder: some View {
-        // v5：图标改用 Component 7.png（partySeatRing 深粉简约环，用户 2026-07-11 correction）
-        // 与空位 partyVideoSeatEmpty(上视频位.png) 视觉区分；位置与 emptyLayer 中 emptyRing 完全对齐
-        VStack(spacing: 4) {
-            Spacer()
+        // v7.4：ring 居中于 ZStack，与 headFrameOverlay 同 y 中心（用户 2026-07-14 requirement）
+        // 与 emptyLayer 同款布局，保持空位/占用关摄像头/头像占用三态位置一致
+        ZStack {
             Image("partySeatRing")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 72, height: 72)
-            Spacer()
-            // emptyLayer 底部 Text(seatIndex) + padding.bottom(12) 综合 ≈ 32pt；
-            // 此处放透明占位保持 icon 中心 y-坐标与空位 emptyRing 一致
-            Color.clear.frame(height: 32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -145,27 +140,29 @@ struct PartyRoomBigSeatCell: View {
     @ViewBuilder
     private var emptyLayer: some View {
         if !seat.occupied {
-            VStack(spacing: 4) {
-                Spacer()
-                ZStack {
-                    emptyRing
-                    // v15：锁麦位在 emptyRing 中心叠 lock icon（对齐 H5 视觉禁止上麦提示）
-                    if (seat.lockFlag ?? 0) == 1 {
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 24, weight: .semibold))
-                            .foregroundColor(.white.opacity(0.9))
-                            .accessibilityHidden(true)
+            // v7.4：Ring 居中于 ZStack（与 headFrameOverlay 同 y 中心），idx 独立底部布局
+            // 原 VStack + Spacer 均分因底部 idx text 挤下让 ring 中心偏上，与占用态头像位置不齐
+            ZStack {
+                emptyRing
+                // v15：锁麦位在 emptyRing 中心叠 lock icon
+                if (seat.lockFlag ?? 0) == 1 {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.9))
+                        .accessibilityHidden(true)
+                }
+                // idx 底部独立布局（不影响 ring 中心位置）
+                if let idx = seat.seatIndex, (seat.lockFlag ?? 0) != 1 {
+                    VStack {
+                        Spacer()
+                        Text("\(idx)")
+                            .font(Theme.Typography.partyRoomEmptyIndex)
+                            .foregroundColor(Theme.Palette.partyRoomEmptyIndex)
+                            .padding(.bottom, 12)
                     }
                 }
-                Spacer()
-                if let idx = seat.seatIndex, (seat.lockFlag ?? 0) != 1 {
-                    // v15：锁麦位不显示数字（视觉焦点让给 lock 图标）
-                    Text("\(idx)")
-                        .font(Theme.Typography.partyRoomEmptyIndex)
-                        .foregroundColor(Theme.Palette.partyRoomEmptyIndex)
-                        .padding(.bottom, 12)
-                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

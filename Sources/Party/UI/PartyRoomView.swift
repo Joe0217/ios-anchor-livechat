@@ -71,6 +71,9 @@ struct PartyRoomView: View {
     @State private var giftSentToast: String? = nil
     /// H-5：Recharge 按钮 toast（充值功能未接入前的占位提示）
     @State private var giftRechargeToast: String? = nil
+    /// v16 键盘避让：整个 stageContent `.ignoresSafeArea(.keyboard)` 阻止 SwiftUI 默认键盘避让，
+    /// 单独订阅 `UIResponder.keyboardWillShow/Hide` 让 inputBar 手动 `.padding(.bottom, keyboardHeight)` 上移。
+    @State private var keyboardHeight: CGFloat = 0
 
     // MARK: - 顶层 body
 
@@ -143,8 +146,14 @@ struct PartyRoomView: View {
             .confirmationDialog(L10n.Party.selfActionsTitle, isPresented: $showSelfActions) {
                 selfActionsButtons
             }
-            // v15：他人麦位 tap → UserCardPopup（对齐 H5 openUserCard）
-            .overlay { userCardOverlay }
+            // v15:他人麦位 tap → UserCardPopup(sheet 化,对齐 H5 openUserCard)
+            // 派对房主播端 tap 头像不跳 UserProfile(对齐 H5 主播端 route.path === '/liveSetting' 分支)
+            .userCardSheet(
+                item: Binding(
+                    get: { userCardForUserId.map { UserCardPresentation(userId: $0) } },
+                    set: { userCardForUserId = $0?.userId }
+                )
+            )
             // v15：已在麦位点空位 → 切麦确认（对齐 H5 EnterSwitchPopup）
             .confirmationDialog(
                 L10n.PartyRoom.switchSeatTitle,
@@ -169,6 +178,20 @@ struct PartyRoomView: View {
             ) {
                 otherSeatAdminActionsButtons
             }
+            // v16 键盘监听：inputBar 手动上移（stageContent 挂了 .ignoresSafeArea(.keyboard) 阻止默认避让）
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
+                guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+                let duration = (notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
+                withAnimation(.easeOut(duration: duration)) {
+                    keyboardHeight = frame.height
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { notification in
+                let duration = (notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
+                withAnimation(.easeOut(duration: duration)) {
+                    keyboardHeight = 0
+                }
+            }
             .preferredColorScheme(.dark)
     }
 
@@ -185,6 +208,10 @@ struct PartyRoomView: View {
             }
         }
         .ignoresSafeArea(.container, edges: .horizontal)
+        // v16 修复键盘拉起时背景变形：整个 ZStack 完全忽略键盘 safe area，
+        // 让 backgroundLayer / contentColumn / seatGrid 全部保持屏幕原尺寸不变形。
+        // inputBar 内部通过 keyboardHeight @State + `.padding(.bottom, keyboardHeight)` 手动上移避键盘。
+        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 
     /// 进房 loading：半透黑底 + ProgressView + 文案（对齐 PartySearchView loadingOverlay 模式）
@@ -201,13 +228,26 @@ struct PartyRoomView: View {
         .transition(.opacity)
     }
 
-    /// 背景层：房间大图 + 深色遮罩
+    /// 背景层：房主自定义大图（bigImgUrl 优先）→ H5 DEFAULT_BG 兜底 → partyRoomBg asset placeholder。
+    ///
+    /// **v16 对齐 H5 `room-bg.vue`**：
+    /// - `bigImgUrl` 优先（`partyStore.currentPartyInfo?.bigImgUrl || bgImgUrl`）
+    /// - 未设房间背景时走 H5 `DEFAULT_BG = 'https://img.hnhily.link/mstatic/party/bg_party.png'`
+    ///   （对齐用户端视觉；本地 asset `partyRoomBg` 与 H5 默认背景图案不一致）
+    /// - CachedAsyncImage placeholder 用本地 asset，网络加载完前显示避免白屏
+    ///
+    /// 键盘防变形不放这里 —— 挂在 stageContent 外层 `.ignoresSafeArea(.keyboard)` 阻止整个 view tree 键盘避让
     private var backgroundLayer: some View {
-        ZStack {
-            Image("partyRoomBg")
-                .resizable()
-                .scaledToFill()
-                .ignoresSafeArea()
+        let bgURLStr = store.roomInfo?.bigImgUrl
+            ?? store.roomInfo?.bgImgUrl
+            ?? "https://img.hnhily.link/mstatic/party/bg_party.png"
+        return ZStack {
+            CachedAsyncImage(url: URL(string: bgURLStr), contentMode: .fill, persistent: true) {
+                Image("partyRoomBg")
+                    .resizable()
+                    .scaledToFill()
+            }
+            .ignoresSafeArea()
             Theme.Palette.partyRoomOverlay
                 .ignoresSafeArea()
         }
@@ -242,8 +282,10 @@ struct PartyRoomView: View {
             audienceCountText: "\(store.roomInfo?.onlineCount ?? 0)",
             isFollowing: store.isFollowingAnchor,
             isSelfRoom: store.selfRole == .owner,
-            canManage: store.selfRole == .owner || store.selfRole == .admin,
-            canStartPk: (store.selfRole == .owner || store.selfRole == .admin) && (store.roomInfo?.roomTempIdInt == 1),
+            // v7.4 用户明示：右上"设置入口"仅房主本人显示，房管/观众不看到
+            // （房管的管理动作走麦位 tap → adminSeatActionsTarget dialog，不通过 tools sheet）
+            canManage: store.selfRole == .owner,
+            canStartPk: store.selfRole == .owner && (store.roomInfo?.roomTempIdInt == 1),
             onFollowTap: handleFollowTap,
             onPkTap: handlePkTap,
             onAnnouncementTap: handleAnnouncementTap,
@@ -422,6 +464,8 @@ struct PartyRoomView: View {
             Rectangle().fill(Color.black.opacity(0.15))
                 .ignoresSafeArea(edges: .bottom)
         )
+        // v16 键盘弹起时 inputBar 手动上移（stageContent 已 `.ignoresSafeArea(.keyboard)` 阻止默认避让）
+        .padding(.bottom, keyboardHeight)
     }
 
     private var currentMicOn: Bool {
@@ -483,6 +527,9 @@ struct PartyRoomView: View {
         }
         // P2-10：onAppear 同步 cache 一次仅作为"上次会话残留"兜底
         sortedSeatsCache = store.seatList.sorted { ($0.seatIndex ?? 0) < ($1.seatIndex ?? 0) }
+        // F 里程碑（spec §3.4 P0-2）：挂 CallStore observer 监听 PartyCall 通话结束触发 resumeParty
+        // NSHashTable 多观察者数组，与 LiveStore attach 互不干扰
+        CallStore.shared.attach(store)
         guard !didStartEnter else { return }
         didStartEnter = true
         Task { await ensureEntered() }
@@ -491,6 +538,8 @@ struct PartyRoomView: View {
     /// 双守卫防误退房：scenePhase != .background + 仅活跃态才 leave
     private func handleDisappear() {
         guard scenePhase != .background else { return }
+        // F 里程碑：显式 detach（NSHashTable weak 会自动清，但显式调用是最佳实践）
+        CallStore.shared.detach(store)
         AutoOfflineMonitor.shared.resume()
         if store.roomState == .joined || store.roomState == .entering {
             Task { await store.leaveRoom() }
@@ -568,20 +617,7 @@ struct PartyRoomView: View {
         Task { await store.requestOnSeat(seatIndex: idx) }
     }
 
-    // MARK: - v15 UserCard overlay
-
-    @ViewBuilder
-    private var userCardOverlay: some View {
-        if let uid = userCardForUserId {
-            UserCardPopup(
-                userId: uid,
-                isPresented: Binding(
-                    get: { userCardForUserId != nil },
-                    set: { if !$0 { userCardForUserId = nil } }
-                )
-            )
-        }
-    }
+    // MARK: - v15 UserCard sheet(sheet 化后 helper computed 已删,挂载走 §.userCardSheet 一行 modifier)
 
     // MARK: - v15 切麦确认
 
@@ -796,6 +832,14 @@ struct PartyRoomView: View {
                         activeRoomTool = .mcSeat
                     }
                 },
+                onTapPrivateCall: {
+                    // F-spec §5.3 Party Call：关 tools sheet + 350ms 后打开 PartyPrivateCallSettingSheet
+                    Task { @MainActor in
+                        activeRoomTool = nil
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        activeRoomTool = .privateCall
+                    }
+                },
                 onTapStub: { label in
                     // 关 sheet + 顶部 toast
                     Task { @MainActor in
@@ -932,6 +976,13 @@ struct PartyRoomView: View {
             NavigationStack { PartyMCSeatSheet(store: store) }
                 .presentationDetents([.medium, .large])
                 .preferredColorScheme(.dark)
+        case .privateCall:
+            // F-spec §5.3 Party Call：房主 tap 私 call 入口占位（F 里程碑独立 sheet 后接入）
+            Text(L10n.Party.toolComingSoon)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Theme.Palette.partyListBackground.ignoresSafeArea())
+                .preferredColorScheme(.dark)
         }
     }
 
@@ -1024,7 +1075,7 @@ struct PartyRoomView: View {
     private var giftPanelSheet: some View {
         let receivers = PartyGiftPanelBridge.makeReceiversConfig(
             seatList: store.seatList,
-            selfUserId: store.myUserIdString
+            selfYxAccid: SessionStore.shared.user?.yxAccid
         )
         let config = CommonGiftPanelConfig.partySend(
             roomId: store.roomInfo?.id ?? roomId,
@@ -1049,7 +1100,8 @@ struct PartyRoomView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: giftRechargeToast == nil)
-            .presentationDetents([.medium, .large])
+            // 固定高度 600pt（对齐 H5 party-gift-popup.vue 半屏视觉；不允许拖到 large 避免布局跳动）
+            .presentationDetents([.height(600)])
             .preferredColorScheme(.dark)
     }
 

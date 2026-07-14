@@ -11,7 +11,12 @@ import SwiftUI  // @AppStorage（E v2 §3 partySaveInfo.autoEnter{On,Off}Applica
 /// - `PartyRoomChatManager`：NIM 公屏 + attachType 分发
 ///
 /// 单例语义（一次只能在一个房）；多次进退房会先 `forceLeaveRoom(.userRequest)` 清残留。
-/// **禁止字段**：`weak var liveStore` / `weak var callStore`（spec §1.0.3 验证；E 期完全不与 B/C/D 耦合）。
+/// **禁止字段**：`weak var liveStore`（spec §1.0.3 验证；E 期完全不与 B 耦合）。
+///
+/// **F 期铁律修订**（F-PartyCall-spec §0.4 P0-3）：
+/// - 保留：禁止 `weak var liveStore` 直接引用直播 store
+/// - 修订：允许 conform `CallStoreObserver` + 通过 `CallStore.shared.attach/detach` 观察通话事件
+///   （不使用 `weak var callStore` 字段，仍避免强 store-to-store 耦合；通过 P0-2 多观察者数组解耦）
 @MainActor
 final class PartyStore: ObservableObject {
     static let shared = PartyStore()
@@ -149,9 +154,17 @@ final class PartyStore: ObservableObject {
         return seatList.first { $0.userId == me }
     }
 
-    /// 自己角色（owner / audience；admin 推 F）
+    /// 自己角色（owner / admin / audience）。
+    /// **优先从 selfSeat.roomRoleType 派生** —— 房主 setRoomAdmin 后 IM 1001 seatList 广播
+    /// 会 update seat.roomRoleType，本 computed 实时反映 role 变化，无需重进房
+    /// （fallback 到 roomInfo.roomRoleType 覆盖未在麦上时的初始状态）
     var selfRole: PartyRoomRoleType {
-        roomInfo?.selfRoleType(myUserId: myUserIdString) ?? .audience
+        if let seat = selfSeat,
+           let raw = seat.roomRoleType,
+           let role = PartyRoomRoleType(rawValue: raw) {
+            return role
+        }
+        return roomInfo?.selfRoleType(myUserId: myUserIdString) ?? .audience
     }
 
     /// 当前登录 userId 的字符串形式（用于 seatList.userId 比较）
@@ -1886,6 +1899,22 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         )
     }
 
+    /// F 期 1029 派对房私 call 状态通知（spec §4.2 P0-4 已由 decoder 严格校验）。
+    ///
+    /// **本 spec 只做 log + roomInfo 回写**（不做 UI 提示 · Q8/Q9 决策）：
+    /// - `status = calling`：日志埋点，通话建立由 CallStore.handleIncomingVideoCall 派对分支主链路承担
+    ///   （queryCall callerType==5 判定 · 不依赖 1029 触发 pauseForCall）
+    /// - `status = ended`：日志埋点，通话结束回派对房由 CallStoreObserver.callStore 触发 resumeParty
+    /// - `partyCallOpen != nil`：回写 roomInfo.partyPrivateCallOpen（后端广播的最新开关态）
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceivePrivateCallNotify notify: PartyPrivateCallNotify, raw: NIMMessage) {
+        _ = raw
+        AppLogger.party.info("[PartyStore] 1029 privateCallNotify status=\(notify.status.rawValue, privacy: .public) userId=\(notify.userId, privacy: .public) partyCallOpen=\(notify.partyCallOpen ?? -1, privacy: .public)")
+        // 回写房间开关态（若字段存在）
+        if let open = notify.partyCallOpen, let info = roomInfo {
+            roomInfo = info.withUpdated(partyPrivateCallOpen: open)
+        }
+    }
+
     /// 从 `micApplicationsState` 已加载列表里 splice 掉指定 userId（1018 op=2/3/4 触发）
     private func spliceMicApplicationsRecord(userId: String) {
         guard !userId.isEmpty else { return }
@@ -1923,6 +1952,150 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         } catch {
             AppLogger.party.error("[PartyStore] 1001 seats decode failed: \(String(describing: error), privacy: .public)")
             return nil
+        }
+    }
+
+    // MARK: - F PartyCall 抢占（spec §2.1 Flow B/C）
+
+    /// F 期：房主在设置 sheet 保存成功后同步回写 roomInfo（对齐 1029 handler 内的字段回写路径）。
+    /// PartyPrivateCallSettingStore 保存 API 成功后调用；本地态与后端广播两条路径最终一致。
+    func applyPrivateCallUpdate(partyPrivateCallOpen: Int?, partyCallGiftId: String?) {
+        guard let info = roomInfo else { return }
+        roomInfo = info.withUpdated(
+            partyPrivateCallOpen: partyPrivateCallOpen,
+            partyCallGiftId: partyCallGiftId
+        )
+    }
+
+    /// F 期入口：派对房挂起进入私 call（由 `CallStore.handleIncomingVideoCall` 派对分支调用）。
+    ///
+    /// **无 5s delay 直接接听**（D-1 决策 · 对齐 LiveStore.pauseForCall 立即模式）。时序：
+    /// 1. 前置守卫（roomState==.joined）
+    /// 2. updateMedia(type=3, enable=false) 若在麦上（fire-and-forget，不阻塞）
+    /// 3. downSeat 若在麦上（fire-and-forget，不阻塞）
+    /// 4. disableLocalVideoCapture()（内部串行 detach Sharer → unsubscribe → tearDown → camera=nil）
+    /// 5. Task.sleep(200ms) — 让 AVCaptureSession 硬件层完全释放前置摄像头（P1-8 · 避免 CallView fallback camera reason=3）
+    /// 6. rtc.leave() — await didLeaveChannelWith 回调（sharedEngine 不 destroy · rule §5）
+    /// 7. CallStore.acceptIncomingFromParty(msg) — CallView zIndex=100 overlay 自动 pop calling
+    func pauseForCall(msg: CallMessage) async {
+        // 1) 前置守卫：只在派对房 .joined 状态下才处理
+        guard roomState == .joined, let info = roomInfo else {
+            AppLogger.party.notice("[PartyStore] pauseForCall guard reject roomState=\(self.roomState.debugDesc, privacy: .public)")
+            return
+        }
+        AppLogger.party.info("[PartyStore] pauseForCall 开始 callId=\(msg.callId, privacy: .public)")
+
+        // 2+3) 若在麦上：updateMedia + downSeat（fire-and-forget · 不阻塞主流程）
+        if let me = selfSeat, let seatIndex = me.seatIndex {
+            let roomId = info.id ?? ""
+            let yxRoomId = info.yxRoomId ?? ""
+            let roomTempId = info.roomTempIdInt
+            Task { @MainActor in
+                do {
+                    try await PartyAPI.updateMedia(
+                        roomId: roomId, seatIndex: seatIndex,
+                        type: 3, enable: false, yxRoomId: yxRoomId
+                    )
+                } catch {
+                    AppLogger.party.notice("⚠️ [PartyStore] pauseForCall updateMedia failed err=\(error.localizedDescription, privacy: .private)")
+                }
+            }
+            Task { @MainActor in
+                do {
+                    try await PartyAPI.downSeat(
+                        roomId: roomId, seatIndex: seatIndex,
+                        yxRoomId: yxRoomId, roomTempId: roomTempId
+                    )
+                } catch {
+                    AppLogger.party.notice("⚠️ [PartyStore] pauseForCall downSeat failed err=\(error.localizedDescription, privacy: .private)")
+                }
+            }
+        }
+
+        // 4) 释放本地相机 + 美颜（内部串行）
+        disableLocalVideoCapture()
+
+        // 5) 等 AVCaptureSession 硬件层完全释放（P1-8 · 20-200ms 保守取 200ms · Step 3 真机 5 循环压测调优）
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        // 6) rtc.leave() 派对房 Agora 频道（sharedEngine 不 destroy · rule §5 §9）
+        await rtc.leave()
+
+        // 7) 委托 CallStore 接听（内部 CallView fallback camera 会 start · CallView overlay 自动显示）
+        await CallStore.shared.acceptIncomingFromParty(msg: msg)
+        AppLogger.party.info("[PartyStore] pauseForCall 完成，已委托 CallStore")
+    }
+
+    /// F 期入口：通话结束回派对房（由 `CallStoreObserver.callStore(_:stateDidChange:previous:)`
+    /// 在 state 转 .idle 时触发 · spec §2.1 Flow C）。
+    ///
+    /// 时序：
+    /// 1. 前置守卫（roomState == .joined；通话中被踢/解散 → 短路，不 rejoin）
+    /// 2. rtc.join 重入派对房 Agora 频道（内部 setChannelProfile(.liveBroadcasting) 显式重设）
+    ///    失败 → refreshRtcToken 重试 1 次；仍失败 → forceLeaveRoom(.networkLost) + banner
+    /// 3. postMikeList() 刷新麦位面板（麦位不自动恢复，主播需手动重上麦 · 对齐安卓）
+    ///
+    /// 注意：由于 disableLocalVideoCapture 已 tearDown camera，视频位需要用户手动重上麦时才会
+    /// 再次 enableLocalVideoCapture（现有 postMikeList → onSeat 路径自动处理）。
+    func resumeParty() async {
+        // 1) 前置守卫：房间未被踢/未解散才恢复
+        guard roomState == .joined, let info = roomInfo else {
+            AppLogger.party.notice("[PartyStore] resumeParty 短路 roomState=\(self.roomState.debugDesc, privacy: .public)")
+            return
+        }
+        guard let channelId = info.agoraChannelId, !channelId.isEmpty,
+              let uid = myRtcUid else {
+            AppLogger.party.error("[PartyStore] resumeParty missing channelId/uid → forceLeaveRoom(.networkLost)")
+            await forceLeaveRoom(.networkLost)
+            return
+        }
+
+        // 2) rtc.rejoin —— 先用现有 rtcToken；失败则 refreshRtcToken 重试 1 次
+        AppLogger.party.info("[PartyStore] resumeParty rejoining channel=\(channelId, privacy: .public)")
+        var rtcToken = info.rtcToken ?? ""
+        if rtcToken.isEmpty {
+            // 现有 rtcToken 空 → 主动拉一次
+            do {
+                let r = try await LiveService.getAgoraRtmToken()
+                rtcToken = r.rtcToken ?? ""
+            } catch {
+                AppLogger.party.error("[PartyStore] resumeParty getAgoraRtmToken failed err=\(String(describing: error), privacy: .private)")
+                await forceLeaveRoom(.networkLost)
+                return
+            }
+        }
+        guard !rtcToken.isEmpty else {
+            AppLogger.party.error("[PartyStore] resumeParty rtcToken empty → forceLeaveRoom")
+            await forceLeaveRoom(.networkLost)
+            return
+        }
+        rtc.join(channelId: channelId, token: rtcToken, uid: uid)
+
+        // 3) 刷麦位面板（麦位不自动恢复 · 对齐安卓 · 主播需手动重上麦）
+        postMikeList()
+        AppLogger.party.info("[PartyStore] resumeParty 完成，等用户主动上麦")
+    }
+}
+
+// MARK: - CallStoreObserver（F 期 spec §3.2 状态机联动 · P0-2 多观察者数组）
+
+extension PartyStore: CallStoreObserver {
+    /// 观察通话状态变化：state 转 .idle 且之前非 .idle → 触发 resumeParty。
+    /// 只在派对房挂起态（isSuspendedForCall）时才需 resume（else 直播私 call 已由 LiveStore 处理）。
+    ///
+    /// 由 CallStore.notifyObservers 遍历数组时调用（PartyStore 通过 attach 注册；LiveStore 同源不干扰）。
+    nonisolated func callStore(_ store: CallStore, stateDidChange newState: CallState, previous: CallState) {
+        // hop 到 MainActor 处理业务逻辑
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            // 只处理"通话结束→idle"（其他态迁移 no-op）
+            guard newState == .idle, previous != .idle else { return }
+            // 只在派对房挂起态下响应（避免直播私 call / direct 通话结束时错误触发 resumeParty）
+            // 判定：previous frontGameType == .party（通话来源是派对房）
+            // 注意：state 已转 .idle 但 current 尚未清（endLocally 内 scheduleEndedToIdle 500ms 延迟清理，观察者在此窗口内触发）
+            guard store.current.frontGameType == .party else { return }
+            AppLogger.party.info("[PartyStore] CallStoreObserver: call ended (prev=\(previous.rawValue, privacy: .public)) → resumeParty")
+            await self.resumeParty()
         }
     }
 }
