@@ -949,6 +949,15 @@
 "party.blocklist.removeFailed"           = "فشلت الإزالة، يرجى المحاولة مرة أخرى";
 "party.blocklist.banTypePermanent"       = "دائم";
 "party.blocklist.autoUnbanFormat"        = "إلغاء الحظر تلقائياً خلال %@";
+// E spec 2026-07-14 قفل/فتح غرفة الحفلة (كلمة مرور من 4 أرقام)
+"party.lockRoom.sheetTitle"              = "قفل الغرفة";
+"party.lockRoom.sheetDescription"        = "عيّن كلمة مرور مكونة من 4 أرقام لقفل الغرفة";
+"party.lockRoom.passwordPlaceholder"     = "أدخل كلمة مرور مكونة من 4 أرقام";
+"party.lockRoom.lockAction"              = "قفل";
+"party.lockRoom.passwordInvalid"         = "يجب أن تتكون كلمة المرور من 4 أرقام";
+"party.lockRoom.lockSuccess"             = "تم قفل الغرفة";
+"party.lockRoom.unlockSuccess"           = "تم فتح الغرفة";
+"party.lockRoom.operationFailed"         = "فشلت العملية، يرجى المحاولة مرة أخرى";
 "party.create.section.template"          = "اختر القالب";
 "party.create.template.loading"          = "جارٍ تحميل القوالب…";
 "party.create.template.empty"            = "لا توجد قوالب متاحة في dev";

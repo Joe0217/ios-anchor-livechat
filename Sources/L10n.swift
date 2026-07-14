@@ -293,6 +293,15 @@ enum L10n {
         static var blocklistRemoveFailed: String { localize("party.blocklist.removeFailed", comment: "移除失败 toast（与 H5 差异化，H5 无差别提示成功）") }
         static var blocklistBanTypePermanent: String { localize("party.blocklist.banTypePermanent", comment: "永久封禁标签") }
         static var blocklistAutoUnbanFormat: String { localize("party.blocklist.autoUnbanFormat", comment: "限时封禁倒计时前缀，参数：剩余时间字符串（如 12:34）") }
+        // 派对房加锁/解锁（E spec 2026-07-14；4 位数字密码，加锁弹 sheet；解锁直接调 API 不弹）
+        static var lockRoomSheetTitle: String { localize("party.lockRoom.sheetTitle", comment: "加锁 sheet 标题 Lock Room") }
+        static var lockRoomSheetDescription: String { localize("party.lockRoom.sheetDescription", comment: "加锁 sheet 副标题：设置 4 位数字密码") }
+        static var lockRoomPasswordPlaceholder: String { localize("party.lockRoom.passwordPlaceholder", comment: "SecureField placeholder：输 4 位数字密码") }
+        static var lockRoomLockAction: String { localize("party.lockRoom.lockAction", comment: "sheet 底部主按钮 Lock") }
+        static var lockRoomPasswordInvalid: String { localize("party.lockRoom.passwordInvalid", comment: "前端校验错误：密码需为 4 位数字（disable 按钮的错误状态；本次实现按钮 disable 兜底不显示）") }
+        static var lockRoomLockSuccess: String { localize("party.lockRoom.lockSuccess", comment: "加锁成功 toast · Room locked") }
+        static var lockRoomUnlockSuccess: String { localize("party.lockRoom.unlockSuccess", comment: "解锁成功 toast · Room unlocked") }
+        static var lockRoomOperationFailed: String { localize("party.lockRoom.operationFailed", comment: "加解锁 API 失败通用兜底 toast") }
         static var createTemplateLoading: String { localize("party.create.template.loading", comment: "加载模板…") }
         static var createTemplateEmpty: String { localize("party.create.template.empty", comment: "dev 暂无可用模板") }
         static var createTemplateFallbackFormat: String { localize("party.create.template.fallbackFormat", comment: "模板 %d") }

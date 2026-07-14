@@ -905,6 +905,15 @@
 "party.blocklist.removeFailed"           = "Failed to remove, please try again";
 "party.blocklist.banTypePermanent"       = "Permanent";
 "party.blocklist.autoUnbanFormat"        = "Auto unban in %@";
+// E spec 2026-07-14 派对房加锁/解锁（4 位数字密码）
+"party.lockRoom.sheetTitle"              = "Lock Room";
+"party.lockRoom.sheetDescription"        = "Set a 4-digit password to lock the room";
+"party.lockRoom.passwordPlaceholder"     = "Enter 4-digit password";
+"party.lockRoom.lockAction"              = "Lock";
+"party.lockRoom.passwordInvalid"         = "Password must be 4 digits";
+"party.lockRoom.lockSuccess"             = "Room locked";
+"party.lockRoom.unlockSuccess"           = "Room unlocked";
+"party.lockRoom.operationFailed"         = "Operation failed, please try again";
 "party.create.section.name"              = "Room Name";
 "party.create.name.placeholder"          = "Up to 20 characters";
 "party.create.section.template"          = "Select Template";

@@ -103,6 +103,11 @@ final class PartyStore: ObservableObject {
     /// spec §3：sheet 快关快开时 cancel 上一次未完成的 load，防 CancellationError 污染新 state
     private var loadBlocklistTask: Task<Result<[PartyBlocklistItem], Error>, Never>? = nil
 
+    // MARK: - Lock Room (E spec §3 Lock Room)
+
+    /// 房间加/解锁 API 幂等 flag（spec §4 R3；防 Save/Lock Room icon 连点双请求）
+    private var isBusyLockRoom: Bool = false
+
     /// partySaveInfo（对齐 H5 stores/modules/user.js partySaveInfo）：本地长驻两个 Bool flag，
     /// 用户是否已经首次协议确认过 "打开申请" / "关闭申请"；二次同方向切换 UI 直接调 API 不弹协议弹窗。
     /// 说明：@AppStorage 在 ObservableObject 中不触发 objectWillChange（与视图订阅相反），
@@ -374,6 +379,8 @@ final class PartyStore: ObservableObject {
         isBusyRemoveBlocklist = []
         loadBlocklistTask?.cancel()
         loadBlocklistTask = nil
+        // E spec §3 Lock Room：幂等 flag 清（退房若正好卡在请求中，下次进新房重置为可用）
+        isBusyLockRoom = false
     }
 
     // MARK: - 房主保存设置后本地同步（v8.2）
@@ -1215,6 +1222,77 @@ final class PartyStore: ObservableObject {
         } catch {
             AppLogger.party.error("[PartyStore] removeKickOutBlacklist failed: \(String(describing: error), privacy: .private)")
             throw error
+        }
+    }
+
+    // MARK: - Lock Room (E spec §3 Lock Room)
+
+    /// 房主加锁房间（spec §3）。isBusy 幂等；成功后本地乐观回写 `lockFlag=1`。
+    /// - 前端拦截：密码固定 4 位纯数字（对齐 H5 `van-password-input length=4`）
+    /// - 无 IM 广播：加锁瞬间已在房观众不 kick（对齐 H5）；跨端一致靠 `enterRoom` 拦截返 10006
+    /// - 失败 sheet 层需保持打开让用户可重试 → 错误通过 `lastError` 上抛让 view 层 toast
+    func lockRoom(password: String) async {
+        guard !isBusyLockRoom else {
+            AppLogger.party.notice("[PartyStore] lockRoom skip: busy")
+            return
+        }
+        guard let info = roomInfo, roomState == .joined else {
+            AppLogger.party.notice("[PartyStore] lockRoom skip: not joined")
+            return
+        }
+        // 前端拦截：4 位纯数字（H5 van-password-input length=4 兜底；UI 层 button.disabled 已挡）
+        guard password.count == 4, password.allSatisfy(\.isNumber) else {
+            AppLogger.party.notice("[PartyStore] lockRoom skip: password format invalid")
+            return
+        }
+        guard let roomId = info.id, !roomId.isEmpty else {
+            AppLogger.party.error("[PartyStore] lockRoom bad roomId")
+            lastError = .underlying(.networkError)
+            return
+        }
+        isBusyLockRoom = true
+        defer { isBusyLockRoom = false }
+
+        do {
+            // 密码明文不落日志（安全）—— 仅记 roomId
+            try await PartyAPI.lockRoom(roomId: roomId, password: password)
+            // 乐观本地回写：lockFlag=1 + needPassword=true；下次 refresh 由服务端字段自然收敛
+            roomInfo = info.withUpdated(lockFlag: 1, needPassword: true)
+            AppLogger.party.info("[PartyStore] lockRoom ok roomId=\(roomId, privacy: .public)")
+        } catch {
+            AppLogger.party.error("[PartyStore] lockRoom failed: \(String(describing: error), privacy: .private)")
+            lastError = .underlying((error as? PartyAPIError) ?? .networkError)
+        }
+    }
+
+    /// 房主解锁房间（spec §3）。isBusy 幂等；成功后本地乐观回写 `lockFlag=0`。
+    /// - 无二次确认：tap Lock Room 已锁态 → 直接调（对齐 H5 无二次确认弹窗）
+    /// - 无密码字段：对齐 H5 `feachLockRoom({ lockFlag: 0 })` payload 省略 password
+    func unlockRoom() async {
+        guard !isBusyLockRoom else {
+            AppLogger.party.notice("[PartyStore] unlockRoom skip: busy")
+            return
+        }
+        guard let info = roomInfo, roomState == .joined else {
+            AppLogger.party.notice("[PartyStore] unlockRoom skip: not joined")
+            return
+        }
+        guard let roomId = info.id, !roomId.isEmpty else {
+            AppLogger.party.error("[PartyStore] unlockRoom bad roomId")
+            lastError = .underlying(.networkError)
+            return
+        }
+        isBusyLockRoom = true
+        defer { isBusyLockRoom = false }
+
+        do {
+            try await PartyAPI.lockRoom(roomId: roomId, password: nil)
+            // 乐观本地回写：lockFlag=0 + needPassword=false
+            roomInfo = info.withUpdated(lockFlag: 0, needPassword: false)
+            AppLogger.party.info("[PartyStore] unlockRoom ok roomId=\(roomId, privacy: .public)")
+        } catch {
+            AppLogger.party.error("[PartyStore] unlockRoom failed: \(String(describing: error), privacy: .private)")
+            lastError = .underlying((error as? PartyAPIError) ?? .networkError)
         }
     }
 

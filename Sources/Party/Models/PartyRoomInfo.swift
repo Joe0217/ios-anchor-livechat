@@ -119,12 +119,17 @@ struct PartyRoomInfo: Codable, Equatable {
     /// v2（2026-07-14）追加 `roomTempId` 参数——E spec §1 Room Mode 切模板成功后，
     /// PartyStore.handleRoomModeChanged 需回写 `roomInfo.roomTempId` 让下次 IM 幂等判断能命中
     /// （否则 `roomTempId==newTempId` 幂等保护恒为 false，重复触发下麦 hook）。
+    ///
+    /// v3（2026-07-14）追加 `lockFlag` / `needPassword`——E spec §3 Lock Room 加/解锁后
+    /// PartyStore 本地乐观更新（无 IM 广播），下次 refresh 前用回写字段驱动 UI 立即反馈。
     func withUpdated(
         roomName: String? = nil,
         roomAvatar: String? = nil,
         greetingMessage: String? = nil,
         roomLanguage: String? = nil,
-        roomTempId: String? = nil
+        roomTempId: String? = nil,
+        lockFlag: Int? = nil,
+        needPassword: Bool? = nil
     ) -> PartyRoomInfo {
         PartyRoomInfo(
             id: id,
@@ -137,14 +142,14 @@ struct PartyRoomInfo: Codable, Equatable {
             roomLanguage: roomLanguage ?? self.roomLanguage,
             heatValue: heatValue,
             roomStatus: roomStatus,
-            lockFlag: lockFlag,
+            lockFlag: lockFlag ?? self.lockFlag,
             yxRoomId: yxRoomId,
             agoraChannelId: agoraChannelId,
             rtcToken: rtcToken,
             onlineUserList: onlineUserList,
             score: score,
             createTime: createTime,
-            needPassword: needPassword,
+            needPassword: needPassword ?? self.needPassword,
             snapshotId: snapshotId,
             roomTempId: roomTempId ?? self.roomTempId,
             roomTempType: roomTempType,

@@ -187,6 +187,40 @@ enum PartyAPI {
         )
     }
 
+    // MARK: - lock room (E spec §3 Lock Room)
+
+    /// 房间加/解锁（E spec §3）。对齐 H5 `apiPartylockRoom`（`src/api/party/index.ts:177`）。
+    ///
+    /// **path**：`/sapi/weidou/v1/client/party/room/lockRoom`
+    /// **加锁 payload**：`{ roomId: Int64, password: "1234", lockRoomFlag: 1 }`（H5 硬编码 4 位数字）
+    /// **解锁 payload**：`{ roomId: Int64, lockRoomFlag: 0 }`（password 字段省略，对齐 H5 `feachLockRoom({ lockFlag: 0 })`）
+    ///
+    /// - **字段名 `lockRoomFlag`（非 `lockFlag`）**：对齐 H5 payload 字面（spec §0 校验点）
+    /// - **roomId Int64**：H5 用户端 `roomId * 1` 数字化，与 sendGift 同款陷阱（避免后端 400）
+    /// - **response 无 lockFlag 回填**：客户端本地乐观更新 `roomInfo.lockFlag`（对齐 H5）
+    /// - **无 IM 广播**：加锁瞬间已在房观众不 kick；跨端一致靠 `enterRoom` 拦截返 10006 触发密码弹窗
+    ///
+    /// truthy 即成功（对齐 setBgImages / switchRoomTemp pattern）；envelope `code!='0000'` 由
+    /// PartyAPIClient 抛 PartyAPIError.business，调用方转 error toast。
+    static func lockRoom(roomId: String, password: String?) async throws {
+        var body: [String: Any] = [
+            "lockRoomFlag": password == nil ? 0 : 1,
+        ]
+        // roomId 数字化（H5 `id * 1` 对齐）—— fallback 到 String 兼容非数字 id 极端场景
+        if let roomIdInt = Int64(roomId) {
+            body["roomId"] = roomIdInt
+        } else {
+            body["roomId"] = roomId
+        }
+        if let password = password {
+            body["password"] = password
+        }
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/lockRoom",
+            body: body
+        )
+    }
+
     /// 创建房间。MVP 仅传 roomName + roomTempId；其他可选字段 F 期补 UI。
     static func createRoom(
         roomName: String,

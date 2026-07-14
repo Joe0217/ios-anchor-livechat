@@ -949,6 +949,15 @@
 "party.blocklist.removeFailed"           = "Kaldırılamadı, lütfen tekrar deneyin";
 "party.blocklist.banTypePermanent"       = "Kalıcı";
 "party.blocklist.autoUnbanFormat"        = "%@ sonra otomatik olarak kaldırılacak";
+// E spec 2026-07-14 Parti odası kilitleme/kilit açma (4 haneli şifre)
+"party.lockRoom.sheetTitle"              = "Odayı Kilitle";
+"party.lockRoom.sheetDescription"        = "Odayı kilitlemek için 4 haneli bir şifre belirleyin";
+"party.lockRoom.passwordPlaceholder"     = "4 haneli şifreyi girin";
+"party.lockRoom.lockAction"              = "Kilitle";
+"party.lockRoom.passwordInvalid"         = "Şifre 4 haneli olmalıdır";
+"party.lockRoom.lockSuccess"             = "Oda kilitlendi";
+"party.lockRoom.unlockSuccess"           = "Odanın kilidi açıldı";
+"party.lockRoom.operationFailed"         = "İşlem başarısız oldu, lütfen tekrar deneyin";
 "party.create.section.template"          = "Şablon Seç";
 "party.create.template.loading"          = "Şablonlar yükleniyor…";
 "party.create.template.empty"            = "dev'de kullanılabilir şablon yok";

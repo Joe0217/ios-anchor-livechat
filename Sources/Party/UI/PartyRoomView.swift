@@ -789,6 +789,22 @@ struct PartyRoomView: View {
                         activeRoomTool = .micApplicationList
                     }
                 },
+                onTapLockRoom: {
+                    // spec §3.4：已锁态直接调 unlockRoom（无弹窗）；未锁态才弹密码输入 sheet
+                    if store.roomInfo?.lockFlag == 1 {
+                        Task { @MainActor in
+                            activeRoomTool = nil
+                            try? await Task.sleep(nanoseconds: 200_000_000)
+                            await store.unlockRoom()
+                        }
+                    } else {
+                        Task { @MainActor in
+                            activeRoomTool = nil
+                            try? await Task.sleep(nanoseconds: 350_000_000)
+                            activeRoomTool = .lockRoom
+                        }
+                    }
+                },
                 onTapStub: { label in
                     // 关 sheet + 顶部 toast
                     Task { @MainActor in
@@ -915,6 +931,12 @@ struct PartyRoomView: View {
                 }
             )
             .presentationDetents([.height(220)])
+        case .lockRoom:
+            NavigationStack {
+                PartyLockRoomSheet(store: store)
+            }
+            .presentationDetents([.height(320)])
+            .preferredColorScheme(.dark)
         }
     }
 

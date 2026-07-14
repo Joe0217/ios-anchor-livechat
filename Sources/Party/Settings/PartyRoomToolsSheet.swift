@@ -9,6 +9,8 @@ enum PartyRoomToolSheetKind: String, Identifiable {
     case roomModeConfirm
     case micApplicationList
     case micApplicationSwitchConfirm
+    // E-spec Lock Room：房主 tap Lock Room → 关 tools sheet → 350ms 后打开 .lockRoom（PartyLockRoomSheet）
+    case lockRoom
     var id: String { rawValue }
 }
 
@@ -31,6 +33,8 @@ struct PartyRoomToolsSheet: View {
     let onTapRoomMode: () -> Void
     /// spec §3 wire：Mic Application item tap → 关本 sheet + 350ms 后打开 activeRoomTool = .micApplicationList
     let onTapMicApplication: () -> Void
+    /// E-spec Lock Room wire：房主 tap Lock Room → 关本 sheet + 350ms 后打开 activeRoomTool = .lockRoom
+    let onTapLockRoom: () -> Void
     /// 其他 stub 项 tap 通用回调（View 可 toast "Coming soon"）
     let onTapStub: (String) -> Void
 
@@ -48,7 +52,7 @@ struct PartyRoomToolsSheet: View {
                 LazyVGrid(columns: columns, spacing: 24) {
                     if isOwner {
                         toolItem(icon: "lock.fill", label: L10n.Party.toolLockRoom) {
-                            onTapStub(L10n.Party.toolLockRoom)
+                            onTapLockRoom()
                         }
                     }
                     toolItem(icon: "music.note", label: L10n.Party.toolMusic) {
