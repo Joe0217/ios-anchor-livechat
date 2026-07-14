@@ -903,6 +903,11 @@
 "party.create.confirm"                   = "تأكيد";
 "party.create.section.name"              = "اسم الغرفة";
 "party.create.name.placeholder"          = "غرفة Xxxxx";
+"party.create.hint.needName"             = "أدخل اسم الغرفة للمتابعة";
+"party.create.hint.needTagline"          = "أدخل الوصف للمتابعة";
+"party.create.hint.needLanguage"         = "اختر لغة للمتابعة";
+"party.create.hint.needTemplate"         = "اختر قالباً للمتابعة";
+"party.create.hint.needBackground"       = "اختر خلفية للمتابعة";
 "party.create.section.tagline"           = "شعار الغرفة";
 "party.create.tagline.placeholder"       = "دعنا نتحدث ونستمتع معًا.";
 "party.create.section.language"          = "لغة الغرفة";
@@ -1084,6 +1089,31 @@
 "report.description.placeholder"         = "صِف المشكلة التي واجهتها";
 "report.success.toast"                   = "تم إرسال الملاحظات بنجاح.";
 "common.other"                           = "أخرى";
+"common.networkError"                    = "فشل طلب الشبكة";
+"common.retry"                           = "إعادة المحاولة";
+"common.weekly"                          = "أسبوعي";
+"common.monthly"                         = "شهري";
+"common.thisWeek"                        = "هذا الأسبوع";
+"common.lastWeek"                        = "الأسبوع الماضي";
+"common.thisMonth"                       = "هذا الشهر";
+"common.lastMonth"                       = "الشهر الماضي";
+"common.twoMonthsAgo"                    = "قبل شهرين";
+"common.date"                            = "التاريخ";
+"common.income"                          = "الدخل";
+
+// MARK: - Phase B 直播数据页
+"liveData.navTitle"                      = "بيانات البث المباشر";
+"liveData.totalData"                     = "إجمالي البيانات";
+"liveData.totalDuration"                 = "إجمالي المدة";
+"liveData.totalIncome"                   = "إجمالي الدخل";
+"liveData.detailData"                    = "تفاصيل البيانات";
+"liveData.liveIncome"                    = "دخل البث";
+"liveData.privateCallIncome"             = "دخل المكالمات الخاصة";
+"liveData.liveDuration"                  = "مدة البث";
+"liveData.timeRemaining"                 = "الوقت المتبقي:";
+"liveData.days"                          = "أيام";
+"liveData.expand"                        = "توسيع";
+"liveData.collapse"                      = "طي";
 
 // MARK: - K 里程碑 美颜设置页（en 英文兜底，J 里程碑翻译团队补齐 ar）
 "beautySettings.pageTitle"                                  = "Beauty";

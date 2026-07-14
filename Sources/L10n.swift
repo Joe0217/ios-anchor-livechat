@@ -246,6 +246,12 @@ enum L10n {
         static var createConfirm: String { localize("party.create.confirm", comment: "Confirm（sheet 底部）") }
         static var createSectionName: String { localize("party.create.section.name", comment: "Room name") }
         static var createNamePlaceholder: String { localize("party.create.name.placeholder", comment: "房名 placeholder") }
+        // v7.2：创房 disable Create 按钮时提示用户缺什么必填项
+        static var createHintNeedName: String { localize("party.create.hint.needName", comment: "hint: enter room name") }
+        static var createHintNeedTagline: String { localize("party.create.hint.needTagline", comment: "hint: enter tagline") }
+        static var createHintNeedLanguage: String { localize("party.create.hint.needLanguage", comment: "hint: select language") }
+        static var createHintNeedTemplate: String { localize("party.create.hint.needTemplate", comment: "hint: select template") }
+        static var createHintNeedBackground: String { localize("party.create.hint.needBackground", comment: "hint: select background") }
         static var createSectionTagline: String { localize("party.create.section.tagline", comment: "Room Tagline") }
         static var createTaglinePlaceholder: String { localize("party.create.tagline.placeholder", comment: "tagline placeholder") }
         static var createSectionLanguage: String { localize("party.create.section.language", comment: "Room language") }
@@ -1435,6 +1441,31 @@ enum L10n {
     static var reportDescriptionPlaceholder: String { localize("report.description.placeholder", comment: "描述输入区 placeholder") }
     static var reportSuccessToast: String           { localize("report.success.toast", comment: "举报成功 toast") }
     static var commonOther: String                  { localize("common.other", comment: "通用：其他") }
+    static var commonNetworkError: String           { localize("common.networkError", comment: "网络请求错误兜底文案") }
+    static var commonRetry: String                  { localize("common.retry", comment: "重试按钮") }
+    static var commonWeekly: String                 { localize("common.weekly", comment: "周（对齐 H5 common.weekly）") }
+    static var commonMonthly: String                { localize("common.monthly", comment: "月（对齐 H5 common.monthly）") }
+    static var commonThisWeek: String               { localize("common.thisWeek", comment: "本周") }
+    static var commonLastWeek: String               { localize("common.lastWeek", comment: "上周") }
+    static var commonThisMonth: String              { localize("common.thisMonth", comment: "本月") }
+    static var commonLastMonth: String              { localize("common.lastMonth", comment: "上月") }
+    static var commonTwoMonthsAgo: String           { localize("common.twoMonthsAgo", comment: "两个月前") }
+    static var commonDate: String                   { localize("common.date", comment: "日期 label") }
+    static var commonIncome: String                 { localize("common.income", comment: "收益 label") }
+
+    // MARK: - Phase B 直播数据页（对齐 H5 views/liveData/index.vue）
+    static var liveDataNavTitle: String             { localize("liveData.navTitle", comment: "Live Stream Data") }
+    static var liveDataTotalData: String            { localize("liveData.totalData", comment: "Total Data") }
+    static var liveDataTotalDuration: String        { localize("liveData.totalDuration", comment: "Total Duration") }
+    static var liveDataTotalIncome: String          { localize("liveData.totalIncome", comment: "Total Income") }
+    static var liveDataDetailData: String           { localize("liveData.detailData", comment: "Detail Data") }
+    static var liveDataLiveIncome: String           { localize("liveData.liveIncome", comment: "Live Income") }
+    static var liveDataPrivateCallIncome: String    { localize("liveData.privateCallIncome", comment: "Private Call Income") }
+    static var liveDataLiveDuration: String         { localize("liveData.liveDuration", comment: "Live Duration") }
+    static var liveDataTimeRemaining: String        { localize("liveData.timeRemaining", comment: "Time Remaining:") }
+    static var liveDataDays: String                 { localize("liveData.days", comment: "days") }
+    static var liveDataExpand: String               { localize("liveData.expand", comment: "展开：无障碍") }
+    static var liveDataCollapse: String             { localize("liveData.collapse", comment: "收起：无障碍") }
 
     // MARK: - K 里程碑 美颜设置页（对照 H5 beautySettings/index.vue；spec §4）
     enum BeautySettings {

@@ -56,7 +56,15 @@ final class PartyCreateStore: ObservableObject {
     @Published private(set) var templatesError: String = ""
 
     /// 当前 mode 下的模板列表（View 层用）
-    var templates: [PartyRoomTemplate] { templatesByMode[mode] ?? [] }
+    /// 有效模板：过滤掉 id<=0 或既无 coverImage 又无 iOS asset 匹配的空占位
+    /// （防后端返 tempId=0 / 4 视频位 / 8 语聊位等 iOS bundle 无 asset 的模板显示为空 card）
+    var templates: [PartyRoomTemplate] {
+        (templatesByMode[mode] ?? []).filter { temp in
+            guard temp.id > 0 else { return false }
+            if let cover = temp.coverImage, !cover.isEmpty { return true }
+            return PartyCreateRoomView.assetNameForTemplate(temp) != nil
+        }
+    }
 
     // MARK: - Language picker 状态
 
@@ -217,6 +225,21 @@ final class PartyCreateStore: ObservableObject {
             && !isUploadingAvatar
     }
 
+    /// canSubmit=false 时缺失字段的 L10n hint —— UI 层 disable Create 按钮下方展示，
+    /// 帮用户定位缺什么（v7.2 真机反悔：backgrounds API 失败时用户不知道该选背景）
+    var missingFieldHint: String? {
+        if roomName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return L10n.Party.createHintNeedName
+        }
+        if roomTagline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return L10n.Party.createHintNeedTagline
+        }
+        if selectedLanguage == nil { return L10n.Party.createHintNeedLanguage }
+        if selectedTemplate == nil { return L10n.Party.createHintNeedTemplate }
+        if selectedBackground == nil { return L10n.Party.createHintNeedBackground }
+        return nil
+    }
+
     func submit() async {
         guard canSubmit,
               let lang = selectedLanguage,
@@ -270,12 +293,17 @@ final class PartyCreateStore: ObservableObject {
         isUploadingAvatar = true
         uploadError = ""
         defer { isUploadingAvatar = false }
+        #if HILY_TESTS
+        // ImageUploader 依赖 OSS 上传栈，不在 test target 白名单；test 不覆盖此路径（走真机验证）
+        uploadError = "upload not available in test target"
+        #else
         do {
             let url = try await ImageUploader.shared.upload(rawData: rawData, preset: .avatar)
             uploadedAvatarUrl = url
         } catch {
             uploadError = error.localizedDescription
         }
+        #endif
     }
 
     /// maxlength 拦截（View 层 onChange 调）：超上限 → 截断

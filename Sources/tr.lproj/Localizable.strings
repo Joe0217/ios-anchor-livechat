@@ -903,6 +903,11 @@
 "party.create.confirm"                   = "Onayla";
 "party.create.section.name"              = "Oda Adı";
 "party.create.name.placeholder"          = "Xxxxx'in Odası";
+"party.create.hint.needName"             = "Devam etmek için oda adını girin";
+"party.create.hint.needTagline"          = "Devam etmek için slogan girin";
+"party.create.hint.needLanguage"         = "Devam etmek için bir dil seçin";
+"party.create.hint.needTemplate"         = "Devam etmek için bir şablon seçin";
+"party.create.hint.needBackground"       = "Devam etmek için bir arka plan seçin";
 "party.create.section.tagline"           = "Oda Sloganı";
 "party.create.tagline.placeholder"       = "Sohbet edip eğlenelim.";
 "party.create.section.language"          = "Oda Dili";
@@ -1084,6 +1089,31 @@
 "report.description.placeholder"         = "Karşılaşılan sorunu açıklayın";
 "report.success.toast"                   = "Geri bildirim başarılı.";
 "common.other"                           = "Diğer";
+"common.networkError"                    = "Ağ isteği başarısız";
+"common.retry"                           = "Tekrar Dene";
+"common.weekly"                          = "Haftalık";
+"common.monthly"                         = "Aylık";
+"common.thisWeek"                        = "Bu Hafta";
+"common.lastWeek"                        = "Geçen Hafta";
+"common.thisMonth"                       = "Bu Ay";
+"common.lastMonth"                       = "Geçen Ay";
+"common.twoMonthsAgo"                    = "2 Ay Önce";
+"common.date"                            = "Tarih";
+"common.income"                          = "Gelir";
+
+// MARK: - Phase B 直播数据页
+"liveData.navTitle"                      = "Canlı Yayın Verileri";
+"liveData.totalData"                     = "Toplam Veri";
+"liveData.totalDuration"                 = "Toplam Süre";
+"liveData.totalIncome"                   = "Toplam Gelir";
+"liveData.detailData"                    = "Detaylı Veri";
+"liveData.liveIncome"                    = "Yayın Geliri";
+"liveData.privateCallIncome"             = "Özel Arama Geliri";
+"liveData.liveDuration"                  = "Yayın Süresi";
+"liveData.timeRemaining"                 = "Kalan Süre:";
+"liveData.days"                          = "gün";
+"liveData.expand"                        = "Genişlet";
+"liveData.collapse"                      = "Daralt";
 
 // MARK: - K 里程碑 美颜设置页（en 英文兜底，J 里程碑翻译团队补齐 tr）
 "beautySettings.pageTitle"                                  = "Beauty";

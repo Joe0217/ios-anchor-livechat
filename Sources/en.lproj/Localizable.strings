@@ -926,6 +926,11 @@
 "party.mcSeat.operationFailed"           = "Operation failed, please try again";
 "party.create.section.name"              = "Room Name";
 "party.create.name.placeholder"          = "Up to 20 characters";
+"party.create.hint.needName"             = "Enter room name to continue";
+"party.create.hint.needTagline"          = "Enter tagline to continue";
+"party.create.hint.needLanguage"         = "Select a language to continue";
+"party.create.hint.needTemplate"         = "Select a template to continue";
+"party.create.hint.needBackground"       = "Select a background to continue";
 "party.create.section.template"          = "Select Template";
 "party.create.template.loading"          = "Loading templates…";
 "party.create.template.empty"            = "No templates available in dev";
@@ -1042,6 +1047,31 @@
 "report.description.placeholder"         = "Describe the problem encountered";
 "report.success.toast"                   = "Feedback success.";
 "common.other"                           = "Other";
+"common.networkError"                    = "Network request failed";
+"common.retry"                           = "Retry";
+"common.weekly"                          = "Weekly";
+"common.monthly"                         = "Monthly";
+"common.thisWeek"                        = "This Week";
+"common.lastWeek"                        = "Last Week";
+"common.thisMonth"                       = "This Month";
+"common.lastMonth"                       = "Last Month";
+"common.twoMonthsAgo"                    = "2 Months Ago";
+"common.date"                            = "Date";
+"common.income"                          = "Income";
+
+// MARK: - Phase B 直播数据页
+"liveData.navTitle"                      = "Live Stream Data";
+"liveData.totalData"                     = "Total Data";
+"liveData.totalDuration"                 = "Total Duration";
+"liveData.totalIncome"                   = "Total Income";
+"liveData.detailData"                    = "Detail Data";
+"liveData.liveIncome"                    = "Live Income";
+"liveData.privateCallIncome"             = "Private Call Income";
+"liveData.liveDuration"                  = "Live Duration";
+"liveData.timeRemaining"                 = "Time Remaining:";
+"liveData.days"                          = "days";
+"liveData.expand"                        = "Expand";
+"liveData.collapse"                      = "Collapse";
 
 // MARK: - K 里程碑 美颜设置页
 "beautySettings.pageTitle"                                  = "Beauty";

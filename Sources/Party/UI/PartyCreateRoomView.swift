@@ -107,14 +107,10 @@ struct PartyCreateRoomView: View {
         .overlay(alignment: .top) {
             if !store.submitError.isEmpty {
                 Text(store.submitError)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(Capsule().fill(Color.black.opacity(0.85)))
-                    .padding(.top, 60)
-                    .transition(.opacity)
+                    .toastStyle()
+                    .transition(Toast.transition)
                     .task(id: store.submitError) {
-                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        try? await Task.sleep(nanoseconds: Toast.dismissDurationLongNanos)
                         store.clearSubmitError()
                     }
             }
@@ -361,6 +357,19 @@ struct PartyCreateRoomView: View {
     // MARK: - Bottom Create button
 
     private var createButton: some View {
+        VStack(spacing: 8) {
+            // v7.2 真机反悔：canSubmit=false 时展示缺失字段提示，帮用户定位（原按钮 disable 无反馈）
+            if let hint = store.missingFieldHint {
+                Text(hint)
+                    .font(.system(size: 12))
+                    .foregroundColor(Theme.Palette.partyGreeting)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+            actualCreateButton
+        }
+    }
+
+    private var actualCreateButton: some View {
         Button {
             Task { await store.submit() }
         } label: {
@@ -530,14 +539,29 @@ struct PartyCreateModePickerSheet: View {
 
     private func templateCard(_ temp: PartyRoomTemplate) -> some View {
         // v6：对齐安卓无等级门槛，全部模板都可选；去除 lock/unlock label + 锁 icon + opacity
+        // v7.2 真机反悔：图片渲染改三层 fallback（coverImage URL → asset name → placeholder），
+        // 防 videoSeatCount/seatCount 不在 asset 集合时 card 全空
         let selected = store.selectedTemplate?.id == temp.id
         return Button {
             store.selectTemplate(temp)
         } label: {
             ZStack(alignment: .topTrailing) {
-                PartyCreateRoomView.assetNameForTemplate(temp).map {
-                    Image($0).resizable().scaledToFit()
+                Group {
+                    if let cover = temp.coverImage, !cover.isEmpty, let u = URL(string: cover) {
+                        CachedAsyncImage(url: u, contentMode: .fit, cdn: (.avatarLarge, .fit)) {
+                            Rectangle().fill(Theme.Palette.partyCreateTempFill)
+                        }
+                    } else if let asset = PartyCreateRoomView.assetNameForTemplate(temp) {
+                        Image(asset).resizable().scaledToFit()
+                    } else {
+                        Image(systemName: "square.grid.2x2")
+                            .resizable().scaledToFit()
+                            .foregroundColor(Theme.Palette.partyCreateInputCounter)
+                            .padding(20)
+                    }
                 }
+                .frame(maxWidth: .infinity)
+                .aspectRatio(1, contentMode: .fit)
                 if selected {
                     Image("partyTemplateSelected")
                         .resizable()
