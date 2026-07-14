@@ -234,15 +234,28 @@ final class PartyListStore: ObservableObject {
     /// 首次进入 Party tab 时拉一次；失败/无 room 保持 `myRoom = nil`；后端 roomStatus=2（封禁）也视为无 room。
     /// 对齐 H5 用户端 index.vue L36 `showMyRoomIcon = hasMyRoom && roomStatus !== 2`。
     /// **完成后**才置 `didLoadMyRoom = true`，View 才显示浮动按钮（避免闪切）。
+    ///
+    /// v7（2026-07-14）：用 Task.detached 隔离 URLSession 生命周期 —— 与 refreshAsync 一致；
+    /// 之前 SwiftUI `.task(id: isPartyTabActive)` cancel 会传播到 URLSession → -999 cancelled
+    /// → catch 后仍置 didLoadMyRoom=true → 下次进 tab 不重试 → myRoom 永远 nil
     func loadMyRoomIfNeeded() async {
         guard !didLoadMyRoom, !isLoadingMyRoom else { return }
-        await performLoadMyRoom(clearOnFail: true)
+        let task = Task.detached { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performLoadMyRoom(clearOnFail: true)
+        }
+        await task.value
     }
 
     /// 手动重拉（如刚创建完房 pop 回大厅时）。已 loaded 时按钮已在，reload 期间保留旧值不清空避免闪。
+    /// v7：同 loadMyRoomIfNeeded 用 Task.detached 隔离 —— 防 refreshable closure cancel 传播
     func reloadMyRoom() async {
         guard !isLoadingMyRoom else { return }
-        await performLoadMyRoom(clearOnFail: false)
+        let task = Task.detached { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performLoadMyRoom(clearOnFail: false)
+        }
+        await task.value
     }
 
     private func performLoadMyRoom(clearOnFail: Bool) async {
@@ -255,11 +268,18 @@ final class PartyListStore: ObservableObject {
             } else {
                 myRoom = nil
             }
+            didLoadMyRoom = true
         } catch {
+            // v7：URLError -999 cancelled 是 SwiftUI Task cancel 传播（非真失败），不锁 didLoadMyRoom
+            // 让下次 loadIfNeeded 能重试；防御性设计（detach 后理论上不再传播，但双保险）
+            if let urlErr = error as? URLError, urlErr.code == .cancelled {
+                AppLogger.party.notice("[PartyListStore] loadMyRoom cancelled, keep didLoadMyRoom=false for retry")
+                return
+            }
             if clearOnFail { myRoom = nil }
+            didLoadMyRoom = true
             // reload 场景失败：保留旧 myRoom（避免按钮从 My Room 闪成 Create）
         }
-        didLoadMyRoom = true
     }
 
     // MARK: - 内部 —— 状态迁移

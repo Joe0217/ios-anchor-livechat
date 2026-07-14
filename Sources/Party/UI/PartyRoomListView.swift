@@ -9,7 +9,8 @@ import SwiftUI
 /// **spec §7 §12 F 期演进笔记**已在 v3 落地；E 增强对齐 H5 用户端 `/party/index.vue` 3-tab TabView(.page)。
 struct PartyRoomListContent<Store: PartyRoomListLike>: View {
     @ObservedObject var store: Store
-    let onTapRoom: (String) -> Void
+    /// v4：传完整对象让上层判密码房/其他前置逻辑
+    let onTapRoom: (PartyRoomInfo) -> Void
     /// Follow/Recent tab 需要在 `.loaded(rooms: [])` 时显 "Coming soon" 空态；Party tab 显常规空态。
     let comingSoonOnEmpty: Bool
 
@@ -23,11 +24,16 @@ struct PartyRoomListContent<Store: PartyRoomListLike>: View {
     private var contentArea: some View {
         switch store.state {
         case .idle, .loading:
+            // v7：非滚动态用 scrollWrap 包一层 ScrollView，让外层 `.refreshable` 在空态也响应下拉
             // Follow/Recent 未接入真接口前，store 停在 .idle，view 直接显 Coming soon 空态而非 spinner
-            if comingSoonOnEmpty { comingSoonView } else { loadingView }
+            scrollWrap {
+                if comingSoonOnEmpty { comingSoonView } else { loadingView }
+            }
         case .loaded(let rooms, let hasMore):
             if rooms.isEmpty {
-                if comingSoonOnEmpty { comingSoonView } else { emptyView }
+                scrollWrap {
+                    if comingSoonOnEmpty { comingSoonView } else { emptyView }
+                }
             } else {
                 roomList(rooms: rooms, hasMore: hasMore, showBottomLoader: false, pageErrorMessage: nil)
             }
@@ -35,14 +41,32 @@ struct PartyRoomListContent<Store: PartyRoomListLike>: View {
             // list-refresh-preserve-items rule：下拉刷新期保留 rooms 视觉，顶部 spinner 由 .refreshable 自身管
             // hasMore 传 true 保持底部 loadMoreSentinel 显示；避免 loaded→refreshing→loaded 时 sentinel 闪烁
             // （loadMore() 内部对 .refreshing 态是 no-op，sentinel onAppear 触发不会重入）
-            roomList(rooms: rooms, hasMore: true, showBottomLoader: false, pageErrorMessage: nil)
+            if rooms.isEmpty {
+                // v7：空 rooms + refreshing → 也要走 scrollWrap 保证 refreshable 挂载体
+                scrollWrap {
+                    if comingSoonOnEmpty { comingSoonView } else { loadingView }
+                }
+            } else {
+                roomList(rooms: rooms, hasMore: true, showBottomLoader: false, pageErrorMessage: nil)
+            }
         case .loadingMore(let rooms):
             roomList(rooms: rooms, hasMore: true, showBottomLoader: true, pageErrorMessage: nil)
         case .error(let message, _):
-            errorView(message: message)
+            // v7：error 态也用 scrollWrap 让用户能下拉重试（原来的 Retry Button 保留）
+            scrollWrap { errorView(message: message) }
         case .pageError(let rooms, let message):
             roomList(rooms: rooms, hasMore: true, showBottomLoader: false, pageErrorMessage: message)
         }
+    }
+
+    /// v7（2026-07-14）非滚动态包 ScrollView 让 `.refreshable` 可响应下拉。
+    /// minHeight 让内容居中撑满 tab 内容区（避免小 view 只占顶部一小片下拉手势区域）。
+    private func scrollWrap<V: View>(@ViewBuilder _ content: () -> V) -> some View {
+        ScrollView {
+            content()
+                .frame(maxWidth: .infinity, minHeight: 400)
+        }
+        .scrollIndicators(.hidden)
     }
 
     // MARK: - States
@@ -107,7 +131,7 @@ struct PartyRoomListContent<Store: PartyRoomListLike>: View {
             LazyVStack(spacing: 12) {
                 ForEach(rooms, id: \.stableListId) { room in
                     Button {
-                        onTapRoom(room.id ?? "")
+                        onTapRoom(room)
                     } label: {
                         PartyRoomCardView(room: room)
                     }
@@ -183,14 +207,33 @@ struct PartyRoomCardView: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(Theme.Palette.partyCardBorder, lineWidth: 0.5)
         )
+        // v5：密码房锁图标（对齐 H5 roomList.vue L99 `lockFlag === 1` → 右上角 lock icon）
+        .overlay(alignment: .topTrailing) {
+            if room.lockFlag == 1 {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.85))
+                    .padding(10)
+                    .accessibilityHidden(true)
+            }
+        }
     }
 
+    /// v17（2026-07-14）房间封面：对齐 H5 `roomList.vue L50`
+    /// `<v-image :src="item.roomAvatar" round default-show-type="partyRoom">` —— 读后端 URL 优先，
+    /// 空 URL / 加载中 / 失败时 fallback 本地 `partyRoomCover` 默认图（对齐 H5 default-show-type）。
     private var cover: some View {
-        Image("partyRoomCover")
-            .resizable()
-            .frame(width: 76, height: 76)
-            .clipShape(Circle())
-            .accessibilityHidden(true)
+        CachedAsyncImage(url: URL(string: room.roomAvatar ?? ""),
+                         contentMode: .fill,
+                         persistent: true,
+                         cdn: (.avatarLarge, .fill)) {
+            Image("partyRoomCover")
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+        }
+        .frame(width: 76, height: 76)
+        .clipShape(Circle())
+        .accessibilityHidden(true)
     }
 
     private var info: some View {
@@ -248,7 +291,14 @@ struct PartyRoomCardView: View {
     }
 
     private var heatIndicator: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: 3) {
+            // v5：PK 中房间标识（对齐 H5 roomList.vue L88-89 `pkStatus 1=选队 2=进行中`）
+            if let p = room.pkStatus, p > 0 {
+                Image("livePkIcon")
+                    .resizable().scaledToFit()
+                    .frame(width: 14, height: 14)
+                    .accessibilityLabel("PK")
+            }
             Image("partyIconFire")
                 .resizable()
                 .frame(width: 12, height: 14)
