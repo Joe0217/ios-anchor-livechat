@@ -754,13 +754,12 @@ struct PartyRoomView: View {
         AppLogger.party.notice("[PartyRoom] share tapped (TODO F)")
     }
     private func handleManagementTap() {
-        // v8.1：对齐 H5 房主/房管 tap 齿轮弹 tools sheet（Room Tools）。
-        // 非普通用户（owner + admin）都可见 tools sheet；普通用户保持 stub log。
-        // MVP 目前 selfRole 只区分 owner/audience，admin 待接入实际权限判定后放开。
-        if store.selfRole == .owner {
+        // v7.4.1：房主 + admin 都能打开 tools sheet（对齐 anchorBar canManage 判定；观众依然拦下）
+        // Bug 1a 已修 selfRole 优先从 selfSeat.roomRoleType 派生 → admin 权限实时生效
+        if store.selfRole == .owner || store.selfRole == .admin {
             activeRoomTool = .tools
         } else {
-            AppLogger.party.notice("[PartyRoom] management tapped by non-owner (TODO F: admin 权限判定)")
+            AppLogger.party.notice("[PartyRoom] management tapped by audience; ignored")
         }
     }
 
