@@ -38,6 +38,9 @@ struct PKInvitedSheet: View {
                     PKRulePopup(isPresented: $showRulePopup)
                 }
             }
+            // v26（2026-07-15）：fullScreenCover 挂载时加 ClearBackground 让底层透明，
+            // 露出直播画面 + PKPopupCard 半透黑遮罩 = "普通弹窗"视觉（对齐 PKRulePopup 已验证 pattern）
+            .background(ClearFullScreenCoverBackground())
             .onChange(of: cardPresented) { newVal in
                 // 点击 PKPopupCard X 关闭 → 视为拒绝邀请（H5 pkInviteReceivePopup close-on-click-overlay=false，
                 // 顶部 X 语义 = 拒绝）

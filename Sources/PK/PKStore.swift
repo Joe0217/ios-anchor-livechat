@@ -321,8 +321,15 @@ final class PKStore: ObservableObject {
         if state == .idle {
             transition(to: .inviting)
         }
-        // 维持 PKMatchingOverlay 不显示但 entry 显示"+追加" 用 inviteRemainingSeconds = 该条剩余
-        inviteRemainingSeconds = 60
+        // v26（2026-07-15）：启动全局 60s tick 更新 UI 倒计时（PKInviteWaitingPopup 显示 store.inviteRemainingSeconds）
+        // 之前只 `= 60` 一次性赋值 → tick 永远不递减 → 用户看到"一直 60"
+        // 每条 anchor 独立 60s 超时由 startSingleInviteTimer 处理（业务动作），本 tick 仅驱动 UI 秒数
+        // 多条并发邀请场景：每次新增邀请重置 tick 到 60（显示最新一条剩余，简化多值单显示的 UI 矛盾）
+        countdown.scheduleInvite(seconds: 60,
+                                 onTick: { [weak self] remaining in
+                                     self?.inviteRemainingSeconds = remaining
+                                 },
+                                 onExpire: { /* no-op：各条 startSingleInviteTimer 独立处理超时 */ })
     }
 
     /// 启动某条邀请的 60s 独立倒计时（超时自动调 handleInvite(.timeout) + 移除字典）。
@@ -381,6 +388,8 @@ final class PKStore: ObservableObject {
         inviteTimers.removeValue(forKey: anchorId)
         invitedAnchors.removeValue(forKey: anchorId)
         if invitedAnchors.isEmpty && state == .inviting {
+            // v26（2026-07-15）：字典空 → 停 UI tick + reset 秒数
+            countdown.cancelInvite()
             inviteRemainingSeconds = 0
             transition(to: .idle)
         }
@@ -670,9 +679,16 @@ final class PKStore: ObservableObject {
             Task { [weak self] in await self?.handleMatchSuccess(bundle, oppositeId: oppositeId) }
         case 8:
             // PK 结束进惩罚
-            logger.info("🏁 [PK End→Punish] result=\(bundle.result ?? -1) my=\(bundle.pkCounter ?? 0) opp=\(bundle.oppositePkCounter ?? 0) isActiveInterrupt=\(bundle.isActiveInterrupt ?? false)")
-            guard state == .inPK else { return }
-            // 后端推送时可能附带 result/pkCounter，scores 兜底
+            logger.info("🏁 [PK End→Punish] result=\(bundle.result ?? -1) my=\(bundle.pkCounter ?? 0) opp=\(bundle.oppositePkCounter ?? 0) isActiveInterrupt=\(bundle.isActiveInterrupt ?? false) state=\(self.state.rawValue)")
+            // v25（2026-07-14）：外层 guard 限定合法态（.inPK 或本地已提前进 .punishing），
+            // 拦截非 PK 态的延迟推送（如 idle 时收到过时消息），避免误 merge scores 干扰 UI
+            guard state == .inPK || state == .punishing else {
+                logger.warning("🏁 [PK End→Punish] unexpected state=\(self.state.rawValue) ignored")
+                return
+            }
+            // 无条件覆盖 scores 用后端权威值（inPK 与 punishing 都要 merge）
+            // 之前 guard state==.inPK 直接短路会让本地 handleInPKExpired 提前进 punishing 后 case 8 到达时
+            // bundle.result/pkCounter/nickname 全部丢弃 → 结果窗和公屏用了本地兜底值
             if let pkCounter = bundle.pkCounter, let oppCounter = bundle.oppositePkCounter {
                 scores = PKScoreUpdate(pkCounter: pkCounter,
                                        oppositePkCounter: oppCounter,
@@ -681,12 +697,22 @@ final class PKStore: ObservableObject {
                                        top3Users: scores?.top3Users,
                                        oppositeTop3Users: scores?.oppositeTop3Users)
             }
+            // 本地已进 punishing → 只 merge scores 不重复 enterPunishing（避免重启 countdown + 重发公屏）
+            guard state == .inPK else {
+                logger.info("🏁 [PK End→Punish] local already in punishing; only merged server bundle scores")
+                return
+            }
             // v22（2026-07-11）：result 来自后端广播；主动结束路径 result=nil 由 enterPunishing 内本地算
             enterPunishing(seconds: 120, resultFromBundle: bundle.result,
                            opponentNickname: bundle.nickname ?? ctx?.oppositeNickname)
         case 9:
             // 对方结束 / 中断；仅结束 PK，本端不下播
             logger.info("🏁 [PK Opposite Ended] currentState=\(self.state.rawValue) currentScores my=\(self.scores?.pkCounter ?? 0) opp=\(self.scores?.oppositePkCounter ?? 0) bundleScores my=\(bundle.pkCounter ?? -1) opp=\(bundle.oppositePkCounter ?? -1)")
+            // v25（2026-07-14）：合法态才处理，防止延迟推送在 idle 时误发公屏 + 误 merge scores
+            guard state == .inPK || state == .punishing || state == .endingPK else {
+                logger.warning("🏁 [PK Opposite Ended] unexpected state=\(self.state.rawValue) ignored")
+                return
+            }
             // 后端 push 时若带最新分数则覆盖本端 scores（pkStatus=9 也可能携带最终分数）
             if let pkCounter = bundle.pkCounter, let oppCounter = bundle.oppositePkCounter {
                 scores = PKScoreUpdate(pkCounter: pkCounter,
@@ -696,10 +722,16 @@ final class PKStore: ObservableObject {
                                        top3Users: scores?.top3Users,
                                        oppositeTop3Users: scores?.oppositeTop3Users)
             }
-            Task { [weak self] in await self?.exitToIdle(finalScores: self?.scores) }
+            // v25（2026-07-14）：case 9 对方结束路径必须补公屏（H5 handleOpponentDisconnect 有 sendPkEndNotice）
+            Task { [weak self] in await self?.exitToIdle(finalScores: self?.scores, appendPublicChatResult: true) }
         case -1:
             // 对方异常断线（连续 20s 无心跳）
-            logger.warning("🏁 [PK Opposite Disconnect] pkStatus=-1 abnormal")
+            logger.warning("🏁 [PK Opposite Disconnect] pkStatus=-1 abnormal state=\(self.state.rawValue)")
+            // v25（2026-07-14）：合法态才处理，防止延迟推送让 idle 态误跳 .failed 状态
+            guard state == .inPK || state == .punishing || state == .endingPK else {
+                logger.warning("🏁 [PK Opposite Disconnect] unexpected state=\(self.state.rawValue) ignored")
+                return
+            }
             transition(to: .failed)
             Task { [weak self] in await self?.exitToIdle(finalScores: self?.scores) }
         case 7:
@@ -1032,10 +1064,20 @@ final class PKStore: ObservableObject {
     /// **结果窗弹出策略**（G #2 反馈修复）：
     /// - case 8 路径已在 enterPunishing 弹过结果 → `hasShownResult=true` → 本函数不重弹
     /// - case 9 / -1 路径未走 punishing → `hasShownResult=false` → 本函数补弹
-    private func exitToIdle(finalScores: PKScoreUpdate?) async {
+    /// - Parameter appendPublicChatResult: v25（2026-07-14）case 9 对方结束路径传 true 补公屏结果消息
+    ///   （对齐 H5 handleOpponentDisconnect sendPkEndNotice）；case -1 异常断线不补
+    private func exitToIdle(finalScores: PKScoreUpdate?, appendPublicChatResult: Bool = false) async {
         countdown.cancelAll()
         unsubscribeNetworkQuality()
         let snapshot = scores ?? finalScores
+        let oppNickBeforeClear = ctx?.oppositeNickname
+        // v25（2026-07-14）：case 9 路径补公屏消息（必须在 ctx=nil 之前拿 opponentNickname）
+        if appendPublicChatResult && !hasShownResult {
+            let my = snapshot?.pkCounter ?? 0
+            let opp = snapshot?.oppositePkCounter ?? 0
+            let effectiveResult = my > opp ? 1 : (my < opp ? 2 : 3)
+            appendPKResultToPublicChat(result: effectiveResult, opponentNickname: oppNickBeforeClear)
+        }
         // M3 bug 修复：离开 PK 时必须 leaveChannelEx 对手频道，否则 SDK 残留连接 + 资源泄漏
         if let channel = ctx?.oppositeChannel, !channel.isEmpty {
             await agora?.leavePKOpposite(channel: channel)

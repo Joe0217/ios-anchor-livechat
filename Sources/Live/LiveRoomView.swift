@@ -20,8 +20,6 @@ struct LiveRoomView: View {
     @StateObject private var publicChatFeed = UnifiedPublicChatFeed(limit: 200)
     /// G 里程碑 M3：PK 主态状态机；onAppear weak 注入 store/agora/nim/observer/networkMonitor
     @StateObject private var pkStore = PKStore()
-    /// G 里程碑 M3：PK 结束后 didEndPK observer 桥到 UI 弹结果窗
-    @StateObject private var pkResultBridge = PKResultBridge()
     /// D 里程碑：监听 CallStore 状态，直播态收到私 call 时用 CallView overlay 覆盖直播画面。
     /// 对齐 H5 g-faceTime 全局浮层模式。RootView 的 ZStack 浮层在 sheet 内不可见，必须在
     /// LiveRoomView 内自己 overlay。
@@ -174,9 +172,20 @@ struct LiveRoomView: View {
         .sheet(isPresented: $showPKDebug) { pkDebugPanel }   // M0 调试入口（仅 DEBUG，不限高）
         #endif
         .sheet(isPresented: $showInviteSheet) { inviteSheetContent }
+        // v26（2026-07-15）：PKInvitedSheet 双挂载策略——LiveRoomView 层负责"sheet 未打开时"，
+        // PKInviteSheet 内 fullScreenCover 负责"sheet 打开时"（iOS UIKit modal stack 限制：
+        // sheet 打开时 root vc 的 fullScreenCover 会排队等 sheet dismiss，无法盖过 sheet）。
+        // 加 !showInviteSheet gate 避免与 sheet 内 fullScreenCover 双 mount。
+        // Binding.set 空实现（关闭由 accept/reject/timeout 触发 state 变化自动 dismiss）
+        .fullScreenCover(isPresented: Binding(
+            get: { pkStore.state == .invited && !showInviteSheet },
+            set: { _ in }
+        )) {
+            PKInvitedSheet(store: pkStore)
+        }
         // G M3 / spec §6.1：PK 各态 overlay 合并为单一 PKOverlayHost，避免 5 层 _OverlayModifier
         // 链路 layout pass + 多 overlay 同时订阅 pkStore 触发 body 重算。
-        .overlay { PKOverlayHost(pkStore: pkStore, resultBridge: pkResultBridge) }
+        .overlay { PKOverlayHost(pkStore: pkStore) }
         // PK 4 popup（iteration 3 全套 UI 同步）挂在 PKOverlayHost 之上（z 序更高）——
         // rule swiftui-body-type-check-timeout：合并 4 个 overlay 为 1 个，ZStack 内保持原 z 顺序
         .overlay { pkPopupsOverlay }
@@ -614,15 +623,19 @@ struct LiveRoomView: View {
         store.attachLiving(roomInfo: roomInfo)
         // D 里程碑：注入 LiveStore 给 CallStore + 挂 observer（直播态期间直播私 call 接听 +
         // 通话挂断后 resumeCall 回直播的协议入口）。weak 引用，LiveRoomView 销毁时自动清理。
+        //
+        // F refactor（spec §3.4 P0-2）：observer 从单 weak var 改为 NSHashTable 多观察者数组；
+        // 直播 attach 不再踩踏派对房 attach。detach 由 handleOnDisappear 兜底（NSHashTable weak 也会自动清）。
         CallStore.shared.liveStore = store
-        CallStore.shared.observer = store
+        CallStore.shared.attach(store)
         // G M6：把 PKStore 注入给 CallStore，PK 期收到私 call 自动 busy reject（spec §8.2）
         CallStore.shared.pkStore = pkStore
         // G M3：PKStore 注入。weak 引用，PKStore 在 LiveRoomView 销毁时随 @StateObject 一起释放。
         pkStore.liveStore = store
         pkStore.agora = agora
         pkStore.nim = nim
-        pkStore.observer = pkResultBridge
+        // v25（2026-07-14）：删除 PKResultBridge/PKResultOverlay 后 observer 无消费者，
+        // PKStore.observer 保持 weak nil；SVGA 结果动画 + 公屏消息已覆盖结束反馈（对齐 H5）
         pkStore.networkMonitor = store.networkMonitor
         pkStore.ownAnchorId = SessionStore.shared.user?.userId ?? 0
         pkStore.ownRoomId = roomInfo.id ?? 0
@@ -1022,19 +1035,16 @@ private struct DebugNetworkPanel: View {
 // PKResultOverlay 4 个状态层 + PKEntryButton 入口按钮 — 每层都是独立 `_OverlayModifier`，
 // layout pass 反复算尺寸；且各子 view 都 `@ObservedObject pkStore`，任一字段变更触发所有 body 重算。
 // 现合并为单一 host，所有 PK 状态层共享一个 `.overlay`，PKEntryButton 保留为独立 bottomTrailing overlay。
+// v25（2026-07-14）：删除 PKResultOverlay（H5 无独立结算弹窗，仅 SVGA 结果动画 + 公屏消息覆盖）
 private struct PKOverlayHost: View {
     @ObservedObject var pkStore: PKStore
-    @ObservedObject var resultBridge: PKResultBridge
 
     var body: some View {
         ZStack {
             PKMatchingOverlay(store: pkStore).transition(.opacity)
-            PKInvitedSheet(store: pkStore).transition(.opacity)
+            // v26（2026-07-14）：PKInvitedSheet 已迁至 LiveRoomView 的 fullScreenCover 挂载
+            // （层级 > sheet；idle→invited 突变时能盖过用户打开的 PKInviteSheet）
             PKPunishingOverlay(store: pkStore).transition(.opacity)
-            PKResultOverlay(isPresented: $resultBridge.presented,
-                            myScore: resultBridge.myScore,
-                            oppositeScore: resultBridge.opponentScore,
-                            top3: resultBridge.top3)
         }
     }
 }

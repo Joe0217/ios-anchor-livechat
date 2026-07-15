@@ -124,6 +124,16 @@ struct PKInviteSheet: View {
         .fullScreenCover(isPresented: $showInviteWaiting) {
             PKInviteWaitingPopup(store: store, isPresented: $showInviteWaiting)
         }
+        // v26（2026-07-15）：PKInvitedSheet 也挂在本 sheet 内，保证 sheet 打开时收到别人邀请
+        // （state=.idle→.invited）能盖过本 sheet；iOS UIKit modal stack 限制：从 sheet root
+        // 发起 fullScreenCover 会排队等 sheet dismiss，只有挂在 sheet 内的 fullScreenCover 层级才 > sheet
+        // 关闭由 accept/reject/timeout 触发 state 变化自动 dismiss（Binding.set 空实现）
+        .fullScreenCover(isPresented: Binding(
+            get: { store.state == .invited },
+            set: { _ in }
+        )) {
+            PKInvitedSheet(store: store)
+        }
         .sheet(isPresented: $showDurationPicker) {
             PKDurationPickerSheet(store: store, isPresented: $showDurationPicker)
                 .presentationDetents([.fraction(0.4)])

@@ -48,6 +48,9 @@ struct PKInviteWaitingPopup: View {
                 .padding(.top, 8)
             }
         }
+        // v26（2026-07-15）：加 ClearBackground 让 fullScreenCover 背景透明，
+        // 露出直播画面 + PKPopupCard 半透黑遮罩 = "普通弹窗"视觉（与 PKInvitedSheet 一致）
+        .background(ClearFullScreenCoverBackground())
     }
 
     /// 60s → 1.0 → 0
