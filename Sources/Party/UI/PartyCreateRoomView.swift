@@ -716,20 +716,24 @@ struct PartyCreateBackgroundPickerSheet: View {
             store.selectedBackground = bg
         } label: {
             ZStack(alignment: .topTrailing) {
-                // v7.9：底色 fill 兜底（加载中/URL 空时有 card 边界），
-                // 图片 .fill 铺满卡片超出隐藏（用户明示 v7.9）
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Theme.Palette.partyCreateTempFill)
-
-                if let urlStr = bg.imgUrl ?? bg.bigImgUrl,
-                   !urlStr.isEmpty,
-                   let u = URL(string: urlStr) {
-                    CachedAsyncImage(url: u, contentMode: .fill, persistent: true, cdn: (.avatarLarge, .fill)) {
-                        Color.clear
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // v7.10：Color.clear.overlay 硬性 confine image 到 card 尺寸 —— image .fill
+                // aspectRatio 让 image 撑到超出 frame 边界（fill 语义），需外层 clip 硬性裁剪，
+                // 之前 v7.9 只 clipShape image 单独一层，layout 溢出污染 ZStack 兄弟位置
+                Color.clear
+                    .overlay(
+                        Group {
+                            if let urlStr = bg.imgUrl ?? bg.bigImgUrl,
+                               !urlStr.isEmpty,
+                               let u = URL(string: urlStr) {
+                                CachedAsyncImage(url: u, contentMode: .fill, persistent: true, cdn: (.avatarLarge, .fill)) {
+                                    Rectangle().fill(Theme.Palette.partyCreateTempFill)
+                                }
+                            } else {
+                                Rectangle().fill(Theme.Palette.partyCreateTempFill)
+                            }
+                        }
+                    )
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
 
                 if selected {
                     Image("partyTemplateSelected")
