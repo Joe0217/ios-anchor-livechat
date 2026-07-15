@@ -86,16 +86,18 @@ struct PartyCreateRoomView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .task { await store.loadInitial() }
         .sheet(isPresented: $showModePicker) {
+            // v7.9 用户明示：高度锁 80%
             PartyCreateModePickerSheet(store: store) { showModePicker = false }
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.fraction(0.8)])
         }
         .sheet(isPresented: $showLanguagePicker) {
             PartyCreateLanguagePickerSheet(store: store) { showLanguagePicker = false }
                 .presentationDetents([.medium])
         }
         .sheet(isPresented: $showBackgroundPicker) {
+            // v7.9 用户明示：高度锁 80%
             PartyCreateBackgroundPickerSheet(store: store) { showBackgroundPicker = false }
-                .presentationDetents([.medium, .large])
+                .presentationDetents([.fraction(0.8)])
         }
         .onChange(of: store.createdRoomId) { id in
             if let id, !id.isEmpty {
@@ -714,17 +716,18 @@ struct PartyCreateBackgroundPickerSheet: View {
             store.selectedBackground = bg
         } label: {
             ZStack(alignment: .topTrailing) {
-                // v7.8：底色 fill 让 letterbox 空白有 card 边界（对齐 templateCard），
-                // 图片 .fit 完整显示（不 crop），不同原比例图不再 crop 位置错乱
+                // v7.9：底色 fill 兜底（加载中/URL 空时有 card 边界），
+                // 图片 .fill 铺满卡片超出隐藏（用户明示 v7.9）
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(Theme.Palette.partyCreateTempFill)
 
                 if let urlStr = bg.imgUrl ?? bg.bigImgUrl,
                    !urlStr.isEmpty,
                    let u = URL(string: urlStr) {
-                    CachedAsyncImage(url: u, contentMode: .fit, persistent: true, cdn: (.avatarLarge, .fit)) {
+                    CachedAsyncImage(url: u, contentMode: .fill, persistent: true, cdn: (.avatarLarge, .fill)) {
                         Color.clear
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
 
