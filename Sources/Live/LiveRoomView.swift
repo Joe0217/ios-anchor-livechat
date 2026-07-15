@@ -50,6 +50,23 @@ struct LiveRoomView: View {
     /// liveRoom.vue:291-319，spec `docs/plan/H-直播间发送公屏文字-spec-202607101100.md`）
     @State private var inputText: String = ""
 
+    /// 输入框聚焦态：focused 时 HStack 隐藏右侧 4 图标（PK / MSG / Gift / Setting）让 TextField 占满宽度；
+    /// mainZStack 挂 simultaneousGesture(TapGesture)，focused 时点任意区域失焦（TapGesture 与子手势不同类别，
+    /// 不阻塞 button / 公屏 3 连击等，遵守 swiftui-root-draggesture-mindist-zero rule）
+    @FocusState private var isInputFocused: Bool
+
+    /// v24（B4 · 对齐 H5 §9.12.4 hi 气泡 → Screen 公屏 @回复 pending 态）：
+    /// 用户点公屏消息 hi 图标 → Screen → 底部输入行显示 "@{nick}" pill；`onSend` 携 replyToNick 发送；发送后清除
+    @State private var pendingReplyTo: PendingReplyTarget? = nil
+
+    /// v24（B4 · MSG 半屏私聊）：`chatDetailBottomSheet` modifier binding；tap MSG 后置 yxAccid 弹起
+    @State private var chatSheetPeerYxAccid: String? = nil
+
+    struct PendingReplyTarget: Equatable {
+        let nickname: String
+        let userId: String?
+    }
+
     /// "Coming soon" toast（快捷礼物 / 私 call 主动发起 / task / 排行 等占位入口点击提示）
     @State private var comingSoonToast: String? = nil
 
@@ -146,6 +163,9 @@ struct LiveRoomView: View {
             .onAppear(perform: handleMainOnAppear)
             .onDisappear(perform: handleOnDisappear)
             .onChange(of: store.state, perform: handleStoreStateChange)
+            // v24（B4 verify finding · 对齐 H5 liveRoom.vue:154-160 msgInputToUserBlur 200ms 清）：
+            // 输入框失焦 200ms 后自清 pendingReplyTo，防止用户关闭键盘后 pill 仍在 → 误以 reply 语义发送
+            .onChange(of: isInputFocused, perform: handleInputFocusChange)
             // D 里程碑：CallView + returnLive 倒计时覆盖 —— 合并为单 overlay
             .overlay { callAndReturnLiveOverlays }
             .animation(.easeInOut(duration: 0.2), value: callState)
@@ -155,6 +175,9 @@ struct LiveRoomView: View {
             // Task 9：GiftEffect / EnterEffect scope 均用 yxRoomId（云信房间 id）
             .giftEffectScene(.live, scopeId: roomInfo.yxRoomId.map(String.init) ?? "")
             .enterEffectScene(.live, scopeId: roomInfo.yxRoomId.map(String.init) ?? "")
+            // v24（B4）：hi 气泡 → MSG 半屏私聊入口（swiftui-fullscreencover-hoist rule §1 单容器挂载）
+            .chatDetailBottomSheet(peer: $chatSheetPeerYxAccid,
+                                   selfYxAccId: SessionStore.shared.user?.yxAccid ?? "")
     }
 
     /// body 前段：navigation + sheets + overlays + PK/Live modifier + TopSheets（约 15 个 modifier）
@@ -212,6 +235,8 @@ struct LiveRoomView: View {
             liveRecordId: "\(roomInfo.id ?? 0)",
             onAnnouncementSaved: handleAnnouncementSaved
         ))
+        // 头像 tap 内置分派：直播中 → 弹名片卡（走 userCardUserId → LiveRoomExtraOverlaysModifier 内 .userCardSheet 挂载）
+        .avatarUserCardPresenter { uid in userCardUserId = uid }
         .onAppear(perform: handleStoresInitialLoad)
         // v7 Contribution / Rank / Roulette 独立 sheet（对齐 H5 真交互）
         .modifier(TopSheetsModifier(
@@ -310,7 +335,12 @@ struct LiveRoomView: View {
                 Spacer()
                 // 公屏消息 + 右侧 Private Call 小开关（对齐 H5 liveRoom.vue:639-679：左公屏 flex-1 + 右操作列 van-switch）
                 HStack(alignment: .bottom, spacing: 8) {
-                    PublicChatListView(feed: publicChatFeed, theme: .live)
+                    PublicChatListView(
+                        feed: publicChatFeed,
+                        theme: .live,
+                        onScreenReply: handleScreenReply,
+                        onMsgOpen: handleMsgOpen
+                    )
                         .frame(maxHeight: 260)
                         .onReceive(nim.messagesStore.$messages) { messages in
                             publicChatFeed.replace(messages.map(LivePublicChatAdapter.adapt))
@@ -337,46 +367,100 @@ struct LiveRoomView: View {
                 // - PKEntryButton 从原 .overlay(bottomTrailing) 迁到此处（对齐 H5 单入口，5 态视觉切换）
                 // - Setting 按钮弹 confirmationDialog 承载「美颜 / 结束直播」（H 里程碑接入完整设置弹窗前的过渡）
                 // - 移除原 DEBUG PK 按钮（PKEntryButton 5 态已覆盖入口）+ 原「结束直播」大红按钮（迁到 Setting 菜单 & 顶部 X）
-                HStack(spacing: Theme.Metric.liveRoomToolbarGap) {
-                    LiveRoomInputRow(text: $inputText, onSend: {
-                        // sendText 内做 trim/空判/hasJoined 守卫 + 200 字截断（对齐 H5 maxlength）
-                        // return true → 清空（H5 line 305 `if (res) inputText.value = ''`）
-                        // return false → NIM send throw，保留 inputText 让用户重试（spec R5）
-                        if nim.sendText(inputText) { inputText = "" }
-                    })
-                    PKEntryButton(store: pkStore,
-                                  showInviteSheet: $showInviteSheet,
-                                  onInterruptTap:  { showPKInterruptConfirm = true },
-                                  onDisconnectTap: { showPKDisconnectConfirm = true })
-                    LiveRoomToolButton(systemName: nil,
-                                       imageName: "liveRoomToolMessageBadge",
-                                       a11y: L10n.liveRoomToolMessage,
-                                       action: { showMessageSheet = true })
-                        .overlay(alignment: .topTrailing) {
-                            // 未读红点（对齐 H5 sessionStore.newMsg），3 类会话未读合计 > 0 显示
-                            if unreadBridge.totalUnread > 0 {
-                                Circle()
-                                    .fill(Color.red)
-                                    .frame(width: 8, height: 8)
-                                    .overlay(Circle().stroke(Color.white, lineWidth: 1))
-                                    .offset(x: -2, y: 2)
-                                    .accessibilityHidden(true)
-                            }
+                // v24（B4）：@reply pending pill —— 展示 "Replying to @nick" + × 清除按钮
+                if let reply = pendingReplyTo {
+                    HStack(spacing: 6) {
+                        Text(String(format: L10n.publicScreenHiReplyPillFormat, reply.nickname))
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.9))
+                        Button(action: {
+                            // v24（B4 verify finding）：清除动画与设置对称
+                            withAnimation { pendingReplyTo = nil }
+                        }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 20, height: 20)
+                                .contentShape(Rectangle())
                         }
-                    LiveRoomToolButton(systemName: nil,
-                                       imageName: "liveRoomToolGiftBadge",
-                                       a11y: L10n.liveRoomToolGift,
-                                       action: { showGiftPicker = true })   // 接入 CommonGiftPanel（.liveDisplayOnly，直播中纯展示）
-                    LiveRoomToolButton(systemName: nil,
-                                       imageName: "liveRoomToolSettingBadge",
-                                       a11y: L10n.liveRoomToolSetting,
-                                       action: { showSettingSheet = true })
+                        .buttonStyle(.plain)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .background(Color.black.opacity(0.30), in: Capsule())
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 4)
+                    .transition(.opacity)
                 }
+                HStack(spacing: Theme.Metric.liveRoomToolbarGap) {
+                    LiveRoomInputRow(
+                        text: $inputText,
+                        isMuted: store.isBlockUser,
+                        whoBlock: store.whoBlock,
+                        focus: $isInputFocused,
+                        onSend: {
+                            // sendText 内做 trim/空判/hasJoined 守卫 + 200 字截断（对齐 H5 maxlength）
+                            // return true → 清空(H5 line 305 `if (res) inputText.value = ''`)
+                            // return false → NIM send throw，保留 inputText 让用户重试（spec R5）
+                            // v24（B3）：禁言态双保险 —— UI disable + tap toast；此处防御性守卫
+                            if store.isBlockUser {
+                                AppToastCenter.shared.show(mutedToastText(whoBlock: store.whoBlock))
+                                return
+                            }
+                            // v24（B4）：pending @reply → 携 replyToNick；发送成功清 pending
+                            // （replyUserId 只留本地态，不进云信 remoteExt · verify finding）
+                            let reply = pendingReplyTo
+                            let ok = nim.sendText(inputText,
+                                                  replyToNick: reply?.nickname,
+                                                  replyToUserId: reply?.userId)
+                            if ok {
+                                inputText = ""
+                                withAnimation { pendingReplyTo = nil }
+                            }
+                            // spec R5：失败保留 inputText + 保留 pending pill 供重试
+                        }
+                    )
+                    if !isInputFocused {
+                        PKEntryButton(store: pkStore,
+                                      showInviteSheet: $showInviteSheet,
+                                      onInterruptTap:  { showPKInterruptConfirm = true },
+                                      onDisconnectTap: { showPKDisconnectConfirm = true })
+                        LiveRoomToolButton(systemName: nil,
+                                           imageName: "liveRoomToolMessageBadge",
+                                           a11y: L10n.liveRoomToolMessage,
+                                           action: { showMessageSheet = true })
+                            .overlay(alignment: .topTrailing) {
+                                // 未读红点（对齐 H5 sessionStore.newMsg），3 类会话未读合计 > 0 显示
+                                if unreadBridge.totalUnread > 0 {
+                                    Circle()
+                                        .fill(Color.red)
+                                        .frame(width: 8, height: 8)
+                                        .overlay(Circle().stroke(Color.white, lineWidth: 1))
+                                        .offset(x: -2, y: 2)
+                                        .accessibilityHidden(true)
+                                }
+                            }
+                        LiveRoomToolButton(systemName: nil,
+                                           imageName: "liveRoomToolGiftBadge",
+                                           a11y: L10n.liveRoomToolGift,
+                                           action: { showGiftPicker = true })   // 接入 CommonGiftPanel（.liveDisplayOnly，直播中纯展示）
+                        LiveRoomToolButton(systemName: nil,
+                                           imageName: "liveRoomToolSettingBadge",
+                                           a11y: L10n.liveRoomToolSetting,
+                                           action: { showSettingSheet = true })
+                    }
+                }
+                .animation(.easeInOut(duration: 0.2), value: isInputFocused)
             }
             .padding(.horizontal, Theme.Metric.liveRoomScreenHPadding)
             .padding(.top, 8)
             .padding(.bottom, 8)
         }
+        // 输入框 focused 时点任意外部区域失焦；TapGesture 与 Button/DragGesture 不同类别，
+        // 不阻塞子 view 按钮点击与公屏 3 连击（swiftui-root-draggesture-mindist-zero rule）
+        .simultaneousGesture(TapGesture().onEnded {
+            if isInputFocused { isInputFocused = false }
+        })
     }
 
     // MARK: - body modifier handlers（编译器泛型推导减负 —— rule swiftui-body-type-check-timeout）
@@ -634,6 +718,9 @@ struct LiveRoomView: View {
         pkStore.liveStore = store
         pkStore.agora = agora
         pkStore.nim = nim
+        // v24（B3 禁言状态机）：NIMChatroomManager 拿到 LiveStore 引用，用于 notification addMute/removeMute
+        // 事件分派到 LiveStore.applyGag/applyUngag（weak，随 view 销毁自动释放）
+        nim.liveStore = store
         // v25（2026-07-14）：删除 PKResultBridge/PKResultOverlay 后 observer 无消费者，
         // PKStore.observer 保持 weak nil；SVGA 结果动画 + 公屏消息已覆盖结束反馈（对齐 H5）
         pkStore.networkMonitor = store.networkMonitor
@@ -847,6 +934,44 @@ struct LiveRoomView: View {
                 store.setPrivateCallOpen(!next)
                 comingSoonToast = L10n.liveRoomComingSoonPrivateCall
             }
+        }
+    }
+
+    /// v24（B4 verify finding · 对齐 H5 msgInputToUserBlur L154-160）：
+    /// 输入框失焦 200ms 后自清 pendingReplyTo；聚焦时不动。
+    /// **门禁**：`pendingReplyTo != nil` 才起作用；若中途重聚焦不清，用户可继续在 reply 模式
+    private func handleInputFocusChange(_ focused: Bool) {
+        guard !focused, pendingReplyTo != nil else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(200))
+            // 二次判定：sleep 期间用户可能重聚焦或已手动发送/清除
+            guard !isInputFocused, pendingReplyTo != nil else { return }
+            withAnimation { pendingReplyTo = nil }
+        }
+    }
+
+    // MARK: - B4 hi 气泡 callbacks（对齐 H5 §9.12.4）
+
+    /// Screen 公屏 @回复 → 进入 pending 态；输入行显示 "Replying to @{nick}" pill；
+    /// 用户下一次发送时 nim.sendText 携 replyToNick，公屏渲染"@ nick: text"
+    private func handleScreenReply(_ msg: UnifiedPublicChatMessage) {
+        guard let nick = msg.sender?.nickname, !nick.isEmpty else { return }
+        withAnimation { pendingReplyTo = PendingReplyTarget(nickname: nick, userId: msg.sender?.userId) }
+    }
+
+    /// MSG 半屏私聊 → 打开 chatDetailBottomSheet（peer=对方 yxAccid）
+    /// **注意**：sender 里的 yxAccid 不直接存于 SenderProfile —— msg.sender.userId 是 iOS 端 userId（业务），
+    /// 云信 yxAccid 从 UnifiedPublicChatMessage 侧无法直接取（Adapter 未透传）。回退方案：从 nim.messagesStore
+    /// 查同 id 的 PublicChatMessage 拿 senderYxAccId（B4 增补字段）。
+    private func handleMsgOpen(_ msg: UnifiedPublicChatMessage) {
+        // 到 nim.messagesStore.messages 里按 id 查 senderYxAccId（B4 数据层已透传）
+        if let payloadMsg = nim.messagesStore.messages.first(where: { $0.id == msg.id }),
+           let peer = payloadMsg.senderYxAccId, !peer.isEmpty {
+            chatSheetPeerYxAccid = peer
+        } else {
+            // v24（B4 · verify finding）：fallback 分支给用户 toast 反馈 + warning log，避免死链手感
+            AppLogger.im.warning("[B4] MSG open skipped: senderYxAccId nil for msg id=\(msg.id.uuidString, privacy: .public)")
+            AppToastCenter.shared.show(L10n.publicScreenHiMsgUnavailable)
         }
     }
 
@@ -1675,28 +1800,48 @@ fileprivate struct LiveRoomToolButton: View {
 
 fileprivate struct LiveRoomInputRow: View {
     @Binding var text: String
+    /// v24（B3）：被禁言时 TextField + send button disable + placeholder 换 "muted" 文案
+    let isMuted: Bool
+    let whoBlock: LiveStore.WhoBlock
+    /// 父 view 的 FocusState 桥；focused 时父层隐藏右侧图标让输入框占满宽度
+    var focus: FocusState<Bool>.Binding
     let onSend: () -> Void
+
+    private var placeholderText: String {
+        guard isMuted else { return L10n.liveRoomInputPlaceholder }
+        // whoBlock: system(1) / both(3) → 系统禁言文案；room(2) → 房主禁言文案
+        return (whoBlock == .room) ? L10n.liveRoomMutePlaceholderHost : L10n.liveRoomMutePlaceholderSystem
+    }
 
     var body: some View {
         HStack(spacing: 8) {
-            TextField(L10n.liveRoomInputPlaceholder, text: $text)
+            TextField(placeholderText, text: $text)
                 .font(Theme.Typography.liveRoomInputPlaceholder)
-                .foregroundStyle(.white)
+                .foregroundStyle(isMuted ? Color.white.opacity(0.5) : .white)
                 .tint(.white)
+                .focused(focus)
                 .submitLabel(.send)
-                .onSubmit(onSend)
+                .onSubmit { if !isMuted { onSend() } }
+                .disabled(isMuted)
                 .padding(.leading, Theme.Metric.liveRoomInputHPadding)
                 .frame(height: Theme.Metric.liveRoomInputHeight)
             Button(action: onSend) {
                 Image("liveRoomSendButton")
                     .resizable()
                     .frame(width: 24, height: 24)
+                    .opacity(isMuted ? 0.4 : 1.0)
                     .padding(.trailing, 8)
             }
+            .disabled(isMuted)   // v24（B3 verify finding · a11y）：VoiceOver isEnabled=false 提示不可用；tap 层由 onSend 前置守卫兜底 toast
             .accessibilityLabel(Text(L10n.liveRoomInputSendA11y))
         }
         .frame(height: Theme.Metric.liveRoomInputHeight)
         .background(Theme.Palette.liveRoomInputBackground,
                     in: RoundedRectangle(cornerRadius: Theme.Radius.liveRoomInput))
     }
+}
+
+/// v24（B3）：禁言 tap toast 文案派生（LiveRoomView / LiveRoomInputRow 共享）
+private func mutedToastText(whoBlock: LiveStore.WhoBlock) -> String {
+    (whoBlock == .room) ? L10n.liveRoomMuteToastHost : L10n.liveRoomMuteToastSystem
 }
