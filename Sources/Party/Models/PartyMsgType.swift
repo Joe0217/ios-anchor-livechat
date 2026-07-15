@@ -1,17 +1,21 @@
 import Foundation
 
-/// 派对房公屏渲染分类（对齐安卓 `PartyRoomMsgType`，spec §1.0.2 第 8 条解耦原则）。
+/// **Deprecated（v3 2026-07-15）**：派对房公屏渲染分类枚举，v3 已迁移到跨场景 unified
+/// [`PublicChatVariant`](../../PublicChat/Model/PublicChatVariant.swift)（17 case 全覆盖）+
+/// [`SenderProfile`](../../PublicChat/Model/SenderProfile.swift) 富字段 + 13 个现成 Row 组件。
 ///
-/// 与 `PartyAttachType` 解耦：
-/// - 网络层：`PartyAttachType` 决定信令解码路径
-/// - UI 层：`PartyMsgType` 决定公屏气泡渲染模板
-/// 两者通过 `PartyAttachType.toMsgType()` 显式映射，**不混为一谈**。
+/// 保留空 enum 仅为**避免 pbxproj 重生**（`./bin/regen.sh` 后可删除本文件）；无任何生产端赋值。
+/// 单测 `PartyAttachTypeTests` 相关 `toMsgType()` 测试已同步移除。
 ///
-/// MVP 仅 0-3 四类；F 期再扩 4-16（管理员变动 / 申请上麦开关 / 切模板 / 游戏中奖 /
-/// 活动中奖 / 视频位邀请接受 / PK / 房间通告 / LuckyNumber）。
+/// **迁移路径**：
+/// - `msgType == .text` → `variant = .text(content:, mentions:, translation:, replyToNick:)`
+/// - `msgType == .gift` → `variant = .gift(iconURL:, name:, count:)`
+/// - `msgType == .welcome` → 主播端不再本地生成欢迎消息（房主本人不需要欢迎自己）
+/// - `msgType == .convention` → PartyRoomChatArea 顶部绿字 banner（不进 feed）
+@available(*, deprecated, message: "v3 迁移到 UnifiedPublicChatMessage + PublicChatVariant")
 enum PartyMsgType: Int {
-    case convention = 0   // 公约
-    case text = 1         // 文本消息（公屏聊天）
-    case gift = 2         // 礼物消息
-    case welcome = 3      // 进房欢迎
+    case convention = 0
+    case text = 1
+    case gift = 2
+    case welcome = 3
 }

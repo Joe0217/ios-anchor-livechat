@@ -99,6 +99,27 @@
 "work.tool.partyData"        = "بيانات الحفلة";
 "work.tool.myGuardian"       = "الحارس الخاص بي";
 
+// Task Center 页（Phase C · 对齐 H5 views/task/index.vue）
+"task.center.navTitle"                = "المهام";
+"task.section.rankProgress"           = "تقدم الترتيب";
+"task.section.taskProgress"           = "تقدم المهام";
+"task.cycle.daily"                    = "يومي";
+"task.cycle.weekly"                   = "أسبوعي";
+"task.countdown.prefix"               = "إعادة التعيين خلال";
+"task.weekly.totalPoints"             = "إجمالي النقاط:";
+"task.myIncome"                       = "دخلي";
+"task.myIntegral"                     = "نقاطي";
+"task.viewRank"                       = "عرض الترتيب";
+"task.tier.claim"                     = "استلام";
+"task.claimAll"                       = "استلام الكل";
+"task.claim.success"                  = "تم الاستلام بنجاح";
+"task.claim.grantPending"             = "جارٍ منح المكافأة";
+"task.claim.allMultiTypeFormat"       = "تم استلام %d مكافآت";
+"task.reward.gotIt"                   = "حسناً";
+"task.reward.mergedPrefix"            = "المجموع";
+"task.active.tycoonTask"              = "مهمة الأثرياء";
+"task.integralTask"                   = "مهمة النقاط";
+
 "work.invite.earnMoney"      = "اكسب المال";
 
 "work.offline.confirmMessage" = "هل أنت متأكد من إيقاف الاتصال؟";

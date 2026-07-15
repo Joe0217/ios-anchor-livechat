@@ -18,4 +18,10 @@ struct SenderProfile: Equatable {
     var isSelf: Bool = false
     var isNewUser: Bool = false         // Live H5 isNewUser 分支
     var nicknameColor: NicknameColor = .default
+    /// v3（2026-07-15）：头像框静态图 URL（对齐 H5 `head-frame` 组件消费的 `item.headFrame` 字段）。
+    /// 派对房用户虚拟道具 itemType=1 头饰佩戴后返回；nil = 无头像框。
+    var headFrame: String? = nil
+    /// v4（B1 活跃大R）：ActiveTycoonBadge 显示门禁；由 IM `activeTycoon` 字段透传（H5 messageScroller.vue L373 等 8 处）。
+    /// 视觉铁律：**仅主态直播** rendering，客态/派对房/私聊 row 一律不渲染（Row 内可读但 caller 控制 caller 逻辑）。
+    var isActiveTycoon: Bool = false
 }

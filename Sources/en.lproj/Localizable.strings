@@ -97,6 +97,27 @@
 "work.tool.partyData"        = "Party Data";
 "work.tool.myGuardian"       = "My Guardian";
 
+// Task Center 页（Phase C · 对齐 H5 views/task/index.vue）
+"task.center.navTitle"                = "Tasks";
+"task.section.rankProgress"           = "Rank Progress";
+"task.section.taskProgress"           = "Task Progress";
+"task.cycle.daily"                    = "Daily";
+"task.cycle.weekly"                   = "Weekly";
+"task.countdown.prefix"               = "Reset in";
+"task.weekly.totalPoints"             = "Total Points:";
+"task.myIncome"                       = "My Income";
+"task.myIntegral"                     = "My Integral";
+"task.viewRank"                       = "View Ranking";
+"task.tier.claim"                     = "Claim";
+"task.claimAll"                       = "Claim All";
+"task.claim.success"                  = "Claimed successfully";
+"task.claim.grantPending"             = "Reward is being granted";
+"task.claim.allMultiTypeFormat"       = "Claimed %d rewards";
+"task.reward.gotIt"                   = "Got It";
+"task.reward.mergedPrefix"            = "Total";
+"task.active.tycoonTask"              = "Active Tycoon Task";
+"task.integralTask"                   = "Integral Task";
+
 "work.invite.earnMoney"      = "Earn Money";
 
 "work.offline.confirmMessage" = "Are you sure you want to go offline?";

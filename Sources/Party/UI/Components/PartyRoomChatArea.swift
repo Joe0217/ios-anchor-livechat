@@ -14,24 +14,32 @@ struct PartyRoomChatArea: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             PartyRoomChatTabStrip(selection: $filter)
-            welcomeBanner
+            // v3（2026-07-15）：welcomeBanner 只在 All tab 顶部显示（对齐 H5 public-chat.vue L194-197
+            // 只在 `state.tabList[0]` 顶部渲染 convention 绿字）；Chat/Gift tab 隐藏。
+            if filter == .all {
+                welcomeBanner
+            }
             messageList
         }
     }
 
+    @ViewBuilder
     private var welcomeBanner: some View {
-        Text(welcomeMessage)
-            .font(Theme.Typography.partyRoomWelcome)
-            .foregroundColor(Theme.Palette.partyRoomWelcomeText)
-            .lineLimit(3)
-            .padding(.horizontal, Theme.Metric.partyRoomChatHPadding)
-            .padding(.top, 6)
-            .padding(.bottom, 8)
+        if !welcomeMessage.isEmpty {
+            Text(welcomeMessage)
+                .font(Theme.Typography.partyRoomWelcome)
+                .foregroundColor(Theme.Palette.partyRoomWelcomeText)
+                .lineLimit(3)
+                .padding(.horizontal, Theme.Metric.partyRoomChatHPadding)
+                .padding(.top, 6)
+                .padding(.bottom, 8)
+        }
     }
 
     private var messageList: some View {
         // P1-6：复用已有 PartyMessageListView（chat 观测已在子 view 内切分）
-        PartyMessageListView(chat: chat, lastGiftEvent: lastGiftEvent)
+        // v10：filter 透传（All/Chat/Gift 三档真过滤，对齐 H5/Android 派对房蓝本）
+        PartyMessageListView(chat: chat, filter: filter, lastGiftEvent: lastGiftEvent)
             .padding(.horizontal, Theme.Metric.partyRoomChatHPadding)
     }
 }

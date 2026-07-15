@@ -79,9 +79,21 @@ final class PartyMessageRouter: MessageRouter {
             // review 202606260029 P2-7：与 line 49 同源威胁模型——远端可控 key 名可能夹带 PII
             // （如 "userId_123456"），统一 .private 让 Release 包遮蔽，调试期 dev profile 直读。
             AppLogger.party.notice("[PartyRouter] 1012 keys=\(Array(ext.keys), privacy: .private)")
-            delegate?.partyRoomChatDidRequireSeatListReload(chat)
+            delegate?.partyRoomChatDidRequireSeatListReload(chat, msgTimestampMs: Int64(m.timestamp * 1000))
         case .prohibitMic:
             delegate?.partyRoomChat(chat, didReceiveProhibitMic: payload, raw: m)
+        case .privateCallNotify:
+            // F 期 1029 派对房私 call 状态通知（spec §4.2 P0-4 双重定义防御）
+            // PartyPrivateCallNotify decoder 硬要求 status enum ∈ {calling, ended}；
+            // GIFT_DOUBLED 语义（无 status 字段）会 throw dataCorrupted → drop
+            AppLogger.party.info("[PartyRouter] 1029 privateCallNotify payloadKeys=\(Array(payload.keys), privacy: .public)")
+            do {
+                let data = try JSONSerialization.data(withJSONObject: payload)
+                let notify = try JSONDecoder().decode(PartyPrivateCallNotify.self, from: data)
+                delegate?.partyRoomChat(chat, didReceivePrivateCallNotify: notify, raw: m)
+            } catch {
+                AppLogger.party.debug("[PartyRouter] 1029 decode failed (likely GIFT_DOUBLED / unknown status) → drop err=\(String(describing: error), privacy: .public)")
+            }
         case .kickedOut:
             handleKickedOut(payload: payload, chat: chat)
         case .updateMedia:
@@ -123,6 +135,57 @@ final class PartyMessageRouter: MessageRouter {
             delegate?.partyRoomChat(chat, didReceiveInviteResult: .broadcast)
         case .inviteVideoSeatJoinFailed:
             delegate?.partyRoomChat(chat, didReceiveInviteResult: .joinFailed)
+
+        // MARK: - v3（2026-07-14）Step 1 新增分派
+
+        case .gameWinNotifyGlobal:
+            // 136 全服游戏中奖公屏（session.js 主入口 + party.js 兜底）
+            AppLogger.party.info("[PartyRouter] 136 payloadKeys=\(Array(payload.keys), privacy: .public)")
+            delegate?.partyRoomChat(chat, didReceiveGameWinGlobal: payload, raw: m)
+        case .pkSmallPrize:
+            // 138 PK 小奖 / Party 房游戏小奖（字段结构同 136）
+            AppLogger.party.info("[PartyRouter] 138 payloadKeys=\(Array(payload.keys), privacy: .public)")
+            delegate?.partyRoomChat(chat, didReceivePkSmallPrize: payload, raw: m)
+        case .winnerBroadcastGlobal:
+            // 140 活动中奖公屏广播（含 worldcup）
+            AppLogger.party.info("[PartyRouter] 140 payloadKeys=\(Array(payload.keys), privacy: .public)")
+            delegate?.partyRoomChat(chat, didReceiveWinnerBroadcast: payload, raw: m)
+        case .authUpdate:
+            // 1019 房管变更（仅本人被设/取消，Store 端做 userId==self 校验）
+            AppLogger.party.info("[PartyRouter] 1019 payloadKeys=\(Array(payload.keys), privacy: .public)")
+            delegate?.partyRoomChat(chat, didReceiveAuthUpdate: payload, raw: m)
+        case .roomAnnouncement:
+            // 1049 房间通告公屏广播
+            AppLogger.party.info("[PartyRouter] 1049 payloadKeys=\(Array(payload.keys), privacy: .public)")
+            delegate?.partyRoomChat(chat, didReceiveRoomAnnouncement: payload, raw: m)
+        case .luckyNumberDraw:
+            // 1050 ⚠️ 直读 ext（H5 party.js:602 特殊分支 `[1050,1051].includes → ext 直读`），不走 unwrapDataField
+            AppLogger.party.info("[PartyRouter] 1050 extKeys=\(Array(ext.keys), privacy: .public)")
+            delegate?.partyRoomChat(chat, didReceiveLuckyNumberDraw: ext, raw: m)
+        case .luckyNumberWin:
+            // 1051 ⚠️ 直读 ext（同 1050）
+            AppLogger.party.info("[PartyRouter] 1051 extKeys=\(Array(ext.keys), privacy: .public)")
+            delegate?.partyRoomChat(chat, didReceiveLuckyNumberWin: ext, raw: m)
+
+        // MARK: - 一刀切忽略（老版送礼 / H5 空占位）
+
+        case .giftLegacy:
+            // 1007 明文送礼 —— iOS 只信 2049 giftCompressed 双发去重
+            return
+        case .roomLock, .rejectMicLegacy:
+            // H5 空占位 case（H5 用户端也 `break` 不处理），iOS 同步不消费
+            return
+
+        // MARK: - 占位群组（F 期功能未落 / Android 独有不实装）
+
+        case .emojiPlay, .emojiStatic,
+             .roomCloseOrWhitelist, .musicSongChange, .musicSwitchPerUser,
+             .auditGuardWarning, .platformAdminChange, .roomBgUpdate, .roomBgExpire,
+             .diamondGiftSend, .diamondGiftGrab, .diamondGiftSplit, .diamondGiftSettle,
+             .luckyNumberPersonalDialog,
+             .battleHeartbeat, .battleGiftNotify, .battleForceEndConfirm, .battleApplyPendingNotice:
+            AppLogger.party.debug("[PartyRouter] placeholder attachType=\(attachType.rawValue, privacy: .public)")
+            return
         }
     }
 
@@ -161,15 +224,59 @@ final class PartyMessageRouter: MessageRouter {
     }
 
     // MARK: - E v2：本地系统消息投递（Room Mode 切换 / Mic Application 开关公屏系统消息）
+    // v3（2026-07-15）：迁移到 `.partyModeSwitch` unified variant 4 类 kind + `.announcement`
+    // 通过 [`PartyPublicChatAdapter`](../Chat/PartyPublicChatAdapter.swift) 生成 message
 
-    /// 让 Store 层业务事件（切模板成功、Mic Application 开关广播）通过 router 投递到公屏。
-    /// 路由到 `chatManager.appendLocalSystemMessage(_:)`；chatManager 未 wired 时 log 后 no-op。
-    func postSystemMessage(_ text: String) {
+    /// 1017 切模板系统消息（kind: .mode）
+    func postSystemMode(_ text: String) {
         guard let chat = chatManager else {
-            AppLogger.party.notice("[PartyRouter] postSystemMessage skip: chatManager nil text=\(text, privacy: .public)")
+            AppLogger.party.notice("[PartyRouter] postSystemMode skip: chatManager nil")
             return
         }
-        chat.appendLocalSystemMessage(text)
+        chat.appendMessage(PartyPublicChatAdapter.systemMode(text: text))
+    }
+
+    /// 1021 排麦开关系统消息（kind: .application）
+    func postSystemApplication(_ text: String) {
+        guard let chat = chatManager else {
+            AppLogger.party.notice("[PartyRouter] postSystemApplication skip: chatManager nil")
+            return
+        }
+        chat.appendMessage(PartyPublicChatAdapter.systemApplication(text: text))
+    }
+
+    /// 1019 房管变更系统消息（kind: .authUpdate；仅本人被设/取消）
+    func postSystemAuthUpdate(_ text: String) {
+        guard let chat = chatManager else {
+            AppLogger.party.notice("[PartyRouter] postSystemAuthUpdate skip: chatManager nil")
+            return
+        }
+        chat.appendMessage(PartyPublicChatAdapter.systemAuthUpdate(text: text))
+    }
+
+    /// 1047 视频位邀请接受系统消息（kind: .videoSeatInvite）
+    func postSystemVideoSeatInvite(_ text: String) {
+        guard let chat = chatManager else {
+            AppLogger.party.notice("[PartyRouter] postSystemVideoSeatInvite skip: chatManager nil")
+            return
+        }
+        chat.appendMessage(PartyPublicChatAdapter.systemVideoSeatInvite(text: text))
+    }
+
+    /// 1049 房间通告公屏（`.announcement(kind: .partyRoom)`）
+    func postAnnouncement(_ text: String) {
+        guard let chat = chatManager else {
+            AppLogger.party.notice("[PartyRouter] postAnnouncement skip: chatManager nil")
+            return
+        }
+        chat.appendMessage(PartyPublicChatAdapter.announcement(text: text))
+    }
+
+    /// **Deprecated（v3）**：旧调用点入口。默认走 `.partyModeSwitch(kind: .mode)`。
+    /// 现有 caller（handleRoomModeChanged @ L928）应改调 `postSystemMode`。
+    @available(*, deprecated, renamed: "postSystemMode")
+    func postSystemMessage(_ text: String) {
+        postSystemMode(text)
     }
 
     // MARK: - M5 备用路径：MessageRouter protocol
@@ -190,7 +297,7 @@ final class PartyMessageRouter: MessageRouter {
         guard case .partyChatroom = context else { return false }
         switch attachType {
         case .partySeatUpdate, .partyKickedOut, .partyUpdateMedia, .partySeatUpdateList,
-             .partyProhibitMic, .partyGiftCompressed, .partyInviteVideoSeat:
+             .partyProhibitMic, .partyPrivateCallNotify, .partyGiftCompressed, .partyInviteVideoSeat:
             return true
         default:
             return false

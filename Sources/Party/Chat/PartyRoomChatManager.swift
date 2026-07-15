@@ -1,41 +1,6 @@
 import Foundation
 import NIMSDK
 
-/// 派对房公屏一条消息（UI 模型，非持久化）。
-struct PartyChatMessage: Identifiable, Equatable {
-    let id: UUID
-    let userId: String?
-    let nickname: String?
-    let role: PartyRoomRoleType?
-    let text: String
-    let msgType: PartyMsgType
-    let isLocal: Bool                  // 本端回显（未等服务端广播即先 push 的消息）
-    let timestamp: TimeInterval
-    /// 用户 tap 翻译图标后填入(对齐 H5 `messageScroller.vue` translatedClick + PublicChatListView.setTranslation)。
-    /// nil = 未翻译；非 nil = 显示译文（内存态，不持久化）
-    let translation: String?
-
-    init(id: UUID = UUID(),
-         userId: String?,
-         nickname: String?,
-         role: PartyRoomRoleType?,
-         text: String,
-         msgType: PartyMsgType,
-         isLocal: Bool,
-         timestamp: TimeInterval,
-         translation: String? = nil) {
-        self.id = id
-        self.userId = userId
-        self.nickname = nickname
-        self.role = role
-        self.text = text
-        self.msgType = msgType
-        self.isLocal = isLocal
-        self.timestamp = timestamp
-        self.translation = translation
-    }
-}
-
 /// 派对房云信聊天室封装（spec §1.4.4）。与直播 `NIMChatroomManager` 并存。
 ///
 /// **抽取候选点（路线图 §五）**：底层 `NIMSDK` 长连接共享；多 ChatManagerDelegate 同时挂时
@@ -55,10 +20,16 @@ struct PartyChatMessage: Identifiable, Equatable {
 @MainActor
 final class PartyRoomChatManager: NSObject, ObservableObject {
 
-    @Published private(set) var messages: [PartyChatMessage] = []
+    /// v3（2026-07-15）：迁移到 unified `UnifiedPublicChatMessage`（跨场景公屏统一模型）。
+    /// 不嵌套 `UnifiedPublicChatFeed` ObservableObject，避免 [swiftui-observable-double-publish]
+    /// 双 publish；用扁平 `@Published` 数组 + 手写 trim。
+    @Published private(set) var messages: [UnifiedPublicChatMessage] = []
     @Published private(set) var onlineCount: Int = 0
     @Published private(set) var connected: Bool = false
     @Published private(set) var imAlive: Bool = false
+
+    /// 公屏消息上限（对齐 H5 `_maxPlubicChatLength` = 100）
+    private let messagesLimit: Int = 200
 
     weak var delegate: PartyRoomChatManagerDelegate?
 
@@ -155,7 +126,8 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
                     AppLogger.party.notice("[PartyChat] pullHistory error code=\((error as NSError).code, privacy: .public)")
                     return
                 }
-                let mapped = (history ?? []).compactMap { self.makeTextMessage(from: $0, isLocal: false) }
+                // v3：迁移到 UnifiedPublicChatMessage（isSelf 由 sender userId == self 派生；historical 消息一律 false）
+                let mapped = (history ?? []).compactMap { self.makeUnifiedTextMessage(from: $0, isSelf: false) }
                 if !mapped.isEmpty {
                     self.messages.insert(contentsOf: mapped, at: 0)
                     self.trimIfNeeded()
@@ -168,36 +140,48 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
     // MARK: - 发送公屏文本（本地回显）
 
     /// 本地立即回显 → 异步 chatManager.send；不等服务端回声。
-    /// 文本走 NIM `.text` 标准消息；`remoteExt` 附挂 userId/role/nickname。
+    /// 文本走 NIM `.text` 标准消息；`remoteExt` 附挂 H5 sendTextMessage 全字段
+    /// （对齐 `livechat-h5/src/stores/modules/party.js:1044` serverExtension.data：
+    /// `userId / nickname / userAvatar / isVip / userLevel / role / headFrame / chatBubble / isPlatformAdmin`）
     func sendText(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, hasJoined else { return }
 
         let me = SessionStore.shared.user
+        let anchorMine = AnchorInfoStore.shared.mine
         let myUserId = me?.userId.map(String.init)
         let myNickname = me?.nickname ?? ""
         // 自己角色在 PartyStore 衍生；这里默认 .audience（房主发文本时由 Store 上层覆盖 remoteExt）
         let myRole: PartyRoomRoleType = .audience
+        let myAvatar = me?.icon ?? anchorMine?.icon
+        let myChatBubble = anchorMine?.chatBubble
 
-        // 本地立即回显
-        let local = PartyChatMessage(
-            userId: myUserId,
-            nickname: myNickname,
-            role: myRole,
+        // 本地立即回显（v3：走 unified Adapter，字段富化）
+        // 主播端本人无 headFrame 数据（后端 AnchorInfo 无此字段），nil
+        let local = PartyPublicChatAdapter.selfEchoText(
             text: trimmed,
-            msgType: .text,
-            isLocal: true,
-            timestamp: Date().timeIntervalSince1970
+            myUserId: myUserId,
+            myNickname: myNickname,
+            myAvatar: myAvatar,
+            myLevel: anchorMine?.level,
+            myIsVip: false,
+            myChatBubble: myChatBubble,
+            myRoleRaw: myRole.rawValue,
+            myHeadFrame: nil
         )
-        push(local)
+        appendMessage(local)
 
-        // 构造 NIMMessage 并发送
+        // 构造 NIMMessage 并发送 —— 注入 H5 sendTextMessage 全字段（对齐 party.js:1044）
         let msg = NIMMessage()
         msg.text = trimmed
         var ext: [String: Any] = [:]
         if let uid = myUserId { ext["userId"] = uid }
-        ext["role"] = myRole.rawValue
         if !myNickname.isEmpty { ext["nickname"] = myNickname }
+        if let av = myAvatar, !av.isEmpty { ext["userAvatar"] = av }
+        if let lv = anchorMine?.level { ext["userLevel"] = lv }
+        ext["role"] = myRole.rawValue
+        if let cb = myChatBubble, !cb.isEmpty { ext["chatBubble"] = cb }
+        // isVip / headFrame / medalList / isPlatformAdmin 主播端本人无源，留给远端消息填充
         msg.remoteExt = ext
 
         let session = NIMSession(roomId, type: .chatroom)
@@ -210,72 +194,83 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
 
     // MARK: - 工具
 
-    private func makeTextMessage(from m: NIMMessage, isLocal: Bool) -> PartyChatMessage? {
+    /// 从 NIM `.text` 消息构造 unified message（对齐 H5 addPartyChatRecordsMsg 字段派生）。
+    /// NIMMessage 依赖内联在此（保持 PartyPublicChatAdapter 主文件 zero-NIM 便于 test target 单测）。
+    ///
+    /// **头像回落逻辑**（H5 用户端 sendTextMessage 不注入 userAvatar 到 remoteExt，
+    /// H5 UI 层取自 NIM V2 `userInfoConfig.senderAvatar` —— iOS V1 SDK 无此 API，改走 `NIMUser` 缓存）：
+    /// 1. remoteExt.userAvatar 有 → 使用（iOS 主播端发的消息按此约定）
+    /// 2. 否则 `NIMSDK.userManager.userInfo(m.from)` 缓存查（H5 用户端消息 SDK 自动填充 userInfo）
+    /// 3. 都无 → nil，AvatarView 显示默认图占位
+    private func makeUnifiedTextMessage(from m: NIMMessage, isSelf: Bool) -> UnifiedPublicChatMessage? {
         guard m.messageType == .text else { return nil }
-        let ext = m.remoteExt as? [String: Any] ?? [:]
-        let userId = (ext["userId"] as? String) ?? (ext["userId"].map { "\($0)" })
-        let nickname = (ext["nickname"] as? String) ?? m.senderName
-        let role = PartyRoomRoleType(rawValue: (ext["role"] as? Int) ?? -1)
+        var ext = m.remoteExt as? [String: Any] ?? [:]
         let text = m.text ?? ""
         guard !text.isEmpty else { return nil }
-        return PartyChatMessage(
-            userId: userId,
-            nickname: nickname,
-            role: role,
-            text: text,
-            msgType: .text,
-            isLocal: isLocal,
-            timestamp: m.timestamp
+        // 头像 fallback：remoteExt 无 userAvatar 时从 NIMUser 缓存查（对齐 H5 senderAvatar 语义）
+        if (ext["userAvatar"] as? String)?.isEmpty ?? true,
+           let from = m.from,
+           let nimUser = NIMSDK.shared().userManager.userInfo(from),
+           let avatarUrl = nimUser.userInfo?.avatarUrl,
+           !avatarUrl.isEmpty {
+            ext["userAvatar"] = avatarUrl
+        }
+        // 昵称 fallback：同理，remoteExt.nickname 无值时从 NIMUser 或 m.senderName 补
+        if (ext["nickname"] as? String)?.isEmpty ?? true,
+           let from = m.from,
+           let nimUser = NIMSDK.shared().userManager.userInfo(from),
+           let nickName = nimUser.userInfo?.nickName,
+           !nickName.isEmpty {
+            ext["nickname"] = nickName
+        }
+        return UnifiedPublicChatMessage(
+            sender: PartyPublicChatAdapter.makeSender(from: ext, fallbackNickname: m.senderName, isSelf: isSelf),
+            variant: .text(content: text)
         )
     }
 
-    private func push(_ msg: PartyChatMessage) {
+    /// 通用 append + trim（供内部 + delegate append 方法调用）。
+    func appendMessage(_ msg: UnifiedPublicChatMessage) {
         messages.append(msg)
         trimIfNeeded()
     }
 
+    /// v3 便利方法：Store delegate 需要 append 多种公屏消息（.announcement / .partyModeSwitch / .gift / .gameWinNotify / .winnerBroadcast / .luckyGift）
+    /// 通过公开的 `appendMessage` 一站式入口；Adapter 生成 message + 此处 trim。
+    /// 保持 Store 端调用点极简：`chat.appendMessage(PartyPublicChatAdapter.systemMode(text: ...))`。
+
     /// 追加本地系统消息（E v2 §1/§2：切模板 / Mic Application 开关广播后公屏落一条业务系统消息）。
-    ///
-    /// 当前 `PartyMsgType` 无独立 `.system` 案例；MVP 阶段暂借 `.text` 视觉外壳（isLocal=true / role=nil /
-    /// nickname 空 → UI 层可通过这三特征识别为系统消息，未来 UI 细化时再扩 `.system` case）。
-    /// 不写 NIM——本地消息不广播到远端。
+    /// v3（2026-07-15）：迁移到 `.partyModeSwitch(kind: .mode)` unified variant；旧 caller 仍可用（默认 kind=.mode）。
+    /// **推荐**：Store 端直接调 Adapter.systemMode/systemApplication/... 生成消息后 appendMessage。
     func appendLocalSystemMessage(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        let msg = PartyChatMessage(
-            userId: nil,
-            nickname: nil,
-            role: nil,
-            text: trimmed,
-            msgType: .text,
-            isLocal: true,
-            timestamp: Date().timeIntervalSince1970
-        )
-        push(msg)
+        appendMessage(PartyPublicChatAdapter.systemMode(text: trimmed))
     }
 
-    /// 更新指定消息的 translation 字段(对齐 H5 messageScroller.vue translatedClick + PublicChatListView.setTranslation)。
-    /// 命中不到 msgId 或非 `.text` msgType 时静默 no-op。
+    /// 更新指定消息的 translation 字段（对齐 H5 messageScroller.vue translatedClick）。
+    /// 命中不到 msgId 或非 `.text` variant 时静默 no-op。
     func setTranslation(messageId: UUID, translation: String) {
         guard let idx = messages.firstIndex(where: { $0.id == messageId }) else { return }
         let old = messages[idx]
-        guard old.msgType == .text else { return }
-        messages[idx] = PartyChatMessage(
+        guard case .text(let content, let mentions, _, let replyToNick) = old.variant else { return }
+        let newVariant: PublicChatVariant = .text(
+            content: content,
+            mentions: mentions,
+            translation: translation,
+            replyToNick: replyToNick
+        )
+        messages[idx] = UnifiedPublicChatMessage(
             id: old.id,
-            userId: old.userId,
-            nickname: old.nickname,
-            role: old.role,
-            text: old.text,
-            msgType: old.msgType,
-            isLocal: old.isLocal,
             timestamp: old.timestamp,
-            translation: translation
+            sender: old.sender,
+            variant: newVariant
         )
     }
 
     private func trimIfNeeded() {
-        if messages.count > 200 {
-            messages.removeFirst(messages.count - 200)
+        if messages.count > messagesLimit {
+            messages.removeFirst(messages.count - messagesLimit)
         }
     }
 
@@ -288,15 +283,27 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
     // MARK: - 处理消息（统一在 main actor 执行，避免跨 actor 访问 SessionStore）
 
     fileprivate func processIncoming(_ batch: [NIMMessage]) {
-        var textPush: [PartyChatMessage] = []
+        var textPush: [UnifiedPublicChatMessage] = []
         var memberDelta = 0
+
+        // 判定 isSelf：ext["userId"] == 当前登录 userId
+        let myUserIdStr = SessionStore.shared.user?.userId.map(String.init)
 
         for m in batch {
             guard belongsToThisRoom(m) else { continue }
 
             switch m.messageType {
             case .text:
-                if let pm = makeTextMessage(from: m, isLocal: false) {
+                // v3：远端消息通过 ext.userId 判 isSelf（可能是自己在其他端发的回声）
+                let isSelf: Bool = {
+                    guard let mine = myUserIdStr,
+                          let ext = m.remoteExt as? [String: Any],
+                          let uid = PartyValueNormalizer.stringify(ext["userId"]) else {
+                        return false
+                    }
+                    return uid == mine
+                }()
+                if let pm = makeUnifiedTextMessage(from: m, isSelf: isSelf) {
                     textPush.append(pm)
                 }
 
@@ -318,7 +325,7 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
             }
         }
 
-        for m in textPush { push(m) }
+        for m in textPush { appendMessage(m) }
         if memberDelta != 0 {
             onlineCount = max(0, onlineCount + memberDelta)
         }
@@ -381,7 +388,8 @@ protocol PartyRoomChatManagerDelegate: AnyObject {
     func partyRoomChatDidKickOut(_ chat: PartyRoomChatManager)
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveSeatUpdate payload: [String: Any], raw: NIMMessage)
-    func partyRoomChatDidRequireSeatListReload(_ chat: PartyRoomChatManager)
+    /// 1012 全量重拉指令；`msgTimestampMs` 用于 `lastRoomTempSwitchAt` 精确判丢旧广播（对齐 1017 pattern）
+    func partyRoomChatDidRequireSeatListReload(_ chat: PartyRoomChatManager, msgTimestampMs: Int64)
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveProhibitMic payload: [String: Any], raw: NIMMessage)
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveMediaUpdate payload: [String: Any], raw: NIMMessage)
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveGift payload: [String: Any], raw: NIMMessage)
@@ -397,4 +405,36 @@ protocol PartyRoomChatManagerDelegate: AnyObject {
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveQueueSeatUpdate payload: [String: Any], raw: NIMMessage)
     /// 1021 Mic Application 开关广播；payload 内 `{ enable: Int }`（0/1）
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveMicApplicationSwitch payload: [String: Any], raw: NIMMessage)
+
+    /// F 期（2026-07-14）1029 派对房私 call 状态通知
+    /// payload 已通过 PartyPrivateCallNotify decoder 严格校验（status enum 硬要求）
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceivePrivateCallNotify notify: PartyPrivateCallNotify, raw: NIMMessage)
+
+    // MARK: - v3（2026-07-14）Step 1 通知基建骨架 delegate
+
+    /// 1019 房管变更（仅本人被设/取消房管时公屏文案；Store 端做 userId==self 校验）。
+    /// payload 期望 `{ userId, authType }`（authType: 1=设房管 / 2=取消）—— 真机 preflight。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveAuthUpdate payload: [String: Any], raw: NIMMessage)
+
+    /// 1049 房间通告公屏广播。payload 期望 `{ text, roomId }`—— roomId 校验后落公屏。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveRoomAnnouncement payload: [String: Any], raw: NIMMessage)
+
+    /// 1050 幸运数字抽数公屏卡片（⚠️ 直读 ext，无 ext.data 包裹）。
+    /// ext 期望 `{ userId, nickname, luckyNumber, giftId, ... }` —— 真机 preflight。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveLuckyNumberDraw payload: [String: Any], raw: NIMMessage)
+
+    /// 1051 幸运数字中奖公屏广播（⚠️ 直读 ext）。
+    /// ext 期望 `{ userId, nickname, luckyNumber, winAmount, ... }` —— 真机 preflight。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveLuckyNumberWin payload: [String: Any], raw: NIMMessage)
+
+    /// 136 游戏中奖公屏通知（全服，session 通道主入口 + Party 通道兜底）。
+    /// payload 期望 `{ avatar, nickname, winAmount, gameName, gameIcon, gameId, gameType, messageSkin }` —— 真机 preflight。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveGameWinGlobal payload: [String: Any], raw: NIMMessage)
+
+    /// 138 PK 小奖 / Party 房游戏小奖（本房，字段同 136）。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceivePkSmallPrize payload: [String: Any], raw: NIMMessage)
+
+    /// 140 活动中奖公屏广播（含 worldcup 世界杯活动卡）。
+    /// payload 期望 `{ activityName, quantity, imageURL, joinCTA, avatar, cardType, ... }` —— 真机 preflight。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveWinnerBroadcast payload: [String: Any], raw: NIMMessage)
 }

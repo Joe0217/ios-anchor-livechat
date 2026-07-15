@@ -130,6 +130,8 @@ targets:
       - path: Sources/Networking/AppConfigService.swift
       - path: Sources/Core/AppConfigStore.swift
       - path: Sources/Core/CallAuthLogic.swift
+      # P 项目：权限管理系统（zero SDK 依赖，publisher-inject 无 SessionStore 编译依赖）
+      - path: Sources/Core/Permission/SelfPermissionBridge.swift
       # G 里程碑 M1：PK 数据契约 + NIM AttachType（仅纯数据/解析层，零 SDK 依赖）
       - path: Sources/Live/NIM/AttachType.swift
       - path: Sources/PK/PKModels.swift

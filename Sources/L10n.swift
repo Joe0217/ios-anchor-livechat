@@ -555,6 +555,27 @@ enum L10n {
     static var toolPartyData: String { localize("work.tool.partyData", comment: "派对数据") }
     static var toolMyGuardian: String { localize("work.tool.myGuardian", comment: "我的守护") }
 
+    // MARK: - Task Center 页(Phase C · 对齐 H5 views/task/index.vue)
+    static var taskCenterNavTitle: String { localize("task.center.navTitle", comment: "任务中心标题") }
+    static var taskRankProgress: String { localize("task.section.rankProgress", comment: "排位进度小节标题") }
+    static var taskProgress: String { localize("task.section.taskProgress", comment: "任务进度小节标题") }
+    static var taskCycleDaily: String { localize("task.cycle.daily", comment: "Daily tab") }
+    static var taskCycleWeekly: String { localize("task.cycle.weekly", comment: "Weekly tab") }
+    static var taskCountdownPrefix: String { localize("task.countdown.prefix", comment: "重置倒计时前缀 (Reset in)") }
+    static var taskWeeklyTotalPointsLabel: String { localize("task.weekly.totalPoints", comment: "Weekly Total Points 标签") }
+    static var taskMyIncome: String { localize("task.myIncome", comment: "我方收入") }
+    static var taskMyIntegral: String { localize("task.myIntegral", comment: "我方积分") }
+    static var taskViewRank: String { localize("task.viewRank", comment: "查看榜单") }
+    static var taskTierClaim: String { localize("task.tier.claim", comment: "领取按钮") }
+    static var taskClaimAll: String { localize("task.claimAll", comment: "一键领取按钮") }
+    static var taskClaimSuccess: String { localize("task.claim.success", comment: "领取成功") }
+    static var taskClaimGrantPending: String { localize("task.claim.grantPending", comment: "领奖发放中") }
+    static var taskClaimAllMultiTypeFormat: String { localize("task.claim.allMultiTypeFormat", comment: "领取成功 x%d 档(多类型混合)") }
+    static var taskRewardGotIt: String { localize("task.reward.gotIt", comment: "领奖弹窗知道了") }
+    static var taskRewardMergedPrefix: String { localize("task.reward.mergedPrefix", comment: "合计前缀(合并同类奖励)") }
+    static var taskActiveTycoonTask: String { localize("task.active.tycoonTask", comment: "大R任务折叠区标题") }
+    static var taskIntegralTask: String { localize("task.integralTask", comment: "积分任务折叠区标题") }
+
     // LiveData 规则 sheet(对齐 H5 liveRule/index.vue 默认分支)
     static var liveDataRuleNavTitle: String { localize("liveData.rule.navTitle", comment: "规则标题") }
     static var liveDataRuleSection1: String { localize("liveData.rule.section1", comment: "I. 基本信息") }

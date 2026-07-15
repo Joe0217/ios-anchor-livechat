@@ -152,6 +152,15 @@ final class PartyStore: ObservableObject {
     /// camera 字段自身非 @Published（CameraManager 不需要 Combine 链路追踪）。
     @Published private(set) var isLocalCameraActive: Bool = false
 
+    // MARK: - F PartyCall 私 call 开关（spec §5.3）
+
+    /// 私 call 开关选中礼物的 icon URL 缓存（浮动按钮开启态 preview 用）。
+    /// setPrivateCall(enable=true) 成功时更新；enable=false 时保留（下次打开预选记忆）。
+    /// 必须在 class 主体（stored property + property wrapper 不能放 extension）
+    @Published private(set) var partyCallGiftIcon: String?
+    /// 私 call 开关选中礼物的价格缓存（蓝钻显示用）。
+    @Published private(set) var partyCallGiftPrice: Int?
+
     // MARK: - 衍生
 
     /// 自己当前所在麦位（衍生：seatList.first { userId == 自己 }）
@@ -311,7 +320,32 @@ final class PartyStore: ObservableObject {
         // 后端 weidou-socket.partyRoomHeartbeat() 据 roomId+seatIndex 更新 lastActiveTime，
         // 30s 无心跳 → 强制下麦。iOS 现有 5s 心跳保活，理论上足够。
         WSHeartbeat.shared.setPartyContext(roomId: roomId, seatIndex: selfSeat?.seatIndex ?? -1)
+
+        // Step 7 (F-spec)：进房若后端返回上次记忆的私 call 礼物 giftId，异步拉一次 gift list 匹配 icon/price
+        // 让浮动开关按钮开启态能立即显示"上次选的礼物"预览（用户诉求 · 减少重选负担）
+        Task { @MainActor in await loadPartyCallGiftMetaIfNeeded() }
+
         // roomState = .joined 由 RTC didJoin + Chat didEnter 双就绪后回调 markJoinedIfReady() 设置
+    }
+
+    /// F 期：进房若 roomInfo.partyCallGiftId 非 nil，异步拉一次 party call gift list 找匹配 icon/price
+    /// → 缓存到 partyCallGiftIcon/Price。已缓存则跳过（避免重拉）。
+    private func loadPartyCallGiftMetaIfNeeded() async {
+        guard let giftId = roomInfo?.partyCallGiftId, !giftId.isEmpty else { return }
+        if partyCallGiftIcon != nil && partyCallGiftPrice != nil { return }
+        do {
+            let items = try await PartyAPI.getPartyCallGiftList(scene: 2)
+            // GiftListData.id 是 Int64；roomInfo.partyCallGiftId 是 String（后端返 "62"）—— 转 String 比较
+            if let match = items.first(where: { String($0.id) == giftId }) {
+                partyCallGiftIcon = match.giftSmallImg.isEmpty ? match.giftImg : match.giftSmallImg
+                partyCallGiftPrice = Int(match.giftPrice)
+                AppLogger.party.info("[PartyStore] loadPartyCallGiftMeta matched giftId=\(giftId, privacy: .public) price=\(match.giftPrice, privacy: .public)")
+            } else {
+                AppLogger.party.notice("[PartyStore] loadPartyCallGiftMeta giftId=\(giftId, privacy: .public) NOT FOUND in list of \(items.count, privacy: .public) items")
+            }
+        } catch {
+            AppLogger.party.notice("[PartyStore] loadPartyCallGiftMeta failed err=\(error.localizedDescription, privacy: .private)")
+        }
     }
 
     // MARK: - leaveRoom
@@ -473,17 +507,50 @@ final class PartyStore: ObservableObject {
     /// 房主实际设置的背景需通过独立 `room/getRoomBgImage` 接口拉。iOS PartyRoomSettingsView
     /// 已在用同一 API 显示"当前已选背景"。
     ///
+    /// **v17 真根因修复（对齐 H5 create.vue:216 精神）**：后端 `getRoomBgImage` 只返 `{id: X}`
+    /// 无 URL 字段（PartyAPI.swift:150 早有注释警告）。仅靠此接口，`bigImgUrl/imgUrl` decode 恒 nil
+    /// → PartyRoomView 永远显示 DEFAULT_BG 静态兜底 → 用户报"选完动图仍显示静态图"。
+    /// 修复：拿到 id 后拉 `getBgImages` 全列表按 id 匹配拿完整对象（含真实 bigImgUrl 动图 URL）。
+    /// 匹配失败退化为 id-only 对象（现状兼容）。
+    ///
     /// 更新 `currentRoomBackground` @Published → backgroundLayer 自动派生新 URL 显示。
     /// 失败静默：backgroundLayer fallback 到 H5 DEFAULT_BG 网络图。
     func loadCurrentRoomBackground() async {
         guard let info = roomInfo, let id = info.id, !id.isEmpty else { return }
         do {
-            let bg = try await PartyAPI.getRoomBgImage(roomId: id)
-            currentRoomBackground = bg
-            AppLogger.party.info("[PartyStore] loadCurrentRoomBackground ok bigImgUrl=\(bg?.bigImgUrl ?? "nil", privacy: .public)")
+            guard let idOnly = try await PartyAPI.getRoomBgImage(roomId: id) else {
+                currentRoomBackground = nil
+                AppLogger.party.info("[PartyStore] loadCurrentRoomBackground: no bg set")
+                return
+            }
+            // 按 id 从 backgroundList 匹配完整对象（拿 bigImgUrl / imgUrl）
+            do {
+                let list = try await PartyAPI.backgroundList()
+                if let full = list.first(where: { $0.id == idOnly.id }) {
+                    currentRoomBackground = full
+                    AppLogger.party.info("[PartyStore] loadCurrentRoomBackground matched id=\(full.id, privacy: .public) bigImgUrl=\(full.bigImgUrl ?? "nil", privacy: .public)")
+                } else {
+                    currentRoomBackground = idOnly
+                    AppLogger.party.notice("[PartyStore] loadCurrentRoomBackground id=\(idOnly.id, privacy: .public) not in backgroundList (list size=\(list.count, privacy: .public)); fallback id-only")
+                }
+            } catch {
+                currentRoomBackground = idOnly
+                AppLogger.party.notice("[PartyStore] loadCurrentRoomBackground backgroundList fetch failed: \(String(describing: error), privacy: .private); fallback id-only")
+            }
         } catch {
             AppLogger.party.notice("[PartyStore] loadCurrentRoomBackground failed: \(String(describing: error), privacy: .private)")
         }
+    }
+
+    /// v17：由 Settings 层选完背景后回流完整对象（对齐 H5 create.vue:200-203
+    /// `apiSetPartyBgImage.then → partyStore.currentPartyInfo.bigImgUrl = selectedBg.bigImgUrl`）。
+    ///
+    /// 必要性：`getRoomBgImage` 只返 id 无 URL；只有前端选背景那一刻手里握着完整 `PartyBackground`
+    /// （从 `getBgImages` 列表来）—— 必须此刻主动回流，否则 PartyRoomView 只能等下一次 `loadCurrentRoomBackground`
+    /// 全流程 refresh（成本高 + UX 延迟）。
+    func updateCurrentRoomBackground(_ bg: PartyBackground) {
+        currentRoomBackground = bg
+        AppLogger.party.info("[PartyStore] updateCurrentRoomBackground id=\(bg.id, privacy: .public) bigImgUrl=\(bg.bigImgUrl ?? "nil", privacy: .public)")
     }
 
     // MARK: - 关注房主（对齐 H5 header-wrap.vue L139-140 handleFollowOrNo）
@@ -608,6 +675,83 @@ final class PartyStore: ObservableObject {
         } catch {
             lastError = .underlying(.networkError)
             AppLogger.party.error("[PartyStore] prohibitSeat failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    // MARK: - 房主/房管 名片卡 admin 操作(对齐 H5 party-user-card.vue)
+
+    /// 抱下麦(仅"抱下"分支)。对齐 H5 `feachHoldSeat({operatorType: 3, seatIndex, targetUserId})`
+    /// - 前置:selfRole owner/admin;目标已在麦位(seatIndex/targetUserId 双传)
+    /// - 主态无 toast;被抱下者收 IM "You're off mic."
+    func requestKickFromMic(seatIndex: Int, targetUserId: String) async {
+        guard let info = roomInfo, roomState == .joined else { return }
+        guard selfRole == .owner || selfRole == .admin else {
+            AppLogger.party.notice("[PartyStore] holdSeat rejected: not owner/admin")
+            return
+        }
+        do {
+            try await PartyAPI.holdSeat(
+                roomId: info.id ?? "",
+                seatIndex: seatIndex,
+                targetUserId: targetUserId,
+                yxRoomId: info.yxRoomId ?? "",
+                operatorType: 3,
+                roomTempId: info.roomTempIdInt
+            )
+        } catch let api as PartyAPIError {
+            lastError = PartyRoomErrorMapper.map(api)
+        } catch {
+            lastError = .underlying(.networkError)
+            AppLogger.party.error("[PartyStore] holdSeat failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    /// 设置/移除房管(仅房主)。对齐 H5 `apiPartySetAdmin({roomId, userId, operationType})`
+    /// - operationType 1 = 添加, 2 = 移除
+    /// - 服务端广播 1001 seatList 更新目标 seat.roomRoleType
+    func requestSetAdmin(userId: String, add: Bool) async {
+        guard let info = roomInfo, roomState == .joined else { return }
+        guard selfRole == .owner else {
+            AppLogger.party.notice("[PartyStore] setAdmin rejected: not owner")
+            return
+        }
+        do {
+            try await PartyAPI.setAdmin(
+                roomId: info.id ?? "",
+                userId: userId,
+                operationType: add ? 1 : 2
+            )
+        } catch let api as PartyAPIError {
+            lastError = PartyRoomErrorMapper.map(api)
+        } catch {
+            lastError = .underlying(.networkError)
+            AppLogger.party.error("[PartyStore] setAdmin failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    /// 踢出房间。对齐 H5 `feachKickOutRoom({seatIndex, targetUserId, banType})`
+    /// - banType 1 = 有限时长(kickOutInterval 秒), 2 = 永久
+    /// - seatIndex -1 表示目标不在麦位;>=0 表示目标麦位号
+    /// - 只能踢普通用户(caller 已过滤 targetRole==.audience)
+    func requestKickOutRoom(seatIndex: Int, targetUserId: String, banType: Int) async {
+        guard let info = roomInfo, roomState == .joined else { return }
+        guard selfRole == .owner || selfRole == .admin else {
+            AppLogger.party.notice("[PartyStore] kickOutRoom rejected: not owner/admin")
+            return
+        }
+        do {
+            try await PartyAPI.kickOutRoom(
+                roomId: info.id ?? "",
+                yxRoomId: info.yxRoomId ?? "",
+                seatIndex: seatIndex,
+                targetUserId: targetUserId,
+                banType: banType
+            )
+        } catch let api as PartyAPIError {
+            lastError = PartyRoomErrorMapper.map(api)
+        } catch {
+            lastError = .underlying(.networkError)
+            AppLogger.party.error("[PartyStore] kickOutRoom failed: \(String(describing: error), privacy: .private)")
         }
     }
 
@@ -1604,11 +1748,16 @@ extension PartyStore: PartyRoomChatManagerDelegate {
     }
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveSeatUpdate payload: [String: Any], raw: NIMMessage) {
-        _ = raw
-        // spec §0/§1 乱序判丢：切模板成功后 3s 内 1001 广播多为旧数据，直接覆盖会踩到旧 seatList
-        if isWithinRoomTempSwitchGuard {
-            AppLogger.party.notice("[PartyStore] 1001 dropped by roomTempSwitch 3s guard")
-            return
+        // spec §0/§1 乱序判丢：切模板成功前发出的 1001（msgTimestamp < switchedAt-3s）为陈旧广播，直接覆盖会踩到旧 seatList
+        // v2（2026-07-15 findings #8 修复）：从"近 3s 内一律丢"改为**精确按 msgTimestamp 判丢旧广播**，
+        // 对齐 1017 pattern。避免切模板后 3s 内新的用户上下麦 1001 被误丢
+        let msgTimestampMs = Int64(raw.timestamp * 1000)
+        if let switchedAt = lastRoomTempSwitchAt {
+            let switchedAtMs = Int64(switchedAt.timeIntervalSince1970 * 1000)
+            if msgTimestampMs < switchedAtMs - 3000 {
+                AppLogger.party.notice("[PartyStore] 1001 dropped by lastRoomTempSwitchAt-3s guard (msgAt=\(msgTimestampMs, privacy: .public) switchedAt=\(switchedAtMs, privacy: .public))")
+                return
+            }
         }
         // MVP 简化：1001 payload schema 待 M3 抓真实帧确认；
         // 现策略——若 payload 含完整 seatList 数组直接替换，否则全量重拉。
@@ -1637,19 +1786,16 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         applyingTimeoutTask = nil
     }
 
-    /// spec §0 乱序保护：切模板成功后 3s 内所有 1001/1012 增量广播均视为旧数据丢弃
-    /// （容差窗口对齐 §0 二次校验 "3s 容差" 语义；实操简化：不用 msgTimestamp 比对，
-    /// 用切模板成功至今的秒数判断，前提是 IM 到达延迟远小于 3s）
-    private var isWithinRoomTempSwitchGuard: Bool {
-        guard let at = lastRoomTempSwitchAt else { return false }
-        return Date().timeIntervalSince(at) < 3.0
-    }
-
-    func partyRoomChatDidRequireSeatListReload(_ chat: PartyRoomChatManager) {
-        // spec §0/§1 乱序判丢：切模板成功后 3s 内 1012 全量重拉指令多来自旧上下文，丢弃避免覆盖
-        if isWithinRoomTempSwitchGuard {
-            AppLogger.party.notice("[PartyStore] 1012 dropped by roomTempSwitch 3s guard")
-            return
+    func partyRoomChatDidRequireSeatListReload(_ chat: PartyRoomChatManager, msgTimestampMs: Int64) {
+        // spec §0/§1 乱序判丢：切模板成功前发出的 1012 全量重拉指令视为旧上下文，丢弃避免覆盖
+        // v2（2026-07-15 findings #8 修复）：从"近 3s 内一律丢"改为**精确按 msgTimestamp 判丢**，
+        // 对齐 1017 pattern，避免切模板后 3s 内新的 1012 被误丢
+        if let switchedAt = lastRoomTempSwitchAt {
+            let switchedAtMs = Int64(switchedAt.timeIntervalSince1970 * 1000)
+            if msgTimestampMs < switchedAtMs - 3000 {
+                AppLogger.party.notice("[PartyStore] 1012 dropped by lastRoomTempSwitchAt-3s guard (msgAt=\(msgTimestampMs, privacy: .public) switchedAt=\(switchedAtMs, privacy: .public))")
+                return
+            }
         }
         AppLogger.party.notice("[PartyStore] 1012 require full seatList reload")
         Task { [weak self] in
@@ -2157,12 +2303,17 @@ extension PartyStore: PartyRoomChatManagerDelegate {
 
     /// F 期：房主 tap 主 view 浮动私 call 开关按钮触发。
     ///
-    /// - `enable=true`：需带 `giftId`（从 CommonGiftPanel.callGate 选中回调传入）
+    /// - `enable=true`：需带 `giftId`（从 CommonGiftPanel.callGate 选中回调传入）+ 可选 giftIcon/giftPrice 供按钮 preview
     /// - `enable=false`：giftId 传 nil；仅关开关，保留 partyCallGiftId 记忆下次开启时预选
     ///
     /// 成功后立即回写本地 roomInfo；失败设 lastError（顶层 alert 已 wire）。
     /// Optimistic UI 由调用方（PartyRoomView 浮动按钮）自己维护本地 @State 切换。
-    func setPrivateCall(enable: Bool, giftId: String?) async {
+    func setPrivateCall(
+        enable: Bool,
+        giftId: String?,
+        giftIcon: String? = nil,
+        giftPrice: Int? = nil
+    ) async {
         guard let info = roomInfo, let roomId = info.id, !roomId.isEmpty else {
             AppLogger.party.notice("[PartyStore] setPrivateCall skip: roomInfo missing")
             return
@@ -2177,6 +2328,13 @@ extension PartyStore: PartyRoomChatManagerDelegate {
                 partyPrivateCallOpen: enable ? 1 : 0,
                 partyCallGiftId: giftId ?? info.partyCallGiftId
             )
+            // 缓存 gift meta 供按钮 preview（enable=true 时更新；关开关时保留最后一次）
+            if enable, let icon = giftIcon, !icon.isEmpty {
+                partyCallGiftIcon = icon
+            }
+            if enable, let price = giftPrice, price > 0 {
+                partyCallGiftPrice = price
+            }
             AppLogger.party.info("[PartyStore] setPrivateCall ok enable=\(enable, privacy: .public) giftId=\(giftId ?? "nil", privacy: .public)")
         } catch {
             AppLogger.party.notice("[PartyStore] setPrivateCall failed err=\(error.localizedDescription, privacy: .private)")

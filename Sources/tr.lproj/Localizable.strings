@@ -99,6 +99,27 @@
 "work.tool.partyData"        = "Parti Verileri";
 "work.tool.myGuardian"       = "Koruyucum";
 
+// Task Center 页（Phase C · 对齐 H5 views/task/index.vue）
+"task.center.navTitle"                = "Görevler";
+"task.section.rankProgress"           = "Sıralama İlerlemesi";
+"task.section.taskProgress"           = "Görev İlerlemesi";
+"task.cycle.daily"                    = "Günlük";
+"task.cycle.weekly"                   = "Haftalık";
+"task.countdown.prefix"               = "Sıfırlanma";
+"task.weekly.totalPoints"             = "Toplam Puan:";
+"task.myIncome"                       = "Gelirim";
+"task.myIntegral"                     = "Puanım";
+"task.viewRank"                       = "Sıralamayı Gör";
+"task.tier.claim"                     = "Al";
+"task.claimAll"                       = "Tümünü Al";
+"task.claim.success"                  = "Başarıyla alındı";
+"task.claim.grantPending"             = "Ödül veriliyor";
+"task.claim.allMultiTypeFormat"       = "%d ödül alındı";
+"task.reward.gotIt"                   = "Tamam";
+"task.reward.mergedPrefix"            = "Toplam";
+"task.active.tycoonTask"              = "Aktif Zengin Görevi";
+"task.integralTask"                   = "Puan Görevi";
+
 "work.invite.earnMoney"      = "Para Kazan";
 
 "work.offline.confirmMessage" = "Çevrimdışı olmak istediğinizden emin misiniz?";
