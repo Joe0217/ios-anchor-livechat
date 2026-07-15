@@ -715,44 +715,46 @@ struct PartyCreateBackgroundPickerSheet: View {
         return Button {
             store.selectedBackground = bg
         } label: {
-            ZStack(alignment: .topTrailing) {
-                // v7.12：底色兜底 + 图片 .fill 铺满 + frame 撑到 card 尺寸 + clipShape 裁剪超出
-                // 保留 v7.11 的 ZStack 结构（不用 v7.10 Color.clear.overlay 那种嵌套），
-                // 只把图片 contentMode 从 .fit → .fill，加 explicit frame 让 image 有明确 layout 边界
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(Theme.Palette.partyCreateTempFill)
+            // v7.13：用 GeometryReader 拿 card 精确宽×高 → image explicit frame(w:h:) +
+            // clipped() 硬矩形裁剪，image aspectRatio(.fill) 有确定 target 才能正确 fill；
+            // 之前 v7.9/v7.10/v7.12 三次尝试均因 frame(maxW/H: .infinity) 无确定尺寸 →
+            // aspectRatio 计算无参考 → 视觉溢出或 layout 崩坏。
+            GeometryReader { geo in
+                ZStack(alignment: .topTrailing) {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Theme.Palette.partyCreateTempFill)
 
-                if let urlStr = bg.imgUrl ?? bg.bigImgUrl,
-                   !urlStr.isEmpty,
-                   let u = URL(string: urlStr) {
-                    CachedAsyncImage(url: u, contentMode: .fill, persistent: true, cdn: (.avatarLarge, .fill)) {
-                        Color.clear
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-
-                if selected {
-                    Image("partyTemplateSelected")
-                        .resizable()
-                        .frame(width: 20, height: 20)
-                        .padding(6)
-                }
-                if !bg.isPermanent, let d = bg.duration, d > 0 {
-                    // duration chip：VStack + Spacer 定位左下角，不用 frame(maxHeight: .infinity)
-                    // （避免撑满 ZStack 干扰 image sizing）
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Text("\(d)s")
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 6).padding(.vertical, 2)
-                                .background(Capsule().fill(Color.black.opacity(0.55)))
-                            Spacer()
+                    if let urlStr = bg.imgUrl ?? bg.bigImgUrl,
+                       !urlStr.isEmpty,
+                       let u = URL(string: urlStr) {
+                        CachedAsyncImage(url: u, contentMode: .fill, persistent: true, cdn: (.avatarLarge, .fill)) {
+                            Color.clear
                         }
+                        .frame(width: geo.size.width, height: geo.size.height)
+                        .clipped()  // 硬矩形 clip layout + 视觉
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                     }
-                    .padding(6)
+
+                    if selected {
+                        Image("partyTemplateSelected")
+                            .resizable()
+                            .frame(width: 20, height: 20)
+                            .padding(6)
+                    }
+                    if !bg.isPermanent, let d = bg.duration, d > 0 {
+                        VStack {
+                            Spacer()
+                            HStack {
+                                Text("\(d)s")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6).padding(.vertical, 2)
+                                    .background(Capsule().fill(Color.black.opacity(0.55)))
+                                Spacer()
+                            }
+                        }
+                        .padding(6)
+                    }
                 }
             }
             // 固定 grid item：flex 宽 + fixed height 160pt（3 列 flex 宽约 100pt，160 高 = 5:8 竖）
