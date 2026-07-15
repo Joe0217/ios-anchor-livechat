@@ -465,6 +465,8 @@
 "userCard.unblockConfirm.message"         = "هل تريد إزالة هذا المستخدم من قائمة الحظر لديك؟";
 "userCard.unblockConfirm.confirm"         = "إزالة";
 "userCard.unblockConfirm.cancel"          = "إلغاء";
+"userCard.uidCopiedToast"                 = "تم نسخ المعرف إلى الحافظة";
+"userCard.uidCopyA11y"                    = "نسخ المعرف";
 "userCard.blockSuccess"                   = "تم الحظر";
 "userCard.blockFail"                      = "فشل الحظر، يرجى المحاولة مرة أخرى";
 "userCard.unblockSuccess"                 = "تمت الإزالة من قائمة الحظر";

@@ -378,7 +378,10 @@ final class AnchorInfoStore: ObservableObject {
     // MARK: - Helpers
 
     /// ISO 两字母国家码 → Unicode regional indicator emoji。非法回落 🌐。
-    static func flagEmoji(from countryCode: String) -> String {
+    ///
+    /// **nonisolated**:纯函数无 actor state 访问,允许 UserCardService.decodeCard 等
+    /// nonisolated context 调用,不给 decode 链路强加 @MainActor(会阻塞 main actor)。
+    nonisolated static func flagEmoji(from countryCode: String) -> String {
         let trimmed = countryCode.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         guard trimmed.count == 2 else { return "🌐" }
         let base: UInt32 = 0x1F1E6 - 0x41

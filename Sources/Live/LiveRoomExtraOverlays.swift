@@ -27,9 +27,15 @@ struct LiveRoomExtraOverlaysModifier: ViewModifier {
                                   isPresented: $showAnnouncementPopup,
                                   onSaved: onAnnouncementSaved)
             }
-            .overlay {
-                userCardOverlay
-            }
+            // UserCard 名片卡:sheet 挂载(H5 主播端 userCard.vue 对齐,底部 sheet 形态)
+            // 主播端直播间 tap 头像不跳 UserProfile(对齐 H5 `route.path === '/liveSetting'` 分支)
+            // Message 按钮暂未接聊天页(D 里程碑 chat push 就绪后再传 callback)
+            .userCardSheet(
+                item: Binding(
+                    get: { userCardUserId.map { UserCardPresentation(userId: $0) } },
+                    set: { userCardUserId = $0?.userId }
+                )
+            )
             .sheet(isPresented: $showGiftPicker) {
                 // H-4 迁移：直播中礼物入口 = 纯展示（interaction=.readonly + footer=.none）
                 CommonGiftPanel(config: .liveDisplayOnly)

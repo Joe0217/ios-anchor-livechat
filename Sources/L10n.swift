@@ -1297,6 +1297,10 @@ enum L10n {
     /// H5 template `isAnchor ? 'Received gifts' : 'Send gifts'`,iOS 主播端定位永远走 !isAnchor 分支
     static var userCardGiftWall: String { localize("userCard.giftWall", comment: "礼物墙 title:用户送出过的礼物") }
     static var userCardErrorRetry: String { localize("userCard.errorRetry", comment: "名片卡加载失败") }
+    /// UID 复制成功 toast(比通用 commonCopySuccess 更具体)
+    static var userCardUidCopiedToast: String { localize("userCard.uidCopiedToast", comment: "UID 已复制到剪贴板 toast") }
+    /// UID 复制按钮 accessibility label(VoiceOver 读作动词"复制 UID")
+    static var userCardUidCopyA11y: String { localize("userCard.uidCopyA11y", comment: "复制 UID 按钮无障碍描述") }
     /// Block/Unblock 4 类 toast(H5 line 254/256/276 显式 showToast)
     static var userCardBlockSuccess: String { localize("userCard.blockSuccess", comment: "拉黑成功 toast") }
     static var userCardBlockFail: String { localize("userCard.blockFail", comment: "拉黑失败 toast") }

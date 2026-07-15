@@ -421,6 +421,8 @@
 "userCard.unblockConfirm.message"         = "Are you sure you want to remove this user from your blocklist?";
 "userCard.unblockConfirm.confirm"         = "Remove";
 "userCard.unblockConfirm.cancel"          = "Cancel";
+"userCard.uidCopiedToast"                 = "UID copied to clipboard";
+"userCard.uidCopyA11y"                    = "Copy UID";
 "userCard.blockSuccess"                   = "Blocked";
 "userCard.blockFail"                      = "Failed to block, please retry";
 "userCard.unblockSuccess"                 = "Removed from blocklist";

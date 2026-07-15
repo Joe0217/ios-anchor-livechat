@@ -341,19 +341,18 @@ struct ChatDetailView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: callToastShow)
-        // 半屏模式下 tap 对方头像 → UserCardPopup(对齐 H5 msgItem.vue isPopup + emit('showUserCard'))
-        .overlay {
-            if let uid = userCardUserId {
-                UserCardPopup(
-                    userId: uid,
-                    isPresented: Binding(
-                        get: { userCardUserId != nil },
-                        set: { if !$0 { userCardUserId = nil } }
-                    )
-                )
-                .zIndex(150)   // 高于 rewards records (100) / call toast, 低于 diamond receive (200) / intro (300)
-            }
-        }
+        // 半屏模式下 tap 对方头像 → UserCardPopup(sheet 化,对齐 H5 msgItem.vue isPopup + emit('showUserCard'))
+        // onMessageTap 传 nil:防"聊天页 → 名片卡 → Message → 聊天页" 循环反调,按钮自动 disabled
+        .userCardSheet(
+            item: Binding(
+                get: { userCardUserId.map { UserCardPresentation(userId: $0) } },
+                set: { userCardUserId = $0?.userId }
+            ),
+            onMessageTap: nil
+        )
+        // 头像 tap 内置分派：半屏模式（sheet 内嵌）由本层消费 → 弹名片卡；
+        // 全屏模式环境自探为 .list → 走外层 NavigationStack 的 profilePusher 跳详情（本 presenter 不会被触发）
+        .avatarUserCardPresenter { uid in userCardUserId = uid }
         // 云端历史 fallback 也返空 + 会话老会话 → toast 提示(对齐 H5 loadHistoryMsgs 'empty' + 'chat history expired')
         .overlay(alignment: .top) {
             if showHistoryExpiredToast {

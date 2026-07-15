@@ -465,6 +465,8 @@
 "userCard.unblockConfirm.message"         = "Bu kullanıcıyı engel listenizden kaldırmak istediğinizden emin misiniz?";
 "userCard.unblockConfirm.confirm"         = "Kaldır";
 "userCard.unblockConfirm.cancel"          = "İptal";
+"userCard.uidCopiedToast"                 = "UID panoya kopyalandı";
+"userCard.uidCopyA11y"                    = "UID'yi kopyala";
 "userCard.blockSuccess"                   = "Engellendi";
 "userCard.blockFail"                      = "Engellenemedi, lütfen tekrar deneyin";
 "userCard.unblockSuccess"                 = "Engel listesinden kaldırıldı";
