@@ -638,6 +638,7 @@ enum L10n {
     static var liveListActionLive: String { localize("liveList.action.live", comment: "直播按钮 a11y") }
     static var liveListActionMatch: String { localize("liveList.action.match", comment: "匹配按钮 a11y") }
     static var liveListActionOffline: String { localize("liveList.action.offline", comment: "下线开关 a11y") }
+    static var liveListActionVideoCall: String { localize("liveList.action.videoCall", comment: "视频通话按钮 a11y") }
     /// 列表状态文案
     static var liveListEmpty: String { localize("liveList.empty", comment: "List 子页空数据提示") }
     static var liveListEnd: String { localize("liveList.end", comment: "List 子页已到底提示") }
@@ -1248,6 +1249,33 @@ enum L10n {
     static var publicScreenDiamondBoxClaim: String { localize("publicScreen.diamondBoxClaim", comment: "钻石盲盒瓜分") }
     static var publicScreenDiamondBoxSettled: String { localize("publicScreen.diamondBoxSettled", comment: "钻石盲盒结算") }
     static var publicScreenDiamondBoxExpired: String { localize("publicScreen.diamondBoxExpired", comment: "钻石盲盒过期退回") }
+    /// v24 活跃大 R 进房 Toast（B1 · 对齐 H5 §9.6 handleActiveTycoonEnterToast）
+    static var liveActiveTycoonEnterToast: String { localize("live.activeTycoon.enterToast", comment: "大 R 进房顶部 toast") }
+    /// v24 猜拳规则浮层（B2 · 对齐 H5 §9.2.2 rpsRulesSheet.vue）
+    static var liveRoomRpsRulesTitle: String { localize("liveRoom.rpsRules.title", comment: "猜拳规则标题") }
+    /// %d bestOf 局数
+    static var liveRoomRpsRulesBestOfFormat: String { localize("liveRoom.rpsRules.bestOf", comment: "%d Best of N 局") }
+    /// %d 每局价格钻石
+    static var liveRoomRpsRulesPerChallengeFormat: String { localize("liveRoom.rpsRules.perChallenge", comment: "%d 每局价格钻石") }
+    static var liveRoomRpsRulesTies: String { localize("liveRoom.rpsRules.ties", comment: "平局重赛") }
+    /// %d 勋章基础小时 %d 累计上限小时
+    static var liveRoomRpsRulesMedalFormat: String { localize("liveRoom.rpsRules.medal", comment: "%d 勋章基础小时 %d 累计上限") }
+    static var liveRoomRpsRulesRefund: String { localize("liveRoom.rpsRules.refund", comment: "异常退出退款") }
+    static var liveRoomRpsRulesGotIt: String { localize("liveRoom.rpsRules.gotIt", comment: "知道了") }
+    /// v24 主播被禁言双字段状态机（B3 · 对齐 H5 §9.16 gagMember/ungagMember）
+    static var liveRoomMutePlaceholderSystem: String { localize("liveRoom.mute.placeholder.system", comment: "被系统禁言输入框 placeholder") }
+    static var liveRoomMutePlaceholderHost: String { localize("liveRoom.mute.placeholder.host", comment: "被房主禁言输入框 placeholder") }
+    static var liveRoomMuteToastSystem: String { localize("liveRoom.mute.toast.system", comment: "被系统禁言 tap toast") }
+    static var liveRoomMuteToastHost: String { localize("liveRoom.mute.toast.host", comment: "被房主禁言 tap toast") }
+    /// v24 公屏 hi 气泡 Screen / MSG 双入口（B4 · 对齐 H5 §9.12.4）
+    static var publicScreenHiActionA11y: String { localize("publicScreen.hi.actionA11y", comment: "公屏 hi 图标 a11y label") }
+    static var publicScreenHiScreen: String { localize("publicScreen.hi.screen", comment: "公屏 @回复") }
+    static var publicScreenHiMsg: String { localize("publicScreen.hi.msg", comment: "半屏私聊") }
+    static var publicScreenHiMsgUnavailable: String { localize("publicScreen.hi.msgUnavailable", comment: "半屏私聊入口 fallback toast：对方账号不可用") }
+    /// %@ = 对方昵称
+    static var publicScreenHiReplyPillFormat: String { localize("publicScreen.hi.replyPill", comment: "@回复 pending pill") }
+    /// 通用取消（多处 confirmationDialog / cancel role 复用）
+    static var commonCancel: String { localize("common.cancel", comment: "通用取消") }
     static var virtualPropsEffectSwitchTitle: String { localize("virtualProps.effectSwitch.title", comment: "虚拟道具开关标题") }
     static var virtualPropsEffectSwitchDescription: String { localize("virtualProps.effectSwitch.description", comment: "虚拟道具开关说明") }
     static var virtualPropsEffectEnable: String { localize("virtualProps.effectEnable", comment: "启用效果") }

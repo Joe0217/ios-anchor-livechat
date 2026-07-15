@@ -22,6 +22,9 @@ import SwiftUI
 /// 切后台时不要触发 withAnimation（回前台 backlog 会一次性闪烁），仅在 active/inactive 才动画。
 struct MainTabView: View {
     @State private var selection: MainTab = .home
+    /// P 项目权限管理：Party tab 按 userType 黑名单动态显隐（bit `.party` 命中 → 隐藏）。
+    /// 本项目底 tab bar 是 ForEach + 自定义 Button（非 SwiftUI TabView），tab 数量变化不触发 tag 消失坑。
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     @State private var homePath: NavigationPath = NavigationPath()
     @State private var workPath: NavigationPath = NavigationPath()
     /// H-2 spec §4.1：Messages tab 加 NavigationStack path 支持 push ChatDetailView（对齐 homePath 模式）
@@ -77,13 +80,19 @@ struct MainTabView: View {
 
     /// 跨 tab 打开私聊页 action：切 Messages Tab + 清 home/work path + push peerYxAccId 到 messagesPath。
     /// 从直播结果页 Message 按钮触发时，LiveRoomView 已随 state=.ended 主动清资源；path 清空后 dismount 幂等兜底。
+    ///
+    /// **必须抑制 onChange(of: selection) 清 path**（对齐 `liveResultTransitionAction`）：
+    /// `selection = .messages` 会触发 onChange 把 messagesPath 立即重置为 NavigationPath()，
+    /// 覆盖同帧刚设置的 `[peerYxAccId]` → Messages Tab 只显示会话列表根页，push 丢失。
     private var openChatAction: OpenChatAction {
         OpenChatAction { peerYxAccId in
             guard !peerYxAccId.isEmpty else { return }
+            suppressPathClearOnTabChange = true
             selection = .messages
             homePath = NavigationPath()
             workPath = NavigationPath()
             messagesPath = NavigationPath([peerYxAccId])
+            DispatchQueue.main.async { suppressPathClearOnTabChange = false }
         }
     }
 
@@ -193,10 +202,23 @@ struct MainTabView: View {
             matchPopupCoordinator.start()
             // E-spec §0.2 F-16：初始 gate 同步（onChange 不触发首次；覆盖冷启动 selection != .home 的场景）
             matchPopupCoordinator.updatePartyTabBlocked(selection == .party)
+            // P 项目权限管理：冷启动 selection == .party 但 permission.canParty == false 时兜底
+            if selection == .party && !permission.canParty {
+                partyPath = NavigationPath()
+                selection = .home
+            }
         }
         // 观察 scenePhase 更新 popupCoordinator.appHidden 用于组合态 gate
         .onChange(of: scenePhase) { newPhase in
             matchPopupCoordinator.updateAppHidden(newPhase != .active)
+        }
+        // P 项目权限管理：Party tab 权限变化 → selection == .party 时 fallback .home + 清 partyPath
+        // 覆盖场景：切账号 party bit 变化 / 运行时 revoke。冷启动持久化 selection 由 .onAppear 兜底。
+        .onChange(of: permission.canParty) { newValue in
+            if !newValue && selection == .party {
+                partyPath = NavigationPath()
+                selection = .home
+            }
         }
         // L 里程碑：全局匹配预览浮窗（跨 tab 展示）
         // .overlay 挂在 safeAreaInset 之后 → 覆盖全屏（含 tabbar 区域）
@@ -309,6 +331,8 @@ struct MainTabView: View {
                 HomeView()
                     // 详情↔聊天互跳所有 destination(UserProfileRoute + ChatFromProfileRoute) 统一注册
                     .userProfileAndChatDestinations()
+                    // 头像 tap 内置分派：非房间态 → push UserProfileRoute 跳详情页（对齐环境自探 .list 分支）
+                    .avatarProfilePusher { uid in homePath.append(UserProfileRoute.userId(uid)) }
                     // Home 也持有 WorkRoute destination——QuickGoLive 从 Home 内 push LiveSettings 后,
                     // LiveSettings 内嵌 NavigationLink(WorkRoute.wishSetting/.beautySettings) 也要能
                     // 在同一 stack 内 push。**必须与 Work stack 保持 case 一致**，否则从 Home 入口进入
@@ -322,6 +346,15 @@ struct MainTabView: View {
                         case .wishSetting:    WishSettingView()
                         case .beautySettings: BeautySettingsView()
                         case .giftMessage:    GiftMessageView()
+                        case .profileEdit:    EditProfileView(service: EditProfileService.shared)
+                        case .liveData:       LiveDataView()
+                            .environment(\.moneyBagAction, { homePath.append(WorkRoute.task) })
+                        case .task:           WorkComingSoonView(title: L10n.toolTask)
+                        case .invite:         WorkComingSoonView(title: L10n.toolInvite)
+                        case .pointsRank:     WorkComingSoonView(title: L10n.toolPoints)
+                        case .anchorGuide:    WorkComingSoonView(title: L10n.toolWorkingGuide)
+                        case .partyData:      WorkComingSoonView(title: L10n.toolPartyData)
+                        case .myGuardian:     WorkComingSoonView(title: L10n.toolMyGuardian)
                         case .pocDebug:       POCDebugView()
                         case .newbie:         WorkComingSoonView(title: L10n.toolNewbie)
                         case .bigR:           WorkComingSoonView(title: L10n.toolBigR)
@@ -372,6 +405,8 @@ struct MainTabView: View {
                     // —— ChatMessageRow 内 NavigationLink(value: UserProfileRoute) 会走 helper 里的 UserProfileRoute case
                     .userProfileAndChatDestinations()
                     .environment(\.openUserProfile, openUserProfileAction)
+                    // 头像 tap 内置分派：非房间态 → push UserProfileRoute 跳详情页
+                    .avatarProfilePusher { uid in messagesPath.append(UserProfileRoute.userId(uid)) }
             }
             .opacity(selection == .messages ? 1 : 0)
             .allowsHitTesting(selection == .messages)
@@ -404,12 +439,29 @@ struct MainTabView: View {
                                 WishSettingView()
                             case .beautySettings:
                                 BeautySettingsView()
+                            case .giftMessage:
+                                GiftMessageView()
+                            case .profileEdit:
+                                EditProfileView(service: EditProfileService.shared)
+                            case .liveData:
+                                LiveDataView()
+                                    .environment(\.moneyBagAction, { workPath.append(WorkRoute.task) })
+                            case .task:
+                                WorkComingSoonView(title: L10n.toolTask)
+                            case .invite:
+                                WorkComingSoonView(title: L10n.toolInvite)
+                            case .pointsRank:
+                                WorkComingSoonView(title: L10n.toolPoints)
+                            case .anchorGuide:
+                                WorkComingSoonView(title: L10n.toolWorkingGuide)
+                            case .partyData:
+                                WorkComingSoonView(title: L10n.toolPartyData)
+                            case .myGuardian:
+                                WorkComingSoonView(title: L10n.toolMyGuardian)
                             case .newbie:
                                 WorkComingSoonView(title: L10n.toolNewbie)
                             case .bigR:
                                 WorkComingSoonView(title: L10n.toolBigR)
-                            case .giftMessage:
-                                GiftMessageView()
                             case .liveResult(let begin, let end, let endType):
                                 LiveResultView(range: (begin, end), endType: endType, hostPath: $workPath)
                             }
@@ -421,6 +473,8 @@ struct MainTabView: View {
                         }
                         // 详情↔聊天互跳所有 destination(UserProfileRoute + ChatFromProfileRoute) 统一注册
                         .userProfileAndChatDestinations()
+                        // 头像 tap 内置分派：非房间态 → push UserProfileRoute 跳详情页
+                        .avatarProfilePusher { uid in workPath.append(UserProfileRoute.userId(uid)) }
                 }
                 .environment(\.liveResultTransition, liveResultTransitionAction)
                 .environment(\.liveTermination, liveTerminationAction)
@@ -444,6 +498,9 @@ struct MainTabView: View {
                             case .feedback:     FeedbackView(path: $profilePath)
                             }
                         }
+                        // 详情↔聊天互跳所有 destination + 头像 tap 详情 pusher
+                        .userProfileAndChatDestinations()
+                        .avatarProfilePusher { uid in profilePath.append(UserProfileRoute.userId(uid)) }
                 }
             }
         }
@@ -477,7 +534,8 @@ struct MainTabView: View {
 
     private var tabBar: some View {
         HStack(alignment: .top, spacing: 0) {
-            ForEach(MainTab.allCases, id: \.self) { tab in
+            // P 项目权限管理：userType 命中 .party bit → 过滤掉 party tab（4 icon 变 3 icon）
+            ForEach(visibleTabs, id: \.self) { tab in
                 Button {
                     selection = tab
                 } label: {
@@ -490,6 +548,17 @@ struct MainTabView: View {
         .frame(maxWidth: .infinity)
         .frame(height: Theme.Metric.tabBarHeight)
         .background(Theme.Palette.screenBackground)
+    }
+
+    /// P 项目：按权限过滤 tab bar 可见项。userType 命中 .party bit 时 party tab 不渲染。
+    /// 若 selection == .party 时 canParty 变 false，通过 `.onChange(of: permission.canParty)` fallback（见 body modifier）。
+    private var visibleTabs: [MainTab] {
+        MainTab.allCases.filter { tab in
+            switch tab {
+            case .party: return permission.canParty
+            default:     return true
+            }
+        }
     }
 
     private func tabItem(_ tab: MainTab, isSelected: Bool) -> some View {
