@@ -41,6 +41,7 @@ struct LiveDataView: View {
         }
         .sheet(isPresented: $showRuleSheet) {
             LiveRuleSheet()
+                .giftPanelSheetBackground()
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }

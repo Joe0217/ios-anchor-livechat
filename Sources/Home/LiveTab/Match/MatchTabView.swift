@@ -60,6 +60,7 @@ struct MatchTabView: View {
         .sheet(item: $vm.presentedUser) { user in
             MatchUserCardSheet(user: user)
                 .sheetTopInset()
+                .giftPanelSheetBackground()
                 .presentationDetents([.medium])
         }
         .preferredColorScheme(.dark)

@@ -46,6 +46,7 @@ struct ChatDetailBottomSheet: ViewModifier {
             selfYxAccId: selfYxAccId,
             onClose: { peerYxAccId = nil }
         )
+        .giftPanelSheetBackground()
         .presentationDetents([.fraction(0.4)])
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(false)

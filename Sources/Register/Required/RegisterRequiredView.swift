@@ -86,11 +86,13 @@ struct RegisterRequiredView: View {
         }
         .sheet(isPresented: $showLanguagePicker) {
             LanguagePickerSheet(isPresented: $showLanguagePicker, selected: $store.languages)
+                .giftPanelSheetBackground()
         }
         .sheet(isPresented: $showVideoGuide) {
             VideoGuideSheet(isPresented: $showVideoGuide) {
                 pathHolder.path.append(RegisterRoute.videoRecord)
             }
+            .giftPanelSheetBackground()
         }
     }
 

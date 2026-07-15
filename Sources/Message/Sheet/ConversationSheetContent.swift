@@ -48,7 +48,6 @@ struct ConversationSheetContent: View {
             header
             content
         }
-        .background(Color(hex: 0x0A0018))
         // 半屏私聊叠加（对齐 H5 talkPopup 覆盖 messagePopup）—— 私聊 back 点击 = selectedChatPeer = nil，
         // 半屏消息列表保持可见（不关闭），符合用户"back 返回列表"预期
         .sheet(item: $selectedChatPeer, onDismiss: { chatSheetDetent = .medium }) { peer in
@@ -58,6 +57,7 @@ struct ConversationSheetContent: View {
                 onClose: { selectedChatPeer = nil },
                 sheetDetent: $chatSheetDetent
             )
+            .giftPanelSheetBackground()
             .presentationDetents([.medium, .large], selection: $chatSheetDetent)
             .presentationDragIndicator(.visible)
         }

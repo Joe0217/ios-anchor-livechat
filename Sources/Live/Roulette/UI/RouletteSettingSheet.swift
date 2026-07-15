@@ -41,7 +41,6 @@ struct RouletteSettingSheet: View {
 
     var body: some View {
         ZStack {
-            Color(hex: 0x242221).ignoresSafeArea()
             content
             toastOverlay
         }
@@ -52,6 +51,7 @@ struct RouletteSettingSheet: View {
         }
         .sheet(isPresented: $showEditSheet) {
             RouletteEditSheet(store: store, isPresented: $showEditSheet)
+                .giftPanelSheetBackground()
                 .presentationDetents([.fraction(0.5), .fraction(0.8)])
                 .presentationDragIndicator(.visible)
         }

@@ -66,7 +66,7 @@ struct WishSettingView: View {
             .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $store.showRuleDoc) {
-            ruleDocSheet
+            ruleDocSheet.giftPanelSheetBackground()
         }
         .alert(L10n.wishSettingSubmittedForReview, isPresented: $store.showSubmitSuccessAlert) {
             Button(L10n.giftPickerConfirm, role: .cancel) { }

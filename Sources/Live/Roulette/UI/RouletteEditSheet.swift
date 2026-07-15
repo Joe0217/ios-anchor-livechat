@@ -22,7 +22,6 @@ struct RouletteEditSheet: View {
             header
             content
         }
-        .background(Color(hex: 0x242221).ignoresSafeArea())
     }
 
     private var header: some View {

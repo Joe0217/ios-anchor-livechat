@@ -189,6 +189,7 @@ struct LiveRoomView: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $showBeauty) {
             beautyPanel
+                .giftPanelSheetBackground()
                 .presentationDetents([.fraction(0.4)])
                 .presentationDragIndicator(.visible)
         }
@@ -257,12 +258,12 @@ struct LiveRoomView: View {
         // - matching → idle/failed：视为匹配失败，自动挂载 MatchFailed（对齐 H5 pkMatchFailedPopup）
         .onChange(of: pkStore.state, perform: handlePKStateChange)
         // v17 设置弹窗改 Bottom Sheet + 3 列 Grid（对齐 H5 liveSettingPopup.vue）
-        .sheet(isPresented: $showSettingSheet) { settingSheetContent }
+        .sheet(isPresented: $showSettingSheet) { settingSheetContent.giftPanelSheetBackground() }
         // 直播间半屏消息列表（对齐 H5 messagePopup 408pt） —— 底部工具栏消息按钮触发；
         // 直播 RTC 全程不中断（sheet 保留底层可见，@StateObject camera/agora 生命周期独立）。
         // **半屏私聊 sheet 挂在 ConversationSheetContent 内部**（sheet-over-sheet），此层只管消息列表。
         // SwiftUI 同一 view 挂多个平行 sheet 同一时刻只显示一个，会出现"点会话 → 消息列表关闭后才显示私聊"的错觉。
-        .sheet(isPresented: $showMessageSheet) { messageSheetContent }
+        .sheet(isPresented: $showMessageSheet) { messageSheetContent.giftPanelSheetBackground() }
         // v23（2026-07-13）body-split 重构清理：以下 tail modifier chain（alerts / handleMainOnAppear /
         // handleOnDisappear / overlays / giftEffectScene / enterEffectScene）已在 body L137-159 挂载。
         // stage1 内不再重复挂载 —— 之前重复导致 handleMainOnAppear/handleOnDisappear 每次进直播房**双 fire**

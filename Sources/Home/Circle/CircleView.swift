@@ -85,6 +85,7 @@ struct CircleView: View {
         // 发布 sheet：默认 runtime 工厂注入 PostPublishService / OssCredentialService / OssUploadService
         .sheet(isPresented: $showPublishSheet) {
             PostPublishView(viewModel: PostPublishViewModel.makeRuntime())
+                .giftPanelSheetBackground()
         }
         // 图片/视频大图预览（统一挂在容器层——见 mediaPreview 定义处说明）
         .fullScreenCover(item: $mediaPreview) { ctx in

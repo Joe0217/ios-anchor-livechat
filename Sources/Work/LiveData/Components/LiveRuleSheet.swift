@@ -29,7 +29,6 @@ struct LiveRuleSheet: View {
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .background(Color(hex: 0x0B0010))
             .navigationTitle(L10n.liveDataRuleNavTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color(hex: 0x0B0010), for: .navigationBar)

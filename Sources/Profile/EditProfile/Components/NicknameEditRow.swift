@@ -85,7 +85,6 @@ struct NicknameEditSheet: View {
                 Spacer()
             }
             .padding(16)
-            .background(Theme.Palette.screenBackground.ignoresSafeArea())
             .navigationTitle(L10n.EditProfile.nicknameEditTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

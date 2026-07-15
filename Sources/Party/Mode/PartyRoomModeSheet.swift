@@ -35,7 +35,6 @@ struct PartyRoomModeSheet: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Theme.Palette.partyListBackground.ignoresSafeArea()
             VStack(spacing: 16) {
                 Text(L10n.Party.roomModeSheetTitle)
                     .font(.system(size: 17, weight: .semibold))

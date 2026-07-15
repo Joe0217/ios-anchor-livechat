@@ -56,7 +56,6 @@ struct MatchRulePopup: View {
             .padding(.bottom, 32)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Theme.Palette.screenBackground.ignoresSafeArea())
         .preferredColorScheme(.dark)
         .onAppear { startCountdown() }
         .onDisappear { timerTask?.cancel() }

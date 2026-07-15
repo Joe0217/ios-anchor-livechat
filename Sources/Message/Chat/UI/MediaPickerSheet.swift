@@ -38,7 +38,6 @@ struct MediaPickerSheet: View {
                 .padding(.bottom, 10)
         }
         .frame(height: 280)
-        .background(ChatPalette.navGradient)
         .task {
             // 8s 兜底：AnchorInfoStore.mine 永久 nil（接口失败 / 未触发）时不永久转圈
             try? await Task.sleep(nanoseconds: 8_000_000_000)

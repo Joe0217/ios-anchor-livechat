@@ -12,7 +12,6 @@ struct PartyRoomModeConfirmSheet: View {
 
     var body: some View {
         ZStack {
-            Theme.Palette.partyListBackground.ignoresSafeArea()
             VStack(spacing: 16) {
                 Text(L10n.Party.roomModeConfirmTitle)
                     .font(.system(size: 17, weight: .semibold))

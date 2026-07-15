@@ -45,6 +45,7 @@ struct CGoMatchButton: View {
                     store.markRuleAgreedToday()
                     Task { @MainActor in await store.openMatch() }
                 })
+                .giftPanelSheetBackground()
                 .interactiveDismissDisabled(true)
             }
         }

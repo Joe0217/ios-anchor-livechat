@@ -107,6 +107,7 @@ struct TopSheetsModifier: ViewModifier {
                                      isPresented: $showRouletteSetting,
                                      onEnabledChanged: onRouletteEnabledChanged,
                                      onToast: onRouletteToast)
+                    .giftPanelSheetBackground()
                     .presentationDetents([.fraction(0.65)])
                     .presentationDragIndicator(.visible)
             }

@@ -14,7 +14,6 @@ struct PartyMicApplicationSwitchConfirmSheet: View {
 
     var body: some View {
         ZStack {
-            Theme.Palette.partyListBackground.ignoresSafeArea()
             VStack(spacing: 16) {
                 Text(enable
                      ? L10n.Party.micApplicationSwitchOnTitle

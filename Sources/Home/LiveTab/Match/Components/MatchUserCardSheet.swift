@@ -56,7 +56,6 @@ struct MatchUserCardSheet: View {
             .padding(.bottom, 24)
         }
         .frame(maxWidth: .infinity)
-        .background(Theme.Palette.screenBackground)
         .preferredColorScheme(.dark)
     }
 }

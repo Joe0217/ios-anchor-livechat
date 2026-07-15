@@ -28,13 +28,6 @@ struct LiveSettingBottomSheet: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity)
-        .background(
-            LinearGradient(
-                colors: [Color(hex: 0x17175A), Color(hex: 0x1D0E4C), Color(hex: 0x130A2A)],
-                startPoint: .topTrailing, endPoint: .bottomLeading
-            )
-            .ignoresSafeArea()
-        )
     }
 
     // v20: header (title + X) 已移除，关闭走系统下拉手势

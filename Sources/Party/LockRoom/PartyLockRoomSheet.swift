@@ -35,8 +35,6 @@ struct PartyLockRoomSheet: View {
 
     var body: some View {
         ZStack {
-            Theme.Palette.partyListBackground.ignoresSafeArea()
-
             VStack(spacing: 14) {
                 Text(L10n.Party.lockRoomSheetTitle)
                     .font(.system(size: 17, weight: .semibold))

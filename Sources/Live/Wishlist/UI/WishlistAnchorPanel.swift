@@ -38,7 +38,6 @@ struct WishlistAnchorPanel: View {
                 .padding(.top, 12)
             }
         }
-        .background(Color(hex: 0x1A0033).ignoresSafeArea())
         .onAppear { store.onPanelAppear(liveRecordId: liveRecordId) }
         .onDisappear { store.onPanelDisappear() }
     }

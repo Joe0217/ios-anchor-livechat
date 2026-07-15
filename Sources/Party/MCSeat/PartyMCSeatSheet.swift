@@ -22,7 +22,6 @@ struct PartyMCSeatSheet: View {
 
     var body: some View {
         ZStack {
-            Theme.Palette.partyListBackground.ignoresSafeArea()
             VStack(spacing: 0) {
                 header
                 contentArea

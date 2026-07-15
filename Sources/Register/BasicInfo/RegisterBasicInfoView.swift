@@ -57,12 +57,14 @@ struct RegisterBasicInfoView: View {
         }
         .sheet(isPresented: $showBirthdayPicker) {
             BirthdayPickerSheet(isPresented: $showBirthdayPicker, birthday: $store.birthday)
+                .giftPanelSheetBackground()
         }
         .sheet(isPresented: $showCountryPicker) {
             CountryPickerSheet(isPresented: $showCountryPicker) { country in
                 store.countryCode = country.locale
                 store.countryName = country.en
             }
+            .giftPanelSheetBackground()
         }
     }
 
