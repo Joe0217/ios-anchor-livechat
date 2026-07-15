@@ -86,7 +86,6 @@ struct PartyCreateRoomView: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .task { await store.loadInitial() }
         .sheet(isPresented: $showModePicker) {
-            // v7.9 用户明示：高度锁 80%
             PartyCreateModePickerSheet(store: store) { showModePicker = false }
                 .presentationDetents([.fraction(0.8)])
         }
@@ -95,7 +94,6 @@ struct PartyCreateRoomView: View {
                 .presentationDetents([.medium])
         }
         .sheet(isPresented: $showBackgroundPicker) {
-            // v7.9 用户明示：高度锁 80%
             PartyCreateBackgroundPickerSheet(store: store) { showBackgroundPicker = false }
                 .presentationDetents([.fraction(0.8)])
         }
@@ -105,7 +103,7 @@ struct PartyCreateRoomView: View {
                 onCreated(id)
             }
         }
-        // v7.1 gap 2: submitError toast overlay（对齐安卓失败 toast，用户看不到错误原因 → 现补 UI）
+        // submitError toast overlay（对齐安卓失败 toast，让用户看到错误原因）
         .overlay(alignment: .top) {
             if !store.submitError.isEmpty {
                 Text(store.submitError)
@@ -328,7 +326,7 @@ struct PartyCreateRoomView: View {
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Theme.Palette.partyCreateChevron)
                     }
-                    // 已选模板 preview（v7.3：改 height=100pt 固定，宽度由 image 内在 aspect ratio 自适应）
+                    // 已选模板 preview：高度锁 100pt，宽度由 image 内在 aspect ratio 自适应
                     if let temp = store.selectedTemplate {
                         Divider().background(Theme.Palette.partyCardBorder)
                         HStack {
@@ -360,7 +358,7 @@ struct PartyCreateRoomView: View {
 
     private var createButton: some View {
         VStack(spacing: 8) {
-            // v7.2 真机反悔：canSubmit=false 时展示缺失字段提示，帮用户定位（原按钮 disable 无反馈）
+            // canSubmit=false 时展示缺失字段提示，帮用户定位（disable 按钮本身无反馈）
             if let hint = store.missingFieldHint {
                 Text(hint)
                     .font(.system(size: 12))
@@ -413,8 +411,8 @@ struct PartyCreateRoomView: View {
         }
     }
 
-    /// 模板缩略图：优先服务端 imgUrl（coverImage）；否则按 videoSeatCount / seatCount 选切图
-    /// v7.3：调用点用 `.frame(height: 100).fixedSize(horizontal: true, vertical: false)` 组合让
+    /// 模板缩略图：优先服务端 imgUrl（coverImage）；否则按 videoSeatCount / seatCount 选切图。
+    /// 调用点用 `.frame(height: 100).fixedSize(horizontal: true, vertical: false)` 组合让
     /// 宽度按 image aspect ratio 自适应；CachedAsyncImage 分支必须 `contentMode: .fit` 否则
     /// 加载中 placeholder 无 intrinsic width，`fixedSize(horizontal: true)` 会 collapse 到 0
     @ViewBuilder
@@ -532,7 +530,7 @@ struct PartyCreateModePickerSheet: View {
                 .padding(.top, 40)
         } else {
             ScrollView {
-                // v7.8：spacing 12→20（用户明示"间距加多"）；列 GridItem 也加 spacing:20 让水平/垂直一致
+                // LazyVGrid vertical spacing + 每列 GridItem 的 spacing 都要设，水平/垂直间距才对称
                 LazyVGrid(
                     columns: [GridItem(.flexible(), spacing: 20), GridItem(.flexible(), spacing: 20)],
                     spacing: 20
@@ -548,9 +546,8 @@ struct PartyCreateModePickerSheet: View {
     }
 
     private func templateCard(_ temp: PartyRoomTemplate) -> some View {
-        // v6：对齐安卓无等级门槛，全部模板都可选；去除 lock/unlock label + 锁 icon + opacity
-        // v7.2 真机反悔：图片渲染改三层 fallback（coverImage URL → asset name → placeholder），
-        // 防 videoSeatCount/seatCount 不在 asset 集合时 card 全空
+        // 对齐安卓无等级门槛，全部模板都可选；图片三层 fallback（coverImage URL → asset name →
+        // SF Symbol placeholder）防 videoSeatCount/seatCount 不在 asset 集合时 card 全空
         let selected = store.selectedTemplate?.id == temp.id
         return Button {
             store.selectTemplate(temp)
@@ -579,8 +576,8 @@ struct PartyCreateModePickerSheet: View {
                         .padding(6)
                 }
             }
-            // v7.7：固定 grid item 高度 140pt（对齐用户"固定大小"要求）—— aspectRatio(.fit) 在
-            // LazyVGrid flex column 里会让高度崩塌到 0 造成堆叠；改为 flex 宽 + fixed height
+            // grid item 固定 height —— aspectRatio(.fit) 在 LazyVGrid flex column 里高度会
+            // 崩塌到 0（fit 语义"不超过 parent"，parent 无高度约束时取 0）造成 card 堆叠
             .frame(maxWidth: .infinity)
             .frame(height: 140)
             .padding(8)
@@ -669,7 +666,7 @@ struct PartyCreateBackgroundPickerSheet: View {
     @ObservedObject var store: PartyCreateStore
     var onConfirm: () -> Void
 
-    // v7.8：spacing 10→14（加大间距），列 GridItem 也 spacing:14 让水平/垂直一致
+    // LazyVGrid vertical spacing + 每列 GridItem 的 spacing 都要设，水平/垂直间距才对称
     private let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 14), count: 3)
 
     var body: some View {
@@ -715,10 +712,10 @@ struct PartyCreateBackgroundPickerSheet: View {
         return Button {
             store.selectedBackground = bg
         } label: {
-            // v7.13：用 GeometryReader 拿 card 精确宽×高 → image explicit frame(w:h:) +
-            // clipped() 硬矩形裁剪，image aspectRatio(.fill) 有确定 target 才能正确 fill；
-            // 之前 v7.9/v7.10/v7.12 三次尝试均因 frame(maxW/H: .infinity) 无确定尺寸 →
-            // aspectRatio 计算无参考 → 视觉溢出或 layout 崩坏。
+            // 用 GeometryReader 拿 card 精确宽×高传给 image explicit frame(w:h:)。
+            // 关键坑：SwiftUI Image `.aspectRatio(.fill)` 需要 explicit width×height 才能
+            // 计算 target；用 `frame(maxW/H: .infinity)` 会让 aspectRatio 无参考 →
+            // 视觉溢出或 layout 崩坏。clipped() 硬矩形 clip layout + 视觉不传播。
             GeometryReader { geo in
                 ZStack(alignment: .topTrailing) {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
