@@ -28,7 +28,12 @@ struct PartyRoomView: View {
     /// 必须双守卫防误退房。
     @Environment(\.scenePhase) private var scenePhase
 
+    /// v16.10：内嵌 TextField 文本 state（对齐 LiveRoomView `inputText`）
     @State private var inputText: String = ""
+    /// v16.10：输入框 focus state 桥（focused 时 PartyRoomInputBar 收起右侧按钮，TextField 占满宽度）
+    @FocusState private var isInputFocused: Bool
+    /// v16.11：键盘高度（`UIResponder.keyboardWillShow/Hide` 订阅）—— inputBar 手动 padding 上移
+    @State private var keyboardHeight: CGFloat = 0
     @State private var showSelfActions: Bool = false
     @State private var showError: Bool = false
     @State private var didStartEnter: Bool = false
@@ -69,10 +74,6 @@ struct PartyRoomView: View {
     @State private var showGiftPanel: Bool = false
     /// H-5：送礼成功 toast（sheet 内触发；主 body overlay 显示避免被 sheet 遮挡）
     @State private var giftSentToast: String? = nil
-    /// v16 键盘避让：整个 stageContent `.ignoresSafeArea(.keyboard)` 阻止 SwiftUI 默认键盘避让，
-    /// 单独订阅 `UIResponder.keyboardWillShow/Hide` 让 inputBar 手动 `.padding(.bottom, keyboardHeight)` 上移。
-    @State private var keyboardHeight: CGFloat = 0
-
     // MARK: - 顶层 body
 
     var body: some View {
@@ -81,6 +82,10 @@ struct PartyRoomView: View {
             // v23（2026-07-13）派对房进场特效：与 giftEffectScene 并列驱动 EnterEffectCenter
             // scopeId 同源用 roomInfo?.id（与 PartyStore.didReceiveEnterAnimation 内 EnterEffectCenter.enqueue 的 scopeId 强对齐）
             .enterEffectScene(.party, scopeId: store.roomInfo?.id ?? roomId)
+            // v16.14：不再挂 .ignoresSafeArea(.keyboard) —— 换新架构：
+            // inputBar 从 contentColumn VStack 拆出到 stageContent ZStack 作独立 sibling（alignment: .bottom），
+            // contentColumn 挂 .ignoresSafeArea(.keyboard) 阻止避让。SwiftUI 默认避让只作用于 inputBar 层，
+            // 自动上移到键盘顶部 0 空隙（Workflow 3 agent 一致诊断结论）。
     }
 
     /// 拆两层规避 SwiftUI type-check timeout（[swiftui-body-type-check-timeout] rule）：
@@ -91,11 +96,11 @@ struct PartyRoomView: View {
             // 保留 navigationBarBackButtonHidden 副作用禁 interactive pop（对齐 [default-swipe-back-on-push-pages] 业务态防误退例外）。
             .navigationBarBackButtonHidden(true)
             .toolbar(.hidden, for: .navigationBar)
-            .sheet(isPresented: $showSettings) { settingsSheet }
-            .sheet(isPresented: $showAnnouncement) { announcementSheet }
+            .sheet(isPresented: $showSettings) { settingsSheet.giftPanelSheetBackground() }
+            .sheet(isPresented: $showAnnouncement) { announcementSheet.giftPanelSheetBackground() }
             // v8.1 房间工具 sheet（单一挂点，enum 切换 tools / settings 内嵌 push）
             .sheet(item: $activeRoomTool) { kind in
-                roomToolContent(kind: kind)
+                roomToolContent(kind: kind).giftPanelSheetBackground()
             }
             // H-5：底部礼物 icon → CommonGiftPanel sheet（对齐 H5 party-gift-popup.vue）
             .sheet(isPresented: $showGiftPanel) { giftPanelSheet }
@@ -152,6 +157,8 @@ struct PartyRoomView: View {
                     set: { userCardForUserId = $0?.userId }
                 )
             )
+            // 头像 tap 内置分派：party 房中 → 弹名片卡（走 userCardForUserId binding）
+            .avatarUserCardPresenter { uid in userCardForUserId = uid }
             // v15：已在麦位点空位 → 切麦确认（对齐 H5 EnterSwitchPopup）
             .confirmationDialog(
                 L10n.PartyRoom.switchSeatTitle,
@@ -176,7 +183,14 @@ struct PartyRoomView: View {
             ) {
                 otherSeatAdminActionsButtons
             }
-            // v16 键盘监听：inputBar 手动上移（stageContent 挂了 .ignoresSafeArea(.keyboard) 阻止默认避让）
+            // v16.10：TapGesture 让点击外部区域收起键盘（对齐 LiveRoomView L459）。
+            // TapGesture 与 Button/DragGesture 不同类别，不会挡住 seat/toolbar 按钮点击。
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    if isInputFocused { isInputFocused = false }
+                }
+            )
+            // v16.11：键盘 notification 订阅，同步 keyboardHeight 让 inputBar 上移
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
                 guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
                 let duration = (notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
@@ -206,10 +220,6 @@ struct PartyRoomView: View {
             }
         }
         .ignoresSafeArea(.container, edges: .horizontal)
-        // v16 修复键盘拉起时背景变形：整个 ZStack 完全忽略键盘 safe area，
-        // 让 backgroundLayer / contentColumn / seatGrid 全部保持屏幕原尺寸不变形。
-        // inputBar 内部通过 keyboardHeight @State + `.padding(.bottom, keyboardHeight)` 手动上移避键盘。
-        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 
     /// 进房 loading：半透黑底 + ProgressView + 文案（对齐 PartySearchView loadingOverlay 模式）
@@ -228,45 +238,39 @@ struct PartyRoomView: View {
 
     /// 背景层：房主自定义大图（bigImgUrl 优先）→ H5 DEFAULT_BG 兜底 → partyRoomBg asset placeholder。
     ///
-    /// **v16.3 真根因修复**：CachedAsyncImage 加载完的 `Image(uiImage:).aspectRatio(.fill)` **没 frame 约束时**
-    /// 会按图片 intrinsic size 显示（网络图 1080×2340pt 巨大）→ 溢出屏幕视觉变大。必须外挂：
-    /// `.frame(maxWidth: .infinity, maxHeight: .infinity) + .clipped()` 显式约束到屏幕大小。
+    /// **v17 移除静态降级**：直接把 bigImgUrl 按 URL 后缀分流给三种渲染器（image/mp4/svga），
+    /// 与 H5 `room-bg.vue` `bgType` 逻辑一致；`imgUrl` 缩略图退化为**动态资源加载中的 placeholder**
+    /// 覆盖层，就绪后透明度过渡消失（对齐 H5 `showPlaceholder` + `<Transition name="bg-placeholder">`）。
     ///
-    /// **v16 对齐 H5 `room-bg.vue`**：
-    /// - `bigImgUrl` 优先（`partyStore.currentPartyInfo?.bigImgUrl || bgImgUrl`）
-    /// - 未设房间背景时走 H5 `DEFAULT_BG = 'https://img.hnhily.link/mstatic/party/bg_party.png'`
-    /// - CachedAsyncImage placeholder 用本地 asset，网络加载完前显示避免白屏
+    /// **v16.3 真根因修复保留**：静态图路径下 CachedAsyncImage 需显式 `.frame + .clipped()` 约束到屏幕大小。
+    /// **v16.7 保留**：UIScreen.main.bounds 锁定物理屏幕尺寸不受键盘避让影响。
     private var backgroundLayer: some View {
-        // v16.4 URL 优先级（真根因修复）：
-        // 1. `currentRoomBackground.bigImgUrl` —— 独立 `getRoomBgImage` 接口拉的房主已设背景（**主要来源**）
-        // 2. `currentRoomBackground.imgUrl` —— 缩略图兜底
-        // 3. `roomInfo.bigImgUrl` / `bgImgUrl` —— enterRoom response 兜底（dev 实测通常 null）
-        // 4. H5 `DEFAULT_BG` —— 未设背景时的通用默认图
-        let bgURLStr = store.currentRoomBackground?.bigImgUrl
-            ?? store.currentRoomBackground?.imgUrl
-            ?? store.roomInfo?.bigImgUrl
-            ?? store.roomInfo?.bgImgUrl
-            ?? "https://img.hnhily.link/mstatic/party/bg_party.png"
+        let bg = store.currentRoomBackground
+        let bigURL = firstNonEmpty(bg?.bigImgUrl, store.roomInfo?.bigImgUrl)
+        let placeholderURL = firstNonEmpty(bg?.imgUrl, store.roomInfo?.bgImgUrl)
+        let screenSize = UIScreen.main.bounds.size
         return ZStack {
-            CachedAsyncImage(url: URL(string: bgURLStr), contentMode: .fill, persistent: true) {
-                Image("partyRoomBg")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .clipped()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .clipped()
+            PartyRoomBackgroundView(
+                bigImgURL: bigURL,
+                placeholderURL: placeholderURL,
+                size: screenSize
+            )
             .ignoresSafeArea()
-            .onAppear {
-                AppLogger.party.info("[PartyRoom] bg URL=\(bgURLStr, privacy: .public)")
-            }
+
             Theme.Palette.partyRoomOverlay
+                .frame(width: screenSize.width, height: screenSize.height)
                 .ignoresSafeArea()
         }
+        .frame(width: screenSize.width, height: screenSize.height)
     }
 
-    /// 内容层
+    private func firstNonEmpty(_ a: String?, _ b: String?) -> String? {
+        if let a, !a.isEmpty { return a }
+        if let b, !b.isEmpty { return b }
+        return nil
+    }
+
+    /// 内容层（v16.11 版本）
     private var contentColumn: some View {
         VStack(spacing: 0) {
             anchorBar
@@ -279,6 +283,8 @@ struct PartyRoomView: View {
             Spacer(minLength: 0)
             inputBar
         }
+        // v16.11：contentColumn 层阻止 SwiftUI 默认键盘避让
+        .ignoresSafeArea(.keyboard, edges: .bottom)
     }
 
     // MARK: - 顶部主播条
@@ -448,6 +454,46 @@ struct PartyRoomView: View {
             lastGiftEvent: store.lastGiftEvent
         )
         .padding(.top, 6)
+        // F-spec 派对房私 call 浮动开关按钮（房主 only；roomInfo 已加载才判定角色，未加载时兜底显示防误隐）
+        .overlay(alignment: .topTrailing) {
+            if shouldShowPrivateCallButton {
+                PartyRoomPrivateCallButton(
+                    isOn: privateCallOn,
+                    onToggle: handlePartyCallToggle
+                )
+                .padding(.trailing, 12)
+                .padding(.top, 4)
+            }
+        }
+    }
+
+    /// 房主可见 + roomInfo 未加载完（selfRole 恒 .audience）时兜底显示，防止用户以为按钮被 guard 隐藏
+    private var shouldShowPrivateCallButton: Bool {
+        // 若 roomInfo 尚未加载 → 兜底显示（roomInfo 到达后 selfRole 精确判定）
+        guard store.roomInfo != nil else { return true }
+        return store.selfRole == .owner
+    }
+
+    // MARK: - F-spec 派对房私 call
+
+    /// 派生态：从 `store.roomInfo.partyPrivateCallOpen` 单向流动（1029 广播 / setPrivateCall API 成功后回写自动同步）
+    private var privateCallOn: Bool {
+        store.roomInfo?.isPartyPrivateCallEnabled == true
+    }
+
+    /// 浮动按钮 tap handler：
+    /// - 关 → 开：拉起 `CommonGiftPanel.callGate` 让房主选礼物；confirm 后才 API set enable=1
+    /// - 开 → 关：直接 `PartyStore.setPrivateCall(enable: false)`（视觉切换由 store 回写驱动）
+    private func handlePartyCallToggle(_ next: Bool) {
+        if next {
+            Task { @MainActor in
+                activeRoomTool = nil
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                activeRoomTool = .privateCall
+            }
+        } else {
+            Task { await store.setPrivateCall(enable: false, giftId: nil) }
+        }
     }
 
     // MARK: - 底部输入 + 工具栏
@@ -462,6 +508,8 @@ struct PartyRoomView: View {
             showGameButton: false,
             // v12：消息未读徽章（对齐 H5 useUnreadMessageCount + van-badge）
             unreadCount: unreadBridge.totalUnread,
+            // v16.10：focus 桥（focused 时收起右侧按钮，对齐 LiveRoomView pattern）
+            focus: $isInputFocused,
             onSubmit: sendText,
             onEmojiTap: handleEmojiTap,
             onMessageTap: handleMessageTap,
@@ -470,14 +518,14 @@ struct PartyRoomView: View {
             onToolMenuTap: handleToolMenuTap,
             onGiftTap: handleGiftTap
         )
-        // v2：下内边距 +12pt（原 8 → 20），让按钮行距 home indicator 更宽松呼吸位
-        // padding 挂在 .background 之前，背景 frame 仍覆盖含 padding 区域并继续 ignoresSafeArea 延伸到物理底
+        // v2：下内边距 20pt 让按钮行距 home indicator 更宽松呼吸位
         .padding(.bottom, 20)
         .background(
             Rectangle().fill(Color.black.opacity(0.15))
                 .ignoresSafeArea(edges: .bottom)
         )
-        // v16 键盘弹起时 inputBar 手动上移（stageContent 已 `.ignoresSafeArea(.keyboard)` 阻止默认避让）
+        // v16.11：键盘弹起时手动上移到键盘顶（配合 contentColumn `.ignoresSafeArea(.keyboard)` 使用）。
+        // 背景层已用 UIScreen.main.bounds 绝对锁定（v16.7），padding 触发的 layout 重算不影响背景视觉。
         .padding(.bottom, keyboardHeight)
     }
 
@@ -730,8 +778,10 @@ struct PartyRoomView: View {
         Button(L10n.Party.cancel, role: .cancel) { otherSeatAdminActionsTarget = nil }
     }
 
-    // MARK: - 发送公屏 / demo 送礼
+    // MARK: - 发送公屏
 
+    /// v16.10：内嵌 TextField 发送（对齐 LiveRoomView L400+ onSend）
+    /// 成功后清空 inputText + 主动失焦收起键盘（LiveRoomView L417 `inputText = ""` 后键盘继续保持，Party 也保持同款）
     private func sendText() {
         let txt = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !txt.isEmpty, store.roomState == .joined else { return }
@@ -842,14 +892,6 @@ struct PartyRoomView: View {
                         activeRoomTool = nil
                         try? await Task.sleep(nanoseconds: 350_000_000)
                         activeRoomTool = .mcSeat
-                    }
-                },
-                onTapPrivateCall: {
-                    // F-spec §5.3 Party Call：关 tools sheet + 350ms 后打开 PartyPrivateCallSettingSheet
-                    Task { @MainActor in
-                        activeRoomTool = nil
-                        try? await Task.sleep(nanoseconds: 350_000_000)
-                        activeRoomTool = .privateCall
                     }
                 },
                 onTapStub: { label in
@@ -989,10 +1031,26 @@ struct PartyRoomView: View {
                 .presentationDetents([.medium, .large])
                 .preferredColorScheme(.dark)
         case .privateCall:
-            // F-spec §5.1 房主私 call 设置 sheet（Toggle + Gift Grid + optimistic UI）
-            PartyPrivateCallSettingSheet(roomInfo: store.roomInfo)
-                .presentationDetents([.medium, .large])
-                .preferredColorScheme(.dark)
+            // F-spec §5.1 v2：房主开开关时拉直播设置同款礼物面板（CommonGiftPanel.callGate + 蓝钻）
+            // 用户 confirm 选中礼物 → 调 PartyAPI.updatePartyPrivateCall(enable=1, giftId) → 关 sheet
+            // 用户 confirm 但 gift=nil → 视为放弃，不 API，仅关 sheet（对齐 callGate "移除" 语义）
+            CommonGiftPanel(config: .callGate(
+                minPrice: 0,
+                initialSelection: nil,
+                onConfirm: { [store] gift in
+                    if let gift {
+                        Task { @MainActor in
+                            await store.setPrivateCall(enable: true, giftId: String(gift.id))
+                            activeRoomTool = nil
+                        }
+                    } else {
+                        activeRoomTool = nil
+                    }
+                },
+                useBlueDiamond: true
+            ))
+            .presentationDetents([.medium, .large])
+            .preferredColorScheme(.dark)
         }
     }
 
@@ -1157,7 +1215,7 @@ struct PartyRoomView: View {
     /// 避免 modifier chain 累加触发 SwiftUI type-check timeout（rule swiftui-body-type-check-timeout §4）
     private var stageContentWithFooterOverlays: some View {
         stageContent
-            .sheet(isPresented: $showMessageSheet) { messageSheetContent }
+            .sheet(isPresented: $showMessageSheet) { messageSheetContent.giftPanelSheetBackground() }
             .confirmationDialog(L10n.PartyRoom.toolMenuTitle,
                                 isPresented: $showToolMenu,
                                 titleVisibility: .visible) { toolMenuButtons }
@@ -1193,5 +1251,114 @@ struct PartyRoomView: View {
             AppLogger.party.notice("[PartyRoom] toolMenu.roomMute tapped (TODO F)")
         }
         Button(L10n.Party.cancel, role: .cancel) {}
+    }
+}
+
+// MARK: - PartyRoomBackgroundView
+
+/// 派对房背景渲染器（v17 对齐 H5 `room-bg.vue` 三分支）。
+///
+/// **URL 分流**：
+/// - 结尾 `.svga` → `RemoteSVGAImageView`（loops=0 无限循环，scaleAspectFill）
+/// - 结尾 `.mp4` → `LoopingVideoView`（AVQueuePlayer + AVPlayerLooper，resizeAspectFill，muted）
+/// - 其他 → `CachedAsyncImage`（静态图，等比填充 + clipped）
+///
+/// **动态资源 placeholder 层**：动图/视频加载期间显示 `placeholderURL`（后端 imgUrl 缩略图恒静态），
+/// 就绪后 0.3s opacity 渐隐 —— 完全对齐 H5 `<Transition name="bg-placeholder">` 0.3s ease。
+/// 视觉效果：先看到静态缩略图 → 动图/视频首帧就绪后平滑淡出让位给动态内容，避免白屏。
+///
+/// **URL 变更处理**：`.onChange(of: effectiveURL)` reset `dynamicReady` → placeholder 重新覆盖 →
+/// 底层 `LoopingVideoView` / `RemoteSVGAImageView` 通过 updateUIView 内部 URL diff 换 asset。
+///
+/// **失败兜底**：动图/视频加载失败时 `dynamicReady` 保持 false → placeholder 常驻，
+/// 用户视觉等同于静态图，符合 H5 fallback 精神。
+private struct PartyRoomBackgroundView: View {
+    let bigImgURL: String?
+    let placeholderURL: String?
+    let size: CGSize
+
+    /// H5 `DEFAULT_BG`（`room-bg.vue:17`）。bigImgUrl / placeholderURL 都空时最终兜底。
+    private static let defaultBG = "https://img.hnhily.link/mstatic/party/bg_party.png"
+
+    @State private var dynamicReady = false
+
+    private var effectiveURL: String {
+        if let s = bigImgURL, !s.isEmpty { return s }
+        if let s = placeholderURL, !s.isEmpty { return s }
+        return Self.defaultBG
+    }
+
+    private var effectivePlaceholder: String {
+        if let s = placeholderURL, !s.isEmpty { return s }
+        return Self.defaultBG
+    }
+
+    var body: some View {
+        let url = effectiveURL
+        let type = Self.bgType(url)
+        return ZStack {
+            mainContent(type: type, url: url)
+
+            // 动态资源加载中的静态覆盖（就绪后 0.3s opacity 淡出）
+            if type != .image, !dynamicReady {
+                staticImageView(urlStr: effectivePlaceholder)
+                    .transition(.opacity)
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .animation(.easeOut(duration: 0.3), value: dynamicReady)
+        .onAppear {
+            AppLogger.party.info("[PartyRoom] bg url=\(url, privacy: .public) type=\(String(describing: type), privacy: .public)")
+        }
+        .onChange(of: url) { _ in
+            dynamicReady = false
+        }
+    }
+
+    @ViewBuilder
+    private func mainContent(type: BgType, url: String) -> some View {
+        switch type {
+        case .image:
+            staticImageView(urlStr: url)
+        case .svga:
+            RemoteSVGAImageView(
+                url: URL(string: url),
+                loops: 0,
+                contentMode: .scaleAspectFill,
+                onFirstPlay: { dynamicReady = true }
+            )
+            .frame(width: size.width, height: size.height)
+            .clipped()
+        case .mp4:
+            LoopingVideoView(url: URL(string: url)) {
+                dynamicReady = true
+            }
+            .frame(width: size.width, height: size.height)
+            .clipped()
+        }
+    }
+
+    private func staticImageView(urlStr: String) -> some View {
+        CachedAsyncImage(url: URL(string: urlStr), contentMode: .fill, persistent: true) {
+            Image("partyRoomBg")
+                .resizable()
+                .scaledToFill()
+                .frame(width: size.width, height: size.height)
+                .clipped()
+        }
+        .frame(width: size.width, height: size.height)
+        .clipped()
+    }
+
+    fileprivate enum BgType { case image, svga, mp4 }
+
+    /// URL 后缀分流（对齐 H5 `room-bg.vue` `bgType computed`）。
+    /// 允许 URL 带 query string —— 先切 `?` 再判后缀。
+    fileprivate static func bgType(_ url: String) -> BgType {
+        let path = url.split(separator: "?").first.map(String.init) ?? url
+        let lower = path.lowercased()
+        if lower.hasSuffix(".svga") { return .svga }
+        if lower.hasSuffix(".mp4") { return .mp4 }
+        return .image
     }
 }

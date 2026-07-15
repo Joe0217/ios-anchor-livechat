@@ -66,9 +66,24 @@ struct PartyRoomInfo: Codable, Equatable {
     /// 麦位列表（dev 实测 `room/enter` 接口返字段名是 `roomSeatList`，与 spec 反推的 seatList 不符）；
     /// `room/list` 不返麦位列表。
     let roomSeatList: [PartyRoomSeat]?
+    /// v16：房间背景缩略图 URL（房主设置的自定义背景；null = 用默认 partyRoomBg）
+    let bgImgUrl: String?
+    /// v16：房间背景大图 URL（H5 room-bg.vue 优先用；对齐 backgroundLayer 视觉）
+    let bigImgUrl: String?
+
+    /// F 期私 call 开关（房间级）；1=开 / 0=关；`nil` fallback 0（保守）。
+    /// 后端 `room/enter` 响应字段。房主通过 `updatePartyPrivateCall` 修改。
+    /// 真实字段名待 Step 3 真机 log 校准（预估基于安卓源码梳理 §3 + PartyRoomInfo.kt:77）
+    let partyPrivateCallOpen: Int?
+    /// F 期私 call 礼物 id；用户端拨打时预扣此礼物。
+    let partyCallGiftId: String?
 
     /// 衍生：观众在线人数（用 `onlineUserList.count`；list 接口无独立人数字段）
     var onlineCount: Int { onlineUserList?.count ?? 0 }
+
+    /// 衍生：私 call 是否开启（房主视角）。`partyPrivateCallOpen == 1`。
+    /// 用于 CallStore.handleIncomingVideoCall 派对分支前置 guard（对齐 LiveStore.privateCallOpen · P1-9）
+    var isPartyPrivateCallEnabled: Bool { partyPrivateCallOpen == 1 }
 
     /// 衍生：roomTempId Int 形式（后端 DTO 是 Long，但 HTTP 响应给字符串；调上下麦/respondInvite 时需 Int）。
     /// fallback 1（dev 主流模板 ID）；若 String 不可解析为 Int 同样退化到 1。
@@ -129,7 +144,9 @@ struct PartyRoomInfo: Codable, Equatable {
         roomLanguage: String? = nil,
         roomTempId: String? = nil,
         lockFlag: Int? = nil,
-        needPassword: Bool? = nil
+        needPassword: Bool? = nil,
+        partyPrivateCallOpen: Int? = nil,
+        partyCallGiftId: String? = nil
     ) -> PartyRoomInfo {
         PartyRoomInfo(
             id: id,
@@ -162,7 +179,11 @@ struct PartyRoomInfo: Codable, Equatable {
             contributionCostNum: contributionCostNum,
             honorDailyTotal: honorDailyTotal,
             audienceNum: audienceNum,
-            roomSeatList: roomSeatList
+            roomSeatList: roomSeatList,
+            bgImgUrl: bgImgUrl,
+            bigImgUrl: bigImgUrl,
+            partyPrivateCallOpen: partyPrivateCallOpen ?? self.partyPrivateCallOpen,
+            partyCallGiftId: partyCallGiftId ?? self.partyCallGiftId
         )
     }
 }

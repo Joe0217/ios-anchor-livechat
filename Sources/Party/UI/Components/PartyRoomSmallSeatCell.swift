@@ -90,12 +90,16 @@ struct PartyRoomSmallSeatCell: View {
     private var occupiedFooter: some View {
         if seat.occupied {
             VStack(spacing: 2) {
-                // v11：mic 图标去掉（用户 2026-07-13 requirement）
-                Text(seat.nickname ?? L10n.Party.defaultUser)
-                    .font(Theme.Typography.partyRoomSmallSeatName)
-                    .foregroundColor(Theme.Palette.partyRoomSeatNameText)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                // v16.8：昵称 + 身份标识（对齐 H5 audio-wrap.vue:172）
+                // roomRoleType=1 → 房主 mic icon / roomRoleType=2 → 房管 icon
+                HStack(spacing: 3) {
+                    Text(seat.nickname ?? L10n.Party.defaultUser)
+                        .font(Theme.Typography.partyRoomSmallSeatName)
+                        .foregroundColor(Theme.Palette.partyRoomSeatNameText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    PartyRoleBadge(roomRoleType: seat.roomRoleType, size: 12)
+                }
                 HStack(spacing: 2) {
                     Image("partyGems")
                         .resizable().scaledToFit()

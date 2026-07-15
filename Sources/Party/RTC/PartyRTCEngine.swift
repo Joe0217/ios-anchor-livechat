@@ -36,6 +36,10 @@ final class PartyRTCEngine: NSObject, ObservableObject {
     /// 远端 uid → 当前播放音量（0/100）。视图层不直接消费；M5 视频位时复用作展示信号。
     @Published private(set) var remoteVolumes: [UInt: Int] = [:]
 
+    /// v15：本地 Agora uid（join 时传入，用于 speakers.uid=0 → 真实 uid 映射；
+    /// Agora `reportAudioVolumeIndicationOfSpeakers` 规定 uid=0 = 本地用户）
+    private var localAgoraUid: UInt = 0
+
     weak var delegate: PartyRTCEngineDelegate?
 
     private var engine: AgoraRtcEngineKit?
@@ -111,6 +115,7 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         option.autoSubscribeAudio = true
         option.autoSubscribeVideo = true
 
+        localAgoraUid = uid  // v15 声纹：speakers.uid=0 → localAgoraUid 映射用
         state = .joining
         AppLogger.party.info("[PartyRTC] joinChannel ch=\(channelId, privacy: .public) uid=\(uid, privacy: .public)")
         let ret = kit.joinChannel(byToken: token, channelId: channelId, uid: uid, mediaOptions: option)
@@ -457,10 +462,25 @@ extension PartyRTCEngine: AgoraRtcEngineDelegate {
         }
     }
 
-    /// 声波回调（02-04 §3.2 麦位高亮信号源）。MVP 仅打日志 + 写 remoteVolumes；F 期消费。
+    /// v15 声波回调 → 派发 speakingUids（对齐 H5 `volumeList` + `PlayVolume` 说话反馈）。
+    ///
+    /// Agora 契约：
+    /// - speakers 数组每 500ms 触发一次（enableAudioVolumeIndication interval）
+    /// - volume 范围 0-255（官方标准），> 60 通用作"正在说话"阈值
+    /// - **uid=0 代表本地用户**，需转换为 localAgoraUid 才能给 UI 层用 seat.userId 匹配
+    /// - speakers 为空数组时 = 全体静音，需清空 speakingUids
     func rtcEngine(_ engine: AgoraRtcEngineKit, reportAudioVolumeIndicationOfSpeakers speakers: [AgoraRtcAudioVolumeInfo], totalVolume: Int) {
-        // 仅 debug 级日志，避免 500ms 一次轰炸 info
-        AppLogger.party.debug("[PartyRTC] volume total=\(totalVolume, privacy: .public) speakers=\(speakers.count, privacy: .public)")
+        // 阈值过滤 + uid=0 本地转换（Agora 官方阈值 ≥5，avoid 环境底噪 / 呼吸声误报）
+        let localUid = localAgoraUid
+        var uids = Set<UInt>()
+        for info in speakers where info.volume > 5 {
+            let mapped: UInt = info.uid == 0 ? localUid : UInt(info.uid)
+            if mapped > 0 { uids.insert(mapped) }
+        }
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.delegate?.partyRTCEngine(self, didUpdateSpeakingUids: uids)
+        }
     }
 }
 
@@ -472,4 +492,11 @@ protocol PartyRTCEngineDelegate: AnyObject {
     func partyRTCEngine(_ engine: PartyRTCEngine, didJoinedRemoteUid uid: UInt)
     func partyRTCEngine(_ engine: PartyRTCEngine, didOfflineRemoteUid uid: UInt)
     func partyRTCEngine(_ engine: PartyRTCEngine, didFailWithReason reason: String)
+    /// v15 声纹反馈：正在说话的 uid 集合（500ms 一次全量替换，空集合=全静音）
+    func partyRTCEngine(_ engine: PartyRTCEngine, didUpdateSpeakingUids uids: Set<UInt>)
+}
+
+// v15：给非声纹感知的实现方兜底空实现（PartyStore 会真实现，其他 delegate 无需强制）
+extension PartyRTCEngineDelegate {
+    func partyRTCEngine(_ engine: PartyRTCEngine, didUpdateSpeakingUids uids: Set<UInt>) {}
 }

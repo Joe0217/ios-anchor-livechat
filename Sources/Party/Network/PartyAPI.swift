@@ -145,12 +145,22 @@ enum PartyAPI {
 
     /// 拉当前房间的背景（编辑态显示 selectedBackground 用）。
     /// 对齐 H5 `apiGetRoomBgImage`（index.ts:260）。
+    ///
+    /// v16.5 排查：H5 create.vue:216 只消费 `res.id`（拿背景 ID 匹配 backgrounds list），
+    /// **不消费 `imgUrl` / `bigImgUrl`** —— 意味着后端 `getRoomBgImage` 可能只返 `{id: X}` 而无 URL 字段，
+    /// iOS `PartyBackground` model 声明 imgUrl/bigImgUrl 为 Optional decode 静默变 nil。
+    /// **必须**打 raw JSON log 让真机验证后端返值 schema，才能对齐 [agent-recon-field-names-unverified] rule。
     static func getRoomBgImage(roomId: String) async throws -> PartyBackground? {
         let data = try await PartyAPIClient.shared.post(
             "\(pathPrefix)/room/getRoomBgImage",
             body: ["roomId": roomId]
         )
-        return try? decodeObject(data, as: PartyBackground.self)
+        // v16.5：raw JSON 排查真机字段名（decode 完成后无论成功失败都能看到后端到底返啥）
+        let rawPreview = String(data: data, encoding: .utf8) ?? "<binary>"
+        AppLogger.party.info("[PartyAPI] getRoomBgImage raw=\(rawPreview, privacy: .private)")
+        let result = try? decodeObject(data, as: PartyBackground.self)
+        AppLogger.party.info("[PartyAPI] getRoomBgImage decoded id=\(String(describing: result?.id), privacy: .public) imgUrl=\(result?.imgUrl ?? "nil", privacy: .public) bigImgUrl=\(result?.bigImgUrl ?? "nil", privacy: .public)")
+        return result
     }
 
     /// 设置房间背景（编辑态即时保存，选完 sheet close 就调）。

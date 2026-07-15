@@ -61,8 +61,14 @@ final class PartyStore: ObservableObject {
 
     /// v15 声纹反馈：正在说话的 Agora uid 集合（对齐 H5 `volumeList`）。
     /// 数据源：`PartyRTCEngine.reportAudioVolumeIndicationOfSpeakers` → 阈值 volume>5 → 500ms 全量替换。
-    /// UI 层：`isSpeaking(seat:)` 派生，seat.userId String → UInt 转换后查集合命中。
+    /// UI 层：`isSpeaking(seat:)` 派生,seat.userId String → UInt 转换后查集合命中。
     @Published private(set) var speakingUids: Set<UInt> = []
+
+    /// v16.4 房间背景（房主设置的自定义背景）。
+    /// **重要**：enterRoom response 里的 bigImgUrl / bgImgUrl 通常为 null（后端不在 enter 返），
+    /// 需要独立调 `getRoomBgImage` 接口拉当前房间已设背景。
+    /// 更新时机：enterRoom 成功后主动拉；F 期可加 IM 1025 广播实时刷新。
+    @Published private(set) var currentRoomBackground: PartyBackground?
 
     // MARK: - Room Mode (E v2 §1)
 
@@ -202,6 +208,14 @@ final class PartyStore: ObservableObject {
     // MARK: - enterRoom
 
     func enterRoom(roomId: String, password: String? = nil) async {
+        // P 项目权限管理：userType 命中 .party bit runtime guard（三层防护 Store 层）
+        guard SelfPermissionBridge.shared.canPartySnapshot else {
+            AppLogger.party.info("[Permission] enterRoom blocked by userType gate")
+            #if DEBUG
+            assertionFailure("enterRoom called while permission.canParty == false — UI 层应已拦截")
+            #endif
+            return
+        }
         // 残留检查：state != idle/ended → 先强清
         if roomState != .idle && roomState != .ended {
             AppLogger.party.notice("[PartyStore] enterRoom while state=\(self.roomState.debugDesc, privacy: .public), force leave first")
@@ -245,6 +259,8 @@ final class PartyStore: ObservableObject {
         AppLogger.party.info("[PartyStore] enter isFollowOwner raw=\(String(describing: info.isFollowOwner), privacy: .public) → isFollowingAnchor=\(self.isFollowingAnchor, privacy: .public)")
         // v12：房主头像框 async 拉（不阻塞进房主流程）
         Task { [weak self] in await self?.loadOwnerInfoIfNeeded() }
+        // v16.4：房间背景 async 拉（enterRoom response 不返 bigImgUrl，需独立接口获取房主已设背景）
+        Task { [weak self] in await self?.loadCurrentRoomBackground() }
         roomState = .entering
 
         // Step 3: RTC join
@@ -385,6 +401,9 @@ final class PartyStore: ObservableObject {
         // v12：房主头像框 state 清（退房后下次进新房需重拉）
         ownerHeadFrameURL = nil
         didLoadOwnerInfo = false
+        // v16.4：房间背景 state 清 —— 新房需重拉，否则会带入上一房的背景
+        currentRoomBackground = nil
+        speakingUids = []
         // E v2：Room Mode / Mic Application 状态清 —— 退房需清残留，避免下次进房带入旧队列
         roomModeTemplates = [:]
         roomModeTemplatesState = .idle
@@ -445,6 +464,25 @@ final class PartyStore: ObservableObject {
         } catch {
             AppLogger.party.error("[PartyStore] loadOwnerInfo failed: \(String(describing: error), privacy: .public)")
             ownerHeadFrameURL = nil
+        }
+    }
+
+    /// v16.4：enterRoom 完成后主动拉房间**已设背景**（对齐 H5 room-bg.vue 数据源）。
+    ///
+    /// **必要性**：enterRoom response 里的 `bigImgUrl / bgImgUrl` 大多返 null（后端不在 enter 里返），
+    /// 房主实际设置的背景需通过独立 `room/getRoomBgImage` 接口拉。iOS PartyRoomSettingsView
+    /// 已在用同一 API 显示"当前已选背景"。
+    ///
+    /// 更新 `currentRoomBackground` @Published → backgroundLayer 自动派生新 URL 显示。
+    /// 失败静默：backgroundLayer fallback 到 H5 DEFAULT_BG 网络图。
+    func loadCurrentRoomBackground() async {
+        guard let info = roomInfo, let id = info.id, !id.isEmpty else { return }
+        do {
+            let bg = try await PartyAPI.getRoomBgImage(roomId: id)
+            currentRoomBackground = bg
+            AppLogger.party.info("[PartyStore] loadCurrentRoomBackground ok bigImgUrl=\(bg?.bigImgUrl ?? "nil", privacy: .public)")
+        } catch {
+            AppLogger.party.notice("[PartyStore] loadCurrentRoomBackground failed: \(String(describing: error), privacy: .private)")
         }
     }
 
@@ -924,8 +962,8 @@ final class PartyStore: ObservableObject {
             AppLogger.party.info("[PartyStore] handleRoomModeChanged self was on seat, disable local video (reason=modeChange)")
         }
 
-        // 步骤 5：公屏落系统消息
-        chatRouter.postSystemMessage(L10n.Party.roomModeSystemMsg)
+        // 步骤 5：公屏落系统消息（v3：kind = .mode → PublicChatVariant.partyModeSwitch）
+        chatRouter.postSystemMode(L10n.Party.roomModeSystemMsg)
 
         // 步骤 6：清 Mic Application 相关状态（服务端切模板时会清队列）
         applyingTimeoutTask?.cancel()
@@ -1532,7 +1570,22 @@ extension PartyStore: PartyRoomChatManagerDelegate {
     func partyRoomChatDidEnter(_ chat: PartyRoomChatManager) {
         imAlive = true
         markJoinedIfReady()
+
+        // v3（2026-07-15）：进房首次插入房间通告到公屏（对齐 H5 party.js:412-422 announcementShownRoomIds 内存去重）
+        // 首次插入用 greetingMessage 复用（后端未拆独立 convention 字段前）；离开重进不重复展示
+        if let text = roomInfo?.greetingMessage,
+           !text.isEmpty,
+           let rid = roomInfo?.id,
+           !rid.isEmpty,
+           !PartyStore.announcementShownRoomIds.contains(rid) {
+            PartyStore.announcementShownRoomIds.insert(rid)
+            chatRouter.postAnnouncement(String(format: L10n.Party.roomAnnouncementFormat, text))
+        }
     }
+
+    /// 房间通告"首次插入"跨房去重集合（session 级；退 app 清空）
+    /// 对齐 H5 party.js `announcementShownRoomIds` Set 内存态 —— 同房离开重进不再重复展示
+    private static var announcementShownRoomIds: Set<String> = []
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didFailToEnter reason: String) {
         AppLogger.party.error("[PartyStore] chat enter fail: \(reason, privacy: .public)")
@@ -1673,6 +1726,22 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         )
         lastGiftEvent = event
 
+        // v3（2026-07-15）：礼物消息进公屏 feed（`.gift` variant + 可能派生 `.luckyGift`）
+        //  对齐 H5 party.js newGiftMessage：giftSmallImg 从后端字段取；单接收人 / 多接收人 UI 由 Row 组件处理
+        let giftIcon: String? = (payload["giftSmallImg"] as? String)
+                             ?? (payload["giftImg"] as? String)
+                             ?? (payload["smallImg"] as? String)
+        // 派生 luckyGift（对齐 H5 party.js:1167-1187 `data.totalReward > 0` 判定）
+        let totalReward = PartyValueNormalizer.intify(payload["totalReward"]).map { Int64($0) } ?? 0
+        if totalReward > 0 {
+            chat.appendMessage(PartyPublicChatAdapter.luckyGiftDerived(
+                event: event, iconURL: giftIcon, totalReward: totalReward
+            ))
+        } else {
+            // 普通 gift 消息
+            chat.appendMessage(PartyPublicChatAdapter.gift(event: event, iconURL: giftIcon))
+        }
+
         // Task 10：接入跨场景礼物特效引擎。payload 可能含 `gifts` 数组（compressed 批量）或单条；
         // GiftEffectIntake.ingest 内部按 giftId 校验，无效字段直接返 false 不打扰。
         let scopeId = roomInfo?.id ?? ""
@@ -1782,6 +1851,14 @@ extension PartyStore: PartyRoomChatManagerDelegate {
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveInviteResult result: PartyVideoSeatInviteResult) {
         lastInviteResult = result
+        // v3（2026-07-15）：1047 广播型接受 → 公屏系统消息（对齐 H5 chat-list.vue L221 msgType='videoSeatInviteAccept'）
+        // 房主视角 = 看到"xxx 上了视频位"；被邀请者接受成功也看到反馈
+        if result == .broadcast {
+            // 昵称从 payload 拿不到（PartyVideoSeatInviteResult 是 enum 无参数），只显示通用文案；
+            // 后端若在 1047 payload 内带 nickname 字段，可扩展 delegate 携带更多信息
+            let text = String(format: L10n.Party.videoSeatInviteAcceptedFormat, L10n.Party.defaultUser)
+            chatRouter.postSystemVideoSeatInvite(text)
+        }
     }
 
     // MARK: - E v2 §1/§2 Room Mode + Mic Application IM 消费
@@ -1892,8 +1969,8 @@ extension PartyStore: PartyRoomChatManagerDelegate {
             queueSeatNum = 0
         }
 
-        // 公屏系统消息
-        chatRouter.postSystemMessage(on
+        // 公屏系统消息（v3：kind = .application → PublicChatVariant.partyModeSwitch）
+        chatRouter.postSystemApplication(on
             ? L10n.Party.micApplicationSwitchOnSystemMsg
             : L10n.Party.micApplicationSwitchOffSystemMsg
         )
@@ -1913,6 +1990,118 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         if let open = notify.partyCallOpen, let info = roomInfo {
             roomInfo = info.withUpdated(partyPrivateCallOpen: open)
         }
+    }
+
+    // MARK: - v3（2026-07-15）Step 2 通知公屏 handler 业务实装
+
+    /// 1019 房管变更（仅本人被设/取消房管时公屏文案）。
+    /// payload 期望 `{ userId, authType }`；authType 1=设房管 / 2=取消（真机 preflight）
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveAuthUpdate payload: [String: Any], raw: NIMMessage) {
+        _ = raw
+        AppLogger.party.info("[PartyStore] 1019 authUpdate payloadKeys=\(Array(payload.keys), privacy: .public)")
+        // 仅本人被操作时才落公屏
+        let targetUserId = PartyValueNormalizer.stringify(payload["userId"]) ?? ""
+        guard targetUserId == (myUserIdString ?? "") else { return }
+        let authType = PartyValueNormalizer.intify(payload["authType"]) ?? 0
+        let text = authType == 1
+            ? L10n.Party.authUpdateSetAdmin
+            : L10n.Party.authUpdateRemoveAdmin
+        chatRouter.postSystemAuthUpdate(text)
+    }
+
+    /// 1049 房间通告公屏广播。payload 期望 `{ text, roomId }`。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveRoomAnnouncement payload: [String: Any], raw: NIMMessage) {
+        _ = raw
+        AppLogger.party.info("[PartyStore] 1049 roomAnnouncement payloadKeys=\(Array(payload.keys), privacy: .public)")
+        // roomId 一致性校验（跨房广播防错）
+        if let rid = PartyValueNormalizer.stringify(payload["roomId"]),
+           let currentYxRoom = roomInfo?.yxRoomId,
+           rid != currentYxRoom, rid != (roomInfo?.id ?? "") {
+            AppLogger.party.notice("[PartyStore] 1049 dropped (roomId mismatch \(rid, privacy: .public) vs \(currentYxRoom, privacy: .public))")
+            return
+        }
+        let text = (payload["text"] as? String) ?? ""
+        guard !text.isEmpty else { return }
+        chatRouter.postAnnouncement(String(format: L10n.Party.roomAnnouncementFormat, text))
+    }
+
+    /// 1050 幸运数字抽数公屏卡片（⚠️ 直读 ext，H5 party.js:602 特殊分支）
+    /// ext 期望 `{ userId, nickname, luckyNumber, giftId, ... }`
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveLuckyNumberDraw payload: [String: Any], raw: NIMMessage) {
+        _ = raw
+        AppLogger.party.info("[PartyStore] 1050 luckyNumberDraw extKeys=\(Array(payload.keys), privacy: .public)")
+        let nickname = (payload["nickname"] as? String) ?? (payload["fromNick"] as? String) ?? L10n.Party.defaultUser
+        let number = PartyValueNormalizer.intify(payload["luckyNumber"]) ?? 0
+        let text = String(format: L10n.Party.luckyNumberDrawFormat, nickname, number)
+        chatRouter.postAnnouncement(text)
+    }
+
+    /// 1051 幸运数字中奖公屏广播（⚠️ 直读 ext）
+    /// ext 期望 `{ userId, nickname, luckyNumber, winAmount, ... }`
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveLuckyNumberWin payload: [String: Any], raw: NIMMessage) {
+        _ = raw
+        AppLogger.party.info("[PartyStore] 1051 luckyNumberWin extKeys=\(Array(payload.keys), privacy: .public)")
+        let nickname = (payload["nickname"] as? String) ?? (payload["fromNick"] as? String) ?? L10n.Party.defaultUser
+        let number = PartyValueNormalizer.intify(payload["luckyNumber"]) ?? 0
+        let text = String(format: L10n.Party.luckyNumberWinFormat, nickname, number)
+        chatRouter.postAnnouncement(text)
+    }
+
+    /// 136 全服游戏中奖公屏（session.js 主入口 + Party 通道兜底）
+    /// payload 期望 `{ avatar, nickname, winAmount, gameName, gameIcon, ... }`
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveGameWinGlobal payload: [String: Any], raw: NIMMessage) {
+        AppLogger.party.info("[PartyStore] 136 gameWinGlobal payloadKeys=\(Array(payload.keys), privacy: .public)")
+        appendGameWinDeduped(payload: payload, raw: raw, chat: chat, prefix: "136")
+    }
+
+    /// 138 PK 小奖 / Party 房游戏小奖（字段结构同 136）
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceivePkSmallPrize payload: [String: Any], raw: NIMMessage) {
+        AppLogger.party.info("[PartyStore] 138 pkSmallPrize payloadKeys=\(Array(payload.keys), privacy: .public)")
+        appendGameWinDeduped(payload: payload, raw: raw, chat: chat, prefix: "138")
+    }
+
+    /// 140 活动中奖公屏广播
+    /// payload 期望 `{ activityName, quantity, imageURL, joinCTA, avatar, cardType, ... }`
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveWinnerBroadcast payload: [String: Any], raw: NIMMessage) {
+        _ = raw
+        AppLogger.party.info("[PartyStore] 140 winnerBroadcast payloadKeys=\(Array(payload.keys), privacy: .public)")
+        guard let msg = PartyPublicChatAdapter.winnerBroadcast(payload: payload) else {
+            AppLogger.party.notice("[PartyStore] 140 winnerBroadcast drop (activityName empty)")
+            return
+        }
+        chat.appendMessage(msg)
+    }
+
+    // MARK: - v3 Step 2 handler 辅助
+
+    /// 136 / 138 公用去重 + append 辅助。防止双通道重复（session.js 全服主入口 + party.js 兜底）。
+    private func appendGameWinDeduped(payload: [String: Any], raw: NIMMessage, chat: PartyRoomChatManager, prefix: String) {
+        _ = raw
+        // messageClientId 优先 payload 后端字段；否则 fallback prefix + nickname + winAmount
+        let clientId: String = {
+            if let id = payload["messageClientId"] as? String, !id.isEmpty { return id }
+            let nickname = (payload["nickname"] as? String) ?? ""
+            let amount = (payload["winAmount"] as? String) ?? String(describing: payload["winAmount"] ?? "")
+            return "\(prefix)-\(nickname)-\(amount)"
+        }()
+        guard !seenGameWinIds.contains(clientId) else {
+            AppLogger.party.debug("[PartyStore] gameWin dedup \(clientId, privacy: .public)")
+            return
+        }
+        seenGameWinIds.insert(clientId)
+        // 每个 clientId 是短字符串，累积 1000 条 ~50KB；session 生命周期内不裁剪
+        guard let msg = PartyPublicChatAdapter.gameWinNotify(payload: payload) else {
+            AppLogger.party.notice("[PartyStore] gameWin drop (nickname/gameName empty)")
+            return
+        }
+        chat.appendMessage(msg)
+    }
+
+    /// 跨消息去重集合（进程级；退 app 清空）
+    private static var seenGameWinIds: Set<String> = []
+    private var seenGameWinIds: Set<String> {
+        get { PartyStore.seenGameWinIds }
+        set { PartyStore.seenGameWinIds = newValue }
     }
 
     /// 从 `micApplicationsState` 已加载列表里 splice 掉指定 userId（1018 op=2/3/4 触发）
@@ -1957,14 +2146,42 @@ extension PartyStore: PartyRoomChatManagerDelegate {
 
     // MARK: - F PartyCall 抢占（spec §2.1 Flow B/C）
 
-    /// F 期：房主在设置 sheet 保存成功后同步回写 roomInfo（对齐 1029 handler 内的字段回写路径）。
-    /// PartyPrivateCallSettingStore 保存 API 成功后调用；本地态与后端广播两条路径最终一致。
+    /// F 期：本地回写 roomInfo 私 call 字段（1029 handler / setPrivateCall API 成功后共用）。
     func applyPrivateCallUpdate(partyPrivateCallOpen: Int?, partyCallGiftId: String?) {
         guard let info = roomInfo else { return }
         roomInfo = info.withUpdated(
             partyPrivateCallOpen: partyPrivateCallOpen,
             partyCallGiftId: partyCallGiftId
         )
+    }
+
+    /// F 期：房主 tap 主 view 浮动私 call 开关按钮触发。
+    ///
+    /// - `enable=true`：需带 `giftId`（从 CommonGiftPanel.callGate 选中回调传入）
+    /// - `enable=false`：giftId 传 nil；仅关开关，保留 partyCallGiftId 记忆下次开启时预选
+    ///
+    /// 成功后立即回写本地 roomInfo；失败设 lastError（顶层 alert 已 wire）。
+    /// Optimistic UI 由调用方（PartyRoomView 浮动按钮）自己维护本地 @State 切换。
+    func setPrivateCall(enable: Bool, giftId: String?) async {
+        guard let info = roomInfo, let roomId = info.id, !roomId.isEmpty else {
+            AppLogger.party.notice("[PartyStore] setPrivateCall skip: roomInfo missing")
+            return
+        }
+        do {
+            try await PartyAPI.updatePartyPrivateCall(
+                roomId: roomId,
+                enable: enable ? 1 : 0,
+                giftId: giftId
+            )
+            applyPrivateCallUpdate(
+                partyPrivateCallOpen: enable ? 1 : 0,
+                partyCallGiftId: giftId ?? info.partyCallGiftId
+            )
+            AppLogger.party.info("[PartyStore] setPrivateCall ok enable=\(enable, privacy: .public) giftId=\(giftId ?? "nil", privacy: .public)")
+        } catch {
+            AppLogger.party.notice("[PartyStore] setPrivateCall failed err=\(error.localizedDescription, privacy: .private)")
+            lastError = .underlying((error as? PartyAPIError) ?? .networkError)
+        }
     }
 
     /// F 期入口：派对房挂起进入私 call（由 `CallStore.handleIncomingVideoCall` 派对分支调用）。

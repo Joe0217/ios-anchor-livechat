@@ -203,11 +203,9 @@ struct PartyRoomBigSeatCell: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .frame(maxWidth: 80, alignment: .leading)
-            Image("partyBadgeBubble")
-                .resizable().scaledToFit()
-                .frame(width: 12, height: 12)
-                .accessibilityHidden(true)
-            // v11：mic 图标去掉（用户 2026-07-13 requirement）
+            // v16.8：昵称后身份标识（对齐 H5 audio-wrap.vue:172 / video-seat-cell.vue:59）
+            // roomRoleType=1 → 房主 mic icon / roomRoleType=2 → 房管 icon / 3 或 nil → 不显示
+            PartyRoleBadge(roomRoleType: seat.roomRoleType, size: 12)
         }
         .padding(.horizontal, Theme.Metric.partyRoomSeatNameHPadding)
         .padding(.vertical, Theme.Metric.partyRoomSeatNameVPadding)
