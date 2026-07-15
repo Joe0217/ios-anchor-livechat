@@ -13,9 +13,10 @@ struct LiveDataCountdownRow: View {
     var body: some View {
         HStack {
             HStack(spacing: 4) {
-                Image(systemName: "bolt.fill")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.white)
+                Image("lightning")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 16, height: 16)
                 Text(L10n.liveDataTimeRemaining)
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
@@ -30,11 +31,16 @@ struct LiveDataCountdownRow: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .onAppear {
             remaining = max(0, totalSeconds)
-            startTicking()
+            // 若 remaining=0（后端返回期间已过）不启动 timer，与 onChange guard 对称
+            if remaining > 0 { startTicking() }
         }
         .onDisappear { timerCancellable?.cancel() }
         .onChange(of: totalSeconds) { newValue in
             remaining = max(0, newValue)
+            // totalSeconds 变更（切期间后）—— 若新值 >0 重启 tick，避免旧 timer 已 cancel 后不再 tick
+            if remaining > 0 && timerCancellable == nil {
+                startTicking()
+            }
         }
     }
 
@@ -74,11 +80,17 @@ struct LiveDataCountdownRow: View {
 
     private func startTicking() {
         timerCancellable?.cancel()
-        // 1s tick；到 0 停止（H5 van-count-down 同款行为）
+        // 1s tick；到 0 时自我熄火 —— H5 van-count-down 同款行为，避免 1Hz 空唤醒 main runloop
         timerCancellable = Timer.publish(every: 1, on: .main, in: .common)
             .autoconnect()
             .sink { _ in
-                if remaining > 0 { remaining -= 1 }
+                if remaining > 1 {
+                    remaining -= 1
+                } else {
+                    remaining = 0
+                    timerCancellable?.cancel()
+                    timerCancellable = nil
+                }
             }
     }
 }

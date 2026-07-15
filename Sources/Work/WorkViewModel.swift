@@ -36,6 +36,23 @@ final class WorkViewModel: ObservableObject {
     /// 好评率（百分比整数）—— H5: dataStatistics.positiveRating
     @Published var positiveRating: Int = 0
 
+    // MARK: - 4 张预览卡（激活 H5 蓝本 work/index.vue L443-491 被注释的卡组）
+    /// Calls Today —— dataStatistics.callNum。
+    /// ⚠️ 与 `onlineTimeSec` 共享同一后端字段但语义不同（同一字段不可能两种语义都对）；
+    /// 现有 StatCardsRow 解释为"在线时长秒数"，本卡按用户/安卓端映射解释为"通话数"。
+    /// 真机首次拉取后向用户报告冲突判断。
+    @Published var dailyCalls: Int = 0
+    /// Coins —— dataStatistics.weeklyDiamonds。与 `avgCallDurationSec` 同款字段共享冲突。
+    @Published var weeklyCoins: Int = 0
+    /// Diamonds —— sapi `getBalance.diamond`；fetch 失败保持 0（fail-silent）。
+    @Published var walletDiamonds: Int64 = 0
+    /// Gems —— sapi `getBalance.gem`；fetch 失败保持 0（fail-silent）。
+    @Published var walletGems: Int64 = 0
+
+    /// 官方 WhatsApp 客服号（H5 `getConfigByKey({searchValue: 'WhatsApp'})`）。
+    /// 空串表示未拉到或未配置，Footer 里空时整行隐藏（fail-silent）。
+    @Published var whatsappPhone: String = ""
+
     // MARK: - 今日收益（H5 anchorIncomeMap.{callIncome/giftIncome/taskReward/invitationReward/unlock/totalCoin}）
     /// 值来自后端字符串（H5 蓝本 `|| '0'` 兜底），保留 String 类型避免精度丢失
     @Published var callIncomes: String = "0"
@@ -102,6 +119,18 @@ final class WorkViewModel: ObservableObject {
             .removeDuplicates()
             .assign(to: &$positiveRating)
 
+        // 4 张预览卡的 anchor 端派生（复用同 $info publisher，同 removeDuplicates 守门）
+        // 与 onlineTimeSec / avgCallDurationSec 共享 callNum / weeklyDiamonds 但语义不同，
+        // 详见字段 @Published 注释
+        AnchorInfoStore.shared.$info
+            .map { $0?.dataStatistics?.callNum ?? 0 }
+            .removeDuplicates()
+            .assign(to: &$dailyCalls)
+        AnchorInfoStore.shared.$info
+            .map { $0?.dataStatistics?.weeklyDiamonds ?? 0 }
+            .removeDuplicates()
+            .assign(to: &$weeklyCoins)
+
         // anchorIncomeMap 六项（H5 work/index.vue L279 mappedIncomeItems，值 || '0' 兜底）
         AnchorInfoStore.shared.$info
             .map { $0?.anchorIncomeMap?.callIncome ?? "0" }
@@ -128,15 +157,20 @@ final class WorkViewModel: ObservableObject {
             .removeDuplicates()
             .assign(to: &$totalIncomes)
 
-        // 并行拉两个 visibility 接口（H5 Promise.allSettled 语义：任一失败不阻塞另一个，
-        // 失败态默认 false 与 H5 一致）。
+        // 并行拉两个 visibility 接口 + 钱包余额（H5 Promise.allSettled 语义：任一失败不阻塞另一个）。
+        // 余额走 sapi 域（PartyAPIClient），与主接口 visibility 域并行不冲突。
         Task { @MainActor [weak self] in
             async let newbie = Self.fetchVisible(path: "/api/anchor/newTask/checkEntryVisible", tag: "newbie")
             async let bigR = Self.fetchVisible(path: "/api/anchor/bigr/entryVisible", tag: "bigR")
-            let (n, b) = await (newbie, bigR)
+            async let balance = Self.fetchWalletBalance()
+            async let whatsapp = Self.fetchWhatsapp()
+            let (n, b, bal, wa) = await (newbie, bigR, balance, whatsapp)
             guard let self else { return }
             self.showNewbie = n
             self.showBigR = b
+            self.walletDiamonds = bal.diamond
+            self.walletGems = bal.gem
+            self.whatsappPhone = wa
         }
     }
 
@@ -148,9 +182,14 @@ final class WorkViewModel: ObservableObject {
         async let anchorRefresh: Void = AnchorInfoStore.shared.refresh()
         async let newbie = Self.fetchVisible(path: "/api/anchor/newTask/checkEntryVisible", tag: "newbie")
         async let bigR = Self.fetchVisible(path: "/api/anchor/bigr/entryVisible", tag: "bigR")
-        let (_, n, b) = await (anchorRefresh, newbie, bigR)
+        async let balance = Self.fetchWalletBalance()
+        async let whatsapp = Self.fetchWhatsapp()
+        let (_, n, b, bal, wa) = await (anchorRefresh, newbie, bigR, balance, whatsapp)
         self.showNewbie = n
         self.showBigR = b
+        self.walletDiamonds = bal.diamond
+        self.walletGems = bal.gem
+        self.whatsappPhone = wa
     }
 
     /// POST 无 body 拉 `{visible: Bool}`。失败静默返 false（对齐 H5 allSettled fail-silent）。
@@ -173,6 +212,63 @@ final class WorkViewModel: ObservableObject {
         } catch {
             AppLogger.net.error("[Work.\(tag, privacy: .public)] visibility fetch failed: \(String(describing: error), privacy: .public)")
             return false
+        }
+    }
+
+    /// 拉钱包余额 —— sapi `/sapi/weidou/v1/client/gem/getBalance`（走 PartyAPIClient，
+    /// 与 PartyBalanceService 同域但需同时取 diamond + gem 双字段，不复用 PartyBalanceService
+    /// 的单值实现）。失败静默返 (0, 0)（fail-silent；浮窗数据不阻塞主页面）。
+    ///
+    /// 字段名 fallback（agent-recon-field-names-unverified rule）：
+    /// - Diamonds：`diamond` → `diamonds` → `diamondNum`
+    /// - Gems：`gem` → `gems`
+    /// 真机首次拉取后按 log 校准。NSNumber/String 类型双兼容。
+    private static func fetchWalletBalance() async -> (diamond: Int64, gem: Int64) {
+        do {
+            let data = try await PartyAPIClient.shared.post(
+                "/sapi/weidou/v1/client/gem/getBalance",
+                body: [:]
+            )
+            guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                AppLogger.net.error("[Work.balance] response not object")
+                return (0, 0)
+            }
+            let diamond = extractInt64(from: obj, keys: ["diamond", "diamonds", "diamondNum"])
+            let gem = extractInt64(from: obj, keys: ["gem", "gems"])
+            return (diamond, gem)
+        } catch {
+            AppLogger.net.error("[Work.balance] fetch failed: \(String(describing: error), privacy: .private)")
+            return (0, 0)
+        }
+    }
+
+    /// 从字典按优先级取整数值（NSNumber / String 双兼容，排除 Bool 桥接）。
+    private static func extractInt64(from obj: [String: Any], keys: [String]) -> Int64 {
+        for key in keys {
+            if let n = obj[key] as? NSNumber {
+                let cType = String(cString: n.objCType)
+                if cType != "c" && cType != "B" {  // 排除 Bool 桥接
+                    return n.int64Value
+                }
+            }
+            if let s = obj[key] as? String, let v = Int64(s) {
+                return v
+            }
+        }
+        return 0
+    }
+
+    /// 拉官方 WhatsApp 客服号（对齐 H5 `getConfigByKey({searchValue: 'WhatsApp'})`）。
+    /// 失败静默返空串（fail-silent；Footer 空则隐藏该行）。
+    private static func fetchWhatsapp() async -> String {
+        do {
+            let dict = try await AppConfigService.fetch(keys: ["WhatsApp"])
+            if let s = dict["WhatsApp"] as? String { return s }
+            if let n = dict["WhatsApp"] as? NSNumber { return n.stringValue }
+            return ""
+        } catch {
+            AppLogger.net.error("[Work.whatsapp] fetch failed: \(String(describing: error), privacy: .private)")
+            return ""
         }
     }
 

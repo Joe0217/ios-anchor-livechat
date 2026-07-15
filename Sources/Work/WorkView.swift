@@ -21,14 +21,17 @@ struct WorkView: View {
             ScrollView {
                 VStack(spacing: Theme.Metric.sectionSpacing) {
                     WeeklyLevelHeader(vm: vm)
+                    LiveOverviewCardsRow(vm: vm)
                     StatCardsRow(vm: vm)
                     TodayIncomeCard(vm: vm)
                     ToolsSection(showNewbie: vm.showNewbie, showBigR: vm.showBigR)
+                    WorkSysInfoFooter(whatsapp: vm.whatsappPhone)
                 }
                 .padding(.horizontal, Theme.Metric.screenMargin)
                 .padding(.top, 8)
-                // 预留 ≥ 180(overlay 距 tabbar) + 开关高度 ≈ 44 + 余 8
-                .padding(.bottom, 232)
+                // sysInfo footer 已挂在 VStack 末尾 + 自带 padding；此处 40pt 兜底防紧贴 tabbar。
+                // 悬浮 online toggle 是 overlay 不占 ScrollView 空间，居右下角，与居中 sysInfo 视觉分区。
+                .padding(.bottom, 40)
             }
             .scrollIndicators(.hidden)
             // 下拉刷新（对齐 H5 <CPullRefresh @list-on-refresh="listOnRefresh">）。
@@ -189,12 +192,14 @@ private struct OfflineConfirmDialog: View {
 }
 
 /// Work 子页路由。
-/// - `.pocDebug`：DEBUG 期 POC 调试台
+/// - `.pocDebug`：DEBUG 期 POC 调试台（暂无入口，代码保留待未来接新入口）
 /// - `.firstLiveRule`：首次开播规则阅读页（对齐 H5 `/liveRule?type=3`，10s 倒计时）
 /// - `.liveSettings`：开播设置页（B-spec-开播设置页）
 /// - `.wishSetting`：愿望单设置页（L-spec-愿望单设置页）
 /// - `.beautySettings`：美颜设置页（K-spec-美颜设置页）
 /// - `.giftMessage`：私密媒体解锁（H-2）
+/// - `.profileEdit`：编辑个人资料（复用 EditProfileView；Work tools 入口对齐 H5 `/profile`）
+/// - `.liveData` / `.task` / `.invite` / `.pointsRank` / `.anchorGuide`：Work tools 入口，B-F 阶段替换 ComingSoon 占位
 /// - `.newbie` / `.bigR`：入口对齐 H5，页面 J 里程碑落地（当前占位）
 enum WorkRoute: Hashable {
     case pocDebug
@@ -203,6 +208,14 @@ enum WorkRoute: Hashable {
     case wishSetting
     case beautySettings
     case giftMessage        // H-2 私密媒体解锁
+    case profileEdit        // Phase A：接 EditProfileView（I 里程碑已实现）
+    case liveData           // Phase B：Live Data 页
+    case task               // Phase C：Task Center 页
+    case invite             // Phase D：Invite 页
+    case pointsRank         // Phase E：Points Rank 页
+    case anchorGuide        // Phase F：Anchor Guide 培训中心页
+    case partyData          // Downloads UI 新增（H5 蓝本无此入口），未来落地页替换 ComingSoon
+    case myGuardian         // Downloads UI 新增（H5 蓝本无此入口），未来落地页替换 ComingSoon
     case newbie             // J 里程碑：新手任务
     case bigR               // J 里程碑：Star User 大 R 名单
     /// 直播结果页（B spec v7 从 fullScreenCover 改为 push 页面；LiveRoomView state=.ended 触发切 tab + path 重建）。

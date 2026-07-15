@@ -14,11 +14,10 @@ struct ToolsSection: View {
     /// 由 MainTabView 注入：Match 图标 tap 切到 Home + Match top tab（对齐首页 Match 入口）
     @Environment(\.openHomeMatch) private var openHomeMatch
 
-    /// 工具项（图标资源名 + 标签）。顺序与 H5 workspaceItems 一致。
+    /// 工具项（图标资源名 + 标签）。顺序与 H5 workspaceItems 一致（Hi 已移除）。
     /// Newbie 插在 Task 之后（H5 位置）、bigR 插在 Invite 之后。
     private var tools: [(icon: String, label: String)] {
         var arr: [(icon: String, label: String)] = [
-            ("toolHi", L10n.toolHi),
             ("toolGoLive", L10n.toolGoLive),
             ("toolMatch", L10n.toolMatch),
             ("toolTask", L10n.toolTask),
@@ -36,6 +35,8 @@ struct ToolsSection: View {
             ("toolWorkingGuide", L10n.toolWorkingGuide),
             ("toolBackpack", L10n.toolBackpack),
             ("toolLiveData", L10n.toolLiveData),
+            ("toolPartyData", L10n.toolPartyData),
+            ("toolMyGuardian", L10n.toolMyGuardian),
         ])
         return arr
     }
@@ -67,17 +68,48 @@ struct ToolsSection: View {
                                 : WorkRoute.liveSettings
                         ) { cell }
                             .buttonStyle(.plain)
+                    // Match → 切到 Home + Match top tab（对齐首页 Match 入口，与 CGoMatchButton 同一入口）
+                    } else if tools[i].icon == "toolMatch" {
+                        Button { openHomeMatch.perform() } label: { cell }
+                            .buttonStyle(.plain)
+                    // Task → Phase C 占位（B-F 阶段替换真页面）
+                    } else if tools[i].icon == "toolTask" {
+                        NavigationLink(value: WorkRoute.task) { cell }
+                            .buttonStyle(.plain)
                     // Beauty → 美颜设置页（K-spec-美颜设置页 §0.4 Q1；生产入口）
                     } else if tools[i].icon == "toolBeauty" {
                         NavigationLink(value: WorkRoute.beautySettings) { cell }
+                            .buttonStyle(.plain)
+                    // Points → Phase E 占位
+                    } else if tools[i].icon == "toolPoints" {
+                        NavigationLink(value: WorkRoute.pointsRank) { cell }
                             .buttonStyle(.plain)
                     // Gift Message → 私密媒体解锁页（H-2-spec-私密媒体解锁；生产入口）
                     } else if tools[i].icon == "toolGiftMessage" {
                         NavigationLink(value: WorkRoute.giftMessage) { cell }
                             .buttonStyle(.plain)
-                    // Match → 切到 Home + Match top tab（对齐首页 Match 入口，与 CGoMatchButton 同一入口）
-                    } else if tools[i].icon == "toolMatch" {
-                        Button { openHomeMatch.perform() } label: { cell }
+                    // Profile Update → EditProfileView（I 里程碑已实现，本次接线）
+                    } else if tools[i].icon == "toolProfileUpdate" {
+                        NavigationLink(value: WorkRoute.profileEdit) { cell }
+                            .buttonStyle(.plain)
+                    // Invite → Phase D 占位
+                    } else if tools[i].icon == "toolInvite" {
+                        NavigationLink(value: WorkRoute.invite) { cell }
+                            .buttonStyle(.plain)
+                    // Working Guide (Anchor Guide) → Phase F 占位
+                    } else if tools[i].icon == "toolWorkingGuide" {
+                        NavigationLink(value: WorkRoute.anchorGuide) { cell }
+                            .buttonStyle(.plain)
+                    // Live Data → Phase B 占位（下一个开工）
+                    } else if tools[i].icon == "toolLiveData" {
+                        NavigationLink(value: WorkRoute.liveData) { cell }
+                            .buttonStyle(.plain)
+                    // Party Data / My Guardian → 占位（H5 蓝本无此入口，Downloads UI 新增；未来落地页替换 ComingSoon）
+                    } else if tools[i].icon == "toolPartyData" {
+                        NavigationLink(value: WorkRoute.partyData) { cell }
+                            .buttonStyle(.plain)
+                    } else if tools[i].icon == "toolMyGuardian" {
+                        NavigationLink(value: WorkRoute.myGuardian) { cell }
                             .buttonStyle(.plain)
                     // Newbie / bigR → 占位（页面本身留 J 里程碑落地；对齐 H5 visibility=true 时显示入口）
                     } else if tools[i].icon == "toolNewbie" {
@@ -87,22 +119,8 @@ struct ToolsSection: View {
                         NavigationLink(value: WorkRoute.bigR) { cell }
                             .buttonStyle(.plain)
                     } else {
-                        #if DEBUG
-                        // DEBUG 临时入口（Release 不存在）：
-                        //   Hi     → locale 切换 sheet（i18n 任务）
-                        //   Invite → push POC 调试台（沿用 WorkView 的 NavigationStack）
-                        if tools[i].icon == "toolHi" {
-                            Button { AppLocaleStore.shared.showSheet = true } label: { cell }
-                                .buttonStyle(.plain)
-                        } else if tools[i].icon == "toolInvite" {
-                            NavigationLink(value: WorkRoute.pocDebug) { cell }
-                                .buttonStyle(.plain)
-                        } else {
-                            cell
-                        }
-                        #else
+                        // Backpack（Props）：路线图未安排，保持无 handler 静态显示
                         cell
-                        #endif
                     }
                 }
             }

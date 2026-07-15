@@ -6,17 +6,21 @@ struct StatCardsRow: View {
 
     var body: some View {
         HStack(spacing: Theme.Metric.statCardGap) {
+            // 数字色对齐图标主色（用户 UI 反馈 §3）：
+            // - Online Time 图标是橙红时钟 → 橙红数值
+            // - Avg Call Duration 图标是青绿电话 → 青绿数值
+            // - Positive Rating 图标是粉紫笑脸 → 粉紫数值
             StatCard(icon: "statOnlineTime",
                      number: Self.timeString(vm.onlineTimeSec),
-                     numberColor: Theme.Palette.accentYellow,
+                     numberColor: Color(hex: 0xFF7A2C),
                      caption: L10n.workOnlineTime)
             StatCard(icon: "statAvgCallDuration",
                      number: Self.timeString(vm.avgCallDurationSec),
-                     numberColor: Theme.Palette.accentYellow,
+                     numberColor: Color(hex: 0x00D6C4),
                      caption: L10n.workAvgCallDuration)
             StatCard(icon: "statRating",
                      number: "\(vm.positiveRating)%",
-                     numberColor: Theme.Palette.accentGreen,
+                     numberColor: Color(hex: 0xF640DC),
                      caption: L10n.workPositiveRating)
         }
     }
@@ -39,26 +43,28 @@ private struct StatCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Metric.statNumberToCaption) {
+            // 图标独占顶行
             Image(icon)
                 .resizable()
                 .scaledToFit()
-                .frame(width: 26, height: 26)
-                .padding(.bottom, 4)   // 图标↔数值固定间距 = 6(VStack) + 4 = 10
+                .frame(width: 20, height: 20)
                 .accessibilityHidden(true)
 
+            // 大数字（色对齐图标主色）
             Text(number)
                 .font(Theme.Typography.bigStat)
                 .foregroundStyle(numberColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
 
+            // 次级文案 10pt 位于数字下方
             Text(caption)
-                .font(Theme.Typography.caption)
+                .font(.system(size: 10, weight: .regular))
                 .foregroundStyle(Theme.Palette.textSecondary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .frame(maxWidth: .infinity, minHeight: 104, alignment: .topLeading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(Theme.Metric.cardPadding)
         .background(Theme.Palette.cardFill)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.statCard, style: .continuous))
