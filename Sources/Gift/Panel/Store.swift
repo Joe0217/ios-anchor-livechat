@@ -71,11 +71,17 @@ final class CommonGiftPanelStore: ObservableObject {
         }
         // Fast path（跳过 loading 转圈）：同步查 dataSource 缓存 —— 命中直接切 loaded 展示 grid，
         // 避免每次开面板都短暂 render ProgressView 帧。cache 未命中才走原 async loading path。
-        // balance 独立走 refreshBalance（cache 里可能已带；async refresh 也是零阻塞）。
+        // balance 同步 seed（review #2）：syncCachedBalance 从 dataSource 内部 `_latestBalance` 拿；
+        //   避免 phase=.loaded 后 balanceValue nil 让 canTriggerAction balance gate 短暂失效（几十 ms
+        //   内用户 tap Send 被"允许"，实际走后端 1019 兜底 → 削弱 fast-path 秒开体验）。
+        //   之后 refreshBalance 异步补齐（若 dataSource 内 balance 与真实有 lag）。
         if let cached = config.dataSource.syncCachedGroups() {
             var map: [GiftPanelTab: [GiftListData]] = [:]
             for g in cached { map[g.tab] = g.gifts }
             self.groups = map
+            if let syncedBalance = config.balance.source?.syncCachedBalance() {
+                self.balanceValue = syncedBalance
+            }
             self.phase = .loaded
             enforceSelectionInvariant()
             await refreshBalance()

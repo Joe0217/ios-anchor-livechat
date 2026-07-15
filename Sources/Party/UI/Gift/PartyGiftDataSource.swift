@@ -69,7 +69,14 @@ final class PartyGiftDataSource: GiftPanelDataSource, GiftPanelBalanceSource {
                 groups.append(GiftPanelGroup(tab: mappedTab, gifts: tab.gifts ?? []))
             }
             logger.info("[PartyGift] v2 loaded groups=\(groups.count, privacy: .public) balance=\(response.userDiamond ?? -1, privacy: .public)")
-            GiftCatalogCache.shared.set(scene: .party, groups: groups, userDiamond: response.userDiamond)
+            // review #3 · 空态守护：所有 tabCode 未识别时 groups=[]，不写 cache（避免 5min 内多次开面板都看空）
+            //   触发场景：服务端上线新 tabCode 但 iOS `GiftPanelTab.fromGroupName` 未同步 → mappedTab 全 nil
+            //   下次开面板 fast-path 不命中会重拉 API 再 try
+            if !groups.isEmpty {
+                GiftCatalogCache.shared.set(scene: .party, groups: groups, userDiamond: response.userDiamond)
+            } else {
+                logger.notice("[PartyGift] v2 all tabCode unmapped; skip cache write to allow retry")
+            }
             return groups
         }
 
@@ -84,7 +91,12 @@ final class PartyGiftDataSource: GiftPanelDataSource, GiftPanelBalanceSource {
                 groups.append(GiftPanelGroup(tab: mappedTab, gifts: tab.giftVoList ?? []))
             }
             logger.info("[PartyGift] v1 fallback loaded groups=\(groups.count, privacy: .public)")
-            GiftCatalogCache.shared.set(scene: .party, groups: groups, userDiamond: response.userDiamond)
+            // review #3 · 同 v2 · 空态不缓存让下次可重拉
+            if !groups.isEmpty {
+                GiftCatalogCache.shared.set(scene: .party, groups: groups, userDiamond: response.userDiamond)
+            } else {
+                logger.notice("[PartyGift] v1 all tabName unmapped; skip cache write to allow retry")
+            }
             return groups
         }
 
@@ -95,6 +107,13 @@ final class PartyGiftDataSource: GiftPanelDataSource, GiftPanelBalanceSource {
     /// GiftPanelBalanceSource · 直接返回 loadGifts() 缓存的 userDiamond
     /// - nil = 尚未 loadGifts 或 response 未携带 userDiamond → UI 显 `--`（对齐 spec R6）
     func currentBalance() async -> Int64? {
+        lock.lock(); defer { lock.unlock() }
+        return _latestBalance
+    }
+
+    /// 同步版本（Store.load fast-path 用）：与 currentBalance 同源 `_latestBalance`，无 async 无阻塞。
+    /// syncCachedGroups 命中 GiftCatalogCache 时已把 balance seed 到 `_latestBalance`；此处直接返。
+    func syncCachedBalance() -> Int64? {
         lock.lock(); defer { lock.unlock() }
         return _latestBalance
     }

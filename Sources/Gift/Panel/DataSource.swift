@@ -135,8 +135,11 @@ final class DefaultGiftDataSource: GiftPanelDataSource {
             result[tab].map { GiftPanelGroup(tab: tab, gifts: $0) }
         }
         // 写缓存（live/call 场景无 balance 字段；nil）；scene 若不参与 cache 就跳过
-        if let cs = cacheScene {
+        // review #3 · 空态守护：所有 tab 未识别 groups=[] 时不缓存，让下次开面板可重拉重试
+        if let cs = cacheScene, !groups.isEmpty {
             GiftCatalogCache.shared.set(scene: cs, groups: groups, userDiamond: nil)
+        } else if groups.isEmpty {
+            logger.notice("all tabs unmapped scene=\(self.scene.rawValue, privacy: .public); skip cache write to allow retry")
         }
         return groups
     }
