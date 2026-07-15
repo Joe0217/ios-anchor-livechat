@@ -716,17 +716,19 @@ struct PartyCreateBackgroundPickerSheet: View {
             store.selectedBackground = bg
         } label: {
             ZStack(alignment: .topTrailing) {
-                // v7.11 用户明示回退到 v7.8 版本（"卡片尺寸对了"）：
-                // 底色 fill 让 letterbox 空白有 card 边界，图片 .fit 完整显示不 crop
+                // v7.12：底色兜底 + 图片 .fill 铺满 + frame 撑到 card 尺寸 + clipShape 裁剪超出
+                // 保留 v7.11 的 ZStack 结构（不用 v7.10 Color.clear.overlay 那种嵌套），
+                // 只把图片 contentMode 从 .fit → .fill，加 explicit frame 让 image 有明确 layout 边界
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(Theme.Palette.partyCreateTempFill)
 
                 if let urlStr = bg.imgUrl ?? bg.bigImgUrl,
                    !urlStr.isEmpty,
                    let u = URL(string: urlStr) {
-                    CachedAsyncImage(url: u, contentMode: .fit, persistent: true, cdn: (.avatarLarge, .fit)) {
+                    CachedAsyncImage(url: u, contentMode: .fill, persistent: true, cdn: (.avatarLarge, .fill)) {
                         Color.clear
                     }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
 
