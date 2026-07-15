@@ -50,9 +50,10 @@ struct LiveRoomView: View {
     /// liveRoom.vue:291-319，spec `docs/plan/H-直播间发送公屏文字-spec-202607101100.md`）
     @State private var inputText: String = ""
 
-    /// 输入框聚焦态：focused 时 HStack 隐藏右侧 4 图标（PK / MSG / Gift / Setting）让 TextField 占满宽度；
-    /// mainZStack 挂 simultaneousGesture(TapGesture)，focused 时点任意区域失焦（TapGesture 与子手势不同类别，
-    /// 不阻塞 button / 公屏 3 连击等，遵守 swiftui-root-draggesture-mindist-zero rule）
+    /// 输入框聚焦态：focused 时隐藏右侧 3 图标（MSG / Gift / Setting）让 TextField 占满宽度；
+    /// PKEntryButton 在 PK 关键态（starting/inPK/punishing）豁免隐藏（保留中断/断开入口 + 5 态视觉反馈）。
+    /// 失焦手势由 `topContentWithFocusDismiss` 承载（tap 顶部/公屏空白失焦；tap 按钮/输入行内保持 focus），
+    /// 对齐 iOS Messages/Notes 系统 App 行为（避免祖先层 simultaneousGesture 让 tap TextField/send/pill 意外失焦）
     @FocusState private var isInputFocused: Bool
 
     /// v24（B4 · 对齐 H5 §9.12.4 hi 气泡 → Screen 公屏 @回复 pending 态）：
@@ -310,56 +311,9 @@ struct LiveRoomView: View {
                     .transition(.opacity)
             }
             VStack(spacing: 8) {
-                // v11 fix: LiveRoomHeroTopArea 15+ 参数调用 inline 触发 SwiftUI type-check timeout，
-                // 抽到 computed property `heroTopArea` 减轻 body 类型推导复杂度
-                heroTopArea
-                // DEBUG NetworkPanel 之前挂在此处影响真机视觉（2026-07-06 用户反馈"去掉网络监控展示"）；
-                // struct 定义仍保留于文件底部供开发调试临时接入，不再默认挂载
-
-                if !store.beautyAvailable {
-                    Text(L10n.beautyUnavailableHint)
-                        .font(.caption2)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10).padding(.vertical, 4)
-                        .background(.black.opacity(0.5), in: Capsule())
-                }
-                if let netToast = store.networkWarningToast {
-                    networkBanner(netToast)
-                }
-                if let toast = store.warningToast {
-                    warningBanner(toast)
-                }
-                if let toast = comingSoonToast {
-                    comingSoonBanner(toast)
-                }
-                Spacer()
-                // 公屏消息 + 右侧 Private Call 小开关（对齐 H5 liveRoom.vue:639-679：左公屏 flex-1 + 右操作列 van-switch）
-                HStack(alignment: .bottom, spacing: 8) {
-                    PublicChatListView(
-                        feed: publicChatFeed,
-                        theme: .live,
-                        onScreenReply: handleScreenReply,
-                        onMsgOpen: handleMsgOpen
-                    )
-                        .frame(maxHeight: 260)
-                        .onReceive(nim.messagesStore.$messages) { messages in
-                            publicChatFeed.replace(messages.map(LivePublicChatAdapter.adapt))
-                        }
-                        #if DEBUG
-                        // v19 DEBUG 三连击注入 15 类 mock 消息，验证 iOS 各 row 视觉
-                        .onTapGesture(count: 3) {
-                            PublicChatDebugInjector.injectAll(into: nim.messagesStore)
-                        }
-                        #endif
-                    // PK 期间隐藏私 call 开关（对齐 H5 liveRoom.vue:466 shouldShowPrivateCall）
-                    // 隐藏由 LiveStore.privateCallHiddenForPK 驱动，PKStore.transition 联动切换
-                    if !store.privateCallHiddenForPK {
-                        LiveRoomPrivateCallSwitch(isOn: $privateCallOn, onToggle: { next in
-                            handlePrivateCallToggle(next)
-                        })
-                        .padding(.bottom, 60)   // 让开底部工具栏 + gift row 高度，与 H5 pb-60 对齐
-                    }
-                }
+                // 上部内容（heroTop / banner / Spacer / 公屏 / 私 call 开关）抽到 computed property，
+                // 承载 focused 时点空白失焦手势；SwiftUI Button 子 view 独占 tap 不触发失焦（tap 顶部按钮时保持 focus）
+                topContentWithFocusDismiss
                 // 2026-07-07 v7：快捷礼物栏完全移除（用户明示"主播端没有快捷送礼"）——
                 // 原以为 H5 有此栏但 PK 中隐藏，实测 H5 主播端从未显示此栏（LiveRoomGiftList 是观众端组件）。
                 // 送礼入口仍由底部工具栏 gift 圆按钮承担（H 里程碑接入真礼物列表）
@@ -420,11 +374,15 @@ struct LiveRoomView: View {
                             // spec R5：失败保留 inputText + 保留 pending pill 供重试
                         }
                     )
-                    if !isInputFocused {
+                    // PKEntryButton：PK 关键态（starting/inPK/punishing）豁免隐藏——
+                    // 主播需保留中断 PK / 断开连线入口 + 5 态视觉反馈（rotating icon / punishing 倒计时）
+                    if isPKActive || !isInputFocused {
                         PKEntryButton(store: pkStore,
                                       showInviteSheet: $showInviteSheet,
                                       onInterruptTap:  { showPKInterruptConfirm = true },
                                       onDisconnectTap: { showPKDisconnectConfirm = true })
+                    }
+                    if !isInputFocused {
                         LiveRoomToolButton(systemName: nil,
                                            imageName: "liveRoomToolMessageBadge",
                                            a11y: L10n.liveRoomToolMessage,
@@ -443,7 +401,7 @@ struct LiveRoomView: View {
                         LiveRoomToolButton(systemName: nil,
                                            imageName: "liveRoomToolGiftBadge",
                                            a11y: L10n.liveRoomToolGift,
-                                           action: { showGiftPicker = true })   // 接入 CommonGiftPanel（.liveDisplayOnly，直播中纯展示）
+                                           action: { showGiftPicker = true })
                         LiveRoomToolButton(systemName: nil,
                                            imageName: "liveRoomToolSettingBadge",
                                            a11y: L10n.liveRoomToolSetting,
@@ -451,16 +409,12 @@ struct LiveRoomView: View {
                     }
                 }
                 .animation(.easeInOut(duration: 0.2), value: isInputFocused)
+                .animation(.easeInOut(duration: 0.2), value: isPKActive)
             }
             .padding(.horizontal, Theme.Metric.liveRoomScreenHPadding)
             .padding(.top, 8)
             .padding(.bottom, 8)
         }
-        // 输入框 focused 时点任意外部区域失焦；TapGesture 与 Button/DragGesture 不同类别，
-        // 不阻塞子 view 按钮点击与公屏 3 连击（swiftui-root-draggesture-mindist-zero rule）
-        .simultaneousGesture(TapGesture().onEnded {
-            if isInputFocused { isInputFocused = false }
-        })
     }
 
     // MARK: - body modifier handlers（编译器泛型推导减负 —— rule swiftui-body-type-check-timeout）
@@ -972,6 +926,56 @@ struct LiveRoomView: View {
             // v24（B4 · verify finding）：fallback 分支给用户 toast 反馈 + warning log，避免死链手感
             AppLogger.im.warning("[B4] MSG open skipped: senderYxAccId nil for msg id=\(msg.id.uuidString, privacy: .public)")
             AppToastCenter.shared.show(L10n.publicScreenHiMsgUnavailable)
+        }
+    }
+
+    // MARK: - 输入框 focused 时点上部区域失焦
+    // 抽 subgroup 承载 `.contentShape(Rectangle()).onTapGesture` —— SwiftUI Button/onTapGesture
+    // 子 view 独占 tap 语义（consume 后不 propagate 到外层），实现"tap 输入框/send/pill 保持 focus，
+    // tap 顶部/公屏空白失焦"，对齐 iOS Messages/Notes 系统 App。
+    // 原祖先层 `.simultaneousGesture(TapGesture())` 会让 tap TextField 内 / send button / pill × 意外失焦。
+
+    private var topContentWithFocusDismiss: some View {
+        VStack(spacing: 8) {
+            heroTopArea
+            if !store.beautyAvailable {
+                Text(L10n.beautyUnavailableHint)
+                    .font(.caption2)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 10).padding(.vertical, 4)
+                    .background(.black.opacity(0.5), in: Capsule())
+            }
+            if let netToast = store.networkWarningToast { networkBanner(netToast) }
+            if let toast = store.warningToast { warningBanner(toast) }
+            if let toast = comingSoonToast { comingSoonBanner(toast) }
+            Spacer()
+            HStack(alignment: .bottom, spacing: 8) {
+                PublicChatListView(
+                    feed: publicChatFeed,
+                    theme: .live,
+                    onScreenReply: handleScreenReply,
+                    onMsgOpen: handleMsgOpen
+                )
+                    .frame(maxHeight: 260)
+                    .onReceive(nim.messagesStore.$messages) { messages in
+                        publicChatFeed.replace(messages.map(LivePublicChatAdapter.adapt))
+                    }
+                    #if DEBUG
+                    .onTapGesture(count: 3) {
+                        PublicChatDebugInjector.injectAll(into: nim.messagesStore)
+                    }
+                    #endif
+                if !store.privateCallHiddenForPK {
+                    LiveRoomPrivateCallSwitch(isOn: $privateCallOn, onToggle: { next in
+                        handlePrivateCallToggle(next)
+                    })
+                    .padding(.bottom, 60)
+                }
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if isInputFocused { isInputFocused = false }
         }
     }
 
