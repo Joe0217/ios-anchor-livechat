@@ -10,8 +10,29 @@ struct PartyGiftEvent: Equatable {
     let num: Int
     let senderUserId: String?
     let senderNickname: String?
+    /// v3+（2026-07-16）：发送人头像 URL，对齐 H5 party.js:1100 `data.sendUser.avatar`。
+    /// nil = 后端 payload 缺失（旧版兼容 / 单测省略）
+    let senderAvatar: String?
     let receiverUserIds: [String]    // 安卓支持批量送礼到多麦位
     let timestamp: Int64             // 服务端下发时间戳，用于 1007/2049 去重（iOS 不识别 1007，留字段未来扩展）
+
+    init(giftId: Int,
+         giftName: String?,
+         num: Int,
+         senderUserId: String?,
+         senderNickname: String?,
+         senderAvatar: String? = nil,
+         receiverUserIds: [String],
+         timestamp: Int64) {
+        self.giftId = giftId
+        self.giftName = giftName
+        self.num = num
+        self.senderUserId = senderUserId
+        self.senderNickname = senderNickname
+        self.senderAvatar = senderAvatar
+        self.receiverUserIds = receiverUserIds
+        self.timestamp = timestamp
+    }
 }
 
 /// 视频位邀请待响应（1040 INVITE_VIDEO_SEAT 解析后）。
@@ -93,12 +114,17 @@ extension PartyGiftEvent {
         let sendUserObj = payload["sendUser"] as? [String: Any]
         let receiveList = payload["receiveUserList"] as? [[String: Any]] ?? []
         let receiverIds = receiveList.compactMap { PartyValueNormalizer.stringify($0["userId"]) }
+        // v3+：avatar 字段名 fallback（对齐 H5 `data.sendUser.avatar`；兼容后端 `icon` 别名）
+        let senderAvatar = (sendUserObj?["avatar"] as? String)
+                        ?? (sendUserObj?["icon"] as? String)
+                        ?? (sendUserObj?["userAvatar"] as? String)
         return PartyGiftEvent(
             giftId: PartyValueNormalizer.intify(payload["giftId"]) ?? 0,
             giftName: nil,
             num: PartyValueNormalizer.intify(payload["giftNum"]) ?? 1,
             senderUserId: sendUserObj.flatMap { PartyValueNormalizer.stringify($0["userId"]) },
             senderNickname: sendUserObj?["nickname"] as? String,
+            senderAvatar: senderAvatar,
             receiverUserIds: receiverIds,
             timestamp: timestampMs
         )

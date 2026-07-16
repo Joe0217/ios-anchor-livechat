@@ -93,15 +93,16 @@ enum PartyPublicChatAdapter {
     // MARK: - 送礼消息（2049）
 
     /// 2049 送礼 → `.gift` variant。iconURL/name 由 caller 从后端字段派生（`giftSmallImg / giftName`）。
-    static func gift(event: PartyGiftEvent, iconURL: String?) -> UnifiedPublicChatMessage {
-        let sender = SenderProfile(
-            userId: event.senderUserId,
-            nickname: event.senderNickname ?? "",
-            isSelf: false,
-            nicknameColor: .default
-        )
+    /// v3+（2026-07-16）:senderAvatar 透传到 SenderProfile.avatarURL；主播本人送礼时 payload 缺 avatar
+    /// 可通过 `myAvatarFallback` 兜底（Store 层从 AnchorInfoStore/SessionStore 传入）
+    static func gift(
+        event: PartyGiftEvent,
+        iconURL: String?,
+        myUserId: String? = nil,
+        myAvatarFallback: String? = nil
+    ) -> UnifiedPublicChatMessage {
         return UnifiedPublicChatMessage(
-            sender: sender,
+            sender: makeGiftSender(event: event, myUserId: myUserId, myAvatarFallback: myAvatarFallback),
             variant: .gift(iconURL: iconURL, name: event.giftName ?? "", count: event.num)
         )
     }
@@ -110,17 +111,37 @@ enum PartyPublicChatAdapter {
     static func luckyGiftDerived(
         event: PartyGiftEvent,
         iconURL: String?,
-        totalReward: Int64
+        totalReward: Int64,
+        myUserId: String? = nil,
+        myAvatarFallback: String? = nil
     ) -> UnifiedPublicChatMessage {
-        let sender = SenderProfile(
+        return UnifiedPublicChatMessage(
+            sender: makeGiftSender(event: event, myUserId: myUserId, myAvatarFallback: myAvatarFallback),
+            variant: .luckyGift(iconURL: iconURL, count: event.num, totalReward: totalReward)
+        )
+    }
+
+    /// 送礼消息 sender 构造（gift/luckyGift 共用）。
+    /// - **isSelf** 由 `event.senderUserId == myUserId` 判定
+    /// - **avatarURL** 优先取 `event.senderAvatar`（2049 payload 内 `sendUser.avatar`）；
+    ///   若为 nil 且是 self，走 `myAvatarFallback`（AnchorInfoStore.mine.icon）兜底 —— 解决"主播本人送礼头像不显示"
+    private static func makeGiftSender(
+        event: PartyGiftEvent,
+        myUserId: String?,
+        myAvatarFallback: String?
+    ) -> SenderProfile {
+        let isSelf: Bool = {
+            guard let mine = myUserId, let sid = event.senderUserId else { return false }
+            return sid == mine
+        }()
+        let avatar: String? = event.senderAvatar
+                           ?? (isSelf ? myAvatarFallback : nil)
+        return SenderProfile(
             userId: event.senderUserId,
             nickname: event.senderNickname ?? "",
-            isSelf: false,
+            avatarURL: avatar,
+            isSelf: isSelf,
             nicknameColor: .default
-        )
-        return UnifiedPublicChatMessage(
-            sender: sender,
-            variant: .luckyGift(iconURL: iconURL, count: event.num, totalReward: totalReward)
         )
     }
 

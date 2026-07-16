@@ -244,8 +244,9 @@ private struct RowPartyGift: View {
     }
 }
 
-/// Party 系统消息（切模板 / 排麦开关 / 房管变更 / 视频位邀请接受）—— 无头像，居中卡片
-/// 对齐 H5 chat-list.vue L221-232 系统消息（`ms-8 w-240` 无头像 + `bg-#000/30 rounded-12`）
+/// Party 系统消息（切模板 / 排麦开关 / 房管变更 / 视频位邀请接受）—— 无头像，占用全宽。
+/// v3+（2026-07-16）：**取消头像空间预留**，与 [RowAnnouncement](Rows/RowAnnouncement.swift) 公告布局一致
+/// 从左边缘起 —— 用户反馈"切换 party 房背景图的消息宽度要像公告一样"
 private struct RowPartyModeSwitch: View {
     let text: String
 
@@ -256,9 +257,8 @@ private struct RowPartyModeSwitch: View {
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .frame(maxWidth: 248, alignment: .leading)
+            .frame(maxWidth: 288, alignment: .leading)   // 与 announcement 249 + gameWin 280 同档
             .background(Color.black.opacity(0.30), in: RoundedRectangle(cornerRadius: 12))
-            .padding(.leading, 40)   // 与消息行头像宽度对齐（32 头像 + 8 spacing）
     }
 }
 
@@ -310,7 +310,7 @@ private struct PartyNicknameRow: View {
                 UserLevelBadge(level: lv, size: .small)
             }
             if sender?.isVip == true {
-                PublicChatVipBadge()
+                VIPBadge(size: .small)
             }
             // 房管图标（对齐 H5 chat-list.vue L161 `h16 w16` · icon_lv_${role}.png）
             // v4:owner (role=1) → partyOwnerCrown / manager (role=2) → partyManagerBadge

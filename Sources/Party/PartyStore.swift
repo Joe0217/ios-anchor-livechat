@@ -1950,14 +1950,20 @@ extension PartyStore: PartyRoomChatManagerDelegate {
                              ?? (payload["giftImg"] as? String)
                              ?? (payload["smallImg"] as? String)
         // 派生 luckyGift（对齐 H5 party.js:1167-1187 `data.totalReward > 0` 判定）
+        // v3+（2026-07-16）：主播本人送礼时 payload.sendUser.avatar 若缺失，从 AnchorInfoStore.mine.icon
+        // 或 SessionStore.user.icon 兜底 → 保证自己送礼公屏显示自己头像
+        let myAvatarFallback = AnchorInfoStore.shared.mine?.icon ?? SessionStore.shared.user?.icon
         let totalReward = PartyValueNormalizer.intify(payload["totalReward"]).map { Int64($0) } ?? 0
         if totalReward > 0 {
             chat.appendMessage(PartyPublicChatAdapter.luckyGiftDerived(
-                event: event, iconURL: giftIcon, totalReward: totalReward
+                event: event, iconURL: giftIcon, totalReward: totalReward,
+                myUserId: myUserIdString, myAvatarFallback: myAvatarFallback
             ))
         } else {
-            // 普通 gift 消息
-            chat.appendMessage(PartyPublicChatAdapter.gift(event: event, iconURL: giftIcon))
+            chat.appendMessage(PartyPublicChatAdapter.gift(
+                event: event, iconURL: giftIcon,
+                myUserId: myUserIdString, myAvatarFallback: myAvatarFallback
+            ))
         }
 
         // Task 10：接入跨场景礼物特效引擎。payload 可能含 `gifts` 数组（compressed 批量）或单条；

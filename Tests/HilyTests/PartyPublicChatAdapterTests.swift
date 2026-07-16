@@ -94,6 +94,116 @@ final class PartyPublicChatAdapterTests: XCTestCase {
         XCTAssertEqual(total, 8888)
     }
 
+    /// v3+ (2026-07-16)：event.senderAvatar 应透传到 sender.avatarURL
+    func test_gift_senderAvatar_flowsToSenderProfile() {
+        let event = PartyGiftEvent(
+            giftId: 100, giftName: "Rose", num: 1,
+            senderUserId: "u1", senderNickname: "Alice",
+            senderAvatar: "https://cdn/alice.png",
+            receiverUserIds: [], timestamp: 1_000
+        )
+        let msg = PartyPublicChatAdapter.gift(event: event, iconURL: nil)
+        XCTAssertEqual(msg.sender?.avatarURL, "https://cdn/alice.png")
+    }
+
+    /// v3+ (2026-07-16)：event.senderUserId == myUserId 时 sender.isSelf = true
+    func test_gift_isSelf_whenSenderUserIdMatchesMine() {
+        let event = PartyGiftEvent(
+            giftId: 100, giftName: nil, num: 1,
+            senderUserId: "1000", senderNickname: "Me",
+            senderAvatar: "https://cdn/me.png",
+            receiverUserIds: [], timestamp: 1_000
+        )
+        let msg = PartyPublicChatAdapter.gift(event: event, iconURL: nil, myUserId: "1000")
+        XCTAssertTrue(msg.sender?.isSelf ?? false)
+    }
+
+    /// v3+ (2026-07-16)：senderUserId != myUserId 时 isSelf = false
+    func test_gift_isSelf_falseWhenSenderMismatchesMine() {
+        let event = PartyGiftEvent(
+            giftId: 100, giftName: nil, num: 1,
+            senderUserId: "1000", senderNickname: "Other",
+            senderAvatar: nil,
+            receiverUserIds: [], timestamp: 1_000
+        )
+        let msg = PartyPublicChatAdapter.gift(event: event, iconURL: nil, myUserId: "2000")
+        XCTAssertFalse(msg.sender?.isSelf ?? true)
+    }
+
+    /// v3+ (2026-07-16)：主播本人送礼 payload 缺 sendUser.avatar 时走 myAvatarFallback
+    func test_gift_selfFallbackAvatar_whenPayloadMissingAndIsSelf() {
+        let event = PartyGiftEvent(
+            giftId: 100, giftName: nil, num: 1,
+            senderUserId: "1000", senderNickname: "Me",
+            senderAvatar: nil,        // payload 未带
+            receiverUserIds: [], timestamp: 1_000
+        )
+        let msg = PartyPublicChatAdapter.gift(
+            event: event, iconURL: nil,
+            myUserId: "1000", myAvatarFallback: "https://cdn/local-mine.png"
+        )
+        XCTAssertEqual(msg.sender?.avatarURL, "https://cdn/local-mine.png")
+        XCTAssertTrue(msg.sender?.isSelf ?? false)
+    }
+
+    /// v3+ (2026-07-16)：非 self + payload 缺 avatar → 不走 fallback（fallback 仅 self 生效）
+    func test_gift_fallback_notAppliedWhenNotSelf() {
+        let event = PartyGiftEvent(
+            giftId: 100, giftName: nil, num: 1,
+            senderUserId: "2000", senderNickname: "Other",
+            senderAvatar: nil,
+            receiverUserIds: [], timestamp: 1_000
+        )
+        let msg = PartyPublicChatAdapter.gift(
+            event: event, iconURL: nil,
+            myUserId: "1000", myAvatarFallback: "https://cdn/local-mine.png"
+        )
+        XCTAssertNil(msg.sender?.avatarURL)   // 别人送礼 payload 缺 avatar → 显示默认头像，不错拿 self fallback
+    }
+
+    /// v3+ (2026-07-16)：PartyGiftEvent.from 解析 `sendUser.avatar` 字段
+    func test_partyGiftEvent_from_extractsAvatarFromPayload() {
+        let payload: [String: Any] = [
+            "giftId": 42, "giftNum": 3,
+            "sendUser": [
+                "userId": "1234",
+                "nickname": "Anchor",
+                "avatar": "https://cdn/anchor.png"
+            ]
+        ]
+        let event = PartyGiftEvent.from(payload: payload, timestampMs: 999)
+        XCTAssertEqual(event.senderUserId, "1234")
+        XCTAssertEqual(event.senderNickname, "Anchor")
+        XCTAssertEqual(event.senderAvatar, "https://cdn/anchor.png")
+    }
+
+    /// v3+ (2026-07-16)：sendUser 缺 avatar 字段时用 icon / userAvatar fallback
+    func test_partyGiftEvent_from_avatarFallbackFieldNames() {
+        // 缺 avatar，走 icon
+        let payload1: [String: Any] = [
+            "giftId": 42, "giftNum": 1,
+            "sendUser": ["userId": "1", "icon": "https://cdn/via-icon.png"]
+        ]
+        let e1 = PartyGiftEvent.from(payload: payload1, timestampMs: 1)
+        XCTAssertEqual(e1.senderAvatar, "https://cdn/via-icon.png")
+
+        // 缺 avatar/icon，走 userAvatar
+        let payload2: [String: Any] = [
+            "giftId": 42, "giftNum": 1,
+            "sendUser": ["userId": "1", "userAvatar": "https://cdn/via-userAvatar.png"]
+        ]
+        let e2 = PartyGiftEvent.from(payload: payload2, timestampMs: 1)
+        XCTAssertEqual(e2.senderAvatar, "https://cdn/via-userAvatar.png")
+
+        // 三个都缺 → nil
+        let payload3: [String: Any] = [
+            "giftId": 42, "giftNum": 1,
+            "sendUser": ["userId": "1", "nickname": "X"]
+        ]
+        let e3 = PartyGiftEvent.from(payload: payload3, timestampMs: 1)
+        XCTAssertNil(e3.senderAvatar)
+    }
+
     // MARK: - gameWinNotify
 
     func test_gameWinNotify_decodesFullPayload() {
