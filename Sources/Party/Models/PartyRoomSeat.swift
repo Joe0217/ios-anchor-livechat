@@ -147,6 +147,10 @@ struct PartyRoomSeat: Codable, Equatable, Identifiable {
     /// - Bool 桥接排除：NSNumber objCType "c"/"B" = Bool，避免 `1.stringValue = "1"` 但语义错的场景
     private static func decodeIdString(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> String? {
         if let s = try? c.decode(String.self, forKey: key), !s.isEmpty { return s }
+        // rule §Decoder 模板 · Bool 桥接排除（NSNumber objCType "c"/"B" = Bool）
+        //   Swift Codable 遇 JSON Bool 时 decode(Int64.self) 通过 NSNumber 桥接会返 1/0 —— 语义错
+        //   显式先 decode Bool 检测：若成功说明是 Bool 类型 → 返 nil 不当作 ID
+        if (try? c.decode(Bool.self, forKey: key)) != nil { return nil }
         if let n = try? c.decode(Int64.self, forKey: key) { return String(n) }
         return nil
     }

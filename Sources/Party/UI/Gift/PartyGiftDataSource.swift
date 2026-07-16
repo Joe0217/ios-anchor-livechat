@@ -118,6 +118,59 @@ final class PartyGiftDataSource: GiftPanelDataSource, GiftPanelBalanceSource {
         return _latestBalance
     }
 
+    /// 强制走网络重拉最新余额（用户 tap 余额胶囊触发）。
+    /// **走 getPartyRoomGift** 拿 response.userDiamond + tabs（H-5 balance 一体化 · 无独立 gem/getBalance）；
+    /// 副作用：**groups + userDiamond 都刷入 GiftCatalogCache**（服务端上线新礼物用户可立即看到 · 不需等 TTL 过期）
+    /// 失败静默返 _latestBalance（保留原值 · PartyAPIClient 底层 GlobalErrorBannerNotify 已 post error banner）
+    func refreshFromServer() async -> Int64? {
+        do {
+            let response = try await PartyAPI.getPartyRoomGift(showType: 0, apiVersion: 2)
+            // review #3 · 顺手把最新 groups 写 cache（避免服务端新礼物需要等 5min TTL 过期）
+            let freshGroups = Self.decodeGroupsFromResponse(response)
+            lock.lock()
+            if let b = response.userDiamond {
+                _latestBalance = b
+            }
+            let syncedBalance = _latestBalance
+            lock.unlock()
+            if !freshGroups.isEmpty {
+                GiftCatalogCache.shared.set(scene: .party, groups: freshGroups, userDiamond: response.userDiamond ?? syncedBalance)
+            } else if let b = response.userDiamond {
+                // groups 空但 balance 有 → 只更 balance 不写空 groups（对齐 review #3 空态守护）
+                GiftCatalogCache.shared.updateBalance(scene: .party, userDiamond: b)
+            }
+            logger.info("[PartyGift] refreshFromServer done balance=\(response.userDiamond ?? -1, privacy: .public) groups=\(freshGroups.count, privacy: .public)")
+            return response.userDiamond ?? syncedBalance
+        } catch {
+            logger.error("[PartyGift] refreshFromServer failed: \(String(describing: error), privacy: .private)")
+            // review #1 #2 · 持锁读 _latestBalance（避免与 updateBalanceFromSend 并发 race · 保持类自设 NSLock 契约）
+            lock.lock(); defer { lock.unlock() }
+            return _latestBalance
+        }
+    }
+
+    /// 从 PartyGiftV2Response 解析 groups（v2 优先 / v1 兜底）。抽出复用给 loadGifts 与 refreshFromServer。
+    private static func decodeGroupsFromResponse(_ response: PartyGiftV2Response) -> [GiftPanelGroup] {
+        var groups: [GiftPanelGroup] = []
+        if let tabs = response.tabs, !tabs.isEmpty {
+            let sortedTabs = tabs.sorted { ($0.tabSort ?? 0) < ($1.tabSort ?? 0) }
+            for tab in sortedTabs {
+                let rawName = tab.tabCode ?? tab.tabName ?? ""
+                guard let mapped = GiftPanelTab.fromGroupName(rawName) else { continue }
+                groups.append(GiftPanelGroup(tab: mapped, gifts: tab.gifts ?? []))
+            }
+            return groups
+        }
+        if let v1Tabs = response.giftInfoDtoList, !v1Tabs.isEmpty {
+            for tab in v1Tabs {
+                let rawName = tab.tabName ?? ""
+                guard let mapped = GiftPanelTab.fromGroupName(rawName) else { continue }
+                groups.append(GiftPanelGroup(tab: mapped, gifts: tab.giftVoList ?? []))
+            }
+        }
+        return groups
+    }
+
     /// sendGift 成功后 Store 侧从 response.userDiamond 更新余额；同步到 DataSource 缓存 + GiftCatalogCache
     /// 让下次 currentBalance() 返回最新值（若面板 reopen 不需要重拉 API）
     func updateBalanceFromSend(_ balance: Int64) {

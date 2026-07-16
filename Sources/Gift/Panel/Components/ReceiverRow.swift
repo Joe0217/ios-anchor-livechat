@@ -9,11 +9,13 @@ import SwiftUI
 struct GiftPanelReceiverRow: View {
     @ObservedObject var store: CommonGiftPanelStore
 
+    /// review #13 · 用 @ViewBuilder + if let 替代 AnyView 类型擦除
+    /// AnyView anti-pattern：body 重求值触发 diffing 全刷；@ViewBuilder 保持静态类型
+    @ViewBuilder
     var body: some View {
-        guard let cfg = store.config.receivers else {
-            return AnyView(EmptyView())
+        if let cfg = store.config.receivers {
+            content(cfg: cfg)
         }
-        return AnyView(content(cfg: cfg))
     }
 
     @ViewBuilder
@@ -68,13 +70,13 @@ struct GiftPanelReceiverRow: View {
                 ZStack(alignment: .topTrailing) {
                     AvatarView(url: item.avatarURL, size: 34, kind: .user, persistent: false)
                         .overlay(
-                            Circle().stroke(selected ? Color.pink : Color.clear, lineWidth: 2)
+                            Circle().stroke(selected ? Theme.Palette.brandPink : Color.clear, lineWidth: 2)
                         )
 
                     if selected {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 12))
-                            .foregroundStyle(.white, Color.pink)
+                            .foregroundStyle(.white, Theme.Palette.brandPink)
                             .offset(x: 2, y: -2)
                     }
                 }
@@ -103,7 +105,7 @@ struct GiftPanelReceiverRow: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(allSelected ? .white : .white.opacity(0.7))
                 Circle()
-                    .fill(allSelected ? Color.pink : Color.white.opacity(0.15))
+                    .fill(allSelected ? Theme.Palette.brandPink : Color.white.opacity(0.15))
                     .frame(width: 16, height: 16)
                     .overlay(
                         allSelected
