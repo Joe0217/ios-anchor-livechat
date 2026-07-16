@@ -3,10 +3,13 @@ import Combine
 
 /// 全局顶部错误通知（GlobalErrorBanner）。
 ///
-/// **触发路径**：APIClient / PartyAPIClient / SapiTokenStore 三链路的所有请求失败点
-///  → post `Notification.Name.apiRequestFailed`（userInfo["message"]: String，优先后端 message）
-///    或旧的 `.apiResponseParseFailed`（兼容路径，无 message 时兜底 L10n）
-///  → 本 store observer 消费 → 顶部滑入红色胶囊条 3.5s 后自动收回。
+/// **触发路径**：
+/// - APIClient / PartyAPIClient / SapiTokenStore 三链路所有请求失败点 post
+///   `Notification.Name.apiRequestFailed`（userInfo["message"]: 优先后端 message）
+/// - **系统级 NWPathMonitor 断网**：`NetworkReachability.$isReachable` 的 true→false
+///   边沿主动 enqueue —— 覆盖任何第三方 SDK（云信 NIM / 声网 Agora / 相芯）的网络失败，
+///   因为它们走各自的 URLSession，我方 APIClient 的 catch 覆盖不到
+///  → 本 store 消费 → 顶部滑入红色胶囊条 3.5s 后自动收回。
 ///
 /// **文案来源优先级**：userInfo["message"] → L10n.apiResponseParseFailed 兜底。
 /// 业务侧不想弹全局 banner 时，网络请求传 `suppressCodes` 白名单让底层不 post。
@@ -35,6 +38,11 @@ final class GlobalErrorBannerStore: ObservableObject {
     private var windowEndsAt: Date?
     private var dismissTask: Task<Void, Never>?
     private var requestFailedObserver: NSObjectProtocol?
+    private var reachabilityCancellable: AnyCancellable?
+    /// 上一次已知的网络可达状态，用来判定 true→false 边沿。
+    /// 初始 true：若冷启动就没网，NWPathMonitor 首次回调 satisfied=false 会触发一次弹条（符合预期）。
+    /// 若冷启动有网，首次回调 satisfied=true 时 `true && !true == false`，不弹（符合预期）。
+    private var lastReachable: Bool = true
 
     private init() {
         // 通用请求失败通知：userInfo["message"] 优先，无则兜底 L10n。
@@ -51,12 +59,28 @@ final class GlobalErrorBannerStore: ObservableObject {
                 self?.enqueue(message: msg)
             }
         }
+
+        // 系统级网络断线感知：覆盖第三方 SDK 的网络失败（云信 NIM / 声网 / 相芯 走各自 URLSession）
+        // 仅在 true→false 边沿 fire；恢复不打扰。@Published 首值 nil 由 compactMap 过滤。
+        reachabilityCancellable = NetworkReachability.shared.$isReachable
+            .compactMap { $0 }
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] reachable in
+                guard let self else { return }
+                let wasReachable = self.lastReachable
+                self.lastReachable = reachable
+                if wasReachable && !reachable {
+                    self.enqueue(message: L10n.apiNetworkError)
+                }
+            }
     }
 
     deinit {
         if let obs = requestFailedObserver {
             NotificationCenter.default.removeObserver(obs)
         }
+        reachabilityCancellable?.cancel()
     }
 
     /// 触发 banner；3s 合并窗口内静默丢弃。
