@@ -75,6 +75,8 @@ struct LoopingVideoView: UIViewRepresentable {
         /// gen 计数：URL 变化 / dismantle 时自增，stale async task 通过 gen 对比丢弃
         private var currentGen: Int = 0
         private var loadTask: Task<Void, Never>?
+        /// AVPlayer 在 app 切后台被系统 pause，回前台需显式 play() 恢复
+        private var foregroundObserver: NSObjectProtocol?
 
         func attach(view: PlayerContainerView, url: URL?, onReady: (() -> Void)?) {
             let player = AVQueuePlayer()
@@ -86,6 +88,7 @@ struct LoopingVideoView: UIViewRepresentable {
             self.player = player
             self.containerView = view
             self.onReady = onReady
+            installForegroundObserver()
             load(url: url)
         }
 
@@ -113,6 +116,36 @@ struct LoopingVideoView: UIViewRepresentable {
             containerView?.playerLayer.player = nil
             containerView = nil
             currentRemoteURL = nil
+            removeForegroundObserver()
+        }
+
+        // MARK: - foreground resume
+
+        private func installForegroundObserver() {
+            guard foregroundObserver == nil else { return }
+            foregroundObserver = NotificationCenter.default.addObserver(
+                forName: UIApplication.willEnterForegroundNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in self?.resumePlaybackIfNeeded() }
+            }
+        }
+
+        private func removeForegroundObserver() {
+            if let obs = foregroundObserver {
+                NotificationCenter.default.removeObserver(obs)
+                foregroundObserver = nil
+            }
+        }
+
+        private func resumePlaybackIfNeeded() {
+            guard let player else { return }
+            // 系统在后台自动 pause AVPlayer,回前台需显式 play() 恢复循环播放
+            if player.timeControlStatus != .playing {
+                player.play()
+                logger.info("foreground resume: player.play()")
+            }
         }
 
         // MARK: - load

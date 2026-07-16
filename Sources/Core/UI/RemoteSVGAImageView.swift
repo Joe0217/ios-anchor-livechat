@@ -46,6 +46,7 @@ struct RemoteSVGAImageView: UIViewRepresentable {
         player.loops = Int32(loops)
         player.clearsAfterStop = true
         player.backgroundColor = .clear
+        context.coordinator.player = player
         loadAndPlay(player: player, coordinator: context.coordinator)
         return player
     }
@@ -139,5 +140,30 @@ struct RemoteSVGAImageView: UIViewRepresentable {
         var currentGen: Int = 0
         /// onFirstPlay 已 fire 的 gen（-1 = 从未 fire）；仅 `firstPlayFiredGen != currentGen` 才允许再 fire
         var firstPlayFiredGen: Int = -1
+        /// weak 引用当前 SVGAPlayer,供 foreground observer 回前台时恢复动画
+        weak var player: SVGAPlayer?
+        /// SVGAPlayer 内部 CADisplayLink 在 app 后台被系统暂停,回前台需显式 startAnimation() 恢复
+        private var foregroundObserver: NSObjectProtocol?
+
+        init() {
+            foregroundObserver = NotificationCenter.default.addObserver(
+                forName: UIApplication.willEnterForegroundNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                guard let self, let player = self.player else { return }
+                // videoItem 尚未加载完成时 startAnimation 无副作用;已加载则从头循环播放
+                if player.videoItem != nil {
+                    player.startAnimation()
+                    logger.info("foreground resume: startAnimation()")
+                }
+            }
+        }
+
+        deinit {
+            if let obs = foregroundObserver {
+                NotificationCenter.default.removeObserver(obs)
+            }
+        }
     }
 }
