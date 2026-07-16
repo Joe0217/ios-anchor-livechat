@@ -1295,12 +1295,12 @@ private struct PartyRoomBackgroundView: View {
 
     var body: some View {
         let url = effectiveURL
-        let type = Self.bgType(url)
+        let kind = MediaAssetKind(urlString: url)
         return ZStack {
-            mainContent(type: type, url: url)
+            mainContent(kind: kind, url: url)
 
             // 动态资源加载中的静态覆盖（就绪后 0.3s opacity 淡出）
-            if type != .image, !dynamicReady {
+            if kind != .image, !dynamicReady {
                 staticImageView(urlStr: effectivePlaceholder)
                     .transition(.opacity)
             }
@@ -1308,7 +1308,7 @@ private struct PartyRoomBackgroundView: View {
         .frame(width: size.width, height: size.height)
         .animation(.easeOut(duration: 0.3), value: dynamicReady)
         .onAppear {
-            AppLogger.party.info("[PartyRoom] bg url=\(url, privacy: .public) type=\(String(describing: type), privacy: .public)")
+            AppLogger.party.info("[PartyRoom] bg url=\(url, privacy: .public) kind=\(String(describing: kind), privacy: .public)")
         }
         .onChange(of: url) { _ in
             dynamicReady = false
@@ -1316,8 +1316,8 @@ private struct PartyRoomBackgroundView: View {
     }
 
     @ViewBuilder
-    private func mainContent(type: BgType, url: String) -> some View {
-        switch type {
+    private func mainContent(kind: MediaAssetKind, url: String) -> some View {
+        switch kind {
         case .image:
             staticImageView(urlStr: url)
         case .svga:
@@ -1348,17 +1348,5 @@ private struct PartyRoomBackgroundView: View {
         }
         .frame(width: size.width, height: size.height)
         .clipped()
-    }
-
-    fileprivate enum BgType { case image, svga, mp4 }
-
-    /// URL 后缀分流（对齐 H5 `room-bg.vue` `bgType computed`）。
-    /// 允许 URL 带 query string —— 先切 `?` 再判后缀。
-    fileprivate static func bgType(_ url: String) -> BgType {
-        let path = url.split(separator: "?").first.map(String.init) ?? url
-        let lower = path.lowercased()
-        if lower.hasSuffix(".svga") { return .svga }
-        if lower.hasSuffix(".mp4") { return .mp4 }
-        return .image
     }
 }

@@ -70,6 +70,16 @@ final class PartyStore: ObservableObject {
     /// 更新时机：enterRoom 成功后主动拉；F 期可加 IM 1025 广播实时刷新。
     @Published private(set) var currentRoomBackground: PartyBackground?
 
+    /// v18：`loadCurrentRoomBackground` / `updateCurrentRoomBackground` 竞态守卫。
+    /// 每次外部主动 update（Settings 层回流）或 leave 时 &+= 1；载入前后对比 → mismatch 丢写。
+    /// 防两种真机可复现的 race：
+    /// 1. load 首个 await 后用户在 Settings 选了新背景 → 后续 await 拿到旧 idOnly → match 后覆写用户新选（真机可 100% 复现）
+    /// 2. 房间 A 进房 → load 起 → 用户切到房间 B → A 的 load stale resume 后写入 B 的 store
+    /// 会话级、单调递增；session 生命周期内不需要重置。
+    private var backgroundEpoch: Int = 0
+    /// v18：会话级缓存 backgroundList（近似静态目录，进房不再重拉整份）
+    private var backgroundListCache: [PartyBackground]?
+
     // MARK: - Room Mode (E v2 §1)
 
     /// 房主 Room Mode 模板列表缓存（key=tab type 1/2）。spec §1 UI 态。
@@ -436,6 +446,8 @@ final class PartyStore: ObservableObject {
         ownerHeadFrameURL = nil
         didLoadOwnerInfo = false
         // v16.4：房间背景 state 清 —— 新房需重拉，否则会带入上一房的背景
+        // v18：bump epoch 让上一房 in-flight `loadCurrentRoomBackground` 恢复时对比 epoch → 丢写
+        backgroundEpoch &+= 1
         currentRoomBackground = nil
         speakingUids = []
         // E v2：Room Mode / Mic Application 状态清 —— 退房需清残留，避免下次进房带入旧队列
@@ -517,29 +529,63 @@ final class PartyStore: ObservableObject {
     /// 失败静默：backgroundLayer fallback 到 H5 DEFAULT_BG 网络图。
     func loadCurrentRoomBackground() async {
         guard let info = roomInfo, let id = info.id, !id.isEmpty else { return }
-        do {
-            guard let idOnly = try await PartyAPI.getRoomBgImage(roomId: id) else {
-                currentRoomBackground = nil
-                AppLogger.party.info("[PartyStore] loadCurrentRoomBackground: no bg set")
-                return
+        // Snapshot：入口锁定 room-id + epoch，写入前 double-check 防两种 race（见字段声明）
+        let expectedRoomId = id
+        let expectedEpoch = backgroundEpoch
+
+        // 独立守卫：写入前必须 (a) 当前房间未变，(b) epoch 未被外部 update 抢先
+        func canWrite() -> Bool {
+            guard roomInfo?.id == expectedRoomId else {
+                AppLogger.party.notice("[PartyStore] loadCurrentRoomBackground stale: roomId changed from=\(expectedRoomId, privacy: .public) to=\(self.roomInfo?.id ?? "nil", privacy: .public), drop write")
+                return false
             }
-            // 按 id 从 backgroundList 匹配完整对象（拿 bigImgUrl / imgUrl）
-            do {
-                let list = try await PartyAPI.backgroundList()
-                if let full = list.first(where: { $0.id == idOnly.id }) {
-                    currentRoomBackground = full
-                    AppLogger.party.info("[PartyStore] loadCurrentRoomBackground matched id=\(full.id, privacy: .public) bigImgUrl=\(full.bigImgUrl ?? "nil", privacy: .public)")
-                } else {
-                    currentRoomBackground = idOnly
-                    AppLogger.party.notice("[PartyStore] loadCurrentRoomBackground id=\(idOnly.id, privacy: .public) not in backgroundList (list size=\(list.count, privacy: .public)); fallback id-only")
-                }
-            } catch {
-                currentRoomBackground = idOnly
-                AppLogger.party.notice("[PartyStore] loadCurrentRoomBackground backgroundList fetch failed: \(String(describing: error), privacy: .private); fallback id-only")
+            guard backgroundEpoch == expectedEpoch else {
+                AppLogger.party.notice("[PartyStore] loadCurrentRoomBackground stale: epoch bumped by external update (my=\(expectedEpoch, privacy: .public) cur=\(self.backgroundEpoch, privacy: .public)), drop write")
+                return false
             }
-        } catch {
-            AppLogger.party.notice("[PartyStore] loadCurrentRoomBackground failed: \(String(describing: error), privacy: .private)")
+            return true
         }
+
+        // v18 并发拉：getRoomBgImage 与 backgroundList 相互独立（match 本地做），
+        // `async let` 让两者并行，省一个 RTT。backgroundList 会话内缓存，多次进房只拉一次。
+        async let idOnlyTask: PartyBackground? = PartyAPI.getRoomBgImage(roomId: id)
+        async let listTask: [PartyBackground] = self.fetchBackgroundListCached()
+
+        let idOnly: PartyBackground?
+        do {
+            idOnly = try await idOnlyTask
+        } catch {
+            _ = await listTask   // 收尾 async let 避免 warning
+            AppLogger.party.notice("[PartyStore] loadCurrentRoomBackground getRoomBgImage failed: \(String(describing: error), privacy: .private)")
+            return
+        }
+
+        guard let idOnly else {
+            _ = await listTask
+            guard canWrite() else { return }
+            currentRoomBackground = nil
+            AppLogger.party.info("[PartyStore] loadCurrentRoomBackground: no bg set")
+            return
+        }
+
+        let list = await listTask
+        guard canWrite() else { return }
+        if let full = list.first(where: { $0.id == idOnly.id }) {
+            currentRoomBackground = full
+            AppLogger.party.info("[PartyStore] loadCurrentRoomBackground matched id=\(full.id, privacy: .public) bigImgUrl=\(full.bigImgUrl ?? "nil", privacy: .public)")
+        } else {
+            currentRoomBackground = idOnly
+            AppLogger.party.notice("[PartyStore] loadCurrentRoomBackground id=\(idOnly.id, privacy: .public) not in backgroundList (list size=\(list.count, privacy: .public)); fallback id-only")
+        }
+    }
+
+    /// v18：backgroundList 会话缓存（近似静态目录，多次进房只拉一次）。
+    /// 失败退化空数组不 throw，让 loadCurrentRoomBackground 走 fallback（id-only）。
+    private func fetchBackgroundListCached() async -> [PartyBackground] {
+        if let cached = backgroundListCache { return cached }
+        let fresh = (try? await PartyAPI.backgroundList()) ?? []
+        backgroundListCache = fresh
+        return fresh
     }
 
     /// v17：由 Settings 层选完背景后回流完整对象（对齐 H5 create.vue:200-203
@@ -549,9 +595,17 @@ final class PartyStore: ObservableObject {
     /// （从 `getBgImages` 列表来）—— 必须此刻主动回流，否则 PartyRoomView 只能等下一次 `loadCurrentRoomBackground`
     /// 全流程 refresh（成本高 + UX 延迟）。
     func updateCurrentRoomBackground(_ bg: PartyBackground) {
+        // v18 竞态守卫：bump epoch → 任何 in-flight `loadCurrentRoomBackground` 恢复时对比 epoch
+        // 发现不匹配 → 丢写，避免用户新选被 stale load 覆盖回旧背景
+        backgroundEpoch &+= 1
         currentRoomBackground = bg
-        AppLogger.party.info("[PartyStore] updateCurrentRoomBackground id=\(bg.id, privacy: .public) bigImgUrl=\(bg.bigImgUrl ?? "nil", privacy: .public)")
+        AppLogger.party.info("[PartyStore] updateCurrentRoomBackground id=\(bg.id, privacy: .public) bigImgUrl=\(bg.bigImgUrl ?? "nil", privacy: .public) epoch=\(self.backgroundEpoch, privacy: .public)")
     }
+
+    // TODO(F 里程碑)：接入 IM 1025 (PartyAttachType.roomBgUpdate) broadcast 消费。
+    // 目前 owner 端 Settings 层直接调 updateCurrentRoomBackground 是唯一写路径；
+    // audience 端 / 跨设备同步能力等 F 期后端 IM 1025 payload 契约稳定后统一 route 到本方法。
+    // 参见 review finding #14。
 
     // MARK: - 关注房主（对齐 H5 header-wrap.vue L139-140 handleFollowOrNo）
 
@@ -589,6 +643,13 @@ final class PartyStore: ObservableObject {
         guard isJoinedChannel, imAlive else { return }
         roomState = .joined
         AppLogger.party.info("[PartyStore] markJoinedIfReady → state=joined")
+        // 房主进入自己已开启私 call 的房间 → 自动上线（对齐直播/匹配的自动上线行为）
+        // 观众进这种房间不触发（私 call 是房主专属功能，房间态与观众无关）
+        if selfRole == .owner,
+           roomInfo?.partyPrivateCallOpen == 1,
+           !OnlineStatusStore.shared.userSetOnline {
+            OnlineStatusStore.shared.setUserSetOnline(true)
+        }
     }
 
     // MARK: - 上下麦 / 媒体切换

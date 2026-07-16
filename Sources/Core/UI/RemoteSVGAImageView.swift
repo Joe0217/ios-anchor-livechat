@@ -28,6 +28,9 @@ struct RemoteSVGAImageView: UIViewRepresentable {
     /// SVGAPlayer.loops：`0` = 无限循环；`n>0` = 播 n 次后 stop
     var loops: Int = 0
     var contentMode: UIView.ContentMode = .scaleAspectFit
+    /// 首次 `startAnimation()` 调用后回调（幂等）。用于外层 placeholder 淡出等就绪信号。
+    /// 对齐 H5 `room-bg.vue` 的 `!svgaIsPlaying` 判定，同一 URL 只 fire 一次。
+    var onFirstPlay: (() -> Void)? = nil
 
     /// 静态 NSCache：跨实例复用同 URL 的解析结果（对齐 SVGAAnimationPlayer.videoEntityCache 思路）。
     /// countLimit 20 覆盖主播端派对房内可能同时展示的装饰框数量（房主 1 + 麦位 12 + 榜单动画 3 等）。
@@ -85,6 +88,7 @@ struct RemoteSVGAImageView: UIViewRepresentable {
         if let cached = Self.videoEntityCache.object(forKey: urlStr as NSString) {
             player.videoItem = cached
             player.startAnimation()
+            fireFirstPlayIfNeeded(coordinator: coordinator)
             return
         }
 
@@ -99,9 +103,32 @@ struct RemoteSVGAImageView: UIViewRepresentable {
                 Self.videoEntityCache.setObject(videoItem, forKey: urlStr as NSString)
                 player.videoItem = videoItem
                 player.startAnimation()
+                self.fireFirstPlayIfNeeded(coordinator: coordinator)
             }
-        } failureBlock: { error in
+        } failureBlock: { [self] error in
             logger.warning("SVGA parse fail url=\(urlStr, privacy: .private) err=\(String(describing: error), privacy: .private)")
+            // v18 修复（code-review #10）：解析失败时也 fire "ready" —— 让外层 placeholder 淡出，
+            // 避免 placeholder 永久盖住（对齐 H5 用户端 <video> 加载失败仍触发 canplay=false → 不阻塞）。
+            // 上层的 fallback UX 语义：SVGA 显不出来时应露出下层（用户看到透明或 default 兜底），
+            // 而不是让 placeholder 静态图误导用户"以为动图播出但不动"。
+            DispatchQueue.main.async {
+                self.fireFirstPlayIfNeeded(coordinator: coordinator)
+            }
+        }
+    }
+
+    /// 同一 URL 只 fire 一次（幂等）；URL 变化时 `loadAndPlay` 会 `currentGen &+= 1`，
+    /// `firstPlayFiredGen` 与 `currentGen` 对比重新允许 fire。
+    /// **必须 async dispatch**：cache hit 路径下本方法从 `makeUIView` / `updateUIView` 同步调用，
+    /// 直接 fire 若触发 caller `@State` 变更会撞 SwiftUI "Modifying state during view update" 警告。
+    private func fireFirstPlayIfNeeded(coordinator: Coordinator) {
+        guard coordinator.firstPlayFiredGen != coordinator.currentGen else { return }
+        let gen = coordinator.currentGen
+        DispatchQueue.main.async {
+            guard coordinator.currentGen == gen,
+                  coordinator.firstPlayFiredGen != gen else { return }
+            coordinator.firstPlayFiredGen = gen
+            self.onFirstPlay?()
         }
     }
 
@@ -110,5 +137,7 @@ struct RemoteSVGAImageView: UIViewRepresentable {
         var loadedURLStr: String = ""
         /// generation 计数：URL 变化 / dismantle 时自增；parse callback 检查 gen 不匹配丢弃
         var currentGen: Int = 0
+        /// onFirstPlay 已 fire 的 gen（-1 = 从未 fire）；仅 `firstPlayFiredGen != currentGen` 才允许再 fire
+        var firstPlayFiredGen: Int = -1
     }
 }

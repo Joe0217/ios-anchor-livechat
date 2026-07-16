@@ -81,6 +81,11 @@ final class PartyRoomSettingsStore: ObservableObject {
 
     private let service: PartyRoomSettingsService
 
+    /// v18：selectBackground 串行化，防用户快速 tap X→Y 导致 setBackground 请求乱序 →
+    /// 本地 currentRoomBackground / selectedBackground / 服务器状态三方分裂。
+    /// 有 in-flight 时新 tap 静默丢弃（View 层已通过 selectedBackground 乐观 UI 立即反馈）。
+    private var isSelectingBackground: Bool = false
+
     // MARK: - Init
 
     init(
@@ -162,14 +167,31 @@ final class PartyRoomSettingsStore: ObservableObject {
     }
 
     /// 用户选新背景 → 即时调 setBgImages（对齐 H5 编辑态 apiSetPartyBgImage 独立 setter）
+    ///
+    /// **v17 真根因修复**：接口成功后必须回流完整 `bg` 到 `PartyStore.currentRoomBackground`
+    /// —— 否则主房间视图（PartyRoomView）看到的仍是 loadCurrentRoomBackground 从
+    /// `getRoomBgImage` 拉到的 id-only 对象（bigImgUrl=nil），永远走 DEFAULT_BG 静态兜底。
+    /// 对齐 H5 用户端 `create.vue:200-203` 精神：接口成功后前端直接把手里已有的完整对象塞回。
     func selectBackground(_ bg: PartyBackground) async {
         // 未变化不发接口
         guard selectedBackground?.id != bg.id else { return }
+        // v18：in-flight guard 防 rapid-tap 三方分裂（本地 vs UI vs 服务器）
+        guard !isSelectingBackground else {
+            AppLogger.party.notice("[PartyRoomSettings] selectBackground drop: in-flight (tapped=\(bg.id, privacy: .public))")
+            return
+        }
+        isSelectingBackground = true
+        defer { isSelectingBackground = false }
         // 乐观 update UI
         let prev = selectedBackground
         selectedBackground = bg
         do {
             try await service.setBackground(roomId: roomId, bgImgId: bg.id)
+            // 回流 PartyStore 让 PartyRoomView 立即换背景（动图 URL 从 bg.bigImgUrl 直接可用）
+            // PartyStore 不在 HilyTests 白名单，test target 编译时用 stub（bg 已通过 service.setBackground 到位）
+            #if !HILY_TESTS
+            PartyStore.shared.updateCurrentRoomBackground(bg)
+            #endif
         } catch {
             // 失败回退
             selectedBackground = prev
