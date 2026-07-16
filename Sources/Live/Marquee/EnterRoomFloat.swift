@@ -40,8 +40,10 @@ struct EnterRoomFloat: View {
     private func content(_ item: EnterRoomFloatQueue.Item) -> some View {
         HStack(spacing: 8) {
             AvatarView(urlString: item.avatarUrl, size: 32, kind: .user)
+            // v24（B1）：大 R 徽章前置（Live 场景恒 true —— EnterRoomFloat 只在直播用）
+            if item.isActiveTycoon { ActiveTycoonBadge(style: .bigRText, size: .small) }
             UserLevelBadge(level: item.userLevel, size: .small)
-            if item.isVip { PublicChatVipBadge() }
+            if item.isVip { VIPBadge(size: .small) }
             Text(item.nickname)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Color(hex: 0x1AFFCD))

@@ -138,7 +138,7 @@ private struct PKRankRow: View {
     var body: some View {
         HStack(spacing: 12) {
             rankBadge
-            AvatarView(urlString: item.avatar, size: 44, kind: .user)
+            AvatarView(urlString: item.avatar, size: 44, kind: .user, userId: item.anchorId)
             infoColumn
             Spacer(minLength: 8)
             contributionValue
@@ -179,10 +179,7 @@ private struct PKRankRow: View {
                 UserLevelBadge(levelName: item.levelName, size: .small)
 
                 if item.isVip {
-                    Image("liveListVipBadge")
-                        .resizable()
-                        .frame(width: 31, height: 14)
-                        .accessibilityLabel(Text("VIP"))
+                    VIPBadge(size: .medium)
                 }
             }
 

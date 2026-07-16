@@ -87,34 +87,12 @@ struct UserLevelBadge: View {
     }
 }
 
-/// VIP 图标 badge（对齐 H5 `list.vue:368-372`：金色 star.circle 占位）。
-struct VIPBadge: View {
-    var body: some View {
-        Image(systemName: "star.circle.fill")
-            .font(.system(size: 14))
-            .foregroundStyle(
-                LinearGradient(colors: [Color(hex: 0xFFD700), Color(hex: 0xFF9900)],
-                               startPoint: .top, endPoint: .bottom)
-            )
-            .accessibilityLabel(L10n.messageA11yVIP)
-    }
-}
+// VIPBadge 已迁移到 [Sources/DesignSystem/Badges/VIPBadge.swift](../../DesignSystem/Badges/VIPBadge.swift)
+// 全 App VIP 视觉统一走公共组件；本文件原 SF Symbol 占位版本已删除。
 
-/// 活跃大 R badge（对齐 H5 `CActiveTycoonBadge`：闪电/宝石图标）。
-struct ActiveTycoonBadge: View {
-    var body: some View {
-        Image(systemName: "bolt.fill")
-            .font(.system(size: 10, weight: .semibold))
-            .foregroundStyle(.white)
-            .padding(3)
-            .background(
-                LinearGradient(colors: [Color(hex: 0xFF6B6B), Color(hex: 0xE94E77)],
-                               startPoint: .leading, endPoint: .trailing)
-            )
-            .clipShape(Capsule())
-            .accessibilityLabel(L10n.messageA11yActiveTycoon)
-    }
-}
+// v24（B1）：ActiveTycoonBadge 迁移到 [Sources/Live/Badges/ActiveTycoonBadge.swift](../../Live/Badges/ActiveTycoonBadge.swift)
+// 支持 style: .boltIcon（Message 私聊列表默认，icon 版）与 .bigRText（直播间榜/名片/公屏，"BIG R" text 版）。
+// 保留无参 init() 语义 = boltIcon —— MessageSessionRow 等既有调用点无 breaking change。
 
 // MARK: - Color hex helper
 

@@ -41,7 +41,7 @@ struct RowWheelRes: View {
         if let s = sender {
             HStack(spacing: 4) {
                 if let lv = s.userLevel, lv > 0 { UserLevelBadge(level: lv, size: .small) }
-                if s.isVip { PublicChatVipBadge() }
+                if s.isVip { VIPBadge(size: .small) }
             }
         }
     }

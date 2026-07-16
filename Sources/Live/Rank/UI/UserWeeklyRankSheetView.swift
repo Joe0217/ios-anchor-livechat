@@ -186,16 +186,16 @@ struct UserWeeklyRankSheetView: View {
     private func sendRankRow(_ entry: SendRankEntry) -> some View {
         HStack(spacing: 12) {
             rankBadge(entry.rank)
-            AvatarView(urlString: entry.avatarUrl, size: 40, kind: .user)
+            AvatarView(urlString: entry.avatarUrl, size: 40, kind: .user, userId: entry.userId)
             VStack(alignment: .leading, spacing: 3) {
                 Text(entry.nickname)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.white)
                     .lineLimit(1)
                 HStack(spacing: 4) {
-                    if entry.isActiveTycoon { bigRBadge }
+                    if entry.isActiveTycoon { ActiveTycoonBadge(style: .bigRText, size: .small) }
                     if entry.level > 0 { levelBadge(entry.level) }
-                    if entry.isVip { vipBadge }
+                    if entry.isVip { VIPBadge(size: .medium) }
                 }
             }
             Spacer(minLength: 8)
@@ -229,30 +229,16 @@ struct UserWeeklyRankSheetView: View {
 
     // MARK: - Badges
 
-    private var bigRBadge: some View {
-        Text("BIG R")
-            .font(.system(size: 9, weight: .bold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 4).padding(.vertical, 1)
-            .background(
-                LinearGradient(colors: [Color(hex: 0xFF6B00), Color(hex: 0xFF3D00)],
-                               startPoint: .leading, endPoint: .trailing),
-                in: Capsule()
-            )
-    }
+    // v24（B1 · prefer-shared-component-over-adhoc）：私有 bigRBadge 迁移到公共组件
+    // [ActiveTycoonBadge](../../Badges/ActiveTycoonBadge.swift)，同 badge 被 6+ 处调用点复用
 
     /// 2026-07-10 迁移到公共组件 UserLevelBadge (11 tier gradient 对齐 H5)
     private func levelBadge(_ level: Int) -> some View {
         UserLevelBadge(level: level, size: .small)
     }
 
-    private var vipBadge: some View {
-        Text("VIP")
-            .font(.system(size: 9, weight: .bold))
-            .foregroundColor(.white)
-            .padding(.horizontal, 3).padding(.vertical, 1)
-            .background(Color(hex: 0xFFBB02), in: RoundedRectangle(cornerRadius: 3))
-    }
+    // v25：VIP 徽章统一走公共组件 VIPBadge（[Sources/DesignSystem/Badges/VIPBadge.swift]），
+    // 原自定义 Text("VIP") + 黄色 rounded 版本已废弃。
 
     private func formatDiamond(_ n: Int64) -> String {
         if n >= 1000 {
@@ -331,7 +317,7 @@ private struct WeekTopThreeCards: View {
                 .font(.system(size: 20))
                 .foregroundColor(crownColor(rank))
             ZStack(alignment: .bottom) {
-                AvatarView(urlString: entry.avatarUrl, size: 48, kind: .user)
+                AvatarView(urlString: entry.avatarUrl, size: 48, kind: .user, userId: entry.userId)
                     .overlay(Circle().stroke(crownColor(rank), lineWidth: 2))
                 // v18 Q4: Week 前 3 名等级徽章（对齐 H5 userWeeklyRank Week Tab Top3 level badge h18 z-3）
                 // 2026-07-10 迁移到公共组件 UserLevelBadge
@@ -387,34 +373,20 @@ private struct ViewerRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            AvatarView(urlString: viewer.avatarUrl, size: 40, kind: .user)
+            AvatarView(urlString: viewer.avatarUrl, size: 40, kind: .user, userId: viewer.userId)
             VStack(alignment: .leading, spacing: 3) {
                 Text(viewer.nickname)
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.white)
                     .lineLimit(1)
                 HStack(spacing: 4) {
-                    if viewer.isActiveTycoon {
-                        Text("BIG R")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 4).padding(.vertical, 1)
-                            .background(
-                                LinearGradient(colors: [Color(hex: 0xFF6B00), Color(hex: 0xFF3D00)],
-                                               startPoint: .leading, endPoint: .trailing),
-                                in: Capsule()
-                            )
-                    }
+                    if viewer.isActiveTycoon { ActiveTycoonBadge(style: .bigRText, size: .small) }
                     if viewer.level > 0 {
                         // 2026-07-10 迁移到公共组件 UserLevelBadge
                         UserLevelBadge(level: viewer.level, size: .small)
                     }
                     if viewer.isVip {
-                        Text("VIP")
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 3).padding(.vertical, 1)
-                            .background(Color(hex: 0xFFBB02), in: RoundedRectangle(cornerRadius: 3))
+                        VIPBadge(size: .medium)
                     }
                     if let country = viewer.countryId, !country.isEmpty {
                         HStack(spacing: 2) {

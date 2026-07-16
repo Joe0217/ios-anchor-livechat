@@ -14,7 +14,7 @@ struct RowOfficialBoostEnter: View {
             HStack(spacing: 4) {
                 if let s = sender {
                     if let lv = s.userLevel, lv > 0 { UserLevelBadge(level: lv, size: .small) }
-                    if s.isVip { PublicChatVipBadge() }
+                    if s.isVip { VIPBadge(size: .small) }
                 }
                 Text("Official Boost✨")
                     .font(.system(size: 12, weight: .semibold))

@@ -12,8 +12,10 @@ struct RowEnterRoom: View {
     var body: some View {
         HStack(spacing: 4) {
             if let s = sender {
+                // v24（B1）：大 R 徽章前置（仅 Live 场景，对齐 H5 §9.6 messageScroller.vue L577）
+                if s.isActiveTycoon && theme.scene == .live { ActiveTycoonBadge(style: .bigRText, size: .small) }
                 if let lv = s.userLevel, lv > 0 { UserLevelBadge(level: lv, size: .small) }
-                if s.isVip { PublicChatVipBadge() }
+                if s.isVip { VIPBadge(size: .small) }
                 Text(s.nickname)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(Color(red: 26/255, green: 1.0, blue: 205/255))   // #1AFFCD
@@ -35,8 +37,19 @@ struct RowEnterRoom: View {
 
     /// H5 setLevelEnterBg tier → 单色渐变（bg1-6：CSS 纯色 → 0 透明；bg7-11：H5 是 border image，iOS 简化为类似色渐变）
     /// 对齐 H5 L65-92 分档：0 / 1 / 2-10 / 11-20 / 21-30 / 31-40 / 41-45 / 46-50 / 51-55 / 56-60 / 61-65 / 66+
+    ///
+    /// v24（B1）：`sender.isActiveTycoon && theme.scene == .live` 覆盖为**金色 gradient**
+    /// （对齐 H5 messageScroller.vue L878-888 `tycoon-enter-bg` 紫红→橙 + 金边）
     private var levelEnterBg: LinearGradient {
-        let lv = sender?.userLevel ?? 0
+        let s = sender
+        if s?.isActiveTycoon == true && theme.scene == .live {
+            return LinearGradient(
+                colors: [Color(red: 227/255, green: 106/255, blue: 205/255),   // 紫红 #E36ACD
+                         Color(red: 255/255, green: 187/255, blue: 2/255)],    // 橙金 #FFBB02
+                startPoint: .leading, endPoint: .trailing
+            )
+        }
+        let lv = s?.userLevel ?? 0
         let color = tierColor(lv)
         return LinearGradient(
             colors: [color, color.opacity(0)],

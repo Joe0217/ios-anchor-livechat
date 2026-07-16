@@ -1,9 +1,14 @@
 import SwiftUI
 
-/// 单张用户卡片：左侧圆形头像（带绿色在线点）+ 中部 [昵称 / 等级行 / 位置行] + 右侧动作按钮。
-/// 字段对齐 H5 `views/home/components/list.vue` 模板。
+/// 单张用户卡片：左侧圆形头像（带绿色在线点）+ 中部 [昵称 / 等级行 / 位置行] + 右侧动作按钮组。
+/// 字段对齐 H5 `views/home/components/list.vue` 模板；按钮组规则对齐 H5 `CCommunicationBtns`。
 struct LiveListUserCard: View {
     let anchor: LiveListAnchor
+    /// 是否显示视频通话按钮（对齐 H5：online segment 看 `anchortCallAuth`，prime segment 强制显示）。
+    /// 由 `LiveListView` 派生：`segment == .prime || CallAuthBridge.canCall`。
+    let showVideoCall: Bool
+
+    @Environment(\.openChat) private var openChat
 
     var body: some View {
         // H-0：整 cell 包 NavigationLink 推入 UserProfileView。actionButton 用 .buttonStyle(.borderless)
@@ -13,8 +18,7 @@ struct LiveListUserCard: View {
                 avatar
                 infoColumn
                 Spacer(minLength: 4)
-                LiveListActionButton(action: .chat)
-                    .buttonStyle(.borderless)
+                actionButtonGroup
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -31,6 +35,23 @@ struct LiveListUserCard: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
+    }
+
+    /// 按钮组：videoCall 条件显示 + chat 常显（对齐 H5 flex gap-10 并排）
+    private var actionButtonGroup: some View {
+        HStack(spacing: 10) {
+            if showVideoCall {
+                LiveListActionButton(action: .videoCall) {
+                    Task { await initiateVideoCall() }
+                }
+                .buttonStyle(.borderless)
+            }
+            LiveListActionButton(action: .chat) {
+                guard let id = anchor.yxAccid, !id.isEmpty else { return }
+                openChat.perform(id)
+            }
+            .buttonStyle(.borderless)
+        }
     }
 
     /// 圆形头像 + 右下绿色在线圆点。走公共 `AvatarView`；nil/失败自动回退用户默认头像。
@@ -64,10 +85,7 @@ struct LiveListUserCard: View {
                         .foregroundStyle(Theme.Palette.liveListUserMeta)
                 }
                 if anchor.hasVipBadge {
-                    Image("liveListVipBadge")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(height: 14)
+                    VIPBadge(size: .medium)
                         .accessibilityHidden(true)
                 }
             }
@@ -93,5 +111,17 @@ struct LiveListUserCard: View {
         if anchor.hasLevelBadge, let lv = anchor.userLevel { parts.append("Lv.\(lv)") }
         if let c = anchor.country, !c.isEmpty { parts.append(c) }
         return parts.joined(separator: ", ")
+    }
+
+    // MARK: - 拨打通话
+
+    /// code-review Finding 5：preflight (isSignalingReady + state==.idle) 已内部化到 CallStore.callOut。
+    /// 此处只需调 callOut；失败反馈由 CallStore.lastError 承载，LiveList 场景无 toast infra，仅 log。
+    @MainActor
+    private func initiateVideoCall() async {
+        await CallStore.shared.callOut(remoteUserId: anchor.userId)
+        if CallStore.shared.state == .idle, !CallStore.shared.lastError.isEmpty {
+            AppLogger.call.error("[LiveList] callOut failed instantly: \(CallStore.shared.lastError, privacy: .public)")
+        }
     }
 }

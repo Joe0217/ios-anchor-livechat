@@ -13,8 +13,10 @@ struct RowGift: View {
     var body: some View {
         HStack(alignment: .center, spacing: 3) {
             if let s = sender {
+                // v24（B1）：大 R 徽章前置（仅 Live 场景，对齐 H5 §9.6）
+                if s.isActiveTycoon && theme.scene == .live { ActiveTycoonBadge(style: .bigRText, size: .small) }
                 if let lv = s.userLevel, lv > 0 { UserLevelBadge(level: lv, size: .small) }
-                if s.isVip { PublicChatVipBadge() }
+                if s.isVip { VIPBadge(size: .small) }
                 Text(s.nickname)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(Color(red: 26/255, green: 1.0, blue: 205/255))  // #1AFFCD

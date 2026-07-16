@@ -19,6 +19,9 @@ struct CallView: View {
     var liveCamera: CameraManager? = nil
     var liveBeauty: BeautyParameters? = nil
 
+    /// 头像 tap 分派：通话中 → 弹名片卡（对齐 LiveRoom / PartyRoom pattern）
+    @State private var userCardUserId: String? = nil
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -61,11 +64,20 @@ struct CallView: View {
                 store.dismissCongratsBonus()
             }
             .sheetTopInset()
+            .giftPanelSheetBackground()
             .presentationDetents([.height(300)])
             .presentationDragIndicator(.visible)
         }
         // Task 10：声明本 view 属于 GiftEffect .call 场景 —— onAppear 时 setActiveScene，onDisappear 时 leaveScene（硬中断+清队列）
         .giftEffectScene(.call, scopeId: store.current.callId ?? "")
+        // 头像 tap 内置分派：通话中 → 弹名片卡（对齐 LiveRoom / PartyRoom pattern）
+        .userCardSheet(
+            item: Binding(
+                get: { userCardUserId.map { UserCardPresentation(userId: $0) } },
+                set: { userCardUserId = $0?.userId }
+            )
+        )
+        .avatarUserCardPresenter { uid in userCardUserId = uid }
     }
 
     /// v5.5 修复（Bug A/B 同源根因）：消除 switch case 跨分支重建 CallFaceTimeView。
@@ -98,7 +110,8 @@ private struct CallWaitingView: View {
             // 对方头像 / 名字
             RemoteAvatar(icon: store.current.remoteIcon,
                          nickname: store.current.remoteNickname,
-                         headFrame: store.current.remoteHeadFrame)
+                         headFrame: store.current.remoteHeadFrame,
+                         userId: store.current.remoteUserIdString)
 
             Text(store.current.remoteNickname.isEmpty ? store.current.remoteUserIdString : store.current.remoteNickname)
                 .font(.title2).foregroundStyle(.white)
@@ -228,8 +241,10 @@ private struct CallFaceTimeView: View {
             // .allowsHitTesting(isChromeVisible) 隐时按钮不响应，root tap 直穿 → 恢复 chrome
             VStack(spacing: 0) {
                 // D 里程碑：直播私 call 顶部提示条（对齐 H5 index.vue:53 `privateCallTips = isLivingCall && streamerCountdown > 0`）
+                // F-spec：派对房私 call 同款 5min HUD（用户诉求 · 期间不显示关闭按钮）
                 // 归 0 后 banner 完全消失（H5 v-if="privateCallTips"），主播端只在 5 分钟锁定期内看到收益倒计时提示
-                if store.current.frontGameType == .live, store.liveCallCountdown > 0 {
+                if (store.current.frontGameType == .live || store.current.frontGameType == .party),
+                   store.liveCallCountdown > 0 {
                     liveCallBanner.padding(.top, 12).padding(.horizontal, 16)
                 }
                 topBar.padding(.top, 12).padding(.horizontal, 16)
@@ -389,11 +404,11 @@ private struct CallFaceTimeView: View {
             Text(reasonMessage(for: reason))
         }
         // Phase C: chat 输入框 sheet
-        .sheet(isPresented: $showChatInput) { chatInputSheet }
-        // Phase D: gift picker sheet
+        .sheet(isPresented: $showChatInput) { chatInputSheet.giftPanelSheetBackground() }
+        // Phase D: gift picker sheet（CommonGiftPanel 内部已铺渐变，无需 modifier）
         .sheet(isPresented: $showGiftPicker) { giftPickerSheet }
         // Phase E: report sheet
-        .sheet(isPresented: $showReportSheet) { reportSheet }
+        .sheet(isPresented: $showReportSheet) { reportSheet.giftPanelSheetBackground() }
     }
 
     // MARK: - Phase C/D/E · 3 sheet content（@ViewBuilder 抽出减 body 类型推导复杂度）
@@ -478,7 +493,8 @@ private struct CallFaceTimeView: View {
         ZStack {
             Color.black.opacity(0.9)
             VStack(spacing: 14) {
-                AvatarView(urlString: store.current.remoteIcon, size: 100, kind: .user)
+                AvatarView(urlString: store.current.remoteIcon, size: 100, kind: .user,
+                           userId: store.current.remoteUserIdString)
                     .overlay(
                         Circle().stroke(.white.opacity(0.35), lineWidth: 2)
                     )
@@ -532,9 +548,11 @@ private struct CallFaceTimeView: View {
         }
     }
 
-    /// v4：直播私 call 锁定期判定。前 5 分钟 `liveCallCountdown > 0` 时主播不能挂断（对齐 H5 privateCallTips）
+    /// v4：直播私 call / F-spec 派对房私 call 锁定期判定。
+    /// 前 5 分钟 `liveCallCountdown > 0` 时主播不能挂断（对齐 H5 privateCallTips）；派对房同款用户诉求。
     private var isInLiveLockout: Bool {
-        store.current.frontGameType == .live && store.liveCallCountdown > 0
+        (store.current.frontGameType == .live || store.current.frontGameType == .party)
+            && store.liveCallCountdown > 0
     }
 
     /// 左上信息卡：identity + timer + income + waitTag（对齐设计稿主播端.png）
@@ -545,7 +563,8 @@ private struct CallFaceTimeView: View {
                 AvatarView(urlString: store.current.remoteIcon,
                            size: 40,
                            kind: .user,
-                           headwearURL: store.current.remoteHeadFrame.isEmpty ? nil : store.current.remoteHeadFrame)
+                           headwearURL: store.current.remoteHeadFrame.isEmpty ? nil : store.current.remoteHeadFrame,
+                           userId: store.current.remoteUserIdString)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(store.current.remoteNickname.isEmpty ? store.current.remoteUserIdString : store.current.remoteNickname)
                         .font(.system(size: 15, weight: .semibold))
@@ -704,7 +723,7 @@ private struct CallFaceTimeView: View {
             Text("\(value)")
                 .font(.system(size: 14, weight: .semibold)).monospacedDigit()
                 .foregroundStyle(.white)
-            Image("liveResultDiamond")
+            Image("coins")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 14, height: 14)
@@ -851,10 +870,10 @@ private struct CallFaceTimeView: View {
     }
 
     /// PIP 场景额外 top 偏移：
-    /// - 直播私 call（.live）：顶部有 liveCallBanner 横幅挤压 → +50pt
-    /// - 独立 1v1（非 .live）：默认再下移 20pt（对齐设计意图，与 topBar 保留视觉呼吸间距）
+    /// - 直播私 call（.live）+ 派对房私 call（.party）：顶部有 liveCallBanner 横幅挤压 → +50pt
+    /// - 独立 1v1（其他）：默认再下移 20pt（对齐设计意图，与 topBar 保留视觉呼吸间距）
     private var pipTopExtraForCurrentScene: CGFloat {
-        store.current.frontGameType == .live ? 50 : 20
+        (store.current.frontGameType == .live || store.current.frontGameType == .party) ? 50 : 20
     }
 
     /// 本地相机预览的锁定态 dim overlay（仅 PIP + isCallWaitLocked 时生效；main 全屏时不 dim）
@@ -951,13 +970,15 @@ private struct RemoteAvatar: View {
     /// 佩戴的头像框 URL（joinCall.headFrame）；SVGA 后缀当前不渲染，静态图正常显示。
     /// headwearRatio 1.35 对齐 H5 g-waitingCall.vue（头像 48 / 框 65 ≈ 1.354 外扩）。
     let headFrame: String
+    var userId: String? = nil
 
     var body: some View {
         AvatarView(urlString: icon,
                    size: 120,
                    kind: .user,
                    headwearURL: headFrame,
-                   headwearRatio: 1.35)
+                   headwearRatio: 1.35,
+                   userId: userId)
     }
 }
 
@@ -1273,7 +1294,8 @@ private struct CallWaitRechargeTips: View {
 
                 HStack(spacing: 16) {
                     // 远端头像
-                    AvatarView(urlString: store.current.remoteIcon, size: 48, kind: .user)
+                    AvatarView(urlString: store.current.remoteIcon, size: 48, kind: .user,
+                               userId: store.current.remoteUserIdString)
                         .overlay(
                             Circle().stroke(.white.opacity(0.35), lineWidth: 1)
                         )
@@ -1438,7 +1460,7 @@ private struct CallMessageScroller: View {
                     UserLevelBadge(level: level, size: .small)
                 }
                 if sender.isVip {
-                    PublicChatVipBadge()
+                    VIPBadge(size: .small)
                 }
                 if sender.isSpecial {
                     Image("CallAnchorBadgeSS")
