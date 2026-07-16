@@ -55,15 +55,22 @@ struct GiftPanelGrid: View {
 
                 HStack(spacing: 2) {
                     if isPartySend {
-                        // Party 房紫钻资源
+                        // Party 房送礼场景：紫钻 partyGems
                         Image("partyGems")
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .frame(width: 10, height: 10)
-                    } else {
+                    } else if store.config.useBlueDiamond {
+                        // F-spec 派对房私 call 场景：蓝色钻石（对齐设计稿）
                         Image(systemName: "diamond.fill")
                             .font(.system(size: 9))
-                            .foregroundColor(.yellow)
+                            .foregroundColor(Color(hex: 0x4E9AFF))
+                    } else {
+                        // 其他场景（wishGift / callGate / liveDisplayOnly / imBind / callAskFor）：coins 金币图标
+                        Image("coins")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 10, height: 10)
                     }
                     Text("\(gift.giftPrice)")
                         .font(.system(size: 10, weight: .medium))

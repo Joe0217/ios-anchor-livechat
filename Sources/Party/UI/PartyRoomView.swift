@@ -151,11 +151,21 @@ struct PartyRoomView: View {
             }
             // v15:他人麦位 tap → UserCardPopup(sheet 化,对齐 H5 openUserCard)
             // 派对房主播端 tap 头像不跳 UserProfile(对齐 H5 主播端 route.path === '/liveSetting' 分支)
+            // onSendGiftTap:关闭名片卡 + 拉起礼物面板(对齐 H5 partyStore.showPartyGiftPopup = true)
+            // partyAdminContext:派对房 owner/admin 场景下嵌 admin action row
             .userCardSheet(
                 item: Binding(
                     get: { userCardForUserId.map { UserCardPresentation(userId: $0) } },
                     set: { userCardForUserId = $0?.userId }
-                )
+                ),
+                onSendGiftTap: { _ in
+                    // 先关名片卡再拉礼物面板;延迟 0.3s 避免同帧 dismiss+present 冲突(系统 sheet)
+                    userCardForUserId = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        showGiftPanel = true
+                    }
+                },
+                partyAdminContext: partyAdminContextForCard
             )
             // 头像 tap 内置分派：party 房中 → 弹名片卡（走 userCardForUserId binding）
             .avatarUserCardPresenter { uid in userCardForUserId = uid }
@@ -370,6 +380,9 @@ struct PartyRoomView: View {
     }
 
     /// v12：6 视频位模板 —— 3 列 × 2 行 grid（对齐 H5 `grid grid-cols-3 gap-1 px-1` + `aspect-[6/5]`）
+    /// v12：6 视频位模板 —— 3 列 × 2 行 grid（对齐 H5 `grid grid-cols-3 gap-1 px-1` + `aspect-[6/5]`）
+    /// **固定 height**：aspectRatio(.fit) 两维 flex 会被父 VStack 因键盘 padding 挤压 → 视频位缩小；
+    /// 显式挂 `.frame(height:)` 让 seat 脱离 flex，键盘弹起时不受影响。
     private var sixBigSeatGrid: some View {
         LazyVGrid(columns: sixBigSeatColumns, spacing: 4) {
             ForEach(bigSeats, id: \.stableId) { seat in
@@ -385,13 +398,23 @@ struct PartyRoomView: View {
             }
         }
         .padding(.horizontal, 4)
+        .frame(height: sixBigSeatGridHeight)
     }
 
     private var sixBigSeatColumns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: 4), count: 3)
     }
 
+    /// 6 视频位模板固定高度：cellW = (屏宽 - 2*4 hPadding - 2*4 colSpacing) / 3，cellH = cellW * 5/6，总高 = 2 行 + 1 rowSpacing
+    private var sixBigSeatGridHeight: CGFloat {
+        let screenW = UIScreen.main.bounds.width
+        let cellW = (screenW - 16) / 3   // 16 = 2*4 padding + 2*4 col spacing
+        let cellH = cellW * 5.0 / 6.0
+        return cellH * 2 + 4   // 2 行 + 1 行 spacing
+    }
+
     /// v11 沿用：2/3/其他 count → HStack 均分屏宽 + 每 cell 9/16 竖屏
+    /// **固定 height**：同 sixBigSeatGrid 理由 —— aspectRatio(.fit) 会被键盘 padding 挤压。
     private var multiBigSeatRow: some View {
         HStack(spacing: Theme.Metric.partyRoomBigSeatGap) {
             ForEach(bigSeats, id: \.stableId) { seat in
@@ -405,7 +428,16 @@ struct PartyRoomView: View {
                 .onTapGesture { handleSeatTap(seat) }
             }
         }
+        .frame(height: multiBigSeatRowHeight)
         // v9：已按 seat.seatType 分组（video→大位，voice→小位）—— 对齐 H5 main-wrap.vue
+    }
+
+    /// 2/3/其他视频位模板固定高度：cellW = (屏宽 - (n-1)*gap) / n，cellH = cellW * 16/9（竖屏 9:16）
+    private var multiBigSeatRowHeight: CGFloat {
+        let n = CGFloat(max(bigSeats.count, 1))
+        let gap = Theme.Metric.partyRoomBigSeatGap
+        let cellW = (UIScreen.main.bounds.width - gap * (n - 1)) / n
+        return cellW * 16.0 / 9.0
     }
 
     /// v9：按 seatType 分组（对齐 H5 main-wrap.vue slice(0, videoMicNum)）
@@ -413,20 +445,115 @@ struct PartyRoomView: View {
         sortedSeatsCache.filter { $0.seatType == PartyRoomSeatType.video.rawValue }
     }
 
-    // MARK: - 小麦位（按模板动态列数）
+    // MARK: - 小麦位（按模板动态布局，v17 对齐 H5 main-wrap.vue 三分支）
 
-    /// v11：按模板动态渲染 —— smallSeats.count == 0（纯视频模板）时整个 grid 隐藏
+    /// v17（对齐 H5 main-wrap.vue L326-349）：小麦位按 audioMicNum + 有无视频位分 3 布局分支
+    /// - `smallSeats.count == 30 && bigSeats.isEmpty` → 6 列 5 行 grid + sm 变体（H5 L326）
+    /// - `smallSeats.count <= 8 && bigSeats.isEmpty` → 前 n-4 + 后 4 底行分组（H5 L338）
+    /// - 默认（≥10 或有视频位）→ 3/5 列 flex-wrap（对齐 H5 L332 flex-wrap w-68）
     @ViewBuilder
     private var smallSeatGrid: some View {
         if !smallSeats.isEmpty {
-            LazyVGrid(columns: smallSeatColumns, spacing: 14) {
-                ForEach(smallSeats, id: \.stableId) { seat in
-                    PartyRoomSmallSeatCell(seat: seat)
-                        .onTapGesture { handleSeatTap(seat) }
+            Group {
+                if smallSeats.count == 30 && bigSeats.isEmpty {
+                    smallSeatGrid30
+                } else if smallSeats.count <= 8 && bigSeats.isEmpty {
+                    smallSeatSplitLayout
+                } else {
+                    smallSeatDefaultGrid
                 }
             }
-            .padding(.horizontal, Theme.Metric.partyRoomScreenH)
         }
+    }
+
+    /// v17（对齐 H5 `@media (max-width: 380px)` 音频位缩小）：小屏统一 sm 变体（35pt 头像 vs 46pt 默认）
+    private var isSmallScreen: Bool {
+        UIScreen.main.bounds.width < 380
+    }
+
+    /// v17：小麦位默认布局（≥10 麦位 或 有视频位）—— 现有 3/5 列 grid 保留 + sizeVariant 小屏自适应
+    private var smallSeatDefaultGrid: some View {
+        let variant: PartyRoomSmallSeatCell.SizeVariant = isSmallScreen ? .sm : .default
+        return LazyVGrid(columns: smallSeatColumns, spacing: isSmallScreen ? 8 : 14) {
+            ForEach(smallSeats, id: \.stableId) { seat in
+                PartyRoomSmallSeatCell(
+                    seat: seat,
+                    isSpeaking: store.isSpeaking(seat: seat),
+                    sizeVariant: variant
+                )
+                .onTapGesture { handleSeatTap(seat) }
+            }
+        }
+        .padding(.horizontal, Theme.Metric.partyRoomScreenH)
+    }
+
+    /// v17：30 麦位纯语聊模板 —— 6 列 × 5 行 grid（对齐 H5 L326 `grid-cols-6 mx-2`）
+    /// - 无视频位强制走 sm 变体（H5 `<AudioWrap size="sm">`）
+    private var smallSeatGrid30: some View {
+        let cols = Array(repeating: GridItem(.flexible(), spacing: 2), count: 6)
+        return LazyVGrid(columns: cols, spacing: 2) {
+            ForEach(smallSeats, id: \.stableId) { seat in
+                PartyRoomSmallSeatCell(
+                    seat: seat,
+                    isSpeaking: store.isSpeaking(seat: seat),
+                    sizeVariant: .sm
+                )
+                .onTapGesture { handleSeatTap(seat) }
+            }
+        }
+        .padding(.horizontal, 8)
+    }
+
+    /// v17：≤8 麦位纯语聊模板 —— 前 n-4 + 后 4 底行分组（对齐 H5 L338-349）
+    /// - topCount < 4 → 上排居中；topCount = 4 → 上排 justify-between
+    /// - 底排 4 个恒 justify-around（用 `.frame(maxWidth: .infinity)` 均分模拟）
+    /// - 每 cell 固定宽 68pt（H5 `w-68`）
+    private var smallSeatSplitLayout: some View {
+        let n = smallSeats.count
+        let topCount = max(n - 4, 0)
+        let topSeats = Array(smallSeats.prefix(topCount))
+        let bottomSeats = Array(smallSeats.suffix(min(4, n)))
+        let variant: PartyRoomSmallSeatCell.SizeVariant = isSmallScreen ? .sm : .default
+        let cellW: CGFloat = isSmallScreen ? 56 : 68
+        return VStack(spacing: isSmallScreen ? 4 : 8) {
+            if !topSeats.isEmpty {
+                if topCount < 4 {
+                    HStack(spacing: 20) {
+                        ForEach(topSeats, id: \.stableId) { seat in
+                            splitLayoutCell(seat, variant: variant, cellW: cellW)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    HStack(spacing: 0) {
+                        ForEach(Array(topSeats.enumerated()), id: \.element.stableId) { idx, seat in
+                            splitLayoutCell(seat, variant: variant, cellW: cellW)
+                            if idx < topSeats.count - 1 { Spacer() }
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                }
+            }
+            HStack(spacing: 0) {
+                ForEach(bottomSeats, id: \.stableId) { seat in
+                    splitLayoutCell(seat, variant: variant, cellW: cellW)
+                        .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+    }
+
+    private func splitLayoutCell(_ seat: PartyRoomSeat,
+                                 variant: PartyRoomSmallSeatCell.SizeVariant,
+                                 cellW: CGFloat) -> some View {
+        PartyRoomSmallSeatCell(
+            seat: seat,
+            isSpeaking: store.isSpeaking(seat: seat),
+            sizeVariant: variant
+        )
+        .frame(width: cellW)
+        .onTapGesture { handleSeatTap(seat) }
     }
 
     /// v11：列数按模板 smallSeats.count 自适应，避免 5 列固定在 3/6/9 麦模板下右侧留空。
@@ -455,14 +582,19 @@ struct PartyRoomView: View {
         )
         .padding(.top, 6)
         // F-spec 派对房私 call 浮动开关按钮（房主 only；roomInfo 已加载才判定角色，未加载时兜底显示防误隐）
-        .overlay(alignment: .topTrailing) {
+        // 位置：chatArea bottomTrailing —— 对齐设计稿"聊天区右下角靠近输入栏"（避免遮挡顶部欢迎语）
+        .overlay(alignment: .bottomTrailing) {
             if shouldShowPrivateCallButton {
                 PartyRoomPrivateCallButton(
                     isOn: privateCallOn,
-                    onToggle: handlePartyCallToggle
+                    selectedGiftIcon: store.partyCallGiftIcon,
+                    selectedGiftPrice: store.partyCallGiftPrice,
+                    isLoading: store.isTogglingPrivateCall,
+                    onToggle: handlePartyCallToggle,
+                    onTapGift: handlePartyCallGiftReselect
                 )
                 .padding(.trailing, 12)
-                .padding(.top, 4)
+                .padding(.bottom, 8)
             }
         }
     }
@@ -481,18 +613,33 @@ struct PartyRoomView: View {
         store.roomInfo?.isPartyPrivateCallEnabled == true
     }
 
-    /// 浮动按钮 tap handler：
-    /// - 关 → 开：拉起 `CommonGiftPanel.callGate` 让房主选礼物；confirm 后才 API set enable=1
+    /// 浮动按钮 tap handler（v5-需求 1：已有 giftId 复用不重选）：
+    /// - 关 → 开：若 `roomInfo.partyCallGiftId` 已有 → 直接 API set enable=1 复用礼物（无需弹 sheet）
+    ///           若无 → 拉起 `CommonGiftPanel.callGate` 让房主选礼物；confirm 后才 API set enable=1
     /// - 开 → 关：直接 `PartyStore.setPrivateCall(enable: false)`（视觉切换由 store 回写驱动）
     private func handlePartyCallToggle(_ next: Bool) {
         if next {
-            Task { @MainActor in
-                activeRoomTool = nil
-                try? await Task.sleep(nanoseconds: 200_000_000)
-                activeRoomTool = .privateCall
+            if let existingGiftId = store.roomInfo?.partyCallGiftId, !existingGiftId.isEmpty {
+                Task { await store.setPrivateCall(enable: true, giftId: existingGiftId) }
+            } else {
+                Task { @MainActor in
+                    activeRoomTool = nil
+                    try? await Task.sleep(nanoseconds: 200_000_000)
+                    activeRoomTool = .privateCall
+                }
             }
         } else {
             Task { await store.setPrivateCall(enable: false, giftId: nil) }
+        }
+    }
+
+    /// tap 按钮上的礼物 icon —— 无论开关状态都可以重选礼物（弹 gift panel）
+    /// 复用与 `handlePartyCallToggle` 开启态相同的 sheet；confirm 后走 setPrivateCall(enable: true) 更新礼物
+    private func handlePartyCallGiftReselect() {
+        Task { @MainActor in
+            activeRoomTool = nil
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            activeRoomTool = .privateCall
         }
     }
 
@@ -1067,23 +1214,33 @@ struct PartyRoomView: View {
                 .presentationDetents([.medium, .large])
                 .preferredColorScheme(.dark)
         case .privateCall:
-            // F-spec §5.1 v2：房主开开关时拉直播设置同款礼物面板（CommonGiftPanel.callGate + 蓝钻）
+            // F-spec §5.1 v5：房主开开关时拉直播设置同款礼物面板（CommonGiftPanel.callGate + 蓝钻）
             // 用户 confirm 选中礼物 → 调 PartyAPI.updatePartyPrivateCall(enable=1, giftId) → 关 sheet
             // 用户 confirm 但 gift=nil → 视为放弃，不 API，仅关 sheet（对齐 callGate "移除" 语义）
+            // v5-需求 3：关闭态时 confirm 按钮文案改为 "Open private call" 提示"点确认即开启"
+            // v5-需求 4：onConfirm 提取 giftIcon/giftPrice 传给 store 立即更新按钮预览（不等下次 enterRoom 回写）
             CommonGiftPanel(config: .callGate(
                 minPrice: 0,
                 initialSelection: nil,
                 onConfirm: { [store] gift in
                     if let gift {
+                        let icon = gift.giftSmallImg.isEmpty ? gift.giftImg : gift.giftSmallImg
+                        let price = Int(exactly: gift.giftPrice)
                         Task { @MainActor in
-                            await store.setPrivateCall(enable: true, giftId: String(gift.id))
+                            await store.setPrivateCall(
+                                enable: true,
+                                giftId: String(gift.id),
+                                giftIcon: icon,
+                                giftPrice: price
+                            )
                             activeRoomTool = nil
                         }
                     } else {
                         activeRoomTool = nil
                     }
                 },
-                useBlueDiamond: true
+                useBlueDiamond: true,
+                confirmLabel: privateCallOn ? nil : L10n.Party.privateCallOpenConfirmLabel
             ))
             .presentationDetents([.medium, .large])
             .preferredColorScheme(.dark)
