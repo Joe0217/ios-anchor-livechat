@@ -48,7 +48,8 @@ struct PartyListMainView: View {
             }
 
             // 未 load 完 myRoom 前不显示按钮（避免"先显 Create 后切 My Room"闪切体验，用户反馈 2026-07-11）
-            if listStore.didLoadMyRoom {
+            // P 项目：userType 命中 .party bit 时不渲染按钮（三层防护 UI 层）
+            if listStore.didLoadMyRoom && SelfPermissionBridge.shared.canParty {
                 createRoomButton
                     .padding(.bottom, 24)
                     .transition(.opacity)

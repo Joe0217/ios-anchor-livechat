@@ -6,7 +6,8 @@ import SwiftUI
 /// **交互**：回车触发搜索（`.onSubmit`）+ Store 层 1500ms throttle；空搜结果显 empty 空态卡
 struct PartySearchView: View {
     @StateObject private var store = PartySearchStore()
-    let onTapRoom: (String) -> Void
+    /// v4：传完整对象让上层判密码房前置弹窗
+    let onTapRoom: (PartyRoomInfo) -> Void
     @Environment(\.dismiss) private var dismiss
     @FocusState private var searchFocused: Bool
 
@@ -123,7 +124,7 @@ struct PartySearchView: View {
             LazyVStack(spacing: 12) {
                 ForEach(rooms, id: \.stableListId) { room in
                     Button {
-                        onTapRoom(room.id ?? "")
+                        onTapRoom(room)
                     } label: {
                         PartyRoomCardView(room: room)
                     }

@@ -105,26 +105,10 @@ struct PartyTabRootView: View {
         .overlay(alignment: .top) {
             if let t = permissionDeniedToast {
                 Text(t)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(
-                        Capsule().fill(
-                            LinearGradient(
-                                colors: [
-                                    Theme.Palette.partyCreateBtnA.opacity(0.4),
-                                    Theme.Palette.partyCreateBtnB.opacity(0.4)
-                                ],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                    )
-                    .overlay(Capsule().stroke(Color.white.opacity(0.15), lineWidth: 0.5))
-                    .padding(.top, 60)
-                    .transition(.opacity)
+                    .toastStyle()
+                    .transition(Toast.transition)
                     .task(id: t) {
-                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        try? await Task.sleep(nanoseconds: Toast.dismissDurationNanos)
                         permissionDeniedToast = nil
                     }
             }
@@ -137,6 +121,8 @@ struct PartyTabRootView: View {
     /// 密码房 → 弹密码 alert，输入密码后再 push；普通房 → 直接 push。
     /// 对齐 H5 index.vue L165-188 `clickRoomItem` 密码房判断（H5 那段已注释，iOS 按语义激活）。
     private func handleTapRoom(_ room: PartyRoomInfo) {
+        // P 项目权限管理：走统一 gate helper（code-review Finding 6 消除 4 行复制）
+        guard SelfPermissionBridge.shared.gate(.party, action: "handleTapRoom") else { return }
         guard let rid = room.id, !rid.isEmpty else { return }
         let isLocked = (room.lockFlag == 1) || (room.needPassword == true)
         if isLocked {
@@ -148,6 +134,8 @@ struct PartyTabRootView: View {
     }
 
     private func tapCreate() {
+        // P 项目权限管理：走统一 gate helper（code-review Finding 6 消除 4 行复制）
+        guard SelfPermissionBridge.shared.gate(.party, action: "tapCreate") else { return }
         AppLogger.party.info("[PartyTab] tapCreate begin checking=\(self.checkingPermission, privacy: .public)")
         guard !checkingPermission else { return }
         checkingPermission = true

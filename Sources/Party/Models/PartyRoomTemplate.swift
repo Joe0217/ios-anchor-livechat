@@ -76,6 +76,39 @@ struct PartyRoomTemplate: Decodable, Equatable, Identifiable {
         self.coverImage = coverImage
         self.createRoomLevel = createRoomLevel
     }
+
+    /// videoSeatCount / seatCount fallback 到 bundle asset 名（无 coverImage 时兜底）
+    /// Store 层判"是否有可显示资源" + View 层渲染均从此 helper 读，
+    /// 收归 Store→View 反向依赖（CLAUDE.md "副作用收敛进 Store"）
+    var fallbackAssetName: String? {
+        if let vc = videoSeatCount, vc > 0 {
+            switch vc {
+            case 1: return "partyTemplate1Video"
+            case 2: return "partyTemplate2Video"
+            case 3: return "partyTemplate3Video"
+            default: return nil
+            }
+        }
+        if let sc = seatCount {
+            switch sc {
+            case 5:  return "partyTemplate5Mic"
+            case 6:  return "partyTemplate6Mic"
+            case 10: return "partyTemplate10Mic"
+            case 15: return "partyTemplate15Mic"
+            case 20: return "partyTemplate20Mic"
+            default: return nil
+            }
+        }
+        return nil
+    }
+
+    /// 有效模板：id>0 且 有 coverImage URL 或 fallback asset 可命中。
+    /// 过滤后端返 tempId=0 / 4 视频位 / 8 语聊位等 iOS bundle 无 asset 的空占位。
+    var hasValidDisplay: Bool {
+        guard id > 0 else { return false }
+        if let cover = coverImage, !cover.isEmpty { return true }
+        return fallbackAssetName != nil
+    }
 }
 
 /// Room Mode Tab 分类；rawValue 对齐 `getRoomTempList { type }` API 请求参数（spec §1）。

@@ -13,6 +13,9 @@ enum PartyRoomToolSheetKind: String, Identifiable {
     case lockRoom
     // E-spec MC Seat：房主/平台管理员 tap MC Seat → 关 tools sheet → 350ms 后打开 .mcSeat（PartyMCSeatSheet）
     case mcSeat
+    // F-spec Party Call：入口在派对房主 view 的浮动圆形按钮（非 tools sheet），
+    // tap 打开时 activeRoomTool = .privateCall 挂 CommonGiftPanel.callGate sheet（复用直播设置同款）
+    case privateCall
     var id: String { rawValue }
 }
 
@@ -46,7 +49,6 @@ struct PartyRoomToolsSheet: View {
 
     var body: some View {
         ZStack {
-            Theme.Palette.partyListBackground.ignoresSafeArea()
             VStack(spacing: 0) {
                 Text(L10n.Party.settingsToolsTitle)
                     .font(.system(size: 17, weight: .semibold))
@@ -81,6 +83,7 @@ struct PartyRoomToolsSheet: View {
                             onTapMCSeat()
                         }
                     }
+                    // F-spec Party Call：入口在派对房主 view 浮动按钮（非 tools sheet），此处不放 icon
                 }
                 .padding(.horizontal, 24)
                 .padding(.bottom, 32)

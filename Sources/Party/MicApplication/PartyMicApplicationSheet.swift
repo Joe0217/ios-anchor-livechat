@@ -186,7 +186,7 @@ struct PartyMicApplicationSheet: View {
                     genderAgeChip(gender: item.gender, age: item.age)
                 }
                 if let vip = item.vip, vip > 0 {
-                    vipBadge
+                    VIPBadge(size: .medium)
                 }
                 if let lv = item.levelName, !lv.isEmpty {
                     levelBadge(levelName: lv)
@@ -221,22 +221,8 @@ struct PartyMicApplicationSheet: View {
         .background(Capsule().fill(bg))
     }
 
-    private var vipBadge: some View {
-        Text("VIP")
-            .font(.system(size: 9, weight: .heavy))
-            .foregroundColor(.white)
-            .padding(.horizontal, 5)
-            .frame(height: 14)
-            .background(
-                Capsule().fill(
-                    LinearGradient(
-                        colors: [Color(red: 1.0, green: 0.75, blue: 0.10),
-                                 Color(red: 0.98, green: 0.42, blue: 0.10)],
-                        startPoint: .leading, endPoint: .trailing
-                    )
-                )
-            )
-    }
+    // v25：VIP 徽章统一走公共组件 VIPBadge（[Sources/DesignSystem/Badges/VIPBadge.swift]），
+    // 原自定义 Text("VIP") + 橙金 gradient capsule 版本已废弃。
 
     private func levelBadge(levelName: String) -> some View {
         Text("Lv.\(levelName)")

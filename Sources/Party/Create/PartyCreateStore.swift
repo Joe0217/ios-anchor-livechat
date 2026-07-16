@@ -41,8 +41,8 @@ final class PartyCreateStore: ObservableObject {
     @Published var mode: Int = 2 {
         didSet {
             guard mode != oldValue else { return }
-            // 切 selectedTemplate 到新 mode 下的第一张（缓存已就绪时无 loading，未就绪时走 loadInitial 补拉）
-            if let cached = templatesByMode[mode], !cached.isEmpty {
+            // 切 selectedTemplate 到新 mode 下**过 filter 的第一张**（缓存已就绪时无 loading，未就绪时走 loadInitial 补拉）
+            if let cached = templatesByMode[mode]?.filter(\.hasValidDisplay), !cached.isEmpty {
                 selectedTemplate = cached.first
             } else {
                 Task { await loadTemplates(for: mode) }
@@ -56,14 +56,9 @@ final class PartyCreateStore: ObservableObject {
     @Published private(set) var templatesError: String = ""
 
     /// 当前 mode 下的模板列表（View 层用）
-    /// 有效模板：过滤掉 id<=0 或既无 coverImage 又无 iOS asset 匹配的空占位
-    /// （防后端返 tempId=0 / 4 视频位 / 8 语聊位等 iOS bundle 无 asset 的模板显示为空 card）
+    /// 有效模板：`PartyRoomTemplate.hasValidDisplay`（id>0 + coverImage 或 fallback asset 命中）
     var templates: [PartyRoomTemplate] {
-        (templatesByMode[mode] ?? []).filter { temp in
-            guard temp.id > 0 else { return false }
-            if let cover = temp.coverImage, !cover.isEmpty { return true }
-            return PartyCreateRoomView.assetNameForTemplate(temp) != nil
-        }
+        (templatesByMode[mode] ?? []).filter(\.hasValidDisplay)
     }
 
     // MARK: - Language picker 状态
@@ -172,11 +167,14 @@ final class PartyCreateStore: ObservableObject {
             let list = try await service.fetchTemplates(type: targetMode)
             templatesByMode[targetMode] = list
             // v6：全部可选，默认选第一张（仅当前 mode）
+            // 用 filter 后的有效 list 判 selectedTemplate 归属 —— 防 selectedTemplate 指向被 filter
+            // 剔除的空占位 template，UI 侧 templates 里没它但 canSubmit 依然 true
             if isCurrent {
-                if let cur = selectedTemplate, !list.contains(where: { $0.id == cur.id }) {
-                    selectedTemplate = list.first
+                let valid = list.filter(\.hasValidDisplay)
+                if let cur = selectedTemplate, !valid.contains(where: { $0.id == cur.id }) {
+                    selectedTemplate = valid.first
                 } else if selectedTemplate == nil {
-                    selectedTemplate = list.first
+                    selectedTemplate = valid.first
                 }
             }
         } catch is CancellationError {

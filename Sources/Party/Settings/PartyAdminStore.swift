@@ -18,10 +18,18 @@ final class PartyAdminStore: ObservableObject {
     let roomId: String
     private let service: PartyAdminService
 
+    #if HILY_TESTS
+    // Test target 无 PartyAdminServiceLive（不在白名单，依赖 PartyAPI 网络栈）；test 必须显式传 service
+    init(roomId: String, service: PartyAdminService) {
+        self.roomId = roomId
+        self.service = service
+    }
+    #else
     init(roomId: String, service: PartyAdminService = PartyAdminServiceLive()) {
         self.roomId = roomId
         self.service = service
     }
+    #endif
 
     func loadInitial() async {
         guard !isLoading else { return }

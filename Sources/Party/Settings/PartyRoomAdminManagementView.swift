@@ -17,7 +17,6 @@ struct PartyRoomAdminManagementView: View {
 
     var body: some View {
         ZStack {
-            Theme.Palette.partyListBackground.ignoresSafeArea()
             content
         }
         .navigationTitle(L10n.Party.settingsManageAdmins)
@@ -39,19 +38,16 @@ struct PartyRoomAdminManagementView: View {
         .task { await store.loadInitial() }
         .sheet(isPresented: $showAddSheet) {
             PartyAdminAddSheet(store: store) { showAddSheet = false }
+                .giftPanelSheetBackground()
                 .presentationDetents([.medium])
         }
         .overlay(alignment: .top) {
             if !store.errorMessage.isEmpty {
                 Text(store.errorMessage)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(Capsule().fill(Color.black.opacity(0.85)))
-                    .padding(.top, 60)
-                    .transition(.opacity)
+                    .toastStyle()
+                    .transition(Toast.transition)
                     .task(id: store.errorMessage) {
-                        try? await Task.sleep(nanoseconds: 3_000_000_000)
+                        try? await Task.sleep(nanoseconds: Toast.dismissDurationLongNanos)
                         store.clearError()
                     }
             }
@@ -142,7 +138,6 @@ struct PartyAdminAddSheet: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Theme.Palette.partyListBackground.ignoresSafeArea()
             VStack(spacing: 16) {
                 Text(L10n.Party.settingsAdminAddTitle)
                     .font(.system(size: 15, weight: .semibold))

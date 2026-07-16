@@ -88,6 +88,28 @@ final class PartyRoomSettingsStore: ObservableObject {
 
     // MARK: - Init
 
+    #if HILY_TESTS
+    init(
+        roomId: String,
+        roomName: String,
+        tagline: String,
+        languageCode: String,
+        avatarUrl: String?,
+        backgroundId: Int?,
+        service: PartyRoomSettingsService
+    ) {
+        self.roomId = roomId
+        self.service = service
+        self.originalRoomName = roomName
+        self.originalTagline = tagline
+        self.originalLanguageCode = languageCode
+        self.originalAvatarUrl = avatarUrl
+        self.originalBackgroundId = backgroundId
+
+        self.roomName = roomName
+        self.roomTagline = tagline
+    }
+    #else
     init(
         roomId: String,
         roomName: String,
@@ -108,6 +130,7 @@ final class PartyRoomSettingsStore: ObservableObject {
         self.roomName = roomName
         self.roomTagline = tagline
     }
+    #endif
 
     // MARK: - Load
 

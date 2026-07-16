@@ -57,6 +57,8 @@ struct PartyRoomBigSeatCell: View {
             videoLayer
             emptyLayer
             headFrameOverlay
+            // v17：MC 位视觉（对齐 H5 main-wrap.vue `.mc-bg` + `icon_mic_mc_result` + `icon_mic_zs_left/right`）
+            mcOverlay
             overlayNameAndGems
             // v15：说话中呼吸边框（覆盖在视频/头像上层，clipped 里保证不越界）
             PartyBigSeatSpeakingBorder(
@@ -64,6 +66,98 @@ struct PartyRoomBigSeatCell: View {
                 cornerRadius: 0
             )
             // v10：overlayMicIndicator 移除，mic 图标已迁到 nameChip 名字后面（用户 2026-07-13 requirement）
+        }
+    }
+
+    /// v17：MC 位视觉判定 —— `seat.isHostSeat == 1`（对齐 H5 `roomSeatListCom[index]?.isHostSeat === 1`）
+    private var isMcSeat: Bool { (seat.isHostSeat ?? 0) == 1 }
+
+    /// v17：MC 装饰双侧翅膀显示条件 —— 空位 or (占用 + 麦关)（对齐 H5 main-wrap.vue L264 v-if）
+    /// 摄像头开的占用 MC 位显示视频不叠翅膀（避免遮挡视频画面）
+    private var showMcWings: Bool {
+        if !seat.occupied { return true }
+        if (seat.microphoneEnabled ?? 1) == 0 { return true }
+        return false
+    }
+
+    /// v17：MC 位综合装饰层（4-stop 彩边 + 顶部徽章 + 双侧翅膀 + cameraOff 头像框）
+    @ViewBuilder
+    private var mcOverlay: some View {
+        if isMcSeat {
+            // 4-stop 彩边（H5 border-image linear-gradient 150deg）
+            Rectangle()
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            Color(hex: 0xFFFCFA),
+                            Color(hex: 0xFF9438, opacity: 0.5),
+                            Color(hex: 0xFF0090, opacity: 0),
+                            Color(hex: 0xFE00DE, opacity: 0.5),
+                            Color(hex: 0xFF84F0)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 2
+                )
+                .allowsHitTesting(false)
+
+            // 顶部徽章 icon_mic_mc_result（H5 empty: top--16 h-12 w-24；占用+cameraOff: 中心；简化为顶部居中 -6pt）
+            CachedAsyncImage(
+                url: URL(string: "https://img.hnhily.link/mstatic/party/icon_mic_mc_result.webp"),
+                contentMode: .fit,
+                persistent: true
+            ) { Color.clear }
+            .frame(width: 44, height: 22)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .offset(y: -6)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+
+            // 双侧装饰翅膀（H5 L264-267：空位 op-45，占用 op-100）
+            if showMcWings {
+                mcWings
+                    .opacity(seat.occupied ? 1.0 : 0.45)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            }
+
+            // 头像框 border_mc（cameraOff 时叠 —— H5 L283：只在头像可见时显示）
+            if seat.occupied, !isVideoActiveOnThisSeat {
+                CachedAsyncImage(
+                    url: URL(string: "https://img.hnhily.link/mstatic/party/border_mc.webp"),
+                    contentMode: .fit,
+                    persistent: true
+                ) { Color.clear }
+                .frame(width: 76, height: 76)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+        }
+    }
+
+    /// v17：MC 双侧翅膀 —— H5 L265-266：左 h75 w80 inset-is--11 bottom--2；右 h60 w57 inset-ie-0 bottom--2
+    private var mcWings: some View {
+        ZStack {
+            // 左翅（bottom-leading，向左偏 -11pt）
+            CachedAsyncImage(
+                url: URL(string: "https://img.hnhily.link/mstatic/party/icon_mic_zs_left.webp"),
+                contentMode: .fit,
+                persistent: true
+            ) { Color.clear }
+            .frame(width: 60, height: 56)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            .offset(x: -8, y: 2)
+
+            // 右翅（bottom-trailing）
+            CachedAsyncImage(
+                url: URL(string: "https://img.hnhily.link/mstatic/party/icon_mic_zs_right.webp"),
+                contentMode: .fit,
+                persistent: true
+            ) { Color.clear }
+            .frame(width: 44, height: 46)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .offset(x: 0, y: 2)
         }
     }
 
@@ -93,13 +187,29 @@ struct PartyRoomBigSeatCell: View {
 
     // MARK: - Layers
 
+    @ViewBuilder
     private var background: some View {
-        // 占用：深底承接视频；空位：**white 15% 透明**（设计稿 Component 7 视频位空位底色）
-        Rectangle().fill(
-            seat.occupied
-                ? Theme.Palette.partyRoomSeatFill
-                : Color.white.opacity(0.15)
-        )
+        if isMcSeat {
+            // v17：MC 底色 `.mc-bg`（H5 linear-gradient 17deg #1F003D 0%, #440127 51.53%, #000000 100%）
+            // 17deg 近似垂直，用 top→bottom LinearGradient 近似
+            Rectangle().fill(
+                LinearGradient(
+                    stops: [
+                        .init(color: Color(hex: 0x1F003D), location: 0.0),
+                        .init(color: Color(hex: 0x440127), location: 0.5153),
+                        .init(color: Color(hex: 0x000000), location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+        } else if seat.occupied {
+            // 占用：深底承接视频
+            Rectangle().fill(Theme.Palette.partyRoomSeatFill)
+        } else {
+            // 空位：**white 15% 透明**（设计稿 Component 7 视频位空位底色）
+            Rectangle().fill(Color.white.opacity(0.15))
+        }
     }
 
     @ViewBuilder
