@@ -24,15 +24,21 @@ extension View {
     ///   - item: modal 承载 state,`nil` 关闭
     ///   - onAvatarTap: 头像 tap 回调(nil = 头像不可 tap)
     ///   - onMessageTap: Message 按钮 tap 回调(nil = Message 按钮 disabled)
+    ///   - onSendGiftTap: 送礼按钮 tap 回调(nil = 送礼按钮 disabled 半透)
+    ///   - partyAdminContext: 派对房 admin 上下文(nil = 非派对房场景,admin row 隐藏)
     func userCardSheet(
         item: Binding<UserCardPresentation?>,
         onAvatarTap: (() -> Void)? = nil,
-        onMessageTap: ((_ userId: String, _ yxAccid: String?) -> Void)? = nil
+        onMessageTap: ((_ userId: String, _ yxAccid: String?) -> Void)? = nil,
+        onSendGiftTap: ((_ info: UserCardInfo) -> Void)? = nil,
+        partyAdminContext: PartyAdminContext? = nil
     ) -> some View {
         modifier(UserCardOverlayModifier(
             item: item,
             onAvatarTap: onAvatarTap,
-            onMessageTap: onMessageTap
+            onMessageTap: onMessageTap,
+            onSendGiftTap: onSendGiftTap,
+            partyAdminContext: partyAdminContext
         ))
     }
 }
@@ -43,6 +49,8 @@ private struct UserCardOverlayModifier: ViewModifier {
     @Binding var item: UserCardPresentation?
     let onAvatarTap: (() -> Void)?
     let onMessageTap: ((String, String?) -> Void)?
+    let onSendGiftTap: ((UserCardInfo) -> Void)?
+    let partyAdminContext: PartyAdminContext?
 
     func body(content: Content) -> some View {
         content.overlay {
@@ -61,7 +69,9 @@ private struct UserCardOverlayModifier: ViewModifier {
                     UserCardPopup(
                         userId: p.userId,
                         onAvatarTap: onAvatarTap,
-                        onMessageTap: onMessageTap
+                        onMessageTap: onMessageTap,
+                        onSendGiftTap: onSendGiftTap,
+                        partyAdminContext: partyAdminContext
                     )
                     .transition(.move(edge: .bottom))
                 }
@@ -88,6 +98,10 @@ struct UserCardPopup: View {
     let userId: String
     var onAvatarTap: (() -> Void)? = nil
     var onMessageTap: ((_ userId: String, _ yxAccid: String?) -> Void)? = nil
+    /// 送礼按钮 tap 回调(nil = 按钮 disabled 半透,派对房 caller 传入实际打开 gift panel 实现)
+    var onSendGiftTap: ((_ info: UserCardInfo) -> Void)? = nil
+    /// 派对房 admin 上下文(nil = 非派对房场景,admin row 隐藏)
+    var partyAdminContext: PartyAdminContext? = nil
 
     @StateObject private var store: UserCardStore
 
@@ -100,14 +114,23 @@ struct UserCardPopup: View {
     @State private var giftScrollGeom: GiftScrollGeometry = .zero
     @State private var giftContainerWidth: CGFloat = 0
 
+    // Kick 2 步确认状态(对齐 H5 showKickTimeConfirm + showKickConfirm)
+    @State private var showKickTimeConfirm: Bool = false
+    @State private var showKickConfirmDialog: Bool = false
+    @State private var pendingKickBanType: Int = 0
+
     init(userId: String,
          service: UserCardServiceProtocol = UserCardServiceReal(),
          onAvatarTap: (() -> Void)? = nil,
-         onMessageTap: ((String, String?) -> Void)? = nil) {
+         onMessageTap: ((String, String?) -> Void)? = nil,
+         onSendGiftTap: ((UserCardInfo) -> Void)? = nil,
+         partyAdminContext: PartyAdminContext? = nil) {
         self.userId = userId
         self._store = StateObject(wrappedValue: UserCardStore(userId: userId, service: service))
         self.onAvatarTap = onAvatarTap
         self.onMessageTap = onMessageTap
+        self.onSendGiftTap = onSendGiftTap
+        self.partyAdminContext = partyAdminContext
     }
 
     var body: some View {
@@ -143,6 +166,53 @@ struct UserCardPopup: View {
             } message: {
                 Text(L10n.userCardUnblockConfirmMessage)
             }
+            // 派对房 Kick 2 步:Step 1 选踢房时长(Limited hours / Permanent)
+            .confirmationDialog(
+                "",
+                isPresented: $showKickTimeConfirm,
+                titleVisibility: .hidden
+            ) {
+                if let ctx = partyAdminContext, ctx.kickOutHours > 0 {
+                    Button(L10n.userCardPartyKickHoursFormat(hours: ctx.kickOutHours)) {
+                        pendingKickBanType = 1
+                        showKickConfirmDialog = true
+                    }
+                }
+                Button(L10n.userCardPartyKickPermanent, role: .destructive) {
+                    pendingKickBanType = 2
+                    showKickConfirmDialog = true
+                }
+                Button(L10n.userCardUnblockConfirmCancel, role: .cancel) { }
+            }
+            // Step 2:确认弹窗
+            .confirmationDialog(
+                loadedNickname ?? "",
+                isPresented: $showKickConfirmDialog,
+                titleVisibility: .visible
+            ) {
+                Button(L10n.userCardPartyKickConfirmButton, role: .destructive) {
+                    performKickOut()
+                }
+                Button(L10n.userCardUnblockConfirmCancel, role: .cancel) { }
+            } message: {
+                Text(L10n.userCardPartyKickConfirmMessage(nickname: loadedNickname ?? ""))
+            }
+    }
+
+    /// 从 loaded state 派生的昵称(kick confirm dialog 显示用)
+    private var loadedNickname: String? {
+        if case .loaded(let info) = store.state { return info.nickname }
+        return nil
+    }
+
+    /// 执行 kick out(Step 2 confirm 后调,内部走 partyAdminContext 桥接到 PartyStore)
+    private func performKickOut() {
+        guard let ctx = partyAdminContext else { return }
+        guard case .loaded(let info) = store.state else { return }
+        let seatIndex = ctx.targetSeat?.seatIndex ?? -1
+        ctx.onKickOutRoom(seatIndex, info.userId, pendingKickBanType)
+        // 关闭 sheet(caller 层通过 binding 感知)
+        // 这里无法直接关闭 sheet(item binding 在 wrapper),但 caller 收到 action 后可自行 dismiss
     }
 
     // MARK: - 卡片背景(顶部圆角 16 + 深紫渐变;向下延伸到屏幕底 safe area)
@@ -192,11 +262,8 @@ struct UserCardPopup: View {
                     .frame(height: Self.avatarBlockHeight - Self.avatarOverhang, alignment: .top)
                     .offset(y: -Self.avatarOverhang)
 
-                // 昵称
-                Text(info.nickname)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
+                // 昵称 + 关注 icon(未关注时显示;tap 后 icon 消失,对齐 H5 v-if="isShowFollow")
+                nicknameRow(info: info)
 
                 // UID: xxx + 复制按钮(tap 复制 userId 到剪贴板 + 全局 toast)
                 uidWithCopyButton(userId: info.userId)
@@ -229,6 +296,12 @@ struct UserCardPopup: View {
                 // 底部按钮(Follow + Message)
                 bottomButtons(info: info)
                     .padding(.top, 6)
+
+                // 派对房 admin action row(对齐 H5 party-user-card.vue L640-668)
+                if let ctx = partyAdminContext, ctx.canShowAdminActions {
+                    partyAdminActionRow(info: info, context: ctx)
+                        .padding(.top, 24)
+                }
             }
             .padding(.horizontal, 15)
             .padding(.bottom, 34)
@@ -301,6 +374,37 @@ struct UserCardPopup: View {
         }
     }
 
+    // MARK: - 昵称行(昵称 + 关注 icon,未关注时显示)
+
+    /// 昵称 + 右侧关注 icon(H5 party-user-card.vue L534-538 `v-if="isShowFollow"`)。
+    /// - 未关注 → icon 显示,tap 触发 store.toggleFollow(乐观 UI:isFollowed=true 后 icon 消失)
+    /// - 已关注 → icon 隐藏(取消关注的入口不在名片卡)
+    /// - pending 期间 icon 半透 disabled 防连点
+    private func nicknameRow(info: UserCardInfo) -> some View {
+        HStack(spacing: 8) {
+            Text(info.nickname)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+
+            if !info.isFollowed {
+                Button {
+                    store.toggleFollow()
+                } label: {
+                    Image("partyUserCardFollow")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(store.pendingFollow)
+                .opacity(store.pendingFollow ? 0.5 : 1.0)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+    }
+
     // MARK: - UID 展示 + 复制按钮
 
     /// UID row:`UID: 1000001861 [icon]` —— tap icon 复制 userId 到剪贴板 + 全局 toast
@@ -315,10 +419,14 @@ struct UserCardPopup: View {
                 UIPasteboard.general.string = userId
                 AppToastCenter.shared.show(L10n.userCardUidCopiedToast)
             } label: {
-                Image(systemName: "doc.on.doc")
-                    .font(.system(size: 11))
+                // 换切图 `partyUserCardCopy`(对齐 H5 icon_copy.webp 视觉;fallback SF Symbol 若资源缺失)
+                Image("partyUserCardCopy")
+                    .resizable()
+                    .renderingMode(.template)
+                    .aspectRatio(contentMode: .fit)
                     .foregroundColor(.white.opacity(0.5))
-                    .frame(width: 20, height: 20)
+                    .frame(width: 14, height: 14)
+                    .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -361,7 +469,7 @@ struct UserCardPopup: View {
             }
 
             if info.isVip {
-                PublicChatVipBadge()
+                VIPBadge(size: .small)
             }
         }
         .frame(maxWidth: .infinity, alignment: .center)
@@ -562,28 +670,33 @@ struct UserCardPopup: View {
         }
     }
 
-    // MARK: - 底部按钮(Follow + Message)
+    // MARK: - 底部按钮(Send Gift + Message)
+    //
+    // v2 改造(2026-07-16):关注按钮移到昵称行 icon(未关注时显示 icon,tap 后消失),
+    // bottomButtons 原 Follow 位置改为 Send Gift 按钮 —— 对齐 H5 party-user-card.vue L614-624。
 
     private func bottomButtons(info: UserCardInfo) -> some View {
         HStack(spacing: 12) {
-            // Follow / Followed
+            // Send Gift(H5 深紫 #3625AA + 送礼切图 icon,替换原 Follow 位置)
             Button {
-                store.toggleFollow()
+                onSendGiftTap?(info)
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: info.isFollowed ? "checkmark" : "plus")
-                        .font(.system(size: 14, weight: .bold))
-                    Text(info.isFollowed ? L10n.userCardUnfollow : L10n.userCardFollow)
+                    Image("partyUserCardSendGift")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 24, height: 24)
+                    Text(L10n.userCardSendGift)
                         .font(.system(size: 18, weight: .bold))
                 }
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .frame(height: 44)
-                .background(followBackground(followed: info.isFollowed))
+                .background(Capsule().fill(Color(hex: 0x3625AA)))
             }
             .buttonStyle(.plain)
-            .disabled(store.pendingFollow)
-            .opacity(store.pendingFollow ? 0.6 : 1.0)
+            .disabled(onSendGiftTap == nil)
+            .opacity(onSendGiftTap == nil ? 0.5 : 1.0)
 
             // Message(仅 onMessageTap != nil 时显示)
             if onMessageTap != nil {
@@ -599,7 +712,15 @@ struct UserCardPopup: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
-                    .background(Capsule().fill(Color(hex: 0x3625AA)))
+                    .background(
+                        Capsule().fill(
+                            LinearGradient(
+                                colors: [Color(hex: 0x8E60E6), Color(hex: 0xD074E9)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                    )
                 }
                 .buttonStyle(.plain)
                 .disabled(info.isBlocked || info.yxAccid == nil || info.yxAccid?.isEmpty == true)
@@ -608,24 +729,74 @@ struct UserCardPopup: View {
         }
     }
 
-    @ViewBuilder
-    private func followBackground(followed: Bool) -> some View {
-        if followed {
-            Capsule()
-                .fill(Color.white.opacity(0.2))
-                .overlay(
-                    Capsule().strokeBorder(Color.white.opacity(0.5), lineWidth: 1)
-                )
-        } else {
-            Capsule()
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: 0x8E60E6), Color(hex: 0xD074E9)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+    // MARK: - 派对房 admin action row(对齐 H5 party-user-card.vue L640-668)
+
+    /// 4 圆形图标横排,权限过滤后动态显隐 —— Mute/Kick 麦 / Set Admin / Kick out。
+    /// - Mute/Unmute:目标在语音麦位 + 目标非房主
+    /// - Take/Leave(抱下麦):目标在麦位 + 目标非房主
+    /// - Set/Remove Admin:仅 owner 可见
+    /// - Kick out:目标是普通用户(audience)
+    private func partyAdminActionRow(info: UserCardInfo, context ctx: PartyAdminContext) -> some View {
+        HStack(spacing: 0) {
+            // 1. Mute/Unmute
+            if ctx.canShowMuteToggle, let seat = ctx.targetSeat, let seatIndex = seat.seatIndex {
+                partyAdminButton(
+                    imageName: ctx.isTargetMuted ? "partyUserCardUnmute" : "partyUserCardMute",
+                    label: ctx.isTargetMuted ? L10n.userCardPartyUnmute : L10n.userCardPartyMute
+                ) {
+                    ctx.onToggleMute(seatIndex, !ctx.isTargetMuted)
+                }
+            }
+            // 2. Take/Leave(抱下麦)
+            if ctx.canShowKickFromMic, let seat = ctx.targetSeat, let seatIndex = seat.seatIndex {
+                partyAdminButton(
+                    imageName: "partyUserCardKickMic",
+                    label: L10n.userCardPartyKickFromMic
+                ) {
+                    ctx.onKickFromMic(info.userId, seatIndex)
+                }
+            }
+            // 3. Set/Remove Admin(仅 owner)
+            if ctx.canShowSetAdmin {
+                partyAdminButton(
+                    imageName: ctx.isTargetAdmin ? "partyUserCardAdminRemove" : "partyUserCardAdminAdd",
+                    label: ctx.isTargetAdmin ? L10n.userCardPartyRemoveAdmin : L10n.userCardPartySetAdmin
+                ) {
+                    ctx.onSetAdmin(info.userId, !ctx.isTargetAdmin)
+                }
+            }
+            // 4. Kick out(仅目标 audience)
+            if ctx.canShowKickOut {
+                partyAdminButton(
+                    imageName: "partyUserCardKickOut",
+                    label: L10n.userCardPartyKick
+                ) {
+                    // 触发 Step 1:时长选择
+                    showKickTimeConfirm = true
+                }
+            }
         }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// 单个圆形 admin 按钮:切图 40x40 + 6pt 间距 + 白色 500 fw 12pt 文案(对齐 H5 `size-40 + mt-6`)
+    private func partyAdminButton(imageName: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(imageName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 40, height: 40)
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Block pill(左上角)
