@@ -110,6 +110,11 @@
 "task.myIncome"                       = "Gelirim";
 "task.myIntegral"                     = "Puanım";
 "task.viewRank"                       = "Sıralamayı Gör";
+"task.rankLabel.globalIncome"         = "Küresel Gelir";
+"task.rankLabel.points"               = "Puanlar";
+"task.reset.prefix"                   = "Görev Sıfırlama:";
+"task.daysFormat"                     = "%dgün";
+"task.go"                             = "Git";
 "task.tier.claim"                     = "Al";
 "task.claimAll"                       = "Tümünü Al";
 "task.claim.success"                  = "Başarıyla alındı";
@@ -488,6 +493,19 @@
 "userCard.unblockConfirm.cancel"          = "İptal";
 "userCard.uidCopiedToast"                 = "UID panoya kopyalandı";
 "userCard.uidCopyA11y"                    = "UID'yi kopyala";
+"userCard.party.mute"                     = "Sessize Al";
+"userCard.party.unmute"                   = "Sesi Aç";
+"userCard.party.kickFromMic"              = "İndir";
+"userCard.party.setAdmin"                 = "Yönetici Yap";
+"userCard.party.removeAdmin"              = "Yöneticiyi Kaldır";
+"userCard.party.kick"                     = "At";
+"userCard.party.kickHoursFormat"          = "%d Saat";
+"userCard.party.kickPermanent"            = "Kalıcı";
+"userCard.party.kickConfirmMessage"       = "%@ adlı kullanıcıyı odadan atmak istediğinize emin misiniz?";
+"userCard.party.kickConfirmButton"        = "Onayla";
+"userCard.party.kickSuccess"              = "Kullanıcı atıldı";
+"userCard.party.setAdminSuccess"          = "Yönetici olarak atandı";
+"userCard.party.removeAdminSuccess"       = "Yönetici kaldırıldı";
 "userCard.blockSuccess"                   = "Engellendi";
 "userCard.blockFail"                      = "Engellenemedi, lütfen tekrar deneyin";
 "userCard.unblockSuccess"                 = "Engel listesinden kaldırıldı";
@@ -690,6 +708,7 @@
 "live.error.noCover"         = "Henüz yayın kapağı ayarlanmadı. Lütfen önce ana uygulamadan kapak yapılandırın.";
 // 全局顶部错误通知：envelope 解析失败（技术错误，三语言统一英文，不本地化）
 "api.error.responseParseFailed" = "Server response error";
+"api.error.network" = "Network error, please check your connection";
 
 // 公屏系统消息（用户在直播间内可见）
 "im.system.loginFailedFormat" = "Sohbet girişi başarısız: %@";
@@ -1013,7 +1032,8 @@
 "party.tool.roomMode"                    = "Oda Modu";
 "party.tool.blocklist"                   = "Engellenenler";
 "party.tool.mcSeat"                      = "MC Koltuğu";
-"party.tool.privateCall"                 = "Parti Araması";
+"party.tool.privateCall"                 = "Özel Arama";
+"party.privateCall.openConfirmLabel"     = "Özel aramayı aç";
 "party.tool.comingSoon"                  = "Yakında";
 // F-spec §5.1 Parti Araması Ayarları
 "party.privateCall.settingTitle"         = "Parti Araması";
@@ -1162,6 +1182,7 @@
 // P1-6 (2026-07-14) 主播审核弹窗
 "common.kindReminder"                    = "Uyarı";
 "common.confirm"                         = "Onayla";
+"common.close"                           = "Kapat";
 "audit.passed.message"                   = "Tebrikler, incelemeniz onaylandı. Lütfen uygulamaya tekrar giriş yapın.";
 "audit.rejected.fallback"                = "İncelemeniz reddedildi.";
 "userProfile.a11y.avatar"                = "Avatar";

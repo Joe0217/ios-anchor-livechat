@@ -14,7 +14,7 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "auto-of
 /// 3. UI 交互（tap / drag） / `scenePhase → .active` / WSHeartbeat 送礼等业务事件 → `pokeActivity()` 重置计时
 /// 4. 无 `pokeActivity` 满 M 分钟 → `OnlineStatusStore.setUserSetOnline(false)` + `showDialog = true`
 /// 5. 用户点弹窗 "Go Online" → `setUserSetOnline(true)` + 重启计时
-///    背景 dim 点关 → 保持离线，计时不重启（等下次真交互再重启）
+///    右上角 X 点关 → 保持离线，计时不重启（等下次真交互再重启）
 ///
 /// **忙碌态守卫**（对齐 H5 `isBusy = isLiving || isCalling`）：
 /// - `CallStore.shared.state != .idle` → 自动 `suspend()`
@@ -136,7 +136,7 @@ final class AutoOfflineMonitor: ObservableObject {
         logger.info("[AutoOffline] user clicked Go Online, resumed timer")
     }
 
-    /// 弹窗背景 dim 点关闭。保持离线态，不重启计时（等下次真交互）。
+    /// 弹窗右上角 X 点关闭。保持离线态，不重启计时（等下次真交互）。
     func handleDialogDismiss() {
         showDialog = false
     }

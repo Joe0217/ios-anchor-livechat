@@ -287,7 +287,9 @@ enum L10n {
         static var toolRoomMode: String { localize("party.tool.roomMode", comment: "Room Mode") }
         static var toolBlocklist: String { localize("party.tool.blocklist", comment: "Blocklist") }
         static var toolMCSeat: String { localize("party.tool.mcSeat", comment: "MC Seat") }
-        static var toolPrivateCall: String { localize("party.tool.privateCall", comment: "Party Call") }
+        static var toolPrivateCall: String { localize("party.tool.privateCall", comment: "Private Call") }
+        /// F-spec 关闭态弹 gift panel 时的 confirm 按钮标签："Open private call"
+        static var privateCallOpenConfirmLabel: String { localize("party.privateCall.openConfirmLabel", comment: "关闭态选礼物 confirm 按钮：Open private call") }
         static var toolComingSoon: String { localize("party.tool.comingSoon", comment: "stub 项 toast") }
         // F-spec §5.1 PartyPrivateCallSettingSheet
         static var privateCallSettingTitle: String { localize("party.privateCall.settingTitle", comment: "私 call 设置 sheet 标题") }
@@ -566,6 +568,11 @@ enum L10n {
     static var taskMyIncome: String { localize("task.myIncome", comment: "我方收入") }
     static var taskMyIntegral: String { localize("task.myIntegral", comment: "我方积分") }
     static var taskViewRank: String { localize("task.viewRank", comment: "查看榜单") }
+    static var taskGlobalIncome: String { localize("task.rankLabel.globalIncome", comment: "Rank 卡左奖杯 label") }
+    static var taskPoints: String { localize("task.rankLabel.points", comment: "Rank 卡右勋章 label") }
+    static var taskResetPrefix: String { localize("task.reset.prefix", comment: "Task Reset:") }
+    static var taskDaysFormat: String { localize("task.daysFormat", comment: "%d days") }
+    static var taskGo: String { localize("task.go", comment: "Go 按钮(引导去完成)") }
     static var taskTierClaim: String { localize("task.tier.claim", comment: "领取按钮") }
     static var taskClaimAll: String { localize("task.claimAll", comment: "一键领取按钮") }
     static var taskClaimSuccess: String { localize("task.claim.success", comment: "领取成功") }
@@ -1322,6 +1329,27 @@ enum L10n {
     static var userCardUidCopiedToast: String { localize("userCard.uidCopiedToast", comment: "UID 已复制到剪贴板 toast") }
     /// UID 复制按钮 accessibility label(VoiceOver 读作动词"复制 UID")
     static var userCardUidCopyA11y: String { localize("userCard.uidCopyA11y", comment: "复制 UID 按钮无障碍描述") }
+    /// 派对房 admin action row 按钮文案(对齐 H5 party-user-card.vue L644-666)
+    static var userCardPartyMute: String { localize("userCard.party.mute", comment: "禁麦按钮") }
+    static var userCardPartyUnmute: String { localize("userCard.party.unmute", comment: "解禁麦按钮") }
+    static var userCardPartyKickFromMic: String { localize("userCard.party.kickFromMic", comment: "抱下麦按钮") }
+    static var userCardPartySetAdmin: String { localize("userCard.party.setAdmin", comment: "设为房管按钮") }
+    static var userCardPartyRemoveAdmin: String { localize("userCard.party.removeAdmin", comment: "移除房管按钮") }
+    static var userCardPartyKick: String { localize("userCard.party.kick", comment: "踢出房间按钮") }
+    /// 踢房时长 sheet 文案(H5 blockTime + Permanent 双选)
+    static func userCardPartyKickHoursFormat(hours: Int) -> String {
+        String(format: localize("userCard.party.kickHoursFormat", comment: "%d hours"), hours)
+    }
+    static var userCardPartyKickPermanent: String { localize("userCard.party.kickPermanent", comment: "永久") }
+    /// 踢房 confirm dialog 文案
+    static func userCardPartyKickConfirmMessage(nickname: String) -> String {
+        String(format: localize("userCard.party.kickConfirmMessage", comment: "Are you sure to kick %@ out of the room?"), nickname)
+    }
+    static var userCardPartyKickConfirmButton: String { localize("userCard.party.kickConfirmButton", comment: "踢出确认按钮") }
+    /// 操作成功/失败 toast(H5 对齐)
+    static var userCardPartyKickSuccess: String { localize("userCard.party.kickSuccess", comment: "踢出成功 toast") }
+    static var userCardPartySetAdminSuccess: String { localize("userCard.party.setAdminSuccess", comment: "设为房管成功") }
+    static var userCardPartyRemoveAdminSuccess: String { localize("userCard.party.removeAdminSuccess", comment: "移除房管成功") }
     /// Block/Unblock 4 类 toast(H5 line 254/256/276 显式 showToast)
     static var userCardBlockSuccess: String { localize("userCard.blockSuccess", comment: "拉黑成功 toast") }
     static var userCardBlockFail: String { localize("userCard.blockFail", comment: "拉黑失败 toast") }
@@ -1510,6 +1538,8 @@ enum L10n {
     static var liveErrorNoCover: String { localize("live.error.noCover", comment: "开播失败：账号还没有直播封面") }
     /// 全局顶部错误通知：envelope 解析失败（APIClient / PartyAPIClient / SapiTokenStore 共用；技术错误，三语言统一英文）
     static var apiResponseParseFailed: String { localize("api.error.responseParseFailed", comment: "响应解析失败：全局顶部通知文案，三语言统一英文") }
+    /// 全局顶部错误通知：网络错误（URLError 层失败，如离线/超时/DNS）；三语言统一英文
+    static var apiNetworkError: String { localize("api.error.network", comment: "网络错误：全局顶部通知文案，三语言统一英文") }
 
     // 公屏系统消息（用户在直播间内可见）
     static var imSystemLoginFailedFormat: String { localize("im.system.loginFailedFormat", comment: "公屏系统消息：IM 登录失败 code=%@") }
@@ -1554,6 +1584,7 @@ enum L10n {
     // P1-6（2026-07-14）主播审核弹窗
     static var commonKindReminder: String           { localize("common.kindReminder", comment: "通用弹窗提示 title（对齐 H5 Vant showDialog 默认）") }
     static var commonConfirm: String                { localize("common.confirm", comment: "通用 Confirm 按钮") }
+    static var commonClose: String                  { localize("common.close", comment: "通用关闭按钮 accessibility label") }
     static var auditPassedMessage: String           { localize("audit.passed.message", comment: "主播审核通过 alert 文案（H5 固定英文原文）") }
     static var auditRejectedFallback: String        { localize("audit.rejected.fallback", comment: "主播审核拒绝 payload.content 空时 fallback") }
     static var userProfileA11yAvatar: String        { localize("userProfile.a11y.avatar", comment: "无障碍：头像 label") }

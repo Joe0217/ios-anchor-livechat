@@ -110,6 +110,11 @@
 "task.myIncome"                       = "دخلي";
 "task.myIntegral"                     = "نقاطي";
 "task.viewRank"                       = "عرض الترتيب";
+"task.rankLabel.globalIncome"         = "الدخل العالمي";
+"task.rankLabel.points"               = "النقاط";
+"task.reset.prefix"                   = "إعادة تعيين المهمة:";
+"task.daysFormat"                     = "%dأيام";
+"task.go"                             = "اذهب";
 "task.tier.claim"                     = "استلام";
 "task.claimAll"                       = "استلام الكل";
 "task.claim.success"                  = "تم الاستلام بنجاح";
@@ -488,6 +493,19 @@
 "userCard.unblockConfirm.cancel"          = "إلغاء";
 "userCard.uidCopiedToast"                 = "تم نسخ المعرف إلى الحافظة";
 "userCard.uidCopyA11y"                    = "نسخ المعرف";
+"userCard.party.mute"                     = "كتم";
+"userCard.party.unmute"                   = "إلغاء الكتم";
+"userCard.party.kickFromMic"              = "إنزال";
+"userCard.party.setAdmin"                 = "تعيين مشرف";
+"userCard.party.removeAdmin"              = "إزالة المشرف";
+"userCard.party.kick"                     = "طرد";
+"userCard.party.kickHoursFormat"          = "%d ساعة";
+"userCard.party.kickPermanent"            = "دائم";
+"userCard.party.kickConfirmMessage"       = "هل أنت متأكد من طرد %@ من الغرفة؟";
+"userCard.party.kickConfirmButton"        = "تأكيد";
+"userCard.party.kickSuccess"              = "تم طرد المستخدم";
+"userCard.party.setAdminSuccess"          = "تم التعيين كمشرف";
+"userCard.party.removeAdminSuccess"       = "تمت إزالة المشرف";
 "userCard.blockSuccess"                   = "تم الحظر";
 "userCard.blockFail"                      = "فشل الحظر، يرجى المحاولة مرة أخرى";
 "userCard.unblockSuccess"                 = "تمت الإزالة من قائمة الحظر";
@@ -690,6 +708,7 @@
 "live.error.noCover"         = "لم يتم تعيين غلاف بث بعد. يرجى تعيين الغلاف في التطبيق الرئيسي أولاً.";
 // 全局顶部错误通知：envelope 解析失败（技术错误，三语言统一英文，不本地化）
 "api.error.responseParseFailed" = "Server response error";
+"api.error.network" = "Network error, please check your connection";
 
 // 公屏系统消息（用户在直播间内可见）
 "im.system.loginFailedFormat" = "فشل تسجيل دخول الدردشة: %@";
@@ -1013,7 +1032,8 @@
 "party.tool.roomMode"                    = "وضع الغرفة";
 "party.tool.blocklist"                   = "قائمة الحظر";
 "party.tool.mcSeat"                      = "مقعد MC";
-"party.tool.privateCall"                 = "مكالمة الحفلة";
+"party.tool.privateCall"                 = "مكالمة خاصة";
+"party.privateCall.openConfirmLabel"     = "فتح المكالمة الخاصة";
 "party.tool.comingSoon"                  = "قريبًا";
 // F-spec §5.1 إعدادات مكالمة الحفلة
 "party.privateCall.settingTitle"         = "مكالمة الحفلة";
@@ -1162,6 +1182,7 @@
 // P1-6 (2026-07-14) 主播审核弹窗
 "common.kindReminder"                    = "تنبيه";
 "common.confirm"                         = "تأكيد";
+"common.close"                           = "إغلاق";
 "audit.passed.message"                   = "تهانينا، تمت الموافقة على مراجعتك. يرجى تسجيل الدخول إلى التطبيق مرة أخرى.";
 "audit.rejected.fallback"                = "تم رفض مراجعتك.";
 "userProfile.a11y.avatar"                = "الصورة الرمزية";

@@ -108,6 +108,11 @@
 "task.myIncome"                       = "My Income";
 "task.myIntegral"                     = "My Integral";
 "task.viewRank"                       = "View Ranking";
+"task.rankLabel.globalIncome"         = "Global income";
+"task.rankLabel.points"               = "Points";
+"task.reset.prefix"                   = "Task Reset:";
+"task.daysFormat"                     = "%ddays";
+"task.go"                             = "Go";
 "task.tier.claim"                     = "Claim";
 "task.claimAll"                       = "Claim All";
 "task.claim.success"                  = "Claimed successfully";
@@ -444,6 +449,19 @@
 "userCard.unblockConfirm.cancel"          = "Cancel";
 "userCard.uidCopiedToast"                 = "UID copied to clipboard";
 "userCard.uidCopyA11y"                    = "Copy UID";
+"userCard.party.mute"                     = "Mute";
+"userCard.party.unmute"                   = "Unmute";
+"userCard.party.kickFromMic"              = "Leave";
+"userCard.party.setAdmin"                 = "Set Admin";
+"userCard.party.removeAdmin"              = "Remove Admin";
+"userCard.party.kick"                     = "Kick";
+"userCard.party.kickHoursFormat"          = "%d Hours";
+"userCard.party.kickPermanent"            = "Permanent";
+"userCard.party.kickConfirmMessage"       = "Are you sure to kick %@ out of the room?";
+"userCard.party.kickConfirmButton"        = "Confirm";
+"userCard.party.kickSuccess"              = "User kicked out";
+"userCard.party.setAdminSuccess"          = "Set as admin successfully";
+"userCard.party.removeAdminSuccess"       = "Admin removed successfully";
 "userCard.blockSuccess"                   = "Blocked";
 "userCard.blockFail"                      = "Failed to block, please retry";
 "userCard.unblockSuccess"                 = "Removed from blocklist";
@@ -647,6 +665,7 @@
 "live.error.noCover"         = "No live cover set yet. Please configure a cover on the main app first.";
 // 全局顶部错误通知：envelope 解析失败（APIClient/PartyAPIClient/SapiTokenStore 共用；技术错误，三语言统一英文）
 "api.error.responseParseFailed" = "Server response error";
+"api.error.network" = "Network error, please check your connection";
 
 // 公屏系统消息（用户在直播间内可见）
 "im.system.loginFailedFormat" = "IM login failed: %@";
@@ -964,7 +983,8 @@
 "party.tool.roomMode"                    = "Room Mode";
 "party.tool.blocklist"                   = "Blocklist";
 "party.tool.mcSeat"                      = "MC Seat";
-"party.tool.privateCall"                 = "Party Call";
+"party.tool.privateCall"                 = "Private Call";
+"party.privateCall.openConfirmLabel"     = "Open private call";
 "party.tool.comingSoon"                  = "Coming soon";
 // F-spec §5.1 PartyPrivateCallSettingSheet
 "party.privateCall.settingTitle"         = "Party Call";
@@ -1120,6 +1140,7 @@
 // P1-6 (2026-07-14) 主播审核弹窗
 "common.kindReminder"                    = "Kind reminder";
 "common.confirm"                         = "Confirm";
+"common.close"                           = "Close";
 "audit.passed.message"                   = "Congratulations, your review has been approved. Please log in to the APP again.";
 "audit.rejected.fallback"                = "Your review was rejected.";
 "userProfile.a11y.avatar"                = "Avatar";
