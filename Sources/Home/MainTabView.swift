@@ -241,8 +241,12 @@ struct MainTabView: View {
         .overlay {
             if matchPopupCoordinator.isShowing {
                 MatchTipPopup(
-                    onGoMatch: {
-                        matchPopupCoordinator.dismiss()
+                    onGoMatch: { noReminder in
+                        if noReminder {
+                            matchPopupCoordinator.markTodayNoReminder()
+                        } else {
+                            matchPopupCoordinator.dismiss()
+                        }
                         Task { @MainActor in
                             if MatchStore.shared.isFirstMatchToday {
                                 // 首日走规则弹窗（CGoMatchButton 内挂载；这里不重复启动）
@@ -252,11 +256,12 @@ struct MainTabView: View {
                             }
                         }
                     },
-                    onNoReminder: {
-                        matchPopupCoordinator.markTodayNoReminder()
-                    },
-                    onClose: {
-                        matchPopupCoordinator.dismiss()
+                    onClose: { noReminder in
+                        if noReminder {
+                            matchPopupCoordinator.markTodayNoReminder()
+                        } else {
+                            matchPopupCoordinator.dismiss()
+                        }
                     }
                 )
                 .transition(.opacity)
@@ -349,7 +354,11 @@ struct MainTabView: View {
                         case .profileEdit:    EditProfileView(service: EditProfileService.shared)
                         case .liveData:       LiveDataView()
                             .environment(\.moneyBagAction, { homePath.append(WorkRoute.task) })
-                        case .task:           WorkComingSoonView(title: L10n.toolTask)
+                        case .task:
+                            TaskCenterView()
+                                // rank 头卡 tap → 跳 pointsRank(Phase E 未做,ComingSoon 占位;
+                                // H5 income/integral 分别跳独立榜单页,iOS 首版统一到 pointsRank)
+                                .environment(\.rankProgressAction, { _ in homePath.append(WorkRoute.pointsRank) })
                         case .invite:         WorkComingSoonView(title: L10n.toolInvite)
                         case .pointsRank:     WorkComingSoonView(title: L10n.toolPoints)
                         case .anchorGuide:    WorkComingSoonView(title: L10n.toolWorkingGuide)
@@ -447,7 +456,8 @@ struct MainTabView: View {
                                 LiveDataView()
                                     .environment(\.moneyBagAction, { workPath.append(WorkRoute.task) })
                             case .task:
-                                WorkComingSoonView(title: L10n.toolTask)
+                                TaskCenterView()
+                                    .environment(\.rankProgressAction, { _ in workPath.append(WorkRoute.pointsRank) })
                             case .invite:
                                 WorkComingSoonView(title: L10n.toolInvite)
                             case .pointsRank:
