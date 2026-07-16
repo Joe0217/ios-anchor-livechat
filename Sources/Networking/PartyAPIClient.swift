@@ -28,11 +28,15 @@ final class PartyAPIClient {
     /// POST 请求。body 走 sapi AES key/iv 加密 → Base64 作为原始 body。
     /// 返回解密后的 result JSON（供 Codable）；非 '200' 抛 `PartyAPIError.business`。
     /// HTTP 401 自动续 token 并 retry 一次；仍 401 抛 `PartyAPIError.tokenExchangeFailed`。
-    func post(_ path: String, body: [String: Any]? = nil) async throws -> Data {
-        try await send(path: path, body: body, isRetry: false)
+    ///
+    /// - parameter suppressCodes: 业务码白名单，命中的 code 不 post 全局 banner
+    ///   （用于业务侧已有独立处理的 code：如 ROOM_SEAT_IS_OCCUPIED 自动重拉对账、
+    ///    ROOM_PASSWORD_WRONG 密码 sheet 内联、1019 diamond not enough 独立充值弹窗）
+    func post(_ path: String, body: [String: Any]? = nil, suppressCodes: Set<String> = []) async throws -> Data {
+        try await send(path: path, body: body, isRetry: false, suppressCodes: suppressCodes)
     }
 
-    private func send(path: String, body: [String: Any]?, isRetry: Bool) async throws -> Data {
+    private func send(path: String, body: [String: Any]?, isRetry: Bool, suppressCodes: Set<String> = []) async throws -> Data {
         // 首次冷启动前等到系统「允许使用无线数据」权限对话框通过再发请求(10s 超时兜底走原错误路径)
         await NetworkReachability.shared.waitUntilReachable()
         guard let url = URL(string: AppConfig.sapiBaseURL + path) else {
@@ -44,6 +48,8 @@ final class PartyAPIClient {
         do {
             authToken = try await SapiTokenStore.shared.ensureValid()
         } catch {
+            // Task cancel / URLError.cancelled：调用方已放弃，直接向上抛不再发请求
+            if GlobalErrorBannerNotify.isCancellation(error) { throw error }
             AppLogger.party.error("[PartyAPI] ensureValid failed: \(String(describing: error), privacy: .private)")
             // 续 token 失败不阻塞调用（让请求带 nil auth_token 走，让服务端返 401 走 retry 链路决定终态）
             authToken = nil
@@ -83,11 +89,14 @@ final class PartyAPIClient {
         do {
             (data, response) = try await session.data(for: req)
         } catch {
-            // session.data 抛错（多为 URLError 网络层错误）—— 单独打日志便于排查"发请求即失败"
+            // Task cancel / URLError.cancelled：不弹 banner，向上抛
+            if GlobalErrorBannerNotify.isCancellation(error) { throw error }
             AppLogger.party.error("[PartyAPI] session.data threw for \(path, privacy: .public): \(String(describing: error), privacy: .public)")
+            GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: path)
             throw PartyAPIError.networkError
         }
         guard let http = response as? HTTPURLResponse else {
+            GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: path)
             throw PartyAPIError.networkError
         }
 
@@ -100,31 +109,53 @@ final class PartyAPIClient {
         if http.statusCode == 401 {
             if isRetry {
                 AppLogger.party.error("[PartyAPI] retry still 401, give up")
+                // 二次 401 = session 失效但不走 1004/1005（sapi 走独立 auth 通道），
+                // 用 session 专用文案，不用"服务错误"文案避免误导用户以为是服务器问题
+                GlobalErrorBannerNotify.post(message: L10n.apiSessionExpired, path: path, status: 401)
                 throw PartyAPIError.tokenExchangeFailed
             }
             AppLogger.party.notice("[PartyAPI] 401 → exchange token + retry")
             do {
                 _ = try await SapiTokenStore.shared.ensureValid(forceRefresh: true)
             } catch {
+                // Task cancel：直接向上抛
+                if GlobalErrorBannerNotify.isCancellation(error) { throw error }
+                // ensureValid 内部已按错误点 post banner；这里只需向上抛
                 throw PartyAPIError.tokenExchangeFailed
             }
-            return try await send(path: path, body: body, isRetry: true)
+            return try await send(path: path, body: body, isRetry: true, suppressCodes: suppressCodes)
         }
 
-        // 其他非 200 HTTP（403/404/500 等）：直接抛网络层错误
-        guard http.statusCode == 200 else {
+        // 其他非 200 HTTP（403/404/500 等）：先尝试解析 envelope 拿 code；
+        // 拿不到才走 HTTP status 兜底文案。
+        if http.statusCode != 200 {
+            if let env = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+               let code = env["code"] as? String, !code.isEmpty, code != "200" {
+                let message = (env["message"] as? String) ?? ""
+                if !suppressCodes.contains(code) {
+                    let bannerMsg = message.isEmpty ? L10n.apiRequestFailedFormat(code) : message
+                    GlobalErrorBannerNotify.post(message: bannerMsg, path: path, status: http.statusCode)
+                }
+                throw PartyAPIError.business(code: code, message: message.isEmpty ? "请求失败(\(code))" : message)
+            }
+            GlobalErrorBannerNotify.post(message: L10n.apiServerErrorFormat(http.statusCode), path: path, status: http.statusCode)
             throw PartyAPIError.httpStatus(http.statusCode)
         }
 
         // envelope: { code: '200'(字符串), message, result(hex) }
         guard let env = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            NotificationCenter.default.post(name: .apiResponseParseFailed, object: nil, userInfo: ["path": path])
+            GlobalErrorBannerNotify.post(message: L10n.apiResponseParseFailed, path: path, status: http.statusCode)
             throw PartyAPIError.envelopeParseFailed
         }
         let code = env["code"] as? String ?? ""
         let message = env["message"] as? String ?? ""
 
         guard code == "200" else {
+            // 业务码非 200：post 通用 banner；suppressCodes 里的码不弹；空 message 用 code 兜底避免落 parse-failure 文案
+            if !suppressCodes.contains(code) {
+                let bannerMsg = message.isEmpty ? L10n.apiRequestFailedFormat(code) : message
+                GlobalErrorBannerNotify.post(message: bannerMsg, path: path, status: http.statusCode)
+            }
             throw PartyAPIError.business(code: code, message: message.isEmpty ? "请求失败(\(code))" : message)
         }
 

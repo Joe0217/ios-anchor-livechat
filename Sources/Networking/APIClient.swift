@@ -66,7 +66,20 @@ final class APIClient {
         AppLogger.net.debug("POST \(path, privacy: .public) loginToken=\(tkInfo, privacy: .private) appid=\(headers["appid"] ?? "-", privacy: .public)")
         #endif
 
-        let (data, resp) = try await session.data(for: req)
+        let data: Data
+        let resp: URLResponse
+        do {
+            (data, resp) = try await session.data(for: req)
+        } catch {
+            // Task cancel / URLError.cancelled 是用户/系统主动打断（切页、logout、二次刷新前 cancel 旧任务），
+            // 不弹 banner；直接向上抛。
+            if GlobalErrorBannerNotify.isCancellation(error) { throw error }
+            AppLogger.net.error("network error path=\(path, privacy: .public): \(String(describing: error), privacy: .public)")
+            #if !HILY_TESTS
+            GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: path)
+            #endif
+            throw error
+        }
 
         #if DEBUG
         let respPreview = String(data: data, encoding: .utf8)?.prefix(300) ?? "<binary>"
@@ -74,47 +87,8 @@ final class APIClient {
         AppLogger.net.debug("RESP \(path, privacy: .public) status=\(statusCode, privacy: .public) len=\(data.count, privacy: .public) body=\(String(respPreview), privacy: .private)")
         #endif
 
-        guard let env = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            // 2026-07-12 诊断增强：envelope 解析失败时打 status code + body len 供追后端问题（用户 register submit 空 body 场景）
-            let sc = (resp as? HTTPURLResponse)?.statusCode ?? 0
-            AppLogger.net.error("envelope parse failed path=\(path, privacy: .public) status=\(sc, privacy: .public) len=\(data.count, privacy: .public)")
-            NotificationCenter.default.post(name: .apiResponseParseFailed, object: nil, userInfo: ["path": path, "status": sc])
-            #if HILY_TESTS
-            throw APIError(code: "-1", message: "response parse failed")  // test target 无 L10n
-            #else
-            throw APIError(code: "-1", message: L10n.apiResponseParseFailed)
-            #endif
-        }
-        let code = env["code"] as? String ?? ""
-        let message = env["message"] as? String ?? ""
-
-        guard code == "0000" else {
-            // A 收尾：1004 挤下线 / 1005 token 失效集中分流。
-            // 单点 throw 前 post 通知，SessionStore 监听后统一 logout + 弹 UI 提示，
-            // 业务层 catch APIError 仍可拿到原始 code/message（兼容现有错误处理代码）。
-            // A-2 spec v3 BLOCK-1：login path 传 suppressCodes: ["1005"] 让"未注册跳注册"分流走 catch 而非 observer logout。
-            if (code == "1004" || code == "1005"), !suppressCodes.contains(code) {
-                NotificationCenter.default.post(
-                    name: .apiSessionInvalidated,
-                    object: nil,
-                    userInfo: ["code": code, "message": message]
-                )
-            }
-            throw APIError(code: code, message: message.isEmpty ? "请求失败(\(code))" : message)
-        }
-
-        // 解密 result（Hex 密文）
-        if let hex = env["result"] as? String, !hex.isEmpty,
-           let decrypted = CryptoUtil.aesDecryptFromHex(hex),
-           let out = decrypted.data(using: .utf8) {
-            return out
-        }
-        // result 为空/非加密：仅当是合法 JSON 顶层对象（数组/字典）时回传，
-        // 否则（null / 字符串 / 数字等）当作无数据，避免 JSONSerialization 抛 OC 异常崩溃
-        if let raw = env["result"], JSONSerialization.isValidJSONObject(raw) {
-            return (try? JSONSerialization.data(withJSONObject: raw)) ?? Data("null".utf8)
-        }
-        return Data("null".utf8)
+        // 走公用 decodeEnvelope：内部处理 HTTP 非 2xx（先试 envelope）+ envelope-parse-fail + 业务码分流
+        return try decodeEnvelope(data, path: path, httpStatus: (resp as? HTTPURLResponse)?.statusCode, suppressCodes: suppressCodes)
     }
 
     /// GET 请求。query 参数走 URL query string；无请求体加密（对齐 H5 `http.get(...)`）。
@@ -140,7 +114,19 @@ final class APIClient {
         AppLogger.net.debug("GET \(path, privacy: .public) query=\(String(describing: query), privacy: .public)")
         #endif
 
-        let (data, resp) = try await session.data(for: req)
+        let data: Data
+        let resp: URLResponse
+        do {
+            (data, resp) = try await session.data(for: req)
+        } catch {
+            // Task cancel / URLError.cancelled：不弹 banner，向上抛
+            if GlobalErrorBannerNotify.isCancellation(error) { throw error }
+            AppLogger.net.error("network error path=\(path, privacy: .public): \(String(describing: error), privacy: .public)")
+            #if !HILY_TESTS
+            GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: path)
+            #endif
+            throw error
+        }
 
         #if DEBUG
         let respPreview = String(data: data, encoding: .utf8)?.prefix(300) ?? "<binary>"
@@ -167,7 +153,19 @@ final class APIClient {
         AppLogger.net.debug("DELETE \(path, privacy: .public)")
         #endif
 
-        let (data, resp) = try await session.data(for: req)
+        let data: Data
+        let resp: URLResponse
+        do {
+            (data, resp) = try await session.data(for: req)
+        } catch {
+            // Task cancel / URLError.cancelled：不弹 banner，向上抛
+            if GlobalErrorBannerNotify.isCancellation(error) { throw error }
+            AppLogger.net.error("network error path=\(path, privacy: .public): \(String(describing: error), privacy: .public)")
+            #if !HILY_TESTS
+            GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: path)
+            #endif
+            throw error
+        }
 
         #if DEBUG
         let respPreview = String(data: data, encoding: .utf8)?.prefix(300) ?? "<binary>"
@@ -184,14 +182,23 @@ final class APIClient {
     /// - parameter httpStatus: HTTP status code（可选，用于诊断日志区分"200 body 空"vs"5xx body 空"）
     /// - parameter suppressCodes: 对指定错误码不 post `.apiSessionInvalidated` 通知（A-2 spec v3 BLOCK-1）
     private func decodeEnvelope(_ data: Data, path: String, httpStatus: Int? = nil, suppressCodes: Set<String> = []) throws -> Data {
-        guard let env = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            // 2026-07-12 诊断增强：envelope 解析失败时打 status code + body len，供追后端问题
-            AppLogger.net.error("envelope parse failed path=\(path, privacy: .public) status=\(httpStatus ?? 0, privacy: .public) len=\(data.count, privacy: .public)")
-            NotificationCenter.default.post(name: .apiResponseParseFailed, object: nil, userInfo: ["path": path, "status": httpStatus ?? 0])
+        // 先尝试 envelope 解析：即便 HTTP 非 2xx（如 401/403/500 携带 code=1004/1005 body），
+        // 也要走业务码分流；解析不出才 fallback HTTP status 分支。
+        let envelope = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+
+        // envelope 完全解不出：区分 HTTP 非 2xx（server error 文案）vs 2xx 但 body 非 JSON（parse-failure 文案）
+        guard let env = envelope else {
+            let sc = httpStatus ?? 0
+            AppLogger.net.error("envelope parse failed path=\(path, privacy: .public) status=\(sc, privacy: .public) len=\(data.count, privacy: .public)")
+            let isNon2xx = !(200...299).contains(sc)
+            #if !HILY_TESTS
+            let bannerMsg = isNon2xx ? L10n.apiServerErrorFormat(sc) : L10n.apiResponseParseFailed
+            GlobalErrorBannerNotify.post(message: bannerMsg, path: path, status: sc)
+            #endif
             #if HILY_TESTS
-            throw APIError(code: "-1", message: "response parse failed")  // test target 无 L10n
+            throw APIError(code: "-1", message: isNon2xx ? "HTTP \(sc)" : "response parse failed")
             #else
-            throw APIError(code: "-1", message: L10n.apiResponseParseFailed)
+            throw APIError(code: "-1", message: isNon2xx ? "HTTP \(sc)" : L10n.apiResponseParseFailed)
             #endif
         }
         let code = env["code"] as? String ?? ""
@@ -205,6 +212,14 @@ final class APIClient {
                     userInfo: ["code": code, "message": message]
                 )
             }
+            // 业务码非 0000：post 通用 banner（后端 message 优先，空则用 code 兜底避免落 parse-failure 文案）；
+            // suppressCodes 里的码不弹；1004/1005 由 SessionStore observer 独立处理
+            #if !HILY_TESTS
+            if !suppressCodes.contains(code) && code != "1004" && code != "1005" {
+                let bannerMsg = message.isEmpty ? L10n.apiRequestFailedFormat(code) : message
+                GlobalErrorBannerNotify.post(message: bannerMsg, path: path, status: httpStatus ?? 0)
+            }
+            #endif
             throw APIError(code: code, message: message.isEmpty ? "请求失败(\(code))" : message)
         }
 
@@ -252,6 +267,35 @@ extension Notification.Name {
     /// APIClient / PartyAPIClient / SapiTokenStore 三链路的 envelope 解析失败点共用。
     /// `userInfo["path"]` 为触发路径，便于诊断（banner 内不展示，仅供 log 关联）。
     static let apiResponseParseFailed = Notification.Name("APIClient.responseParseFailed")
+
+    /// 通用请求失败 → 全局顶部错误 banner（GlobalErrorBannerStore observer 消费）。
+    /// APIClient / PartyAPIClient / SapiTokenStore 在 network error / HTTP non-2xx /
+    /// envelope 解析失败 / 业务码非成功 四类错误抛出点 post。
+    /// `userInfo["message"]` (String) 为展示文案：优先后端 `message`，无则用 L10n 兜底；
+    /// `userInfo["path"]` (String) / `userInfo["status"]` (Int) 供诊断日志关联。
+    static let apiRequestFailed = Notification.Name("APIClient.requestFailed")
+}
+
+/// 底层统一 helper：任意 nonisolated 线程触发全局顶部 banner。
+/// 3 个网络客户端 4 类错误点共用；GlobalErrorBannerStore observer 内部做 3s 合并去重。
+enum GlobalErrorBannerNotify {
+    /// - parameter message: 展示文案。空串走 observer 侧的 L10n 兜底。
+    /// - parameter path: 触发路径（诊断用，不展示）
+    /// - parameter status: HTTP status code（诊断用）
+    static func post(message: String, path: String, status: Int = 0) {
+        var info: [String: Any] = ["path": path, "status": status]
+        if !message.isEmpty { info["message"] = message }
+        NotificationCenter.default.post(name: .apiRequestFailed, object: nil, userInfo: info)
+    }
+
+    /// 判定错误是否为"用户/系统主动取消"（Task cancel / view dismiss / logout 触发的 URLSession 打断）。
+    /// 三网络客户端 catch 里用此过滤，避免为用户主动 cancel 触发 banner。
+    /// 覆盖 CancellationError（Swift 并发原生）+ URLError.cancelled（Foundation code -999）。
+    static func isCancellation(_ error: Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        return false
+    }
 }
 
 /// 设备标识：本地生成一次并持久化（对应 H5 deviceInfo-V2）。

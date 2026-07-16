@@ -352,6 +352,7 @@ enum L10n {
         // 麦位（PartySeatItemView）
         static var seatEmpty: String { localize("party.seat.empty", comment: "空麦位 a11y") }
         static var seatOccupied: String { localize("party.seat.occupied", comment: "麦上用户 a11y") }
+        static var seatMuted: String { localize("party.seat.muted", comment: "被禁麦/自身关麦 a11y") }
 
         // 业务错误（PartyRoomError.errorDescription）
         static var errorEnterFailedFormat: String { localize("party.error.enterFailedFormat", comment: "进房失败：%@") }
@@ -1357,6 +1358,8 @@ enum L10n {
     static var userCardUnblockFail: String { localize("userCard.unblockFail", comment: "移除黑名单失败 toast") }
     /// H5 对齐:私聊按钮
     static var userCardMessage: String { localize("userCard.message", comment: "私聊按钮") }
+    /// H5 对齐:送礼按钮(替换原 Follow 按钮位置;关注 icon 移到昵称行)
+    static var userCardSendGift: String { localize("userCard.sendGift", comment: "送礼按钮") }
     /// H5 对齐:礼物墙空态文案 "No gifts sent yet!"
     static var userCardEmptyGifts: String { localize("userCard.emptyGifts", comment: "礼物墙空态") }
     /// H5 对齐:UID 前缀 "UID: xxx"(冒号后跟 userId,数字不 i18n)
@@ -1540,6 +1543,12 @@ enum L10n {
     static var apiResponseParseFailed: String { localize("api.error.responseParseFailed", comment: "响应解析失败：全局顶部通知文案，三语言统一英文") }
     /// 全局顶部错误通知：网络错误（URLError 层失败，如离线/超时/DNS）；三语言统一英文
     static var apiNetworkError: String { localize("api.error.network", comment: "网络错误：全局顶部通知文案，三语言统一英文") }
+    /// 全局顶部错误通知：sapi 二次 401（session 失效但不走 1004/1005 主接口分流）；三语言统一英文
+    static var apiSessionExpired: String { localize("api.error.session", comment: "会话失效：全局顶部通知文案，三语言统一英文") }
+    /// 全局顶部错误通知：HTTP 非 2xx server 侧错误（%d = status code）；三语言统一英文
+    static func apiServerErrorFormat(_ code: Int) -> String { String(format: localize("api.error.serverFormat", comment: "服务错误：HTTP %d 全局顶部通知文案，三语言统一英文"), code) }
+    /// 通用请求失败兜底：业务码非成功但 message 为空时用（%@ = code）；三语言统一英文
+    static func apiRequestFailedFormat(_ code: String) -> String { String(format: localize("api.error.requestFailedFormat", comment: "请求失败(code)：业务码空 message 兜底，三语言统一英文"), code) }
 
     // 公屏系统消息（用户在直播间内可见）
     static var imSystemLoginFailedFormat: String { localize("im.system.loginFailedFormat", comment: "公屏系统消息：IM 登录失败 code=%@") }

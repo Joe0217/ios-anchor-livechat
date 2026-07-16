@@ -13,6 +13,22 @@ enum PartyAPI {
     private static let pathPrefix = "/sapi/weidou/v1/client/party"
     private static let decoder = JSONDecoder()
 
+    /// 房间/座位类接口业务码 opt-out：PartyRoomErrorMapper 已识别、业务侧独立处理（自动重拉对账 /
+    /// 密码 sheet 内联 / 封禁弹窗等），不弹全局 banner 避免与业务 UI 双弹。
+    /// caller: enterRoom / onSeat / downSeat / exchangeSeat / holdSeat / lockSeat / setMCSeat 等。
+    private static let roomBusinessSuppress: Set<String> = [
+        "ROOM_SEAT_IS_OCCUPIED",   // → PartyStore.seatOccupied 自动 reloadSeatList
+        "ROOM_SEAT_EMPTY",         // → PartyStore.seatEmpty 自动 reloadSeatList
+        "ROOM_PASSWORD_WRONG",     // → 密码 sheet 内联
+        "PASSWORD_ERROR",          // 同上
+        "USER_BANNED",             // → 独立封禁提示
+        "LIVING_BE_BANNED",        // 同上
+        "LEVEL_INSUFFICIENT",      // → 独立等级不足提示
+    ]
+
+    /// 送礼接口业务码 opt-out：1019 diamond not enough → CommonGiftPanelStore 独立充值弹窗。
+    private static let giftBusinessSuppress: Set<String> = ["1019"]
+
     // MARK: - 私有解码辅助
 
     /// 兼容三种 sapi 返回 schema：
@@ -315,14 +331,22 @@ enum PartyAPI {
     }
 
     /// 进房。`isAnchor` 主播端固定 true。
+    ///
+    /// F-spec raw log：排查后端 `partyPrivateCallOpen / partyCallGiftId` 字段是否真实返回
+    /// （agent-recon-field-names-unverified rule；对齐 getRoomBgImage 同款 pattern）
     static func enterRoom(roomId: String, password: String? = nil) async throws -> PartyRoomInfo {
         var body: [String: Any] = [
             "roomId": roomId,
             "isAnchor": true,
         ]
         if let v = password { body["password"] = v }
-        let data = try await PartyAPIClient.shared.post("\(pathPrefix)/room/enter", body: body)
-        return try decodeObject(data, as: PartyRoomInfo.self)
+        let data = try await PartyAPIClient.shared.post("\(pathPrefix)/room/enter", body: body, suppressCodes: roomBusinessSuppress)
+        // F-spec 真机 log：查后端是否在 enter 响应里返 partyPrivateCallOpen / partyCallGiftId 两字段
+        let rawPreview = String(data: data, encoding: .utf8) ?? "<binary>"
+        AppLogger.party.info("[PartyAPI] enterRoom raw=\(rawPreview, privacy: .private)")
+        let info = try decodeObject(data, as: PartyRoomInfo.self)
+        AppLogger.party.info("[PartyAPI] enterRoom decoded partyPrivateCallOpen=\(String(describing: info.partyPrivateCallOpen), privacy: .public) partyCallGiftId=\(info.partyCallGiftId ?? "nil", privacy: .public) partyCallGiftImg=\(info.partyCallGiftImg ?? "nil", privacy: .public) partyCallGiftPrice=\(String(describing: info.partyCallGiftPrice), privacy: .public)")
+        return info
     }
 
     /// 退房。`seatIndex` 传当前在麦的位号；不在麦时传 0。
@@ -360,7 +384,8 @@ enum PartyAPI {
                 "seatIndex": seatIndex,
                 "yxRoomId": yxRoomId,
                 "roomTempId": roomTempId,
-            ]
+            ],
+            suppressCodes: roomBusinessSuppress
         )
         if let s = try? decoder.decode(String.self, from: data) { return s }
         return String(data: data, encoding: .utf8) ?? ""
@@ -374,7 +399,8 @@ enum PartyAPI {
                 "seatIndex": seatIndex,
                 "yxRoomId": yxRoomId,
                 "roomTempId": roomTempId,
-            ]
+            ],
+            suppressCodes: roomBusinessSuppress
         )
     }
 
@@ -397,6 +423,71 @@ enum PartyAPI {
                 "yxRoomId": yxRoomId,
                 "operatorType": operatorType,
                 "roomTempId": roomTempId,
+            ]
+        )
+    }
+
+    /// 抱下麦(仅"抱下"分支;抱上走 seat-invite 流程)。对齐 H5 `feachHoldSeat({operatorType: 3, seatIndex, targetUserId})`
+    /// + `apiPartyHoldSeat` (`/sapi/weidou/v1/client/party/seat/holdSeat`)
+    /// - operatorType 3 = 抱下麦(主态无 toast,被抱下者收 IM "You're off mic.")
+    static func holdSeat(
+        roomId: String,
+        seatIndex: Int,
+        targetUserId: String,
+        yxRoomId: String,
+        operatorType: Int,
+        roomTempId: Int
+    ) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/seat/holdSeat",
+            body: [
+                "roomId": roomId,
+                "seatIndex": seatIndex,
+                "targetUserId": targetUserId,
+                "yxRoomId": yxRoomId,
+                "operatorType": operatorType,
+                "roomTempId": roomTempId,
+            ]
+        )
+    }
+
+    /// 设置/移除房管(仅房主可操作)。对齐 H5 `apiPartySetAdmin({roomId, userId, operationType})`
+    /// (`/sapi/weidou/v1/client/party/room/setAdmin`)
+    /// - operationType 1 = 添加房管, 2 = 移除房管
+    static func setAdmin(
+        roomId: String,
+        userId: String,
+        operationType: Int
+    ) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/setAdmin",
+            body: [
+                "roomId": roomId,
+                "userId": userId,
+                "operationType": operationType,
+            ]
+        )
+    }
+
+    /// 踢出房间。对齐 H5 `feachKickOutRoom({seatIndex, targetUserId, banType})`
+    /// + `apiPartyKickOutRoom` (`/sapi/weidou/v1/client/party/room/kickOutRoom`)
+    /// - banType 1 = 有限时长(kickOutInterval 秒), 2 = 永久
+    /// - seatIndex -1 = 目标不在麦位;>=0 = 目标麦位号
+    static func kickOutRoom(
+        roomId: String,
+        yxRoomId: String,
+        seatIndex: Int,
+        targetUserId: String,
+        banType: Int
+    ) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/kickOutRoom",
+            body: [
+                "roomId": roomId,
+                "yxRoomId": yxRoomId,
+                "seatIndex": seatIndex,
+                "targetUserId": targetUserId,
+                "banType": banType,
             ]
         )
     }
@@ -444,7 +535,8 @@ enum PartyAPI {
                 "operatorType": 10,
                 "seatType": seatType,
                 "roomTempId": roomTempId,
-            ]
+            ],
+            suppressCodes: roomBusinessSuppress
         )
     }
 
@@ -736,7 +828,7 @@ enum PartyAPI {
         } else {
             body["roomId"] = roomId
         }
-        let data = try await PartyAPIClient.shared.post("\(pathPrefix)/gift/sendGift", body: body)
+        let data = try await PartyAPIClient.shared.post("\(pathPrefix)/gift/sendGift", body: body, suppressCodes: giftBusinessSuppress)
         return try decodeObject(data, as: PartySendGiftResult.self)
     }
 
@@ -771,18 +863,18 @@ enum PartyAPI {
 
     /// 拉私 call 礼物列表（房主设置弹窗内选礼物用）。对齐安卓 `ApiService.getPartyCallGiftList`。
     ///
+    /// **真机 log 校准（2026-07-16）**：后端 response schema 与现有 `GiftListData` 完全一致
+    /// （`id: String, name, giftPrice: String, giftSmallImg, giftImg, ...`），直接复用无需另建 model。
+    ///
     /// **path**：`/sapi/weidou/v1/client/party/room/getPartyCallGiftList`
     /// **body**：`{ scene: Int }` —— `scene=2` 设置弹窗（本 spec 仅用此场景）；`scene=1` 通话内送礼（后续里程碑）
-    /// **response**：`[PartyCallGiftItem]`
-    ///
-    /// **⚠️ 字段名/scene 语义未真机验证**（agent-recon-field-names-unverified rule）；
-    /// Step 3 真机首次拉取后按 log 补 alias 兼容 PartyCallGiftItem 字段。
-    static func getPartyCallGiftList(scene: Int = 2) async throws -> [PartyCallGiftItem] {
+    /// **response**：`[GiftListData]`（复用现有礼物模型 · 已 String/Int64 双兼容 decode）
+    static func getPartyCallGiftList(scene: Int = 2) async throws -> [GiftListData] {
         let data = try await PartyAPIClient.shared.post(
             "\(pathPrefix)/room/getPartyCallGiftList",
             body: ["scene": scene]
         )
-        return try decodeArrayOrEmpty(data, as: PartyCallGiftItem.self)
+        return try decodeArrayOrEmpty(data, as: GiftListData.self)
     }
 }
 

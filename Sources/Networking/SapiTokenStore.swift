@@ -54,11 +54,20 @@ final class SapiTokenStore {
         return Int64(Date().timeIntervalSince1970 * 1000) >= exp
     }
 
-    /// 获取有效 auth_token；过期或未取过则自动调 exchangeToken 续接（合并并发）。
+    /// 需要续接：已过期，或距过期不足 24 小时。
+    /// 对齐 H5 `App.vue:163` 的 `bagshopTokenGetTimes - Date.now() < 24 * 60 * 60 * 1000` 主动预取阈值。
+    var needsRefresh: Bool {
+        guard let exp = tokenExpireAtMs else { return true }
+        let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let oneDayMs: Int64 = 24 * 60 * 60 * 1000
+        return exp - nowMs < oneDayMs
+    }
+
+    /// 获取有效 auth_token；已过期 / 距过期 <24h / 未取过时自动调 exchangeToken 续接（合并并发）。
     /// PartyAPIClient 401 retry 时传 forceRefresh=true 强制走一次 exchange。
     @discardableResult
     func ensureValid(forceRefresh: Bool = false) async throws -> String {
-        if !forceRefresh, let t = authToken, !t.isEmpty, !isExpired { return t }
+        if !forceRefresh, let t = authToken, !t.isEmpty, !needsRefresh { return t }
         return try await runExchange()
     }
 
@@ -112,21 +121,39 @@ final class SapiTokenStore {
         }
         req.httpBody = Data(encrypted.utf8)
 
-        let (data, response) = try await Self.exchangeSession.data(for: req)
-        guard let http = response as? HTTPURLResponse else { throw SapiTokenError.networkError }
+        let exchangePath = "/sapi/auth/v1/client/auth/exchangeToken"
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await Self.exchangeSession.data(for: req)
+        } catch {
+            // Task cancel / URLError.cancelled：logout / view teardown 主动打断 inflight，不弹 banner
+            if GlobalErrorBannerNotify.isCancellation(error) { throw error }
+            AppLogger.party.error("[SapiTokenStore] exchange network error: \(String(describing: error), privacy: .public)")
+            GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: exchangePath)
+            throw SapiTokenError.networkError
+        }
+        guard let http = response as? HTTPURLResponse else {
+            GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: exchangePath)
+            throw SapiTokenError.networkError
+        }
         guard http.statusCode == 200 else {
             AppLogger.party.error("[SapiTokenStore] exchange HTTP \(http.statusCode, privacy: .public)")
+            GlobalErrorBannerNotify.post(message: L10n.apiServerErrorFormat(http.statusCode), path: exchangePath, status: http.statusCode)
             throw SapiTokenError.httpStatus(http.statusCode)
         }
 
         // envelope: { code: '200'(字符串), message, result(hex) }
         guard let env = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            GlobalErrorBannerNotify.post(message: L10n.apiResponseParseFailed, path: exchangePath, status: 200)
             throw SapiTokenError.envelopeParseFailed
         }
         let code = env["code"] as? String ?? ""
         guard code == "200" else {
             let msg = env["message"] as? String ?? ""
             AppLogger.party.error("[SapiTokenStore] exchange biz code=\(code, privacy: .public) msg=\(msg, privacy: .private)")
+            let bannerMsg = msg.isEmpty ? L10n.apiRequestFailedFormat(code) : msg
+            GlobalErrorBannerNotify.post(message: bannerMsg, path: exchangePath, status: http.statusCode)
             throw SapiTokenError.businessFailed(code: code, message: msg)
         }
         guard let hex = env["result"] as? String, !hex.isEmpty,
@@ -203,7 +230,7 @@ enum SapiTokenError: Error, LocalizedError {
         case .encryptFailed: return "sapi: 请求加密失败"
         case .networkError: return "sapi: 网络错误"
         case .httpStatus(let code): return "sapi: HTTP \(code)"
-        case .envelopeParseFailed: return "sapi: 响应解析失败"
+        case .envelopeParseFailed: return L10n.apiResponseParseFailed
         case .businessFailed(let code, let message): return "sapi: 业务失败 [\(code)] \(message)"
         case .resultDecryptFailed: return "sapi: 响应解密失败"
         case .tokenValueMissing: return "sapi: tokenValue 缺失"

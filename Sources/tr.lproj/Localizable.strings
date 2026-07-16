@@ -485,6 +485,7 @@
 "userCard.giftWall"                       = "Hediye gönder";
 "userCard.errorRetry"                     = "Profil yüklenemedi";
 "userCard.message"                        = "Mesaj";
+"userCard.sendGift"                       = "Hediye Gönder";
 "userCard.emptyGifts"                     = "Henüz hediye yok!";
 "userCard.uidPrefix"                      = "UID: ";
 "userCard.unblockConfirm.title"           = "Engel listesinden kaldır";
@@ -709,6 +710,9 @@
 // 全局顶部错误通知：envelope 解析失败（技术错误，三语言统一英文，不本地化）
 "api.error.responseParseFailed" = "Server response error";
 "api.error.network" = "Network error, please check your connection";
+"api.error.session" = "Session expired, please log in again";
+"api.error.serverFormat" = "Server error (%d), please try again later";
+"api.error.requestFailedFormat" = "Request failed (%@)";
 
 // 公屏系统消息（用户在直播间内可见）
 "im.system.loginFailedFormat" = "Sohbet girişi başarısız: %@";
@@ -1113,6 +1117,7 @@
 
 "party.seat.empty"                       = "Boş koltuk";
 "party.seat.occupied"                    = "Oturmuş kullanıcı";
+"party.seat.muted"                       = "Sessize alındı";
 
 "party.error.enterFailedFormat"          = "Katılma başarısız: %@";
 "party.error.exitFailedFormat"           = "Ayrılma başarısız: %@";

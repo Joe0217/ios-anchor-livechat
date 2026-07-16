@@ -441,6 +441,7 @@
 "userCard.giftWall"                       = "Send gifts";
 "userCard.errorRetry"                     = "Failed to load profile";
 "userCard.message"                        = "Message";
+"userCard.sendGift"                       = "Send Gift";
 "userCard.emptyGifts"                     = "No gifts sent yet!";
 "userCard.uidPrefix"                      = "UID: ";
 "userCard.unblockConfirm.title"           = "Remove from blocklist";
@@ -666,6 +667,9 @@
 // 全局顶部错误通知：envelope 解析失败（APIClient/PartyAPIClient/SapiTokenStore 共用；技术错误，三语言统一英文）
 "api.error.responseParseFailed" = "Server response error";
 "api.error.network" = "Network error, please check your connection";
+"api.error.session" = "Session expired, please log in again";
+"api.error.serverFormat" = "Server error (%d), please try again later";
+"api.error.requestFailedFormat" = "Request failed (%@)";
 
 // 公屏系统消息（用户在直播间内可见）
 "im.system.loginFailedFormat" = "IM login failed: %@";
@@ -1071,6 +1075,7 @@
 
 "party.seat.empty"                       = "Empty seat";
 "party.seat.occupied"                    = "Seated user";
+"party.seat.muted"                       = "Muted";
 
 "party.error.enterFailedFormat"          = "Failed to join: %@";
 "party.error.exitFailedFormat"           = "Failed to leave: %@";
