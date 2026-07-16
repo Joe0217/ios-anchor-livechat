@@ -87,14 +87,17 @@ struct PartyCreateRoomView: View {
         .task { await store.loadInitial() }
         .sheet(isPresented: $showModePicker) {
             PartyCreateModePickerSheet(store: store) { showModePicker = false }
+                .giftPanelSheetBackground()
                 .presentationDetents([.fraction(0.8)])
         }
         .sheet(isPresented: $showLanguagePicker) {
             PartyCreateLanguagePickerSheet(store: store) { showLanguagePicker = false }
+                .giftPanelSheetBackground()
                 .presentationDetents([.medium])
         }
         .sheet(isPresented: $showBackgroundPicker) {
             PartyCreateBackgroundPickerSheet(store: store) { showBackgroundPicker = false }
+                .giftPanelSheetBackground()
                 .presentationDetents([.fraction(0.8)])
         }
         .onChange(of: store.createdRoomId) { id in
@@ -269,6 +272,10 @@ struct PartyCreateRoomView: View {
                             backgroundThumbnail(bg, big: true)
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 140)
+                                // CachedAsyncImage 默认 contentMode=.fill —— 缺 .clipped() 图片
+                                // 撑大后超出 140h 参与父 VStack 布局；.clipShape 只 clip 视觉不 clip layout。
+                                // .clipped() 必须**在** .clipShape **之前**（先硬矩形 clip layout，再圆角 clip 视觉）
+                                .clipped()
                                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                             Text(bg.isPermanent ? L10n.Party.createBgPermanent : "\(bg.duration ?? 0)s")
                                 .font(.system(size: 10, weight: .semibold))
@@ -432,190 +439,69 @@ struct PartyCreateRoomView: View {
     }
 
     /// 根据 videoSeatCount / seatCount fallback 到切图 asset 名
+    /// 逻辑已迁到 [PartyRoomTemplate.fallbackAssetName](../Models/PartyRoomTemplate.swift)；
+    /// 本 wrapper 保留旧签名给 View 内多处调用点使用
     static func assetNameForTemplate(_ temp: PartyRoomTemplate) -> String? {
-        if let vc = temp.videoSeatCount, vc > 0 {
-            switch vc {
-            case 1: return "partyTemplate1Video"
-            case 2: return "partyTemplate2Video"
-            case 3: return "partyTemplate3Video"
-            default: return nil
-            }
-        }
-        if let sc = temp.seatCount {
-            switch sc {
-            case 5:  return "partyTemplate5Mic"
-            case 6:  return "partyTemplate6Mic"
-            case 10: return "partyTemplate10Mic"
-            case 15: return "partyTemplate15Mic"
-            case 20: return "partyTemplate20Mic"
-            default: return nil
-            }
-        }
-        return nil
+        temp.fallbackAssetName
     }
 }
 
 // MARK: - Mode picker sheet
 
 /// H5 蓝本：`create.vue:483-514` 底部 popup + tab + 模板卡片网格 + Confirm 按钮
+///
+/// v7.14 起 UI 抽到 [PartyRoomTemplatePickerSheet](Components/PartyRoomTemplatePickerSheet.swift)
+/// 通用组件，与房间内 Room Mode sheet 复用。本 wrapper 只做 create 侧 store 桥接。
+///
+/// **数据桥**：voice/live 各从 `store.templatesByMode[1/2]` 读；filter valid 与老逻辑对齐
+/// （PartyCreateStore.templates computed 已 filter `.hasValidDisplay`）
+///
+/// **Tab 切换**：`onTabChange` → `store.mode = type.rawValue` → 触发 store.mode.didSet 自动
+/// 补拉 + 切 selectedTemplate 到该 mode 首张（保留原副作用链）
+///
+/// **Confirm**：本地暂存 `store.selectedTemplate = template + store.mode = type.rawValue`，
+/// 关 sheet；等 submit createRoom 时才发接口
 struct PartyCreateModePickerSheet: View {
     @ObservedObject var store: PartyCreateStore
     var onConfirm: () -> Void
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Theme.Palette.partyListBackground.ignoresSafeArea()
-            VStack(spacing: 16) {
-                modeTab.padding(.top, 16)
-                templateGrid
-                Spacer(minLength: 80)
-            }
-            confirmButton.padding(.bottom, 20).padding(.horizontal, 20)
-        }
-    }
-
-    private var modeTab: some View {
-        HStack(spacing: 0) {
-            tabButton(title: L10n.Party.createModeVoice, active: store.mode == PartyCreateStore.modeVoice) {
-                store.mode = PartyCreateStore.modeVoice
-            }
-            tabButton(title: L10n.Party.createModeLiveVoice, active: store.mode == PartyCreateStore.modeLiveVoice) {
-                store.mode = PartyCreateStore.modeLiveVoice
-            }
-        }
-        .padding(4)
-        .background(Capsule().fill(Theme.Palette.partyCreateInputFill))
-        .padding(.horizontal, 20)
-    }
-
-    private func tabButton(title: String, active: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(active ? .white : Theme.Palette.partyCreateModeTabInactive)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .background(
-                    Capsule().fill(
-                        active
-                        ? AnyShapeStyle(LinearGradient(
-                            colors: [Theme.Palette.partyCreateModeTabA, Theme.Palette.partyCreateModeTabB, Theme.Palette.partyCreateModeTabC],
-                            startPoint: .leading, endPoint: .trailing))
-                        : AnyShapeStyle(Color.clear)
-                    )
-                )
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-    }
-
-    @ViewBuilder
-    private var templateGrid: some View {
-        if store.templatesLoading {
-            HStack { Spacer(); ProgressView().tint(.white); Spacer() }
-                .padding(.top, 40)
-        } else if !store.templatesError.isEmpty {
-            VStack(spacing: 8) {
-                Text(store.templatesError)
-                    .font(.system(size: 13))
-                    .foregroundColor(.orange)
-                Button(L10n.Party.retry) { Task { await store.loadTemplates(for: store.mode) } }
-                    .foregroundColor(.white)
-            }
-            .padding(.top, 40)
-        } else if store.templates.isEmpty {
-            Text(L10n.Party.createTemplateEmpty)
-                .font(.system(size: 13))
-                .foregroundColor(Theme.Palette.partyGreeting)
-                .padding(.top, 40)
-        } else {
-            ScrollView {
-                // LazyVGrid vertical spacing + 每列 GridItem 的 spacing 都要设，水平/垂直间距才对称
-                LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: 20), GridItem(.flexible(), spacing: 20)],
-                    spacing: 20
-                ) {
-                    ForEach(store.templates) { temp in
-                        templateCard(temp)
+        PartyRoomTemplatePickerSheet(
+            voiceTemplates: validTemplates(mode: PartyCreateStore.modeVoice),
+            liveTemplates: validTemplates(mode: PartyCreateStore.modeLiveVoice),
+            isLoading: store.templatesLoading && store.templates.isEmpty,
+            errorMessage: store.templatesError.isEmpty ? nil : store.templatesError,
+            onRetry: { Task { await store.loadTemplates(for: store.mode) } },
+            initialType: initialType,
+            initialSelectedTempId: store.selectedTemplate?.id,
+            enforceLevelGate: false,          // Create v6 对齐安卓：无等级门槛
+            emptyText: L10n.Party.createTemplateEmpty,
+            onTabChange: { type in
+                // Tab 切换 → store.mode 更新触发 didSet：补拉未 cache 的 mode + 重置 selectedTemplate 到首张
+                store.mode = type.rawValue
+            },
+            onConfirm: { tempId, type in
+                // Confirm：从对应 tab 的 filter valid 列表找 tempId → 本地暂存到 store
+                let picked = validTemplates(mode: type.rawValue).first { $0.id == tempId }
+                if let picked {
+                    store.selectedTemplate = picked
+                    if store.mode != type.rawValue {
+                        store.mode = type.rawValue
                     }
                 }
-                .padding(.horizontal, 20)
+                onConfirm()
             }
-            .scrollIndicators(.hidden)
-        }
+        )
     }
 
-    private func templateCard(_ temp: PartyRoomTemplate) -> some View {
-        // 对齐安卓无等级门槛，全部模板都可选；图片三层 fallback（coverImage URL → asset name →
-        // SF Symbol placeholder）防 videoSeatCount/seatCount 不在 asset 集合时 card 全空
-        let selected = store.selectedTemplate?.id == temp.id
-        return Button {
-            store.selectTemplate(temp)
-        } label: {
-            ZStack(alignment: .topTrailing) {
-                Group {
-                    if let cover = temp.coverImage, !cover.isEmpty, let u = URL(string: cover) {
-                        CachedAsyncImage(url: u, contentMode: .fill, cdn: (.avatarLarge, .fill)) {
-                            Rectangle().fill(Theme.Palette.partyCreateTempFill)
-                        }
-                    } else if let asset = PartyCreateRoomView.assetNameForTemplate(temp) {
-                        Image(asset).resizable().scaledToFill()
-                    } else {
-                        Image(systemName: "square.grid.2x2")
-                            .resizable().scaledToFit()
-                            .foregroundColor(Theme.Palette.partyCreateInputCounter)
-                            .padding(20)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                if selected {
-                    Image("partyTemplateSelected")
-                        .resizable()
-                        .frame(width: 22, height: 22)
-                        .padding(6)
-                }
-            }
-            // grid item 固定 height —— aspectRatio(.fit) 在 LazyVGrid flex column 里高度会
-            // 崩塌到 0（fit 语义"不超过 parent"，parent 无高度约束时取 0）造成 card 堆叠
-            .frame(maxWidth: .infinity)
-            .frame(height: 140)
-            .padding(8)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Theme.Palette.partyCreateTempFill)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(selected ? Theme.Palette.partyCreateTempSelected : Color.clear, lineWidth: 1.5)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
-        .buttonStyle(.plain)
+    /// PartyRoomModeType.rawValue 1=voice / 2=liveAndVoice；转 store.mode 索引
+    private var initialType: PartyRoomModeType {
+        store.mode == PartyCreateStore.modeVoice ? .voiceOnly : .liveAndVoice
     }
 
-    private var confirmButton: some View {
-        Button(action: onConfirm) {
-            HStack {
-                Spacer()
-                Text(L10n.Party.createConfirm)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                Spacer()
-            }
-            .padding(.vertical, 14)
-            .background(
-                Capsule().fill(
-                    LinearGradient(
-                        colors: [Theme.Palette.partyCreateBtnA, Theme.Palette.partyCreateBtnB],
-                        startPoint: .leading, endPoint: .trailing
-                    )
-                )
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(store.selectedTemplate == nil)
-        .opacity(store.selectedTemplate == nil ? 0.5 : 1)
+    /// filter valid（对齐 PartyCreateStore.templates computed 的 filter 规则）
+    private func validTemplates(mode: Int) -> [PartyRoomTemplate] {
+        (store.templatesByMode[mode] ?? []).filter(\.hasValidDisplay)
     }
 }
 
@@ -627,7 +513,6 @@ struct PartyCreateLanguagePickerSheet: View {
 
     var body: some View {
         ZStack {
-            Theme.Palette.partyListBackground.ignoresSafeArea()
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(store.languages) { lang in
@@ -661,133 +546,26 @@ struct PartyCreateLanguagePickerSheet: View {
 // MARK: - Background picker sheet
 
 /// 对齐安卓 `ChoosePartyRoomBackgroundDialog` 网格弹窗。
-/// 视觉：3 列缩略图 grid + 选中态紫粉描边 + 底部 Confirm。
+///
+/// 从 v7.13 起 UI 组件抽到 [PartyBackgroundPickerSheet](Components/PartyBackgroundPickerSheet.swift)
+/// 通用组件，settings 侧复用同款 —— 避免"一处修 pattern 另一处漏"反复出问题。
+///
+/// 本 wrapper 只做 create 侧 store 与通用组件的桥接：
+/// - 数据源：`store.backgrounds` / `store.backgroundsLoading` / `store.selectedBackground?.id`
+/// - Confirm：本地暂存 `store.selectedBackground = picked`，等 submit createRoom 时才发接口
 struct PartyCreateBackgroundPickerSheet: View {
     @ObservedObject var store: PartyCreateStore
     var onConfirm: () -> Void
 
-    // LazyVGrid vertical spacing + 每列 GridItem 的 spacing 都要设，水平/垂直间距才对称
-    private let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 14), count: 3)
-
     var body: some View {
-        ZStack(alignment: .bottom) {
-            Theme.Palette.partyListBackground.ignoresSafeArea()
-            VStack(spacing: 12) {
-                Text(L10n.Party.createSectionBackground)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.top, 16)
-                content
-                Spacer(minLength: 80)
-            }
-            confirmButton.padding(.bottom, 20).padding(.horizontal, 20)
+        PartyBackgroundPickerSheet(
+            backgrounds: store.backgrounds,
+            isLoading: store.backgroundsLoading && store.backgrounds.isEmpty,
+            initialSelectedId: store.selectedBackground?.id
+        ) { picked in
+            store.selectedBackground = picked
+            onConfirm()
         }
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        if store.backgroundsLoading && store.backgrounds.isEmpty {
-            HStack { Spacer(); ProgressView().tint(.white); Spacer() }
-                .padding(.top, 40)
-        } else if store.backgrounds.isEmpty {
-            Text(L10n.Party.createBgEmpty)
-                .font(.system(size: 13))
-                .foregroundColor(Theme.Palette.partyGreeting)
-                .padding(.top, 40)
-        } else {
-            ScrollView {
-                LazyVGrid(columns: columns, spacing: 14) {
-                    ForEach(store.backgrounds) { bg in
-                        backgroundCard(bg)
-                    }
-                }
-                .padding(.horizontal, 16)
-            }
-            .scrollIndicators(.hidden)
-        }
-    }
-
-    private func backgroundCard(_ bg: PartyBackground) -> some View {
-        let selected = store.selectedBackground?.id == bg.id
-        return Button {
-            store.selectedBackground = bg
-        } label: {
-            // 用 GeometryReader 拿 card 精确宽×高传给 image explicit frame(w:h:)。
-            // 关键坑：SwiftUI Image `.aspectRatio(.fill)` 需要 explicit width×height 才能
-            // 计算 target；用 `frame(maxW/H: .infinity)` 会让 aspectRatio 无参考 →
-            // 视觉溢出或 layout 崩坏。clipped() 硬矩形 clip layout + 视觉不传播。
-            GeometryReader { geo in
-                ZStack(alignment: .topTrailing) {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(Theme.Palette.partyCreateTempFill)
-
-                    if let urlStr = bg.imgUrl ?? bg.bigImgUrl,
-                       !urlStr.isEmpty,
-                       let u = URL(string: urlStr) {
-                        CachedAsyncImage(url: u, contentMode: .fill, persistent: true, cdn: (.avatarLarge, .fill)) {
-                            Color.clear
-                        }
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .clipped()  // 硬矩形 clip layout + 视觉
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                    }
-
-                    if selected {
-                        Image("partyTemplateSelected")
-                            .resizable()
-                            .frame(width: 20, height: 20)
-                            .padding(6)
-                    }
-                    if !bg.isPermanent, let d = bg.duration, d > 0 {
-                        VStack {
-                            Spacer()
-                            HStack {
-                                Text("\(d)s")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 6).padding(.vertical, 2)
-                                    .background(Capsule().fill(Color.black.opacity(0.55)))
-                                Spacer()
-                            }
-                        }
-                        .padding(6)
-                    }
-                }
-            }
-            // 固定 grid item：flex 宽 + fixed height 160pt（3 列 flex 宽约 100pt，160 高 = 5:8 竖）
-            .frame(maxWidth: .infinity)
-            .frame(height: 160)
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(selected ? Theme.Palette.partyCreateTempSelected : Color.clear, lineWidth: 1.5)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var confirmButton: some View {
-        Button(action: onConfirm) {
-            HStack {
-                Spacer()
-                Text(L10n.Party.createConfirm)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                Spacer()
-            }
-            .padding(.vertical, 14)
-            .background(
-                Capsule().fill(
-                    LinearGradient(
-                        colors: [Theme.Palette.partyCreateBtnA, Theme.Palette.partyCreateBtnB],
-                        startPoint: .leading, endPoint: .trailing
-                    )
-                )
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(store.selectedBackground == nil)
-        .opacity(store.selectedBackground == nil ? 0.5 : 1)
     }
 }
 

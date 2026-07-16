@@ -680,6 +680,43 @@ struct PartyRoomView: View {
 
     // MARK: - v15 UserCard sheet(sheet 化后 helper computed 已删,挂载走 §.userCardSheet 一行 modifier)
 
+    /// 名片卡内嵌 admin action row 上下文 —— 派生自 store 当前态 + 当前查看的 userCardForUserId。
+    /// - 我方非 owner/admin → nil(admin row 隐藏)
+    /// - 目标是我自己 → nil(不能对自己操作)
+    /// - 其他场景返回 PartyAdminContext,UserCardPopup 内 canShowAdminActions 再过滤(目标房主/角色差异等)
+    private var partyAdminContextForCard: PartyAdminContext? {
+        guard let uid = userCardForUserId else { return nil }
+        guard store.selfRole == .owner || store.selfRole == .admin else { return nil }
+        if let mineUidInt = SessionStore.shared.user?.userId, uid == String(mineUidInt) { return nil }
+
+        let targetSeat = store.seatList.first { $0.userId == uid }
+        let targetRole = targetSeat?.typedRole
+
+        return PartyAdminContext(
+            selfRole: store.selfRole,
+            targetSeat: targetSeat,
+            targetRoleType: targetRole,
+            roomId: store.roomInfo?.id ?? roomId,
+            kickOutHours: 24,   // TODO: 从 partyBaseConfig.kickOutInterval 派生(base config 未接入前默认 24h)
+            onKickFromMic: { targetUserId, seatIndex in
+                Task { await store.requestKickFromMic(seatIndex: seatIndex, targetUserId: targetUserId) }
+                userCardForUserId = nil
+            },
+            onToggleMute: { seatIndex, mute in
+                Task { await store.requestProhibitSeat(seatIndex: seatIndex, mute: mute) }
+                // 不关闭 sheet:mute 后等 IM 1008 广播 → seat.seatMicrophoneEnabled 更新
+            },
+            onSetAdmin: { targetUserId, add in
+                Task { await store.requestSetAdmin(userId: targetUserId, add: add) }
+                userCardForUserId = nil
+            },
+            onKickOutRoom: { seatIndex, targetUserId, banType in
+                Task { await store.requestKickOutRoom(seatIndex: seatIndex, targetUserId: targetUserId, banType: banType) }
+                userCardForUserId = nil
+            }
+        )
+    }
+
     // MARK: - v15 切麦确认
 
     private var switchSeatDialogPresented: Binding<Bool> {
@@ -939,7 +976,6 @@ struct PartyRoomView: View {
             NavigationStack {
                 PartyRoomModeSheet(
                     store: store,
-                    userLevel: AnchorInfoStore.shared.mine?.level ?? 0,
                     onConfirmRequest: { tempId in
                         Task { @MainActor in
                             activeRoomTool = nil

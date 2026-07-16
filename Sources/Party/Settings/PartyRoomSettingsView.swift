@@ -26,7 +26,7 @@ struct PartyRoomSettingsView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            Theme.Palette.partyListBackground.ignoresSafeArea()
+            Color.clear.ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture { textFieldFocused = false }
 
@@ -57,11 +57,26 @@ struct PartyRoomSettingsView: View {
         .task { await store.loadInitial() }
         .sheet(isPresented: $showLanguagePicker) {
             settingsLanguagePickerSheet
+                .giftPanelSheetBackground()
                 .presentationDetents([.medium])
         }
         .sheet(isPresented: $showBackgroundPicker) {
-            settingsBackgroundPickerSheet
-                .presentationDetents([.medium, .large])
+            // v7.14 抽公共组件 —— create 侧同款 UI 复用，避免"一处修 pattern 另一处漏"（v7.13 教训）
+            // Confirm 交互：selected 本地暂存，Confirm 时才调 store.selectBackground async 保存
+            PartyBackgroundPickerSheet(
+                backgrounds: store.backgrounds,
+                // Settings store 无独立 backgroundsLoading flag（loadInitial 完成后才展示页面），
+                // sheet 打开时 backgrounds 若为 [] 走空态而非 loading（与 create 侧语义略异）
+                isLoading: false,
+                initialSelectedId: store.selectedBackground?.id
+            ) { picked in
+                Task {
+                    await store.selectBackground(picked)
+                    showBackgroundPicker = false
+                }
+            }
+            .giftPanelSheetBackground()
+            .presentationDetents([.fraction(0.8)])
         }
         .navigationDestination(isPresented: $showAdminManagement) {
             PartyRoomAdminManagementView(store: PartyAdminStore(roomId: store.roomId))
@@ -218,9 +233,13 @@ struct PartyRoomSettingsView: View {
                     }
                     if let bg = store.selectedBackground {
                         Divider().background(Theme.Palette.partyCardBorder)
-                        bgThumbnail(bg, big: true)
+                        bgThumbnail(bg)
                             .frame(maxWidth: .infinity)
                             .frame(height: 140)
+                            // CachedAsyncImage 默认 contentMode=.fill —— 缺 .clipped() 会让 image
+                            // 撑大后超出 140h 参与 VStack 布局；.clipShape 只 clip 视觉不 clip layout。
+                            // 顺序：.clipped() 在 .clipShape 前（先硬矩形 clip layout，再圆角 clip 视觉）
+                            .clipped()
                             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
                 }
@@ -285,7 +304,6 @@ struct PartyRoomSettingsView: View {
 
     private var settingsLanguagePickerSheet: some View {
         ZStack {
-            Theme.Palette.partyListBackground.ignoresSafeArea()
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(store.languages) { lang in
@@ -314,66 +332,15 @@ struct PartyRoomSettingsView: View {
         }
     }
 
-    // MARK: - Background picker sheet（选完即时保存）
-
-    private var settingsBackgroundPickerSheet: some View {
-        ZStack {
-            Theme.Palette.partyListBackground.ignoresSafeArea()
-            VStack(spacing: 12) {
-                Text(L10n.Party.createSectionBackground)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.top, 16)
-                if store.backgrounds.isEmpty {
-                    Text(L10n.Party.createBgEmpty)
-                        .font(.system(size: 13))
-                        .foregroundColor(Theme.Palette.partyGreeting)
-                        .padding(.top, 40)
-                } else {
-                    ScrollView {
-                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 10) {
-                            ForEach(store.backgrounds) { bg in
-                                bgCard(bg)
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                    }
-                    .scrollIndicators(.hidden)
-                }
-                Spacer(minLength: 40)
-            }
-        }
-    }
-
-    private func bgCard(_ bg: PartyBackground) -> some View {
-        let selected = store.selectedBackground?.id == bg.id
-        return Button {
-            Task {
-                await store.selectBackground(bg)
-                showBackgroundPicker = false
-            }
-        } label: {
-            ZStack(alignment: .topTrailing) {
-                bgThumbnail(bg, big: false)
-                    .aspectRatio(0.75, contentMode: .fill)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                if selected {
-                    Image("partyTemplateSelected")
-                        .resizable().frame(width: 20, height: 20).padding(6)
-                }
-            }
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(selected ? Theme.Palette.partyCreateTempSelected : Color.clear, lineWidth: 1.5)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
+    // MARK: - Background thumbnail（sectionBackground row 已选背景大图预览用）
+    //
+    // v7.14：Background picker sheet UI 抽到公共组件 PartyBackgroundPickerSheet；
+    // 本地只保留 sectionBackground row 已选背景大图预览的 thumbnail helper。
 
     @ViewBuilder
-    private func bgThumbnail(_ bg: PartyBackground, big: Bool) -> some View {
-        let urlStr = big ? (bg.bigImgUrl ?? bg.imgUrl) : (bg.imgUrl ?? bg.bigImgUrl)
+    private func bgThumbnail(_ bg: PartyBackground) -> some View {
+        // sectionBackground row 大图预览：优先 bigImgUrl fallback imgUrl
+        let urlStr = bg.bigImgUrl ?? bg.imgUrl
         if let url = urlStr, !url.isEmpty, let u = URL(string: url) {
             CachedAsyncImage(url: u, persistent: true, cdn: (.avatarLarge, .fill)) {
                 Rectangle().fill(Theme.Palette.partyCreateTempFill)
