@@ -170,6 +170,8 @@ final class PartyStore: ObservableObject {
     @Published private(set) var partyCallGiftIcon: String?
     /// 私 call 开关选中礼物的价格缓存（蓝钻显示用）。
     @Published private(set) var partyCallGiftPrice: Int?
+    /// v5-需求 2：私 call 开关切换 API 在飞标志 —— UI 层按钮显示 ProgressView 并屏蔽 tap 防重复点击。
+    @Published private(set) var isTogglingPrivateCall: Bool = false
 
     // MARK: - 衍生
 
@@ -472,6 +474,10 @@ final class PartyStore: ObservableObject {
         isBusyLockRoom = false
         // E spec §3 MC Seat：幂等 flag 清（退房重置）
         isBusyMCSeat = false
+        // F-spec 私 call：gift cache + toggle flag 清 —— 跨房间避免旧数据残留导致新房按钮显示上一房的礼物
+        partyCallGiftIcon = nil
+        partyCallGiftPrice = nil
+        isTogglingPrivateCall = false
     }
 
     // MARK: - 房主保存设置后本地同步（v8.2）
@@ -2384,6 +2390,9 @@ extension PartyStore: PartyRoomChatManagerDelegate {
             AppLogger.party.notice("[PartyStore] setPrivateCall skip: roomInfo missing")
             return
         }
+        // v5-需求 2：spinner flag —— UI 显示转圈 + 屏蔽 tap 直到 API 返回
+        isTogglingPrivateCall = true
+        defer { isTogglingPrivateCall = false }
         do {
             try await PartyAPI.updatePartyPrivateCall(
                 roomId: roomId,

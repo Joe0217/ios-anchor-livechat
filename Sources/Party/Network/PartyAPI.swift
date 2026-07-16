@@ -896,6 +896,13 @@ struct PartyMicApplicationListResponse: Decodable, Equatable {
     }
 
     init(from decoder: Decoder) throws {
+        // 后端在队列为空时返 result:null（对齐 decodeArrayOrEmpty 的 "null"→空 兜底语义）
+        if let single = try? decoder.singleValueContainer(), single.decodeNil() {
+            self.totalNum = 0
+            self.records = []
+            self.myIndex = -1
+            return
+        }
         let c = try decoder.container(keyedBy: CodingKeys.self)
         // 缺字段兜底：totalNum/records 缺失时视为空列表；myIndex 缺失视为不在队
         self.totalNum = (try? c.decode(Int.self, forKey: .totalNum)) ?? 0

@@ -77,6 +77,11 @@ struct PartyRoomInfo: Codable, Equatable {
     let partyPrivateCallOpen: Int?
     /// F 期私 call 礼物 id；用户端拨打时预扣此礼物。
     let partyCallGiftId: String?
+    /// F 期私 call 礼物图片 URL（后端 `room/enter` 直接返；用户端拨打时预扣此礼物的展示图）。
+    /// **关键**：这是后端 enterRoom 响应字段，不用二次调 `getPartyCallGiftList` 匹配。
+    let partyCallGiftImg: String?
+    /// F 期私 call 礼物价格（蓝钻数量）；后端 `room/enter` 直接返 Int。
+    let partyCallGiftPrice: Int?
 
     /// 衍生：观众在线人数（用 `onlineUserList.count`；list 接口无独立人数字段）
     var onlineCount: Int { onlineUserList?.count ?? 0 }
@@ -146,7 +151,9 @@ struct PartyRoomInfo: Codable, Equatable {
         lockFlag: Int? = nil,
         needPassword: Bool? = nil,
         partyPrivateCallOpen: Int? = nil,
-        partyCallGiftId: String? = nil
+        partyCallGiftId: String? = nil,
+        partyCallGiftImg: String? = nil,
+        partyCallGiftPrice: Int? = nil
     ) -> PartyRoomInfo {
         PartyRoomInfo(
             id: id,
@@ -183,7 +190,9 @@ struct PartyRoomInfo: Codable, Equatable {
             bgImgUrl: bgImgUrl,
             bigImgUrl: bigImgUrl,
             partyPrivateCallOpen: partyPrivateCallOpen ?? self.partyPrivateCallOpen,
-            partyCallGiftId: partyCallGiftId ?? self.partyCallGiftId
+            partyCallGiftId: partyCallGiftId ?? self.partyCallGiftId,
+            partyCallGiftImg: partyCallGiftImg ?? self.partyCallGiftImg,
+            partyCallGiftPrice: partyCallGiftPrice ?? self.partyCallGiftPrice
         )
     }
 }
