@@ -989,6 +989,11 @@ final class PartyStore: ObservableObject {
 
         // 2. 自己在麦 / 不在麦
         if let me = mySelf {
+            // 上麦 = 主播工作态；对齐直播/匹配的自动上线行为
+            // （LiveSettingsView.onAppear / RootView.ensureUserOnlineHook）
+            if !OnlineStatusStore.shared.userSetOnline {
+                OnlineStatusStore.shared.setUserSetOnline(true)
+            }
             let seatType = me.typed ?? .voice
             rtc.upperSeat(seatType: seatType)
             let micEnabled = (me.microphoneEnabled ?? 0) == 1 && (me.seatMicrophoneEnabled ?? 0) == 1
@@ -2389,6 +2394,10 @@ extension PartyStore: PartyRoomChatManagerDelegate {
                 partyPrivateCallOpen: enable ? 1 : 0,
                 partyCallGiftId: giftId ?? info.partyCallGiftId
             )
+            // 开启私 call = 主播工作态；对齐直播/匹配的自动上线行为
+            if enable, !OnlineStatusStore.shared.userSetOnline {
+                OnlineStatusStore.shared.setUserSetOnline(true)
+            }
             // 缓存 gift meta 供按钮 preview（enable=true 时更新；关开关时保留最后一次）
             if enable, let icon = giftIcon, !icon.isEmpty {
                 partyCallGiftIcon = icon
