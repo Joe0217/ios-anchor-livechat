@@ -65,6 +65,18 @@ struct AnchorInfo: Codable {
     let language: String?          // 已学语言 逗号 join（对齐 H5 register `formData.language`）
     let countryId: String?         // ⚠️ 与 countryCode（ISO 两字母）不同：H5 register formData.countryId 是 en 名（"Spain"）或 locale，抓包定；先 String?
 
+    // MARK: - 审核态字段(2026-07-16 新增,与 LoginResult 保持一致)
+    /// 对齐 H5 mineInfo 里的审核态,让冷启动/进受限首屏 refresh 后能同步回 SessionStore.user (LoginResult)。
+    /// H5 App.vue.isLogin() 每次冷启动拉 getAnchorInfo → setMineInfo 覆盖这些字段。
+    /// ⚠️ 字段名与 LoginResult 同款侦察未真机验证,首次真机跑 restricted flow 时对齐字段名。
+    /// 命名与后端字段一致(不加 account 前缀),依赖 auto synthesized CodingKeys。
+    /// `type` / `valid` 与 Swift 保留字/其它字段无实际冲突(struct 属性访问 `.type` 合法)。
+    let valid: Int?                // 账号状态:0=封禁 / 1=正常
+    let onReview: Bool?            // 审核中标记
+    let banAlways: Bool?           // 永久封禁
+    let bannedSubType: Int?        // 临时封禁时长(小时)
+    let type: Int?                 // 审核结果类型:2=通过 / 9=代理 / 其他=拒绝或未审核
+
     // Finding #8 修 2026-07-10：手写 init(from:) 让 birthday 支持 String/Int/Double 混发 decode
     // 其它字段沿用 decodeIfPresent 语义（与 Swift 自动 synthesized 一致；写全一遍是因为一旦手写 init(from:) 就会禁用 auto synthesize）
     init(from decoder: Decoder) throws {
@@ -100,9 +112,16 @@ struct AnchorInfo: Codable {
         self.inviteCode = try c.decodeIfPresent(String.self, forKey: .inviteCode)
         self.language = try c.decodeIfPresent(String.self, forKey: .language)
         self.countryId = try c.decodeIfPresent(String.self, forKey: .countryId)
+        // 2026-07-16 新增审核态字段
+        self.valid = try c.decodeIfPresent(Int.self, forKey: .valid)
+        self.onReview = try c.decodeIfPresent(Bool.self, forKey: .onReview)
+        self.banAlways = try c.decodeIfPresent(Bool.self, forKey: .banAlways)
+        self.bannedSubType = try c.decodeIfPresent(Int.self, forKey: .bannedSubType)
+        self.type = try c.decodeIfPresent(Int.self, forKey: .type)
     }
 
     /// Memberwise init 保留供 EditProfileView+Preview 等 test/preview 代码继续用位置参数构造
+    /// 2026-07-16 加审核态 5 字段(valid/onReview/banAlways/bannedSubType/type),全 default nil 避免 Preview 代码大规模改动。
     init(userId: Int?, nickname: String?, icon: String?, sex: Int?, age: Int?,
          countryCode: String?, signature: String?, signatureVaild: Int?,
          level: Int?, levelName: String?, callPrice: Int?,
@@ -113,7 +132,9 @@ struct AnchorInfo: Codable {
          chatBubble: String?, activeTycoon: Bool?,
          dataStatistics: AnchorDataStatistics? = nil, anchorIncomeMap: AnchorIncomeMap? = nil,
          email: String?, birthday: String?, phone: String?, inviteCode: String?,
-         language: String?, countryId: String?) {
+         language: String?, countryId: String?,
+         valid: Int? = nil, onReview: Bool? = nil, banAlways: Bool? = nil,
+         bannedSubType: Int? = nil, type: Int? = nil) {
         self.userId = userId; self.nickname = nickname; self.icon = icon; self.sex = sex; self.age = age
         self.countryCode = countryCode; self.signature = signature; self.signatureVaild = signatureVaild
         self.level = level; self.levelName = levelName; self.callPrice = callPrice
@@ -125,6 +146,30 @@ struct AnchorInfo: Codable {
         self.dataStatistics = dataStatistics; self.anchorIncomeMap = anchorIncomeMap
         self.email = email; self.birthday = birthday; self.phone = phone; self.inviteCode = inviteCode
         self.language = language; self.countryId = countryId
+        self.valid = valid; self.onReview = onReview; self.banAlways = banAlways
+        self.bannedSubType = bannedSubType; self.type = type
+    }
+
+    /// 2026-07-16：由登录响应直接构造 `mine`，对齐 H5 `loginSuccess → setMineInfo(res)`（`stores/modules/user.js:74-131`）。
+    /// 后端不存在 `/api/user/getUserInfo` 接口（返 404），登录响应本身就是 mine 的权威来源；缺失字段（level/callPrice/picList
+    /// 等主播扩展字段）由 `/api/anchor/userInfo` 填 `info` 覆盖。
+    static func fromLoginResult(_ r: LoginResult) -> AnchorInfo {
+        AnchorInfo(
+            userId: r.userId, nickname: r.nickname, icon: r.icon,
+            sex: nil, age: nil, countryCode: nil,
+            signature: nil, signatureVaild: nil,
+            level: nil, levelName: nil, callPrice: nil,
+            upsNum: nil, fansNum: nil, friendsNum: nil,
+            pictures: nil, videos: nil, picList: nil,
+            greetMsgs: nil,
+            callVideoUrl: nil, giftList: nil,
+            chatBubble: nil, activeTycoon: nil,
+            dataStatistics: nil, anchorIncomeMap: nil,
+            email: nil, birthday: nil, phone: nil, inviteCode: nil,
+            language: nil, countryId: nil,
+            valid: r.valid, onReview: r.onReview, banAlways: r.banAlways,
+            bannedSubType: r.bannedSubType, type: r.type
+        )
     }
 }
 

@@ -34,28 +34,10 @@ enum ProfileService {
         }
     }
 
-    /// 我的基础信息（蓝本 09 §256）。H5 `getMineInfo`，与 getAnchorInfo 字段大量重叠
-    /// 但侧重点不同：mineInfo 给通用字段（nickname/icon/age/sex/country），
-    /// anchorInfo 给主播专属（callPrice/相册/审核态）。两者并发拉取互补。
-    /// 返回模型复用 AnchorInfo（字段全 Optional 兼容缺失）。
-    static func getMineInfo() async throws -> AnchorInfo {
-        let data = try await APIClient.shared.post("/api/user/getUserInfo")
-        do {
-            let info = try JSONDecoder().decode(AnchorInfo.self, from: data)
-            logger.info("getMineInfo decoded userId=\(info.userId ?? -1) nickname=\(info.nickname ?? "nil")")
-            return info
-        } catch {
-            // P2-17：同 getAnchorInfo 防 PII 泄漏
-            let raw = String(data: data.prefix(120), encoding: .utf8) ?? "<非文本>"
-            logger.error("getMineInfo decode failed: \(String(describing: error), privacy: .private) | raw=\(raw, privacy: .private)")
-            throw error
-        }
-    }
-
-    static func getMineInfoRaw() async throws -> [String: Any] {
-        let data = try await APIClient.shared.post("/api/user/getUserInfo")
-        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
-    }
+    /// 2026-07-16 删除：`getMineInfo` / `getMineInfoRaw`（对应 `/api/user/getUserInfo`）后端不存在（返 404）。
+    /// 对齐 H5 蓝本 `stores/modules/user.js:74-131 loginSuccess(res) → setMineInfo(res)`——登录响应本身即为 mine
+    /// 权威来源，无独立"我的信息"接口。主播扩展字段（level/callPrice/picList/...）由 `/api/anchor/userInfo`
+    /// 补齐到 `info`。
 
     /// 主播礼物墙（H5 mine/index.vue:92-98 独立于 getAnchorInfo 拉取）。
     /// 后端字段：`giftId` + `giftImg||icon` + `giftName` + `giftCount||num`；GiftItem 已双兼容。

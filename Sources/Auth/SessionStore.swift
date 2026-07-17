@@ -40,23 +40,15 @@ final class SessionStore: ObservableObject {
     /// login catch 1005 时携入；LoginView.onChange 消费 → push Register + reset
     @Published var pendingRegister: PendingRegister? = nil
 
-    /// login 成功但 userType 非 2/9（审核中/被拒）→ 携 mineInfo 让 View 层 hydrate + push Register
-    /// tuple 不 Equatable，用 struct 包
-    @Published var needsResubmit: PendingResubmit? = nil
-
     struct PendingRegister: Equatable {
         let email: String
         let password: String
     }
 
-    struct PendingResubmit: Equatable {
-        let loginResult: LoginResult
-        let mineInfo: AnchorInfo
-        static func == (lhs: Self, rhs: Self) -> Bool {
-            lhs.loginResult.userId == rhs.loginResult.userId
-                && lhs.mineInfo.userId == rhs.mineInfo.userId
-        }
-    }
+    /// 2026-07-16 重构：`PendingResubmit` / `needsResubmit` 已删除。原设计"未审核账号 login 时同步拉 mineInfo
+    /// hydrate 后 push Register"违反 H5 蓝本(H5 未审核账号进 restricted 首屏,Resubmit 按钮才拉资料重填);
+    /// 且未审核账号 `/api/user/getUserInfo` 后端返 404 让整条链失败。新设计:登录成功直接 applyLogin → RootView
+    /// 按 `userType` 分流到 RestrictedTabView,MineRestrictedView.handleResubmit 才调 getAnchorInfo hydrate。
 
     /// v2 起 user 整体（含 token / imToken / loginUuid 等敏感字段）存 Keychain。
     /// v1（UserDefaults）→ v2 一次性迁移：load() 命中旧键时搬到 Keychain 并清旧。
@@ -134,36 +126,15 @@ final class SessionStore: ObservableObject {
                 return
             }
 
-            // A-2 code-review Finding #1 修 2026-07-10：resubmit 路径先分流再决定是否 applyLogin
-            // 原：先 applyLogin(翻 isLoggedIn=true → RootView dismantle LoginView) → 再设 needsResubmit → 无监听者 → 路径整体断
-            // 修：userType 属"审核中/被拒" → **不**调 applyLogin，让 isLoggedIn 保 false 使 LoginView 存活；
-            //     临时设 AuthToken.value 让 APIClient 能拉 mineInfo；LoginView.onChange 消费 needsResubmit push register；
-            //     RegisterStore.submit 成功后才 applyLogin(register 接口返 result) 真登录
-            // 对齐 H5 login/index.vue:75-82 else 分支语义 (userType !== 2 && !== 9 走 register)
-            let isResubmitPath = (result.userType != nil && result.userType != 2 && result.userType != 9)
-            //     ↑ Finding #7 修：userType nil 视为**合法登录**（H5 !== 对 undefined 也 truthy → 走 else register；
-            //       iOS 保守：nil 时不算 resubmit，直接走正常登录路径避免误判把已注册用户塞进 register）
+            // 2026-07-16 重构：对齐 H5 loginSuccess (`stores/modules/user.js:74-131`)——登录响应本身足以驱动
+            // UI 分流,不再依赖 profile 接口拉取。userType 判定后延到 RootView 分流(userType != 2 && != 9 →
+            // RestrictedTabView,由 MineRestrictedView.Resubmit 按钮才拉资料 hydrate)。
+            //
+            // 保留 pendingRegisterPassword Keychain 保存:MineRestrictedView.handleResubmit 拉 mineInfo 后
+            // RegisterStore.hydrate 需要 cachedPassword 兜底(H5 register 提交仍要带明文密码走 MD5)。
+            // logout 时清此 Keychain(既有逻辑 line 269 已实现)。
+            _ = KeychainStore.setString(password, for: KeychainKey.pendingRegisterPassword)
 
-            if isResubmitPath {
-                // 临时授权：让 APIClient 能带 token 拉 mineInfo；isLoggedIn 保 false 让 LoginView 存活
-                AuthToken.value = token
-                _ = KeychainStore.setString(password, for: KeychainKey.pendingRegisterPassword)
-                await AnchorInfoStore.shared.refresh()
-                if let mineInfo = AnchorInfoStore.shared.mine {
-                    needsResubmit = PendingResubmit(loginResult: result, mineInfo: mineInfo)
-                } else {
-                    // Post-review NEW-2 修 2026-07-10：refresh 失败 mine nil → 无 needsResubmit 触发用户卡登录页无反馈
-                    // 回退清临时状态 + 用通用网络错误提示（避免误导用户 email/pwd 错）
-                    AuthToken.value = nil
-                    _ = KeychainStore.remove(for: KeychainKey.pendingRegisterPassword)
-                    errorMessage = String(format: L10n.authErrorNetworkFormat, "profile refresh failed")
-                    AppLogger.auth.error("[SessionStore] resubmit path aborted: AnchorInfoStore.mine nil after refresh")
-                }
-                // 不 applyLogin，等 RegisterStore.submit 成功后调
-                return
-            }
-
-            // 正常登录（userType == 2 已审核 / 9 代理 / nil 视为合法）
             guard await applyLogin(result) else {
                 errorMessage = L10n.authErrorNoToken
                 return
@@ -188,7 +159,7 @@ final class SessionStore: ObservableObject {
     /// 3. Fire AppConfigStore.shared.activate()（同）
     /// 4. 打日志 [LOGIN OK]
     ///
-    /// 副作用：**不设** errorMessage（成功路径）；**不清** pendingRegister/needsResubmit（由 View 层消费清）
+    /// 副作用：**不设** errorMessage（成功路径）；**不清** pendingRegister（由 View 层消费清）
     /// - returns: true = 登录状态已建立；false = token 缺失，调用方决定文案
     @discardableResult
     func applyLogin(_ result: LoginResult) async -> Bool {
@@ -197,6 +168,9 @@ final class SessionStore: ObservableObject {
         isLoggedIn = true
         save()   // 内部会 AuthToken.value = token
         AppLogger.auth.info("[LOGIN OK] userId=\(result.userId ?? -1, privacy: .private) → fire AnchorInfoStore.refresh() + AppConfigStore.activate()")
+        // 2026-07-16：对齐 H5 `loginSuccess → setMineInfo(res)`——用登录响应直接注入 mine，
+        // 不再依赖 `/api/user/getUserInfo`（后端 404）。getAnchorInfo 结果稍后由 refresh() 覆盖 info。
+        AnchorInfoStore.shared.hydrateFromLogin(result)
         Task { await AnchorInfoStore.shared.refresh() }
         // H-3：AppConfigStore 横断基建（视频通话权限 / 翻译 key / 回复积分 config），
         // 挂 session-scoped rule 双入口之 login refresh；一次拉 4 key 逗号 join
@@ -216,6 +190,16 @@ final class SessionStore: ObservableObject {
         // （当前链 confirmAuditAlert 已先手清 auditDialogShowing；这里是防御式绑生命周期）
         auditAlert = nil
         auditDialogShowing = false
+        // Phase C：任务中心页折叠态 per-user 清理(session-scoped rule 双入口之 logout clear)
+        // 必须在 user = nil 之前调 —— 需要 userId 定位 UserDefaults key
+        // 直接内联删除 UserDefaults key(避免跨 module 依赖 —— TaskCenterCollapseStore 是新 module,
+        // pbxproj 未登记时会 fail;内联安全兼容首次 build)
+        if let uid = user?.userId {
+            let uidStr = String(uid)
+            for cycle in ["DAILY", "WEEKLY"] {
+                UserDefaults.standard.removeObject(forKey: "taskCenter.collapse.\(cycle).\(uidStr)")
+            }
+        }
         user = nil
         isLoggedIn = false
         errorMessage = ""
@@ -248,6 +232,9 @@ final class SessionStore: ObservableObject {
         // H-5 v2: 礼物列表 in-memory 缓存（跨场景 party/live/call）— session-scoped rule 应用
         // 未清则 A 账号的礼物架数据/余额残留到 B 首屏面板（余额值尤其敏感 · session 隔离要求）
         GiftCatalogCache.shared.clear()
+        // v24（B1 · .claude/rules/session-scoped-store-refresh.md 双入口之 logout clear）：
+        // 活跃大 R 进房 Toast 去重集清空，防同账号短时 logout+relogin 后当天已提示的大 R 不再提示
+        ActiveTycoonToastCenter.shared.clear()
         // Batch 6.1.3: 全局 P2P 消息 delegate 解注册（session-scoped rule 双入口之 logout deactivate）
         // 防跨账号后 B 账号仍触发 A 账号的合成路径
         GlobalP2PMessageObserver.shared.deactivate()
@@ -255,7 +242,6 @@ final class SessionStore: ObservableObject {
         RegisterStore.shared.reset()
         _ = KeychainStore.remove(for: KeychainKey.pendingRegisterPassword)
         pendingRegister = nil
-        needsResubmit = nil
         // Bug fix 2026-07-10：注册完成后 logout 会跳回注册页而非登录页 —— NavigationStack path 残留 [.basicInfo, .required, ...]，
         // RootView 分流回 LoginView 时 LoginView 顶层 NavigationStack 用 pathHolder.path 恢复到最后一次的注册栈。
         // 修：logout 时清 path 让下次进 LoginView 从根开始
@@ -295,6 +281,43 @@ final class SessionStore: ObservableObject {
         }
     }
 
+    /// 2026-07-16:受限首屏进入时刷新审核态,对齐 H5 App.vue.isLogin() 每次冷启动拉 getAnchorInfo → setMineInfo 覆盖 valid/onReview/banAlways/... 字段。
+    ///
+    /// iOS 侧 LoginResult 是首次登录快照,若审核态在服务端变化(通过/被拒/临时封禁)本地不知情。sysMsg 58 push 只在
+    /// App 在线时能收到;冷启动或长时间离线的账号必须主动拉一次审核态确认。
+    ///
+    /// 数据源:AnchorInfoStore.shared.refresh() 拉 getAnchorInfo → info?.valid/onReview/banAlways/bannedSubType/type
+    /// 同步回 self.user (LoginResult),save() 持久化到 Keychain。
+    ///
+    /// 失败静默:refresh 内部已 non-fatal(anchor/mine/gift 3 接口任一失败不 throw),info 可能仍为 nil;此时不覆盖 user,
+    /// 保持首次登录的审核态快照(用户重新登录时会拿到新的 LoginResult 覆盖)。
+    func refreshAuditStatus() async {
+        await AnchorInfoStore.shared.refresh()
+        guard let current = user, let info = AnchorInfoStore.shared.info else {
+            AppLogger.auth.notice("[Session] refreshAuditStatus skip: user or anchorInfo nil")
+            return
+        }
+        // 只同步审核态相关字段;其他字段(userId/token/imToken 等)保持登录响应原值
+        let updated = LoginResult(
+            userId: current.userId,
+            token: current.token,
+            loginUuid: current.loginUuid,
+            yxAccid: current.yxAccid,
+            imToken: current.imToken,
+            userType: info.type ?? current.userType,       // type 覆盖 userType(H5 setMineInfo 同款语义)
+            nickname: info.nickname ?? current.nickname,
+            icon: info.icon ?? current.icon,
+            valid: info.valid ?? current.valid,
+            onReview: info.onReview ?? current.onReview,
+            banAlways: info.banAlways ?? current.banAlways,
+            bannedSubType: info.bannedSubType ?? current.bannedSubType,
+            type: info.type ?? current.type
+        )
+        user = updated
+        save()
+        AppLogger.auth.info("[Session] refreshAuditStatus OK userType=\(updated.userType ?? -1) valid=\(updated.valid ?? -1) onReview=\(updated.onReview == true) banAlways=\(updated.banAlways == true)")
+    }
+
     /// RootView `.alert(item:)` dismissButton 回调；根据 applyStatus 分流 logout / refresh。
     /// SwiftUI 会在 tap 后自动置 auditAlert=nil（`.alert(item:)` 契约），本方法不再手动置 nil 避免双写。
     func confirmAuditAlert(_ ctx: AuditAlertContext) {
@@ -302,10 +325,12 @@ final class SessionStore: ObservableObject {
             auditDialogShowing = false
             logout()
         } else {
-            // 拒绝分支：H5 走 forcePageReload() 强制重新拉 mineInfo；iOS 无 reload 概念，
-            // 通过 AnchorInfoStore.refresh() 让本地 anchor 态与后端 rejected 后的 userType 对齐，
-            // Publisher 驱动 UI 自动刷新（tab 顺序 / 可播按钮 enable 状态 等）。
-            Task { await AnchorInfoStore.shared.refresh() }
+            // 2026-07-17 修:拒绝分支改调 refreshAuditStatus(而非 AnchorInfoStore.refresh)。
+            // 对齐 H5 forcePageReload() 语义(强制重新拉 mineInfo 覆盖 valid/onReview/type 字段)——
+            // 只调 AnchorInfoStore.refresh() 仅刷新 info 字段,**不会更新 SessionStore.user (LoginResult)** 里的
+            // 审核字段;banner 派生源是 session.user (RootView.isRestricted / RestrictedStatusBanner 都读它),
+            // 不同步就永远看不到新审核态。refreshAuditStatus 内部 anchorStore.refresh + 同步字段到 user + save。
+            Task { await refreshAuditStatus() }
         }
     }
 
@@ -330,6 +355,10 @@ final class SessionStore: ObservableObject {
             // H-3: 冷启动 restore 时也 activate AppConfigStore(rule session-scoped-store-refresh 双入口)
             // 否则 microsoftTranslatorKey/Area 为 nil,翻译 tap 会 toast "Translation config missing"
             Task { await AppConfigStore.shared.activate() }
+            // 2026-07-17:冷启动 restore 同步注入 AnchorInfoStore.mine(对齐 applyLogin 里的 hydrateFromLogin 双入口设计)。
+            // 若不注入,mine 恒 nil,派生 UI 字段(displayName/userId/iconURL 等)只能靠 info 或 SessionStore.user 兜底;
+            // 未审核账号 info 拉取可能失败(non-fatal),mine 缺失会让派生链断层。
+            AnchorInfoStore.shared.hydrateFromLogin(u)
             return
         }
         // v1 迁移：UserDefaults 残留 → Keychain，迁完清旧
@@ -345,6 +374,8 @@ final class SessionStore: ObservableObject {
             GlobalP2PMessageObserver.shared.activate()
             // H-3: 同 v2 路径,冷启动 restore 后 activate AppConfigStore
             Task { await AppConfigStore.shared.activate() }
+            // 2026-07-17:v1 迁移路径同步 hydrate(与 v2 分支对称)
+            AnchorInfoStore.shared.hydrateFromLogin(u)
         }
     }
 }

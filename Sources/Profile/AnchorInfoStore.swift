@@ -15,7 +15,9 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "AnchorI
 /// - 主播信息多处复用（Profile / Work 头部 / Settings / 直播开播默认值），需要单一来源
 ///
 /// 设计：
-/// - `info` (来自 /api/anchor/userInfo) 主写，`mine` (来自 /api/user/getUserInfo) 兜底
+/// - `info` (来自 /api/anchor/userInfo) 主写，`mine` (来自登录响应 LoginResult) 兜底
+/// - 2026-07-16：`mine` 不再走 `/api/user/getUserInfo`（后端 404），改为 `hydrateFromLogin(_:)` 由
+///   SessionStore.applyLogin / load 直接注入，对齐 H5 `loginSuccess → setMineInfo(res)` 语义
 /// - 派生 UI 字段（displayName / userId / ratePerMin 等）统一在本 store 计算
 /// - `loadIfNeeded()` 首次拉一次 → `hasLoadedOnce=true` 之后不重拉
 /// - `refresh()` 用户主动触发（下拉 / 资料编辑后）强制刷新
@@ -111,6 +113,14 @@ final class AnchorInfoStore: ObservableObject {
         await performReload()
     }
 
+    /// 2026-07-16：从登录响应直接注入 `mine`，对齐 H5 `loginSuccess → setMineInfo(res)`。
+    /// SessionStore.applyLogin（登录成功）+ SessionStore.load（冷启动 restore）双入口调用；
+    /// 后端不存在 `/api/user/getUserInfo`，登录响应本身是 mine 权威来源。
+    func hydrateFromLogin(_ result: LoginResult) {
+        mine = AnchorInfo.fromLoginResult(result)
+        saveToDisk()
+    }
+
     /// 列出本 Profile 关联的所有图片 URL，从 ImageCache + URLCache 中清除。
     /// 只清"持久写入过"的本人资源（头像/相册/视频封面/礼物图），不影响他人头像。
     private func invalidateImageCaches() {
@@ -175,66 +185,57 @@ final class AnchorInfoStore: ObservableObject {
             return
         }
         loadState = .loading
-        do {
-            async let anchorTask = ProfileService.getAnchorInfo()
-            async let mineTask: AnchorInfo? = {
-                do { return try await ProfileService.getMineInfo() }
-                catch {
-                    logger.warning("getMineInfo failed (non-fatal): \(String(describing: error))")
-                    return nil
-                }
-            }()
-            // 礼物墙独立接口（H5 mine/index.vue:92）；失败不阻塞主流程 → 空数组 UI 走空态
-            async let giftTask: [GiftItem] = {
-                do { return try await ProfileService.getGiftWallList() }
-                catch {
-                    logger.warning("getGiftWallList failed (non-fatal): \(String(describing: error))")
-                    return []
-                }
-            }()
 
-            let anchor = try await anchorTask
-            let mineInfo = await mineTask
-            let giftWall = await giftTask
-
-            // API await 期间可能被 clear() 递增 epoch（用户登出竞态）——丢弃全部写入，
-            // 不写 info/mine/social/loadState/hasLoadedOnce，也不 saveToDisk（否则 keychain 会被 A 数据污染，
-            // 冷启动 loadFromDisk 又恢复 A 让 hasLoadedOnce=true 短路新 loadIfNeeded）
-            guard epoch == self.reloadEpoch else {
-                logger.info("doReload result discarded: epoch=\(epoch) current=\(self.reloadEpoch)")
-                return
+        // 2026-07-16：`mine` 由 `hydrateFromLogin` 从登录响应直接注入，doReload 不再拉 `/api/user/getUserInfo`
+        // （后端返 404）。剩余 2 接口全 non-fatal——未审核账号 getAnchorInfo 也可能返错，允许 info nil，
+        // 派生 UI 字段 displayName/userId/iconURL 走 info ?? mine ?? SessionStore 兜底。
+        async let anchorTask: AnchorInfo? = {
+            do { return try await ProfileService.getAnchorInfo() }
+            catch {
+                logger.warning("getAnchorInfo failed (non-fatal): \(String(describing: error))")
+                return nil
             }
-
-            self.info = anchor
-            self.mine = mineInfo
-            self.giftWallList = giftWall
-
-            // 社交数从接口字段直接写入（覆盖；用户操作的增减在 Notification 收到时再叠加）
-            if let n = anchor.upsNum    ?? mineInfo?.upsNum    { self.followingCount = n }
-            if let n = anchor.fansNum   ?? mineInfo?.fansNum   { self.followersCount = n }
-            if let n = anchor.friendsNum ?? mineInfo?.friendsNum { self.friendsCount = n }
-
-            loadState = .loaded
-            hasLoadedOnce = true
-            saveToDisk()
-            logger.info("reload OK userId=\(anchor.userId ?? -1) mineMerged=\(mineInfo != nil) giftWall=\(giftWall.count)")
-        } catch let e as APIError {
-            // 错误状态也要 guard：老 task 的失败结果不应污染新 session 的 loadState
-            guard epoch == self.reloadEpoch else {
-                logger.info("doReload APIError discarded: epoch=\(epoch) current=\(self.reloadEpoch) code=\(e.code)")
-                return
+        }()
+        // 礼物墙独立接口（H5 mine/index.vue:92）；失败不阻塞主流程 → 空数组 UI 走空态
+        async let giftTask: [GiftItem] = {
+            do { return try await ProfileService.getGiftWallList() }
+            catch {
+                logger.warning("getGiftWallList failed (non-fatal): \(String(describing: error))")
+                return []
             }
-            loadState = .error(e.message)
-            logger.error("reload APIError code=\(e.code) message=\(e.message)")
-        } catch {
-            guard epoch == self.reloadEpoch else {
-                logger.info("doReload error discarded: epoch=\(epoch) current=\(self.reloadEpoch)")
-                return
-            }
-            let msg = String(format: L10n.profileLoadFailedFormat, error.localizedDescription)
-            loadState = .error(msg)
-            logger.error("reload error: \(String(describing: error))")
+        }()
+
+        let anchor = await anchorTask
+        let giftWall = await giftTask
+
+        // API await 期间可能被 clear() 递增 epoch（用户登出竞态）——丢弃全部写入，
+        // 不写 info/mine/social/loadState/hasLoadedOnce，也不 saveToDisk（否则 keychain 会被 A 数据污染，
+        // 冷启动 loadFromDisk 又恢复 A 让 hasLoadedOnce=true 短路新 loadIfNeeded）
+        guard epoch == self.reloadEpoch else {
+            logger.info("doReload result discarded: epoch=\(epoch) current=\(self.reloadEpoch)")
+            return
         }
+
+        self.info = anchor
+        self.giftWallList = giftWall
+        // `mine` 保留 hydrateFromLogin 注入值，不在此重写
+
+        // 社交数从接口字段直接写入（覆盖；用户操作的增减在 Notification 收到时再叠加）；
+        // mine (from LoginResult) 无社交计数字段，只从 anchor 取
+        if let n = anchor?.upsNum     { self.followingCount = n }
+        if let n = anchor?.fansNum    { self.followersCount = n }
+        if let n = anchor?.friendsNum { self.friendsCount = n }
+
+        // 2 接口全 nil/空 时保留 .error 语义,让 ProfileView 显 error banner + Retry(避免用户被静默错误困住);
+        // 至少一个成功 → .loaded(下游派生 UI 走 info ?? mine 兜底)
+        if anchor == nil && giftWall.isEmpty {
+            loadState = .error(String(format: L10n.profileLoadFailedFormat, "no data returned"))
+        } else {
+            loadState = .loaded
+        }
+        hasLoadedOnce = true
+        saveToDisk()
+        logger.info("reload OK userId=\(anchor?.userId ?? -1) anchorMerged=\(anchor != nil) giftWall=\(giftWall.count)")
     }
 
     // MARK: - 派生 UI 字段（info 优先 / mine 兜底 / SessionStore 兜底）
