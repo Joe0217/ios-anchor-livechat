@@ -51,6 +51,8 @@ struct PartyRoomView: View {
     @State private var isEditingAnnouncement: Bool = false
     @State private var announcementDraft: String = ""
     @State private var isSavingAnnouncement: Bool = false
+    // F 期便利功能（2026-07-17）ShareLink 深链分享态；非 nil 触发 UIActivityViewController
+    @State private var shareItems: [Any]?
     /// v9：更多菜单 action sheet 显隐（对齐 H5 more-tool-popup.vue Minimize/Exit）
     @State private var showMoreActions: Bool = false
     // v16（2026-07-14）：关注态改从 `store.isFollowingAnchor` 读，进房时 room/enter 接口的
@@ -78,6 +80,21 @@ struct PartyRoomView: View {
     @State private var showGiftPanel: Bool = false
     /// H-5：送礼成功 toast（sheet 内触发；主 body overlay 显示避免被 sheet 遮挡）
     @State private var giftSentToast: String? = nil
+    /// F 里程碑（2026-07-17）：表情面板 sheet 显隐（对齐 H5 party-expression-popup.vue showEmojiPopup）
+    @State private var showExpressionPanel: Bool = false
+
+    // MARK: - F-1a PartyBattle 状态（Task 21-22, 2026-07-17）
+
+    /// PartyBattle 状态机（对齐 spec §6.2 布局叠加；sheet 触发由 handlePkTap 分流）
+    @ObservedObject private var battleStore = PartyBattleStore.shared
+    /// 房主 PK 发起弹窗 sheet 显隐
+    @State private var showBattleInitiate: Bool = false
+    /// 房主 PK 强制结束确认 sheet 显隐
+    @State private var showBattleForceEnd: Bool = false
+    /// 冷却期点 PK 提示 toast 显隐（自清 2s）
+    @State private var showBattleCooldownToast: Bool = false
+    /// PK 规则弹窗 sheet 显隐
+    @State private var showBattleRules: Bool = false
     // MARK: - 顶层 body
 
     var body: some View {
@@ -102,12 +119,29 @@ struct PartyRoomView: View {
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showSettings) { settingsSheet.giftPanelSheetBackground() }
             .sheet(isPresented: $showAnnouncement) { announcementSheet.giftPanelSheetBackground() }
+            // F 期便利功能（2026-07-17）ShareLink 深链分享：@State 触发 UIActivityViewController
+            .sheet(
+                isPresented: Binding(
+                    get: { shareItems != nil },
+                    set: { if !$0 { shareItems = nil } }
+                )
+            ) {
+                if let items = shareItems {
+                    PartyShareSheet(items: items)
+                }
+            }
             // v8.1 房间工具 sheet（单一挂点，enum 切换 tools / settings 内嵌 push）
             .sheet(item: $activeRoomTool) { kind in
                 roomToolContent(kind: kind).giftPanelSheetBackground()
             }
             // H-5：底部礼物 icon → CommonGiftPanel sheet（对齐 H5 party-gift-popup.vue）
             .sheet(isPresented: $showGiftPanel) { giftPanelSheet }
+            // F 里程碑（2026-07-17）表情面板 sheet 挂载（对齐 H5 party-expression-popup.vue · 半屏 fraction 0.5）
+            .sheet(isPresented: $showExpressionPanel) {
+                PartyExpressionPanel()
+                    .giftPanelSheetBackground()
+                    .presentationDetents([.fraction(0.5)])
+            }
             // H-5：送礼成功 toast（sheet 内触发，主 body overlay 避免被 sheet 遮挡）
             .overlay(alignment: .top) {
                 if let t = giftSentToast {
@@ -218,6 +252,15 @@ struct PartyRoomView: View {
                     keyboardHeight = 0
                 }
             }
+            // F-1a Task 22：PartyBattle UI 挂载点（避免 sceneBody 复杂度爆炸抽独立 modifier）
+            .modifier(PartyBattleUIModifier(
+                battleStore: battleStore,
+                effectiveRoomId: store.roomInfo?.id ?? roomId,
+                showInitiate: $showBattleInitiate,
+                showForceEnd: $showBattleForceEnd,
+                showCooldownToast: $showBattleCooldownToast,
+                showRules: $showBattleRules
+            ))
             .preferredColorScheme(.dark)
     }
 
@@ -333,8 +376,22 @@ struct PartyRoomView: View {
         )
     }
 
+    /// F-1a Task 21：PK 入口点击（对齐 spec §6.2 · 三分支）
+    /// - RUNNING 期 → 强制结束确认
+    /// - COOLDOWN 期 → 提示 toast
+    /// - 其他（idle / ended） → 发起弹窗
     private func handlePkTap() {
-        AppLogger.party.notice("[PartyRoom] pk tapped (TODO G-milestone PK flow)")
+        guard battleStore.canStartPk || battleStore.isRunning || battleStore.isCoolingDown else {
+            AppLogger.party.warning("[PartyRoom] pk tapped but !canStartPk (role/temp/switch not met)")
+            return
+        }
+        if battleStore.isRunning {
+            showBattleForceEnd = true
+        } else if battleStore.isCoolingDown {
+            showBattleCooldownToast = true
+        } else {
+            showBattleInitiate = true
+        }
     }
 
     private func handleRankTap(_ kind: PartyRankKind) {
@@ -1012,10 +1069,18 @@ struct PartyRoomView: View {
     }
 
     private func handleShareTap() {
-        // TODO(F 里程碑)：SwiftUI ShareLink + AppConfig.shareBaseURL + roomId 构造深链；
-        // H5 蓝本 share-list-wrap.vue 是分享到 IM 好友（走 NIM 自定义消息），iOS 复用 P2PChatStore；
-        // 站外分享用 iOS 原生 ShareLink 兜底。是否需 apiGetShareUrl 短链需 H5 二次校验（api-http-method-strict rule）
-        AppLogger.party.notice("[PartyRoom] share tapped (TODO F)")
+        // F 期便利功能（2026-07-17）：ShareLink 深链分享 —— 用 UIActivityViewController 承接系统分享面板。
+        // H5 蓝本 share-list-wrap.vue 是"分享到 IM 好友"（走 NIM 自定义消息），iOS 主播端首版做**站外**
+        // 系统分享出口（wechat/whatsapp/复制），IM 好友转发暂不做（差异文档 §2.3：私聊仅限观众→主播场景）。
+        // 后端若下发短链 API（`apiGetShareUrl`）时可替换 partyShareBaseURL 常量。
+        guard let rid = store.roomInfo?.id, !rid.isEmpty else {
+            AppLogger.party.notice("[PartyRoom] share tapped but roomId missing")
+            return
+        }
+        let url = "\(AppConfig.partyShareBaseURL)\(rid)"
+        let text = String(format: L10n.PartyRoom.shareMessageFormat, url)
+        shareItems = [text]
+        AppLogger.party.info("[PartyRoom] share tapped roomId=\(rid, privacy: .public)")
     }
     private func handleManagementTap() {
         // v7.4.1：房主 + admin 都能打开 tools sheet（对齐 anchorBar canManage 判定；观众依然拦下）
@@ -1307,11 +1372,10 @@ struct PartyRoomView: View {
         // onlineCount==0 时按 H5 语义应隐藏按钮（当前 UX 常显）
         AppLogger.party.notice("[PartyRoom] viewer list tapped (TODO F)")
     }
+    /// F 里程碑（2026-07-17）表情面板入口（对齐 H5 party-expression-popup.vue showEmojiPopup=true）。
+    /// 上麦门槛已在 `PartyRoomInputBar.emojiButton` `isOnSeat` opacity/hitTest 门控 · 此处触发条件即已上麦。
     private func handleEmojiTap() {
-        // TODO(F 里程碑)：H5 蓝本 party-expression-popup.vue —— 表情面板走独立 IM 消息码 + SVGA 广播；
-        // 上麦门槛 v-if inPartyRole > -1 已在 PartyRoomInputBar isOnSeat 处过滤；
-        // 面板本身需 apiPartyEmojiList + apiPartySendEmoji 端点接入
-        AppLogger.party.notice("[PartyRoom] emoji tapped (TODO F)")
+        showExpressionPanel = true
     }
     /// v12：消息按钮（对齐 H5 footer-wrap.vue onClickMsgBtn → partyStore.openPartyMessage()）
     /// A 档接入：复用 Live 侧 ConversationSheetContent 半屏消息列表
@@ -1637,4 +1701,19 @@ private struct PartyRoomBackgroundView: View {
         .frame(width: size.width, height: size.height)
         .clipped()
     }
+}
+
+// MARK: - PartyShareSheet (F 期便利功能, 2026-07-17)
+
+/// UIActivityViewController wrapper —— SwiftUI ShareLink 是 View 无法从 button action 触发；
+/// 用 UIViewControllerRepresentable 通过 `.sheet` 承载 UIActivityViewController 实现程序化触发。
+/// 分享内容通常是 `[String]`（文案含深链），iOS 系统面板会自动识别 URL。
+private struct PartyShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

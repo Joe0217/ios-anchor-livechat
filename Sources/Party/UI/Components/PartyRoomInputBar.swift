@@ -33,10 +33,9 @@ struct PartyRoomInputBar: View {
             inputField
             // v16.10：focused 时右侧图标全隐藏，TextField 占满（对齐 LiveRoomView L423 pattern）
             if !focus.wrappedValue {
+                // F 里程碑（2026-07-17）：emoji 是全员基础能力（对齐 H5 `inPartyRole > -1` 即"在房内" ·
+                // 观众/上麦者/房主都能打开面板 · 静态 -10 全员可发 · 玩法 -11 门槛在 Panel/Store 层守）
                 emojiButton
-                    .opacity(isOnSeat ? 1 : 0)
-                    .allowsHitTesting(isOnSeat)
-                    .accessibilityHidden(!isOnSeat)
                 messageButton
                 micButton
                     .opacity(isOnSeat ? 1 : 0)

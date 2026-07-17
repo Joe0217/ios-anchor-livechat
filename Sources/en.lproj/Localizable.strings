@@ -92,7 +92,7 @@
 "work.tool.profileUpdate"    = "Profile Update";
 "work.tool.invite"           = "Invite";
 "work.tool.workingGuide"     = "Working Guide";
-"work.tool.backpack"         = "Backpack";
+"work.tool.props"            = "Props";
 "work.tool.liveData"         = "Live Data";
 "work.tool.partyData"        = "Party Data";
 "work.tool.myGuardian"       = "My Guardian";
@@ -132,6 +132,16 @@
 "task.reward.points"                  = "Points";
 "task.module.noTasks"                 = "No tasks yet";
 "common.OK"                           = "OK";
+
+// Points Rank(Phase E · 对齐 H5 pointsRank/index.vue)
+"points.rank.navTitle"                = "Points Leaderboards";
+"points.myPoints"                     = "My Points:";
+"points.rank.subtitle"                = "Leaderboards settle rewards and reset points on a weekly basis";
+"points.rank.rules.title"             = "Point Rules";
+"points.rank.rules.content1"          = "1、You can get 10 points every time you post a circle of friends";
+"points.rank.rules.content2"          = "2、Initiate a message chat with the user, and the user replies, you can get 10 points";
+"points.rank.rules.content3"          = "3、The top 5 streamers in the points can get diamond rewards, automatically settle and issue rewards every week";
+"points.rank.rules.content4"          = "4、After weekly settlement, the points will be reset to 0";
 
 "work.invite.earnMoney"      = "Earn Money";
 
@@ -416,7 +426,7 @@
 "liveRoom.rank.empty"             = "No ranking data yet";
 "liveRoom.rank.errorRetry"        = "Failed to load. Tap to retry.";
 "liveRoom.rank.ownMe"             = "Me";
-"liveRoom.rank.diffFormat"        = "%@ 💎 to next rank";
+"liveRoom.rank.diffFormat"        = "%@ to next rank";
 "liveRoom.retry"                  = "Retry";
 "liveRoom.rank.tab.now"           = "Now";
 "liveRoom.rank.tab.today"         = "Today";
@@ -500,7 +510,7 @@
 "live.activeTycoon.enterToast"            = "Active Tycoon has entered the room. Engage now";
 "liveRoom.rpsRules.title"                 = "Game Rules";
 "liveRoom.rpsRules.bestOf"                = "Best of %d rounds";
-"liveRoom.rpsRules.perChallenge"          = "%d 💎 per challenge";
+"liveRoom.rpsRules.perChallenge"          = "%d per challenge";
 "liveRoom.rpsRules.ties"                  = "Ties are replayed";
 "liveRoom.rpsRules.medal"                 = "Win earns %dh medal, cap %dh total";
 "liveRoom.rpsRules.refund"                = "Refund on abnormal exit";
@@ -977,6 +987,9 @@
 "party.create.bg.permanent"              = "Permanent";
 "party.create.bg.empty"                  = "No backgrounds available";
 "party.create.permissionDenied"          = "Contact admin to unlock room creation";
+// F 期 Live↔Party 互斥（对齐安卓 isLiveing||isPartying toast，2026-07-17）
+"party.mutex.blockedByLive"              = "You're broadcasting live. End broadcast to enter a Party Room.";
+"party.mutex.blockedByParty"             = "You're in a Party Room. Leave first to go live.";
 // v8 派对房设置 + 房管管理（2026-07-13）
 "party.settings.navTitle"                = "Room Settings";
 "party.settings.changeAvatar"            = "Change room avatar";
@@ -1197,6 +1210,34 @@
 "liveData.days"                          = "days";
 "liveData.expand"                        = "Expand";
 "liveData.collapse"                      = "Collapse";
+
+// Party Data 派对数据看板（对齐安卓 PartyRoomDataActivity）
+"partyData.navTitle"                     = "Party Data";
+"partyData.totalMicTime"                 = "Total Mic Time";
+"partyData.micTime"                      = "Mic Time";
+"partyData.totalIncome"                  = "Total Income";
+"partyData.giftIncome"                   = "Party Gift Income";
+"partyData.callIncome"                   = "Partycall Income";
+
+"partyData.rule.navTitle"                = "Party Data Rules";
+"partyData.rule.section1"                = "Basic Information:";
+"partyData.rule.section2"                = "Mic Time Statistical Rules:";
+"partyData.rule.section3"                = "Income Composition:";
+"partyData.rule.section4"                = "Display Rules:";
+"partyData.rule.title1"                  = "Data Update Cycle:";
+"partyData.rule.content1"                = "Party data is refreshed periodically. This week / this month shows real-time cumulative data; last week / last month shows finalized totals.";
+"partyData.rule.title2"                  = "Statistical Rules:";
+"partyData.rule.content2"                = "Mic time counts your accumulated seconds on both voice and video seats across all party rooms during the period.";
+"partyData.rule.title3"                  = "Income Sources:";
+"partyData.rule.content3"                = "Party Gift Income is diamonds received from gifts inside party rooms. Partycall Income includes both call billing and gifts received during party calls.";
+"partyData.rule.title4"                  = "Display Rules:";
+"partyData.rule.content4"                = "Only dates with activity are shown in the daily list. Amounts are displayed in diamonds.";
+
+"party.micTimeDetail.title"              = "Mic Time by Room";
+"party.micTime.total"                    = "Total";
+"party.micTime.voice"                    = "Voice";
+"party.micTime.video"                    = "Video";
+"party.micTime.empty"                    = "No mic time data yet";
 
 // LiveData 规则 sheet（对齐 H5 liveRule/index.vue 默认分支）
 "liveData.rule.navTitle"                 = "Live Rules";
@@ -1532,10 +1573,23 @@
 "partyRoom.a11y.game"                    = "Games";
 "partyRoom.a11y.gift"                    = "Send gift";
 
+/* F 里程碑 表情面板 (2026-07-17) */
+"partyRoom.emoji.loadFailed"             = "Failed to load emojis";
+"partyRoom.emoji.retry"                  = "Retry";
+"partyRoom.emoji.playError"              = "Emoji unavailable";
+"partyRoom.emoji.onSeatRequired"         = "Get on a seat to play emojis";
+
 /* v9 PartyRoom biz logic */
 "partyRoom.announcement.title"           = "Announcement";
 "partyRoom.announcement.empty"           = "No announcement yet";
 "partyRoom.announcement.close"           = "Close";
+// F 期房主管理批 编辑通告（2026-07-17）
+"partyRoom.announcement.edit"            = "Edit";
+"partyRoom.announcement.save"            = "Save";
+"partyRoom.announcement.cancel"          = "Cancel";
+"partyRoom.announcement.placeholder"     = "Enter room announcement";
+"partyRoom.announcement.saveSuccess"     = "Announcement saved";
+"partyRoom.announcement.saveFailed"      = "Failed to save announcement";
 "partyRoom.more.title"                   = "More";
 "partyRoom.more.leave"                   = "Leave room";
 
@@ -1549,6 +1603,11 @@
 "partyRoom.toolMenu.startPk"             = "Start PK";
 "partyRoom.toolMenu.luckyNumber"         = "Lucky Number";
 "partyRoom.toolMenu.roomMute"            = "Mute Room";
+// F 期便利功能 Room Mute toggle 状态化文案（2026-07-17）
+"partyRoom.toolMenu.roomMute.on"         = "Mute Room";
+"partyRoom.toolMenu.roomMute.off"        = "Unmute Room";
+// F 期便利功能 ShareLink 深链
+"partyRoom.share.messageFormat"          = "Join my Party Room! %@";
 "partyRoom.seat.locked"                  = "The seat is locked";
 "partyRoom.seat.videoNeedsInvite"        = "Requires invitation from the Room Owner/Admin";
 "partyRoom.switchSeat.title"             = "Switch to this seat?";
@@ -1562,3 +1621,21 @@
 "partyRoom.otherSeat.mute"               = "Mute seat";
 "partyRoom.otherSeat.unmute"             = "Unmute seat";
 "partyRoom.otherSeat.viewProfile"        = "View profile";
+
+// v25.1 (2026-07-17) LiveGiftTask · 三语真翻译从 H5 locales 迁移(user feedback: 文案要对齐 H5)
+"liveRoom.task.sheet.title"              = "Live Stream Task";
+"liveRoom.task.tab.liveGift"             = "Live Gift Task";
+"liveRoom.task.tab.activeTycoon"         = "Active Tycoon Task";
+"liveRoom.task.progress.title"           = "Task Progress";
+"liveRoom.task.progress.subtitle"        = "Send gifts to the girl and help her get daily reward";
+"liveRoom.task.history.title"            = "Today's History";
+"liveRoom.task.history.finished"         = "No More Data";
+"liveRoom.task.history.error"            = "load failed, tap to retry";
+"liveRoom.task.tycoon.completed"         = "Completed";
+"liveRoom.task.tycoon.empty"             = "No tasks yet";
+"liveRoom.task.tycoon.loading"           = "Loading...";
+"liveRoom.task.rules.button"             = "OK";
+"liveRoom.task.rules.title.liveGift"     = "Live Gift Task Rules";
+"liveRoom.task.rules.title.tycoon"       = "Active Tycoon Task Rules";
+"liveRoom.task.rules.body.liveGift"      = "1. Target users: All users in the live room\n2. Progress behavior: Paid activities including gifting, lucky draw, live connection and private call\n3. Reset cycle: Calculated on weekly basis, data resets every week\n4. Progress calculation: Calculated in accordance with relevant task standards";
+"liveRoom.task.rules.body.tycoon"        = "1. Target users: Users tagged with Active Tycoon\n2. Progress behavior: Paid activities including gifting, lucky draw, live connection and private call by tagged users\n3. Reset cycle: Calculated on weekly basis, data resets every week\n4. Progress calculation: Calculated in accordance with relevant task standards";

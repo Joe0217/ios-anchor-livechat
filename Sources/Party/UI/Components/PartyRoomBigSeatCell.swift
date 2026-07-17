@@ -65,6 +65,10 @@ struct PartyRoomBigSeatCell: View {
                 isSpeaking: isSpeaking && seat.occupied,
                 cornerRadius: 0
             )
+            // F 里程碑（2026-07-17）emoji SVGA overlay（对齐 H5 expression-receiver.vue 挂麦位卡片内）
+            // - 空位 seat.userId 为 nil/empty → PartyEmojiSVGAOverlay 内部自动隐藏，无副作用
+            // - 覆盖顶层不拦截 tap（allowsHitTesting 已 false）· 单段播完停留末帧
+            PartyEmojiSVGAOverlay(seatUserId: seat.userId)
             // v10：overlayMicIndicator 移除，mic 图标已迁到 nameChip 名字后面（用户 2026-07-13 requirement）
         }
     }

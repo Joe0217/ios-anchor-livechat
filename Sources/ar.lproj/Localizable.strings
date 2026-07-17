@@ -94,7 +94,7 @@
 "work.tool.profileUpdate"    = "تحديث الملف";
 "work.tool.invite"           = "دعوة";
 "work.tool.workingGuide"     = "دليل العمل";
-"work.tool.backpack"         = "الحقيبة";
+"work.tool.props"            = "الأدوات";
 "work.tool.liveData"         = "بيانات البث";
 "work.tool.partyData"        = "بيانات الحفلة";
 "work.tool.myGuardian"       = "الحارس الخاص بي";
@@ -134,6 +134,16 @@
 "task.reward.points"                  = "نقاط";
 "task.module.noTasks"                 = "لا توجد مهام بعد";
 "common.OK"                           = "حسناً";
+
+// Points Rank(Phase E · 对齐 H5 pointsRank/index.vue)
+"points.rank.navTitle"                = "ترتيب النقاط";
+"points.myPoints"                     = "نقاطي:";
+"points.rank.subtitle"                = "تقوم لوائح المتصدرين بتسوية المكافآت وإعادة تعيين النقاط بشكل أسبوعي";
+"points.rank.rules.title"             = "قواعد النقاط";
+"points.rank.rules.content1"          = "١. يمكنك الحصول على ١٠ نقاط في كل مرة تنشر فيها منشورًا في دائرة الأصدقاء";
+"points.rank.rules.content2"          = "٢. ابدأ محادثة نصية مع المستخدم، وعندما يرد المستخدم، يمكنك الحصول على ١٠ نقاط";
+"points.rank.rules.content3"          = "٣. أفضل ٥ مضيفين في النقاط يمكنهم الحصول على مكافآت ماسية، يتم التسوية وصرف المكافآت تلقائيًا كل أسبوع";
+"points.rank.rules.content4"          = "٤. بعد التسوية الأسبوعية، سيتم إعادة تعيين النقاط إلى ٠";
 
 "work.invite.earnMoney"      = "اكسب المال";
 
@@ -460,7 +470,7 @@
 "liveRoom.rank.empty"             = "لا توجد بيانات ترتيب بعد";
 "liveRoom.rank.errorRetry"        = "فشل التحميل. انقر لإعادة المحاولة.";
 "liveRoom.rank.ownMe"             = "أنا";
-"liveRoom.rank.diffFormat"        = "%@ 💎 للوصول إلى المرتبة التالية";
+"liveRoom.rank.diffFormat"        = "%@ للوصول إلى المرتبة التالية";
 "liveRoom.retry"                  = "إعادة المحاولة";
 "liveRoom.rank.tab.now"           = "الآن";
 "liveRoom.rank.tab.today"         = "اليوم";
@@ -544,7 +554,7 @@
 "live.activeTycoon.enterToast"            = "دخل قطب نشط إلى الغرفة. تفاعل الآن";
 "liveRoom.rpsRules.title"                 = "قواعد اللعبة";
 "liveRoom.rpsRules.bestOf"                = "أفضل من %d جولات";
-"liveRoom.rpsRules.perChallenge"          = "%d 💎 لكل تحدي";
+"liveRoom.rpsRules.perChallenge"          = "%d لكل تحدي";
 "liveRoom.rpsRules.ties"                  = "التعادل يعاد لعبه";
 "liveRoom.rpsRules.medal"                 = "الفوز يمنح %d ساعة، الحد الأقصى %d ساعة";
 "liveRoom.rpsRules.refund"                = "استرداد عند الخروج غير الطبيعي";
@@ -1026,6 +1036,9 @@
 "party.create.bg.permanent"              = "دائم";
 "party.create.bg.empty"                  = "لا توجد خلفيات متاحة";
 "party.create.permissionDenied"          = "تواصل مع المشرف لفتح إنشاء الغرفة";
+// F 期 Live↔Party 互斥
+"party.mutex.blockedByLive"              = "أنت تبث حاليًا. أنهِ البث لدخول غرفة الحفلة.";
+"party.mutex.blockedByParty"             = "أنت في غرفة حفلة. غادر أولًا لتبدأ البث.";
 // v8 派对房 settings
 "party.settings.navTitle"                = "إعدادات الغرفة";
 "party.settings.changeAvatar"            = "تغيير صورة الغرفة";
@@ -1239,6 +1252,34 @@
 "liveData.days"                          = "أيام";
 "liveData.expand"                        = "توسيع";
 "liveData.collapse"                      = "طي";
+
+// Party Data 派对数据看板（对齐安卓 PartyRoomDataActivity）
+"partyData.navTitle"                     = "بيانات الحفلة";
+"partyData.totalMicTime"                 = "إجمالي وقت المايك";
+"partyData.micTime"                      = "وقت المايك";
+"partyData.totalIncome"                  = "إجمالي الدخل";
+"partyData.giftIncome"                   = "دخل هدايا الحفلة";
+"partyData.callIncome"                   = "دخل مكالمات الحفلة";
+
+"partyData.rule.navTitle"                = "قواعد بيانات الحفلة";
+"partyData.rule.section1"                = "المعلومات الأساسية:";
+"partyData.rule.section2"                = "قواعد إحصاء وقت المايك:";
+"partyData.rule.section3"                = "مصادر الدخل:";
+"partyData.rule.section4"                = "قواعد العرض:";
+"partyData.rule.title1"                  = "دورة تحديث البيانات:";
+"partyData.rule.content1"                = "يتم تحديث بيانات الحفلة دوريًا. هذا الأسبوع / هذا الشهر يظهر بيانات فورية تراكمية، والأسبوع / الشهر الماضي يظهر إجمالي نهائي.";
+"partyData.rule.title2"                  = "قواعد الإحصاء:";
+"partyData.rule.content2"                = "يحسب وقت المايك ثوانيك المتراكمة على مقاعد الصوت والفيديو في جميع غرف الحفلات خلال الفترة.";
+"partyData.rule.title3"                  = "مصادر الدخل:";
+"partyData.rule.content3"                = "دخل هدايا الحفلة هو الماس المستلم من الهدايا داخل غرف الحفلات. دخل مكالمات الحفلة يشمل فوترة المكالمات والهدايا المستلمة خلال المكالمات.";
+"partyData.rule.title4"                  = "قواعد العرض:";
+"partyData.rule.content4"                = "تُعرض فقط الأيام التي بها نشاط في القائمة اليومية. المبالغ معروضة بالماس.";
+
+"party.micTimeDetail.title"              = "وقت المايك حسب الغرفة";
+"party.micTime.total"                    = "الإجمالي";
+"party.micTime.voice"                    = "صوت";
+"party.micTime.video"                    = "فيديو";
+"party.micTime.empty"                    = "لا توجد بيانات وقت مايك بعد";
 
 // LiveData 规则 sheet（对齐 H5 liveRule/index.vue 默认分支）
 "liveData.rule.navTitle"                 = "قواعد البث";
@@ -1492,10 +1533,23 @@
 "partyRoom.a11y.game"                    = "الألعاب";
 "partyRoom.a11y.gift"                    = "إرسال هدية";
 
+/* F 里程碑 表情面板 (2026-07-17) */
+"partyRoom.emoji.loadFailed"             = "فشل تحميل الرموز";
+"partyRoom.emoji.retry"                  = "إعادة المحاولة";
+"partyRoom.emoji.playError"              = "الرمز غير متاح";
+"partyRoom.emoji.onSeatRequired"         = "اجلس على مقعد لتشغيل الرموز";
+
 /* v9 PartyRoom biz logic */
 "partyRoom.announcement.title"           = "الإعلان";
 "partyRoom.announcement.empty"           = "لا يوجد إعلان بعد";
 "partyRoom.announcement.close"           = "إغلاق";
+// F 期房主管理批 编辑通告
+"partyRoom.announcement.edit"            = "تحرير";
+"partyRoom.announcement.save"            = "حفظ";
+"partyRoom.announcement.cancel"          = "إلغاء";
+"partyRoom.announcement.placeholder"     = "أدخل إعلان الغرفة";
+"partyRoom.announcement.saveSuccess"     = "تم حفظ الإعلان";
+"partyRoom.announcement.saveFailed"      = "فشل حفظ الإعلان";
 "partyRoom.more.title"                   = "المزيد";
 "partyRoom.more.leave"                   = "مغادرة الغرفة";
 
@@ -1509,6 +1563,11 @@
 "partyRoom.toolMenu.startPk"             = "بدء PK";
 "partyRoom.toolMenu.luckyNumber"         = "الرقم المحظوظ";
 "partyRoom.toolMenu.roomMute"            = "كتم صوت الغرفة";
+// F 期便利功能 Room Mute toggle 状态化文案
+"partyRoom.toolMenu.roomMute.on"         = "كتم صوت الغرفة";
+"partyRoom.toolMenu.roomMute.off"        = "إلغاء كتم الغرفة";
+// F 期便利功能 ShareLink 深链
+"partyRoom.share.messageFormat"          = "انضم إلى غرفة الحفلة الخاصة بي! %@";
 "partyRoom.seat.locked"                  = "المقعد مقفل";
 "partyRoom.seat.videoNeedsInvite"        = "يتطلب دعوة من مالك الغرفة/المسؤول";
 "partyRoom.switchSeat.title"             = "التبديل إلى هذا المقعد؟";
@@ -1522,3 +1581,21 @@
 "partyRoom.otherSeat.mute"               = "كتم صوت المقعد";
 "partyRoom.otherSeat.unmute"             = "إلغاء كتم المقعد";
 "partyRoom.otherSeat.viewProfile"        = "عرض الملف الشخصي";
+
+// v25.1 (2026-07-17) LiveGiftTask · 三语真翻译从 H5 ar.json 迁移
+"liveRoom.task.sheet.title"              = "مهمة البث المباشر";
+"liveRoom.task.tab.liveGift"             = "مهمة هدايا البث";
+"liveRoom.task.tab.activeTycoon"         = "مهمة رجل أعمال نشط";
+"liveRoom.task.progress.title"           = "تقدم المهمة";
+"liveRoom.task.progress.subtitle"        = "أرسل هدايا للفتاة وساعدها في الحصول على مكافأة يومية";
+"liveRoom.task.history.title"            = "سجل اليوم";
+"liveRoom.task.history.finished"         = "لا مزيد من البيانات";
+"liveRoom.task.history.error"            = "فشل التحميل، اضغط للمحاولة مرة أخرى";
+"liveRoom.task.tycoon.completed"         = "مكتمل";
+"liveRoom.task.tycoon.empty"             = "لا توجد مهام بعد";
+"liveRoom.task.tycoon.loading"           = "تحميل...";
+"liveRoom.task.rules.button"             = "حسناً";
+"liveRoom.task.rules.title.liveGift"     = "قواعد مهمة هدايا البث";
+"liveRoom.task.rules.title.tycoon"       = "قواعد مهمة رجل أعمال نشط";
+"liveRoom.task.rules.body.liveGift"      = "1. المستخدمون المستهدفون: جميع المستخدمين في غرفة البث المباشر\n2. سلوك التقدم: الأنشطة المدفوعة بما في ذلك إرسال الهدايا والسحب الترفيهي والاتصال المباشر والمكالمات الخاصة\n3. دورة إعادة التعيين: يتم احتسابها أسبوعياً، تتم إعادة تعيين البيانات كل أسبوع\n4. حساب التقدم: يتم احتسابه وفقاً لمعايير المهمة ذات الصلة";
+"liveRoom.task.rules.body.tycoon"        = "1. المستخدمون المستهدفون: المستخدمون الموسومون بـ رجل أعمال نشط\n2. سلوك التقدم: الأنشطة المدفوعة بما في ذلك إرسال الهدايا والسحب الترفيهي والاتصال المباشر والمكالمات الخاصة من قِبل المستخدمين الموسومين\n3. دورة إعادة التعيين: يتم احتسابها أسبوعياً، تتم إعادة تعيين البيانات كل أسبوع\n4. حساب التقدم: يتم احتسابه وفقاً لمعايير المهمة ذات الصلة";

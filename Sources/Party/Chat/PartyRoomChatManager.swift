@@ -181,6 +181,9 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
         if let lv = anchorMine?.level { ext["userLevel"] = lv }
         ext["role"] = myRole.rawValue
         if let cb = myChatBubble, !cb.isEmpty { ext["chatBubble"] = cb }
+        // 主播端固定注入 userType=2（对齐 android `PartyRoomVM.kt:949`；差异文档 §1.3 明示）—
+        // 与坐麦身份无关；主播以观众身份进他人 Party 房时消息仍带 2，接收端据此差异化展示（等级/VIP 徽章仅对 userType=1 用户消息渲染）
+        ext["userType"] = 2
         // isVip / headFrame / medalList / isPlatformAdmin 主播端本人无源，留给远端消息填充
         msg.remoteExt = ext
 
@@ -189,6 +192,43 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
             try NIMSDK.shared().chatManager.send(msg, to: session)
         } catch {
             AppLogger.party.error("[PartyChat] send failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    // MARK: - 发送自定义消息（表情等 attachType 通道）
+
+    /// 发送 attachType custom 消息（F 里程碑表情面板 attachType `-10 / -11` 使用）。
+    ///
+    /// **对齐 H5 `usePartyHooks.js:1748-1774` `sendCustomMsg({ attachType, data: JSON.stringify(exData) })`**：
+    /// - `remoteExt.attachType = attachType`
+    /// - `remoteExt.data = data`（字典 · **本方法内不做 JSON.stringify**；后端 chatroom 服务端会按 dict 处理，
+    ///   若观察真机需 stringify 再改；对齐 gzip/JSON/dict 三态解码基础设施 `NIMPayloadDecoder.unwrapDataField`）
+    /// - 走 NIM `.custom` 消息类型（`NIMCustomObject` + `NIMCustomAttachment` protocol · 空 encode）
+    /// - 不做本地回显（云信 chatroom 会 push 自己发的消息回来 · 由 IM router self-echo skip 逻辑处理）
+    ///
+    /// **权限**：调用方需保证已 `hasJoined`；未 joined 时 return（防漏收 IM 后异步 send 崩）。
+    func sendCustomMessage(attachType: Int, data: [String: Any]) {
+        guard hasJoined else {
+            AppLogger.party.notice("[PartyChat] sendCustomMessage skip: not joined attachType=\(attachType, privacy: .public)")
+            return
+        }
+        let msg = NIMMessage()
+        let attachment = PartyGenericCustomAttachment(attachType: attachType, data: data)
+        let obj = NIMCustomObject()
+        obj.attachment = attachment
+        msg.messageObject = obj
+        // remoteExt 是 chatroom 通道消息路由 + 消费的真值来源（IM router.processCustom 从 remoteExt 读 attachType）
+        msg.remoteExt = [
+            "attachType": attachType,
+            "data": data,
+        ]
+
+        let session = NIMSession(roomId, type: .chatroom)
+        do {
+            try NIMSDK.shared().chatManager.send(msg, to: session)
+            AppLogger.party.info("[PartyChat] sendCustomMessage sent attachType=\(attachType, privacy: .public) dataKeys=\(Array(data.keys), privacy: .public)")
+        } catch {
+            AppLogger.party.error("[PartyChat] sendCustomMessage failed attachType=\(attachType, privacy: .public) err=\(String(describing: error), privacy: .private)")
         }
     }
 
@@ -437,4 +477,41 @@ protocol PartyRoomChatManagerDelegate: AnyObject {
     /// 140 活动中奖公屏广播（含 worldcup 世界杯活动卡）。
     /// payload 期望 `{ activityName, quantity, imageURL, joinCTA, avatar, cardType, ... }` —— 真机 preflight。
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveWinnerBroadcast payload: [String: Any], raw: NIMMessage)
+
+    /// F 期房主管理批（2026-07-17）1025 roomBgUpdate / 1026 roomBgExpire 广播 —— 触发 PartyStore 重拉当前背景。
+    /// - `expired = false`：1025 房主 setBgImages 后广播，观众端全量重拉 getRoomBgImage
+    /// - `expired = true`：1026 背景过期，清空 currentRoomBackground → UI 层走 DEFAULT_BG fallback
+    /// payload 字段名待真机 preflight（agent-recon-field-names-unverified rule），不依赖 payload 字段。
+    func partyRoomChatDidRequireRoomBgReload(_ chat: PartyRoomChatManager, expired: Bool)
+
+    /// F 里程碑（2026-07-17）表情面板 IM 分发：attachType `-10 emojiStatic` / `-11 emojiPlay` 分发到麦位队列。
+    /// payload 已经过 `PartyEmojiPayload.from(payload:)` 严校验（缺 emojiId/playUrl/sendUserId 任一 drop）+
+    /// self-echo skip 于 router 层完成 · 到 Store 时 payload 已保证 fresh 非 self。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveEmoji payload: PartyEmojiPayload, raw: NIMMessage)
+}
+
+/// NIMCustomAttachment 空桥接实现（发送 custom 消息必需 · attachType 与 data 已通过 `remoteExt` 传输，
+/// 此 attachment 只做 protocol 合规占位 · encode 用最小 JSON 兜住 NIMSDK 序列化路径）。
+///
+/// 对齐 H5 侧 `sendCustomMsg` 语义 · 不用于消费端反序列化（消费走 remoteExt.attachType + remoteExt.data）。
+final class PartyGenericCustomAttachment: NSObject, NIMCustomAttachment {
+    let attachType: Int
+    let data: [String: Any]
+
+    init(attachType: Int, data: [String: Any]) {
+        self.attachType = attachType
+        self.data = data
+        super.init()
+    }
+
+    func encode() -> String {
+        // 最小合规 JSON · 真正的 payload 走 remoteExt · 此串仅 NIMSDK 内部序列化占位
+        let obj: [String: Any] = ["attachType": attachType, "data": data]
+        guard JSONSerialization.isValidJSONObject(obj),
+              let d = try? JSONSerialization.data(withJSONObject: obj),
+              let s = String(data: d, encoding: .utf8) else {
+            return "{\"attachType\":\(attachType)}"
+        }
+        return s
+    }
 }

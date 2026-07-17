@@ -94,7 +94,7 @@
 "work.tool.profileUpdate"    = "Profili Güncelle";
 "work.tool.invite"           = "Davet Et";
 "work.tool.workingGuide"     = "Çalışma Rehberi";
-"work.tool.backpack"         = "Çanta";
+"work.tool.props"            = "Aksesuarlar";
 "work.tool.liveData"         = "Yayın Verileri";
 "work.tool.partyData"        = "Parti Verileri";
 "work.tool.myGuardian"       = "Koruyucum";
@@ -134,6 +134,16 @@
 "task.reward.points"                  = "Puan";
 "task.module.noTasks"                 = "Henüz görev yok";
 "common.OK"                           = "Tamam";
+
+// Points Rank(Phase E · 对齐 H5 pointsRank/index.vue)
+"points.rank.navTitle"                = "Puan Liderlik Tabloları";
+"points.myPoints"                     = "Puanlarım:";
+"points.rank.subtitle"                = "Liderlik tabloları ödülleri haftalık olarak dağıtır ve puanları sıfırlar";
+"points.rank.rules.title"             = "Puan Kuralları";
+"points.rank.rules.content1"          = "1. Her arkadaş çevresi paylaşımı yaptığınızda 10 puan kazanabilirsiniz";
+"points.rank.rules.content2"          = "2. Kullanıcıyla mesaj sohbeti başlatın, kullanıcı yanıt verdiğinde 10 puan kazanabilirsiniz";
+"points.rank.rules.content3"          = "3. Puan sıralamasında ilk 5'e giren yayıncılar elmas ödüller kazanabilir, her hafta otomatik olarak hesaplanır ve ödüller dağıtılır";
+"points.rank.rules.content4"          = "4. Haftalık hesaplamadan sonra puanlar sıfırlanır";
 
 "work.invite.earnMoney"      = "Para Kazan";
 
@@ -460,7 +470,7 @@
 "liveRoom.rank.empty"             = "Henüz sıralama verisi yok";
 "liveRoom.rank.errorRetry"        = "Yükleme başarısız. Tekrar denemek için dokunun.";
 "liveRoom.rank.ownMe"             = "Ben";
-"liveRoom.rank.diffFormat"        = "Sonraki sıralamaya %@ 💎";
+"liveRoom.rank.diffFormat"        = "Sonraki sıralamaya %@";
 "liveRoom.retry"                  = "Tekrar dene";
 "liveRoom.rank.tab.now"           = "Şimdi";
 "liveRoom.rank.tab.today"         = "Bugün";
@@ -544,7 +554,7 @@
 "live.activeTycoon.enterToast"            = "Aktif tycoon odaya girdi. Şimdi etkileşime geç";
 "liveRoom.rpsRules.title"                 = "Oyun Kuralları";
 "liveRoom.rpsRules.bestOf"                = "%d turdan en iyi";
-"liveRoom.rpsRules.perChallenge"          = "Her meydan okuma için %d 💎";
+"liveRoom.rpsRules.perChallenge"          = "Her meydan okuma için %d";
 "liveRoom.rpsRules.ties"                  = "Beraberlikler tekrar oynanır";
 "liveRoom.rpsRules.medal"                 = "Kazanç %d saatlik madalya, üst sınır %d saat";
 "liveRoom.rpsRules.refund"                = "Anormal çıkışta iade";
@@ -1026,6 +1036,9 @@
 "party.create.bg.permanent"              = "Kalıcı";
 "party.create.bg.empty"                  = "Kullanılabilir arka plan yok";
 "party.create.permissionDenied"          = "Oda oluşturmayı açmak için yöneticiyle iletişime geçin";
+// F dönemi Live↔Party karşılıklı dışlama
+"party.mutex.blockedByLive"              = "Şu anda yayındasınız. Parti Odasına girmek için yayını sonlandırın.";
+"party.mutex.blockedByParty"             = "Bir Parti Odasındasınız. Yayına çıkmak için önce çıkın.";
 // v8 parti oda ayarları
 "party.settings.navTitle"                = "Oda Ayarları";
 "party.settings.changeAvatar"            = "Oda avatarını değiştir";
@@ -1239,6 +1252,34 @@
 "liveData.days"                          = "gün";
 "liveData.expand"                        = "Genişlet";
 "liveData.collapse"                      = "Daralt";
+
+// Party Data 派对数据看板（对齐安卓 PartyRoomDataActivity）
+"partyData.navTitle"                     = "Parti Verileri";
+"partyData.totalMicTime"                 = "Toplam Mikrofon Süresi";
+"partyData.micTime"                      = "Mikrofon Süresi";
+"partyData.totalIncome"                  = "Toplam Gelir";
+"partyData.giftIncome"                   = "Parti Hediye Geliri";
+"partyData.callIncome"                   = "Parti Görüşme Geliri";
+
+"partyData.rule.navTitle"                = "Parti Veri Kuralları";
+"partyData.rule.section1"                = "Temel Bilgiler:";
+"partyData.rule.section2"                = "Mikrofon Süresi Kuralları:";
+"partyData.rule.section3"                = "Gelir Bileşimi:";
+"partyData.rule.section4"                = "Görüntüleme Kuralları:";
+"partyData.rule.title1"                  = "Veri Güncelleme Döngüsü:";
+"partyData.rule.content1"                = "Parti verileri düzenli aralıklarla yenilenir. Bu hafta / bu ay gerçek zamanlı kümülatif veriyi, geçen hafta / geçen ay ise nihai toplamları gösterir.";
+"partyData.rule.title2"                  = "İstatistik Kuralları:";
+"partyData.rule.content2"                = "Mikrofon süresi, dönem boyunca tüm parti odalarındaki sesli ve görüntülü koltuklarda geçirdiğiniz saniyeleri toplar.";
+"partyData.rule.title3"                  = "Gelir Kaynakları:";
+"partyData.rule.content3"                = "Parti Hediye Geliri, parti odalarında alınan hediyelerden gelen elmasları içerir. Parti Görüşme Geliri hem çağrı ücretini hem de görüşme sırasında alınan hediyeleri kapsar.";
+"partyData.rule.title4"                  = "Görüntüleme Kuralları:";
+"partyData.rule.content4"                = "Yalnızca etkinlik olan günler günlük listede gösterilir. Tutarlar elmas cinsinden görüntülenir.";
+
+"party.micTimeDetail.title"              = "Odaya Göre Mikrofon Süresi";
+"party.micTime.total"                    = "Toplam";
+"party.micTime.voice"                    = "Sesli";
+"party.micTime.video"                    = "Görüntülü";
+"party.micTime.empty"                    = "Henüz mikrofon süresi verisi yok";
 
 // LiveData 规则 sheet（对齐 H5 liveRule/index.vue 默认分支）
 "liveData.rule.navTitle"                 = "Yayın Kuralları";
@@ -1492,10 +1533,23 @@
 "partyRoom.a11y.game"                    = "Oyunlar";
 "partyRoom.a11y.gift"                    = "Hediye gönder";
 
+/* F 里程碑 表情面板 (2026-07-17) */
+"partyRoom.emoji.loadFailed"             = "Emojiler yüklenemedi";
+"partyRoom.emoji.retry"                  = "Tekrar dene";
+"partyRoom.emoji.playError"              = "Emoji kullanılamıyor";
+"partyRoom.emoji.onSeatRequired"         = "Emoji oynatmak için mikrofona geç";
+
 /* v9 PartyRoom biz logic */
 "partyRoom.announcement.title"           = "Duyuru";
 "partyRoom.announcement.empty"           = "Henüz duyuru yok";
 "partyRoom.announcement.close"           = "Kapat";
+// F dönemi ev sahibi yönetim - duyuru düzenleme
+"partyRoom.announcement.edit"            = "Düzenle";
+"partyRoom.announcement.save"            = "Kaydet";
+"partyRoom.announcement.cancel"          = "İptal";
+"partyRoom.announcement.placeholder"     = "Oda duyurusu girin";
+"partyRoom.announcement.saveSuccess"     = "Duyuru kaydedildi";
+"partyRoom.announcement.saveFailed"      = "Duyuru kaydedilemedi";
 "partyRoom.more.title"                   = "Daha fazla";
 "partyRoom.more.leave"                   = "Odadan çık";
 
@@ -1509,6 +1563,11 @@
 "partyRoom.toolMenu.startPk"             = "PK Başlat";
 "partyRoom.toolMenu.luckyNumber"         = "Şanslı Sayı";
 "partyRoom.toolMenu.roomMute"            = "Odayı Sessize Al";
+// F dönemi Room Mute toggle durum metinleri
+"partyRoom.toolMenu.roomMute.on"         = "Odayı Sessize Al";
+"partyRoom.toolMenu.roomMute.off"        = "Odanın Sesini Aç";
+// F dönemi ShareLink derin bağlantı
+"partyRoom.share.messageFormat"          = "Parti Odama katıl! %@";
 "partyRoom.seat.locked"                  = "Koltuk kilitli";
 "partyRoom.seat.videoNeedsInvite"        = "Oda Sahibi/Yöneticiden davet gerekli";
 "partyRoom.switchSeat.title"             = "Bu koltuğa geçilsin mi?";
@@ -1522,3 +1581,22 @@
 "partyRoom.otherSeat.mute"               = "Koltuğu sessize al";
 "partyRoom.otherSeat.unmute"             = "Sessizden çıkar";
 "partyRoom.otherSeat.viewProfile"        = "Profili görüntüle";
+
+// v25.1 (2026-07-17) LiveGiftTask · 三语真翻译从 H5 tr.json 迁移
+// H5 tr.json 缺 3 key(today s history / send gifts daily / common.loading),用近似值 fallback
+"liveRoom.task.sheet.title"              = "Canlı Yayın Görevi";
+"liveRoom.task.tab.liveGift"             = "Canlı Hediye Görevi";
+"liveRoom.task.tab.activeTycoon"         = "Active Tycoon Görevi";
+"liveRoom.task.progress.title"           = "Görev İlerlemesi";
+"liveRoom.task.progress.subtitle"        = "Kıza hediye gönderin ve günlük ödül almasına yardım edin";
+"liveRoom.task.history.title"            = "Bugünkü Geçmiş";
+"liveRoom.task.history.finished"         = "Daha Fazla Veri Yok";
+"liveRoom.task.history.error"            = "yükleme başarısız, yeniden denemek için dokunun";
+"liveRoom.task.tycoon.completed"         = "Tamamlandı";
+"liveRoom.task.tycoon.empty"             = "Henüz görev yok";
+"liveRoom.task.tycoon.loading"           = "Yükleniyor...";
+"liveRoom.task.rules.button"             = "Tamam";
+"liveRoom.task.rules.title.liveGift"     = "Canlı Hediye Görev Kuralları";
+"liveRoom.task.rules.title.tycoon"       = "Active Tycoon Görev Kuralları";
+"liveRoom.task.rules.body.liveGift"      = "1. Hedef kullanıcılar: Canlı yayın odasındaki tüm kullanıcılar\n2. İlerleme davranışı: Hediye gönderme, şanslı çekiliş, canlı bağlantı ve özel arama dahil ödemeli aktiviteler\n3. Sıfırlama döngüsü: Haftalık olarak hesaplanır, veriler her hafta sıfırlanır\n4. İlerleme hesaplaması: İlgili görev standartlarına göre hesaplanır";
+"liveRoom.task.rules.body.tycoon"        = "1. Hedef kullanıcılar: Active Tycoon etiketli kullanıcılar\n2. İlerleme davranışı: Etiketli kullanıcıların hediye gönderme, şanslı çekiliş, canlı bağlantı ve özel arama dahil ödemeli aktiviteleri\n3. Sıfırlama döngüsü: Haftalık olarak hesaplanır, veriler her hafta sıfırlanır\n4. İlerleme hesaplaması: İlgili görev standartlarına göre hesaplanır";

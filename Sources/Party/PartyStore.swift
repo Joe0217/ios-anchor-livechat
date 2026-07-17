@@ -143,8 +143,30 @@ final class PartyStore: ObservableObject {
 
     /// F 期便利功能（2026-07-17）Room Mute 全房静音状态。
     /// - 本地状态，非服务端字段（Agora `adjustPlaybackSignalVolume` 是本端 SDK 行为）
-    /// - 退房 resetState 归 false；不需持久化（每次进房从默认状态开始）
+    /// - 退房 resetState 归 false；不需持久化（每次进房从默认状态开始)
     @Published private(set) var isRoomMuted: Bool = false
+
+    // MARK: - Expression / Emoji Panel (F 里程碑 · 2026-07-17)
+
+    /// 表情面板分类 list 加载状态机。
+    /// - 首次面板 onAppear 拉一次；`.loaded` 后不重拉（面板反复开关不重复请求）
+    /// - error 态面板中央显 retry 按钮
+    /// - 退房 resetState 归 idle（不清 loaded 数据 · 表情列表跨房通用 · 但状态机重置避免 UI 残留）
+    @Published private(set) var expressionListState: PartyEmojiListState = .idle
+
+    /// 麦位 SVGA 播放队列（key = 发送者 sendUserId · 值 = 该麦位待播 emoji 列表）。
+    /// - **同一麦位串行播放**：SVGA player onFinish → `dequeueEmoji(seatUserId:)` 弹队首
+    /// - **跨麦位并行**：多个 seat 同时收到 -10/-11 → 分别独立 enqueue 并行播
+    /// - **队列上限 20**：对齐 H5 `QUEUE_MAX_SIZE = 20`（`usePartyHooks.js` · `party-expression-popup.vue`）·
+    ///   超上限 shift 队首（防单麦位刷屏 SVGA 引起内存/GPU 压力）
+    /// - 退房 resetState 清空
+    @Published private(set) var emojiQueueMap: [String: [PartyEmojiPayload]] = [:]
+
+    /// 单麦位 emoji 队列上限（对齐 H5 `QUEUE_MAX_SIZE = 20`）
+    private let emojiQueueMaxSize: Int = 20
+
+    /// `loadExpressionList` in-flight 防连点（首次面板 onAppear 期间 tab 切换/快速开关不重复请求）
+    private var isLoadingExpressionList: Bool = false
 
     // MARK: - MC Seat (E spec §3 MC Seat, 2026-07-14)
 
@@ -547,6 +569,12 @@ final class PartyStore: ObservableObject {
         partyCallGiftIcon = nil
         partyCallGiftPrice = nil
         isTogglingPrivateCall = false
+        // F 里程碑：Expression 状态清 —— 退房重置状态机 + 清麦位队列
+        // 注意：expressionListState 数据本身跨房通用，但状态机 idle 让下次面板 onAppear 重新走 loading 走查一次
+        // （避免上一房数据错乱 · 且 loadExpressionList 有 in-flight guard 不重复请求）
+        expressionListState = .idle
+        emojiQueueMap = [:]
+        isLoadingExpressionList = false
     }
 
     // MARK: - 房主保存设置后本地同步（v8.2）
@@ -567,6 +595,136 @@ final class PartyStore: ObservableObject {
             greetingMessage: greetingMessage,
             roomLanguage: roomLanguage
         )
+    }
+
+    // MARK: - Expression / Emoji Panel (F 里程碑 · 2026-07-17)
+
+    /// 表情面板打开时拉分类列表（对齐 H5 `usePartyHooks.js` `feachEmojiList()` on popup show）。
+    /// `.loaded` 后不重拉（面板反复开关只请求一次 · 由 in-flight flag + state 双守）；error 时可 retry。
+    func loadExpressionList() async {
+        // in-flight 防连点（面板 onAppear 快速多次触发 · 或 retry 中重复点）
+        if isLoadingExpressionList { return }
+        // loaded 短路（对齐 [list-refresh-preserve-items] 精神 · 首次拉过就不重拉；如需强制刷新走单独 API）
+        if case .loaded = expressionListState { return }
+
+        isLoadingExpressionList = true
+        expressionListState = .loading
+        do {
+            let list = try await PartyAPI.getPartyRoomEmojis()
+            // 过滤：emojisList 为空的分类不显示（H5 侧默认过滤空 tab）
+            let nonEmpty = list.filter { !$0.emojisList.isEmpty }
+            expressionListState = .loaded(nonEmpty)
+            AppLogger.party.info("[PartyStore] expression list loaded classifications=\(nonEmpty.count, privacy: .public)")
+        } catch {
+            let msg = (error as? PartyAPIError)?.localizedDescription
+                ?? (error as? DecodingError).map { String(describing: $0) }
+                ?? error.localizedDescription
+            expressionListState = .error(msg)
+            AppLogger.party.error("[PartyStore] loadExpressionList failed: \(msg, privacy: .private)")
+        }
+        isLoadingExpressionList = false
+    }
+
+    /// 用户点选面板某个表情后发送 IM 消息 + 本地立即入队（对齐 H5 `sendExpressionMsg` / `sendPlayEmoji`）。
+    ///
+    /// **上麦门槛**（对齐 H5 `usePartyHooks.js:1783` `inPartyRole > -1` guard）：
+    /// 未上麦时 return（UI 层 PartyRoomInputBar emoji 按钮已 opacity=0/allowsHitTesting=false 门控 ·
+    /// 此处二重防御防未来 UI refactor 门控失守 · 参 [prefer-shared-component-over-adhoc] 精神）。
+    ///
+    /// **静态 vs 玩法**（对齐 H5 `party-expression-popup.vue:92-95`）：
+    /// - `!item.isPlayEmoji` → attachType -10 · payload `{id, minImage, playUrl: gifImage, sendUserId}`
+    /// - `item.isPlayEmoji` + `resultImages` 非空 → attachType -11 · **客户端随机抽 picked** ·
+    ///   payload `{id, minImage, playUrl: picked.image, sendUserId, playType, resultKey, timestamp}`
+    ///
+    /// `resultImages` 空的玩法 emoji：拒送 + log（H5 侧同款拒送逻辑 · 防播空 URL 崩）。
+    func sendEmoji(_ item: PartyEmojiItem) {
+        guard let myUserId = myUserIdString, !myUserId.isEmpty else {
+            AppLogger.party.notice("[PartyStore] sendEmoji skip: no userId")
+            return
+        }
+        // 玩法 -11 门槛：仅上麦者可发（对齐 H5 `usePartyHooks.js:1783` `inPartyRole > 0`）
+        // 静态 -10 无门槛（对齐权限矩阵"emoji 全员基础能力"）
+        if item.isPlayEmoji, selfSeat == nil {
+            AppLogger.party.notice("[PartyStore] sendEmoji play skip: not on seat emojiId=\(item.id, privacy: .public)")
+            return
+        }
+
+        let playUrl: String
+        var payloadData: [String: Any] = [
+            "id": item.id,
+            "sendUserId": myUserId,
+        ]
+        if let mi = item.minImage, !mi.isEmpty { payloadData["minImage"] = mi }
+
+        let attachType: Int
+        if item.isPlayEmoji {
+            // -11 玩法表情：resultImages 空 → 拒送
+            guard let pool = item.resultImages, !pool.isEmpty,
+                  let picked = pool.randomElement() else {
+                AppLogger.party.error("[PartyStore] sendEmoji play emoji has no resultImages emojiId=\(item.id, privacy: .public)")
+                return
+            }
+            playUrl = picked.image
+            attachType = PartyAttachType.emojiPlay.rawValue
+            payloadData["playUrl"] = playUrl
+            if let pt = item.playType, !pt.isEmpty { payloadData["playType"] = pt }
+            payloadData["resultKey"] = picked.key
+            payloadData["timestamp"] = Int64(Date().timeIntervalSince1970 * 1000)
+        } else {
+            // -10 静态表情
+            guard let gif = item.gifImage, !gif.isEmpty else {
+                AppLogger.party.error("[PartyStore] sendEmoji static emoji has no gifImage emojiId=\(item.id, privacy: .public)")
+                return
+            }
+            playUrl = gif
+            attachType = PartyAttachType.emojiStatic.rawValue
+            payloadData["playUrl"] = playUrl
+        }
+
+        // 本地立即入队（不等云信回环 · 与 H5 pushPlayEmojiMsg pattern 一致 · router 的 self-echo skip 会阻止双入队）
+        let local = PartyEmojiPayload(
+            uuid: UUID(),
+            emojiId: item.id,
+            playUrl: playUrl,
+            playType: item.isPlayEmoji ? item.playType : nil,
+            resultKey: (payloadData["resultKey"] as? String),
+            timestamp: (payloadData["timestamp"] as? Int64),
+            sendUserId: myUserId
+        )
+        enqueueEmoji(seatUserId: myUserId, payload: local)
+
+        // 走 chatroom IM 发消息
+        chat.sendCustomMessage(attachType: attachType, data: payloadData)
+        AppLogger.party.info("[PartyStore] sendEmoji ok attachType=\(attachType, privacy: .public) emojiId=\(item.id, privacy: .public) isPlay=\(item.isPlayEmoji, privacy: .public)")
+    }
+
+    /// 单麦位队列入队 + 上限 shift（对齐 H5 `QUEUE_MAX_SIZE = 20`）。
+    func enqueueEmoji(seatUserId: String, payload: PartyEmojiPayload) {
+        var queue = emojiQueueMap[seatUserId] ?? []
+        queue.append(payload)
+        // 超上限 shift 队首（对齐 H5：防单麦位刷屏 SVGA 引起 GPU 卡顿）
+        while queue.count > emojiQueueMaxSize {
+            queue.removeFirst()
+        }
+        emojiQueueMap[seatUserId] = queue
+    }
+
+    /// 单麦位 SVGA 播完后出队队首（player onFinish 回调驱动）。
+    /// - 队首 payload 应等于 `expected`（防迟到的 onFinish 出队新 payload · SVGA 播放器实例复用竞态防御）
+    /// - 队列空清 key（避免 dict 长期堆积空 array · @Published 变化频率也降）
+    func dequeueEmoji(seatUserId: String, expected: PartyEmojiPayload) {
+        guard var queue = emojiQueueMap[seatUserId], !queue.isEmpty else { return }
+        // 幂等：只在队首 UUID 匹配时才出队（防迟到 onFinish 误吞新入队的 payload）
+        if queue.first?.uuid == expected.uuid {
+            queue.removeFirst()
+            if queue.isEmpty {
+                emojiQueueMap.removeValue(forKey: seatUserId)
+            } else {
+                emojiQueueMap[seatUserId] = queue
+            }
+        } else {
+            AppLogger.party.debug("[PartyStore] dequeueEmoji uuid mismatch (head=\(queue.first?.uuid.uuidString ?? "nil", privacy: .public) expected=\(expected.uuid.uuidString, privacy: .public)) drop")
+        }
     }
 
     // MARK: - 房主 ownerInfo（v12 对齐 H5 party.js:1259 loadOwnerInfo）
@@ -1012,6 +1170,39 @@ final class PartyStore: ObservableObject {
         } catch {
             AppLogger.party.error("[PartyStore] reload seatList failed: \(String(describing: error), privacy: .private)")
         }
+    }
+
+    /// F-1a Task 9：PartyBattle SELECTING 开始时清参战麦位 giftValueCount（对齐 H5 partyBattle.ts:335-351）
+    ///
+    /// 只清红蓝队参战 uid 的 seat.giftValueCount = 0，中立位不清。
+    /// PartyBattleStore.onSelectingStart 调此 API。
+    ///
+    /// PartyRoomSeat 所有字段 `let`（immutable struct），通过 Codable round-trip 覆盖 `giftValueCount`
+    /// 后 replace seatList[i]（保持 model 定义不动，避免侵入其他模块字段可变性契约）。
+    func clearGiftValueCount(uids: Set<String>) {
+        guard !uids.isEmpty else { return }
+        var updated = 0
+        for i in seatList.indices {
+            guard let uid = seatList[i].userId, uids.contains(uid) else { continue }
+            let curr = seatList[i].giftValueCount ?? 0
+            guard curr != 0 else { continue }
+            guard let reset = try? Self.replaceGiftValueCount(seatList[i], with: 0) else {
+                continue
+            }
+            seatList[i] = reset
+            updated += 1
+        }
+        AppLogger.party.info(
+            "[PartyStore] clearGiftValueCount uids=\(uids.count, privacy: .public) updated=\(updated, privacy: .public)")
+    }
+
+    /// Codable round-trip 覆盖 seat 单字段（let 字段替代方案）
+    private static func replaceGiftValueCount(_ seat: PartyRoomSeat, with newValue: Double) throws -> PartyRoomSeat {
+        let data = try JSONEncoder().encode(seat)
+        var dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+        dict["giftValueCount"] = newValue
+        let updated = try JSONSerialization.data(withJSONObject: dict)
+        return try JSONDecoder().decode(PartyRoomSeat.self, from: updated)
     }
 
     // MARK: - 麦位-RTC 对账中心（spec §1.4.5）
@@ -2215,6 +2406,16 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         // 仅当邀请对象是自己（房间匹配）才弹窗——roomId 已在 chat 双过滤；
         // seatIndex 范围由 chat 内 handleVideoSeatInvite 校验过。
         pendingVideoSeatInvite = invite
+    }
+
+    /// F 里程碑（2026-07-17）表情面板 IM 消费：
+    /// - Router 已完成 self-echo skip（sendUserId == 自己 → 已在本地 sendEmoji 时 enqueue，不重复）
+    /// - Router 已完成 payload 严校验（emojiId / playUrl / sendUserId 必须非空）
+    /// - 此处只做入队；播放由麦位 SVGA player 观察 emojiQueueMap[sendUserId] 驱动
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveEmoji payload: PartyEmojiPayload, raw: NIMMessage) {
+        _ = raw
+        enqueueEmoji(seatUserId: payload.sendUserId, payload: payload)
+        AppLogger.party.info("[PartyStore] emoji enqueued sender=\(payload.sendUserId, privacy: .public) emojiId=\(payload.emojiId, privacy: .public) queueSize=\(self.emojiQueueMap[payload.sendUserId]?.count ?? 0, privacy: .public)")
     }
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveInviteResult result: PartyVideoSeatInviteResult) {

@@ -70,6 +70,12 @@ struct PartyRoomSmallSeatCell: View {
                     .accessibilityHidden(true)
             }
 
+            // F 里程碑（2026-07-17）emoji SVGA overlay（对齐 H5 expression-receiver.vue 挂麦位内）
+            // - 空位 seat.userId 为 nil/empty → PartyEmojiSVGAOverlay 内部自动隐藏
+            // - 覆盖头像上方 · 尺寸 = 头像装饰环大小 · 播完停留末帧
+            PartyEmojiSVGAOverlay(seatUserId: seat.userId)
+                .frame(width: avatarSize + 12, height: avatarSize + 12)
+
             // v13：badgeCorner (partyBadgeBubble 右上角泡泡) 去掉（用户 2026-07-13 requirement）
             // v10：mic 图标移到 footer 名字后面（去掉 bottom-left corner overlay）
         }

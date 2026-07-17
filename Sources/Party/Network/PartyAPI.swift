@@ -876,6 +876,28 @@ enum PartyAPI {
         )
         return try decodeArrayOrEmpty(data, as: GiftListData.self)
     }
+
+    // MARK: - emoji panel (F 里程碑 · 2026-07-17)
+
+    /// 派对房表情面板分类列表（对齐 H5 `apiPartyEmojis` / `apiGetPartyRoomEmojis` ·
+    /// `livechat-h5/src/api/party/index.ts:139` + `pay/index.ts:61`）。
+    ///
+    /// **path**：`/sapi/weidou/v1/client/party/room/getPartyRoomEmojis`（无入参）
+    /// **response**：`[PartyEmojiClassification]`（每分类 `{classType, coverImage, emojisList}`）
+    ///
+    /// **H5 用 GET · iOS 用 POST**（对齐 [api-http-method-strict] rule 说明）：
+    /// PartyAPIClient 只有 `post()`；H5 `src/api/party/index.ts:139` 明确后端两 verb 都接
+    /// （POST 别名 `apiPartyEmojis` 与 GET `apiGetPartyRoomEmojis` 同 path），沿用 party 域一致 POST。
+    ///
+    /// **字段校验**：首次真机接入后按 log 复核 emojisList 内字段名 · 对齐
+    /// [im-payload-real-log-over-code-assumption]（H5 侧 vue 消费的字段可能只是部分）
+    static func getPartyRoomEmojis() async throws -> [PartyEmojiClassification] {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/getPartyRoomEmojis",
+            body: [:]
+        )
+        return try decodeArrayOrEmpty(data, as: PartyEmojiClassification.self)
+    }
 }
 
 /// 排麦申请列表 API response（`getQueueSeatList` 的 DTO 包装，spec §2）。

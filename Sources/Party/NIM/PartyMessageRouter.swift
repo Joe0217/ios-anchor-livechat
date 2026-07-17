@@ -176,15 +176,60 @@ final class PartyMessageRouter: MessageRouter {
             // H5 空占位 case（H5 用户端也 `break` 不处理），iOS 同步不消费
             return
 
+        // F 期房主管理批消费（2026-07-17）
+        case .platformAdminChange:
+            // 1024 平台超管任免广播。payload 结构待真机 preflight（agent-recon-field-names-unverified rule）——
+            // iOS 主播端只关心"自己被任免"场景，但 roomInfo.isPlatformAdmin 属账号级字段（enterRoom
+            // 已经填充），受任免影响的更多是"某观众显示超管装饰"这类跨端 UI，iOS 主播端不承接。
+            // 保留独立 case 便于后续接入 log + 观察 payload；不改任何 state 避免误设。
+            AppLogger.party.info("[PartyRouter] 1024 platformAdminChange payloadKeys=\(Array(payload.keys), privacy: .public)")
+        case .roomBgUpdate:
+            // 1025 房间背景更新广播。所有观众端应刷新背景。payload 字段名待真机 preflight —
+            // iOS 稳妥策略：不依赖 payload 字段，直接触发 delegate → PartyStore.loadCurrentRoomBackground()
+            // 全量重拉 getRoomBgImage 接口，与房主端 setBgImages 后的状态一致。
+            AppLogger.party.info("[PartyRouter] 1025 roomBgUpdate payloadKeys=\(Array(payload.keys), privacy: .public)")
+            delegate?.partyRoomChatDidRequireRoomBgReload(chat, expired: false)
+        case .roomBgExpire:
+            // 1026 房间背景过期广播（时限背景到期回默认）。iOS 清 currentRoomBackground → UI 层
+            // fallback DEFAULT_BG（对齐 PartyRoomBackgroundView 三层 fallback 语义）。
+            AppLogger.party.info("[PartyRouter] 1026 roomBgExpire payloadKeys=\(Array(payload.keys), privacy: .public)")
+            delegate?.partyRoomChatDidRequireRoomBgReload(chat, expired: true)
+
+        // MARK: - F 里程碑（2026-07-17）表情面板 IM 分发
+
+        case .emojiPlay, .emojiStatic:
+            // 对齐 H5 `party.js:744-761` handleAttachType case -10/-11 分支：
+            // 1. 从 ext.data 派生 EmojiPayload（缺字段 drop）
+            // 2. self-echo skip：云信 chatroom 会 push 自己发的消息回来（H5 明示"self-echo skip 已踩坑"）
+            // 3. 派发到 Store 队列 → 麦位 SVGA player 消费
+            AppLogger.party.info("[PartyRouter] \(attachType.rawValue, privacy: .public) payloadKeys=\(Array(payload.keys), privacy: .public)")
+            guard let emojiPayload = PartyEmojiPayload.from(payload: payload) else {
+                AppLogger.party.notice("[PartyRouter] \(attachType.rawValue, privacy: .public) emoji payload missing required fields (emojiId/playUrl/sendUserId); drop")
+                return
+            }
+            // self-echo skip：sendUserId == 自己 → 已由本地发送时 append 过（sendEmoji 本地立即入队）· 避免双入队
+            if let myUserId = SessionStore.shared.user?.userId.map(String.init),
+               emojiPayload.sendUserId == myUserId {
+                AppLogger.party.debug("[PartyRouter] \(attachType.rawValue, privacy: .public) self-echo skip uid=\(myUserId, privacy: .public)")
+                return
+            }
+            delegate?.partyRoomChat(chat, didReceiveEmoji: emojiPayload, raw: m)
+
         // MARK: - 占位群组（F 期功能未落 / Android 独有不实装）
 
-        case .emojiPlay, .emojiStatic,
-             .roomCloseOrWhitelist, .musicSongChange, .musicSwitchPerUser,
-             .auditGuardWarning, .platformAdminChange, .roomBgUpdate, .roomBgExpire,
+        case .roomCloseOrWhitelist, .musicSongChange, .musicSwitchPerUser,
+             .auditGuardWarning,
              .diamondGiftSend, .diamondGiftGrab, .diamondGiftSplit, .diamondGiftSettle,
-             .luckyNumberPersonalDialog,
-             .battleHeartbeat, .battleGiftNotify, .battleForceEndConfirm, .battleApplyPendingNotice:
+             .luckyNumberPersonalDialog:
             AppLogger.party.debug("[PartyRouter] placeholder attachType=\(attachType.rawValue, privacy: .public)")
+            return
+
+        // F-1a Task 11 · PartyBattle 1100-1112 全号段分流到独立 router
+        case .battleSelectingStart, .battleTeamMemberChange, .battleApplyReceived,
+             .battleRunningStart, .battleLeaderboardUpdate, .battleCrownHolderUpdate,
+             .battleEnd, .battleBroadcast, .battleCooldownEnd,
+             .battleHeartbeat, .battleGiftNotify, .battleForceEndConfirm, .battleApplyPendingNotice:
+            _ = PartyBattleMessageRouter.dispatch(attachType: attachType, payload: payload)
             return
         }
     }

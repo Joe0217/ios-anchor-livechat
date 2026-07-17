@@ -267,6 +267,9 @@ enum L10n {
         static var createBgPermanent: String { localize("party.create.bg.permanent", comment: "永久背景标签") }
         static var createBgEmpty: String { localize("party.create.bg.empty", comment: "背景列表空态") }
         static var createPermissionDenied: String { localize("party.create.permissionDenied", comment: "创房权限被拒 toast") }
+        // F 期 Live↔Party 互斥（对齐安卓 isLiveing||isPartying toast，2026-07-17）
+        static var mutexBlockedByLive: String { localize("party.mutex.blockedByLive", comment: "直播中拦截进派对房") }
+        static var mutexBlockedByParty: String { localize("party.mutex.blockedByParty", comment: "派对房中拦截开播") }
         // v8 设置功能（房主派对房设置 + 房管管理，2026-07-13）
         static var settingsNavTitle: String { localize("party.settings.navTitle", comment: "Room Settings") }
         static var settingsChangeAvatar: String { localize("party.settings.changeAvatar", comment: "更换头像 a11y") }
@@ -452,6 +455,12 @@ enum L10n {
         // 底部输入栏（PartyRoomInputBar）
         static var inputPlaceholder: String { localize("partyRoom.input.placeholder", comment: "聊天输入 placeholder") }
         static var a11yEmoji: String { localize("partyRoom.a11y.emoji", comment: "表情按钮 a11y") }
+
+        // F 里程碑（2026-07-17）表情面板
+        static var emojiLoadFailed: String { localize("partyRoom.emoji.loadFailed", comment: "表情面板加载失败") }
+        static var emojiRetry: String { localize("partyRoom.emoji.retry", comment: "表情面板加载失败 retry 按钮") }
+        static var emojiPlayError: String { localize("partyRoom.emoji.playError", comment: "玩法表情 resultImages 空时 toast") }
+        static var emojiOnSeatRequired: String { localize("partyRoom.emoji.onSeatRequired", comment: "未上麦时 tap 玩法表情 toast") }
         static var a11ySpeakerOn: String { localize("partyRoom.a11y.speaker.on", comment: "扬声器已开 a11y") }
         static var a11ySpeakerOff: String { localize("partyRoom.a11y.speaker.off", comment: "扬声器已关 a11y") }
         static var a11yMicOn: String { localize("partyRoom.a11y.mic.on", comment: "麦克风已开 a11y") }
@@ -463,6 +472,13 @@ enum L10n {
         static var announcementTitle: String { localize("partyRoom.announcement.title", comment: "公告 sheet 标题") }
         static var announcementEmpty: String { localize("partyRoom.announcement.empty", comment: "公告空态文案") }
         static var announcementClose: String { localize("partyRoom.announcement.close", comment: "公告 sheet 关闭按钮") }
+        // F 期房主管理批（2026-07-17）房主编辑通告
+        static var announcementEdit: String { localize("partyRoom.announcement.edit", comment: "公告 sheet 房主编辑入口") }
+        static var announcementSave: String { localize("partyRoom.announcement.save", comment: "公告编辑保存按钮") }
+        static var announcementCancel: String { localize("partyRoom.announcement.cancel", comment: "公告编辑取消按钮") }
+        static var announcementPlaceholder: String { localize("partyRoom.announcement.placeholder", comment: "公告编辑输入 placeholder") }
+        static var announcementSaveSuccess: String { localize("partyRoom.announcement.saveSuccess", comment: "公告保存成功 toast") }
+        static var announcementSaveFailed: String { localize("partyRoom.announcement.saveFailed", comment: "公告保存失败 toast") }
         static var moreMenuTitle: String { localize("partyRoom.more.title", comment: "更多菜单标题") }
         static var moreMenuLeave: String { localize("partyRoom.more.leave", comment: "更多菜单：退出房间") }
 
@@ -475,7 +491,12 @@ enum L10n {
         static var toolMenuTitle: String { localize("partyRoom.toolMenu.title", comment: "更多工具菜单标题") }
         static var toolMenuStartPk: String { localize("partyRoom.toolMenu.startPk", comment: "工具菜单：发起 PK") }
         static var toolMenuLuckyNumber: String { localize("partyRoom.toolMenu.luckyNumber", comment: "工具菜单：幸运数字") }
-        static var toolMenuRoomMute: String { localize("partyRoom.toolMenu.roomMute", comment: "工具菜单：房间静音") }
+        static var toolMenuRoomMute: String { localize("partyRoom.toolMenu.roomMute", comment: "工具菜单：房间静音（未静音态显示 Mute Room）") }
+        // F 期便利功能（2026-07-17）Room Mute toggle 状态化文案
+        static var toolMenuRoomMuteOn: String { localize("partyRoom.toolMenu.roomMute.on", comment: "开启静音 button label（当前未静音）") }
+        static var toolMenuRoomMuteOff: String { localize("partyRoom.toolMenu.roomMute.off", comment: "关闭静音 button label（当前已静音）") }
+        // F 期便利功能（2026-07-17）ShareLink 深链分享文案
+        static var shareMessageFormat: String { localize("partyRoom.share.messageFormat", comment: "站外分享文案 %@ = 房间深链 URL") }
 
         // v15：麦位点击分流（对齐 H5 joinOrOutMic 4 分支）
         static var seatLockedToast: String { localize("partyRoom.seat.locked", comment: "锁麦位 toast：The seat is locked") }
@@ -553,7 +574,7 @@ enum L10n {
     static var toolProfileUpdate: String { localize("work.tool.profileUpdate", comment: "资料更新") }
     static var toolInvite: String { localize("work.tool.invite", comment: "邀请") }
     static var toolWorkingGuide: String { localize("work.tool.workingGuide", comment: "工作指南") }
-    static var toolBackpack: String { localize("work.tool.backpack", comment: "背包") }
+    static var toolProps: String { localize("work.tool.props", comment: "道具（H · Props 虚拟道具入口）") }
     static var toolLiveData: String { localize("work.tool.liveData", comment: "直播数据") }
     static var toolPartyData: String { localize("work.tool.partyData", comment: "派对数据") }
     static var toolMyGuardian: String { localize("work.tool.myGuardian", comment: "我的守护") }
@@ -593,6 +614,16 @@ enum L10n {
     static var taskRewardPoints: String { localize("task.reward.points", comment: "6=积分") }
     static var taskModuleNoTasks: String { localize("task.module.noTasks", comment: "Module 空态") }
     static var commonOK: String { localize("common.OK", comment: "OK 按钮通用文案") }
+
+    // Points Rank(Phase E · 对齐 H5 views/pointsRank/index.vue)
+    static var pointsRankNavTitle: String { localize("points.rank.navTitle", comment: "积分榜标题") }
+    static var pointsMyPoints: String { localize("points.myPoints", comment: "我方积分 label") }
+    static var pointsRankSubtitle: String { localize("points.rank.subtitle", comment: "榜单说明") }
+    static var pointsRankRulesTitle: String { localize("points.rank.rules.title", comment: "规则标题") }
+    static var pointsRankRulesContent1: String { localize("points.rank.rules.content1", comment: "规则条目 1") }
+    static var pointsRankRulesContent2: String { localize("points.rank.rules.content2", comment: "规则条目 2") }
+    static var pointsRankRulesContent3: String { localize("points.rank.rules.content3", comment: "规则条目 3") }
+    static var pointsRankRulesContent4: String { localize("points.rank.rules.content4", comment: "规则条目 4") }
 
     // LiveData 规则 sheet(对齐 H5 liveRule/index.vue 默认分支)
     static var liveDataRuleNavTitle: String { localize("liveData.rule.navTitle", comment: "规则标题") }
@@ -1526,6 +1557,25 @@ enum L10n {
         String(format: localize("pk.pkResultDraw", comment: "PK 平局公屏文案"), my, opponent)
     }
 
+    // MARK: - v25（2026-07-17）: 直播间任务面板 LiveGiftTask · 对齐 H5 girlWeeklyTask.vue
+    // 三语言翻译需从 H5 locales/[en|ar|tr].json 迁移 task.* 键值，禁止三语同填英文
+    static var liveRoomTaskSheetTitle: String { localize("liveRoom.task.sheet.title", comment: "任务面板标题 Live Stream Task") }
+    static var liveRoomTaskTabLiveGift: String { localize("liveRoom.task.tab.liveGift", comment: "Tab1 Live Gift Task") }
+    static var liveRoomTaskTabActiveTycoon: String { localize("liveRoom.task.tab.activeTycoon", comment: "Tab2 Active Tycoon Task") }
+    static var liveRoomTaskProgressTitle: String { localize("liveRoom.task.progress.title", comment: "任务进度卡标题 task progress") }
+    static var liveRoomTaskProgressSubtitle: String { localize("liveRoom.task.progress.subtitle", comment: "任务进度卡副文案") }
+    static var liveRoomTaskHistoryTitle: String { localize("liveRoom.task.history.title", comment: "今日送礼历史标题") }
+    static var liveRoomTaskHistoryFinished: String { localize("liveRoom.task.history.finished", comment: "无更多历史 / 空态") }
+    static var liveRoomTaskHistoryError: String { localize("liveRoom.task.history.error", comment: "加载失败 tap 重试") }
+    static var liveRoomTaskTycoonCompleted: String { localize("liveRoom.task.tycoon.completed", comment: "任务已完成绿色标记") }
+    static var liveRoomTaskTycoonEmpty: String { localize("liveRoom.task.tycoon.empty", comment: "Tycoon 空态") }
+    static var liveRoomTaskTycoonLoading: String { localize("liveRoom.task.tycoon.loading", comment: "Tycoon 加载中") }
+    static var liveRoomTaskRulesButton: String { localize("liveRoom.task.rules.button", comment: "规则弹窗 OK 按钮") }
+    static var liveRoomTaskRulesTitleLiveGift: String { localize("liveRoom.task.rules.title.liveGift", comment: "Live Gift Task 规则标题") }
+    static var liveRoomTaskRulesTitleTycoon: String { localize("liveRoom.task.rules.title.tycoon", comment: "Active Tycoon Task 规则标题") }
+    static var liveRoomTaskRulesBodyLiveGift: String { localize("liveRoom.task.rules.body.liveGift", comment: "Live Gift Task 规则正文") }
+    static var liveRoomTaskRulesBodyTycoon: String { localize("liveRoom.task.rules.body.tycoon", comment: "Active Tycoon Task 规则正文默认") }
+
     // MARK: - C 1v1 通话（HUD）
     enum Call {
         enum Hud {
@@ -1645,6 +1695,36 @@ enum L10n {
     static var liveDataDays: String                 { localize("liveData.days", comment: "days") }
     static var liveDataExpand: String               { localize("liveData.expand", comment: "展开：无障碍") }
     static var liveDataCollapse: String             { localize("liveData.collapse", comment: "收起：无障碍") }
+
+    // MARK: - Party Data 派对数据看板（对齐安卓 PartyRoomDataActivity；analysis §3）
+    static var partyDataNavTitle: String            { localize("partyData.navTitle", comment: "Party Data") }
+    static var partyDataTotalMicTime: String        { localize("partyData.totalMicTime", comment: "Total Mic Time") }
+    static var partyDataMicTime: String             { localize("partyData.micTime", comment: "Mic Time · daily row label") }
+    static var partyDataTotalIncome: String         { localize("partyData.totalIncome", comment: "Total Income") }
+    static var partyDataGiftIncome: String          { localize("partyData.giftIncome", comment: "Party Gift Income") }
+    static var partyDataCallIncome: String          { localize("partyData.callIncome", comment: "Partycall Income (calls+gifts merged)") }
+
+    // Party Data 规则 sheet (对齐安卓 PartyRoomDataRuleActivity 4 小节)
+    static var partyDataRuleNavTitle: String        { localize("partyData.rule.navTitle", comment: "Party Data Rules") }
+    static var partyDataRuleSection1: String        { localize("partyData.rule.section1", comment: "Basic Information") }
+    static var partyDataRuleSection2: String        { localize("partyData.rule.section2", comment: "Mic Time Rules") }
+    static var partyDataRuleSection3: String        { localize("partyData.rule.section3", comment: "Income Composition") }
+    static var partyDataRuleSection4: String        { localize("partyData.rule.section4", comment: "Display Rules") }
+    static var partyDataRuleTitle1: String          { localize("partyData.rule.title1", comment: "Data Update Cycle:") }
+    static var partyDataRuleContent1: String        { localize("partyData.rule.content1", comment: "Content 1") }
+    static var partyDataRuleTitle2: String          { localize("partyData.rule.title2", comment: "Statistical Rules:") }
+    static var partyDataRuleContent2: String        { localize("partyData.rule.content2", comment: "Content 2") }
+    static var partyDataRuleTitle3: String          { localize("partyData.rule.title3", comment: "Income Sources:") }
+    static var partyDataRuleContent3: String        { localize("partyData.rule.content3", comment: "Content 3") }
+    static var partyDataRuleTitle4: String          { localize("partyData.rule.title4", comment: "Display Rules:") }
+    static var partyDataRuleContent4: String        { localize("partyData.rule.content4", comment: "Content 4") }
+
+    // Party 麦时二级页
+    static var partyMicTimeDetailTitle: String      { localize("party.micTimeDetail.title", comment: "Mic Time by Room") }
+    static var partyMicTimeTotal: String            { localize("party.micTime.total", comment: "Total") }
+    static var partyMicTimeVoice: String            { localize("party.micTime.voice", comment: "Voice") }
+    static var partyMicTimeVideo: String            { localize("party.micTime.video", comment: "Video") }
+    static var partyMicTimeEmpty: String            { localize("party.micTime.empty", comment: "No mic time data yet") }
 
     // MARK: - K 里程碑 美颜设置页（对照 H5 beautySettings/index.vue；spec §4）
     enum BeautySettings {
