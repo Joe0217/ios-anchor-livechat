@@ -54,12 +54,12 @@ struct PrivateMediaCard: View {
         .accessibilityValue(item.giftPrice.map { "gift value \($0)" } ?? "")
     }
 
-    /// 底部礼物价值 pill：黄钻石 + 数字（H5 视觉对齐）
+    /// 底部礼物价值 pill：coins + 数字（主播视角看用户送来的礼物价值,非 Party 收益）
     private func giftPricePill(price: Int) -> some View {
         HStack(spacing: 3) {
-            Image(systemName: "diamond.fill")
-                .font(.system(size: 9))
-                .foregroundColor(Color(hex: 0xFFCC00))   // H5 diamond-yellow ≈ #FFCC00
+            Image("coins")
+                .resizable()
+                .frame(width: 10, height: 10)
             Text("\(price)")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.white)

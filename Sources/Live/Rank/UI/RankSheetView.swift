@@ -154,7 +154,8 @@ struct RankSheetView: View {
             ? store.weekState : store.lastWeekState
         if case .loaded(let page) = state {
             HStack(spacing: 10) {
-                if let rank = page.anchorOwnRank {
+                // rank 为 nil 或 ≤0（无效值/未上榜）统一显示 "--"
+                if let rank = page.anchorOwnRank, rank > 0 {
                     Text("\(rank)")
                         .font(.system(size: 14, weight: .heavy))
                         .foregroundColor(Color(hex: 0xFE00DE))
@@ -166,24 +167,22 @@ struct RankSheetView: View {
                         .frame(width: 28)
                 }
                 AvatarView(urlString: page.anchorAvatarUrl, size: 40, kind: .user)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(page.anchorNickname.isEmpty ? L10n.liveRoomRankOwnMe : page.anchorNickname)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-                    // "距下一名" 差值（H5 girlWeeklyRank text-13 text-#FFE000）
-                    if let diff = page.diffToPrevious, diff > 0 {
-                        HStack(spacing: 3) {
-                            Image(systemName: "diamond.fill")
-                                .font(.system(size: 10))
-                                .foregroundColor(Color(hex: 0xFFE000))
-                            Text(String(format: L10n.liveRoomRankDiffFormat, "\(diff)"))
-                                .font(.system(size: 12))
-                                .foregroundColor(Color(hex: 0xFFE000))
-                        }
+                Text(page.anchorNickname.isEmpty ? L10n.liveRoomRankOwnMe : page.anchorNickname)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                // "距下一名" 差值 —— 向右靠（用户 v18 反馈）
+                if let diff = page.diffToPrevious, diff > 0 {
+                    HStack(spacing: 3) {
+                        Image("coins")
+                            .resizable()
+                            .frame(width: 14, height: 14)
+                        Text(String(format: L10n.liveRoomRankDiffFormat, "\(diff)"))
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(hex: 0xFFE000))
                     }
                 }
-                Spacer(minLength: 8)
             }
             .padding(.horizontal, 15).padding(.vertical, 12)
             .frame(minHeight: 88)

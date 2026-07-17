@@ -9,7 +9,7 @@ struct RankRow: View {
             // 排名徽章：Top1/2/3 高亮色，其余灰白
             rankBadge
 
-            AvatarView(urlString: entry.avatarUrl, size: 40, kind: .user)
+            AvatarView(urlString: entry.avatarUrl, size: 40, kind: .user, userId: entry.userId)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(entry.nickname)
@@ -25,7 +25,7 @@ struct RankRow: View {
             Spacer(minLength: 8)
 
             HStack(spacing: 4) {
-                Image("liveRoomDiamondBadge")
+                Image("coins")
                     .resizable().frame(width: 14, height: 14)
                     .accessibilityHidden(true)
                 Text(formatDiamond(entry.diamond))

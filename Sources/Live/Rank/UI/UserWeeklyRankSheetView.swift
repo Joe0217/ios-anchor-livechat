@@ -200,9 +200,9 @@ struct UserWeeklyRankSheetView: View {
             }
             Spacer(minLength: 8)
             HStack(spacing: 4) {
-                Image(systemName: "diamond.fill")
-                    .font(.system(size: 12))
-                    .foregroundColor(Color(hex: 0xFFE000))
+                Image("coins")
+                    .resizable()
+                    .frame(width: 14, height: 14)
                 Text(formatDiamond(entry.costNum))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white)
@@ -331,11 +331,11 @@ private struct WeekTopThreeCards: View {
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.white)
                 .lineLimit(1)
-            // v18 Q4: 钻石图标（对齐 H5 diamond-yellow.webp h14 w14）
+            // v18 Q4:直播间 weekly gift ranking + 观众排行榜统一 coins
             HStack(spacing: 3) {
-                Image(systemName: "diamond.fill")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(hex: 0xFFE000))
+                Image("coins")
+                    .resizable()
+                    .frame(width: 12, height: 12)
                 Text(formatDiamondCard(entry.costNum))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.white)

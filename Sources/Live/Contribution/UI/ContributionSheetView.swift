@@ -32,7 +32,7 @@ struct ContributionSheetView: View {
                     .font(.system(size: 12))
                     .foregroundColor(.white.opacity(0.6))
                 HStack(spacing: 6) {
-                    Image("liveRoomDiamondBadge")
+                    Image("coins")
                         .resizable().frame(width: 18, height: 18)
                         .accessibilityHidden(true)
                     Text("\(page.totalIncome)")

@@ -48,7 +48,7 @@ struct DiamondGiftFloatScreen: View {
             Text(L10n.publicScreenSentAction)
                 .font(.system(size: 12))
                 .foregroundColor(.white)
-            Image("liveRoomDiamondBadge")
+            Image("coins")
                 .resizable().frame(width: 20, height: 20)
                 .accessibilityHidden(true)
             Text("×\(item.giftCount)")

@@ -78,8 +78,9 @@ struct RewardRecordsPopup: View {
                 .frame(maxWidth: .infinity)
             HStack(spacing: 2) {
                 Text("Reward")
-                Image(systemName: "diamond.fill")
-                    .foregroundStyle(Color(hex: 0x66CCFF))
+                Image("coins")
+                    .resizable()
+                    .frame(width: 12, height: 12)
             }
             .frame(maxWidth: .infinity)
             Text("Time")

@@ -65,7 +65,7 @@ struct LiveStreamCard: View {
             // 上排：左钻石盲盒 / 右周收入
             HStack {
                 if anchor.hasDiamondGift {
-                    Image("liveDiamondGift")
+                    Image("coins")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 22, height: 22)
@@ -98,7 +98,7 @@ struct LiveStreamCard: View {
 
     private func weekIncomeChip(_ income: String) -> some View {
         HStack(spacing: 2) {
-            Image("liveMarqueeDiamond")
+            Image("coins")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 12, height: 12)

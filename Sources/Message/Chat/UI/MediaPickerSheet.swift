@@ -167,12 +167,12 @@ struct MediaPickerSheet: View {
         }
     }
 
-    /// Batch 4：giftPrice 徽章（私密相册 cell 左下角显解锁钻石价）
+    /// Batch 4：giftPrice 徽章（私密相册 cell 左下角显解锁钻石价,用户消费视角紫钻）
     private func giftPriceBadge(price: Int) -> some View {
         HStack(spacing: 2) {
-            Image(systemName: "diamond.fill")
-                .font(.system(size: 8))
-                .foregroundStyle(Color(hex: 0x66CCFF))
+            Image("partyGems")
+                .resizable()
+                .frame(width: 10, height: 10)
             Text("\(price)")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(.white)

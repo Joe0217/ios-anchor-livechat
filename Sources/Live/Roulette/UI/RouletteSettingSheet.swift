@@ -118,7 +118,7 @@ struct RouletteSettingSheet: View {
 
     private var priceRow: some View {
         HStack(spacing: 6) {
-            Image("liveRoomDiamondBadge")
+            Image("coins")
                 .resizable().frame(width: 18, height: 18)
             TextField("", text: $priceText,
                       prompt: Text(L10n.liveRoomRoulettePrice)

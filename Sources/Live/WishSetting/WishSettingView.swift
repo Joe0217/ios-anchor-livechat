@@ -367,8 +367,9 @@ struct WishSettingView: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 HStack(spacing: 3) {
-                    Image(systemName: "diamond.fill")
-                        .font(.system(size: 9)).foregroundStyle(.yellow)
+                    Image("coins")
+                        .resizable()
+                        .frame(width: 10, height: 10)
                     Text("\(g.giftPrice)")
                         .font(.system(size: 11)).foregroundStyle(.white.opacity(0.8))
                 }
