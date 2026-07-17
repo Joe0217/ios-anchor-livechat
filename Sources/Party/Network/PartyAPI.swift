@@ -345,7 +345,7 @@ enum PartyAPI {
         let rawPreview = String(data: data, encoding: .utf8) ?? "<binary>"
         AppLogger.party.info("[PartyAPI] enterRoom raw=\(rawPreview, privacy: .private)")
         let info = try decodeObject(data, as: PartyRoomInfo.self)
-        AppLogger.party.info("[PartyAPI] enterRoom decoded partyPrivateCallOpen=\(String(describing: info.partyPrivateCallOpen), privacy: .public) partyCallGiftId=\(info.partyCallGiftId ?? "nil", privacy: .public) partyCallGiftImg=\(info.partyCallGiftImg ?? "nil", privacy: .public) partyCallGiftPrice=\(String(describing: info.partyCallGiftPrice), privacy: .public)")
+        AppLogger.party.info("[PartyAPI] enterRoom decoded partyPrivateCallOpen=\(String(describing: info.partyPrivateCallOpen), privacy: .public) partyCallGiftId=\(info.partyCallGiftId ?? "nil", privacy: .public) partyCallGiftImg=\(info.partyCallGiftImg ?? "nil", privacy: .public) partyCallGiftPrice=\(String(describing: info.partyCallGiftPrice), privacy: .public) onSeatApplySwitch=\(String(describing: info.onSeatApplySwitch), privacy: .public)")
         return info
     }
 

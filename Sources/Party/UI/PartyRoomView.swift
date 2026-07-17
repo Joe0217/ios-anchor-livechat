@@ -47,6 +47,10 @@ struct PartyRoomView: View {
     @State private var pendingRoomModeTempId: Int? = nil
     /// v9：公告只读 sheet 显隐（对齐 H5 announcement-popup.vue，MVP 只读；房主/房管编辑权限 F 期补）
     @State private var showAnnouncement: Bool = false
+    // F 期房主管理批（2026-07-17）房主编辑通告态
+    @State private var isEditingAnnouncement: Bool = false
+    @State private var announcementDraft: String = ""
+    @State private var isSavingAnnouncement: Bool = false
     /// v9：更多菜单 action sheet 显隐（对齐 H5 more-tool-popup.vue Minimize/Exit）
     @State private var showMoreActions: Bool = false
     // v16（2026-07-14）：关注态改从 `store.isFollowingAnchor` 读，进房时 room/enter 接口的
@@ -310,7 +314,10 @@ struct PartyRoomView: View {
             honorText: heatText,
             audienceCountText: "\(store.roomInfo?.onlineCount ?? 0)",
             isFollowing: store.isFollowingAnchor,
-            isSelfRoom: store.selfRole == .owner,
+            // 用 isSelfRoomOwner（ownerId==myUserId）而非 selfRole == .owner：
+            // 平台超管在他人房 selfRole 已被提权为 .owner（管理权限用），但**关注按钮显隐**
+            // 属"是否房主本人"身份判定 —— 超管应能像普通用户一样关注房主
+            isSelfRoom: store.isSelfRoomOwner,
             // v7.4.1 用户明示修正：房主本人 + admin 都可见"设置入口"；仅观众不显示
             // （Bug 1a 已修 selfRole 优先 selfSeat.roomRoleType 派生 → admin 权限实时生效）
             canManage: store.selfRole == .owner || store.selfRole == .admin,
@@ -822,6 +829,12 @@ struct PartyRoomView: View {
             switchSeatPendingTarget = seat
             return
         }
+        // 对齐安卓 PartyRoomActivity §3.2：开关开 + 非特权 → 走"申请上麦"流程；否则直接上麦
+        // isManager 已在前面分支处理并 return；这里仅剩非特权观众
+        if store.micApplicationSwitchOn {
+            Task { await store.applyMic(seatIndex: idx) }
+            return
+        }
         Task { await store.requestOnSeat(seatIndex: idx) }
     }
 
@@ -981,8 +994,10 @@ struct PartyRoomView: View {
     /// 本 view 不再本地弹（避免与全局 toast 重复展示）。
     /// 进房关注态由 room/enter 接口 `isFollowOwner` 字段初始化，退出重进保持一致。
     private func handleFollowTap() {
-        guard store.selfRole != .owner else {
-            AppLogger.party.notice("[PartyRoom] follow: is owner; skip")
+        // 用 isSelfRoomOwner 而非 selfRole == .owner：
+        // 平台超管 selfRole 被提权为 .owner，但可关注房主 —— 参见 isSelfRoom 相同逻辑
+        guard !store.isSelfRoomOwner else {
+            AppLogger.party.notice("[PartyRoom] follow: is owner self; skip")
             return
         }
         Task { @MainActor in
@@ -1022,7 +1037,9 @@ struct PartyRoomView: View {
         case .tools:
             PartyRoomToolsSheet(
                 isOwner: store.selfRole == .owner,
-                isPlatformAdmin: false,  // TODO(F): 接入 roomInfo.isPlatformAdmin
+                // 平台超管在 selfRole 层已提权为 .owner（PartyStore.selfRole 首判 isPlatformAdmin），此参数保留
+                // 为语义冗余安全网 —— MC Seat `if isOwner || isPlatformAdmin` 条件下双重命中
+                isPlatformAdmin: store.roomInfo?.isPlatformAdmin ?? false,
                 onTapSettings: {
                     // 用 Task.sleep 一帧规避 iOS 16 sheet 切换 race
                     Task { @MainActor in
@@ -1356,21 +1373,43 @@ struct PartyRoomView: View {
 
     // MARK: - v9 sheets & action dialogs
 
-    /// 公告只读 sheet（对齐 H5 announcement-popup.vue MVP 分档）。
-    /// H5 房主/管理员可编辑，本轮只读；F 期补编辑权限流程。
+    /// 公告 sheet（对齐 H5 announcement-popup.vue）。
+    /// F 期房主管理批（2026-07-17）：房主/平台超管可切编辑态修改 greetingMessage 并 save。
+    /// 权限判定：`store.selfRole == .owner`（平台超管已在 selfRole 层提权，见 PartyRoomInfo.selfRoleType）。
     @ViewBuilder
     private var announcementSheet: some View {
         NavigationStack {
-            let text = store.roomInfo?.greetingMessage ?? ""
+            let currentText = store.roomInfo?.greetingMessage ?? ""
+            let canEdit = store.selfRole == .owner
             ScrollView {
-                if text.isEmpty {
+                if isEditingAnnouncement {
+                    // 编辑态：TextEditor + placeholder overlay（对齐 H5 form 输入体感）
+                    ZStack(alignment: .topLeading) {
+                        if announcementDraft.isEmpty {
+                            Text(L10n.PartyRoom.announcementPlaceholder)
+                                .font(.system(size: 15))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 16)
+                                .allowsHitTesting(false)
+                        }
+                        TextEditor(text: $announcementDraft)
+                            .font(.system(size: 15))
+                            .foregroundColor(.primary)
+                            .scrollContentBackground(.hidden)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .frame(minHeight: 160)
+                            .disabled(isSavingAnnouncement)
+                    }
+                } else if currentText.isEmpty {
                     Text(L10n.PartyRoom.announcementEmpty)
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                         .padding()
                         .frame(maxWidth: .infinity, minHeight: 120)
                 } else {
-                    Text(text)
+                    Text(currentText)
                         .font(.system(size: 15))
                         .foregroundColor(.primary)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1380,13 +1419,68 @@ struct PartyRoomView: View {
             .navigationTitle(L10n.PartyRoom.announcementTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(L10n.PartyRoom.announcementClose) { showAnnouncement = false }
+                if isEditingAnnouncement {
+                    // 编辑态：leading=Cancel / trailing=Save
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button(L10n.PartyRoom.announcementCancel) {
+                            isEditingAnnouncement = false
+                            announcementDraft = currentText
+                        }
+                        .disabled(isSavingAnnouncement)
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        if isSavingAnnouncement {
+                            ProgressView()
+                        } else {
+                            Button(L10n.PartyRoom.announcementSave) { performSaveAnnouncement() }
+                        }
+                    }
+                } else if canEdit {
+                    // 只读态且是房主/超管：显示 Edit / Close
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button(L10n.PartyRoom.announcementClose) { showAnnouncement = false }
+                    }
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(L10n.PartyRoom.announcementEdit) {
+                            announcementDraft = currentText
+                            isEditingAnnouncement = true
+                        }
+                    }
+                } else {
+                    // 只读态且非房主：只有 Close
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(L10n.PartyRoom.announcementClose) { showAnnouncement = false }
+                    }
                 }
             }
         }
         .presentationDetents([.medium])
         .preferredColorScheme(.dark)
+        .onChange(of: showAnnouncement) { newVal in
+            // dismiss sheet 时同时退出编辑态，避免下次打开残留 dirty draft
+            if !newVal {
+                isEditingAnnouncement = false
+                announcementDraft = ""
+            }
+        }
+    }
+
+    /// F 期房主管理批：Save 通告。成功 toast + 关编辑态 + 关 sheet；失败 toast 保留编辑态供重试。
+    private func performSaveAnnouncement() {
+        guard !isSavingAnnouncement else { return }
+        isSavingAnnouncement = true
+        let draft = announcementDraft
+        Task { @MainActor in
+            let ok = await store.updateAnnouncement(text: draft)
+            isSavingAnnouncement = false
+            if ok {
+                AppToastCenter.shared.show(L10n.PartyRoom.announcementSaveSuccess)
+                isEditingAnnouncement = false
+                showAnnouncement = false
+            } else {
+                AppToastCenter.shared.show(L10n.PartyRoom.announcementSaveFailed)
+            }
+        }
     }
 
     /// 更多菜单 action sheet（对齐 H5 more-tool-popup.vue：Minimize + Exit）
@@ -1439,9 +1533,10 @@ struct PartyRoomView: View {
         Button(L10n.PartyRoom.toolMenuLuckyNumber) {
             AppLogger.party.notice("[PartyRoom] toolMenu.luckyNumber tapped (TODO F)")
         }
-        // TODO(F 里程碑)：Room Mute —— PartyRTCEngine.setMuteAllRemoteAudio(Bool) + Store isRoomMuted
-        Button(L10n.PartyRoom.toolMenuRoomMute) {
-            AppLogger.party.notice("[PartyRoom] toolMenu.roomMute tapped (TODO F)")
+        // F 期便利功能（2026-07-17）：Room Mute 全房静音切换（对齐蓝本 §1.2 采用 adjustPlaybackSignalVolume
+        // 播放端总音量策略，不动订阅层）；文案随状态在 muteOn/muteOff 间切换
+        Button(store.isRoomMuted ? L10n.PartyRoom.toolMenuRoomMuteOff : L10n.PartyRoom.toolMenuRoomMuteOn) {
+            store.toggleRoomMute()
         }
         Button(L10n.Party.cancel, role: .cancel) {}
     }

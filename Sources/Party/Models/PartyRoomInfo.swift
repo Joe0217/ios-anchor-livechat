@@ -83,6 +83,12 @@ struct PartyRoomInfo: Codable, Equatable {
     /// F 期私 call 礼物价格（蓝钻数量）；后端 `room/enter` 直接返 Int。
     let partyCallGiftPrice: Int?
 
+    /// 排麦申请模式开关（房间级）；`true` 表示需要走"申请上麦"流程。对齐安卓 `PartyRoomInfo.onSeatApplySwitch`。
+    /// 后端 `room/enter` 响应字段；进房后 UI 分流依赖此字段初始态（1021 广播只在切换时才下发）。
+    /// 字段名来自安卓源码梳理（未真机 log 校准）：参 [agent-recon-field-names-unverified] rule，
+    /// 真机验证 raw JSON 后如后端字段名不同，此处补 CodingKeys alias。
+    let onSeatApplySwitch: Bool?
+
     /// 衍生：观众在线人数（用 `onlineUserList.count`；list 接口无独立人数字段）
     var onlineCount: Int { onlineUserList?.count ?? 0 }
 
@@ -116,12 +122,13 @@ struct PartyRoomInfo: Codable, Equatable {
     /// 衍生：自己角色（信服务端字段，不再用 `ownerId==myUserId` 推断 —— 安卓确认 §4.2 反例：
     /// 房管/平台管理员都不是房主但有管理权限，纯 ownerId 比较会漏判）。
     /// 顺序：
-    /// 1) `isPlatformAdmin==true` → 视为最高权限（admin 等价）
+    /// 1) `isPlatformAdmin==true` → **提权等同房主**（对齐 H5 `computedRoomRoleType` usePartyHooks.js:31-35 +
+    ///    安卓 `PartyRoomActivity.kt:893-898` `isPlatformAdmin || OWNER` 判定；差异文档 §4 明示）
     /// 2) `roomRoleType` 服务端字段（1/2/3 → owner/admin/audience）
     /// 3) fallback：`ownerId==myUserId` → owner（仅在 list 接口无 roomRoleType 字段时用）
     /// `myUserId` 参数保留为 fallback 路径用
     func selfRoleType(myUserId: String?) -> PartyRoomRoleType {
-        if isPlatformAdmin == true { return .admin }
+        if isPlatformAdmin == true { return .owner }  // 提权等同房主（非 admin）
         if let raw = roomRoleType, let role = PartyRoomRoleType(rawValue: raw) {
             return role
         }
@@ -153,7 +160,8 @@ struct PartyRoomInfo: Codable, Equatable {
         partyPrivateCallOpen: Int? = nil,
         partyCallGiftId: String? = nil,
         partyCallGiftImg: String? = nil,
-        partyCallGiftPrice: Int? = nil
+        partyCallGiftPrice: Int? = nil,
+        onSeatApplySwitch: Bool? = nil
     ) -> PartyRoomInfo {
         PartyRoomInfo(
             id: id,
@@ -192,7 +200,8 @@ struct PartyRoomInfo: Codable, Equatable {
             partyPrivateCallOpen: partyPrivateCallOpen ?? self.partyPrivateCallOpen,
             partyCallGiftId: partyCallGiftId ?? self.partyCallGiftId,
             partyCallGiftImg: partyCallGiftImg ?? self.partyCallGiftImg,
-            partyCallGiftPrice: partyCallGiftPrice ?? self.partyCallGiftPrice
+            partyCallGiftPrice: partyCallGiftPrice ?? self.partyCallGiftPrice,
+            onSeatApplySwitch: onSeatApplySwitch ?? self.onSeatApplySwitch
         )
     }
 }

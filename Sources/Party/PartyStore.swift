@@ -24,7 +24,14 @@ final class PartyStore: ObservableObject {
     // MARK: - 状态字段
 
     @Published private(set) var roomInfo: PartyRoomInfo?
-    @Published private(set) var seatList: [PartyRoomSeat] = []
+    /// 麦位列表。F 期麦时统计 didSet：`selfSeat` 从无到有触发 `onMikeStartTime = now`；
+    /// 从有到无触发 `accumulatedMikeSeconds += now - onMikeStartTime`（对齐蓝本 02-04 §2.6
+    /// mOnMikeStartTime 语义 —— 上麦/下麦/被抱下/切模版/退房/被踢全靠 seatList 变更承接）。
+    @Published private(set) var seatList: [PartyRoomSeat] = [] {
+        didSet {
+            trackMikeTimeIfNeeded(previous: oldValue)
+        }
+    }
     @Published private(set) var onlineUserCount: Int = 0
     @Published private(set) var isJoinedChannel: Bool = false   // RTC joined
     @Published private(set) var imAlive: Bool = false           // NIM chatroom enterOK
@@ -129,6 +136,16 @@ final class PartyStore: ObservableObject {
     /// 房间加/解锁 API 幂等 flag（spec §4 R3；防 Save/Lock Room icon 连点双请求）
     private var isBusyLockRoom: Bool = false
 
+    /// F 期房主管理批（2026-07-17）：房间通告编辑防连点 flag。
+    /// - 幂等：`updateAnnouncement` 期间二次调用直接短路返回 false
+    /// - 权限：selfRole == .owner（平台超管已在 selfRole 层提权，无需额外判 isPlatformAdmin）
+    private var isBusyAnnouncement: Bool = false
+
+    /// F 期便利功能（2026-07-17）Room Mute 全房静音状态。
+    /// - 本地状态，非服务端字段（Agora `adjustPlaybackSignalVolume` 是本端 SDK 行为）
+    /// - 退房 resetState 归 false；不需持久化（每次进房从默认状态开始）
+    @Published private(set) var isRoomMuted: Bool = false
+
     // MARK: - MC Seat (E spec §3 MC Seat, 2026-07-14)
 
     /// setMCSeat 幂等 flag（per-seatIndex；防同 seat 快速双点双请求）。
@@ -182,10 +199,14 @@ final class PartyStore: ObservableObject {
     }
 
     /// 自己角色（owner / admin / audience）。
-    /// **优先从 selfSeat.roomRoleType 派生** —— 房主 setRoomAdmin 后 IM 1001 seatList 广播
-    /// 会 update seat.roomRoleType，本 computed 实时反映 role 变化，无需重进房
-    /// （fallback 到 roomInfo.roomRoleType 覆盖未在麦上时的初始状态）
+    /// 派生顺序：
+    /// 1) `roomInfo.isPlatformAdmin==true` → **提权等同房主**（差异文档 §4 明示：seat 侧无 isPlatformAdmin
+    ///    字段，超管特权只在 roomInfo 层，若不优先判超管，超管上麦后 selfRole 会退化为麦位真实角色）
+    /// 2) `selfSeat.roomRoleType` —— 房主 setRoomAdmin 后 IM 1001 seatList 广播会 update seat.roomRoleType，
+    ///    实时反映房管任免（无需重进房）
+    /// 3) fallback 到 `roomInfo.selfRoleType(...)` 覆盖未在麦上时的初始状态
     var selfRole: PartyRoomRoleType {
+        if roomInfo?.isPlatformAdmin == true { return .owner }
         if let seat = selfSeat,
            let raw = seat.roomRoleType,
            let role = PartyRoomRoleType(rawValue: raw) {
@@ -197,10 +218,54 @@ final class PartyStore: ObservableObject {
     /// 当前登录 userId 的字符串形式（用于 seatList.userId 比较）
     var myUserIdString: String? { SessionStore.shared.user?.userId.map(String.init) }
 
+    /// 是否为当前房间的**房主本人**（对比：`selfRole == .owner` 会把平台超管一起算进来，
+    /// 用作管理权限判定正确；但"关注房主""是否自己的房间"这类**身份判定**必须区分。
+    /// 参考 party-user-vs-anchor-comparison §1：关注是所有非房主账号的通用能力）。
+    var isSelfRoomOwner: Bool {
+        guard let owner = roomInfo?.ownerId, !owner.isEmpty,
+              let me = myUserIdString, !me.isEmpty else { return false }
+        return owner == me
+    }
+
     /// 当前登录 userId 的 UInt 形式（用于声网 uid 比较）
     var myRtcUid: UInt? {
         guard let id = SessionStore.shared.user?.userId, id > 0 else { return nil }
         return UInt(id)
+    }
+
+    // MARK: - 麦时统计（F 期蓝本 02-04 §2.6 · 2026-07-17）
+
+    /// 上麦起始时间戳（对齐安卓 `mOnMikeStartTime`）。
+    /// - 上麦（selfSeat nil→有）时置 `Date()`；下麦/被抱下/切模版/退房/被踢时置 nil。
+    /// - 累加值写入 `accumulatedMikeSeconds`。
+    private var onMikeStartTime: Date?
+
+    /// 本次进房累计麦时（秒，对齐安卓 `accumulatedDuration`）。
+    /// 退房 resetState 时归零；埋点框架就位后由 `PartyRoomDataActivity` 等价页面上报。
+    /// TODO(埋点框架 · spec §1 step 4)：Points/Track SDK wire 到位后补上报调用点。
+    @Published private(set) var accumulatedMikeSeconds: TimeInterval = 0
+
+    /// selfSeat 前后对比处理麦时累加。挂在 `seatList.didSet`。
+    /// - prev 无 curr 有 → 上麦，记 `onMikeStartTime = now`
+    /// - prev 有 curr 无 → 下麦（含被抱下 / 被踢 / 切模版清空 / 退房 resetState），累加秒数
+    /// - 其他情形（都在麦或都不在麦、换麦 exchangeSeat）→ 保持不动
+    private func trackMikeTimeIfNeeded(previous: [PartyRoomSeat]) {
+        guard let me = myUserIdString, !me.isEmpty else { return }
+        let wasOnMike = previous.contains { $0.userId == me }
+        let isOnMike = seatList.contains { $0.userId == me }
+        if !wasOnMike, isOnMike {
+            onMikeStartTime = Date()
+            AppLogger.party.info("[PartyStore] mikeTime: onSeat startAt=\(self.onMikeStartTime?.timeIntervalSince1970 ?? 0, privacy: .public)")
+        } else if wasOnMike, !isOnMike {
+            if let start = onMikeStartTime {
+                let delta = Date().timeIntervalSince(start)
+                if delta > 0 {
+                    accumulatedMikeSeconds += delta
+                }
+                AppLogger.party.info("[PartyStore] mikeTime: offSeat +\(Int(delta), privacy: .public)s total=\(Int(self.accumulatedMikeSeconds), privacy: .public)s")
+            }
+            onMikeStartTime = nil
+        }
     }
 
     private init() {
@@ -269,6 +334,9 @@ final class PartyStore: ObservableObject {
         onlineUserCount = info.onlineCount
         // 初始化关注态（对齐 H5 `currentPartyInfo.isFollowOwner`；nil 视为未关注）
         isFollowingAnchor = info.isFollowOwner ?? false
+        // 初始化排麦申请开关（对齐安卓 PartyRoomVM.setPartyRoomInfo 同步 onSeatApplySwitch；
+        // 1021 广播只在切换时下发，进房初始态必须从 enter response 拉；nil fallback 到 false）
+        micApplicationSwitchOn = info.onSeatApplySwitch ?? false
         // v16：字段真机对齐诊断 —— 若后端 `isFollowOwner` 字段名不匹配 / 不返回，
         // 用户报"已关注房间重进显示未关注"时可查此 log 确认后端行为
         AppLogger.party.info("[PartyStore] enter isFollowOwner raw=\(String(describing: info.isFollowOwner), privacy: .public) → isFollowingAnchor=\(self.isFollowingAnchor, privacy: .public)")
@@ -430,6 +498,13 @@ final class PartyStore: ObservableObject {
     private func resetState() {
         roomInfo = nil
         seatList = []
+        // F 期麦时统计：seatList = [] 触发 didSet → trackMikeTimeIfNeeded 累加最后一段麦时；
+        // TODO(埋点框架 · spec §1 step 4)：上报调用点插入此处；随后归零，避免下次进房带入
+        AppLogger.party.info("[PartyStore] party ended totalMikeTime=\(Int(self.accumulatedMikeSeconds), privacy: .public)s (report pending 埋点框架)")
+        accumulatedMikeSeconds = 0
+        onMikeStartTime = nil
+        // F 期 Room Mute 状态回归默认；SDK 层无需显式复位（engine 也会随下次 join 重建）
+        isRoomMuted = false
         onlineUserCount = 0
         isJoinedChannel = false
         imAlive = false
@@ -1326,7 +1401,7 @@ final class PartyStore: ObservableObject {
                 roomId: info.id ?? "",
                 seatIndex: targetIndex,
                 targetUserId: userId,
-                operatorType: 1,  // 内圈硬编 1（房主）；房管路径中圈 TODO
+                operatorType: 1,  // agreeSeat 固定操作码 1（对齐 H5 apiPartyAgreeSeat）；服务端从 token role 判权限，不按角色变化
                 roomTempId: info.roomTempIdInt,
                 yxRoomId: info.yxRoomId ?? ""
             )
@@ -1576,6 +1651,64 @@ final class PartyStore: ObservableObject {
         }
     }
 
+    // MARK: - Room Mute (F 期便利功能, 2026-07-17)
+
+    /// F 期便利功能：Room Mute 全房静音切换（本地 SDK 行为，无接口）。
+    /// - 幂等：直接翻转 `isRoomMuted` + 调 RTC `setMuteAllRemoteAudio`
+    /// - 权限：任何观众都可静音自己听到的房间音频（对齐 H5 room-mana-popup 中的 mute 项无角色限制）
+    /// - 退房 resetState 时自动归 false（顺带重置 SDK 本地音量到 100）
+    func toggleRoomMute() {
+        guard roomState == .joined else { return }
+        isRoomMuted.toggle()
+        rtc.setMuteAllRemoteAudio(isRoomMuted)
+        AppLogger.party.info("[PartyStore] toggleRoomMute -> \(self.isRoomMuted, privacy: .public)")
+    }
+
+    // MARK: - Room Announcement Edit (F 期房主管理批, 2026-07-17)
+
+    /// 房主/平台超管编辑房间通告（对齐 H5 announcement-popup.vue 房主编辑分支 + 差异文档 §权限矩阵
+    /// "修改房间信息/公告/背景 仅房主+超管"）。
+    ///
+    /// - 权限：`selfRole == .owner`（平台超管已在 selfRole 层提权，不需额外 isPlatformAdmin 判定）
+    /// - API：走通用 `updateRoom(greetingMessage:)`，与 Settings 页 save 同一入口（H5 蓝本亦复用同一 apiPartyUpdateRoom）
+    /// - 幂等：`isBusyAnnouncement` 防连点
+    /// - 成功后本地乐观回写 `roomInfo.greetingMessage`；服务端会广播 1049 到公屏（既有 didReceiveRoomAnnouncement）
+    /// - **返回 Bool**：view 层用于 toast + 关闭编辑态判定（对齐 setMCSeat 同款 verify P0 fix）
+    ///
+    /// 空字符串合法（等价 H5 清空通告），前端 view 层可选做 non-empty 校验避免误清。
+    @discardableResult
+    func updateAnnouncement(text: String) async -> Bool {
+        guard selfRole == .owner else {
+            AppLogger.party.notice("[PartyStore] updateAnnouncement rejected: not owner/platformAdmin")
+            return false
+        }
+        guard !isBusyAnnouncement else {
+            AppLogger.party.notice("[PartyStore] updateAnnouncement skip: busy")
+            return false
+        }
+        guard let info = roomInfo, roomState == .joined else {
+            AppLogger.party.notice("[PartyStore] updateAnnouncement skip: not joined")
+            return false
+        }
+        guard let roomId = info.id, !roomId.isEmpty else {
+            AppLogger.party.error("[PartyStore] updateAnnouncement bad roomId")
+            lastError = .underlying(.networkError)
+            return false
+        }
+        isBusyAnnouncement = true
+        defer { isBusyAnnouncement = false }
+        do {
+            try await PartyAPI.updateRoom(roomId: roomId, greetingMessage: text)
+            roomInfo = info.withUpdated(greetingMessage: text)
+            AppLogger.party.info("[PartyStore] updateAnnouncement ok len=\(text.count, privacy: .public)")
+            return true
+        } catch {
+            AppLogger.party.error("[PartyStore] updateAnnouncement failed: \(String(describing: error), privacy: .private)")
+            lastError = .underlying((error as? PartyAPIError) ?? .networkError)
+            return false
+        }
+    }
+
     // MARK: - MC Seat (E spec §3 MC Seat, 2026-07-14)
 
     /// 房主/房管设置接待位（E spec §3）。
@@ -1748,6 +1881,23 @@ extension PartyStore: PartyRTCEngineDelegate {
     func partyRTCEngine(_ engine: PartyRTCEngine, didUpdateSpeakingUids uids: Set<UInt>) {
         if uids != speakingUids {
             speakingUids = uids
+        }
+    }
+
+    /// F 期断线重连（2026-07-17）：Agora 从 `.disconnected/.reconnecting` 回到 `.connected` 时触发。
+    /// 蓝本 02-04-派对房.md §5 明示"NIM UNLOGIN/NET_BROKEN 置 mLoadMikeList=false，LOGINED 重连后自动
+    /// 重拉全量麦位"。iOS 侧同时对 Agora 侧做全量重拉 seatList → postMikeList 对账，避免断线期间
+    /// 错过 1001/1012 广播导致麦位视图 stale。
+    ///
+    /// 仅在 roomState == .joined 时才重拉，避免 entering / leaving 中间态误触发。
+    func partyRTCEngineDidReconnect(_ engine: PartyRTCEngine) {
+        guard roomState == .joined else {
+            AppLogger.party.notice("[PartyStore] RTC reconnect ignored: roomState=\(String(describing: self.roomState), privacy: .public)")
+            return
+        }
+        AppLogger.party.notice("[PartyStore] RTC reconnected; reloading seatList for reconciliation")
+        Task { [weak self] in
+            await self?.reloadSeatListFromServer()
         }
     }
 }
@@ -2225,6 +2375,29 @@ extension PartyStore: PartyRoomChatManagerDelegate {
             ? L10n.Party.authUpdateSetAdmin
             : L10n.Party.authUpdateRemoveAdmin
         chatRouter.postSystemAuthUpdate(text)
+    }
+
+    /// F 期房主管理批（2026-07-17）1025 roomBgUpdate / 1026 roomBgExpire 消费。
+    /// - `expired = false`：1025 房主 setBgImages 后广播 → 全量重拉 getRoomBgImage 与房主端对齐
+    /// - `expired = true`：1026 背景过期 → 清 currentRoomBackground，UI 层 fallback DEFAULT_BG
+    ///
+    /// payload 字段名待真机 preflight（agent-recon-field-names-unverified rule）。
+    /// 保守策略：不依赖 payload 字段值，直接触发全量拉取或清空，行为幂等安全。
+    func partyRoomChatDidRequireRoomBgReload(_ chat: PartyRoomChatManager, expired: Bool) {
+        guard roomState == .joined else {
+            AppLogger.party.notice("[PartyStore] roomBg broadcast ignored: roomState=\(String(describing: self.roomState), privacy: .public) expired=\(expired, privacy: .public)")
+            return
+        }
+        if expired {
+            // 1026：清空自定义背景 → PartyRoomBackgroundView fallback 到 DEFAULT_BG asset
+            backgroundEpoch &+= 1
+            currentRoomBackground = nil
+            AppLogger.party.info("[PartyStore] 1026 roomBgExpire cleared to default")
+        } else {
+            // 1025：全量重拉当前背景。loadCurrentRoomBackground 内已有 epoch/roomId 竞态守卫
+            AppLogger.party.info("[PartyStore] 1025 roomBgUpdate → reloading current background")
+            Task { [weak self] in await self?.loadCurrentRoomBackground() }
+        }
     }
 
     /// 1049 房间通告公屏广播。payload 期望 `{ text, roomId }`。
