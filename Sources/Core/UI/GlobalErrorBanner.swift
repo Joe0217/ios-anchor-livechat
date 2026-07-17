@@ -1,17 +1,20 @@
 import SwiftUI
 import Combine
+import UIKit
 
 /// 全局顶部错误通知（GlobalErrorBanner）。
 ///
 /// **触发路径**：
 /// - APIClient / PartyAPIClient / SapiTokenStore 三链路所有请求失败点 post
 ///   `Notification.Name.apiRequestFailed`（userInfo["message"]: 优先后端 message）
-/// - **系统级 NWPathMonitor 断网**：`NetworkReachability.$isReachable` 的 true→false
-///   边沿主动 enqueue —— 覆盖任何第三方 SDK（云信 NIM / 声网 Agora / 相芯）的网络失败，
-///   因为它们走各自的 URLSession，我方 APIClient 的 catch 覆盖不到
+/// - **系统级 NWPathMonitor 设备断网**：`NetworkReachability.$isReachable` 从 true→false
+///   且持续 ≥3s 才 enqueue（防 WiFi↔cellular handoff / 隧道 blip）；额外 60s throttle
+///   防 flapping spam；willEnterForeground 后 5s 冷却丢 backlog 事件。
+///   **仅覆盖设备级 NWPath 不可达**——第三方 SDK 后端挂但设备联网正常（NIM/Agora RTM 服务
+///   端故障、DNS 被劫）NWPathMonitor 感知不到，需各 SDK 自己接入 banner。
 ///  → 本 store 消费 → 顶部滑入红色胶囊条 3.5s 后自动收回。
 ///
-/// **文案来源优先级**：userInfo["message"] → L10n.apiResponseParseFailed 兜底。
+/// **文案来源优先级**：userInfo["message"] → L10n.apiNetworkError 兜底（网络类失败文案统一）。
 /// 业务侧不想弹全局 banner 时，网络请求传 `suppressCodes` 白名单让底层不 post。
 ///
 /// **Cascade 合并**：3s 窗口内后续同类事件被静默丢弃，避免"一次心跳挂断触发 10+ 接口全解析失败"
@@ -34,53 +37,116 @@ final class GlobalErrorBannerStore: ObservableObject {
 
     private let mergeWindow: TimeInterval = 3.0
     private let displayDuration: TimeInterval = 3.5
+    /// 断网延迟 fire 阈值：断网持续 ≥3s 才真弹；短暂 flap（WiFi↔cellular handoff / 隧道 blip）取消
+    private let unreachDebounce: TimeInterval = 3.0
+    /// 断网 banner throttle：地铁/隧道场景 8-15s 循环 flap，60s 内不重弹避免 spam
+    /// （20s throttle 仍会每 20s 弹一次；60s 更符合"用户已经知道在弱网"的产品预期）
+    private let reachabilityBannerThrottle: TimeInterval = 60.0
+    /// 前台恢复冷却：iOS 会把后台期间的 NWPath 事件排入 main queue backlog，回前台 drain
+    /// 时 removeDuplicates 让 false 通过导致假 banner。冷却期内直接丢事件不启 pending
+    /// （若在 handleReachabilityChange 里启 pending 再由 fire 端 gate 会与 debounce 交互出 bug）。
+    /// 同源问题在声网 SDK 已修（[.claude/rules/swiftui-camera-preview.md](../.claude/rules/swiftui-camera-preview.md) §v5.3.2）
+    private let foregroundCooldown: TimeInterval = 5.0
 
     private var windowEndsAt: Date?
     private var dismissTask: Task<Void, Never>?
     private var requestFailedObserver: NSObjectProtocol?
-    private var reachabilityCancellable: AnyCancellable?
-    /// 上一次已知的网络可达状态，用来判定 true→false 边沿。
-    /// 初始 true：若冷启动就没网，NWPathMonitor 首次回调 satisfied=false 会触发一次弹条（符合预期）。
-    /// 若冷启动有网，首次回调 satisfied=true 时 `true && !true == false`，不弹（符合预期）。
-    private var lastReachable: Bool = true
+    private var cancellables = Set<AnyCancellable>()
+    /// 回前台冷却期结束时间（Date）—— 之前的 reachability 事件都丢
+    private var suppressReachabilityUntil: Date?
+    /// 上一次 reachability banner 触发时间戳，用于 60s throttle
+    private var lastReachabilityBannerAt: Date?
+    /// 断网延迟 fire 的 pending task —— 期间恢复则 cancel
+    private var pendingUnreachTask: Task<Void, Never>?
 
     private init() {
-        // 通用请求失败通知：userInfo["message"] 优先，无则兜底 L10n。
-        // APIClient / PartyAPIClient / SapiTokenStore 所有错误抛出点统一走此通知
-        // （envelope-parse-fail 也走这里，userInfo["message"] 传 L10n.apiResponseParseFailed）。
+        // 通用请求失败通知：userInfo["message"] 优先，无则兜底 L10n.apiNetworkError
+        // （与 reachability path 保持同一 fallback 文案，避免"同种网络失败两种文案"不一致）。
         requestFailedObserver = NotificationCenter.default.addObserver(
             forName: .apiRequestFailed,
             object: nil,
             queue: .main
         ) { [weak self] note in
             let raw = note.userInfo?["message"] as? String
-            let msg = (raw?.isEmpty == false ? raw! : L10n.apiResponseParseFailed)
+            let msg = (raw?.isEmpty == false ? raw! : L10n.apiNetworkError)
             Task { @MainActor in
                 self?.enqueue(message: msg)
             }
         }
 
-        // 系统级网络断线感知：覆盖第三方 SDK 的网络失败（云信 NIM / 声网 / 相芯 走各自 URLSession）
-        // 仅在 true→false 边沿 fire；恢复不打扰。@Published 首值 nil 由 compactMap 过滤。
-        reachabilityCancellable = NetworkReachability.shared.$isReachable
+        // HilyTests target 不启用 reachability 监听：NWPathMonitor 会在模拟器 launch 时触发
+        // 瞬态 .unsatisfied，会把 banner state 泄漏到测试。与 APIClient 用 #if !HILY_TESTS
+        // 包每处 GlobalErrorBannerNotify.post 的约定一致。
+        #if !HILY_TESTS
+        setupReachabilityMonitor()
+        setupForegroundSuppression()
+        #endif
+    }
+
+    /// 订阅系统级网络可达变化，处理 debounce / throttle / cooldown。
+    /// - `dropFirst()` 丢 subscribe-time 的 @Published 当前值 replay，避免"若 NetworkReachability
+    ///   已 latch false 时 subscribe 立即弹假 banner"（也是冷启动无 WiFi + iOS 蜂窝权限弹窗前的
+    ///   场景 —— NetworkReachability.waitUntilReachable 的存在初衷就是压制这里）。
+    /// - `Task { @MainActor in ... }` 对齐 requestFailedObserver 的 hop pattern，保证 sink
+    ///   closure 内的 @MainActor 状态读写始终在 main actor 上。
+    private func setupReachabilityMonitor() {
+        NetworkReachability.shared.$isReachable
+            .dropFirst()
             .compactMap { $0 }
             .removeDuplicates()
-            .receive(on: DispatchQueue.main)
             .sink { [weak self] reachable in
-                guard let self else { return }
-                let wasReachable = self.lastReachable
-                self.lastReachable = reachable
-                if wasReachable && !reachable {
-                    self.enqueue(message: L10n.apiNetworkError)
+                Task { @MainActor in
+                    self?.handleReachabilityChange(reachable: reachable)
                 }
             }
+            .store(in: &cancellables)
+    }
+
+    /// 回前台监听：设定 5s reachability 冷却期，drain 期间的 NWPath backlog 事件不弹 banner。
+    private func setupForegroundSuppression() {
+        NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
+            .sink { [weak self] _ in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.suppressReachabilityUntil = Date().addingTimeInterval(self.foregroundCooldown)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func handleReachabilityChange(reachable: Bool) {
+        // 前台冷却期：drain backlog 事件全丢，不启 pending（若延迟到 fire 端 gate 会与 debounce
+        // 交互出 bug —— pending fire 在 t=3s，此时冷却 5s 未过 → 真断网也被拦下）
+        if let until = suppressReachabilityUntil, Date() < until { return }
+        if reachable {
+            // 已恢复：取消尚未 fire 的 pending banner（真断网 <3s → 属短暂 flap，不打扰）
+            pendingUnreachTask?.cancel()
+            pendingUnreachTask = nil
+        } else {
+            // 断网：延 unreachDebounce 秒 fire；期间若恢复 → handleReachabilityChange(true) cancel
+            pendingUnreachTask?.cancel()
+            let delay = unreachDebounce
+            pendingUnreachTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                self?.enqueueReachabilityBanner()
+            }
+        }
+    }
+
+    /// reachability 触发的 banner：60s throttle 防 flapping spam，最后走通用 enqueue。
+    private func enqueueReachabilityBanner() {
+        let now = Date()
+        if let last = lastReachabilityBannerAt, now.timeIntervalSince(last) < reachabilityBannerThrottle { return }
+        lastReachabilityBannerAt = now
+        enqueue(message: L10n.apiNetworkError)
     }
 
     deinit {
+        // shared singleton，实际运行时 deinit 不会触发；这里的清理仅为未来 refactor 保险。
         if let obs = requestFailedObserver {
             NotificationCenter.default.removeObserver(obs)
         }
-        reachabilityCancellable?.cancel()
     }
 
     /// 触发 banner；3s 合并窗口内静默丢弃。
