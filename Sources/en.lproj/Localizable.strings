@@ -123,6 +123,16 @@
 "task.active.tycoonTask"              = "Active Tycoon Task";
 "task.integralTask"                   = "Integral Task";
 
+// Task 领奖弹窗 rewardType 描述(对齐 H5 REWARD_DESC_KEY 1-6)+ 空态 + OK
+"task.reward.diamond"                 = "Diamonds";
+"task.reward.gem"                     = "Gems";
+"task.reward.prop"                    = "Prop";
+"task.reward.mount"                   = "Mount";
+"task.reward.frame"                   = "Frame";
+"task.reward.points"                  = "Points";
+"task.module.noTasks"                 = "No tasks yet";
+"common.OK"                           = "OK";
+
 "work.invite.earnMoney"      = "Earn Money";
 
 "work.offline.confirmMessage" = "Are you sure you want to go offline?";

@@ -584,6 +584,16 @@ enum L10n {
     static var taskActiveTycoonTask: String { localize("task.active.tycoonTask", comment: "大R任务折叠区标题") }
     static var taskIntegralTask: String { localize("task.integralTask", comment: "积分任务折叠区标题") }
 
+    // Task 领奖弹窗 rewardType 描述(对齐 H5 REWARD_DESC_KEY 1-6)
+    static var taskRewardDiamond: String { localize("task.reward.diamond", comment: "1=钻石") }
+    static var taskRewardGem: String { localize("task.reward.gem", comment: "2=宝石") }
+    static var taskRewardProp: String { localize("task.reward.prop", comment: "3=道具") }
+    static var taskRewardMount: String { localize("task.reward.mount", comment: "4=座驾") }
+    static var taskRewardFrame: String { localize("task.reward.frame", comment: "5=头像框") }
+    static var taskRewardPoints: String { localize("task.reward.points", comment: "6=积分") }
+    static var taskModuleNoTasks: String { localize("task.module.noTasks", comment: "Module 空态") }
+    static var commonOK: String { localize("common.OK", comment: "OK 按钮通用文案") }
+
     // LiveData 规则 sheet(对齐 H5 liveRule/index.vue 默认分支)
     static var liveDataRuleNavTitle: String { localize("liveData.rule.navTitle", comment: "规则标题") }
     static var liveDataRuleSection1: String { localize("liveData.rule.section1", comment: "I. 基本信息") }
