@@ -20,6 +20,9 @@ struct LiveTopBar: View {
             HStack(spacing: Theme.Metric.liveSubTabGap) {
                 ForEach(availableOrder, id: \.self) { tab in
                     LiveSubTabButton(tab: tab, isSelected: selected == tab) {
+                        // P 项目权限管理 v2 code-review Finding 7：optimistic init canCall=true 期间黑名单
+                        // 用户 tab bar 可见 Match icon；tap Match 时用 snapshot 挡视觉级绕过（不进 empty hero）
+                        if tab == .match && !SelfPermissionBridge.shared.canCallSnapshot { return }
                         selected = tab
                     }
                 }

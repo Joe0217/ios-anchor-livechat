@@ -36,6 +36,8 @@ struct ChatDetailContainer: View {
     @ObservedObject private var customerIdStore: CustomerServiceIdStore = .shared
     // H-3 spec §2.6：CallAuthBridge 派生 canCall（订阅 AppConfigStore + AnchorInfoStore.$mine）
     @StateObject private var callAuthBridge = CallAuthBridge()
+    // P 项目：账户级权限（userType 黑名单，全局硬性）—— UI AND 组合 spec §3.1
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     // Batch 6.1：订阅回复积分 store,view 层显示 RewardProgress + tips
     @ObservedObject private var replyPointsStore: ReplyPointsStore = .shared
 
@@ -85,7 +87,7 @@ struct ChatDetailContainer: View {
             originProfileUserId: originProfileUserId,
             onClose: onClose,
             chatType: chatType,
-            canCall: callAuthBridge.canCall,
+            canCall: callAuthBridge.canCall && permission.canCall,
             replyPointsStore: replyPointsStore,
             sheetDetent: sheetDetent
         )

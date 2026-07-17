@@ -1,8 +1,11 @@
 import SwiftUI
 
 /// 三项概览卡：在线时长 / 平均通话时长 / 好评率。对齐 H5 work/index.vue。
+/// P 项目权限管理 v2：`canCall=false` 时剔除 Avg Call Duration（属通话数据），HStack 自动 2 卡等宽。
 struct StatCardsRow: View {
     @ObservedObject var vm: WorkViewModel
+    /// P 项目权限管理：观察 canCall 决定是否显示 Avg Call Duration 卡
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     var body: some View {
         HStack(spacing: Theme.Metric.statCardGap) {
@@ -14,10 +17,12 @@ struct StatCardsRow: View {
                      number: Self.timeString(vm.onlineTimeSec),
                      numberColor: Color(hex: 0xFF7A2C),
                      caption: L10n.workOnlineTime)
-            StatCard(icon: "statAvgCallDuration",
-                     number: Self.timeString(vm.avgCallDurationSec),
-                     numberColor: Color(hex: 0x00D6C4),
-                     caption: L10n.workAvgCallDuration)
+            if permission.canCall {
+                StatCard(icon: "statAvgCallDuration",
+                         number: Self.timeString(vm.avgCallDurationSec),
+                         numberColor: Color(hex: 0x00D6C4),
+                         caption: L10n.workAvgCallDuration)
+            }
             StatCard(icon: "statRating",
                      number: "\(vm.positiveRating)%",
                      numberColor: Color(hex: 0xF640DC),

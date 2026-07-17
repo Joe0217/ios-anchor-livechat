@@ -13,6 +13,8 @@ struct UserProfileView: View {
     @StateObject private var vm: UserProfileViewModel
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
+    /// 账户级权限（userType 黑名单）—— P 项目权限管理系统 UI 层订阅点。
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     @State private var showingMenu: Bool = false
     // Report sheet 显隐 + 成功 toast（对齐 H5 c-feedbackPopup 交互）
     @State private var showingReportSheet: Bool = false
@@ -78,6 +80,7 @@ struct UserProfileView: View {
                     reportSuccessToken &+= 1
                 }
             )
+            .giftPanelSheetBackground()
             .presentationDetents([.medium, .fraction(0.8)])
         }
         // 菜单弹起
@@ -241,11 +244,14 @@ struct UserProfileView: View {
                 // yxAccid 缺失时 disabled + 半透明视觉降级，不隐藏避免布局跳变
                 messageButton(detail: detail)
                 // 拨打：接 CallStore.shared.callOut（trial #3 step 3 反悔 #10）
-                communicationButton(
-                    systemImage: "phone.fill",
-                    a11yLabel: L10n.userProfileActionCall,
-                    action: { Task { await initiateCall(detail: detail) } }
-                )
+                // P 项目：userType 黑名单命中时隐藏（三层防护 UI 层）
+                if permission.canCall {
+                    communicationButton(
+                        systemImage: "phone.fill",
+                        a11yLabel: L10n.userProfileActionCall,
+                        action: { Task { await initiateCall(detail: detail) } }
+                    )
+                }
             }
         }
     }
@@ -298,23 +304,12 @@ struct UserProfileView: View {
 
     // MARK: - 拨打通话（接入 CallStore，参 POCDebugView.dial 同款）
 
+    /// code-review Finding 5：preflight (isSignalingReady + state==.idle) 已内部化到 CallStore.callOut，
+    /// 失败会 set CallStore.lastError；此处只需调 callOut + observe lastError → vm.transientError。
     @MainActor
     private func initiateCall(detail: UserDetail) async {
-        // 守卫 1：RTM 信令未就绪
-        guard CallStore.shared.isSignalingReady else {
-            vm.transientError = L10n.userProfileNetworkError
-            return
-        }
-        // 守卫 2：已在通话中
-        guard CallStore.shared.state == .idle else {
-            vm.transientError = CallStore.shared.lastError.isEmpty
-                ? L10n.userProfileNetworkError
-                : CallStore.shared.lastError
-            return
-        }
-        // 拨打 —— 成功后 RootView 自动覆盖 CallView
         await CallStore.shared.callOut(remoteUserId: detail.userId)
-        // 拨打瞬间失败（state 仍 .idle 且有 lastError）→ toast 提示
+        // 拨打瞬间失败（state 仍 .idle 且有 lastError）→ toast 提示（signaling 未就绪 / 通话中 / createCall 失败等）
         if CallStore.shared.state == .idle,
            !CallStore.shared.lastError.isEmpty {
             vm.transientError = CallStore.shared.lastError

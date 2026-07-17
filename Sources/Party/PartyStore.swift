@@ -229,14 +229,8 @@ final class PartyStore: ObservableObject {
     // MARK: - enterRoom
 
     func enterRoom(roomId: String, password: String? = nil) async {
-        // P 项目权限管理：userType 命中 .party bit runtime guard（三层防护 Store 层）
-        guard SelfPermissionBridge.shared.canPartySnapshot else {
-            AppLogger.party.info("[Permission] enterRoom blocked by userType gate")
-            #if DEBUG
-            assertionFailure("enterRoom called while permission.canParty == false — UI 层应已拦截")
-            #endif
-            return
-        }
+        // P 项目权限管理：三层防护 Store 层 · 走统一 gate helper（v2 code-review 补迁移 · 与其他 5 处对齐）
+        guard SelfPermissionBridge.shared.gate(.party, action: "enterRoom(\(roomId))") else { return }
         // 残留检查：state != idle/ended → 先强清
         if roomState != .idle && roomState != .ended {
             AppLogger.party.notice("[PartyStore] enterRoom while state=\(self.roomState.debugDesc, privacy: .public), force leave first")

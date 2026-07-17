@@ -13,6 +13,9 @@ struct ToolsSection: View {
 
     /// 由 MainTabView 注入：Match 图标 tap 切到 Home + Match top tab（对齐首页 Match 入口）
     @Environment(\.openHomeMatch) private var openHomeMatch
+    /// v2 code-review Finding 1：观察 SelfPermissionBridge 让 canCall/canLive/canParty 变化触发 body 重算，
+    /// cell 显隐同步更新（原直接读 shared.canX 无订阅，权限翻转后 cell stale）。
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     /// 工具项（图标资源名 + 标签）。顺序与 H5 workspaceItems 一致（Hi 已移除）。
     /// Newbie 插在 Task 之后（H5 位置）、bigR 插在 Invite 之后。
@@ -58,20 +61,25 @@ struct ToolsSection: View {
                 ForEach(tools.indices, id: \.self) { i in
                     let cell = toolCell(icon: tools[i].icon, label: tools[i].label)
                     // Go Live → 开播设置页（B-spec-开播设置页 §1.4；生产入口）
+                    // P 项目：userType 命中 .live bit 时不渲染入口
                     if tools[i].icon == "toolGoLive" {
-                        // 首次开播 → firstLiveRule 10s 规则页；已开播过 → 直接 LiveSettings
-                        // 对齐 H5 c-goLive.vue:64 `router.push(userStore.isFirstLive ? '/liveRule?type=3' : '/liveSetting')`
-                        // 用 NavigationLink 静态 value 时，body 未重算会缓存旧 value；改用 tap 时动态求值
-                        NavigationLink(
-                            value: FirstLiveTracker.isFirstLive
-                                ? WorkRoute.firstLiveRule
-                                : WorkRoute.liveSettings
-                        ) { cell }
-                            .buttonStyle(.plain)
+                        if permission.canLive {
+                            // 首次开播 → firstLiveRule 10s 规则页；已开播过 → 直接 LiveSettings
+                            // 对齐 H5 c-goLive.vue:64 `router.push(userStore.isFirstLive ? '/liveRule?type=3' : '/liveSetting')`
+                            NavigationLink(
+                                value: FirstLiveTracker.isFirstLive
+                                    ? WorkRoute.firstLiveRule
+                                    : WorkRoute.liveSettings
+                            ) { cell }
+                                .buttonStyle(.plain)
+                        }
                     // Match → 切到 Home + Match top tab（对齐首页 Match 入口，与 CGoMatchButton 同一入口）
+                    // P 项目：userType 命中 .call bit 时不渲染入口
                     } else if tools[i].icon == "toolMatch" {
-                        Button { openHomeMatch.perform() } label: { cell }
-                            .buttonStyle(.plain)
+                        if permission.canCall {
+                            Button { openHomeMatch.perform() } label: { cell }
+                                .buttonStyle(.plain)
+                        }
                     // Task → Phase C 占位（B-F 阶段替换真页面）
                     } else if tools[i].icon == "toolTask" {
                         NavigationLink(value: WorkRoute.task) { cell }
@@ -101,13 +109,19 @@ struct ToolsSection: View {
                         NavigationLink(value: WorkRoute.anchorGuide) { cell }
                             .buttonStyle(.plain)
                     // Live Data → Phase B 占位（下一个开工）
+                    // P 项目权限管理 v2：canLive=false 时不渲染入口
                     } else if tools[i].icon == "toolLiveData" {
-                        NavigationLink(value: WorkRoute.liveData) { cell }
-                            .buttonStyle(.plain)
+                        if permission.canLive {
+                            NavigationLink(value: WorkRoute.liveData) { cell }
+                                .buttonStyle(.plain)
+                        }
                     // Party Data / My Guardian → 占位（H5 蓝本无此入口，Downloads UI 新增；未来落地页替换 ComingSoon）
+                    // P 项目权限管理 v2：canParty=false 时不渲染入口
                     } else if tools[i].icon == "toolPartyData" {
-                        NavigationLink(value: WorkRoute.partyData) { cell }
-                            .buttonStyle(.plain)
+                        if permission.canParty {
+                            NavigationLink(value: WorkRoute.partyData) { cell }
+                                .buttonStyle(.plain)
+                        }
                     } else if tools[i].icon == "toolMyGuardian" {
                         NavigationLink(value: WorkRoute.myGuardian) { cell }
                             .buttonStyle(.plain)

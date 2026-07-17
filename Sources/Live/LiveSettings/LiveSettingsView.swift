@@ -28,8 +28,10 @@ struct LiveSettingsView: View {
         String(format: L10n.liveSettingsCounterFormat, store.title.utf16.count)
     }
 
-    /// 开播按钮可点条件：editing 态；loading/starting/error 全 disable
+    /// 开播按钮可点条件：editing 态；loading/starting/error 全 disable。
+    /// P 项目：叠加 permission.canLive —— userType 命中 .live 黑名单时 disable（按钮仍渲染以保证布局稳定）。
     private var canTapStart: Bool {
+        guard SelfPermissionBridge.shared.canLive else { return false }
         if case .editing = store.state { return true }
         return false
     }
@@ -273,9 +275,9 @@ struct LiveSettingsView: View {
                 .lineLimit(1)
                 .frame(maxWidth: 66)
             HStack(spacing: 3) {
-                Image(systemName: "diamond.fill")
-                    .font(.system(size: 8))
-                    .foregroundStyle(.yellow)
+                Image("coins")
+                    .resizable()
+                    .frame(width: 9, height: 9)
                 Text("\(gift.giftPrice)")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(.white)

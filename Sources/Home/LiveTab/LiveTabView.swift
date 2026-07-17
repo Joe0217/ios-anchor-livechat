@@ -41,6 +41,8 @@ struct LiveTabView: View {
 
     /// Home 4 tab 跨模块导航总线（Work Match 点击时切 Match top tab 用）
     @ObservedObject private var navBus = HomeNavigationBus.shared
+    /// P 项目权限管理 v2：观察 canCall 变化触发 top tab 重派生（filter .match）
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     /// scenePhase 用于"onResume 静默检查"（对齐安卓 HomeHomeFragment.onResume）。
     @Environment(\.scenePhase) private var scenePhase
@@ -84,9 +86,7 @@ struct LiveTabView: View {
             .onAppear {
                 Task { @MainActor in
                     await anchorInfoStore.loadIfNeeded()
-                    if anchorInfoStore.hasLoadedTier {
-                        homeStore.applyTier(isSLevel: anchorInfoStore.isSLevelAnchor)
-                    }
+                    reapplyTier()
                 }
                 // initial state 已满足加载条件时的首次触发——
                 // S 级默认 currentOuter=.live、非 S 级默认 currentOuter=.list，
@@ -98,14 +98,12 @@ struct LiveTabView: View {
             // 监听派生 Bool 而非 AnchorInfo (后者未 Equatable 不能 onChange)：
             // hasLoadedTier  false→true 触发首次 applyTier；
             // isSLevelAnchor 变化（极少：段位远程刷新）触发重派生。
-            .onChange(of: anchorInfoStore.hasLoadedTier) { _ in
-                homeStore.applyTier(isSLevel: anchorInfoStore.isSLevelAnchor)
-            }
-            .onChange(of: anchorInfoStore.isSLevelAnchor) { _ in
-                if anchorInfoStore.hasLoadedTier {
-                    homeStore.applyTier(isSLevel: anchorInfoStore.isSLevelAnchor)
-                }
-            }
+            .onChange(of: anchorInfoStore.hasLoadedTier) { _ in reapplyTier() }
+            .onChange(of: anchorInfoStore.isSLevelAnchor) { _ in reapplyTier() }
+            // P 项目权限管理 v2：canCall 变化时（切账号 / DebugPermissionOverride）重新派生 top tab
+            .onChange(of: permission.canCall) { _ in reapplyTier() }
+            // code-review Finding 3：permission.isLoaded 变化也要触发（避免冷启动 permission=false 首帧摘 Match tab 再补的闪烁）
+            .onChange(of: permission.isLoaded) { _ in reapplyTier() }
             // Live / List 子页 lazy load：keep-alive 架构下不在 view tree mount 时触发，
             // 仅在 home 真正 active + 当前 outer tab 匹配 + 未加载过时触发。
             .onChange(of: isHomeTabActive) { _ in
@@ -119,6 +117,23 @@ struct LiveTabView: View {
     }
 
     /// 触发 List 首页加载——三重守卫：
+    /// P 权限管理 · 统一 applyTier 入口（code-review Finding 3/7 消除 4 处 3-line 复制块）。
+    ///
+    /// **只 gate `permission.isLoaded`**（deny-by-default 权限侧）；`hasLoadedTier` 不 gate ——
+    /// tier 未 loaded 时用假设 `isSLevel: true`（默认 S 级顺序，仍含 .match）。
+    ///
+    /// **反例（前一版双 gate 导致的 bug）**：dev 环境 hasLoadedTier 长时间 false（AnchorInfoStore
+    /// 未拉到 level）→ 双 gate 永久 early return → permission override 切换（101 屏通话+匹配）
+    /// 后 availableOrder 保持 init 时的 optimistic order 不更新 → Match tab 无法消失。
+    /// 用户实测发现：Work 页 Match cell 正确隐藏（直接读 canCall @Published），首页 Match tab
+    /// 仍显示（依赖 reapplyTier → hasLoadedTier gate 挡）。修法：解耦 tier gate。
+    private func reapplyTier() {
+        guard permission.isLoaded else { return }
+        // tier 未 loaded 时用默认 S 级顺序（含 .match）；tier loaded 后正确的 isSLevel 会再触发一次 apply
+        let isSLevel = anchorInfoStore.hasLoadedTier ? anchorInfoStore.isSLevelAnchor : true
+        homeStore.applyTier(isSLevel: isSLevel, canCall: permission.canCall)
+    }
+
     /// 1. home tab 必须 active（避免启动即预热）
     /// 2. 当前 outer tab 必须是 .list（避免用户在 live/circle 时浪费请求）
     /// 3. loadState 必须是 .idle（避免重复加载——切走再回不重发，对齐 keep-alive 体感）
@@ -207,13 +222,14 @@ struct LiveTabView: View {
     /// bottom 180pt：从 tabbar 顶往上抬高，避免被视觉遮挡（用户要求）。
     @ViewBuilder
     private func floatingButtons(for current: HomeTopTab) -> some View {
-        if current == .live {
+        // P 项目权限管理：canCall/canLive 命中 userType 黑名单时对应浮动按钮不渲染
+        if current == .live, SelfPermissionBridge.shared.canLive {
             QuickGoLiveButton()
                 .padding(.trailing, 12)
                 .padding(.bottom, 180)
                 .transition(.opacity)
-        } else if current == .match {
-            // L 里程碑：Match tab 浮动开关（v3 spec §4.2）
+        } else if current == .match, SelfPermissionBridge.shared.canCall {
+            // L 里程碑：Match tab 浮动开关（v3 spec §4.2）· .call bit 覆盖匹配
             CGoMatchButton(store: MatchStore.shared)
                 .padding(.trailing, Theme.Metric.matchButtonTrailingInset)
                 .padding(.bottom, Theme.Metric.matchButtonBottomInset)
@@ -256,16 +272,11 @@ struct LiveTabView: View {
     private var reconnectToast: some View {
         if showReconnectToast {
             Text(L10n.callReconnect)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color(hex: 0x424242), in: Capsule())
-                .padding(.top, 12)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .toastStyle()
+                .transition(Toast.transition)
                 .task(id: showReconnectToast) {
                     do {
-                        try await Task.sleep(nanoseconds: 2_000_000_000)
+                        try await Task.sleep(nanoseconds: Toast.dismissDurationNanos)
                         try Task.checkCancellation()
                     } catch { return }
                     showReconnectToast = false

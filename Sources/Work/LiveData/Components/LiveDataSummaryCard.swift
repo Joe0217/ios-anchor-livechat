@@ -14,6 +14,8 @@ struct LiveDataSummaryCard: View {
     let dropdownExpanded: Bool
 
     @State private var expandBreakdown = true
+    /// v2 code-review：观察 canCall 让 Private Call Income 分项显隐响应 permission 变化
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     private var segmentLabel: String {
         switch dateType.segment {
@@ -159,7 +161,10 @@ struct LiveDataSummaryCard: View {
 
             HStack(spacing: 12) {
                 breakdownItem(value: liveIncomeDiamonds, label: L10n.liveDataLiveIncome)
-                breakdownItem(value: privateCallIncomeDiamonds, label: L10n.liveDataPrivateCallIncome)
+                // P 项目权限管理 v2：canCall=false 时隐 Private Call Income（仅 canLive=true+canCall=false 组合可达）
+                if permission.canCall {
+                    breakdownItem(value: privateCallIncomeDiamonds, label: L10n.liveDataPrivateCallIncome)
+                }
             }
             .padding(20)
             .frame(maxWidth: .infinity)

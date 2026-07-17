@@ -287,6 +287,14 @@ final class MatchStore: ObservableObject {
     /// v3 §5.1 F3 修正后的顺序（**删除 beauty pre-check**，见 RA21）：
     /// `isOpen 返 1 → toggleMatch(1) 返 1 → cameraSession.start() → matchState=.matching`
     func openMatch() async {
+        // P 项目权限管理：.call bit 覆盖匹配 · 走统一 gate helper（不 assertionFailure · Finding 4/8）
+        // v2 code-review: gate 拒绝时 set lastToast 让 UI 有反馈（对齐同函数其他失败分支 pattern），
+        // 复用 .networkError case 避免暴露 blacklist 状态（spec §6.1 fail-secure）。
+        // 路径：MatchTipPopup 10 分钟弹（不查 canCall）+ optimistic init tab bar 视觉 race → 用户 tap "Go Match"
+        guard SelfPermissionBridge.shared.gate(.call, action: "openMatch") else {
+            lastToast = .networkError
+            return
+        }
         // 只有 .ended / .blocked 允许发起（.matching / .matchingCalling 期间按钮不 render,理论到不了这里）
         guard state == .ended || state == .blocked else {
             logger.warning("openMatch called in unexpected state=\(String(describing: self.state))")

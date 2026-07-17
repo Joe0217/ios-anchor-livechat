@@ -37,15 +37,20 @@ final class CallStore: ObservableObject {
         // didSet 在 @Published publish 之后调用，满足 SwiftUI 渲染先于业务回调的顺序。
         didSet {
             guard oldValue != state else { return }
-            observer?.callStore(self, stateDidChange: state, previous: oldValue)
+            // F refactor：多观察者数组（原单 weak var observer 已改为 NSHashTable，spec §3.4 P0-2）
+            notifyObservers { $0.callStore(self, stateDidChange: state, previous: oldValue) }
             updateElapsedTimer(prev: oldValue)
             updateIMSceneGate(prev: oldValue, next: state)
             // C-4 Wave1 gap-009：私 call 首次转 .connected 时初始化 300s 收益横幅倒计时。
             // frontGameType 在 callOut/handleIncomingVideoCall/acceptIncomingFromLive 时已置定。
-            if state == .connected, oldValue != .connected, current.frontGameType == .live {
+            // F-spec：派对房私 call 同款 5min 锁定期（对齐直播私 call · 用户诉求）
+            if state == .connected, oldValue != .connected,
+               (current.frontGameType == .live || current.frontGameType == .party) {
                 liveCallCountdown = 300
-                // C-4 Wave4 A1 gap-008：私 call 首次接通触发双头像会合动画（H5 livingCallAnimation.vue 1s 旋转 + 2s 消失）
-                livingCallIntroToken = UUID()
+                // C-4 Wave4 A1 gap-008：直播私 call 双头像会合动画（H5 livingCallAnimation 特效，派对房不启用）
+                if current.frontGameType == .live {
+                    livingCallIntroToken = UUID()
+                }
             }
             // C-4 Wave2 gap-critic-004：AudioSession 生命周期挂载
             // - 首次进入 .connecting/.connected 时 activate（直播私 call 走 LiveStore 主导，不激活）
@@ -236,9 +241,30 @@ final class CallStore: ObservableObject {
     /// G M6：PK 状态机弱引用；handleIncomingVideoCall 在 PK 期一律 busy reject 避免脏跳。
     weak var pkStore: PKStore?
 
-    /// D 里程碑：状态变化观察者（CallStoreObserver 协议 T4）。
-    /// LiveStore 在 RootView/LiveRoomView 注入时挂载,监听 connected/connecting → ended/idle 触发 resumeCall。
-    weak var observer: CallStoreObserver?
+    /// D+F 里程碑：状态变化观察者数组（CallStoreObserver 协议 T4）。
+    ///
+    /// F 期 refactor（spec §3.4 P0-2 决策）：从 `weak var observer: CallStoreObserver?` 单槽 →
+    /// `NSHashTable.weakObjects()` 多观察者，支持 LiveStore + PartyStore + 未来场景各自 attach 而不互相踩踏。
+    ///
+    /// - 使用 attach / detach 而非直接赋值
+    /// - NSHashTable weakObjects 自动清理已销毁的观察者
+    /// - notifyObservers 按 allObjects 快照顺序遍历（顺序不保证，观察者不能相互依赖顺序）
+    private let observers = NSHashTable<AnyObject>.weakObjects()
+
+    /// 注册状态观察者（幂等：NSHashTable 内含即忽略）
+    func attach(_ observer: CallStoreObserver) {
+        observers.add(observer as AnyObject)
+    }
+
+    /// 注销状态观察者（幂等：不存在时 no-op）。view dismiss 后 weak 会自动 nil，仍推荐显式调用。
+    func detach(_ observer: CallStoreObserver) {
+        observers.remove(observer as AnyObject)
+    }
+
+    /// 内部通知辅助：遍历当前存活观察者
+    private func notifyObservers(_ block: (CallStoreObserver) -> Void) {
+        observers.allObjects.compactMap { $0 as? CallStoreObserver }.forEach(block)
+    }
 
     /// 黑屏空房间检测状态机(DM-20260616-003)。init 后由 `setupEmptyRoomDetector()` 构造并挂 Combine assign。
     /// 每 10s 心跳查询 `POST /api/agora/live/channelUserCount`;连续 3 次异常弹 10s 倒计时自动挂断。
@@ -490,7 +516,22 @@ final class CallStore: ObservableObject {
     // 上报的 onlineStatus 错误。后端要求 CALL_END(10001) 才放行 createCall；FOREGROUND(10002)
     // 被拒。已在 WSHeartbeat 调整为 .callEnd。
     func callOut(remoteUserId: String) async {
+        // P 项目权限管理：三层防护 Store 层 · 走统一 gate helper（不 assertionFailure 避 race crash · Finding 4/8）
+        // v2 code-review: gate 拒绝时 set lastError 让 view 层可 observe（对齐同函数其他 preflight 失败分支）
+        // 用通用 networkError 文案避免暴露 blacklist 状态（spec §6.1 fail-secure）
+        guard SelfPermissionBridge.shared.gate(.call, action: "callOut") else {
+            lastError = L10n.userProfileNetworkError
+            return
+        }
+        // code-review Finding 5：内部化 preflight 让 caller 简化（原 4 处 caller preflight 分裂：POCDebug 无 / ChatDetail 缺 isSignalingReady / LiveList+UserProfile 全套）
+        // signaling 未就绪 / 通话中 / calling → set lastError 让 view 层 observe → 统一反馈路径
+        guard isSignalingReady else {
+            lastError = L10n.userProfileNetworkError
+            AppLogger.call.notice("⚠️ [CallStore] callOut aborted: signaling not ready")
+            return
+        }
         guard state == .idle, let signaling else {
+            if lastError.isEmpty { lastError = L10n.userProfileNetworkError }
             AppLogger.call.notice("⚠️ [CallStore] callOut 跳过 state=\(self.state.rawValue, privacy: .public) signaling=\(self.signaling != nil, privacy: .public)")
             return
         }
@@ -718,6 +759,76 @@ final class CallStore: ObservableObject {
         }
     }
 
+    /// F 里程碑：派对房私 call 自动接听入口（对齐 D 期 acceptIncomingFromLive · spec §2.1 Flow B）。
+    /// 由 PartyStore.pauseForCall 调用，不弹浮层、无 UI 确认；frontGameType 写入 .party 标记本通通话来源。
+    ///
+    /// 与 acceptIncomingFromLive 的唯一差异：`frontGameType = .party`。其余时序、信令、joinRtc、
+    /// 接通率上报、joinCall 拉资料完全一致（复用直播私 call 立即接听模式 · D-1 决策：无 5s delay）。
+    func acceptIncomingFromParty(msg: CallMessage) async {
+        guard state == .idle, let signaling else {
+            AppLogger.call.notice("⚠️ [CallStore] acceptIncomingFromParty 跳过 state=\(self.state.rawValue, privacy: .public) signaling=\(self.signaling != nil, privacy: .public)")
+            return
+        }
+        guard let fromRoomId = msg.fromRoomId, !fromRoomId.isEmpty else {
+            AppLogger.call.notice("⚠️ [CallStore] acceptIncomingFromParty 缺 fromRoomId")
+            return
+        }
+
+        // 1) 初始化 currentCallInfo（被叫 in / frontGameType=.party）
+        var info = CurrentCallInfo()
+        info.frontGameType = .party
+        info.inOrOut = .in
+        info.channelId = fromRoomId
+        info.callId = msg.callId
+        info.remoteUserId = msg.fromUserId
+        info.callStartTime = Date().timeIntervalSince1970 * 1000
+        current = info
+        state = .calling
+
+        // 2) 立刻发 Accept（publish 失败必须收尾，避免主叫永等不到 Accept）
+        let ok = await signaling.publish(buildMessage(action: .accept))
+        guard ok else {
+            lastError = L10n.callErrorAcceptFailed
+            await endLocally(reason: .beginCallError, rateCategory: nil, rateType: .callee, answerTime: 0, abnormal: 1)
+            return
+        }
+        state = .connecting
+
+        // 3) join RTC 通话频道（sharedEngine 会显式 setChannelProfile(.communication) · rule §5）
+        await joinRtc(channel: fromRoomId, rateType: .callee)
+
+        // 4) 主叫端可能已在频道（callOut 时先 join），若 didJoinedOfUid 在切到 .connecting 前已触发，
+        //    handleRemoteRtcChange 不会再回调，此处手动补一次升级。
+        if agora.remoteUid != 0, state == .connecting {
+            current.callConnectTime = Date().timeIntervalSince1970 * 1000
+            state = .connected
+            AppLogger.call.info("✅ [CallStore] 派对房私 call 接听后远端已在频道 → state=connected")
+        }
+
+        // 5) 接通率上报（answered 节点，与 acceptIncomingFromLive 同步 await 顺序对齐）
+        await reportRate(category: .answered, type: .callee,
+                         answerTime: current.sinceStartDuration, abnormal: 0)
+
+        // 6) 异步拉对方资料（joinCall 接口；失败仅影响 UI，不影响接通能力）
+        Task { @MainActor in
+            do {
+                let r = try await CallService.joinCall(channelId: fromRoomId)
+                self.lastJoinCallSource = r.source
+                guard self.state != .idle, self.current.callId == msg.callId else { return }
+                self.current.remoteYxAccid = r.yxAccid ?? self.current.remoteYxAccid
+                self.current.remoteNickname = r.nickname ?? self.current.remoteNickname
+                self.current.remoteIcon = r.icon ?? self.current.remoteIcon
+                self.current.remoteHeadFrame = r.headFrame ?? self.current.remoteHeadFrame
+                self.current.remoteAge = r.age ?? self.current.remoteAge
+                self.current.remoteCountryCode = r.countryCode ?? self.current.remoteCountryCode
+                self.current.remoteVideoPrice = r.videoPrice ?? self.current.remoteVideoPrice
+            } catch {
+                self.lastJoinCallSource = nil
+                AppLogger.call.notice("⚠️ [CallStore] PARTY joinCall 拉对方资料失败 channel=\(fromRoomId, privacy: .private) err=\(error.localizedDescription, privacy: .private)")
+            }
+        }
+    }
+
     /// 被叫接受通话。
     func accept(auto: Bool = false) async {
         guard state == .calling, current.inOrOut == .in, let signaling else { return }
@@ -762,12 +873,12 @@ final class CallStore: ObservableObject {
 
     /// 通话中本地挂断。
     /// v4 规则（对齐 H5 anchor-livechat-h5/src/components/g-faceTime/index.vue:387 `privateCallTips`）：
-    /// 直播私 call 前 5 分钟锁定期主播不能挂断（liveCallCountdown > 0 期间）；用户可挂断不受此约束。
+    /// 直播私 call / 派对房私 call 前 5 分钟锁定期主播不能挂断（liveCallCountdown > 0 期间）；用户可挂断不受此约束。
     func hangup() async {
         guard state == .connecting || state == .connected else { return }
-        // 直播私 call 锁定期 guard：主播 5 分钟内不允许挂断（H5 v-if="!privateCallTips" 规则）
-        if current.frontGameType == .live, liveCallCountdown > 0 {
-            AppLogger.call.notice("🔒 [hangup] 直播私 call 锁定期 (剩余 \(self.liveCallCountdown, privacy: .public)s) → 拒绝主播挂断")
+        // 直播私 call / 派对房私 call 锁定期 guard：主播 5 分钟内不允许挂断（对齐 H5 privateCallTips）
+        if (current.frontGameType == .live || current.frontGameType == .party), liveCallCountdown > 0 {
+            AppLogger.call.notice("🔒 [hangup] 私 call 锁定期 (frontGameType=\(self.current.frontGameType.rawValue, privacy: .public) 剩余 \(self.liveCallCountdown, privacy: .public)s) → 拒绝主播挂断")
             return
         }
         if let signaling {
@@ -863,10 +974,13 @@ final class CallStore: ObservableObject {
 
     // MARK: - C-4 Wave1 gap-009 300s 收益横幅倒计时 tick
 
-    /// startElapsedTask 每秒 tick 后调；仅 .connected 且 frontGameType==.live 时递减。
+    /// startElapsedTask 每秒 tick 后调；仅 .connected 且 frontGameType==.live/.party 时递减。
     /// 从 300 → 0，归 0 后不再触发（liveCallBanner 分档显示静态文案）。
+    /// F-spec：派对房私 call 复用同款 300s 锁定倒计时。
     private func tickLiveCallCountdownIfNeeded() {
-        guard state == .connected, current.frontGameType == .live, liveCallCountdown > 0 else { return }
+        guard state == .connected,
+              (current.frontGameType == .live || current.frontGameType == .party),
+              liveCallCountdown > 0 else { return }
         liveCallCountdown -= 1
     }
 
@@ -1128,10 +1242,31 @@ extension CallStore: CallSignalingDelegate {
         }
     }
 
+    /// F 里程碑辅助：向来电方发 busy reject（不改本端 state）。
+    /// 用于 handleIncomingVideoCall 前置守卫失败时（App 后台 / 派对房私 call 已关 / queryCall 失败 / 非派对来电）。
+    private func publishRejectBusy(msg: CallMessage, reason: String) async {
+        guard let signaling else { return }
+        let busy = CallMessage(action: .reject,
+                               fromUserId: myUserId,
+                               remoteUserId: msg.fromUserId,
+                               callId: msg.callId,
+                               rejectReason: reason,
+                               rejectByInternal: 1)
+        _ = await signaling.publish(busy)
+    }
+
     private func handleIncomingVideoCall(_ msg: CallMessage) async {
-        // 校验是发给本端的
+        // 校验是发给本端的（**必须先于 permission gate** · v2 code-review 修复：原顺序会对非本端 msg
+        // 发出错误 permission_denied reject，误挂断主叫方 A→Y 的合法通话）
         guard msg.remoteUserId == myUserId else {
             AppLogger.call.notice("⚠️ [CallStore] 来电 remoteUserId(\(msg.remoteUserId, privacy: .private)) 与本端(\(self.myUserId, privacy: .private)) 不符，忽略")
+            return
+        }
+        // P 项目权限管理：三层防护 RTM 被动接收层 · 走统一 gate helper（不 assertionFailure · Finding 4/8）
+        // guard 在 source 判定之前 → 覆盖所有 source（普通通话 / matchV4 派单 / 未来新增）
+        // gate 内部已 log warning；额外 publishRejectBusy 向对端发信号防主叫方等待
+        if !SelfPermissionBridge.shared.gate(.call, action: "incomingVideoCall(callId=\(msg.callId))") {
+            await publishRejectBusy(msg: msg, reason: "permission_denied")
             return
         }
         // D 里程碑：直播态优先走"直播私 call 自动接听"分支（不弹浮层、无 UI 确认）
@@ -1157,6 +1292,50 @@ extension CallStore: CallSignalingDelegate {
             await ls.pauseForCall(msg: msg)
             return
         }
+
+        // F 里程碑（spec §2.1 Flow B）：派对房态优先分支 —— 在 PK guard 之前。
+        // PartyStore 是全局单例；roomState == .joined 才可能是派对房私 call 场景。
+        //
+        // 三层前置守卫（对齐安卓 PartyRoomDataManager.kt:662 + spec §7 B3/B5）：
+        //   1. appForeground（App 后台一律 reject）
+        //   2. partyPrivateCallOpen == 1（本地二次校验，对齐 LiveStore.privateCallOpen · P1-9）
+        //   3. queryCall 返 callerType == 5（不为 5 → reject reason=party room reject non-party call）
+        //      queryCall 超时/失败 → 保守 reject（spec §7 B19 P2-19）
+        let partyStore = PartyStore.shared
+        if partyStore.roomState == .joined {
+            // 守卫 1: App 前台
+            if UIApplication.shared.applicationState == .background {
+                AppLogger.call.notice("🚫 [CallStore] 派对房 App 后台 → reject from=\(msg.fromUserId, privacy: .private)")
+                await publishRejectBusy(msg: msg, reason: "background")
+                return
+            }
+            // 守卫 2: 房间维度私 call 开关（本地二次校验）
+            guard partyStore.roomInfo?.isPartyPrivateCallEnabled == true else {
+                AppLogger.call.notice("🚫 [CallStore] 派对房私 call 已关 → busy reject from=\(msg.fromUserId, privacy: .private)")
+                await publishRejectBusy(msg: msg, reason: "party_call_closed")
+                return
+            }
+            // 守卫 3: queryCall 判 callerType==5
+            let channelId = msg.fromRoomId ?? ""
+            do {
+                let resp = try await CallService.queryCall(fromUserId: msg.fromUserId, channelId: channelId)
+                guard resp.callerType == 5 else {
+                    AppLogger.call.notice("🚫 [CallStore] 派对房内非 PartyCall (callerType=\(resp.callerType ?? -1, privacy: .public)) → reject")
+                    // 对齐安卓 §1.2：非 5 一律 reject（P1-7 决策：与直播一致）
+                    await publishRejectBusy(msg: msg, reason: "party room reject non-party call")
+                    return
+                }
+            } catch {
+                AppLogger.call.notice("🚫 [CallStore] 派对房 queryCall 超时/失败 → 保守 reject err=\(error.localizedDescription, privacy: .private)")
+                await publishRejectBusy(msg: msg, reason: "queryCall_failed")
+                return
+            }
+            // callerType==5 → 委托 PartyStore.pauseForCall
+            AppLogger.call.debug("📞 [CallStore] 派对房收到 PartyCall → 委托 PartyStore.pauseForCall")
+            await partyStore.pauseForCall(msg: msg)
+            return
+        }
+
         // L Gap-5：匹配态 auto-accept 时序改造 —— 不再"匹配态无脑 auto-accept"，
         // 改为"先走标准 .calling 拉 apiJoinCall 拿 source"（见下方 direct 路径 line ~1119 Task 尾部），
         // source==matchV4 && isMatchActive → 内部自动 accept；非 matchV4 → 保持 .calling 让用户手动选接听/拒绝。
@@ -1459,16 +1638,22 @@ extension CallStore {
 
     // MARK: - C-5 充值锁定 timer / 补偿 / Congrats
 
-    /// 启动 60s 主段 + 5s 兜底段 auto hangup（H5 topBar.vue waitRechargeTimer + 5s fallback）。
+    /// 启动主段 + 5s 兜底段 auto hangup（H5 topBar.vue waitRechargeTimer + 5s fallback）。
+    /// 主段秒数：v26（2026-07-15）从 `AppConfigStore.callWaitTime` 读（H5 `call_config.call_wait_time`），
+    /// 后端未配置或未拉到时用 `callWaitPrimarySeconds`=60 本地兜底（对齐 H5 topBar.vue:20 `|| 60`）。
     /// 幂等：重复 START_PAY / CALL_TIME_END cancel 旧 task 重启。
     private func startCallWaitLockTimer(reason: Int) {
         callWaitPauseAt = Date()
         callWaitTimerTask?.cancel()
-        callWaitCountdown = Self.callWaitPrimarySeconds
-        AppLogger.call.info("[CallStore] callWaitLockTimer start reason=\(reason, privacy: .public) 60s+5s")
+        // v26.1（2026-07-16）review 修：等价 JS `|| 60` 语义，`0 / 负数 / nil` 全部回落
+        // （原 `?? 60` 只兜 nil，后端错配 0 会导致空循环 → 立即 5s auto hangup 秒挂断）
+        let rawSeconds = AppConfigStore.shared.callWaitTime ?? Self.callWaitPrimarySeconds
+        let primarySeconds = rawSeconds > 0 ? rawSeconds : Self.callWaitPrimarySeconds
+        callWaitCountdown = primarySeconds
+        AppLogger.call.info("[CallStore] callWaitLockTimer start reason=\(reason, privacy: .public) \(primarySeconds, privacy: .public)s+\(Self.callWaitFallbackSeconds, privacy: .public)s")
         callWaitTimerTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            for _ in 0..<Self.callWaitPrimarySeconds {
+            for _ in 0..<primarySeconds {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 if Task.isCancelled { return }
                 self.callWaitCountdown = max(0, self.callWaitCountdown - 1)

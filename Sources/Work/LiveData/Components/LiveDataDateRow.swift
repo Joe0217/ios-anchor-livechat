@@ -7,6 +7,8 @@ struct LiveDataDateRow: View {
     let day: LiveDataDay
     let isExpanded: Bool
     let onToggle: () -> Void
+    /// v2 code-review：观察 canCall 让 Private Call Income 分项显隐响应 permission 变化
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -92,7 +94,10 @@ struct LiveDataDateRow: View {
 
             HStack(spacing: 12) {
                 item(value: day.liveIncomeDiamonds, label: L10n.liveDataLiveIncome)
-                item(value: day.privateCallIncomeDiamonds, label: L10n.liveDataPrivateCallIncome)
+                // P 项目权限管理 v2：canCall=false 时隐 Private Call Income（仅 canLive=true+canCall=false 组合可达）
+                if permission.canCall {
+                    item(value: day.privateCallIncomeDiamonds, label: L10n.liveDataPrivateCallIncome)
+                }
             }
             .padding(20)  // 对齐 H5 line 356 `p-20`
             .frame(maxWidth: .infinity)

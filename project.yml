@@ -6,6 +6,14 @@ options:
   createIntermediateGroups: true
   groupSortPosition: top
   developmentLanguage: en
+# 打包环境切换：Archive 时通过 Scheme 选择注入哪套 xcconfig
+#   - Hily scheme      → Archive 用 Release       → Prod（正式上架）
+#   - Hily-Test scheme → Archive 用 Release-Test  → Test（预发布/QA 分发）
+# Release-Test 走 release 优化档（同 Release），只是 xcconfig 换成 Config-Test
+configs:
+  Debug: debug
+  Release: release
+  Release-Test: release
 settings:
   base:
     MARKETING_VERSION: "1.0.0"
@@ -48,11 +56,15 @@ targets:
       - framework: Vendor/FaceUnity/FURenderKit.framework
         embed: true
         codeSign: true
-    # 多环境密钥：当前 Debug→Test（预发布调试），Release→Prod（archive 上线）
-    # 切回 dev 调试：改 Debug 一行为 Config/Config-Dev.xcconfig，./bin/regen.sh
+    # 多环境密钥：
+    #   - Debug        → Dev（日常 Run/真机调试）
+    #   - Release      → Prod（Hily scheme Archive 上架用）
+    #   - Release-Test → Test（Hily-Test scheme Archive 分发测试用）
+    # 打测试包：Xcode 顶部 Scheme 选 Hily-Test → Product → Archive，不改本文件
     configFiles:
       Debug: Config/Config-Dev.xcconfig
       Release: Config/Config-Prod.xcconfig
+      Release-Test: Config/Config-Test.xcconfig
     settings:
       base:
         # 相芯授权证书 authpack 绑定的就是这个包名，给相芯时必须原样一致
@@ -378,6 +390,20 @@ schemes:
       config: Debug
     archive:
       config: Release
+  # 打测试包专用 scheme：Run 仍走 Dev（Debug），只在 Archive 时用 Config-Test.xcconfig。
+  # 用法：Xcode 顶部 Scheme 切到 Hily-Test → Product → Archive → 分发给 QA。
+  Hily-Test:
+    build:
+      targets:
+        Hily: all
+    run:
+      config: Debug
+    profile:
+      config: Release-Test
+    analyze:
+      config: Debug
+    archive:
+      config: Release-Test
   # 单测专用 scheme：build action 只编 HilyTests，不碰 Hily.app/FURenderKit，模拟器/真机皆可跑。
   # 跑法：xcodebuild test -workspace Hily.xcworkspace -scheme HilyTests -destination 'platform=iOS Simulator,name=iPhone 16 Pro'
   HilyTests:

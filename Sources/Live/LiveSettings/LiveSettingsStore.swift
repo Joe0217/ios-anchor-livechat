@@ -120,6 +120,8 @@ final class LiveSettingsStore: ObservableObject {
     /// push 到 LiveRoomView 后 View 消失 → deinit → unlock。
     /// 1004/1005 短路 + `showErrorAndDismiss`（toast + auto pop）分支均显式 unlock，避免 tabbar 卡死。
     func startTapped() async {
+        // P 项目权限管理：.live bit runtime guard · 走统一 gate helper（不 assertionFailure · Finding 4/8）
+        guard SelfPermissionBridge.shared.gate(.live, action: "startTapped") else { return }
         // 无权限报错 pop 过渡期（showErrorAndDismiss 已排队 1.5s 后 dismiss），忽略后续开播点击
         if shouldDismiss { return }
         // 红队 🟠#6：入口自清 .error

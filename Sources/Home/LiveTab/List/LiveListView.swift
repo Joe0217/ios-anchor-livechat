@@ -7,6 +7,18 @@ import SwiftUI
 /// VM 由父持有（segment / scroll / 分页状态在父级，避免 .list 切走重建丢状态）。
 struct LiveListView: View {
     @ObservedObject var viewModel: LiveListViewModel
+    /// 段位显示 bridge（订阅 AppConfig.achorHideButton + AnchorInfo.mine）；对齐 H5 anchortCallAuth 语义。
+    /// 每行 UserCard 只收 Bool，不各自订阅，减少 publisher 冗余（keep-alive publisher isolation）。
+    @StateObject private var callAuth = CallAuthBridge()
+    /// 账户级权限（userType 黑名单，全局硬性 gate）。三层防护 UI 侧订阅点。
+    @ObservedObject private var permission = SelfPermissionBridge.shared
+
+    /// 组合规则（P spec §2.4）：
+    /// - userType 黑名单命中 → 一律不显示（permission.canCall == false 短路）
+    /// - 未命中黑名单 → prime segment 强制显示（H5 show-video="true"），online 走 callAuth.canCall
+    private var showVideoCall: Bool {
+        permission.canCall && (viewModel.segment == .prime || callAuth.canCall)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -61,7 +73,7 @@ struct LiveListView: View {
     private var cardList: some View {
         LazyVStack(spacing: Theme.Metric.liveListCardGap) {
             ForEach(viewModel.items) { anchor in
-                LiveListUserCard(anchor: anchor)
+                LiveListUserCard(anchor: anchor, showVideoCall: showVideoCall)
                     .onAppear {
                         // 触底加载：最后一项 onAppear + hasMore + 非错误态
                         if anchor.id == viewModel.items.last?.id,

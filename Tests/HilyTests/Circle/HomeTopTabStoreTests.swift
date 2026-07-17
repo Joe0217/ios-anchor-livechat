@@ -30,13 +30,13 @@ final class HomeTopTabStoreTests: XCTestCase {
 
     func test_applyTier_sLevel_orderIsLiveListMatchCircle() {
         let store = HomeTopTabStore()
-        store.applyTier(isSLevel: true)
+        store.applyTier(isSLevel: true, canCall: true)
         XCTAssertEqual(store.availableOrder, [.live, .list, .match, .circle])
     }
 
     func test_applyTier_sLevel_defaultSelectFirstLive() {
         let store = HomeTopTabStore()
-        store.applyTier(isSLevel: true)
+        store.applyTier(isSLevel: true, canCall: true)
         XCTAssertEqual(store.currentOuter, .live)
     }
 
@@ -44,13 +44,13 @@ final class HomeTopTabStoreTests: XCTestCase {
 
     func test_applyTier_nonSLevel_orderIsListMatchLiveCircle() {
         let store = HomeTopTabStore()
-        store.applyTier(isSLevel: false)
+        store.applyTier(isSLevel: false, canCall: true)
         XCTAssertEqual(store.availableOrder, [.list, .match, .live, .circle])
     }
 
     func test_applyTier_nonSLevel_defaultSelectFirstList() {
         let store = HomeTopTabStore()
-        store.applyTier(isSLevel: false)
+        store.applyTier(isSLevel: false, canCall: true)
         XCTAssertEqual(store.currentOuter, .list)
     }
 
@@ -89,7 +89,7 @@ final class HomeTopTabStoreTests: XCTestCase {
         XCTAssertEqual(store.currentOuter, .circle)
 
         // 段位刷新 (例：远程信息后到达，仍是 S 级)
-        store.applyTier(isSLevel: true)
+        store.applyTier(isSLevel: true, canCall: true)
         XCTAssertEqual(store.currentOuter, .circle, "用户曾选 circle 应保留")
     }
 
@@ -98,7 +98,7 @@ final class HomeTopTabStoreTests: XCTestCase {
         // 在新 order 中仍存在 → 保留业务语义 (不动 enum 值，仅 index 重映)
         let store = HomeTopTabStore(initialIsSLevel: true)
         store.tapOuter(.live)  // S 级 index 0
-        store.applyTier(isSLevel: false) // 非 S 级 → [list,match,live,circle] live 现在 index 2
+        store.applyTier(isSLevel: false, canCall: true) // 非 S 级 → [list,match,live,circle] live 现在 index 2
         XCTAssertEqual(store.currentOuter, .live, "用户曾选 live 应在新 order 保留")
         XCTAssertEqual(store.availableOrder, [.list, .match, .live, .circle])
     }
@@ -111,7 +111,7 @@ final class HomeTopTabStoreTests: XCTestCase {
         XCTAssertNil(store.availableOrder)
         XCTAssertNil(store.currentOuter)
         // 阶段 2: 段位到达 (S 级)
-        store.applyTier(isSLevel: true)
+        store.applyTier(isSLevel: true, canCall: true)
         XCTAssertEqual(store.availableOrder, [.live, .list, .match, .circle])
         XCTAssertEqual(store.currentOuter, .live)
     }

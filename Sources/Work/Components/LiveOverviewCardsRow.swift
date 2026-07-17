@@ -7,31 +7,63 @@ import SwiftUI
 ///
 /// ⚠️ 字段语义与 StatCardsRow 冲突（详见 WorkViewModel `dailyCalls` / `weeklyCoins` 注释），
 /// 待真机首次拉取后向用户报告冲突判断。
+///
+/// P 项目权限管理 v2：`canCall=false` 时剔除 Calls Today（属通话数据），
+/// LazyVGrid 动态列数（4 卡 columns=2 → 3 卡 columns=3 单行等宽，视觉平衡）。
 struct LiveOverviewCardsRow: View {
     @ObservedObject var vm: WorkViewModel
+    /// P 项目权限管理：观察 canCall 决定是否显示 Calls Today 卡
+    @ObservedObject private var permission = SelfPermissionBridge.shared
+
+    private struct CardData: Identifiable {
+        let id: String
+        let icon: String
+        let number: String
+        let numberColor: Color
+        let label: String
+    }
+
+    private var cards: [CardData] {
+        var arr: [CardData] = []
+        if permission.canCall {
+            arr.append(CardData(id: "callsToday",
+                                icon: "callsToday",
+                                number: "\(vm.dailyCalls)",
+                                numberColor: Color(hex: 0xFA06F4),
+                                label: L10n.workCallsToday))
+        }
+        arr.append(CardData(id: "coins",
+                            icon: "coins",
+                            number: "\(vm.weeklyCoins)",
+                            numberColor: Color(hex: 0xF9991A),
+                            label: L10n.workCoins))
+        arr.append(CardData(id: "diamonds",
+                            icon: "diamonds",
+                            number: "\(vm.walletDiamonds)",
+                            numberColor: Color(hex: 0xF640DC),
+                            label: L10n.workDiamonds))
+        arr.append(CardData(id: "gems",
+                            icon: "gems",
+                            number: "\(vm.walletGems)",
+                            numberColor: Color(hex: 0x3A8AE0),
+                            label: L10n.workGems))
+        return arr
+    }
+
+    /// 动态列数：4 卡 → 2 列（2×2）；3 卡 → 3 列（单行等宽，视觉平衡）
+    private var gridColumns: [GridItem] {
+        let count = cards.count == 3 ? 3 : 2
+        return Array(repeating: GridItem(.flexible(), spacing: Theme.Metric.statCardGap),
+                     count: count)
+    }
 
     var body: some View {
-        // 卡片间距对齐 3 张卡（StatCardsRow.Theme.Metric.statCardGap = 10）
-        VStack(spacing: Theme.Metric.statCardGap) {
-            HStack(spacing: Theme.Metric.statCardGap) {
-                LiveOverviewCard(icon: "callsToday",
-                                 number: "\(vm.dailyCalls)",
-                                 numberColor: Color(hex: 0xFA06F4),
-                                 label: L10n.workCallsToday)
-                LiveOverviewCard(icon: "coins",
-                                 number: "\(vm.weeklyCoins)",
-                                 numberColor: Color(hex: 0xF9991A),
-                                 label: L10n.workCoins)
-            }
-            HStack(spacing: Theme.Metric.statCardGap) {
-                LiveOverviewCard(icon: "diamonds",
-                                 number: "\(vm.walletDiamonds)",
-                                 numberColor: Color(hex: 0xF640DC),
-                                 label: L10n.workDiamonds)
-                LiveOverviewCard(icon: "gems",
-                                 number: "\(vm.walletGems)",
-                                 numberColor: Color(hex: 0x3A8AE0),
-                                 label: L10n.workGems)
+        LazyVGrid(columns: gridColumns, spacing: Theme.Metric.statCardGap) {
+            ForEach(cards) { card in
+                LiveOverviewCard(icon: card.icon,
+                                 number: card.number,
+                                 numberColor: card.numberColor,
+                                 label: card.label)
             }
         }
     }

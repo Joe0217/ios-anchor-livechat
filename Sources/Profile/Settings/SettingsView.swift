@@ -27,6 +27,9 @@ struct SettingsView: View {
                 accountSection
                 generalSection
                 aboutSection
+                #if DEBUG
+                DebugPermissionSection()
+                #endif
                 logoutSection
             }
             .listStyle(.insetGrouped)
@@ -183,13 +186,8 @@ struct SettingsView: View {
     private var toastOverlay: some View {
         if let msg = toastMessage {
             Text(msg)
-                .font(.system(size: 14))
-                .foregroundColor(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(Color.black.opacity(0.75), in: Capsule())
-                .padding(.top, 60)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .toastStyle()
+                .transition(Toast.transition)
         }
     }
 
