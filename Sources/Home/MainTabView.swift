@@ -405,6 +405,9 @@ struct MainTabView: View {
                         // Batch 3.8：sentinel `__station_list__` → StationListView（独立 HTTP 列表页）
                         if pathValue == MessageListView.stationSentinel {
                             StationListView()
+                        } else if pathValue == MessageListView.callRecordsSentinel {
+                            // 通话历史记录页（对齐 H5 `/communication?from=news&active=0`）
+                            CallRecordListView(path: $messagesPath)
                         } else {
                             let selfYxAccId = SessionStore.shared.user?.yxAccid ?? ""
                             ChatDetailContainer(peerYxAccId: pathValue, selfYxAccId: selfYxAccId)

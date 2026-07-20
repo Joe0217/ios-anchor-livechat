@@ -887,6 +887,19 @@
 "message.systemInbox.admin"             = "المسؤول";
 "message.systemInbox.comingSoon"        = "التفاصيل قريباً";
 
+// Call Records 通话历史记录（对齐 H5 views/communication/records/list.vue）
+"callRecord.list.title"                 = "المكالمات";
+"callRecord.empty"                      = "لا توجد سجلات مكالمات";
+"callRecord.loadingMore"                = "جارٍ التحميل...";
+"callRecord.noMoreData"                 = "لا مزيد من السجلات";
+"callRecord.source.match"               = "مطابقة";
+"callRecord.source.live"                = "مباشر";
+"callRecord.source.private"             = "خاص";
+"callRecord.reason.rejected"            = "رفض";
+"callRecord.reason.timeout"             = "انتهت المهلة";
+"callRecord.reason.canceled"            = "ملغى";
+"callRecord.a11y.missed"                = "مكالمة فائتة";
+
 // Batch 6.1 回复积分 4 tip 文案（guideTip / stimulateTip H5 蓝本硬编码英文,未翻译,ar 兼容显英文）
 "chat.guideTip"        = "Chat to earn rewards – start chatting now!";
 "chat.stimulateTip"    = "More messages from him – Unlock extra diamonds!";

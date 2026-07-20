@@ -273,6 +273,8 @@ struct MessageListView: View {
 
     /// Batch 3.8：Station 详情页 sentinel（MainTabView.navigationDestination 分支识别）
     static let stationSentinel = "__station_list__"
+    /// 通话历史记录页 sentinel（对齐 H5 `/communication?from=news&active=0` 的 Records tab）
+    static let callRecordsSentinel = "__call_records__"
 
     private func handleStickTop(_ session: MessageSession) async {
         let beforeState = store.state

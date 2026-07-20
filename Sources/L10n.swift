@@ -851,6 +851,22 @@ enum L10n {
     static var messageSystemInboxAdmin: String         { localize("message.systemInbox.admin", comment: "Flame 顶部 Admin 客服入口标题") }
     static var messageSystemInboxComingSoon: String    { localize("message.systemInbox.comingSoon", comment: "3 入口详情页留 H-2 未开放 toast") }
 
+    // MARK: - Call Records（通话历史记录页，对齐 H5 views/communication/records/list.vue）
+    static var callRecordListTitle: String     { localize("callRecord.list.title", comment: "通话历史页顶部标题") }
+    static var callRecordEmpty: String         { localize("callRecord.empty", comment: "通话历史空态文案") }
+    static var callRecordLoadingMore: String   { localize("callRecord.loadingMore", comment: "触底加载更多文案") }
+    static var callRecordNoMoreData: String    { localize("callRecord.noMoreData", comment: "已加载完全部记录") }
+    /// 来源标签：匹配 / 直播 / 私聊（对齐 H5 source() 三档 text）
+    static var callRecordSourceMatch: String   { localize("callRecord.source.match", comment: "来源 · Match") }
+    static var callRecordSourceLive: String    { localize("callRecord.source.live", comment: "来源 · Live") }
+    static var callRecordSourcePrivate: String { localize("callRecord.source.private", comment: "来源 · Private") }
+    /// 未接原因：Rejected / Timeout / Canceled（对齐 H5 missedReason() 三档）
+    static var callRecordReasonRejected: String { localize("callRecord.reason.rejected", comment: "未接原因 · Rejected") }
+    static var callRecordReasonTimeout: String  { localize("callRecord.reason.timeout", comment: "未接原因 · Timeout") }
+    static var callRecordReasonCanceled: String { localize("callRecord.reason.canceled", comment: "未接原因 · Canceled") }
+    /// a11y：未接来电语义标签
+    static var callRecordA11yMissed: String     { localize("callRecord.a11y.missed", comment: "a11y 未接来电语义") }
+
     // MARK: - Batch 6.1 回复积分 4 tip 文案（H5 蓝本 en.json:820-821 + chat/index.vue:43-44 硬编码）
     static var chatGuideTip: String        { localize("chat.guideTip",       comment: "初次进入付费聊天页引导") }
     static var chatStimulateTip: String    { localize("chat.stimulateTip",   comment: "用户连发 ≥10 条付费消息激励主播") }

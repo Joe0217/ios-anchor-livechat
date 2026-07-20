@@ -844,6 +844,19 @@
 "message.systemInbox.admin"             = "Administrator";
 "message.systemInbox.comingSoon"        = "Details coming soon";
 
+// Call Records 通话历史记录（对齐 H5 views/communication/records/list.vue）
+"callRecord.list.title"                 = "Communication";
+"callRecord.empty"                      = "No call records yet";
+"callRecord.loadingMore"                = "Loading...";
+"callRecord.noMoreData"                 = "No more records";
+"callRecord.source.match"               = "Match";
+"callRecord.source.live"                = "Live";
+"callRecord.source.private"             = "Private";
+"callRecord.reason.rejected"            = "Rejected";
+"callRecord.reason.timeout"             = "Timeout";
+"callRecord.reason.canceled"            = "Canceled";
+"callRecord.a11y.missed"                = "Missed call";
+
 // Batch 6.1 回复积分 4 tip 文案（H5 蓝本 en.json:820-821 + chat/index.vue:43-44 硬编码）
 "chat.guideTip"        = "Chat to earn rewards – start chatting now!";
 "chat.stimulateTip"    = "More messages from him – Unlock extra diamonds!";

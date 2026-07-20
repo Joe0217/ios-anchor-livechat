@@ -887,6 +887,19 @@
 "message.systemInbox.admin"             = "Yönetici";
 "message.systemInbox.comingSoon"        = "Ayrıntılar yakında";
 
+// Call Records 通话历史记录（对齐 H5 views/communication/records/list.vue）
+"callRecord.list.title"                 = "İletişim";
+"callRecord.empty"                      = "Henüz arama kaydı yok";
+"callRecord.loadingMore"                = "Yükleniyor...";
+"callRecord.noMoreData"                 = "Başka kayıt yok";
+"callRecord.source.match"               = "Eşleşme";
+"callRecord.source.live"                = "Canlı";
+"callRecord.source.private"             = "Özel";
+"callRecord.reason.rejected"            = "Reddedildi";
+"callRecord.reason.timeout"             = "Zaman aşımı";
+"callRecord.reason.canceled"            = "İptal edildi";
+"callRecord.a11y.missed"                = "Cevapsız arama";
+
 // Batch 6.1 回复积分 4 tip 文案（guideTip / stimulateTip H5 蓝本硬编码英文,未翻译,tr 兼容显英文）
 "chat.guideTip"        = "Chat to earn rewards – start chatting now!";
 "chat.stimulateTip"    = "More messages from him – Unlock extra diamonds!";
