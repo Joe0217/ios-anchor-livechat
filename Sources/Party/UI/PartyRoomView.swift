@@ -908,6 +908,14 @@ struct PartyRoomView: View {
 
         let targetSeat = store.seatList.first { $0.userId == uid }
         let targetRole = targetSeat?.typedRole
+        // 首个空音频位(seatType == voice + isOccupied==0 + lockFlag != 1);目标不在麦时 Take 用此位
+        let firstEmptyAudioSeatIndex: Int? = store.seatList
+            .first { seat in
+                seat.seatType == PartyRoomSeatType.voice.rawValue
+                    && (seat.isOccupied ?? 0) == 0
+                    && (seat.lockFlag ?? 0) != 1
+            }?
+            .seatIndex
 
         return PartyAdminContext(
             selfRole: store.selfRole,
@@ -915,6 +923,11 @@ struct PartyRoomView: View {
             targetRoleType: targetRole,
             roomId: store.roomInfo?.id ?? roomId,
             kickOutHours: 24,   // TODO: 从 partyBaseConfig.kickOutInterval 派生(base config 未接入前默认 24h)
+            firstEmptyAudioSeatIndex: firstEmptyAudioSeatIndex,
+            onTakeToMic: { targetUserId, seatIndex in
+                Task { await store.requestTakeToMic(seatIndex: seatIndex, targetUserId: targetUserId) }
+                userCardForUserId = nil
+            },
             onKickFromMic: { targetUserId, seatIndex in
                 Task { await store.requestKickFromMic(seatIndex: seatIndex, targetUserId: targetUserId) }
                 userCardForUserId = nil

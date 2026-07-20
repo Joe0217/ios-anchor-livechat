@@ -974,6 +974,32 @@ final class PartyStore: ObservableObject {
 
     // MARK: - 房主/房管 名片卡 admin 操作(对齐 H5 party-user-card.vue)
 
+    /// 抱上麦。对齐 H5 `feachHoldSeat({operatorType: 4, seatIndex, targetUserId})` + Android `holdSeat opType=4`
+    /// - 前置:selfRole owner/admin;seatIndex 是**空位**(caller 已挑选)
+    /// - 被抱上者收 IM `HOLD_ON_MIKE(4)` → updateMedia 推流
+    func requestTakeToMic(seatIndex: Int, targetUserId: String) async {
+        guard let info = roomInfo, roomState == .joined else { return }
+        guard selfRole == .owner || selfRole == .admin else {
+            AppLogger.party.notice("[PartyStore] holdSeat(take) rejected: not owner/admin")
+            return
+        }
+        do {
+            try await PartyAPI.holdSeat(
+                roomId: info.id ?? "",
+                seatIndex: seatIndex,
+                targetUserId: targetUserId,
+                yxRoomId: info.yxRoomId ?? "",
+                operatorType: 4,
+                roomTempId: info.roomTempIdInt
+            )
+        } catch let api as PartyAPIError {
+            lastError = PartyRoomErrorMapper.map(api)
+        } catch {
+            lastError = .underlying(.networkError)
+            AppLogger.party.error("[PartyStore] holdSeat(take) failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
     /// 抱下麦(仅"抱下"分支)。对齐 H5 `feachHoldSeat({operatorType: 3, seatIndex, targetUserId})`
     /// - 前置:selfRole owner/admin;目标已在麦位(seatIndex/targetUserId 双传)
     /// - 主态无 toast;被抱下者收 IM "You're off mic."

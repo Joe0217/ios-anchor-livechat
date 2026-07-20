@@ -747,13 +747,22 @@ struct UserCardPopup: View {
                     ctx.onToggleMute(seatIndex, !ctx.isTargetMuted)
                 }
             }
-            // 2. Take/Leave(抱下麦)
+            // 2. Take/Leave 互斥切换(对齐 H5 单按钮 isOnMic > -1 ? 'Leave' : 'Take')
             if ctx.canShowKickFromMic, let seat = ctx.targetSeat, let seatIndex = seat.seatIndex {
+                // 目标在麦 → Leave(抱下麦)
                 partyAdminButton(
                     imageName: "partyUserCardKickMic",
                     label: L10n.userCardPartyKickFromMic
                 ) {
                     ctx.onKickFromMic(info.userId, seatIndex)
+                }
+            } else if ctx.canShowTakeToMic, let emptySeatIndex = ctx.firstEmptyAudioSeatIndex {
+                // 目标不在麦 + 有空音频位 → Take(抱上麦,opType=4)
+                partyAdminButton(
+                    imageName: "partyUserCardTakeMic",
+                    label: L10n.userCardPartyTake
+                ) {
+                    ctx.onTakeToMic(info.userId, emptySeatIndex)
                 }
             }
             // 3. Set/Remove Admin(仅 owner)

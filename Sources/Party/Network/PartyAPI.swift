@@ -188,29 +188,75 @@ enum PartyAPI {
         )
     }
 
-    /// 房管列表（房主设置页 Admin 子页拉）。**待真机验证 path/字段**（对齐 agent-recon-field-names-unverified rule）
-    static func roomAdminList(roomId: String) async throws -> [PartyRoomAdmin] {
+    // 房管设置/撤销：见下方 `setAdmin(roomId:userId:operationType:)`（party-user-card 已有，复用）
+    // 房管列表：H5 用户端无独立接口；用 `partyOnlineViewers(type: 1)` + 客户端筛 `roomRoleType == 2`
+
+    // MARK: - room rank / viewers（顶栏财富/荣誉/观众入口）
+
+    /// 派对房贡献榜（对齐 H5 `apiGetPartyContributionRank`；顶栏 wealth 数据点击触发）。
+    ///
+    /// **path**：`/sapi/weidou/v1/client/party/room/rank/getContributionRanks`
+    /// **body**：`{roomId, rankType: 'day'|'week'|'month', periodType?: 'CURRENT'|'LAST'}`
+    /// **response**：`{rankList: [PartyRankEntry], myRank: {...}, duration: Int(秒)}`
+    ///
+    /// MVP 只暴露 rankType/periodType 参数；iOS 侧 sheet 默认 daily + CURRENT。
+    static func partyContributionRank(roomId: String,
+                                      rankType: String = "day",
+                                      periodType: String? = nil) async throws -> [PartyRankEntry] {
+        var body: [String: Any] = ["roomId": roomId, "rankType": rankType]
+        if let p = periodType { body["periodType"] = p }
         let data = try await PartyAPIClient.shared.post(
-            "\(pathPrefix)/room/getRoomAdminList",
-            body: ["roomId": roomId]
+            "\(pathPrefix)/room/rank/getContributionRanks",
+            body: body
         )
-        return try decodeArrayOrEmpty(data, as: PartyRoomAdmin.self)
+        return try decodeRankResponse(data)
     }
 
-    /// 设为房管
-    static func setRoomAdmin(roomId: String, userId: String) async throws {
-        _ = try await PartyAPIClient.shared.post(
-            "\(pathPrefix)/room/setRoomAdmin",
-            body: ["roomId": roomId, "userId": userId]
+    /// 派对房荣誉榜（对齐 H5 `apiGetPartyHonorRank`；顶栏 honor 数据点击触发）。
+    ///
+    /// **path**：`/sapi/weidou/v1/client/party/room/rank/getHonorRanks`
+    /// H5 一致，body/response 与 contribution 相同（Honor 无月榜由 UI 层限制）。
+    static func partyHonorRank(roomId: String,
+                               rankType: String = "day",
+                               periodType: String? = nil) async throws -> [PartyRankEntry] {
+        var body: [String: Any] = ["roomId": roomId, "rankType": rankType]
+        if let p = periodType { body["periodType"] = p }
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/rank/getHonorRanks",
+            body: body
         )
+        return try decodeRankResponse(data)
     }
 
-    /// 撤销房管
-    static func removeRoomAdmin(roomId: String, userId: String) async throws {
-        _ = try await PartyAPIClient.shared.post(
-            "\(pathPrefix)/room/removeRoomAdmin",
-            body: ["roomId": roomId, "userId": userId]
+    /// 派对房在线观众列表（对齐 H5 `apiGetPartyOnlineList`；顶栏观众数点击触发）。
+    ///
+    /// **path**：`/sapi/weidou/v1/client/party/room/getViewers`
+    /// **body**：`{roomId, offset: Any?, pageSize, needTotalCount: Bool}`
+    /// **response**：数组或 `{list, offset}`；MVP 无分页,一次拉 50 条。
+    static func partyOnlineViewers(roomId: String, pageSize: Int = 50, type: Int? = nil) async throws -> [PartyRankEntry] {
+        var body: [String: Any] = [
+            "roomId": roomId,
+            "offset": NSNull(),
+            "pageSize": pageSize,
+            "needTotalCount": true
+        ]
+        // type=1 触发后端过滤为"房主/房管"候选（H5 party-admin-popup.vue params 传 type:1）
+        if let type { body["type"] = type }
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/getViewers",
+            body: body
         )
+        return try decodeArrayOrEmpty(data, as: PartyRankEntry.self)
+    }
+
+    /// Rank 接口特化解码：优先 `{rankList: [...]}`，其次直接数组，再次 wrapper key 兜底。
+    private static func decodeRankResponse(_ data: Data) throws -> [PartyRankEntry] {
+        // 1. 直接对象 `{rankList: [...]}`
+        if let obj = try? decoder.decode(PartyRankResponse.self, from: data) {
+            return obj.rankList
+        }
+        // 2. envelope 分页数组 fallback（复用 decodeArrayOrEmpty）
+        return try decodeArrayOrEmpty(data, as: PartyRankEntry.self)
     }
 
     // MARK: - lock room (E spec §3 Lock Room)

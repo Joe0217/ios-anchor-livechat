@@ -11,9 +11,10 @@ import Foundation
 /// - 目标非房主(隐藏)
 /// - admin 只能操作 audience(观众/普通用户);owner 可操作 admin+audience
 ///
-/// **单项按钮显示规则**:
+/// **单项按钮显示规则**(对齐 H5 party-user-card.vue L649 单按钮切换):
 /// - `Mute/Unmute`:目标在**语音麦位**上(seatType=voice)+ 目标非房主
-/// - `Take/Leave`(抱下麦,不做抱上):目标在麦上 + 目标非房主
+/// - `Take`(抱上麦):目标**不在麦位** + 目标非房主(caller 需保证有空音频位;PartyStore MVP 走首空位)
+/// - `Leave`(抱下麦):目标**在麦位** + 目标非房主
 /// - `Set/Remove Admin`:**仅 owner** 可看;目标可以是 audience(设为 admin) 或 admin(移除)
 /// - `Kick out`:目标是 audience(普通用户);owner/admin 均可点
 struct PartyAdminContext {
@@ -28,8 +29,14 @@ struct PartyAdminContext {
     /// 有限时长踢房时长(小时,H5 partyBaseConfig.kickOutInterval / 3600)。<=0 时 UI 按钮文案降级为 "Limited"
     let kickOutHours: Int
 
+    /// 首个空音频位 seatIndex(caller 挑;Take 按钮 tap 时用此位调 holdSeat opType=4)。
+    /// nil = 无空音频位(UI 层降级 toast "All seats occupied")。
+    let firstEmptyAudioSeatIndex: Int?
+
     // MARK: - Actions(由 caller 提供,内部通常调 PartyStore.requestXxx)
 
+    /// 抱上麦(仅目标不在麦位时可触发;seatIndex 由 caller 挑首空音频位)
+    let onTakeToMic: (_ targetUserId: String, _ seatIndex: Int) -> Void
     /// 抱下麦(仅目标在麦上时可触发;seatIndex 由 targetSeat.seatIndex 派生)
     let onKickFromMic: (_ targetUserId: String, _ seatIndex: Int) -> Void
     /// 切换禁麦(mute=true 禁麦, false 解禁)
@@ -66,6 +73,12 @@ struct PartyAdminContext {
     var canShowKickFromMic: Bool {
         guard let seat = targetSeat, seat.seatIndex != nil else { return false }
         return true
+    }
+
+    /// 是否显示"抱上麦"(目标不在麦位 + 至少有 1 空音频位)。
+    /// H5 单按钮 Take/Leave 切换 —— iOS 通过 canShowTakeToMic vs canShowKickFromMic 互斥实现同款视觉。
+    var canShowTakeToMic: Bool {
+        targetSeat == nil && firstEmptyAudioSeatIndex != nil
     }
 
     /// 是否显示 Set/Remove Admin(**仅 owner** 可见)
