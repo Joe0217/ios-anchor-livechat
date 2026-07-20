@@ -514,6 +514,7 @@
 "userCard.unblockConfirm.cancel"          = "إلغاء";
 "userCard.uidCopiedToast"                 = "تم نسخ المعرف إلى الحافظة";
 "userCard.uidCopyA11y"                    = "نسخ المعرف";
+"userCard.party.take"                     = "دعوة للصعود";
 "userCard.party.mute"                     = "كتم";
 "userCard.party.unmute"                   = "إلغاء الكتم";
 "userCard.party.kickFromMic"              = "إنزال";
@@ -1194,6 +1195,14 @@
 "party.micApplication.switchOffBody"     = "لن يتمكن المستخدمون من طلب المقاعد بعد الآن.";
 "party.micApplication.switchOnSystemMsg" = "تم تشغيل طلبات المايك";
 "party.micApplication.switchOffSystemMsg" = "تمت إزالة طلبات المايك";
+"party.micApplication.cancel"            = "إلغاء الطلب";
+"party.micApplication.tapEmptySeatHint"  = "اضغط على مقعد فارغ لتقديم طلب";
+"party.micApplication.submit"            = "طلب المقعد";
+"party.approveSeatPicker.title"          = "تعيين مقعد";
+"party.approveSeatPicker.subtitleFormat" = "الموافقة على %@ لأي مقعد؟";
+"party.approveSeatPicker.seatNumberFormat" = "المقعد رقم %d";
+"party.approveSeatPicker.voiceSeat"      = "مقعد صوتي";
+"party.approveSeatPicker.videoSeat"      = "مقعد فيديو";
 
 /* MARK: - H-0 用户详情页 */
 "userProfile.uid.prefix"                 = "المعرف: ";
@@ -1534,6 +1543,14 @@
 "partyRoom.a11y.wealthRank"              = "قائمة الثروة";
 "partyRoom.a11y.honorRank"               = "قائمة الشرف";
 "partyRoom.a11y.pk"                      = "بدء PK";
+
+/* 顶栏 Rank / Viewers sheet */
+"partyRoom.rank.tab.contribution"        = "المساهمة";
+"partyRoom.rank.tab.honor"               = "الشرف";
+"partyRoom.rank.viewersTitle"            = "المشاهدون";
+"partyRoom.rank.emptyRank"               = "لا يوجد ترتيب بعد";
+"partyRoom.rank.emptyViewers"            = "لا يوجد مشاهدون بعد";
+
 "partyRoom.tab.all"                      = "الكل";
 "partyRoom.tab.chat"                     = "الدردشة";
 "partyRoom.tab.gift"                     = "الهدية";
@@ -1590,10 +1607,6 @@
 "partyRoom.adminSeat.switchHere"         = "التبديل إلى هنا";
 "partyRoom.adminSeat.lock"               = "قفل المقعد";
 "partyRoom.adminSeat.unlock"             = "فتح المقعد";
-"partyRoom.otherSeat.title"              = "إدارة المستخدم";
-"partyRoom.otherSeat.mute"               = "كتم صوت المقعد";
-"partyRoom.otherSeat.unmute"             = "إلغاء كتم المقعد";
-"partyRoom.otherSeat.viewProfile"        = "عرض الملف الشخصي";
 
 // v25.1 (2026-07-17) LiveGiftTask · 三语真翻译从 H5 ar.json 迁移
 "liveRoom.task.sheet.title"              = "مهمة البث المباشر";

@@ -36,7 +36,7 @@ struct ToolsSection: View {
         if showBigR { arr.append(("toolBigR", L10n.toolBigR)) }
         arr.append(contentsOf: [
             ("toolWorkingGuide", L10n.toolWorkingGuide),
-            ("toolBackpack", L10n.toolBackpack),
+            ("toolBackpack", L10n.toolProps),
             ("toolLiveData", L10n.toolLiveData),
             ("toolPartyData", L10n.toolPartyData),
             ("toolMyGuardian", L10n.toolMyGuardian),
@@ -132,8 +132,11 @@ struct ToolsSection: View {
                     } else if tools[i].icon == "toolBigR" {
                         NavigationLink(value: WorkRoute.bigR) { cell }
                             .buttonStyle(.plain)
+                    } else if tools[i].icon == "toolBackpack" {
+                        // H · Props（虚拟道具）· 对齐 H5 work/index.vue:148 href='/virtualProps'
+                        NavigationLink(value: WorkRoute.props) { cell }
+                            .buttonStyle(.plain)
                     } else {
-                        // Backpack（Props）：路线图未安排，保持无 handler 静态显示
                         cell
                     }
                 }

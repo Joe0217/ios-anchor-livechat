@@ -470,6 +470,7 @@
 "userCard.unblockConfirm.cancel"          = "Cancel";
 "userCard.uidCopiedToast"                 = "UID copied to clipboard";
 "userCard.uidCopyA11y"                    = "Copy UID";
+"userCard.party.take"                     = "Take";
 "userCard.party.mute"                     = "Mute";
 "userCard.party.unmute"                   = "Unmute";
 "userCard.party.kickFromMic"              = "Leave";
@@ -1152,6 +1153,14 @@
 "party.micApplication.switchOffBody"     = "Users can no longer request seats.";
 "party.micApplication.switchOnSystemMsg" = "The mic application is turned on";
 "party.micApplication.switchOffSystemMsg" = "The mic application is removed";
+"party.micApplication.cancel"            = "Cancel Request";
+"party.micApplication.tapEmptySeatHint"  = "Tap an empty seat to request";
+"party.micApplication.submit"            = "Request Seat";
+"party.approveSeatPicker.title"          = "Assign Seat";
+"party.approveSeatPicker.subtitleFormat" = "Approve %@ to which seat?";
+"party.approveSeatPicker.seatNumberFormat" = "Seat #%d";
+"party.approveSeatPicker.voiceSeat"      = "Voice seat";
+"party.approveSeatPicker.videoSeat"      = "Video seat";
 
 /* MARK: - H-0 用户详情页 */
 "userProfile.uid.prefix"                 = "uid: ";
@@ -1574,6 +1583,13 @@
 "partyRoom.a11y.wealthRank"              = "Wealth ranking";
 "partyRoom.a11y.honorRank"               = "Honor ranking";
 "partyRoom.a11y.pk"                      = "Start PK";
+
+/* 顶栏 Rank / Viewers sheet（对齐 H5 room-rank.vue） */
+"partyRoom.rank.tab.contribution"        = "Contribution";
+"partyRoom.rank.tab.honor"               = "Honor";
+"partyRoom.rank.viewersTitle"            = "Viewers";
+"partyRoom.rank.emptyRank"               = "No ranking yet";
+"partyRoom.rank.emptyViewers"            = "No viewers yet";
 "partyRoom.tab.all"                      = "All";
 "partyRoom.tab.chat"                     = "Chat";
 "partyRoom.tab.gift"                     = "Gift";
@@ -1630,10 +1646,6 @@
 "partyRoom.adminSeat.switchHere"         = "Switch here";
 "partyRoom.adminSeat.lock"               = "Lock seat";
 "partyRoom.adminSeat.unlock"             = "Unlock seat";
-"partyRoom.otherSeat.title"              = "Manage user";
-"partyRoom.otherSeat.mute"               = "Mute seat";
-"partyRoom.otherSeat.unmute"             = "Unmute seat";
-"partyRoom.otherSeat.viewProfile"        = "View profile";
 
 // v25.1 (2026-07-17) LiveGiftTask · 三语真翻译从 H5 locales 迁移(user feedback: 文案要对齐 H5)
 "liveRoom.task.sheet.title"              = "Live Stream Task";

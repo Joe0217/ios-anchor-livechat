@@ -398,6 +398,22 @@ enum L10n {
         static var micApplicationSwitchOffBody: String { localize("party.micApplication.switchOffBody", comment: "关闭 Mic Application 确认正文") }
         static var micApplicationSwitchOnSystemMsg: String { localize("party.micApplication.switchOnSystemMsg", comment: "开启 Mic Application 公屏系统消息") }
         static var micApplicationSwitchOffSystemMsg: String { localize("party.micApplication.switchOffSystemMsg", comment: "关闭 Mic Application 公屏系统消息") }
+        /// 观众视角底部 CTA：排队中 → 放弃申请（对齐安卓 tvConfirm "放弃申请"）
+        static var micApplicationCancel: String { localize("party.micApplication.cancel", comment: "观众放弃申请 CTA") }
+        /// 观众视角底部 CTA 未排队提示：请先点击空麦位提交申请
+        static var micApplicationTapEmptySeatHint: String { localize("party.micApplication.tapEmptySeatHint", comment: "观众视角未排队 CTA 提示") }
+        /// 观众视角底部 CTA：tap 空位打开 Sheet 后手动点击提交申请（对齐安卓 tvConfirm "申请上麦"）
+        static var micApplicationSubmit: String { localize("party.micApplication.submit", comment: "观众提交申请 CTA") }
+        /// 批准申请-选座 sheet 标题（对齐安卓 SeatRosterDialog(isAgreeOnSeatMode=true)）
+        static var approveSeatPickerTitle: String { localize("party.approveSeatPicker.title", comment: "批准申请-选座 sheet 标题") }
+        /// 批准申请-选座 sheet 副标题格式（%@ = 申请人昵称）
+        static var approveSeatPickerSubtitleFormat: String { localize("party.approveSeatPicker.subtitleFormat", comment: "批准申请-选座 sheet 副标题") }
+        /// 选座 row 座位号格式（%d = seatIndex）
+        static var approveSeatPickerSeatNumberFormat: String { localize("party.approveSeatPicker.seatNumberFormat", comment: "选座 row 座位号") }
+        /// 语音座标签
+        static var approveSeatPickerVoiceSeat: String { localize("party.approveSeatPicker.voiceSeat", comment: "语音座标签") }
+        /// 视频座标签
+        static var approveSeatPickerVideoSeat: String { localize("party.approveSeatPicker.videoSeat", comment: "视频座标签") }
 
         // MARK: - E spec §3 MC Seat（接待位 · 2026-07-14）
         static var mcSeatSheetTitle: String { localize("party.mcSeat.sheetTitle", comment: "MC Seat 选择 sheet 标题") }
@@ -446,6 +462,13 @@ enum L10n {
         static var a11yHonorRank: String { localize("partyRoom.a11y.honorRank", comment: "荣耀榜入口 a11y") }
         // v12：PK 入口 a11y
         static var a11yPk: String { localize("partyRoom.a11y.pk", comment: "PK 入口 a11y") }
+
+        // 顶栏 Rank / Viewers sheet（对齐 H5 room-rank.vue）
+        static var rankTabContribution: String { localize("partyRoom.rank.tab.contribution", comment: "榜单主 tab · 贡献") }
+        static var rankTabHonor: String { localize("partyRoom.rank.tab.honor", comment: "榜单主 tab · 荣誉") }
+        static var rankViewersTitle: String { localize("partyRoom.rank.viewersTitle", comment: "观众列表 sheet 标题") }
+        static var rankEmptyRank: String { localize("partyRoom.rank.emptyRank", comment: "榜单空态") }
+        static var rankEmptyViewers: String { localize("partyRoom.rank.emptyViewers", comment: "观众列表空态") }
 
         // 公屏 tab strip（PartyRoomChatTabStrip）
         static var tabAll: String { localize("partyRoom.tab.all", comment: "公屏 tab All") }
@@ -510,12 +533,6 @@ enum L10n {
         static var adminActionSwitchHere: String { localize("partyRoom.adminSeat.switchHere", comment: "切到此麦位") }
         static var adminActionLock: String { localize("partyRoom.adminSeat.lock", comment: "锁麦位按钮") }
         static var adminActionUnlock: String { localize("partyRoom.adminSeat.unlock", comment: "解锁麦位按钮") }
-
-        // v15：房主/房管他人占用位管理动作（对齐 H5 my-mic-tool.vue Mute/Unmute + openUserCard）
-        static var otherSeatAdminActionsTitle: String { localize("partyRoom.otherSeat.title", comment: "他人麦位管理动作标题") }
-        static var adminActionMute: String { localize("partyRoom.otherSeat.mute", comment: "禁麦按钮") }
-        static var adminActionUnmute: String { localize("partyRoom.otherSeat.unmute", comment: "解禁麦按钮") }
-        static var adminActionViewProfile: String { localize("partyRoom.otherSeat.viewProfile", comment: "查看用户资料按钮") }
     }
 
     // MARK: - Work 工作台（设计稿还原）
@@ -1390,6 +1407,7 @@ enum L10n {
     /// 派对房 admin action row 按钮文案(对齐 H5 party-user-card.vue L644-666)
     static var userCardPartyMute: String { localize("userCard.party.mute", comment: "禁麦按钮") }
     static var userCardPartyUnmute: String { localize("userCard.party.unmute", comment: "解禁麦按钮") }
+    static var userCardPartyTake: String { localize("userCard.party.take", comment: "抱上麦按钮(对齐 H5 party.Take)") }
     static var userCardPartyKickFromMic: String { localize("userCard.party.kickFromMic", comment: "抱下麦按钮") }
     static var userCardPartySetAdmin: String { localize("userCard.party.setAdmin", comment: "设为房管按钮") }
     static var userCardPartyRemoveAdmin: String { localize("userCard.party.removeAdmin", comment: "移除房管按钮") }

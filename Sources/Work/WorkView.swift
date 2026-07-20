@@ -218,6 +218,8 @@ enum WorkRoute: Hashable {
     case myGuardian         // Downloads UI 新增（H5 蓝本无此入口），未来落地页替换 ComingSoon
     case newbie             // J 里程碑：新手任务
     case bigR               // J 里程碑：Star User 大 R 名单
+    case props              // H · Props 虚拟道具主背包页（对齐 H5 /virtualProps）
+    case propsRules         // H · Props FAQ 规则页（对齐 H5 /liveRule?type=2）
     /// 直播结果页（B spec v7 从 fullScreenCover 改为 push 页面；LiveRoomView state=.ended 触发切 tab + path 重建）。
     /// 关联字段：begin/endTimestamp（毫秒）+ endType（强制下播原因；nil 表示用户主动 endLive）
     case liveResult(begin: Int64, end: Int64, endType: Int?)

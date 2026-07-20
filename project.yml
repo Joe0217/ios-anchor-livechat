@@ -7,13 +7,15 @@ options:
   groupSortPosition: top
   developmentLanguage: en
 # 打包环境切换：Archive 时通过 Scheme 选择注入哪套 xcconfig
-#   - Hily scheme      → Archive 用 Release       → Prod（正式上架）
-#   - Hily-Test scheme → Archive 用 Release-Test  → Test（预发布/QA 分发）
-# Release-Test 走 release 优化档（同 Release），只是 xcconfig 换成 Config-Test
+#   - Hily scheme      → Archive 用 Release       → Prod（anchor.hnhily.link，正式上架）
+#   - Hily-Test scheme → Archive 用 Release-Test  → Test 预发布（anchorpre.cphub.link，QA 回归）
+#   - Hily-Dev scheme  → Archive 用 Release-Dev   → Dev（anchor.cphub.link，日常测试分发）
+# Release-Test / Release-Dev 均走 release 优化档（同 Release），仅 xcconfig 不同
 configs:
   Debug: debug
   Release: release
   Release-Test: release
+  Release-Dev: release
 settings:
   base:
     MARKETING_VERSION: "1.0.0"
@@ -57,14 +59,16 @@ targets:
         embed: true
         codeSign: true
     # 多环境密钥：
-    #   - Debug        → Dev（日常 Run/真机调试）
-    #   - Release      → Prod（Hily scheme Archive 上架用）
-    #   - Release-Test → Test（Hily-Test scheme Archive 分发测试用）
-    # 打测试包：Xcode 顶部 Scheme 选 Hily-Test → Product → Archive，不改本文件
+    #   - Debug        → Dev（日常 Run/真机调试，anchor.cphub.link）
+    #   - Release      → Prod（Hily scheme Archive 上架用，anchor.hnhily.link）
+    #   - Release-Test → Test 预发布（Hily-Test scheme Archive QA 回归用，anchorpre.cphub.link）
+    #   - Release-Dev  → Dev release 型（Hily-Dev scheme Archive 日常测试分发，anchor.cphub.link）
+    # 打包切环境：Xcode 顶部 Scheme 三选一 → Product → Archive，不改本文件
     configFiles:
       Debug: Config/Config-Dev.xcconfig
       Release: Config/Config-Prod.xcconfig
       Release-Test: Config/Config-Test.xcconfig
+      Release-Dev: Config/Config-Dev-Archive.xcconfig
     settings:
       base:
         # 相芯授权证书 authpack 绑定的就是这个包名，给相芯时必须原样一致
@@ -338,6 +342,13 @@ targets:
       - path: Sources/Match/MatchToast.swift
       # #3d：人脸检测 protocol + stub（纯 protocol，无 FUManager 依赖）
       - path: Sources/Match/FaceDetectionService.swift
+      # H · Props 虚拟道具 M1 Step 1a：Models + Service protocol + Fake + Store（纯 Foundation + Combine，零 SDK 依赖）
+      # 注意：LivePropsService.swift (Step 1c 待建) 依赖 PartyAPIClient/SapiTokenStore 不入 tests；
+      #      UI 层 PropsMainView 等依赖 SwiftUI/L10n 也不入 tests。
+      - path: Sources/Props/Models/PropModels.swift
+      - path: Sources/Props/Services/PropsService.swift
+      - path: Sources/Props/Services/PropsServiceFake.swift
+      - path: Sources/Props/Store/PropsInventoryStore.swift
       # H-4 里程碑（公共礼物面板 step 1）：纯逻辑层 Store + Config + DataSource protocol + BalanceSource protocol
       # 注意：Config.swift preset factories / DataSource.swift DefaultGiftDataSource+IMGiftDataSource 依赖
       #      GiftMessageServiceProtocol/GiftService/L10n，用 #if !HILY_TESTS 屏蔽；tests 只覆盖纯逻辑层。
@@ -365,6 +376,23 @@ targets:
       - path: Sources/Party/Network/PartyGiftSendServiceProtocol.swift
       - path: Sources/Party/Network/PartyBalanceServiceProtocol.swift
       - path: Sources/Party/UI/Gift/PartyGiftPanelBridge.swift
+      # H 里程碑 · 直播间任务面板(LiveGiftTask)Step 1a：Model + Service protocol + 4 Store 全部零 SDK 依赖
+      # 依赖：CodableExtensions (decodeFlexibleInt) + TaskCenterModels (ActiveTycoonTaskVO 复用)
+      - path: Sources/Core/Extensions/CodableExtensions.swift
+      - path: Sources/Work/TaskCenter/TaskCenterModels.swift
+      - path: Sources/Live/GiftTask/LiveGiftTaskModels.swift
+      - path: Sources/Live/GiftTask/LiveGiftTaskService.swift
+      - path: Sources/Live/GiftTask/LiveGiftTaskStore.swift
+      - path: Sources/Live/GiftTask/LiveGiftTaskHistoryStore.swift
+      - path: Sources/Live/GiftTask/ActiveTycoonTaskStore.swift
+      - path: Sources/Live/GiftTask/LiveGiftTaskSheetStore.swift
+      # F-1a Task 1-6 (2026-07-17)：派对房 PK 战队 · 状态枚举 + double/string 兼容 + 错误枚举 + 主 state Codable + 10 endpoints + 12 IM payload + 全局开关 Java Map style parser（纯 Foundation）
+      - path: Sources/Party/Battle/Models/PartyBattleTypes.swift
+      - path: Sources/Party/Battle/Models/PartyBattleServiceError.swift
+      - path: Sources/Party/Battle/Models/PartyBattleModels.swift
+      - path: Sources/Party/Battle/Models/PartyBattleAPIModels.swift
+      - path: Sources/Party/Battle/Models/PartyBattleIMPayloads.swift
+      - path: Sources/Party/Battle/Services/PartyBattleGlobalConfigParser.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.anchor.livechat.tests
@@ -390,7 +418,8 @@ schemes:
       config: Debug
     archive:
       config: Release
-  # 打测试包专用 scheme：Run 仍走 Dev（Debug），只在 Archive 时用 Config-Test.xcconfig。
+  # Test 预发布 scheme：Archive 走 Config-Test.xcconfig（anchorpre.cphub.link），
+  # 与 Prod 共享后端资源和账号体系，仅接口域名不同，用于上架前 QA 回归验证。
   # 用法：Xcode 顶部 Scheme 切到 Hily-Test → Product → Archive → 分发给 QA。
   Hily-Test:
     build:
@@ -404,6 +433,21 @@ schemes:
       config: Debug
     archive:
       config: Release-Test
+  # Dev 分发 scheme：Archive 走 Config-Dev-Archive.xcconfig（anchor.cphub.link），
+  # 密钥/账号/云信/声网与日常 Cmd+R Run 完全一致，供测试用 Dev 账号联调。
+  # 用法：Xcode 顶部 Scheme 切到 Hily-Dev → Product → Archive → 分发给测试。
+  Hily-Dev:
+    build:
+      targets:
+        Hily: all
+    run:
+      config: Debug
+    profile:
+      config: Release-Dev
+    analyze:
+      config: Debug
+    archive:
+      config: Release-Dev
   # 单测专用 scheme：build action 只编 HilyTests，不碰 Hily.app/FURenderKit，模拟器/真机皆可跑。
   # 跑法：xcodebuild test -workspace Hily.xcworkspace -scheme HilyTests -destination 'platform=iOS Simulator,name=iPhone 16 Pro'
   HilyTests:

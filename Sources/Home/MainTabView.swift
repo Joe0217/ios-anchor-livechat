@@ -360,13 +360,15 @@ struct MainTabView: View {
                                 // H5 income/integral 分别跳独立榜单页,iOS 首版统一到 pointsRank)
                                 .environment(\.rankProgressAction, { _ in homePath.append(WorkRoute.pointsRank) })
                         case .invite:         WorkComingSoonView(title: L10n.toolInvite)
-                        case .pointsRank:     WorkComingSoonView(title: L10n.toolPoints)
+                        case .pointsRank:     PointsRankView()
                         case .anchorGuide:    WorkComingSoonView(title: L10n.toolWorkingGuide)
-                        case .partyData:      WorkComingSoonView(title: L10n.toolPartyData)
+                        case .partyData:      PartyDataView()
                         case .myGuardian:     WorkComingSoonView(title: L10n.toolMyGuardian)
                         case .pocDebug:       POCDebugView()
                         case .newbie:         WorkComingSoonView(title: L10n.toolNewbie)
                         case .bigR:           WorkComingSoonView(title: L10n.toolBigR)
+                        case .props:          PropsMainView()
+                        case .propsRules:     PropsRulesView()
                         case .liveResult(let begin, let end, let endType):
                             LiveResultView(range: (begin, end), endType: endType, hostPath: $homePath)
                         }
@@ -380,6 +382,12 @@ struct MainTabView: View {
             .environment(\.isHomeTabActive, selection == .home)
             .environment(\.liveResultTransition, liveResultTransitionAction)
             .environment(\.quickGoLive, QuickGoLiveAction {
+                // F 期 Live↔Party 互斥（对齐安卓 isLiveing||isPartying toast，2026-07-17）：
+                // 派对房活跃态禁止开播，用全局 AppToastCenter 呈现（跨 tab 可见）
+                if PartyStore.shared.roomState == .joined {
+                    AppToastCenter.shared.show(L10n.Party.mutexBlockedByParty)
+                    return
+                }
                 // 在当前 Home NavigationStack 内 push LiveSettings（对齐用户偏好：
                 // 不切 tab、保持上下文;比 H5 CGoLive 切 tab 更内聚）。
                 // 首次开播 → 先 push firstLiveRule 10s 规则页（对齐 H5 c-goLive.vue:64 isFirstLive 判断）
@@ -464,17 +472,21 @@ struct MainTabView: View {
                             case .invite:
                                 WorkComingSoonView(title: L10n.toolInvite)
                             case .pointsRank:
-                                WorkComingSoonView(title: L10n.toolPoints)
+                                PointsRankView()
                             case .anchorGuide:
                                 WorkComingSoonView(title: L10n.toolWorkingGuide)
                             case .partyData:
-                                WorkComingSoonView(title: L10n.toolPartyData)
+                                PartyDataView()
                             case .myGuardian:
                                 WorkComingSoonView(title: L10n.toolMyGuardian)
                             case .newbie:
                                 WorkComingSoonView(title: L10n.toolNewbie)
                             case .bigR:
                                 WorkComingSoonView(title: L10n.toolBigR)
+                            case .props:
+                                PropsMainView()
+                            case .propsRules:
+                                PropsRulesView()
                             case .liveResult(let begin, let end, let endType):
                                 LiveResultView(range: (begin, end), endType: endType, hostPath: $workPath)
                             }

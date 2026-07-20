@@ -514,6 +514,7 @@
 "userCard.unblockConfirm.cancel"          = "İptal";
 "userCard.uidCopiedToast"                 = "UID panoya kopyalandı";
 "userCard.uidCopyA11y"                    = "UID'yi kopyala";
+"userCard.party.take"                     = "Yukarı Al";
 "userCard.party.mute"                     = "Sessize Al";
 "userCard.party.unmute"                   = "Sesi Aç";
 "userCard.party.kickFromMic"              = "İndir";
@@ -1194,6 +1195,14 @@
 "party.micApplication.switchOffBody"     = "Kullanıcılar artık koltuk talep edemez.";
 "party.micApplication.switchOnSystemMsg" = "Mikrofon başvuruları açıldı";
 "party.micApplication.switchOffSystemMsg" = "Mikrofon başvuruları kaldırıldı";
+"party.micApplication.cancel"            = "İsteği İptal Et";
+"party.micApplication.tapEmptySeatHint"  = "Talep göndermek için boş bir koltuğa dokunun";
+"party.micApplication.submit"            = "Koltuk İste";
+"party.approveSeatPicker.title"          = "Koltuk Ata";
+"party.approveSeatPicker.subtitleFormat" = "%@'yi hangi koltuğa onaylıyorsunuz?";
+"party.approveSeatPicker.seatNumberFormat" = "%d numaralı koltuk";
+"party.approveSeatPicker.voiceSeat"      = "Sesli koltuk";
+"party.approveSeatPicker.videoSeat"      = "Görüntülü koltuk";
 
 /* MARK: - H-0 用户详情页 */
 "userProfile.uid.prefix"                 = "uid: ";
@@ -1534,6 +1543,14 @@
 "partyRoom.a11y.wealthRank"              = "Servet sıralaması";
 "partyRoom.a11y.honorRank"               = "Onur sıralaması";
 "partyRoom.a11y.pk"                      = "PK başlat";
+
+/* 顶栏 Rank / Viewers sheet */
+"partyRoom.rank.tab.contribution"        = "Katkı";
+"partyRoom.rank.tab.honor"               = "Onur";
+"partyRoom.rank.viewersTitle"            = "İzleyiciler";
+"partyRoom.rank.emptyRank"               = "Henüz sıralama yok";
+"partyRoom.rank.emptyViewers"            = "Henüz izleyici yok";
+
 "partyRoom.tab.all"                      = "Tümü";
 "partyRoom.tab.chat"                     = "Sohbet";
 "partyRoom.tab.gift"                     = "Hediye";
@@ -1590,10 +1607,6 @@
 "partyRoom.adminSeat.switchHere"         = "Buraya geç";
 "partyRoom.adminSeat.lock"               = "Koltuğu kilitle";
 "partyRoom.adminSeat.unlock"             = "Kilidi aç";
-"partyRoom.otherSeat.title"              = "Kullanıcıyı yönet";
-"partyRoom.otherSeat.mute"               = "Koltuğu sessize al";
-"partyRoom.otherSeat.unmute"             = "Sessizden çıkar";
-"partyRoom.otherSeat.viewProfile"        = "Profili görüntüle";
 
 // v25.1 (2026-07-17) LiveGiftTask · 三语真翻译从 H5 tr.json 迁移
 // H5 tr.json 缺 3 key(today s history / send gifts daily / common.loading),用近似值 fallback
