@@ -204,10 +204,10 @@ KEY/IV 通过 `validateKey` 严格校验 16 字节，缺省值取 `VITE_AES_KEY`
 |------|------|-----|------|
 | 主请求体上行 | AES-128-CBC | VITE_AES_KEY | Base64 |
 | 主响应体下行 | AES-128-CBC | VITE_AES_KEY | Hex |
-| 心跳 WebSocket | AES-128-**ECB** | 硬编码 `9976kk4322578894` | Hex |
-| openParams/webParams 解密 | AES-CBC | `VITE_AES_KEY` 兜底 `9986sdff5s4f1123` | Hex（`aesHexDecrypt`） |
+| 心跳 WebSocket | AES-128-**ECB** | 环境配置的独立 WebSocket key | Hex |
+| openParams/webParams 解密 | AES-CBC | `VITE_AES_KEY` | Hex（`aesHexDecrypt`） |
 
-其中心跳专用算法定义在 `utils/index.js encryptAes`：key 固定 `9976kk4322578894`（16 字节 UTF-8），**模式 ECB**（无 IV，传入的 iv 参数被忽略）、PKCS7 padding，输出 `encrypted.ciphertext.toString()`（裸 ciphertext 的 Hex，无盐前缀），iOS 上报心跳必须用此套，与主请求体的 CBC/Base64 互不通用。
+其中心跳专用算法定义在 `utils/index.js encryptAes`：key 由受控环境配置提供（16 字节 UTF-8），**模式 ECB**（无 IV，传入的 iv 参数被忽略）、PKCS7 padding，输出 `encrypted.ciphertext.toString()`（裸 ciphertext 的 Hex，无盐前缀），iOS 上报心跳必须用此套，与主请求体的 CBC/Base64 互不通用。
 
 ---
 
