@@ -58,10 +58,10 @@ struct LiveDataMoneyBag: View {
                     .frame(width: 50, height: 50)
 
                 HStack(spacing: 4) {
-                    Image("diamondYellow")
+                    Image("coins")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 14, height: 10.5)
+                        .frame(width: 14, height: 14)
                     Text("\(sureGetAward)")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(.white)

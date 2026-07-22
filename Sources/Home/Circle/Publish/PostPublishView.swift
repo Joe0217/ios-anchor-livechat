@@ -31,7 +31,6 @@ struct PostPublishView: View {
     var body: some View {
         NavigationStack {
             content
-                .background(Theme.Palette.screenBackground.ignoresSafeArea())
                 .navigationTitle(L10n.Publish.navTitle)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -239,17 +238,12 @@ struct PostPublishView: View {
     private var transientErrorToast: some View {
         if let msg = viewModel.transientError {
             Text(msg)
-                .font(.system(size: 13))
-                .foregroundColor(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.black.opacity(0.85), in: Capsule())
-                .padding(.top, 60)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .toastStyle()
+                .transition(Toast.transition)
                 .task(id: msg) {
-                    // 与 BlocklistView 同款 2s 自动消失
+                    // 2s 自动消失（由 Toast.dismissDurationNanos 统一控制）
                     do {
-                        try await Task.sleep(nanoseconds: 2_000_000_000)
+                        try await Task.sleep(nanoseconds: Toast.dismissDurationNanos)
                         try Task.checkCancellation()
                     } catch {
                         return

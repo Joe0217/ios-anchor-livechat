@@ -94,18 +94,22 @@ struct WeeklyLevelHeader: View {
 
     // MARK: - Detail 小 pill（H5 border 半透白，rounded 20，text 10）
     private var detailPill: some View {
-        HStack(spacing: 3) {
-            Text(L10n.workDetail)
-                .font(.system(size: 10))
-            Image(systemName: "chevron.forward")
-                .font(.system(size: 8, weight: .semibold))
+        NavigationLink(value: WorkRoute.dataStatistics) {
+            HStack(spacing: 3) {
+                Text(L10n.workDetail)
+                    .font(.system(size: 10))
+                Image(systemName: "chevron.forward")
+                    .font(.system(size: 8, weight: .semibold))
+            }
+            .foregroundStyle(Color.white.opacity(0.5))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .overlay(
+                Capsule().stroke(Color.white.opacity(0.5), lineWidth: 1)
+            )
         }
-        .foregroundStyle(Color.white.opacity(0.5))
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .overlay(
-            Capsule().stroke(Color.white.opacity(0.5), lineWidth: 1)
-        )
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.workDetail)
     }
 
     // MARK: - 段位刻度

@@ -12,6 +12,7 @@ struct LiveTopBar: View {
     /// 默认值是 S 级顺序，便于 Preview 和兼容性。
     let availableOrder: [HomeTopTab]
     let rankCount: String
+    let onRankTap: () -> Void
 
     @ObservedObject private var onlineStatus = OnlineStatusStore.shared
 
@@ -37,11 +38,14 @@ struct LiveTopBar: View {
     private var rightActions: some View {
         HStack(spacing: Theme.Metric.liveTopActionGap) {
             // 排行榜徽章（金冠 + +100K）。显式约束宽度防 i18n（ar/tr）后右侧拥挤。
-            Image("liveRankBadge")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 56, height: 28)
-                .accessibilityLabel(L10n.liveRankBadge)
+            Button(action: onRankTap) {
+                Image("liveRankBadge")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 56, height: 28)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.liveRankBadge)
 
             // 刷新按钮：对齐安卓 queryHideState(true, true) —— 1s 旋转 + 查超限 API → 未超限置回上线 + toast / 超限弹 SetToBusyDialog
             Button {

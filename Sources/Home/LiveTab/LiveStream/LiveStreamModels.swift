@@ -14,7 +14,7 @@ import Foundation
 /// - `pkStatus` PK 中标志（`=== 7` 时显示 PK 角标覆盖观看数）
 /// - `diamondGiftActive` 钻石盲盒角标（`=== 1` 时显示）
 /// - 加房相关字段（agoraChannelId / yxRoomId）先解出来放到 raw 里，客态里程碑再用
-struct LiveStreamAnchor: Identifiable, Equatable {
+struct LiveStreamAnchor: Identifiable, Hashable {
     let userId: String
     let nickname: String
     let icon: String?

@@ -1,33 +1,48 @@
 import SwiftUI
 
-/// 根视图：按登录态在登录页与首页之间切换；登录后启动 CallStore RTM 信令。
-/// 任何时刻 CallStore.state 非 idle 都会全屏覆盖 CallView（来电浮层 + 通话主界面）。
+/// 根视图：按登录态和审核角色在登录、受限、主播主界面之间切换。
+/// 通话和主播实时能力只允许已审核主播（`userType == 2`）启动。
 struct RootView: View {
     @EnvironmentObject private var session: SessionStore
     @StateObject private var callStore = CallStore.shared
+    @StateObject private var robotCallStore = RobotCallStore.shared
     @StateObject private var autoOffline = AutoOfflineMonitor.shared
+    @StateObject private var mediaPermissionAlert = MediaPermissionAlertCenter.shared
     @Environment(\.scenePhase) private var scenePhase
     /// v23（2026-07-13）code-review 修复：warmup Task 需要 cancel 入口
     /// 场景：快速 login→logout→login（token 失效重刷）→ 旧 Task 迟到对新 router 冗余 warmup + 与新 Task 双打
     @State private var warmupTask: Task<Void, Never>?
 
     var body: some View {
-        ZStack {
-            if session.isLoggedIn {
-                MainTabView()
-            } else {
+        // 2026-07-17 tap-fix diagnostic:确认用户实际进入的分支(RestrictedTabView vs MainTabView vs LoginView)
+        let _ = AppLogger.auth.info("[RootView] body eval: isLoggedIn=\(session.isLoggedIn, privacy: .public) isRestricted=\(self.isRestricted, privacy: .public) userType=\(session.user?.userType ?? -999, privacy: .public)")
+        return ZStack {
+            if !session.isLoggedIn {
                 LoginView()
+            } else if isAgency {
+                AgencyLoginUnsupportedView { session.logout() }
+            } else if isRestricted {
+                // 缺失角色字段时 fail-closed，防止不完整登录响应放行未审核账号。
+                RestrictedTabView()
+            } else {
+                MainTabView()
             }
 
-            // 通话全局浮层：CallStore 状态非 idle 即覆盖
-            if callStore.state != .idle {
+            // 角色被服务端降级时，即使 RTM 尚在异步停机，也不能覆盖受限页。
+            if isApprovedHost, callStore.state != .idle {
                 CallView(store: callStore)
                     .transition(.opacity)
                     .zIndex(100)
             }
 
+            if isApprovedHost, robotCallStore.state != .idle || robotCallStore.reward != nil {
+                RobotCallOverlay(store: robotCallStore)
+                    .transition(.opacity)
+                    .zIndex(150)
+            }
+
             // 长时间无操作自动离线弹窗（对齐 H5 App.vue useDynamicInactivityTimer）
-            if autoOffline.showDialog {
+            if isApprovedHost, autoOffline.showDialog {
                 AutoOfflineDialog(
                     onGoOnline: { autoOffline.handleGoOnline() },
                     onDismiss: { autoOffline.handleDialogDismiss() }
@@ -40,6 +55,30 @@ struct RootView: View {
             // 空态时内部只保留 Spacer 不拦截 hit test，出现时仅胶囊区域可交互
             GlobalErrorBanner()
                 .zIndex(300)
+
+            // 美颜页会先 dismiss 再通过 MediaPermissionAlertCenter 请求提示。
+            // 使用自定义模态层，避免与审核/通话的系统 alert 互相抢占而丢失提示。
+            if let requirement = callStore.mediaPermissionAlertRequirement {
+                MediaPermissionDialog(
+                    requirement: requirement,
+                    onCancel: { callStore.mediaPermissionAlertRequirement = nil },
+                    onConfirm: {
+                        Task { await callStore.retryMediaPermissionFromAlert(requirement) }
+                    }
+                )
+                .transition(.opacity)
+                .zIndex(410)
+            } else if let requirement = mediaPermissionAlert.requirement {
+                MediaPermissionDialog(
+                    requirement: requirement,
+                    onCancel: { mediaPermissionAlert.dismiss() },
+                    onConfirm: {
+                        Task { await mediaPermissionAlert.retry(requirement) }
+                    }
+                )
+                .transition(.opacity)
+                .zIndex(400)
+            }
         }
         // v16：全局 toast overlay（AppToastCenter.shared） —— 关注/取关等 service 层触发的
         // 跨场景成功反馈统一走此挂点；对齐 H5 全局 `showNotify(...)` 模式
@@ -57,6 +96,7 @@ struct RootView: View {
             )
         }
         .animation(.easeInOut(duration: 0.2), value: callStore.state)
+        .animation(.easeInOut(duration: 0.2), value: robotCallStore.state)
         .animation(.easeInOut(duration: 0.15), value: autoOffline.showDialog)
         // 全局交互兜底：任何 tap / drag 都视为活动信号
         // simultaneousGesture 不拦截业务手势，只做观察。
@@ -77,19 +117,46 @@ struct RootView: View {
                 }
             }
         }
-        .task(id: session.isLoggedIn) {
+        .task(id: sessionCapabilityKey) {
             await syncSessionDependent()
         }
         // App 级语言环境注入（Settings → Language 切换后立即生效）
         .appLocaleEnvironment()
     }
 
-    /// 登录态相关的全局连接同步：
-    /// - WSHeartbeat：5s 心跳上报 onlineStatus —— 用户端"主播在线"列表字段的实际驱动源
-    /// - NIM 长连：云信 presence + IM 通道（接收 attachType 消息）
-    /// - CallStore RTM：1v1 通话信令通道
+    /// H5 `isHost` / `isAgency` 对齐：主播可进入主界面，代理被阻止，其他和未知角色受限。
+    private var isApprovedHost: Bool {
+        session.user?.userType == 2
+    }
+
+    private var isAgency: Bool {
+        session.user?.userType == 9
+    }
+
+    /// 已登录却缺少角色字段时保持受限，避免不完整响应绕过审核页。
+    private var isRestricted: Bool {
+        !isApprovedHost
+    }
+
+    /// 审核角色变化时也要重新同步主播能力。
+    private var sessionCapabilityKey: String {
+        let user = session.user
+        return "\(session.isLoggedIn)-\(user?.userId ?? -1)-\(user?.userType ?? -1)"
+    }
+
+    /// 登录态连接同步：NIM 保留给受限页客服聊天；主播专属实时能力按审核角色门控。
     private func syncSessionDependent() async {
         if session.isLoggedIn, let user = session.user {
+            // 受限页仍需 NIM 联系管理员、接收 attachType=58；但其他主播实时能力全部关闭。
+            guard isApprovedHost else {
+                if let account = user.yxAccid, !account.isEmpty,
+                   let token = user.imToken, !token.isEmpty {
+                    NIMOnlineKeeper.shared.start(account: account, token: token)
+                }
+                Task { try? await SapiTokenStore.shared.ensureValid() }
+                await stopHostCapabilities()
+                return
+            }
             // GiftEffect 引擎冷启：Window + install 生产 router + 5s 后 warmup SVGA parser
             if let scene = UIApplication.shared.connectedScenes
                 .compactMap({ $0 as? UIWindowScene }).first {
@@ -149,22 +216,44 @@ struct RootView: View {
             let minutes = await AppConfigService.fetchAutoOfflineReminderMinutes()
             AutoOfflineMonitor.shared.start(reminderMinutes: minutes)
         } else {
-            WSHeartbeat.shared.stop()
             NIMOnlineKeeper.shared.stop()
-            await callStore.stop()
-            AutoOfflineMonitor.shared.stop()
-            // v23（2026-07-13）warmup Task cancel（避免 login→logout 期间旧 Task 对已 reset router 冗余 warmup）
-            warmupTask?.cancel()
-            warmupTask = nil
-            // GiftEffect 引擎清理：stop current + clear pending + tearDown players + hide Window
-            GiftEffectCenter.shared.reset()
-            // v23 EnterEffect 独立并行 Center 同样清理
-            EnterEffectCenter.shared.reset()
-            GiftEffectOverlayWindow.shared.hide()
-            // E-spec §0.2 F-05/F-06：派对房残留清理（forceLeaveRoom 覆盖 preparing/leaving 中间态；
-            // detachChatRouter 切断跨账号 delegate 调用；PartyListStore 因 MainTabView dismount 自然 deinit）
-            await PartyStore.shared.forceLeaveRoom(.userRequest)
-            PartyStore.shared.detachChatRouter()
+            await stopHostCapabilities()
         }
+    }
+
+    /// 角色降级和登出共用的主播能力清理。NIM 由调用方控制，受限页仍需要它。
+    private func stopHostCapabilities() async {
+        WSHeartbeat.shared.stop()
+        await callStore.stop()
+        robotCallStore.resetForSessionEnd()
+        AutoOfflineMonitor.shared.stop()
+        warmupTask?.cancel()
+        warmupTask = nil
+        GiftEffectCenter.shared.reset()
+        EnterEffectCenter.shared.reset()
+        GiftEffectOverlayWindow.shared.hide()
+        await PartyStore.shared.forceLeaveRoom(.userRequest)
+        PartyStore.shared.detachChatRouter()
+    }
+}
+
+/// H5 `GAgencyLoginPop` 的 iOS 对应物。代理账号不能进入主播端，唯一操作是退出。
+private struct AgencyLoginUnsupportedView: View {
+    let onSignOut: () -> Void
+
+    var body: some View {
+        ZStack {
+            Theme.Palette.profileBackground.ignoresSafeArea()
+            VStack(spacing: 20) {
+                Text("Proxy account login is not currently supported. Please login using the proxy app")
+                    .font(.system(size: 16))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                Button("Sign out", action: onSignOut)
+                    .buttonStyle(.borderedProminent)
+            }
+            .padding(32)
+        }
+        .preferredColorScheme(.dark)
     }
 }

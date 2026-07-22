@@ -16,6 +16,8 @@ struct ToolsSection: View {
     /// v2 code-review Finding 1：观察 SelfPermissionBridge 让 canCall/canLive/canParty 变化触发 body 重算，
     /// cell 显隐同步更新（原直接读 shared.canX 无订阅，权限翻转后 cell stale）。
     @ObservedObject private var permission = SelfPermissionBridge.shared
+    @State private var showBeautySettings = false
+    @State private var showBeautyPermissionAlert = false
 
     /// 工具项（图标资源名 + 标签）。顺序与 H5 workspaceItems 一致（Hi 已移除）。
     /// Newbie 插在 Task 之后（H5 位置）、bigR 插在 Invite 之后。
@@ -86,7 +88,11 @@ struct ToolsSection: View {
                             .buttonStyle(.plain)
                     // Beauty → 美颜设置页（K-spec-美颜设置页 §0.4 Q1；生产入口）
                     } else if tools[i].icon == "toolBeauty" {
-                        NavigationLink(value: WorkRoute.beautySettings) { cell }
+                        Button {
+                            openBeautySettings()
+                        } label: {
+                            cell
+                        }
                             .buttonStyle(.plain)
                     // Points → Phase E 占位
                     } else if tools[i].icon == "toolPoints" {
@@ -146,6 +152,39 @@ struct ToolsSection: View {
         .padding(Theme.Metric.cardPadding)
         .background(Theme.Palette.cardFill)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.bigCard, style: .continuous))
+        .navigationDestination(isPresented: $showBeautySettings) {
+            BeautySettingsView()
+        }
+        .overlay {
+            if showBeautyPermissionAlert {
+                MediaPermissionDialog(
+                    requirement: .camera,
+                    onCancel: { showBeautyPermissionAlert = false },
+                    onConfirm: retryBeautyCameraPermission
+                )
+            }
+        }
+    }
+
+    private func openBeautySettings() {
+        Task { @MainActor in
+            guard await MediaPermissionGate.requestAccess(for: .camera) else {
+                showBeautyPermissionAlert = true
+                return
+            }
+            showBeautySettings = true
+        }
+    }
+
+    private func retryBeautyCameraPermission() {
+        Task { @MainActor in
+            guard await MediaPermissionGate.requestAccess(for: .camera) else {
+                MediaPermissionGate.openAppSettings()
+                return
+            }
+            showBeautyPermissionAlert = false
+            showBeautySettings = true
+        }
     }
 
     // MARK: - 单个工具

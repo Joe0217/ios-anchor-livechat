@@ -6,8 +6,6 @@ import SwiftUI
 /// - 左上：`diamondGiftActive === 1` 钻石盲盒 22×22 角标
 /// - 左下：头像圆 + 昵称（black shadow 增强白字对比）
 /// - 右下：PK 中 → PK 角标；否则观看数橘字（H5 #FA7800）
-///
-/// 卡片本身 `.disabled(true)`——本次范围不接客态直播间（客态里程碑接入时再放开）。
 struct LiveStreamCard: View {
     let anchor: LiveStreamAnchor
 
@@ -23,7 +21,6 @@ struct LiveStreamCard: View {
             .overlay(overlayContent)
             .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.liveCard, style: .continuous))
             .contentShape(Rectangle())
-            .disabled(true) // 客态直播间独立里程碑后续启用；卡片当前无 tap 响应
             .accessibilityElement(children: .combine)
             .accessibilityLabel(accessibilityText)
     }

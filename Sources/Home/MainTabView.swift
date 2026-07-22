@@ -160,6 +160,7 @@ struct MainTabView: View {
             tabBarHostContainer
         }
         .onChange(of: isOnSubpageSignal) { newValue in
+            RobotCallRouteGate.shared.update(isAtRootPage: !newValue)
             // 后台时 SwiftUI 仍可能调度 onChange（v5.3.3 已知坑），避免动画 backlog
             guard scenePhase != .background else {
                 isOnSubpage = newValue
@@ -196,6 +197,7 @@ struct MainTabView: View {
             await GiftMarqueeStore.shared.loadIfNeeded()
         }
         .onAppear {
+            RobotCallRouteGate.shared.update(isAtRootPage: !isOnSubpageSignal)
             // L 里程碑：一次性 attach 全局匹配摄像头会话到 MatchStore.shared
             MatchStore.shared.attachCameraSession(matchCameraSession)
             // L 里程碑 #3c：启动 10 分钟提示弹窗调度
@@ -211,6 +213,9 @@ struct MainTabView: View {
         // 观察 scenePhase 更新 popupCoordinator.appHidden 用于组合态 gate
         .onChange(of: scenePhase) { newPhase in
             matchPopupCoordinator.updateAppHidden(newPhase != .active)
+        }
+        .onDisappear {
+            RobotCallRouteGate.shared.update(isAtRootPage: false)
         }
         // P 项目权限管理：Party tab 权限变化 → selection == .party 时 fallback .home + 清 partyPath
         // 覆盖场景：切账号 party bit 变化 / 运行时 revoke。冷启动持久化 selection 由 .onAppear 兜底。
@@ -287,19 +292,14 @@ struct MainTabView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: matchStore.showNoFacePopup)
         .animation(.easeInOut(duration: 0.2), value: matchStore.showExitMatchPopup)
-        // Match toast 全局展示（用户 tap 匹配 → openMatch 各失败/成功分支的 UI 反馈）
-        // 之前 lastToast 有 11 处写入但 0 UI 消费 → 用户看不到"为什么没开启" —— 现补 overlay
+        // Match toast 全局展示：沿用项目通用 toast 视觉和时长。
         .overlay(alignment: .top) {
             if let toast = matchStore.lastToast {
                 Text(toast.localized)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .background(Color.black.opacity(0.8), in: Capsule())
-                    .padding(.top, 12)
-                    .transition(.opacity)
+                    .toastStyle()
+                    .transition(Toast.transition)
                     .task(id: toast) {
-                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        try? await Task.sleep(nanoseconds: Toast.dismissDurationNanos)
                         matchStore.clearLastToast()
                     }
             }
@@ -338,6 +338,20 @@ struct MainTabView: View {
                     .userProfileAndChatDestinations()
                     // 头像 tap 内置分派：非房间态 → push UserProfileRoute 跳详情页（对齐环境自探 .list 分支）
                     .avatarProfilePusher { uid in homePath.append(UserProfileRoute.userId(uid)) }
+                    // 客态直播间必须走 homePath，令主 TabBar 与其他首页子页统一隐藏和恢复。
+                    .navigationDestination(for: AudienceLiveRoomRoute.self) { route in
+                        switch route {
+                        case .room(let anchor):
+                            AudienceLiveRoomView(anchor: anchor)
+                        }
+                    }
+                    // 首页右上排行榜：Live/List/Match 进全站 Charm/Wealth/CP 榜；Circle 进积分榜。
+                    .navigationDestination(for: HomeLeaderboardRoute.self) { route in
+                        switch route {
+                        case .ranking: HomeRankingView()
+                        case .points: PointsRankView()
+                        }
+                    }
                     // Home 也持有 WorkRoute destination——QuickGoLive 从 Home 内 push LiveSettings 后,
                     // LiveSettings 内嵌 NavigationLink(WorkRoute.wishSetting/.beautySettings) 也要能
                     // 在同一 stack 内 push。**必须与 Work stack 保持 case 一致**，否则从 Home 入口进入
@@ -364,6 +378,7 @@ struct MainTabView: View {
                         case .anchorGuide:    WorkComingSoonView(title: L10n.toolWorkingGuide)
                         case .partyData:      PartyDataView()
                         case .myGuardian:     WorkComingSoonView(title: L10n.toolMyGuardian)
+                        case .dataStatistics:  DataStatisticsView()
                         case .pocDebug:       POCDebugView()
                         case .newbie:         WorkComingSoonView(title: L10n.toolNewbie)
                         case .bigR:           WorkComingSoonView(title: L10n.toolBigR)
@@ -380,6 +395,9 @@ struct MainTabView: View {
                     }
             }
             .environment(\.isHomeTabActive, selection == .home)
+            .environment(\.openHomeLeaderboard, OpenHomeLeaderboardAction { route in
+                homePath.append(route)
+            })
             .environment(\.liveResultTransition, liveResultTransitionAction)
             .environment(\.quickGoLive, QuickGoLiveAction {
                 // F 期 Live↔Party 互斥（对齐安卓 isLiveing||isPartying toast，2026-07-17）：
@@ -479,6 +497,8 @@ struct MainTabView: View {
                                 PartyDataView()
                             case .myGuardian:
                                 WorkComingSoonView(title: L10n.toolMyGuardian)
+                            case .dataStatistics:
+                                DataStatisticsView()
                             case .newbie:
                                 WorkComingSoonView(title: L10n.toolNewbie)
                             case .bigR:
@@ -675,6 +695,23 @@ extension EnvironmentValues {
     var isPartyTabActive: Bool {
         get { self[IsPartyTabActiveKey.self] }
         set { self[IsPartyTabActiveKey.self] = newValue }
+    }
+}
+
+/// 首页右上榜单跨层导航。LiveTabView 不持有 NavigationPath，按现有 QuickGoLive 模式由根壳注入。
+struct OpenHomeLeaderboardAction {
+    let perform: (_ route: HomeLeaderboardRoute) -> Void
+    static let noop = OpenHomeLeaderboardAction(perform: { _ in })
+}
+
+private struct OpenHomeLeaderboardKey: EnvironmentKey {
+    static let defaultValue: OpenHomeLeaderboardAction = .noop
+}
+
+extension EnvironmentValues {
+    var openHomeLeaderboard: OpenHomeLeaderboardAction {
+        get { self[OpenHomeLeaderboardKey.self] }
+        set { self[OpenHomeLeaderboardKey.self] = newValue }
     }
 }
 

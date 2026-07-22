@@ -216,6 +216,7 @@ enum WorkRoute: Hashable {
     case anchorGuide        // Phase F：Anchor Guide 培训中心页
     case partyData          // Downloads UI 新增（H5 蓝本无此入口），未来落地页替换 ComingSoon
     case myGuardian         // Downloads UI 新增（H5 蓝本无此入口），未来落地页替换 ComingSoon
+    case dataStatistics     // Work 顶部 Detail（对齐 H5 /dataStatistics）
     case newbie             // J 里程碑：新手任务
     case bigR               // J 里程碑：Star User 大 R 名单
     case props              // H · Props 虚拟道具主背包页（对齐 H5 /virtualProps）

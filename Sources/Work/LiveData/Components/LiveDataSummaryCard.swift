@@ -106,7 +106,7 @@ struct LiveDataSummaryCard: View {
                    valueColor: Color(hex: 0xF640DC),
                    label: L10n.liveDataTotalDuration)
 
-            metric(iconName: "yellowDiamond",
+            metric(iconName: "coins",
                    value: "\(totalIncomeDiamonds)",
                    valueColor: Color(hex: 0xF9991A),
                    label: L10n.liveDataTotalIncome)
@@ -176,10 +176,10 @@ struct LiveDataSummaryCard: View {
     private func breakdownItem(value: Int, label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
-                Image("diamondYellow")
+                Image("coins")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 14, height: 10.5)
+                    .frame(width: 14, height: 14)
                 Text("\(value)")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.white)

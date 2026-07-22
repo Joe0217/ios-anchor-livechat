@@ -56,8 +56,8 @@ final class MomentFeedStore: ObservableObject {
     /// key = postId,value = 已翻译文本。内存态,view dismiss / store 释放后自动清。
     @Published private(set) var translations: [Int: String] = [:]
 
-    /// 防重入 set:正在翻译中的 postId
-    private var pendingTranslateIds: Set<Int> = []
+    /// 防重入 set:正在翻译中的 postId。@Published 供 view 层派生 `isTranslating` 显示 loading UI
+    @Published private(set) var pendingTranslateIds: Set<Int> = []
 
     private let service: CircleServiceProtocol
     private let pageSize: Int

@@ -45,7 +45,10 @@ struct LiveStreamGrid: View {
             GridItem(.flexible(), spacing: Theme.Metric.liveCardGap),
         ], spacing: Theme.Metric.liveCardGap) {
             ForEach(viewModel.items) { anchor in
-                LiveStreamCard(anchor: anchor)
+                NavigationLink(value: AudienceLiveRoomRoute.room(anchor)) {
+                    LiveStreamCard(anchor: anchor)
+                }
+                .buttonStyle(.plain)
                     .onAppear {
                         if anchor.id == viewModel.items.last?.id,
                            viewModel.hasMore,

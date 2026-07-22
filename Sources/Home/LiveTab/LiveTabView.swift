@@ -33,6 +33,8 @@ struct LiveTabView: View {
     /// 用于 List 子页 lazy load —— keep-alive 架构下 view tree 永久持有，
     /// .task 在 app 启动即触发；改用此信号 + currentOuter 组合判定首次进入触发。
     @Environment(\.isHomeTabActive) private var isHomeTabActive
+    /// 首页右上角榜单入口。由 MainTabView 的 home NavigationStack 承接 push。
+    @Environment(\.openHomeLeaderboard) private var openHomeLeaderboard
 
     /// reconnect toast 展示态（对齐 H5 `refreshIMOnline` 后 1s 弹的 toast）。
     /// LiveTopBar 点刷新 → OnlineStatusStore.refreshToastTick 变化 → 本 view onChange 抬起。
@@ -194,7 +196,10 @@ struct LiveTabView: View {
                     set: { homeStore.tapOuter($0) }
                 ),
                 availableOrder: order,
-                rankCount: viewModel.rankCount
+                rankCount: viewModel.rankCount,
+                onRankTap: {
+                    openHomeLeaderboard.perform(current == .circle ? .points : .ranking)
+                }
             )
             .padding(.top, 6)
 

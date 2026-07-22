@@ -42,10 +42,10 @@ struct LiveDataDateRow: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 4) {
-                    Image("diamondYellow")
+                    Image("coins")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 14, height: 10.5)
+                        .frame(width: 14, height: 14)
                     Text("\(day.totalIncomeDiamonds)")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Color(hex: 0xF9991A))
@@ -109,10 +109,10 @@ struct LiveDataDateRow: View {
     private func item(value: Int, label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
-                Image("diamondYellow")
+                Image("coins")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
-                    .frame(width: 14, height: 10.5)
+                    .frame(width: 14, height: 14)
                 Text("\(value)")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.white)
