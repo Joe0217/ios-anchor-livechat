@@ -1,0 +1,17 @@
+name: Repository Hygiene
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  repository-hygiene:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify scripts and shareable configuration templates
+        run: |
+          bash -n bin/bootstrap.sh bin/check-repository.sh bin/regen.sh bin/switch-env.sh
+          ./bin/check-repository.sh

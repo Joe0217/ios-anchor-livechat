@@ -1,0 +1,18 @@
+// Local development archive configuration. Copy to Config-Dev-Archive.xcconfig.
+// Values normally match Config-Dev.xcconfig; only the CocoaPods include differs.
+#include? "../Pods/Target Support Files/Pods-Hily/Pods-Hily.release-dev.xcconfig"
+
+HILY_API_HOST = __REQUIRED__
+HILY_SAPI_HOST = __REQUIRED__
+HILY_SOCKET_HOST = __REQUIRED__
+HILY_APP_ID = __REQUIRED__
+HILY_OCP_APIM_KEY = __REQUIRED__
+HILY_APP_VERSION = __REQUIRED__
+HILY_NIM_APP_KEY = __REQUIRED__
+HILY_NOTIFICATION_YX_ACC_ID = __REQUIRED__
+HILY_AES_KEY = __REQUIRED_16_BYTE_VALUE__
+HILY_AES_IV = __REQUIRED_16_BYTE_VALUE__
+HILY_SAPI_AES_KEY = __REQUIRED_16_BYTE_VALUE__
+HILY_SAPI_AES_IV = __REQUIRED_16_BYTE_VALUE__
+HILY_WS_AES_KEY = __REQUIRED_16_BYTE_VALUE__
+HILY_AGORA_APP_ID = __REQUIRED__

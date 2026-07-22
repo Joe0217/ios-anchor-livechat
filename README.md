@@ -19,15 +19,18 @@ H5 主播端（`anchor-livechat-h5`：1v1 通话、直播、PK、美颜、礼物
 ## 运行步骤
 
 ```bash
-# 1. 生成 Xcode 工程
-xcodegen generate
+# 1. 首次克隆：创建仅本地使用的配置文件并填入开发环境凭证
+./bin/bootstrap.sh
 
-# 2. 安装/集成 Pods（涉及 Pod 变更时）
-LANG=en_US.UTF-8 pod install
-
-# 3. 打开（必须用 workspace，否则云信找不到模块）
-open Hily.xcworkspace
+# 2. 关闭 Xcode 后，重新生成工程、安装 Pods 并打开 workspace
+./bin/regen.sh
 ```
+
+需要 Xcode 16.1+、XcodeGen 和 CocoaPods。`Config/Config-*.xcconfig` 只保留在本机；从对应的
+`.xcconfig.example` 创建文件后，向团队受控的凭证渠道取得实际值。切换环境使用
+`./bin/switch-env.sh <dev|test|prod>`，它会调用 `regen.sh`。
+
+`xcodegen generate` 必须与 `pod install` 成对执行。不要手动只运行前者；`regen.sh` 已处理这两个步骤。
 
 在 Xcode 中：
 1. 选中 target `Hily` → Signing & Capabilities → Team 选个人 Apple ID（免费即可）。
@@ -37,3 +40,4 @@ open Hily.xcworkspace
 ## 文档
 
 - `docs/plan/原生iOS接入技术文档-202606161955.md` — 声网/云信/相芯 接入细节、踩坑、待确认清单
+- `AGENTS.md` — 面向自动化开发协作者的项目约束、验证与安全规则

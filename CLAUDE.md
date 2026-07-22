@@ -50,11 +50,11 @@ docs/plan/                    # 接入技术文档、开发计划、功能审查
 ```
 
 ## 关键集成事实（非显而易见，务必先知）
-- **请求加解密非对称**：请求体 JSON → AES-128-CBC/PKCS7 → **Base64**（上行）；响应 envelope `{code,message,result}`，`result` 是 **Hex** 密文（下行）。成功 code `'0000'`。dev key `9986sdff5s4f1123` / iv `9986sdff5s4y456a`
-- **密钥随环境变（不只换域名）**：dev 主接口/bagshop 同一套；test/prod 主接口与 bagshop 各换一套。多环境配置必须把**密钥**纳入 xcconfig
-- **鉴权头**：token 放 `loginToken`+`anchorToken`（值相同），`appid: 20735424`，`Ocp-Apim-Subscription-Key: 9ec52f6d03cd4d5985a6a2c8bb1ce5ee`，外加 deviceId 等。无请求签名
+- **请求加解密非对称**：请求体 JSON → AES-128-CBC/PKCS7 → **Base64**（上行）；响应 envelope `{code,message,result}`，`result` 是 **Hex** 密文（下行）。成功 code `'0000'`。key/IV 从本地 xcconfig 注入，禁止写入源码或文档。
+- **密钥随环境变（不只换域名）**：主接口、sapi 与 WebSocket 的 key/IV 均通过本地 xcconfig 管理；每个环境都必须配置完整，禁止使用源码 fallback。
+- **鉴权头**：token 放 `loginToken`+`anchorToken`（值相同），另含 appid、网关订阅 key 与 deviceId 等。具体值仅由本地 xcconfig 注入，无请求签名。
 - **dev 域名**：`https://anchor.cphub.link`（/api）。登录 `/api/login/v4/login`，密码=两次大写 MD5：`MD5(MD5(pwd+appId))`
-- **开播 token 来源**：主播加入声网的 rtcToken 来自 `/api/index/getAgoraRtmToken`（绑 uid、与 channel 无关），**不是** beginLiveRoom 返回的；频道用 beginLiveRoom/getMyLiveRoom 的 `agoraChannelId`。声网 dev AppID `4af61c7a92f447d3a582308b5817dbd2`。import 仍是 `AgoraRtcKit`
+- **开播 token 来源**：主播加入声网的 rtcToken 来自 `/api/index/getAgoraRtmToken`（绑 uid、与 channel 无关），**不是** beginLiveRoom 返回的；频道用 beginLiveRoom/getMyLiveRoom 的 `agoraChannelId`。声网 AppID 由本地 xcconfig 注入。import 仍是 `AgoraRtcKit`
 - **心跳 6s**（H5 源码 `setInterval(keepLiving, 6000)`，"10秒"是过时注释）。⚠️ **iOS 实现取 10s / 失败 >3 次**（对齐安卓，详见 `docs/plan/archive/B-LiveStore状态机-spec-*.md` §3）。`callState`：0直播/1通话/2匹配/3PK，阶段一恒为 0
 - **强制下播 5 原因（H5 历史字符串编码）**：`'3'`系统强制(心跳 code 1992/1006 封禁)、`'4'`断连(连续心跳失败 >6 次)、`'5'`网络差(连续 ≥30 次质量≥5；≥10 次上报埋点)、`'99'`相机错误、正常结束。⚠️ **iOS 实现按路线图 §三 B 升级为数字编码 4/2/5/6/7**（对齐安卓；阈值 10s/>3）。⚠️ **弱网阈值 v5 反悔为分层 10/30（"连续"语义，中间任一次质量 ≤4 即清零重计）**：连续 10 次（≈20s）降帧率 30→15fps + toast；连续 30 次（≈60s）才 forceEnd endType=7；降级期连续 5 次质量好恢复 normal。详见 `docs/plan/archive/B-LiveStore状态机-spec-*.md` §11 + §4.5
 - **token 策略**：存 Keychain（非 UserDefaults）；主 token + bagshop `auth_token`（用 `loginUuid` 换、401 自动续）。双 token 拼接是给 webview 传参的，**原生不需要**
