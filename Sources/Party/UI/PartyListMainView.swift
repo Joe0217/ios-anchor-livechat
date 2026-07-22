@@ -29,6 +29,8 @@ struct PartyListMainView: View {
     /// v4：传完整对象让 PartyTabRootView 判密码房/其他前置逻辑
     let onTapRoom: (PartyRoomInfo) -> Void
     let onTapSearch: () -> Void
+    /// 右上角榜单与首页共用 `HomeRankingView`。
+    let onTapRanking: () -> Void
 
     @State private var activeTab: Int = 0
     @State private var toastTick: UUID?
@@ -141,9 +143,7 @@ struct PartyListMainView: View {
     }
 
     private var rankBadge: some View {
-        Button {
-            fireToast()
-        } label: {
+        Button(action: onTapRanking) {
             Image("liveRankBadge")
                 .resizable()
                 .scaledToFit()

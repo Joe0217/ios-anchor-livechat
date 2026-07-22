@@ -10,6 +10,8 @@ struct PartyRoomChatArea: View {
     let welcomeMessage: String
     let chat: PartyRoomChatManager
     let lastGiftEvent: PartyGiftEvent?
+    let canDeleteTextMessages: Bool
+    let onDeleteTextMessage: (UnifiedPublicChatMessage) async -> Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -39,7 +41,13 @@ struct PartyRoomChatArea: View {
     private var messageList: some View {
         // P1-6：复用已有 PartyMessageListView（chat 观测已在子 view 内切分）
         // v10：filter 透传（All/Chat/Gift 三档真过滤，对齐 H5/Android 派对房蓝本）
-        PartyMessageListView(chat: chat, filter: filter, lastGiftEvent: lastGiftEvent)
+        PartyMessageListView(
+            chat: chat,
+            filter: filter,
+            lastGiftEvent: lastGiftEvent,
+            canDeleteTextMessages: canDeleteTextMessages,
+            onDeleteTextMessage: onDeleteTextMessage
+        )
             .padding(.horizontal, Theme.Metric.partyRoomChatHPadding)
     }
 }

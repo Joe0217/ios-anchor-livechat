@@ -51,4 +51,17 @@ enum PartyValueNormalizer {
         if let s = value as? String { return Int(s.trimmingCharacters(in: .whitespaces)) }
         return nil
     }
+
+    /// 把任意 JSON 数值归一为 Double（用于 2049 `gems` 这类允许小数的金额字段）。
+    static func doubleify(_ value: Any?) -> Double? {
+        guard let value else { return nil }
+        if let d = value as? Double { return d }
+        if let i = value as? Int { return Double(i) }
+        if let i = value as? Int64 { return Double(i) }
+        if let n = value as? NSNumber { return n.doubleValue }
+        if let s = value as? String {
+            return Double(s.trimmingCharacters(in: .whitespaces))
+        }
+        return nil
+    }
 }

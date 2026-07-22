@@ -1,9 +1,10 @@
 import Foundation
 
-/// 派对房房管（`room/getRoomAdminList` 返回项）。
+/// 派对房房管（Store/View 消费的轻量 model）。
 ///
-/// 字段名来自 H5 常规命名推断，**待真机 log 验证**
-/// （对齐 `.claude/rules/agent-recon-field-names-unverified.md`）
+/// **数据来源**：H5 用户端无独立"房管列表"接口；`PartyAdminServiceLive.fetchAdminList` 拉
+/// `room/getViewers`(`type: 1`) 后客户端按 `roomRoleType == 2` 筛出，转为本 struct 供 UI。
+/// Decodable 实现保留供未来若后端上线独立接口时直接兼容。
 struct PartyRoomAdmin: Decodable, Identifiable, Equatable, Hashable {
     let userId: String
     let nickname: String?

@@ -283,6 +283,84 @@ final class PartyPublicChatAdapterTests: XCTestCase {
         XCTAssertNil(PartyPublicChatAdapter.winnerBroadcast(payload: [:]))
     }
 
+    // MARK: - Lucky Number (1050 / 1051 / 1052)
+
+    func test_luckyNumberPublic_usesDataWrapperAndPreservesUserHeader() {
+        let payload: [String: Any] = [
+            "attachType": 1050,
+            "data": [
+                "userId": 1001,
+                "nickname": "Lucky Alice",
+                "avatar": "https://cdn/alice.png",
+                "userLevel": 30,
+                "isVip": 1,
+                "medalList": #"["https://cdn/medal.png"]"#,
+                "role": 2,
+                "isPlatformAdmin": 1,
+                "headFrame": "https://cdn/frame.png",
+                "luckyNumber": "88",
+            ],
+        ]
+
+        guard let message = PartyPublicChatAdapter.luckyNumberPublic(payload: payload, didWin: false),
+              case .partyLuckyNumber(let number, let didWin) = message.variant else {
+            XCTFail("expected .partyLuckyNumber"); return
+        }
+        XCTAssertEqual(number, 88)
+        XCTAssertFalse(didWin)
+        XCTAssertEqual(message.sender?.userId, "1001")
+        XCTAssertEqual(message.sender?.nickname, "Lucky Alice")
+        XCTAssertEqual(message.sender?.avatarURL, "https://cdn/alice.png")
+        XCTAssertEqual(message.sender?.userLevel, 30)
+        XCTAssertTrue(message.sender?.isVip ?? false)
+        XCTAssertEqual(message.sender?.medals, ["https://cdn/medal.png"])
+        XCTAssertEqual(message.sender?.role, .manager)
+        XCTAssertTrue(message.sender?.isPlatformAdmin ?? false)
+        XCTAssertEqual(message.sender?.headFrame, "https://cdn/frame.png")
+    }
+
+    func test_luckyNumberPublic_acceptsH5TopLevelFallbackAndAliases() {
+        let payload: [String: Any] = [
+            "userId": "1002",
+            "fromNick": "Bob",
+            "userAvatar": "https://cdn/bob.png",
+            "luckyNumber": 9,
+        ]
+        guard let message = PartyPublicChatAdapter.luckyNumberPublic(payload: payload, didWin: true),
+              case .partyLuckyNumber(let number, let didWin) = message.variant else {
+            XCTFail("expected .partyLuckyNumber"); return
+        }
+        XCTAssertEqual(number, 9)
+        XCTAssertTrue(didWin)
+        XCTAssertEqual(message.sender?.nickname, "Bob")
+        XCTAssertEqual(message.sender?.avatarURL, "https://cdn/bob.png")
+    }
+
+    func test_luckyNumberPublic_rejectsOutOfRangeNumber() {
+        XCTAssertNil(PartyPublicChatAdapter.luckyNumberPublic(payload: ["luckyNumber": 1000], didWin: false))
+        XCTAssertNil(PartyPublicChatAdapter.luckyNumberPublic(payload: ["luckyNumber": -1], didWin: true))
+    }
+
+    func test_luckyNumberPersonalWin_parsesJSONStringDataAndStableNotificationId() {
+        let payload: [String: Any] = [
+            "_nimCustomNotificationId": "notification-1",
+            "data": #"{"roomId":"room-1","nickname":"Winner","avatar":"https://cdn/winner.png","luckyNumber":"99","text":"You won"}"#,
+        ]
+        let win = PartyLuckyNumberWinPayload.from(payload: payload)
+        XCTAssertEqual(win?.id, "notification-1")
+        XCTAssertEqual(win?.roomId, "room-1")
+        XCTAssertEqual(win?.nickname, "Winner")
+        XCTAssertEqual(win?.avatar, "https://cdn/winner.png")
+        XCTAssertEqual(win?.luckyNumber, 99)
+        XCTAssertEqual(win?.text, "You won")
+    }
+
+    func test_luckyNumberPersonalWin_rejectsMissingOrInvalidNumber() {
+        XCTAssertNil(PartyLuckyNumberWinPayload.from(payload: ["luckyNumber": -1]))
+        XCTAssertNil(PartyLuckyNumberWinPayload.from(payload: ["luckyNumber": 1000]))
+        XCTAssertNil(PartyLuckyNumberWinPayload.from(payload: [:]))
+    }
+
     // MARK: - medalList 三态兼容
 
     func test_parseMedals_arrayOfStrings() {

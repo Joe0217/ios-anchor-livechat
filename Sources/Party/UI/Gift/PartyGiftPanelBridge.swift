@@ -21,8 +21,15 @@ enum PartyGiftPanelBridge {
     /// - Parameters:
     ///   - seatList: `PartyStore.seatList`
     ///   - selfYxAccid: 当前用户云信 accid（`SessionStore.shared.user?.yxAccid`）；对齐 H5 用 yxAccid 匹配 self
+    ///   - battlingUids: PK RUNNING 期红/蓝队参战 uid 集合；非 nil 时**只保留命中 uid 的 seat**
+    ///     （对齐 H5 giftPanelTabs.vue "父级 party-gift-popup 用同一份 recipientList 按当前 team 过滤"）
+    ///     · nil = 不做 PK 过滤（非 PK 期或 SELECTING 期传 nil）
     /// - Returns: `ReceiversConfig`；`items` 可能为空（seat 全空/全是自己/全 yxAccid 空 → spec R8 empty state）
-    static func makeReceiversConfig(seatList: [PartyRoomSeat], selfYxAccid: String?) -> ReceiversConfig {
+    static func makeReceiversConfig(
+        seatList: [PartyRoomSeat],
+        selfYxAccid: String?,
+        battlingUids: Set<Int64>? = nil
+    ) -> ReceiversConfig {
         // R14 · seat.yxAccid nil/空串 过滤
         // 对齐 H5 party-gift-popup.vue L149 filter 字面：
         //   `seat?.yxAccid && seat.yxAccid !== '0' && seat.yxAccid !== userStore.mineInfo?.yxAccid`
@@ -32,6 +39,12 @@ enum PartyGiftPanelBridge {
                 guard let accid = seat.yxAccid, !accid.isEmpty, accid != "0" else { return false }
                 // 用 yxAccid 匹配 self（对齐 H5）—— session 与 seat 同源云信 accid，格式一致
                 if let me = selfYxAccid, !me.isEmpty, accid == me { return false }
+                // PK RUNNING 期按 team 过滤（对齐 H5 giftPanelTabs 父级 recipientList filter）
+                if let uids = battlingUids {
+                    guard let uidStr = seat.userId, let uid = Int64(uidStr), uids.contains(uid) else {
+                        return false
+                    }
+                }
                 return true
             }
             .sorted { (a, b) in

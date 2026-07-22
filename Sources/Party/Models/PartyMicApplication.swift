@@ -9,6 +9,8 @@ struct PartyMicApplication: Decodable, Identifiable, Equatable {
     let userId: String
     let nickname: String
     let avatar: String?
+    /// 头像框装饰 URL（对齐安卓 MicApplicationInfo.headFrame/SmallImg）；.svga / .png / .webp 均可能
+    let headFrame: String?
     let gender: Int?
     let age: Int?
     let userType: Int?
@@ -16,6 +18,9 @@ struct PartyMicApplication: Decodable, Identifiable, Equatable {
     let vip: Int?
     let seatType: Int?
     let seatIndex: Int?
+    /// 是否允许上接待位（对齐安卓 MicApplicationInfo.canOnHostSeat）；nil / false 时房主批准
+    /// 挑首空位应排除 isHostSeat=1 的位；true 时允许
+    let canOnHostSeat: Bool?
 
     var id: String { userId }
 
@@ -50,6 +55,9 @@ struct PartyMicApplication: Decodable, Identifiable, Equatable {
         // avatar alias: avatar / head / userIcon / headImg / userAvatar
         self.avatar = Self.decodeString(c, keys: ["avatar", "head", "userIcon", "headImg", "userAvatar"])
 
+        // headFrame alias: headFrame / headFrameSmallImg / smallImg（对齐 PartyRoomSeat + PartyUserBasicInfo 已用字段名）
+        self.headFrame = Self.decodeString(c, keys: ["headFrame", "headFrameSmallImg", "smallImg", "userIconFrame"])
+
         // levelName alias: levelName / lv / levelStr / level / userLevel（level/userLevel 后端可能是 Int，兜底 stringValue）
         if let s = Self.decodeString(c, keys: ["levelName", "lv", "levelStr", "level", "userLevel"]) {
             self.levelName = s
@@ -65,6 +73,14 @@ struct PartyMicApplication: Decodable, Identifiable, Equatable {
         self.vip = try? c.decode(Int.self, forKey: AnyKey(stringValue: "vip")!)
         self.seatType = try? c.decode(Int.self, forKey: AnyKey(stringValue: "seatType")!)
         self.seatIndex = try? c.decode(Int.self, forKey: AnyKey(stringValue: "seatIndex")!)
+        // canOnHostSeat 可能是 Bool 或 Int (1/0)；双兼容
+        if let b = try? c.decode(Bool.self, forKey: AnyKey(stringValue: "canOnHostSeat")!) {
+            self.canOnHostSeat = b
+        } else if let n = try? c.decode(Int.self, forKey: AnyKey(stringValue: "canOnHostSeat")!) {
+            self.canOnHostSeat = (n != 0)
+        } else {
+            self.canOnHostSeat = nil
+        }
     }
 
     private static func decodeString(_ c: KeyedDecodingContainer<AnyKey>, keys: [String]) -> String? {

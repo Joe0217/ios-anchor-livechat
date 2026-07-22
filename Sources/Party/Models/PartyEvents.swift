@@ -14,6 +14,8 @@ struct PartyGiftEvent: Equatable {
     /// nil = 后端 payload 缺失（旧版兼容 / 单测省略）
     let senderAvatar: String?
     let receiverUserIds: [String]    // 安卓支持批量送礼到多麦位
+    /// 单个接收人的本次收礼值（2049 `gems`）；麦位展示以此本地累计。
+    let gems: Double
     let timestamp: Int64             // 服务端下发时间戳，用于 1007/2049 去重（iOS 不识别 1007，留字段未来扩展）
 
     init(giftId: Int,
@@ -23,6 +25,7 @@ struct PartyGiftEvent: Equatable {
          senderNickname: String?,
          senderAvatar: String? = nil,
          receiverUserIds: [String],
+         gems: Double = 0,
          timestamp: Int64) {
         self.giftId = giftId
         self.giftName = giftName
@@ -31,33 +34,115 @@ struct PartyGiftEvent: Equatable {
         self.senderNickname = senderNickname
         self.senderAvatar = senderAvatar
         self.receiverUserIds = receiverUserIds
+        self.gems = gems
         self.timestamp = timestamp
     }
 }
 
 /// 视频位邀请待响应（1040 INVITE_VIDEO_SEAT 解析后）。
-/// MVP 仅消费"被邀请方响应"链路（接受 → onSeat + 服务端转发 1041；拒绝 → 1042）；
-/// "房主主动发起邀请"接口 `inviteOnSeat` 推 F 期。
+/// 被邀请方通过 `respondInvite` 接受、拒绝或超时响应；房主侧由 `inviteOnSeat` 发起邀请。
 struct PartyVideoSeatInvite: Equatable {
     let inviteId: String
     let seatIndex: Int
     let fromUserId: String?
     let fromNickname: String?
     let roomId: String?      // 用于离开房间时 dismiss 残留邀请
+    /// 服务端下发的邀请有效期（秒）；缺失/非法时按 H5 默认 30 秒处理。
+    let ttlSeconds: Int
     let timestamp: Int64
 }
 
-/// 视频位邀请响应反馈枚举（1041-1048 派生）。
-/// MVP 仅 toast 通知用户，无业务影响。
-enum PartyVideoSeatInviteResult: Equatable {
-    case accepted      // 1041 被邀请者接受
-    case rejected      // 1042 被邀请者拒绝
-    case timeout       // 1043 邀请超时未响应
-    case leave         // 1044 被邀请者已离开
-    case occupied      // 1045 视频位已被占用
-    case alreadyOn     // 1046 该用户已在任意麦位
-    case broadcast     // 1047 邀请被接受公屏广播
-    case joinFailed    // 1048 接受后上位失败
+/// 视频位邀请响应反馈（1041-1048）。
+/// 必须保留 `targetUserId`，让邀请方在收到终态时立即解除对应用户的冷却状态。
+struct PartyVideoSeatInviteResult: Equatable {
+    enum Kind: Equatable {
+        case accepted      // 1041 被邀请者接受
+        case rejected      // 1042 被邀请者拒绝
+        case timeout       // 1043 邀请超时未响应
+        case leave         // 1044 被邀请者已离开
+        case occupied      // 1045 视频位已被占用
+        case alreadyOn     // 1046 该用户已在任意麦位
+        case broadcast     // 1047 邀请被接受公屏广播
+        case joinFailed    // 1048 接受后上位失败
+    }
+
+    let kind: Kind
+    let targetUserId: String?
+    /// 1047 服务端可能携带可直接投递公屏的文本。
+    let systemText: String?
+
+    init(kind: Kind, payload: [String: Any]) {
+        self.kind = kind
+        targetUserId = PartyValueNormalizer.stringify(payload["targetUserId"])
+            ?? PartyValueNormalizer.stringify(payload["userId"])
+        systemText = payload["text"] as? String
+    }
+}
+
+/// 幸运数字中奖个人通知（1052）。仅中奖者通过 NIM CustomSystemNotification 收到。
+///
+/// H5 直接把系统通知内容交给中奖弹窗；iOS 在这里先归一化可能存在的 `data` 包裹，
+/// 再由 PartyStore 进行当前房间校验，避免离房后的延迟通知串到下一房。
+struct PartyLuckyNumberWinPayload: Equatable, Identifiable {
+    let id: String
+    let roomId: String?
+    let nickname: String
+    let avatar: String?
+    let luckyNumber: Int
+    let text: String?
+
+    static func from(payload: [String: Any]) -> PartyLuckyNumberWinPayload? {
+        let data = PartyLuckyNumberPayload.unwrapped(payload)
+        guard let luckyNumber = PartyValueNormalizer.intify(data["luckyNumber"]),
+              (0...999).contains(luckyNumber) else {
+            return nil
+        }
+
+        let roomId = PartyValueNormalizer.stringify(data["roomId"])
+            ?? PartyValueNormalizer.stringify(payload["roomId"])
+        let userId = PartyValueNormalizer.stringify(data["userId"])
+            ?? PartyValueNormalizer.stringify(payload["userId"])
+        let notificationId = PartyValueNormalizer.stringify(payload["_nimCustomNotificationId"])
+        let timestamp = PartyValueNormalizer.stringify(payload["_nimCustomNotificationTimestamp"])
+
+        return PartyLuckyNumberWinPayload(
+            id: notificationId ?? "\(roomId ?? "")-\(userId ?? "")-\(luckyNumber)-\(timestamp ?? "")",
+            roomId: roomId,
+            nickname: (data["nickname"] as? String) ?? (data["fromNick"] as? String) ?? "",
+            avatar: (data["avatar"] as? String) ?? (data["userAvatar"] as? String),
+            luckyNumber: luckyNumber,
+            text: data["text"] as? String
+        )
+    }
+}
+
+/// Lucky Number IM payload 共用归一化。
+/// H5 `party.js` 的真实语义为优先消费 `ext.data`，缺失时才回退到顶层 ext；
+/// `data` 既可能已是对象，也可能仍是 JSON 字符串。
+enum PartyLuckyNumberPayload {
+    static func unwrapped(_ payload: [String: Any]) -> [String: Any] {
+        if let data = payload["data"] as? [String: Any] {
+            return data
+        }
+        if let raw = payload["data"] as? String,
+           let data = raw.data(using: .utf8),
+           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            return object
+        }
+        return payload
+    }
+
+    /// 1050/1051 需要使用 H5 的用户公屏头部字段；`fromNick` / `userAvatar` 为兼容别名。
+    static func publicMessagePayload(from payload: [String: Any]) -> [String: Any] {
+        var data = unwrapped(payload)
+        if data["nickname"] == nil, let nickname = data["fromNick"] {
+            data["nickname"] = nickname
+        }
+        if data["avatar"] == nil, let avatar = data["userAvatar"] {
+            data["avatar"] = avatar
+        }
+        return data
+    }
 }
 
 /// 送礼接口 `gift/sendGift` 返回。
@@ -126,8 +211,60 @@ extension PartyGiftEvent {
             senderNickname: sendUserObj?["nickname"] as? String,
             senderAvatar: senderAvatar,
             receiverUserIds: receiverIds,
+            gems: PartyValueNormalizer.doubleify(payload["gems"]) ?? 0,
             timestamp: timestampMs
         )
+    }
+}
+
+/// 麦位的收礼值是客户端按 2049 实时维护的累计值，服务端的全量麦位刷新通常不带该字段。
+/// 统一在此处更新及迁移，保证大视频位、普通麦位和 PK 队伍盒读取同一份 `seatList` 数据。
+enum PartySeatGiftValue {
+    /// 将单个收礼值累加到本次消息中的每个在麦接收人。
+    static func adding(
+        gems: Double,
+        to receiverUserIds: [String],
+        seats: [PartyRoomSeat]
+    ) -> [PartyRoomSeat] {
+        guard gems.isFinite, gems > 0 else { return seats }
+        let receivers = Set(receiverUserIds.filter { !$0.isEmpty })
+        guard !receivers.isEmpty else { return seats }
+
+        return seats.map { seat in
+            guard let userId = seat.userId, receivers.contains(userId) else { return seat }
+            return replacing(seat, giftValueCount: (seat.giftValueCount ?? 0) + gems)
+        }
+    }
+
+    /// 同一用户仍在麦时，将本地累计值迁移到服务端刷新后的新 seat；换人和新上麦从 0 开始。
+    static func preservingLocalValues(
+        from currentSeats: [PartyRoomSeat],
+        in incomingSeats: [PartyRoomSeat]
+    ) -> [PartyRoomSeat] {
+        let localValues = currentSeats.reduce(into: [String: Double]()) { values, seat in
+            guard let userId = seat.userId, let value = seat.giftValueCount else { return }
+            values[userId] = value
+        }
+        guard !localValues.isEmpty else { return incomingSeats }
+
+        return incomingSeats.map { seat in
+            guard seat.giftValueCount == nil,
+                  let userId = seat.userId,
+                  let localValue = localValues[userId]
+            else { return seat }
+            return replacing(seat, giftValueCount: localValue)
+        }
+    }
+
+    private static func replacing(_ seat: PartyRoomSeat, giftValueCount: Double) -> PartyRoomSeat {
+        guard let data = try? JSONEncoder().encode(seat),
+              var object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else { return seat }
+        object["giftValueCount"] = giftValueCount
+        guard let updatedData = try? JSONSerialization.data(withJSONObject: object),
+              let updated = try? JSONDecoder().decode(PartyRoomSeat.self, from: updatedData)
+        else { return seat }
+        return updated
     }
 }
 
@@ -153,6 +290,10 @@ extension PartyVideoSeatInvite {
             fromUserId: PartyValueNormalizer.stringify(payload["ownerUserId"]),
             fromNickname: payload["ownerNick"] as? String,
             roomId: PartyValueNormalizer.stringify(payload["roomId"]) ?? fallbackRoomId,
+            ttlSeconds: {
+                let ttl = PartyValueNormalizer.intify(payload["ttl"]) ?? 30
+                return ttl > 0 ? ttl : 30
+            }(),
             timestamp: timestampMs
         )
     }

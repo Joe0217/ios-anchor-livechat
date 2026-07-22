@@ -151,3 +151,125 @@ struct PartyLockRoomSheet: View {
         }
     }
 }
+
+/// 密码 Party 房进入页。与 H5 `room-password.vue` 一致，只接受 4 位数字，并在密码输入完成后自动校验。
+/// 校验失败时保持在当前 sheet，绝不创建 PartyRoomView 路由。
+struct PartyEnterPasswordSheet: View {
+    let roomId: String
+    @ObservedObject var store: PartyStore
+    let onVerified: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var passwordInput = ""
+    @State private var errorMessage: String?
+    @State private var isSubmitting = false
+    @FocusState private var isPasswordFocused: Bool
+
+    private let requiredLength = 4
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                Spacer()
+                Button(action: dismiss.callAsFunction) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.7))
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.plain)
+                .disabled(isSubmitting)
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+
+            Text(L10n.Party.passwordAlertTitle)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(.white)
+
+            Text(L10n.Party.passwordAlertMessage)
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.65))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 28)
+
+            SecureField(L10n.Party.lockRoomPasswordPlaceholder, text: $passwordInput)
+                .keyboardType(.numberPad)
+                .focused($isPasswordFocused)
+                .foregroundColor(.white)
+                .tint(Theme.Palette.partyCreateChevron)
+                .multilineTextAlignment(.center)
+                .font(.system(size: 20, weight: .semibold, design: .monospaced))
+                .padding(.horizontal, 16)
+                .frame(height: 52)
+                .background(Capsule().fill(Theme.Palette.partyCreateInputFill))
+                .overlay(Capsule().stroke(Theme.Palette.partyCreateInputBorder, lineWidth: 0.5))
+                .padding(.horizontal, 40)
+                .disabled(isSubmitting)
+                .onChange(of: passwordInput) { value in
+                    let sanitized = Self.sanitizedPassword(value, maxLength: requiredLength)
+                    if sanitized != value {
+                        passwordInput = sanitized
+                        return
+                    }
+                    if !sanitized.isEmpty { errorMessage = nil }
+                    if sanitized.count == requiredLength { submit() }
+                }
+
+            Group {
+                if isSubmitting {
+                    ProgressView()
+                        .tint(.white)
+                        .frame(height: 18)
+                } else if let errorMessage, !errorMessage.isEmpty {
+                    Text(errorMessage)
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(hex: 0xFF6B7A))
+                        .multilineTextAlignment(.center)
+                        .frame(minHeight: 18)
+                        .padding(.horizontal, 24)
+                } else {
+                    Color.clear.frame(height: 18)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.bottom, 22)
+        .presentationDetents([.height(290)])
+        .interactiveDismissDisabled(isSubmitting)
+        .task { isPasswordFocused = true }
+    }
+
+    private func submit() {
+        guard !isSubmitting, passwordInput.count == requiredLength else { return }
+        let password = passwordInput
+        errorMessage = nil
+        isSubmitting = true
+
+        Task { @MainActor in
+            let error = await store.validateRoomEntryPassword(roomId: roomId, password: password)
+            isSubmitting = false
+            guard let error else {
+                passwordInput = ""
+                onVerified()
+                dismiss()
+                return
+            }
+
+            errorMessage = error.errorDescription
+            // H5 密码校验失败后清空输入，下一次完整输入才会再次请求。
+            passwordInput = ""
+            isPasswordFocused = true
+        }
+    }
+
+    private static func sanitizedPassword(_ value: String, maxLength: Int) -> String {
+        var result = ""
+        for scalar in value.unicodeScalars where (48...57).contains(scalar.value) {
+            result.unicodeScalars.append(scalar)
+            if result.count == maxLength { break }
+        }
+        return result
+    }
+}

@@ -33,13 +33,33 @@ final class PartyAPIClient {
     ///   （用于业务侧已有独立处理的 code：如 ROOM_SEAT_IS_OCCUPIED 自动重拉对账、
     ///    ROOM_PASSWORD_WRONG 密码 sheet 内联、1019 diamond not enough 独立充值弹窗）
     func post(_ path: String, body: [String: Any]? = nil, suppressCodes: Set<String> = []) async throws -> Data {
-        try await send(path: path, body: body, isRetry: false, suppressCodes: suppressCodes)
+        try await send(method: "POST", path: path, body: body, query: nil, isRetry: false, suppressCodes: suppressCodes)
     }
 
-    private func send(path: String, body: [String: Any]?, isRetry: Bool, suppressCodes: Set<String> = []) async throws -> Data {
+    /// GET 请求（F-1a 2026-07-17 加：sapi 域部分端点强制 GET，如 party/battle/templates、
+    /// party/battle/applications；POST 会返 HTTP 405 "Request method POST is not supported"）。
+    ///
+    /// GET 无 body 加密；query 参数拼到 URL；响应 envelope 同 POST（若后端 GET 也返
+    /// `{code:'200', result: hex}` 走 result 解密；否则 result 若为 JSON dict/array 直接 return）。
+    func get(_ path: String, query: [String: String]? = nil, suppressCodes: Set<String> = []) async throws -> Data {
+        try await send(method: "GET", path: path, body: nil, query: query, isRetry: false, suppressCodes: suppressCodes)
+    }
+
+    private func send(method: String, path: String, body: [String: Any]?, query: [String: String]?, isRetry: Bool, suppressCodes: Set<String> = []) async throws -> Data {
         // 首次冷启动前等到系统「允许使用无线数据」权限对话框通过再发请求(10s 超时兜底走原错误路径)
         await NetworkReachability.shared.waitUntilReachable()
-        guard let url = URL(string: AppConfig.sapiBaseURL + path) else {
+
+        // GET 请求：query 参数拼 URL
+        var finalPath = path
+        if method == "GET", let q = query, !q.isEmpty {
+            var comps = URLComponents()
+            comps.queryItems = q.map { URLQueryItem(name: $0.key, value: $0.value) }
+            if let queryStr = comps.percentEncodedQuery {
+                let sep = path.contains("?") ? "&" : "?"
+                finalPath = path + sep + queryStr
+            }
+        }
+        guard let url = URL(string: AppConfig.sapiBaseURL + finalPath) else {
             throw PartyAPIError.invalidURL
         }
 
@@ -56,12 +76,13 @@ final class PartyAPIClient {
         }
 
         var req = URLRequest(url: url)
-        req.httpMethod = "POST"
+        req.httpMethod = method
         req.timeoutInterval = 30
         let headers = SapiTokenStore.sapiHeaders(authToken: authToken, loginToken: AuthToken.value)
         for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
 
-        if let body = body {
+        // GET 无 body 加密，跳过下方 body 处理段
+        if method == "POST", let body = body {
             // 守护：JSONSerialization 对 NSNull / 非合法顶层对象会抛 OC 异常且 try? 不接（CLAUDE.md 已知坑）
             guard JSONSerialization.isValidJSONObject(body) else {
                 throw PartyAPIError.encryptFailed
@@ -81,7 +102,7 @@ final class PartyAPIClient {
         #if DEBUG
         let tk = headers["auth_token"] ?? ""
         let tkInfo = tk.isEmpty ? "empty" : "len=\(tk.count)"
-        AppLogger.party.debug("POST \(path, privacy: .public) auth_token=\(tkInfo, privacy: .private) retry=\(isRetry, privacy: .public)")
+        AppLogger.party.debug("\(method, privacy: .public) \(finalPath, privacy: .public) auth_token=\(tkInfo, privacy: .private) retry=\(isRetry, privacy: .public)")
         #endif
 
         let data: Data
@@ -123,7 +144,7 @@ final class PartyAPIClient {
                 // ensureValid 内部已按错误点 post banner；这里只需向上抛
                 throw PartyAPIError.tokenExchangeFailed
             }
-            return try await send(path: path, body: body, isRetry: true, suppressCodes: suppressCodes)
+            return try await send(method: method, path: path, body: body, query: query, isRetry: true, suppressCodes: suppressCodes)
         }
 
         // 其他非 200 HTTP（403/404/500 等）：先尝试解析 envelope 拿 code；

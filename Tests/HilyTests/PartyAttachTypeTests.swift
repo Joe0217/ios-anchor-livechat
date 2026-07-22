@@ -127,7 +127,7 @@ final class PartyAttachTypeTests: XCTestCase {
 
     // MARK: - 5. v3：codes 与 enum 不相交
 
-    /// v3 收敛后 `codes` 只保留**未加 case** 的项：{45, 144, 195, 1002, 1010, 1022, 1023}。
+    /// v3 收敛后 `codes` 只保留**未加 case** 的项：{45, 144, 195, 1002, 1010}。
     /// 单测锁定：任一 codes 内的 rawValue **必须** `from(rawValue:)` 返回 nil。
     func test_v3_codes_disjoint_from_enum() {
         for raw in PartyKnownButUnhandledAttachType.codes {
@@ -136,9 +136,9 @@ final class PartyAttachTypeTests: XCTestCase {
         }
     }
 
-    /// codes 现内容锁定（v3 收敛后）：{45, 144, 195, 1002, 1010, 1022, 1023}
+    /// codes 现内容锁定（v3 收敛后）：{45, 144, 195, 1002, 1010}
     func test_v3_codes_current_content() {
-        let expected: Set<Int> = [45, 144, 195, 1002, 1010, 1022, 1023]
+        let expected: Set<Int> = [45, 144, 195, 1002, 1010]
         XCTAssertEqual(PartyKnownButUnhandledAttachType.codes, expected,
                        "v3 codes 应只保留未加 case 的 Android 独有 + 值冲突 45")
     }

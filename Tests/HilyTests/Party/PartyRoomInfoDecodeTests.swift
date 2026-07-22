@@ -206,6 +206,45 @@ final class PartyRoomInfoDecodeTests: XCTestCase {
         XCTAssertEqual(seat?.occupied, false)
     }
 
+    func test_seat_isMicrophoneMuted_emptySeatWithAdminMute_returnsTrue() {
+        let json = """
+        {"seatIndex": 1, "isOccupied": 0, "seatMicrophoneEnabled": 0}
+        """.data(using: .utf8)!
+        let seat = try? decoder.decode(PartyRoomSeat.self, from: json)
+        XCTAssertEqual(seat?.isMicrophoneMuted, true)
+    }
+
+    func test_videoSeat_adminMute_isDistinguishedFromUserMute() {
+        let json = """
+        {"seatIndex": 1, "seatType": 1, "microphoneEnabled": 1, "seatMicrophoneEnabled": 0}
+        """.data(using: .utf8)!
+        let seat = try? decoder.decode(PartyRoomSeat.self, from: json)
+
+        XCTAssertEqual(seat?.isVideoSeat, true)
+        XCTAssertEqual(seat?.isSeatMicrophoneProhibited, true)
+        XCTAssertEqual(seat?.isUserMicrophoneMuted, false)
+        XCTAssertEqual(seat?.isMicrophoneMuted, true)
+    }
+
+    func test_seat_isMCSeat_hostSeatOne_returnsTrue() {
+        let json = """
+        {"seatIndex": 1, "isHostSeat": 1}
+        """.data(using: .utf8)!
+        let seat = try? decoder.decode(PartyRoomSeat.self, from: json)
+        XCTAssertEqual(seat?.isMCSeat, true)
+    }
+
+    func test_seatInviteCandidate_decodesNumericUserIdAndScore() throws {
+        let json = """
+        {"userId": 1001, "nickname": "Mia", "avatar": "https://example.com/a.png", "userType": 1, "score": 42}
+        """.data(using: .utf8)!
+        let candidate = try decoder.decode(PartySeatInviteCandidate.self, from: json)
+        XCTAssertEqual(candidate.userId, "1001")
+        XCTAssertEqual(candidate.nickname, "Mia")
+        XCTAssertEqual(candidate.userType, 1)
+        XCTAssertEqual(candidate.score, "42")
+    }
+
     // MARK: - schema 脆弱性 PASS_WITH_CONCERNS
 
     func test_roomTempId_Number_typeFragile_throws() {
@@ -224,6 +263,49 @@ final class PartyRoomInfoDecodeTests: XCTestCase {
         {"isPlatformAdmin": 1}
         """.data(using: .utf8)!
         XCTAssertThrowsError(try decoder.decode(PartyRoomInfo.self, from: json))
+    }
+
+    func test_withUpdated_roomRoleType_updatesRoleWithoutChangingOtherFields() {
+        let room = makeRoom(roomRoleType: PartyRoomRoleType.audience.rawValue, ownerId: "owner")
+
+        let updated = room.withUpdated(roomRoleType: PartyRoomRoleType.admin.rawValue)
+
+        XCTAssertEqual(updated.roomRoleType, PartyRoomRoleType.admin.rawValue)
+        XCTAssertEqual(updated.ownerId, "owner")
+    }
+
+    func test_cornerBannerList_decodesNumericIdAndUrls() throws {
+        let json = """
+        {
+            "cornerBannerList": [
+                {"id": 42, "picUrl": "https://cdn.example/banner.png", "directUrl": "https://activity.example/play"}
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let info = try decoder.decode(PartyRoomInfo.self, from: json)
+
+        XCTAssertEqual(info.cornerBannerList?.first?.id, "42")
+        XCTAssertEqual(info.cornerBannerList?.first?.picUrl, "https://cdn.example/banner.png")
+        XCTAssertEqual(info.cornerBannerList?.first?.directUrl, "https://activity.example/play")
+        XCTAssertEqual(info.cornerBannerList?.first?.isDisplayable, true)
+    }
+
+    func test_bannerList_decodesNumericIdAndKeepsItemsWithoutDirectUrlDisplayable() throws {
+        let json = """
+        {
+            "bannerList": [
+                {"id": 43, "picUrl": "https://cdn.example/party-banner.png"}
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let info = try decoder.decode(PartyRoomInfo.self, from: json)
+
+        XCTAssertEqual(info.bannerList?.first?.id, "43")
+        XCTAssertEqual(info.bannerList?.first?.picUrl, "https://cdn.example/party-banner.png")
+        XCTAssertTrue(info.bannerList?.first?.isDisplayable == true)
+        XCTAssertFalse(info.bannerList?.first?.isNavigable == true)
     }
 
     // MARK: - helpers

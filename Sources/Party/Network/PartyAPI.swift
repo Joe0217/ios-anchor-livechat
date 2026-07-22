@@ -19,6 +19,7 @@ enum PartyAPI {
     private static let roomBusinessSuppress: Set<String> = [
         "ROOM_SEAT_IS_OCCUPIED",   // → PartyStore.seatOccupied 自动 reloadSeatList
         "ROOM_SEAT_EMPTY",         // → PartyStore.seatEmpty 自动 reloadSeatList
+        "10006",                   // → 密码 sheet 内联（H5 enterRoom 密码错误码）
         "ROOM_PASSWORD_WRONG",     // → 密码 sheet 内联
         "PASSWORD_ERROR",          // 同上
         "USER_BANNED",             // → 独立封禁提示
@@ -127,6 +128,15 @@ enum PartyAPI {
         return try decodeObject(data, as: PartyCreateConditions.self)
     }
 
+    /// Party 房基础配置。对齐 H5 `apiGetPartyBaseConfig`。
+    static func getPartyBaseConfig() async throws -> PartyBaseConfig {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/getPartyBaseConfig",
+            body: [:]
+        )
+        return try decodeObject(data, as: PartyBaseConfig.self)
+    }
+
     /// 派对房背景图列表（创房 Background picker 用）。
     ///
     /// **对齐 H5 `apiGetPartyBgImages`** + 安卓 `getRoomBgImages`。
@@ -199,10 +209,9 @@ enum PartyAPI {
     /// **body**：`{roomId, rankType: 'day'|'week'|'month', periodType?: 'CURRENT'|'LAST'}`
     /// **response**：`{rankList: [PartyRankEntry], myRank: {...}, duration: Int(秒)}`
     ///
-    /// MVP 只暴露 rankType/periodType 参数；iOS 侧 sheet 默认 daily + CURRENT。
     static func partyContributionRank(roomId: String,
                                       rankType: String = "day",
-                                      periodType: String? = nil) async throws -> [PartyRankEntry] {
+                                      periodType: String? = nil) async throws -> PartyRankResponse {
         var body: [String: Any] = ["roomId": roomId, "rankType": rankType]
         if let p = periodType { body["periodType"] = p }
         let data = try await PartyAPIClient.shared.post(
@@ -215,10 +224,10 @@ enum PartyAPI {
     /// 派对房荣誉榜（对齐 H5 `apiGetPartyHonorRank`；顶栏 honor 数据点击触发）。
     ///
     /// **path**：`/sapi/weidou/v1/client/party/room/rank/getHonorRanks`
-    /// H5 一致，body/response 与 contribution 相同（Honor 无月榜由 UI 层限制）。
+    /// body/response 与贡献榜相同（Honor 无月榜由 UI 层限制）。
     static func partyHonorRank(roomId: String,
                                rankType: String = "day",
-                               periodType: String? = nil) async throws -> [PartyRankEntry] {
+                               periodType: String? = nil) async throws -> PartyRankResponse {
         var body: [String: Any] = ["roomId": roomId, "rankType": rankType]
         if let p = periodType { body["periodType"] = p }
         let data = try await PartyAPIClient.shared.post(
@@ -232,11 +241,16 @@ enum PartyAPI {
     ///
     /// **path**：`/sapi/weidou/v1/client/party/room/getViewers`
     /// **body**：`{roomId, offset: Any?, pageSize, needTotalCount: Bool}`
-    /// **response**：数组或 `{list, offset}`；MVP 无分页,一次拉 50 条。
-    static func partyOnlineViewers(roomId: String, pageSize: Int = 50, type: Int? = nil) async throws -> [PartyRankEntry] {
+    /// **response**：数组或 `{list, offset}`；`offset` 必须透传上一页末项的 `score`。
+    static func partyOnlineViewers(
+        roomId: String,
+        pageSize: Int = 10,
+        offset: String? = nil,
+        type: Int? = nil
+    ) async throws -> [PartyRankEntry] {
         var body: [String: Any] = [
             "roomId": roomId,
-            "offset": NSNull(),
+            "offset": offset ?? NSNull(),
             "pageSize": pageSize,
             "needTotalCount": true
         ]
@@ -249,14 +263,145 @@ enum PartyAPI {
         return try decodeArrayOrEmpty(data, as: PartyRankEntry.self)
     }
 
-    /// Rank 接口特化解码：优先 `{rankList: [...]}`，其次直接数组，再次 wrapper key 兜底。
-    private static func decodeRankResponse(_ data: Data) throws -> [PartyRankEntry] {
+    /// 游戏任务激励排行榜（安卓 `PartyRoomRankingFragment` / H5 `from=gameTask`）。
+    ///
+    /// 独立于房间贡献/荣誉榜：`type` 仅支持 day/week，右侧显示 `expectedReward`。
+    /// `expectedReward` 是字符串化 Long，由 `PartyGameTaskRankingResponse` 原样保留。
+    static func gameTaskRanking(
+        type: String,
+        page: Int,
+        size: Int
+    ) async throws -> PartyGameTaskRankingResponse {
+        let data = try await PartyAPIClient.shared.post(
+            "/sapi/marketing/v1/client/gameTask/getRanking",
+            body: ["type": type, "page": page, "size": size]
+        )
+        return try decoder.decode(PartyGameTaskRankingResponse.self, from: data)
+    }
+
+    /// 主播派对房周任务（安卓 `WeekTaskDialog`）。任务完成奖励由 P2P 1023 自动下发，
+    /// 该接口只读取上麦时长任务与已知进度，不发起领奖。
+    static func weeklyTaskInfo(pageSize: Int = 20, offset: String? = nil) async throws -> PartyWeeklyTaskPage {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/task/getTaskInfo",
+            body: ["pageSize": pageSize, "offset": offset ?? NSNull()]
+        )
+        #if DEBUG
+        let raw = String(data: data, encoding: .utf8) ?? "<binary>"
+        AppLogger.party.debug("[PartyWeeklyTask] getTaskInfo raw=\(raw, privacy: .private)")
+        #endif
+        return try PartyWeeklyTaskPage.decode(from: data)
+    }
+
+    /// 安卓主播端热门房任务检测。进房后和房间存活期间调用；仅服务端确认 TopX 时才显示任务入口。
+    static func hotRoomTaskStatus(roomId: String) async throws -> PartyHotRoomTaskStatus {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/checkExistHot3",
+            body: ["roomId": roomId]
+        )
+        #if DEBUG
+        let raw = String(data: data, encoding: .utf8) ?? "<binary>"
+        AppLogger.party.debug("[PartyHotTask] checkExistHot3 raw=\(raw, privacy: .private)")
+        #endif
+        return try PartyHotRoomTaskStatus.decode(from: data)
+    }
+
+    /// 非热门房任务引导的目标房间。安卓在 `path == top_room_guide` 时调用此接口。
+    static func hotRoomWithAvailableSeat() async throws -> PartyHotRoomGuide? {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/top/availableSeat",
+            body: [:]
+        )
+        #if DEBUG
+        let raw = String(data: data, encoding: .utf8) ?? "<binary>"
+        AppLogger.party.debug("[PartyHotTask] availableSeat raw=\(raw, privacy: .private)")
+        #endif
+        return try PartyHotRoomGuide.decode(from: data)
+    }
+
+    /// 露脸检测违规上报。`status` 与 `type` 的业务枚举由服务端任务配置决定，调用端必须传真实值。
+    /// 图片先经 OSS 上传，上传后的 URL 作为 `content` 传入。
+    static func reportHotRoomTask(
+        roomId: String,
+        status: Int,
+        type: Int,
+        content: String,
+        seatId: Int
+    ) async throws -> PartyHotRoomTaskStatus {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/partyRoomReport",
+            body: [
+                "roomId": roomId,
+                "status": status,
+                "type": type,
+                "content": content,
+                "seatId": seatId,
+            ]
+        )
+        return try PartyHotRoomTaskStatus.decode(from: data)
+    }
+
+    /// 分享面板的关注/粉丝联系人。对齐 H5 `apiPartyGetFollowInfoList`。
+    /// `followType`: 0=我关注，1=关注我的；分页从 1 开始。
+    static func shareFollowUsers(followType: Int, pageIndex: Int = 1, pageSize: Int = 20) async throws -> [PartyShareRecipient] {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/getFollowInfoList",
+            body: ["followType": followType, "pageIndex": pageIndex, "pageSize": pageSize]
+        )
+        return try decodeArrayOrEmpty(data, as: PartyShareRecipient.self)
+    }
+
+    /// 对齐 H5 `apiPartyInviteUserRoom`：站内邀请用户进入当前 Party 房。
+    static func inviteUsersToRoom(roomId: String, yxAccidList: [String]) async throws {
+        guard !yxAccidList.isEmpty else { return }
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/inviteUserRoom",
+            body: ["roomId": roomId, "inviteYxAccIds": yxAccidList]
+        )
+    }
+
+    /// 空麦位的在线推荐用户列表。对齐 H5 `apiGetRecommendInviteList`。
+    static func recommendedSeatInviteUsers(
+        roomId: String,
+        offset: String? = nil,
+        pageSize: Int = 20
+    ) async throws -> [PartySeatInviteCandidate] {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/getRecommendInviteList",
+            body: ["roomId": roomId, "offset": offset ?? NSNull(), "pageSize": pageSize]
+        )
+        return try decodeArrayOrEmpty(data, as: PartySeatInviteCandidate.self)
+    }
+
+    /// 视频位邀请普通用户上麦。服务端向目标用户下发 1040，目标确认后才实际占位。
+    static func inviteOnSeat(
+        roomId: String,
+        yxRoomId: String,
+        seatIndex: Int,
+        targetUserId: String,
+        roomTempId: Int
+    ) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/seat/inviteOnSeat",
+            body: [
+                "roomId": roomId,
+                "yxRoomId": yxRoomId,
+                "seatIndex": seatIndex,
+                "targetUserId": targetUserId,
+                "operatorType": 1,
+                "roomTempId": roomTempId,
+            ]
+        )
+    }
+
+    /// Rank 接口特化解码：优先 `{rankList, myRank, duration}`，其次直接数组，再次 wrapper key 兜底。
+    private static func decodeRankResponse(_ data: Data) throws -> PartyRankResponse {
         // 1. 直接对象 `{rankList: [...]}`
         if let obj = try? decoder.decode(PartyRankResponse.self, from: data) {
-            return obj.rankList
+            return obj
         }
         // 2. envelope 分页数组 fallback（复用 decodeArrayOrEmpty）
-        return try decodeArrayOrEmpty(data, as: PartyRankEntry.self)
+        return PartyRankResponse(rankList: try decodeArrayOrEmpty(data, as: PartyRankEntry.self))
     }
 
     // MARK: - lock room (E spec §3 Lock Room)
@@ -395,6 +540,25 @@ enum PartyAPI {
         return info
     }
 
+    /// 删除 Party 房公屏文本消息。仅房主、房管和平台管理员可调用。
+    /// 对齐 H5 `apiDeletePartyMsg`：`POST /party/msg/delete`。
+    static func deletePartyMessage(
+        roomId: String,
+        messageId: String,
+        timetag: Int64,
+        fromAccid: String
+    ) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/msg/delete",
+            body: [
+                "roomId": roomId,
+                "msgIdServer": messageId,
+                "msgTimetag": timetag,
+                "fromAccid": fromAccid,
+            ]
+        )
+    }
+
     /// 退房。`seatIndex` 传当前在麦的位号；不在麦时传 0。
     static func exitRoom(roomId: String, seatIndex: Int, yxRoomId: String) async throws {
         _ = try await PartyAPIClient.shared.post(
@@ -452,7 +616,7 @@ enum PartyAPI {
 
     /// 禁麦/解禁麦（房主/房管专用；对齐 H5 apiPartyProhibitSeat + usePartyHooks.js:1157 `feachProhibitSeat`）。
     /// - operatorType: **6=禁麦，7=解禁麦**（H5 硬编码 magic number；后端 DTO 强校验）
-    /// - 作用于**占用位**（切换 seatMicrophoneEnabled 服务端管理态，独立于用户自身 microphoneEnabled）
+    /// - 切换 `seatMicrophoneEnabled` 服务端管理态，独立于用户自身 microphoneEnabled；空位也由服务端返回状态决定是否允许预设禁麦。
     /// - 成功后服务端下发 1008 updateMedia 广播全员（seat.seatMicrophoneEnabled 切换），前端不做乐观更新
     static func prohibitSeat(
         roomId: String,
@@ -923,6 +1087,190 @@ enum PartyAPI {
         return try decodeArrayOrEmpty(data, as: GiftListData.self)
     }
 
+    // MARK: - Lucky Number (H5 party-tool-menu.vue / lucky-number-panel.vue)
+
+    /// 拉取幸运数字配置。接口与 H5 `apiLuckyNumberGetConfig` 完全一致。
+    static func getLuckyNumberConfig(roomId: String) async throws -> PartyLuckyNumberConfig? {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/lucky-number/getConfig",
+            body: ["roomId": roomId]
+        )
+        guard String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines) != "null" else {
+            return nil
+        }
+        return try decodeObject(data, as: PartyLuckyNumberConfig.self)
+    }
+
+    /// 设置幸运数字范围、固定号码与管理员权限。`luckyNumber=nil` 对齐 H5 显式传 null，代表随机抽取。
+    static func saveLuckyNumberConfig(
+        roomId: String,
+        numberRangeCode: Int,
+        luckyNumber: Int?,
+        adminCanSet: Bool?
+    ) async throws -> PartyLuckyNumberConfig? {
+        var body: [String: Any] = [
+            "roomId": roomId,
+            "numberRangeCode": numberRangeCode,
+            // H5 API contract 是 string | null；保持类型一致，避免服务端 DTO 收紧时拒绝数字 JSON。
+            "luckyNumber": luckyNumber.map(String.init) ?? NSNull(),
+        ]
+        if let adminCanSet {
+            body["adminCanSet"] = adminCanSet ? 1 : 0
+        }
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/lucky-number/saveConfig",
+            body: body
+        )
+        guard String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines) != "null" else {
+            return nil
+        }
+        return try decodeObject(data, as: PartyLuckyNumberConfig.self)
+    }
+
+    /// 抽取幸运数字并由服务端广播到公屏（H5 `apiLuckyNumberGenerate`）。
+    static func generateLuckyNumber(roomId: String) async throws -> Bool {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/lucky-number/generate",
+            body: ["roomId": roomId]
+        )
+        return String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines) != "null"
+    }
+
+    /// 房主查看最近三天的幸运数字命中记录（H5 `apiLuckyNumberHistory`）。
+    static func getLuckyNumberHistory(
+        roomId: String,
+        pageNo: Int = 1,
+        pageSize: Int = 20
+    ) async throws -> PartyLuckyNumberHistoryResponse {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/lucky-number/history",
+            body: [
+                "roomId": roomId,
+                "pageNo": String(pageNo),
+                "pageSize": String(pageSize),
+            ]
+        )
+        return try decodeObject(data, as: PartyLuckyNumberHistoryResponse.self)
+    }
+
+    // MARK: - room music (H5 room-mana-popup.vue)
+
+    /// 读取房间音乐开关的真实状态。`roomMusicSwitc` 只表示音乐功能是否开放，
+    /// 实际 ON/OFF 必须以 music/settings 返回的 `isEnabled` 为准。
+    static func getMusicSettings(roomId: String) async throws -> PartyMusicSettings {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/music/settings",
+            body: ["roomId": roomId]
+        )
+        return try decodeObject(data, as: PartyMusicSettings.self)
+    }
+
+    /// 房主或房管切换房间音乐。与 H5 `apiPartyMusicEnableMusic` 的参数保持一致。
+    static func setMusicEnabled(roomId: String, yxRoomId: String, enabled: Bool) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/music/enableMusic",
+            body: [
+                "roomId": roomId,
+                "isEnable": enabled ? 1 : 0,
+                "yxRoomId": yxRoomId,
+            ]
+        )
+    }
+
+    /// H5 音乐面板的歌单列表。`musicType`：1=Playlist、2=Liked、3=Local。
+    static func getMusicList(
+        musicType: Int,
+        pageSize: Int = 20,
+        offset: String? = nil
+    ) async throws -> [PartyMusicItem] {
+        var body: [String: Any] = [
+            "musicType": musicType,
+            "pageSize": pageSize,
+        ]
+        if let offset { body["offset"] = offset }
+        let data = try await PartyAPIClient.shared.post("\(pathPrefix)/music/list", body: body)
+        return try decodeArrayOrEmpty(data, as: PartyMusicItem.self)
+    }
+
+    /// 收藏或取消收藏音乐。`type`：1=收藏、2=取消收藏。
+    static func setMusicLiked(songId: String, musicType: Int, liked: Bool) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/music/like",
+            body: [
+                "songId": songId,
+                "musicType": musicType,
+                "type": liked ? 1 : 2,
+            ]
+        )
+    }
+
+    /// 管理员播放、暂停或切歌。参数与 H5 `apiPartyMusicPlay` 对齐。
+    static func playMusic(
+        songId: String,
+        roomId: String,
+        musicType: Int,
+        playMode: Int,
+        volume: Int,
+        actionType: Int
+    ) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/music/play",
+            body: [
+                "songId": songId,
+                "roomId": roomId,
+                "musicType": musicType,
+                "playMode": playMode,
+                "volume": volume,
+                "actionType": actionType,
+            ]
+        )
+    }
+
+    /// 更新当前歌曲的音量、播放模式或播放状态。
+    static func updateMusic(
+        songId: String,
+        roomId: String,
+        volume: Int,
+        playMode: Int,
+        playStatus: Int
+    ) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/music/update",
+            body: [
+                "songId": songId,
+                "roomId": roomId,
+                "volume": volume,
+                "playMode": playMode,
+                "playStatus": playStatus,
+            ]
+        )
+    }
+
+    /// 添加房主本地上传的音乐。
+    static func addLocalMusic(roomId: String, music: PartyLocalMusicUpload) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/music/uploadLocalMusic",
+            body: [
+                "roomId": roomId,
+                "musicList": [[
+                    "songName": music.songName,
+                    "musicUrl": music.musicURL,
+                    "durationSeconds": music.durationSeconds,
+                    "fileFormat": music.fileFormat,
+                ]],
+            ]
+        )
+    }
+
+    /// 删除房主本地上传的音乐。
+    static func deleteLocalMusic(roomId: String, musicIDs: [String]) async throws {
+        guard !musicIDs.isEmpty else { return }
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/music/removeLocalMusic",
+            body: ["roomId": roomId, "musicIdList": musicIDs]
+        )
+    }
+
     // MARK: - emoji panel (F 里程碑 · 2026-07-17)
 
     /// 派对房表情面板分类列表（对齐 H5 `apiPartyEmojis` / `apiGetPartyRoomEmojis` ·
@@ -944,6 +1292,193 @@ enum PartyAPI {
         )
         return try decodeArrayOrEmpty(data, as: PartyEmojiClassification.self)
     }
+}
+
+/// H5 `currentMusicInfo` 的宽容解码版本。音乐状态会同时通过 HTTP 和 1011/1013 IM 下发，
+/// 数字/布尔字段可能在环境间混发 String、Int 与 Bool。
+struct PartyMusicSettings: Decodable, Equatable {
+    let id: String?
+    let currentSongId: String?
+    let songName: String?
+    let musicType: Int
+    let playStatus: Int
+    let volume: Int
+    let playMode: Int
+    let isEnabled: Bool
+
+    static let empty = PartyMusicSettings(
+        id: nil, currentSongId: nil, songName: nil, musicType: 1,
+        playStatus: 0, volume: 100, playMode: 1, isEnabled: false
+    )
+
+    init(
+        id: String?,
+        currentSongId: String?,
+        songName: String?,
+        musicType: Int,
+        playStatus: Int,
+        volume: Int,
+        playMode: Int,
+        isEnabled: Bool
+    ) {
+        self.id = id
+        self.currentSongId = currentSongId
+        self.songName = songName
+        self.musicType = musicType
+        self.playStatus = playStatus
+        self.volume = volume
+        self.playMode = playMode
+        self.isEnabled = isEnabled
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, currentSongId, songId, songName, musicType, playStatus, volume, playMode, isEnabled, isEnable
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = Self.string(c, key: .id)
+        currentSongId = Self.string(c, key: .currentSongId) ?? Self.string(c, key: .songId)
+        songName = try? c.decode(String.self, forKey: .songName)
+        musicType = Self.int(c, key: .musicType) ?? 1
+        playStatus = Self.int(c, key: .playStatus) ?? 0
+        volume = min(max(Self.int(c, key: .volume) ?? 100, 0), 200)
+        playMode = Self.int(c, key: .playMode) ?? 1
+        isEnabled = Self.bool(c, key: .isEnabled) || Self.bool(c, key: .isEnable)
+    }
+
+    func updating(
+        currentSongId: String? = nil,
+        songName: String? = nil,
+        musicType: Int? = nil,
+        playStatus: Int? = nil,
+        volume: Int? = nil,
+        playMode: Int? = nil,
+        isEnabled: Bool? = nil
+    ) -> Self {
+        Self(
+            id: id,
+            currentSongId: currentSongId ?? self.currentSongId,
+            songName: songName ?? self.songName,
+            musicType: musicType ?? self.musicType,
+            playStatus: playStatus ?? self.playStatus,
+            volume: min(max(volume ?? self.volume, 0), 200),
+            playMode: playMode ?? self.playMode,
+            isEnabled: isEnabled ?? self.isEnabled
+        )
+    }
+
+    func applying(payload: [String: Any]) -> Self {
+        var next = self
+        if payload["currentSongId"] != nil || payload["songId"] != nil {
+            next = next.updating(currentSongId: PartyValueNormalizer.stringify(payload["currentSongId"] ?? payload["songId"]))
+        }
+        if let name = PartyValueNormalizer.stringify(payload["songName"]) {
+            next = next.updating(songName: name)
+        }
+        if let type = PartyValueNormalizer.intify(payload["musicType"]) {
+            next = next.updating(musicType: type)
+        }
+        if let status = PartyValueNormalizer.intify(payload["playStatus"]) {
+            next = next.updating(playStatus: status)
+        }
+        if let value = PartyValueNormalizer.intify(payload["volume"]) {
+            next = next.updating(volume: value)
+        }
+        if let mode = PartyValueNormalizer.intify(payload["playMode"]) {
+            next = next.updating(playMode: mode)
+        }
+        if payload["isEnabled"] != nil || payload["isEnable"] != nil {
+            let raw = payload["isEnabled"] ?? payload["isEnable"]
+            let enabled = PartyValueNormalizer.intify(raw) == 1
+                || (PartyValueNormalizer.stringify(raw)?.lowercased() == "true")
+            next = next.updating(isEnabled: enabled)
+        }
+        return next
+    }
+
+    private static func string(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> String? {
+        if let value = try? c.decode(String.self, forKey: key), !value.isEmpty { return value }
+        if let value = try? c.decode(Int64.self, forKey: key) { return String(value) }
+        return nil
+    }
+
+    private static func int(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> Int? {
+        if let value = try? c.decode(Int.self, forKey: key) { return value }
+        if let value = try? c.decode(String.self, forKey: key) { return Int(value) }
+        return nil
+    }
+
+    private static func bool(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> Bool {
+        if let value = try? c.decode(Bool.self, forKey: key) { return value }
+        if let value = int(c, key: key) { return value == 1 }
+        if let value = try? c.decode(String.self, forKey: key) {
+            return value == "1" || value.lowercased() == "true"
+        }
+        return false
+    }
+}
+
+struct PartyMusicItem: Decodable, Equatable, Identifiable {
+    let id: String
+    let songName: String
+    let durationSeconds: Int
+    let sortWeight: String?
+    let musicType: Int
+    let isLiked: Bool
+
+    private enum CodingKeys: String, CodingKey { case id, songName, durationSeconds, sortWeight, musicType, like }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = Self.string(c, key: .id) ?? UUID().uuidString
+        songName = (try? c.decode(String.self, forKey: .songName)) ?? ""
+        durationSeconds = Self.int(c, key: .durationSeconds) ?? 0
+        sortWeight = Self.string(c, key: .sortWeight)
+        musicType = Self.int(c, key: .musicType) ?? 1
+        isLiked = Self.bool(c, key: .like)
+    }
+
+    func updating(isLiked: Bool) -> Self {
+        Self(id: id, songName: songName, durationSeconds: durationSeconds, sortWeight: sortWeight, musicType: musicType, isLiked: isLiked)
+    }
+
+    private init(id: String, songName: String, durationSeconds: Int, sortWeight: String?, musicType: Int, isLiked: Bool) {
+        self.id = id
+        self.songName = songName
+        self.durationSeconds = durationSeconds
+        self.sortWeight = sortWeight
+        self.musicType = musicType
+        self.isLiked = isLiked
+    }
+
+    private static func string(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> String? {
+        if let value = try? c.decode(String.self, forKey: key), !value.isEmpty { return value }
+        if let value = try? c.decode(Int64.self, forKey: key) { return String(value) }
+        return nil
+    }
+
+    private static func int(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> Int? {
+        if let value = try? c.decode(Int.self, forKey: key) { return value }
+        if let value = try? c.decode(String.self, forKey: key) { return Int(value) }
+        return nil
+    }
+
+    private static func bool(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> Bool {
+        if let value = try? c.decode(Bool.self, forKey: key) { return value }
+        if let value = int(c, key: key) { return value == 1 }
+        if let value = try? c.decode(String.self, forKey: key) {
+            return value == "1" || value.lowercased() == "true"
+        }
+        return false
+    }
+}
+
+struct PartyLocalMusicUpload {
+    let songName: String
+    let musicURL: String
+    let durationSeconds: Int
+    let fileFormat: String
 }
 
 /// 排麦申请列表 API response（`getQueueSeatList` 的 DTO 包装，spec §2）。
@@ -976,5 +1511,111 @@ struct PartyMicApplicationListResponse: Decodable, Equatable {
         self.totalNum = (try? c.decode(Int.self, forKey: .totalNum)) ?? 0
         self.records = (try? c.decode([PartyMicApplication].self, forKey: .records)) ?? []
         self.myIndex = (try? c.decode(Int.self, forKey: .myIndex)) ?? -1
+    }
+}
+
+// MARK: - Lucky Number DTOs
+
+/// H5 `LuckyNumberConfigResponse` 的宽容解码版本。服务端的数字与开关字段可能混发 String / Int / Bool。
+struct PartyLuckyNumberConfig: Decodable, Equatable {
+    let roomId: String?
+    let numberRangeCode: Int
+    let luckyNumber: Int?
+    let adminCanSet: Bool
+    let canConfigure: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case roomId, numberRangeCode, luckyNumber, adminCanSet, canConfigure
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        roomId = Self.string(c, key: .roomId)
+        let range = Self.int(c, key: .numberRangeCode) ?? 1
+        numberRangeCode = range == 2 || range == 3 ? range : 1
+        luckyNumber = Self.int(c, key: .luckyNumber)
+        adminCanSet = Self.bool(c, key: .adminCanSet)
+        canConfigure = Self.bool(c, key: .canConfigure)
+    }
+
+    private static func string(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> String? {
+        if let value = try? c.decode(String.self, forKey: key), !value.isEmpty { return value }
+        if let value = try? c.decode(Int64.self, forKey: key) { return String(value) }
+        return nil
+    }
+
+    private static func int(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> Int? {
+        if let value = try? c.decode(Int.self, forKey: key) { return value }
+        if let value = try? c.decode(Int64.self, forKey: key) { return Int(value) }
+        if let value = try? c.decode(String.self, forKey: key) { return Int(value) }
+        return nil
+    }
+
+    private static func bool(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> Bool {
+        if let value = try? c.decode(Bool.self, forKey: key) { return value }
+        if let value = int(c, key: key) { return value == 1 }
+        if let value = try? c.decode(String.self, forKey: key) {
+            return value == "1" || value.lowercased() == "true"
+        }
+        return false
+    }
+}
+
+struct PartyLuckyNumberHistoryResponse: Decodable, Equatable {
+    let records: [PartyLuckyNumberHistoryItem]
+    let total: Int
+    let pageNo: Int
+
+    private enum CodingKeys: String, CodingKey { case records, total, pageNo }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        records = (try? c.decode([PartyLuckyNumberHistoryItem].self, forKey: .records)) ?? []
+        total = Self.int(c, key: .total) ?? records.count
+        pageNo = Self.int(c, key: .pageNo) ?? 1
+    }
+
+    private static func int(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> Int? {
+        if let value = try? c.decode(Int.self, forKey: key) { return value }
+        if let value = try? c.decode(Int64.self, forKey: key) { return Int(value) }
+        if let value = try? c.decode(String.self, forKey: key) { return Int(value) }
+        return nil
+    }
+}
+
+struct PartyLuckyNumberHistoryItem: Decodable, Equatable, Identifiable {
+    let recordId: String
+    let nickname: String?
+    let avatar: String?
+    let luckyNumber: Int
+
+    var id: String { recordId }
+
+    private enum CodingKeys: String, CodingKey {
+        case recordId, userId, nickname, avatar, luckyNumber, createTime
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let userId = Self.string(c, key: .userId) ?? "unknown"
+        let number = Self.int(c, key: .luckyNumber) ?? 0
+        recordId = Self.string(c, key: .recordId)
+            ?? "\(userId)-\(number)-\(Self.string(c, key: .createTime) ?? "")"
+        nickname = try? c.decode(String.self, forKey: .nickname)
+        avatar = try? c.decode(String.self, forKey: .avatar)
+        luckyNumber = number
+    }
+
+    private static func string(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> String? {
+        if let value = try? c.decode(String.self, forKey: key), !value.isEmpty { return value }
+        if let value = try? c.decode(Int64.self, forKey: key) { return String(value) }
+        return nil
+    }
+
+    private static func int(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> Int? {
+        if let value = try? c.decode(Int.self, forKey: key) { return value }
+        if let value = try? c.decode(Int64.self, forKey: key) { return Int(value) }
+        if let value = try? c.decode(String.self, forKey: key) { return Int(value) }
+        return nil
     }
 }

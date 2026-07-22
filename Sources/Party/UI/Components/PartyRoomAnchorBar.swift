@@ -20,6 +20,10 @@ struct PartyRoomAnchorBar: View {
     let wealthText: String
     let honorText: String
     let audienceCountText: String
+    /// H5 仅在 audienceNum 非零时展示观众入口；iOS 由实时 chatroom 在线数派生。
+    let showsViewerEntry: Bool
+    /// 安卓主播端进房响应下发的右上角活动资源位；仅展示首条。
+    let cornerBanner: PartyCornerBanner?
     let isFollowing: Bool
     /// v3：自己的房间（房主本人）不显示关注按钮（对齐 H5 用户端 index.vue 同 owner 隐藏 follow）
     let isSelfRoom: Bool
@@ -29,6 +33,9 @@ struct PartyRoomAnchorBar: View {
     /// iOS G 里程碑接 PK 前用 `canManage && roomTempIdInt == 1` 兜底（不判 feature flag）
     let canStartPk: Bool
     let onFollowTap: () -> Void
+    /// H5 点击顶部房主头像打开用户名片。
+    let onAnchorTap: () -> Void
+    let onCornerBannerTap: (PartyCornerBanner) -> Void
     /// v12：PK 入口点击（对齐 H5 `handleItemNoThrottleFn('startPk')`；iOS G 期接 PK 流程前暂 log/toast）
     let onPkTap: () -> Void
     let onAnnouncementTap: () -> Void
@@ -39,6 +46,17 @@ struct PartyRoomAnchorBar: View {
     let onRankTap: (PartyRankKind) -> Void
     /// v11：观众数入口（对齐 H5 userRank sheet；iOS 待 F 期）
     let onViewerTap: () -> Void
+    /// 主播周任务入口（安卓 WeekTaskDialog：上麦时长换奖励）。
+    let showWeeklyTask: Bool
+    let weeklyTaskProgress: PartyWeeklyTaskTopProgress?
+    let onWeeklyTaskTap: () -> Void
+    /// 热门房任务由 `checkExistHot3` 确认后才展示，避免普通房误出现入口。
+    let showHotTask: Bool
+    let hotTaskStatus: PartyHotRoomTaskStatus?
+    let onHotTaskTap: () -> Void
+    /// 管理按钮 badge（对齐安卓 `tvMicApplicationNum`：queueSeatNum > 0 时房主主界面可见红角标）；
+    /// 默认 0 不显示；房主/房管场景由 PartyRoomView 传 `store.queueSeatNum`
+    var managementBadge: Int = 0
 
     /// v11：轮播索引（0=财富榜，1=荣耀榜）；5s 自动切换，对齐 H5 v-swiper autoplay=5000
     @State private var rankSwiperIndex: Int = 0
@@ -46,7 +64,10 @@ struct PartyRoomAnchorBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
-                anchorAvatarBlock
+                Button(action: onAnchorTap) {
+                    anchorAvatarBlock
+                }
+                .buttonStyle(.plain)
                 anchorTextBlock
                 // Component 11 关注按钮紧贴房间信息（房名/ID 右侧）；自己房间不显示（isSelfRoom）
                 if !isSelfRoom {
@@ -176,6 +197,7 @@ struct PartyRoomAnchorBar: View {
             if canManage {
                 iconButton(asset: "partyIconManagement",
                            label: L10n.PartyRoom.a11yManagement,
+                           badge: managementBadge,
                            action: onManagementTap)
             }
             iconButton(asset: "partyIconMore",
@@ -184,17 +206,30 @@ struct PartyRoomAnchorBar: View {
         }
     }
 
-    private func iconButton(asset: String, label: String, action: @escaping () -> Void) -> some View {
+    private func iconButton(asset: String, label: String, badge: Int = 0, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(asset)
-                .resizable()
-                .renderingMode(.template)
-                .foregroundColor(Theme.Palette.partyRoomToolbarIcon)
-                .frame(width: Theme.Metric.partyRoomToolbarIconSize,
-                       height: Theme.Metric.partyRoomToolbarIconSize)
-                // padding 2（原 4）—— iPhone 13 mini 顶部行宽度合规化：4 图标各 26pt = 104 + 3 gap × 12 = 140
-                .padding(2)
-                .contentShape(Rectangle())
+            ZStack {
+                Image(asset)
+                    .resizable()
+                    .renderingMode(.template)
+                    .foregroundColor(Theme.Palette.partyRoomToolbarIcon)
+                    .frame(width: Theme.Metric.partyRoomToolbarIconSize,
+                           height: Theme.Metric.partyRoomToolbarIconSize)
+                    // padding 2（原 4）—— iPhone 13 mini 顶部行宽度合规化：4 图标各 26pt = 104 + 3 gap × 12 = 140
+                    .padding(2)
+                // 对齐安卓 tvMicApplicationNum：badge > 0 显示右上角红角标
+                if badge > 0 {
+                    Text(badge > 99 ? "99+" : "\(badge)")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 4)
+                        .frame(minWidth: 14, minHeight: 14)
+                        .background(Capsule().fill(Color.red))
+                        .offset(x: 12, y: -12)
+                        .allowsHitTesting(false)
+                }
+            }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -203,12 +238,58 @@ struct PartyRoomAnchorBar: View {
     // MARK: - 排名行（v11：对齐 H5 header-wrap.vue 第二行 h-24 · 财富/荣耀 5s 轮播 + 观众数）
 
     private var statRow: some View {
+        ViewThatFits(in: .horizontal) {
+            fullStatRow
+            compactStatRow
+        }
+        .padding(.vertical, Theme.Metric.partyRoomStatRowV)
+    }
+
+    private var fullStatRow: some View {
         HStack(spacing: 4) {
             rankSwiperButton
             Spacer()
-            viewerButton
+            taskEntries
+            if (showWeeklyTask || showHotTask), showsViewerEntry {
+                Spacer()
+            }
+            if let banner = cornerBanner, banner.isDisplayable {
+                cornerBannerButton(banner)
+            }
+            if showsViewerEntry {
+                viewerButton
+            }
         }
-        .padding(.vertical, Theme.Metric.partyRoomStatRowV)
+    }
+
+    /// 窄屏将统计任务与 Banner/观众分两行，避免固定宽度进度条裁切任何入口。
+    private var compactStatRow: some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 4) {
+                rankSwiperButton
+                Spacer(minLength: 4)
+                taskEntries
+            }
+            HStack(spacing: 6) {
+                Spacer()
+                if let banner = cornerBanner, banner.isDisplayable {
+                    cornerBannerButton(banner)
+                }
+                if showsViewerEntry {
+                    viewerButton
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var taskEntries: some View {
+        if showWeeklyTask {
+            weeklyTaskButton
+        }
+        if showHotTask {
+            hotTaskButton
+        }
     }
 
     /// 左侧：icon_rank + 数值轮播（contribution ↔ honor 5s 自切）+ 右黄箭头
@@ -279,6 +360,77 @@ struct PartyRoomAnchorBar: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.PartyRoom.a11yViewers)
+    }
+
+    /// 固定 64×24 对齐安卓顶部活动位，避免异步图片改变统计栏布局。
+    private func cornerBannerButton(_ banner: PartyCornerBanner) -> some View {
+        Button { onCornerBannerTap(banner) } label: {
+            CachedAsyncImage(url: URL(string: banner.picUrl ?? ""), contentMode: .fit, persistent: true) {
+                Color.clear
+            }
+            .frame(width: 64, height: 24)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var weeklyTaskButton: some View {
+        Button(action: onWeeklyTaskTap) {
+            HStack(spacing: 5) {
+                Image("partyTrophy")
+                    .resizable().scaledToFit()
+                    .frame(width: 17, height: 17)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 4) {
+                        Text(PartyWeeklyTaskSheet.durationText(weeklyTaskProgress?.currentTime ?? 0))
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.white)
+                            .monospacedDigit()
+                        if let reward = weeklyTaskProgress?.rewardText, !reward.isEmpty {
+                            Text(reward)
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(Color(hex: 0xFFFFD35C))
+                                .lineLimit(1)
+                        }
+                    }
+                    GeometryReader { proxy in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Color.white.opacity(0.23))
+                            Capsule()
+                                .fill(Color(hex: 0xFF4DB7FF))
+                                .frame(width: proxy.size.width * (weeklyTaskProgress?.fraction ?? 0))
+                        }
+                    }
+                    .frame(height: 4)
+                }
+                Image(systemName: "gift.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(Color(hex: 0xFFFFD35C))
+            }
+            .frame(width: 132, height: 28, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.PartyRoom.a11yWeeklyTask)
+    }
+
+    private var hotTaskButton: some View {
+        Button(action: onHotTaskTap) {
+            ZStack(alignment: .bottomTrailing) {
+                Image(systemName: "flame.fill")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(Color(hex: 0xFFFF8B3D))
+                    .frame(width: 26, height: 26)
+                if hotTaskStatus?.fraction != nil {
+                    Circle()
+                        .fill(Color(hex: 0xFF4DB7FF))
+                        .frame(width: 7, height: 7)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(hotTaskStatus?.title.isEmpty == false ? hotTaskStatus!.title : L10n.PartyRoom.hotTaskTitle)
     }
 }
 

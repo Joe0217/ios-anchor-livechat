@@ -182,6 +182,24 @@ struct PartyRoomSeat: Codable, Equatable, Identifiable {
         return !(userId?.isEmpty ?? true)
     }
 
+    /// 接待位（MC）由服务端 `isHostSeat` 标识。
+    var isMCSeat: Bool { (isHostSeat ?? 0) == 1 }
+
+    /// 视频位仅能通过房主邀请进入，不能作为普通上麦或排麦批准的目标。
+    var isVideoSeat: Bool { seatType == PartyRoomSeatType.video.rawValue }
+
+    /// 用户自行关麦时的状态。
+    var isUserMicrophoneMuted: Bool { (microphoneEnabled ?? 1) != 1 }
+
+    /// 管理员禁麦状态。视频位出现此状态属于历史脏数据，只允许管理端执行解禁。
+    var isSeatMicrophoneProhibited: Bool { (seatMicrophoneEnabled ?? 1) != 1 }
+
+    /// 用户自行关麦或被管理员禁麦时均视作禁麦。
+    /// 缺失字段按开麦处理，避免后端漏字段时误显示禁麦状态。
+    var isMicrophoneMuted: Bool {
+        isUserMicrophoneMuted || isSeatMicrophoneProhibited
+    }
+
     /// 强类型 seatType（未知值 nil 不参与对账分支）
     var typed: PartyRoomSeatType? {
         guard let s = seatType else { return nil }

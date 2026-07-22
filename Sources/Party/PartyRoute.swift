@@ -10,7 +10,7 @@ import Foundation
 enum PartyRoute: Hashable {
     /// 创建派对房入口页
     case create
-    /// 进入某个房间（密码房 MVP 不做前置密码框，password 保留字段供 F 期使用）
+    /// 进入某个房间。密码房由大厅前置校验成功后再创建此路由；`password` 保留给深链等直接进入场景。
     case room(id: String, password: String?)
     /// 搜索页（E 增强 2026-07-10：对齐 H5 用户端 `/party/search`）
     case search

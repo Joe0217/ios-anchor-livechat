@@ -4,7 +4,8 @@ import SwiftUI
 ///
 /// **对齐 H5 蓝本** `livechat-h5/src/components/party/components/party-expression-popup.vue`：
 /// - `van-popup position="bottom"` 底部半屏 sheet · min-h 50%（iOS 用 `.fraction(0.5)`）
-/// - 上部 `v-swiper` 分类 × 分页拍平 · 每页 **4×2 = 8** 格（`PARTY_PLAY_EMOJI.PANEL_PAGE_SIZE = 8`）
+/// - 上部 `v-swiper` 分类 × 分页拍平 · 每页固定 **4×3 = 12** 格
+/// - 暂不接入第三个半屏游戏分类，保留骰子、猜拳等玩法表情及其他表情分类
 /// - 底部 tab bar 横向可滚 · 每 tab 圆形 24×24 · 激活 opacity 0.16 底色
 /// - 单分类多页时展示自绘小圆点 indicator
 ///
@@ -16,22 +17,26 @@ struct PartyExpressionPanel: View {
 
     /// 当前分类 index（对应 `store.expressionListState.loaded` 里的 index）
     @State private var selectedClassIndex: Int = 0
-    /// 当前分类下的分页 index（0-based · 每页 8 格）
+    /// 当前分类下的分页 index（0-based · 每页 12 格）
     @State private var selectedPageIndex: Int = 0
     /// 玩法 resultImages 空时 toast 短提示
     @State private var toastMessage: String? = nil
-
-    /// H5 侧 constant `PANEL_PAGE_SIZE = 8`（4×2 grid）
-    private let panelPageSize: Int = 8
+    /// 每页固定 4×3 grid，避免不同分类或分页导致面板高度跳变。
+    private let panelPageSize: Int = 12
+    private let panelGridHeight: CGFloat = 200
+    private let panelSheetHeight: CGFloat = 288
 
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 4) {
             content
+                .padding(.top, 10)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             tabBar
         }
-        .padding(.vertical, 16)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .task { await store.loadExpressionList() }
+        .presentationDetents([.height(panelSheetHeight)])
         .overlay(alignment: .top) {
             if let msg = toastMessage {
                 Text(msg)
@@ -80,10 +85,11 @@ struct PartyExpressionPanel: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         case .loaded(let classifications):
-            if classifications.isEmpty {
+            let visibleClassifications = visibleClassifications(from: classifications)
+            if visibleClassifications.isEmpty {
                 Color.clear
             } else {
-                grid(for: classifications)
+                grid(for: visibleClassifications)
             }
         }
     }
@@ -104,7 +110,15 @@ struct PartyExpressionPanel: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(height: gridHeight)
+            .frame(height: panelGridHeight)
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 24)
+                    .onEnded { value in
+                        guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                        let delta = value.translation.width < 0 ? 1 : -1
+                        selectAdjacentTab(delta: delta, count: classifications.count)
+                    }
+            )
 
             // 分类页数 > 1 时展示 dot indicator
             if pages.count > 1 {
@@ -122,7 +136,7 @@ struct PartyExpressionPanel: View {
         }
     }
 
-    /// 每页 4×2 grid（对齐 H5 grid-cols-4）
+    /// 每页固定 4×3 grid；不足三行的内容顶对齐。
     private func gridPage(items: [PartyEmojiItem]) -> some View {
         let cols = Array(repeating: GridItem(.flexible(), spacing: 12), count: 4)
         return LazyVGrid(columns: cols, spacing: 16) {
@@ -131,11 +145,7 @@ struct PartyExpressionPanel: View {
             }
         }
         .padding(.horizontal, 16)
-    }
-
-    private var gridHeight: CGFloat {
-        // 2 行 × 每格 (56 + 上下 padding) ≈ 180；再加分页 padding 上下 8
-        180
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private func emojiCell(item: PartyEmojiItem) -> some View {
@@ -156,24 +166,29 @@ struct PartyExpressionPanel: View {
 
     @ViewBuilder
     private var tabBar: some View {
-        if case .loaded(let classifications) = store.expressionListState, classifications.count > 1 {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(classifications.indices, id: \.self) { i in
-                        tabItem(classifications[i], selected: i == selectedClassIndex)
-                            .onTapGesture {
-                                if selectedClassIndex != i {
-                                    selectedClassIndex = i
-                                    selectedPageIndex = 0
+        if case .loaded(let classifications) = store.expressionListState {
+            let visibleClassifications = visibleClassifications(from: classifications)
+            if !visibleClassifications.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(visibleClassifications.indices, id: \.self) { i in
+                            tabItem(visibleClassifications[i], selected: i == selectedClassIndex)
+                                .onTapGesture {
+                                    if selectedClassIndex != i {
+                                        selectedClassIndex = i
+                                        selectedPageIndex = 0
+                                    }
                                 }
-                            }
+                        }
                     }
+                    .padding(.horizontal, 12)
                 }
-                .padding(.horizontal, 16)
+                .frame(height: 32)
+            } else {
+                Color.clear.frame(height: 32)
             }
-            .frame(height: 40)
         } else {
-            Color.clear.frame(height: 40)
+            Color.clear.frame(height: 32)
         }
     }
 
@@ -187,7 +202,7 @@ struct PartyExpressionPanel: View {
             }
             .frame(width: 24, height: 24)
         }
-        .frame(width: 36, height: 36)
+        .frame(width: 32, height: 32)
         .contentShape(Circle())
     }
 
@@ -209,6 +224,8 @@ struct PartyExpressionPanel: View {
         dismiss()
     }
 
+    // MARK: - Helpers
+
     private func showToast(_ msg: String) {
         withAnimation { toastMessage = msg }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
@@ -216,9 +233,21 @@ struct PartyExpressionPanel: View {
         }
     }
 
-    // MARK: - Helpers
+    /// 第三个 tab 是半屏游戏入口，功能未接入前不展示；骰子、猜拳所属的玩法表情分类不受影响。
+    private func visibleClassifications(from classifications: [PartyEmojiClassification]) -> [PartyEmojiClassification] {
+        classifications.enumerated().compactMap { index, classification in
+            index == 2 ? nil : classification
+        }
+    }
 
-    /// 按 pageSize 切页（对齐 H5 chunk 逻辑 · 每分类拍平为 N 页 4×2 grid）
+    private func selectAdjacentTab(delta: Int, count: Int) {
+        let next = selectedClassIndex + delta
+        guard count > 0, next >= 0, next < count else { return }
+        selectedClassIndex = next
+        selectedPageIndex = 0
+    }
+
+    /// 按 pageSize 切页（每分类拍平为 N 页固定 4×3 grid）
     private func paginate(_ items: [PartyEmojiItem], size: Int) -> [[PartyEmojiItem]] {
         guard size > 0, !items.isEmpty else { return [] }
         var result: [[PartyEmojiItem]] = []

@@ -31,11 +31,8 @@ struct PartyTabRootView: View {
     @State private var permissionDeniedToast: String? = nil
     @State private var checkingPermission = false
 
-    // v8：密码房前置弹窗（对齐 H5 index.vue L178-182 语义）
-    /// 点击密码房时待确认的房间 id（非空时弹密码 alert）
-    @State private var pendingPasswordRoomId: String? = nil
-    /// 密码 alert 用户输入
-    @State private var enteredPassword: String = ""
+    // 密码房前置 sheet：H5 限制 4 位数字，校验接口成功后才创建房间路由。
+    @State private var pendingPasswordRoom: PasswordRoom?
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -49,7 +46,8 @@ struct PartyTabRootView: View {
                 onTapRoom: { room in
                     handleTapRoom(room)
                 },
-                onTapSearch: { path.append(PartyRoute.search) }
+                onTapSearch: { path.append(PartyRoute.search) },
+                onTapRanking: { path.append(HomeLeaderboardRoute.ranking) }
             )
             .navigationDestination(for: PartyRoute.self) { route in
                 switch route {
@@ -68,39 +66,32 @@ struct PartyTabRootView: View {
                         }
                     )
                 case .room(let id, let password):
-                    PartyRoomView(roomId: id, password: password)
+                    PartyRoomView(roomId: id, password: password) { targetRoomId in
+                        if !path.isEmpty { path.removeLast() }
+                        path.append(PartyRoute.room(id: targetRoomId, password: nil))
+                    }
                 case .search:
                     PartySearchView(onTapRoom: { room in
                         handleTapRoom(room)
                     })
                 }
             }
+            // Party 大厅右上角榜单与首页复用同一目的地，避免维护两套榜单页面。
+            .navigationDestination(for: HomeLeaderboardRoute.self) { route in
+                switch route {
+                case .ranking:
+                    HomeRankingView()
+                case .points:
+                    PointsRankView()
+                }
+            }
         }
-        // v8：密码房前置 alert（对齐 H5 index.vue L178-182 语义）
-        // isPresented 由 pendingPasswordRoomId 非 nil 派生；SecureField 承载输入
-        .alert(
-            L10n.Party.passwordAlertTitle,
-            isPresented: Binding(
-                get: { pendingPasswordRoomId != nil },
-                set: { if !$0 { pendingPasswordRoomId = nil; enteredPassword = "" } }
-            ),
-            presenting: pendingPasswordRoomId
-        ) { roomId in
-            SecureField(L10n.Party.passwordPlaceholder, text: $enteredPassword)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            Button(L10n.Party.passwordConfirm) {
-                let pwd = enteredPassword.trimmingCharacters(in: .whitespaces)
-                pendingPasswordRoomId = nil
-                enteredPassword = ""
-                path.append(PartyRoute.room(id: roomId, password: pwd.isEmpty ? nil : pwd))
+        .sheet(item: $pendingPasswordRoom) { room in
+            PartyEnterPasswordSheet(roomId: room.id, store: PartyStore.shared) {
+                pendingPasswordRoom = nil
+                path.append(PartyRoute.room(id: room.id, password: nil))
             }
-            Button(L10n.Party.passwordCancel, role: .cancel) {
-                pendingPasswordRoomId = nil
-                enteredPassword = ""
-            }
-        } message: { _ in
-            Text(L10n.Party.passwordAlertMessage)
+            .giftPanelSheetBackground()
         }
         .overlay(alignment: .top) {
             if let t = permissionDeniedToast {
@@ -123,19 +114,34 @@ struct PartyTabRootView: View {
     private func handleTapRoom(_ room: PartyRoomInfo) {
         // P 项目权限管理：走统一 gate helper（code-review Finding 6 消除 4 行复制）
         guard SelfPermissionBridge.shared.gate(.party, action: "handleTapRoom") else { return }
+        // F 期 Live↔Party 互斥（对齐安卓 isLiveing||isPartying toast，2026-07-17）：
+        // 直播活跃态禁止进派对房；LiveRoomView 用 @StateObject 独立实例但其他组件（AvatarView / UserCardStore）
+        // 已把 LiveStore.shared 作为权威源，此处沿用
+        if LiveStore.shared.state == .living {
+            permissionDeniedToast = L10n.Party.mutexBlockedByLive
+            return
+        }
         guard let rid = room.id, !rid.isEmpty else { return }
         let isLocked = (room.lockFlag == 1) || (room.needPassword == true)
         if isLocked {
-            enteredPassword = ""
-            pendingPasswordRoomId = rid
+            pendingPasswordRoom = PasswordRoom(id: rid)
         } else {
             path.append(PartyRoute.room(id: rid, password: nil))
         }
     }
 
+    private struct PasswordRoom: Identifiable {
+        let id: String
+    }
+
     private func tapCreate() {
         // P 项目权限管理：走统一 gate helper（code-review Finding 6 消除 4 行复制）
         guard SelfPermissionBridge.shared.gate(.party, action: "tapCreate") else { return }
+        // F 期 Live↔Party 互斥：直播中禁止创房（同 handleTapRoom 语义）
+        if LiveStore.shared.state == .living {
+            permissionDeniedToast = L10n.Party.mutexBlockedByLive
+            return
+        }
         AppLogger.party.info("[PartyTab] tapCreate begin checking=\(self.checkingPermission, privacy: .public)")
         guard !checkingPermission else { return }
         checkingPermission = true

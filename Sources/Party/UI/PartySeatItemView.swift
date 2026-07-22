@@ -43,14 +43,14 @@ struct PartySeatItemView: View {
                         occupiedContent
                     }
                 } else {
-                    Image(systemName: seat.seatType == 1 ? "video" : "mic")
-                        .foregroundColor(.secondary)
-                        .font(.system(size: 18))
+                    Image(systemName: isLockedEmptySeat ? "lock.fill" : (seat.seatType == 1 ? "video" : "mic"))
+                        .foregroundColor(isLockedEmptySeat ? .white : .secondary)
+                        .font(.system(size: 18, weight: isLockedEmptySeat ? .semibold : .regular))
                 }
 
                 // 视频位 + 自己 + 摄像头开 → 本端预览
                 if isSelf, seat.seatType == 1, isLocalCameraActive, let cm = camera {
-                    CameraPreview(camera: cm, agora: nil)
+                    CameraPreview(camera: cm, agora: nil, scalingMode: .aspectFill)
                         .frame(width: 56, height: 56)
                         .clipShape(Circle())
                 }
@@ -61,8 +61,18 @@ struct PartySeatItemView: View {
             .overlay(alignment: .topLeading) {
                 seatNumberLabel
             }
+            .overlay(alignment: .topTrailing) {
+                if !isLockedEmptySeat, seat.isMCSeat {
+                    PartyMCSeatBadge(compact: true)
+                        .scaleEffect(0.8, anchor: .topTrailing)
+                        .padding(2)
+                }
+            }
             .overlay(alignment: .bottomTrailing) {
-                if seat.occupied {
+                // 与当前大/小麦位组件一致：空位被预设禁麦时也显示禁麦角标；锁位只保留锁和编号。
+                if !isLockedEmptySeat, seat.isMicrophoneMuted {
+                    mutedBadge
+                } else if seat.occupied {
                     micIndicator
                 }
             }
@@ -93,16 +103,26 @@ struct PartySeatItemView: View {
     }
 
     /// 麦克风状态指示（底 trailing，RTL 自动镜像到底 leading 视觉位）
+    @ViewBuilder
     private var micIndicator: some View {
-        let micOn = (seat.microphoneEnabled ?? 0) == 1 && (seat.seatMicrophoneEnabled ?? 0) == 1
-        let sysName = micOn ? "mic.fill" : "mic.slash.fill"
-        let color: Color = micOn ? .green : .red
-        return Image(systemName: sysName)
-            .font(.system(size: 11))
-            .foregroundColor(.white)
-            .padding(4)
-            .background(Circle().fill(color))
-            .padding(2)  // 距 Circle 边 2pt
+        if seat.isMicrophoneMuted {
+            mutedBadge
+        } else {
+            Image(systemName: "mic.fill")
+                .font(.system(size: 11))
+                .foregroundColor(.white)
+                .padding(4)
+                .background(Circle().fill(Color.green))
+                .padding(2)
+        }
+    }
+
+    private var mutedBadge: some View {
+        Image("partyIconMicMuted")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 18, height: 18)
+            .padding(2)
     }
 
     private var displayName: String {
@@ -110,5 +130,9 @@ struct PartySeatItemView: View {
         if let n = seat.nickname, !n.isEmpty { return n }
         if let u = seat.userId, !u.isEmpty { return "ID\(u.suffix(4))" }
         return L10n.Party.seatOccupied
+    }
+
+    private var isLockedEmptySeat: Bool {
+        !seat.occupied && (seat.lockFlag ?? 0) == 1
     }
 }

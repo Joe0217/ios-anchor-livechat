@@ -21,6 +21,7 @@ struct PartyRemoteVideoView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {
-        // no-op：池中实例稳定，无需更新
+        // 池中实例稳定；持续保证 SDK 子视图不会溢出当前视频位容器。
+        uiView.clipsToBounds = true
     }
 }

@@ -90,6 +90,36 @@ enum PartyPublicChatAdapter {
         )
     }
 
+    /// 1050 / 1051 幸运数字公屏：对齐 H5 `chat-list.vue`，使用普通 Party 用户头部而不是房间公告。
+    /// payload 已在 `PartyLuckyNumberPayload` 中处理 `data` 包裹与别名字段。
+    static func luckyNumberPublic(payload: [String: Any], didWin: Bool) -> UnifiedPublicChatMessage? {
+        let data = PartyLuckyNumberPayload.publicMessagePayload(from: payload)
+        guard let number = PartyValueNormalizer.intify(data["luckyNumber"]),
+              (0...999).contains(number) else {
+            return nil
+        }
+        return UnifiedPublicChatMessage(
+            sender: makeSender(from: data, fallbackNickname: nil, isSelf: false),
+            variant: .partyLuckyNumber(number: number, didWin: didWin)
+        )
+    }
+
+    /// Party 房 Battle Team PK 系统消息（对齐 H5 chat-list.vue :333-392 · 4 kind 独立视觉）
+    ///
+    /// - parameter kind: PartyBattleSystemKind 4 kind
+    /// - parameter text: 主文案（含 `{h}` 占位符时会用 highlight 替换）
+    /// - parameter highlight: 黄色高亮片段（如分数/秒数/MVP 姓名）；nil 表示无高亮（forceEnd 场景）
+    static func battleSystem(
+        kind: PartyBattleSystemKind,
+        text: String,
+        highlight: String? = nil
+    ) -> UnifiedPublicChatMessage {
+        UnifiedPublicChatMessage(
+            sender: nil,
+            variant: .partyBattle(kind: kind, text: text, highlight: highlight)
+        )
+    }
+
     // MARK: - 送礼消息（2049）
 
     /// 2049 送礼 → `.gift` variant。iconURL/name 由 caller 从后端字段派生（`giftSmallImg / giftName`）。

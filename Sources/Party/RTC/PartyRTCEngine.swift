@@ -54,6 +54,11 @@ final class PartyRTCEngine: NSObject, ObservableObject {
     /// 视频位推帧是否已启用（默认 false，仅 `enableVideoSeat()` 后置 true）
     private(set) var videoSeatActive = false
 
+    /// 上一次 Agora 连接态（用于 F 期断线重连 partyRTCEngineDidReconnect 检测）。
+    /// - nil = 未收到过 connectionChangedTo（初始态）
+    /// - 从 `.disconnected` / `.reconnecting` 回到 `.connected` 判定为重连恢复
+    private var previousConnectionState: AgoraConnectionState?
+
     /// pushFrame 跨 actor 安全的状态快照（review 202606252033 P0-1）。
     /// pushFrame 是 nonisolated（CameraManager.videoQueue 调用），但 engine / state / videoSeatActive 在 @MainActor 写。
     /// 用 NSLock 守 frameSnapshot；任何 @MainActor 写完上述字段后调 `updateFrameSnapshot()` 刷新快照，
@@ -183,6 +188,19 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         AppLogger.party.info("[PartyRTC] muteLocalMic=\(muted, privacy: .public)")
     }
 
+    /// F 期便利功能（2026-07-17）：Room Mute 全房静音 —— 调整**本地播放总音量**，不影响订阅层。
+    /// 对齐蓝本 §1.2 决策"禁用 muteRemoteAudioStream"，改用 Agora `adjustPlaybackSignalVolume(_:)`
+    /// 一步覆盖所有远端播放；取消静音后 setRemoteAudio 逐 uid 状态（seat.microphoneEnabled+seatMicrophoneEnabled）
+    /// 由下次 postMikeList 全量重塑，无遗留副作用。
+    /// - `muted=true` → 本地播放音量 0
+    /// - `muted=false` → 本地播放音量 100（Agora 默认）
+    @MainActor
+    func setMuteAllRemoteAudio(_ muted: Bool) {
+        guard let engine else { return }
+        engine.adjustPlaybackSignalVolume(muted ? 0 : 100)
+        AppLogger.party.info("[PartyRTC] setMuteAllRemote=\(muted, privacy: .public)")
+    }
+
     // MARK: - 视频位（M5 完整实装；M2 仅占位接口让 PartyStore 编译过）
 
     /// 启用视频位推帧。本端帧由 PartyStore 接 CameraManager v5.8 订阅字典推到 `pushFrame`。
@@ -267,7 +285,7 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         let canvas = AgoraRtcVideoCanvas()
         canvas.uid = uid
         canvas.view = view
-        canvas.renderMode = .hidden    // 等比裁剪铺满 56×56 圆形容器
+        canvas.renderMode = .hidden    // 等比裁剪铺满当前视频位容器，超出区域由容器裁剪
         engine.setupRemoteVideo(canvas)
         seatIndexToBoundUid[seatIndex] = uid
         AppLogger.party.info("[PartyRTC] bindRemoteVideo seatIndex=\(seatIndex, privacy: .public) uid=\(uid, privacy: .public)")
@@ -460,6 +478,21 @@ extension PartyRTCEngine: AgoraRtcEngineDelegate {
                 self.delegate?.partyRTCEngine(self, didFailWithReason: "join_failed")
             }
         }
+
+        // F 期断线重连（2026-07-17）：从 `.disconnected` / `.reconnecting` 回到 `.connected`
+        // 视为一次成功重连，通知 PartyStore 全量重拉 seatList 对账（对齐蓝本 02-04-派对房.md §5
+        // "NIM UNLOGIN/NET_BROKEN 置 mLoadMikeList=false，LOGINED 重连后自动重拉全量麦位"）。
+        // 首次 .connected（previousConnectionState==nil）不算重连——那由 didJoinChannel 承担初始对账。
+        let previous = previousConnectionState
+        previousConnectionState = state
+        if state == .connected,
+           let prev = previous,
+           prev == .disconnected || prev == .reconnecting {
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.delegate?.partyRTCEngineDidReconnect(self)
+            }
+        }
     }
 
     /// v15 声波回调 → 派发 speakingUids（对齐 H5 `volumeList` + `PlayVolume` 说话反馈）。
@@ -494,9 +527,13 @@ protocol PartyRTCEngineDelegate: AnyObject {
     func partyRTCEngine(_ engine: PartyRTCEngine, didFailWithReason reason: String)
     /// v15 声纹反馈：正在说话的 uid 集合（500ms 一次全量替换，空集合=全静音）
     func partyRTCEngine(_ engine: PartyRTCEngine, didUpdateSpeakingUids uids: Set<UInt>)
+    /// F 期断线重连（2026-07-17）：Agora 从 `.disconnected/.reconnecting` 回到 `.connected` 时触发
+    /// PartyStore 收到后应全量重拉 seatList 对账（对齐蓝本 §5）
+    func partyRTCEngineDidReconnect(_ engine: PartyRTCEngine)
 }
 
 // v15：给非声纹感知的实现方兜底空实现（PartyStore 会真实现，其他 delegate 无需强制）
 extension PartyRTCEngineDelegate {
     func partyRTCEngine(_ engine: PartyRTCEngine, didUpdateSpeakingUids uids: Set<UInt>) {}
+    func partyRTCEngineDidReconnect(_ engine: PartyRTCEngine) {}
 }

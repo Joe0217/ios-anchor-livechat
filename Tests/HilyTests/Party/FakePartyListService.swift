@@ -21,6 +21,7 @@ final class FakePartyListService: PartyListService, @unchecked Sendable {
     // MARK: - 调用记录
 
     struct Call: Equatable {
+        let kind: PartyRoomListKind
         let languageCode: String?
         let offset: Int?
         let pageSize: Int
@@ -38,6 +39,7 @@ final class FakePartyListService: PartyListService, @unchecked Sendable {
     // MARK: - PartyListService
 
     func fetchList(
+        kind: PartyRoomListKind,
         languageCode: String?,
         offset: Int?,
         pageSize: Int,
@@ -46,6 +48,7 @@ final class FakePartyListService: PartyListService, @unchecked Sendable {
     ) async throws -> [PartyRoomInfo] {
         lock.lock()
         _calls.append(Call(
+            kind: kind,
             languageCode: languageCode,
             offset: offset,
             pageSize: pageSize,

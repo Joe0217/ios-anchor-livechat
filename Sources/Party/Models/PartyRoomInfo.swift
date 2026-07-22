@@ -89,12 +89,30 @@ struct PartyRoomInfo: Codable, Equatable {
     /// 真机验证 raw JSON 后如后端字段名不同，此处补 CodingKeys alias。
     let onSeatApplySwitch: Bool?
 
+    /// 房间音乐功能总开关。H5 仍使用后端历史拼写 `roomMusicSwitc`；0/nil 时不显示管理入口。
+    let roomMusicSwitc: Int?
+
+    /// 进房响应下发的 Party 右上角活动资源位；顶部展示时只消费第一条。
+    /// 使用 `var` 以保留合成 memberwise initializer 的默认参数；`withUpdated` 必须原样带回该字段。
+    var cornerBannerList: [PartyCornerBanner]? = nil
+
+    /// 进房响应下发的右下角活动轮播资源位。与顶部 `cornerBannerList` 是两个独立位置，
+    /// 仅在完整 Party 房舞台内消费。
+    var bannerList: [PartyRoomBanner]? = nil
+
+    /// 排麦队列长度（房间级 badge 数值）；对齐安卓 `PartyRoomInfo.queueSeatNum: Long`。
+    /// 后端 `room/enter` 响应字段；进房时同步到 `PartyStore.queueSeatNum` 让 AnchorBar / Tools sheet
+    /// badge 立即显示已有排队数（否则要等下一次 1018 到达才 refresh）。
+    let queueSeatNum: Int?
+
     /// 衍生：观众在线人数（用 `onlineUserList.count`；list 接口无独立人数字段）
     var onlineCount: Int { onlineUserList?.count ?? 0 }
 
     /// 衍生：私 call 是否开启（房主视角）。`partyPrivateCallOpen == 1`。
     /// 用于 CallStore.handleIncomingVideoCall 派对分支前置 guard（对齐 LiveStore.privateCallOpen · P1-9）
     var isPartyPrivateCallEnabled: Bool { partyPrivateCallOpen == 1 }
+
+    var isRoomMusicAvailable: Bool { (roomMusicSwitc ?? 0) != 0 }
 
     /// 衍生：roomTempId Int 形式（后端 DTO 是 Long，但 HTTP 响应给字符串；调上下麦/respondInvite 时需 Int）。
     /// fallback 1（dev 主流模板 ID）；若 String 不可解析为 Int 同样退化到 1。
@@ -150,6 +168,7 @@ struct PartyRoomInfo: Codable, Equatable {
     /// v3（2026-07-14）追加 `lockFlag` / `needPassword`——E spec §3 Lock Room 加/解锁后
     /// PartyStore 本地乐观更新（无 IM 广播），下次 refresh 前用回写字段驱动 UI 立即反馈。
     func withUpdated(
+        roomRoleType: Int? = nil,
         roomName: String? = nil,
         roomAvatar: String? = nil,
         greetingMessage: String? = nil,
@@ -161,12 +180,15 @@ struct PartyRoomInfo: Codable, Equatable {
         partyCallGiftId: String? = nil,
         partyCallGiftImg: String? = nil,
         partyCallGiftPrice: Int? = nil,
-        onSeatApplySwitch: Bool? = nil
+        onSeatApplySwitch: Bool? = nil,
+        roomMusicSwitc: Int? = nil,
+        contributionCostNum: String? = nil,
+        queueSeatNum: Int? = nil
     ) -> PartyRoomInfo {
         PartyRoomInfo(
             id: id,
             ownerId: ownerId,
-            roomRoleType: roomRoleType,
+            roomRoleType: roomRoleType ?? self.roomRoleType,
             isPlatformAdmin: isPlatformAdmin,
             roomName: roomName ?? self.roomName,
             roomAvatar: roomAvatar ?? self.roomAvatar,
@@ -191,7 +213,7 @@ struct PartyRoomInfo: Codable, Equatable {
             pkStatus: pkStatus,
             pkId: pkId,
             isFollowOwner: isFollowOwner,
-            contributionCostNum: contributionCostNum,
+            contributionCostNum: contributionCostNum ?? self.contributionCostNum,
             honorDailyTotal: honorDailyTotal,
             audienceNum: audienceNum,
             roomSeatList: roomSeatList,
@@ -201,7 +223,74 @@ struct PartyRoomInfo: Codable, Equatable {
             partyCallGiftId: partyCallGiftId ?? self.partyCallGiftId,
             partyCallGiftImg: partyCallGiftImg ?? self.partyCallGiftImg,
             partyCallGiftPrice: partyCallGiftPrice ?? self.partyCallGiftPrice,
-            onSeatApplySwitch: onSeatApplySwitch ?? self.onSeatApplySwitch
+            onSeatApplySwitch: onSeatApplySwitch ?? self.onSeatApplySwitch,
+            roomMusicSwitc: roomMusicSwitc ?? self.roomMusicSwitc,
+            cornerBannerList: cornerBannerList,
+            bannerList: bannerList,
+            queueSeatNum: queueSeatNum ?? self.queueSeatNum
         )
+    }
+}
+
+/// Party 房右下角活动轮播项。后端 `id` 在不同环境可能是 String 或 Number，需兼容解码。
+struct PartyRoomBanner: Codable, Equatable {
+    let id: String?
+    let picUrl: String?
+    let directUrl: String?
+
+    /// 图片是展示的唯一前置条件；缺跳转地址时仍保留展示，但不响应点击。
+    var isDisplayable: Bool { picUrl?.isEmpty == false }
+    var isNavigable: Bool { directUrl?.isEmpty == false }
+    enum CodingKeys: String, CodingKey { case id, picUrl, directUrl }
+
+    init(id: String? = nil, picUrl: String? = nil, directUrl: String? = nil) {
+        self.id = id
+        self.picUrl = picUrl
+        self.directUrl = directUrl
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let value = try? container.decode(String.self, forKey: .id) {
+            id = value
+        } else if let value = try? container.decode(Int64.self, forKey: .id) {
+            id = String(value)
+        } else {
+            id = nil
+        }
+        picUrl = try? container.decode(String.self, forKey: .picUrl)
+        directUrl = try? container.decode(String.self, forKey: .directUrl)
+    }
+}
+
+/// Party 顶部活动资源。后端 `id` 可能是 String 或 Int，因此保留兼容解码。
+struct PartyCornerBanner: Codable, Equatable {
+    let id: String?
+    let picUrl: String?
+    let directUrl: String?
+
+    var isDisplayable: Bool {
+        picUrl?.isEmpty == false && directUrl?.isEmpty == false
+    }
+
+    enum CodingKeys: String, CodingKey { case id, picUrl, directUrl }
+
+    init(id: String? = nil, picUrl: String? = nil, directUrl: String? = nil) {
+        self.id = id
+        self.picUrl = picUrl
+        self.directUrl = directUrl
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let value = try? container.decode(String.self, forKey: .id) {
+            id = value
+        } else if let value = try? container.decode(Int64.self, forKey: .id) {
+            id = String(value)
+        } else {
+            id = nil
+        }
+        picUrl = try? container.decode(String.self, forKey: .picUrl)
+        directUrl = try? container.decode(String.self, forKey: .directUrl)
     }
 }

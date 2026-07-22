@@ -49,7 +49,8 @@ enum PartyRoomErrorMapper {
             return .seatOccupied
         case "ROOM_SEAT_EMPTY":
             return .seatEmpty
-        case "ROOM_PASSWORD_WRONG", "PASSWORD_ERROR":
+        // H5 `apiGetPartyRoomEnter` 的密码错误业务码为 10006；不同环境仍可能返回语义字符串。
+        case "10006", "ROOM_PASSWORD_WRONG", "PASSWORD_ERROR":
             return .passwordWrong
         case "USER_BANNED", "LIVING_BE_BANNED":
             return .banned

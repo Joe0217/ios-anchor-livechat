@@ -28,6 +28,7 @@ final class PartyGiftEventTests: XCTestCase {
         XCTAssertEqual(e.senderUserId, "1001")
         XCTAssertEqual(e.senderNickname, "Alice")
         XCTAssertEqual(e.receiverUserIds, ["2001", "2002"])
+        XCTAssertEqual(e.gems, 0)
         XCTAssertEqual(e.timestamp, ts)
     }
 
@@ -122,11 +123,84 @@ final class PartyGiftEventTests: XCTestCase {
         XCTAssertEqual(e.receiverUserIds, ["10", "20", "30"])
     }
 
+    // MARK: - 麦位收礼值（2049 gems）
+
+    func test_gems_acceptsDecimalNumberAndString() {
+        XCTAssertEqual(
+            PartyGiftEvent.from(payload: ["gems": 12.5], timestampMs: ts).gems,
+            12.5
+        )
+        XCTAssertEqual(
+            PartyGiftEvent.from(payload: ["gems": "3.25"], timestampMs: ts).gems,
+            3.25
+        )
+    }
+
+    func test_seatGiftValue_addsGemsToEveryRecipientOnSeat() {
+        let seats = [
+            makeSeat(index: 1, userId: "10", giftValueCount: 4.5),
+            makeSeat(index: 2, userId: "20", giftValueCount: nil),
+            makeSeat(index: 3, userId: "30", giftValueCount: 8),
+        ]
+        let updated = PartySeatGiftValue.adding(
+            gems: 2.25,
+            to: ["10", "20", "20", "404"],
+            seats: seats
+        )
+
+        XCTAssertEqual(updated[0].giftValueCount, 6.75)
+        XCTAssertEqual(updated[1].giftValueCount, 2.25)
+        XCTAssertEqual(updated[2].giftValueCount, 8)
+    }
+
+    func test_seatGiftValue_preservesOnlySameUsersAcrossSeatRefresh() {
+        let current = [
+            makeSeat(index: 1, userId: "10", giftValueCount: 12),
+            makeSeat(index: 2, userId: "20", giftValueCount: 8),
+        ]
+        let incoming = [
+            makeSeat(index: 1, userId: "10", giftValueCount: nil),
+            makeSeat(index: 2, userId: "30", giftValueCount: nil),
+        ]
+        let updated = PartySeatGiftValue.preservingLocalValues(from: current, in: incoming)
+
+        XCTAssertEqual(updated[0].giftValueCount, 12)
+        XCTAssertNil(updated[1].giftValueCount)
+    }
+
     // MARK: - timestamp 透传
 
     func test_timestamp_passedThrough() {
         let custom: Int64 = 42
         let e = PartyGiftEvent.from(payload: [:], timestampMs: custom)
         XCTAssertEqual(e.timestamp, custom)
+    }
+
+    private func makeSeat(index: Int, userId: String, giftValueCount: Double?) -> PartyRoomSeat {
+        PartyRoomSeat(
+            id: nil,
+            roomId: nil,
+            seatIndex: index,
+            userId: userId,
+            avatar: nil,
+            nickname: nil,
+            seatType: PartyRoomSeatType.voice.rawValue,
+            isOccupied: 1,
+            cameraEnabled: nil,
+            microphoneEnabled: nil,
+            roomRoleType: nil,
+            giftValueCount: giftValueCount,
+            headFrame: nil,
+            yxAccid: nil,
+            userType: nil,
+            seatCameraEnabled: nil,
+            seatMicrophoneEnabled: nil,
+            lockFlag: nil,
+            roomTempId: nil,
+            isHostSeat: nil,
+            isPlatformAdmin: nil,
+            showBubble: nil,
+            anchorTaskRewardExt: nil
+        )
     }
 }

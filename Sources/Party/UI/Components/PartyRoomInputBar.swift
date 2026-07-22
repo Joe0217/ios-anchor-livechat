@@ -8,7 +8,8 @@ import SwiftUI
 /// - `.animation(.easeInOut(duration: 0.2), value: focus.wrappedValue)` 平滑收合
 /// - 键盘弹起由 SwiftUI 默认避让处理（背景层已用 UIScreen.main.bounds 锁定不变形）
 ///
-/// 按钮顺序（未 focused 时全显）：输入框 · emoji · message · mic · game · toolMenu · gift
+/// 按钮顺序（未 focused 时全显）：输入框 · [micApplication] · emoji · message · mic · game · toolMenu · gift
+/// - micApplication：房主/房管 + 排麦开关开 时显示（对齐安卓 flMicApplication 输入框上方快捷入口）
 struct PartyRoomInputBar: View {
     @Binding var text: String
     let micOn: Bool
@@ -18,6 +19,10 @@ struct PartyRoomInputBar: View {
     let showGameButton: Bool
     /// 消息按钮未读徽章数（对齐 H5 useUnreadMessageCount + van-badge，>99 显 99+）
     let unreadCount: Int
+    /// 对齐安卓 §1 checkMicApplicationVisible：`onSeatApplySwitch && (owner||admin||平台管理员)` 才显示
+    let showMicApplicationButton: Bool
+    /// 排麦申请队列红角标（对齐安卓 tvMicApplicationNum；`0` 不显示 badge）
+    let micApplicationBadge: Int
     /// v16.10：父 view FocusState 桥（focused 时收起右侧按钮，让 TextField 占满宽度）
     var focus: FocusState<Bool>.Binding
     let onSubmit: () -> Void
@@ -27,20 +32,25 @@ struct PartyRoomInputBar: View {
     let onGameTap: () -> Void
     let onToolMenuTap: () -> Void
     let onGiftTap: () -> Void
+    /// 排麦快捷入口 tap（房主/房管直达 Mic Application sheet，绕过 Tools sheet 二层）
+    let onMicApplicationTap: () -> Void
 
     var body: some View {
         HStack(spacing: Theme.Metric.partyRoomToolBtnGap) {
             inputField
             // v16.10：focused 时右侧图标全隐藏，TextField 占满（对齐 LiveRoomView L423 pattern）
             if !focus.wrappedValue {
+                // 对齐安卓 flMicApplication：输入框旁快捷入口，房主/房管 + 排麦开关开时可见 + queueSeatNum badge
+                if showMicApplicationButton {
+                    micApplicationButton
+                }
                 // F 里程碑（2026-07-17）：emoji 是全员基础能力（对齐 H5 `inPartyRole > -1` 即"在房内" ·
                 // 观众/上麦者/房主都能打开面板 · 静态 -10 全员可发 · 玩法 -11 门槛在 Panel/Store 层守）
                 emojiButton
                 messageButton
-                micButton
-                    .opacity(isOnSeat ? 1 : 0)
-                    .allowsHitTesting(isOnSeat)
-                    .accessibilityHidden(!isOnSeat)
+                if isOnSeat {
+                    micButton
+                }
                 if showGameButton { gameButton }
                 toolMenuButton
                 giftButton
@@ -112,6 +122,26 @@ struct PartyRoomInputBar: View {
                 a11y: micOn ? L10n.PartyRoom.a11yMicOn : L10n.PartyRoom.a11yMicOff,
                 tinted: false,
                 action: onMicTap)
+    }
+
+    /// 排麦申请快捷入口（对齐安卓 flMicApplication：输入框旁常驻按钮 + queueSeatNum 红角标）
+    /// 房主/房管 + 排麦开关开 时可见；tap 直达 Mic Application sheet（绕过 Tools sheet 二层）
+    private var micApplicationButton: some View {
+        systemToolBtn(symbol: "hand.raised.fill",
+                      a11y: L10n.Party.toolMicApplication,
+                      action: onMicApplicationTap)
+            .overlay(alignment: .topTrailing) {
+                if micApplicationBadge > 0 {
+                    Text(micApplicationBadge > 99 ? "99+" : "\(micApplicationBadge)")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 4)
+                        .frame(minWidth: 14, minHeight: 14)
+                        .background(Capsule().fill(Color.red))
+                        .offset(x: 4, y: -4)
+                        .accessibilityHidden(true)
+                }
+            }
     }
 
     private var gameButton: some View {

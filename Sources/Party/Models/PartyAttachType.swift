@@ -48,6 +48,8 @@ enum PartyAttachType: Int {
     // MARK: - 房间/音乐/鉴黄（占位 F 期）
 
     case roomCloseOrWhitelist = 1009
+    /// 1010 全房音乐总开关；payload `{ roomMusicSwitch: 0|1 }`。
+    case musicMainSwitch = 1010
     case musicSongChange = 1011
 
     /// 1012 更新麦位列表（触发全量 `seat/list` 重拉）
@@ -121,15 +123,37 @@ enum PartyAttachType: Int {
     case luckyNumberDraw = 1050
     /// 1051 幸运数字中奖公屏广播（⚠️ payload 直读 ext）
     case luckyNumberWin = 1051
-    /// 1052 幸运数字中奖个人弹窗（sheet 承载，非公屏；占位不实装）
+    /// 1052 幸运数字中奖个人弹窗（CustomSystemNotification 主路径消费；聊天室误投时仅降噪）
     case luckyNumberPersonalDialog = 1052
 
-    // MARK: - PartyBattle（占位 F 期，Android 独有）
+    // MARK: - PartyBattle（F-1a 落地 2026-07-17）· spec §5.1 attachType 1100-1112 分发
 
+    /// 1100 SELECTING 开始（房主发起 PK → 服务端广播）
+    case battleSelectingStart = 1100
+    /// 1101 参战成员变化（切队 / 观众上麦 / 下麦）· preservePersonal 语义
+    case battleTeamMemberChange = 1101
+    /// 1102 观众上麦申请推送（H5 pushApply 无 role gating；观众也收但 UI 门控）
+    case battleApplyReceived = 1102
+    /// 1103 RUNNING 开始（SELECTING 归零或房主 startNow）
+    case battleRunningStart = 1103
+    /// 1104 保留（H5/spec 未消费；F-1a 走 fallback log）
     case battleHeartbeat = 1104
+    /// 1105 分数板更新（200ms trailing 聚合入口）
+    case battleLeaderboardUpdate = 1105
+    /// 1106 皇冠归属变更
+    case battleCrownHolderUpdate = 1106
+    /// 1107 保留（H5/spec 未消费；F-1a 走 fallback log）
     case battleGiftNotify = 1107
+    /// 1108 保留（H5/spec 未消费；F-1a 走 fallback log）
     case battleForceEndConfirm = 1108
+    /// 1109 PK 结束（stub / full 分类由 payload.durationSec 存在与否判定）
+    case battleEnd = 1109
+    /// 1110 公屏广播（kind: victory / force_ended / mvp / selecting_started）
+    case battleBroadcast = 1110
+    /// 1111 保留（H5/spec 未消费；F-1a 走 fallback log）
     case battleApplyPendingNotice = 1111
+    /// 1112 冷却结束（无 payload）
+    case battleCooldownEnd = 1112
 
     // MARK: - 送礼压缩版（已实装）
 
@@ -157,7 +181,5 @@ enum PartyKnownButUnhandledAttachType {
         // Android 独有派对房但主播端暂不实装
         1002,       // INVITE_JOIN_PARTY_ROOM（P2P 邀请卡）
         1010,       // PARTY_ROOM_MUSIC_MAIN_SWITCH（全局音乐总开关）
-        1022,       // PARTY_ROOM_TASK_PROGRESS（任务进度）
-        1023,       // PARTY_ROOM_TASK_GET_REWARD（任务奖励）
     ]
 }

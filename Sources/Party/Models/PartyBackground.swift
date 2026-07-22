@@ -56,3 +56,23 @@ struct PartyCreateConditions: Decodable, Equatable {
     /// H5 拼写：`isWithlist`（漏 h），保留原字面兼容
     let isWithlist: Bool?
 }
+
+/// Party 房基础配置。当前消费管理端踢人限时，避免把服务端值硬编码到 UI。
+struct PartyBaseConfig: Decodable, Equatable {
+    let kickOutInterval: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case kickOutInterval
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let value = try? container.decode(Int.self, forKey: .kickOutInterval) {
+            kickOutInterval = value
+        } else if let value = try? container.decode(String.self, forKey: .kickOutInterval) {
+            kickOutInterval = Int(value)
+        } else {
+            kickOutInterval = nil
+        }
+    }
+}

@@ -5,7 +5,7 @@ import SwiftUI
 /// 视觉 3 态：
 /// - 空位：粉紫圆环 + 中心椅子/相机图标 + 底部编号数字
 /// - 占用 + 摄像头开：远端视频渲染（或本端 CameraPreview）+ 顶部名字胶囊 + 徽章 + Gems 值
-/// - 占用 + 摄像头关：深灰底 + 相机 off 图标 + 顶部名字胶囊 + 徽章 + Gems 值
+/// - 占用 + 摄像头关：深灰底 + 头像，关闭视频图标叠在头像上方 + 顶部名字胶囊 + 徽章 + Gems 值
 ///
 /// 参数注入 pattern（对齐 P1-8：不订阅 store 任一 @Published）。
 struct PartyRoomBigSeatCell: View {
@@ -21,6 +21,10 @@ struct PartyRoomBigSeatCell: View {
     let aspectRatio: CGFloat?
     /// v15：是否正在说话（PartyStore.isSpeaking 派生）
     let isSpeaking: Bool
+
+    /// PK-aware gems 显示（SELECTING 期强制 0，对齐 H5 audio-wrap.vue :93-97）
+    /// cell 直接订阅 battleStore 触发 SELECTING → RUNNING 时 gems 数字自动重绘
+    @ObservedObject private var battleStore = PartyBattleStore.shared
 
     init(
         seat: PartyRoomSeat,
@@ -60,6 +64,11 @@ struct PartyRoomBigSeatCell: View {
             // v17：MC 位视觉（对齐 H5 main-wrap.vue `.mc-bg` + `icon_mic_mc_result` + `icon_mic_zs_left/right`）
             mcOverlay
             overlayNameAndGems
+            if !isLockedEmptySeat, seat.isMicrophoneMuted {
+                microphoneMutedBadge
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                    .padding(6)
+            }
             // v15：说话中呼吸边框（覆盖在视频/头像上层，clipped 里保证不越界）
             PartyBigSeatSpeakingBorder(
                 isSpeaking: isSpeaking && seat.occupied,
@@ -69,25 +78,26 @@ struct PartyRoomBigSeatCell: View {
             // - 空位 seat.userId 为 nil/empty → PartyEmojiSVGAOverlay 内部自动隐藏，无副作用
             // - 覆盖顶层不拦截 tap（allowsHitTesting 已 false）· 单段播完停留末帧
             PartyEmojiSVGAOverlay(seatUserId: seat.userId)
+            // Party 2049 静态礼物收礼效果（H5 gift-animator-receiver，50pt / 1.5s）。
+            PartyGiftReceiverEffect(userId: seat.userId, size: 50)
+            // 主播周任务奖励：1023 到达后在本人当前麦位播放宝石效果，再展示奖励窗。
+            PartyWeeklyTaskRewardSeatEffect(isSelf: isSelf, size: 58)
             // v10：overlayMicIndicator 移除，mic 图标已迁到 nameChip 名字后面（用户 2026-07-13 requirement）
         }
     }
-
-    /// v17：MC 位视觉判定 —— `seat.isHostSeat == 1`（对齐 H5 `roomSeatListCom[index]?.isHostSeat === 1`）
-    private var isMcSeat: Bool { (seat.isHostSeat ?? 0) == 1 }
 
     /// v17：MC 装饰双侧翅膀显示条件 —— 空位 or (占用 + 麦关)（对齐 H5 main-wrap.vue L264 v-if）
     /// 摄像头开的占用 MC 位显示视频不叠翅膀（避免遮挡视频画面）
     private var showMcWings: Bool {
         if !seat.occupied { return true }
-        if (seat.microphoneEnabled ?? 1) == 0 { return true }
+        if seat.isMicrophoneMuted { return true }
         return false
     }
 
     /// v17：MC 位综合装饰层（4-stop 彩边 + 顶部徽章 + 双侧翅膀 + cameraOff 头像框）
     @ViewBuilder
     private var mcOverlay: some View {
-        if isMcSeat {
+        if seat.isMCSeat, !isLockedEmptySeat {
             // 4-stop 彩边（H5 border-image linear-gradient 150deg）
             Rectangle()
                 .strokeBorder(
@@ -106,13 +116,8 @@ struct PartyRoomBigSeatCell: View {
                 )
                 .allowsHitTesting(false)
 
-            // 顶部徽章 icon_mic_mc_result（H5 empty: top--16 h-12 w-24；占用+cameraOff: 中心；简化为顶部居中 -6pt）
-            CachedAsyncImage(
-                url: URL(string: "https://img.hnhily.link/mstatic/party/icon_mic_mc_result.webp"),
-                contentMode: .fit,
-                persistent: true
-            ) { Color.clear }
-            .frame(width: 44, height: 22)
+            // 本地徽章保证弱网或远端视觉资源未命中时，MC 身份仍明确可见。
+            PartyMCSeatBadge()
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .offset(y: -6)
             .allowsHitTesting(false)
@@ -172,9 +177,9 @@ struct PartyRoomBigSeatCell: View {
     private var headFrameOverlay: some View {
         if seat.occupied,
            let raw = seat.headFrame, !raw.isEmpty,
-           !isVideoActiveOnThisSeat {
-            // 视频位关摄像头 + 语聊位 → 中心头像位置贴装饰框
-            // 尺寸参考 emptyRing/cameraOffPlaceholder 的 72pt，装饰框略大 +8 让 ring 环绕头像
+           !isVideoActiveOnThisSeat,
+           !isCameraOffVideoSeat {
+            // 语聊位头像可显示装饰框；视频位关闭摄像头时改用纯头像 + 大号关闭视频覆盖标识。
             HeadFrameView(urlString: raw, size: 80)
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
@@ -189,11 +194,15 @@ struct PartyRoomBigSeatCell: View {
         return (seat.cameraEnabled ?? 0) == 1
     }
 
+    private var isCameraOffVideoSeat: Bool {
+        seat.occupied && seat.seatType == 1 && !isVideoActiveOnThisSeat
+    }
+
     // MARK: - Layers
 
     @ViewBuilder
     private var background: some View {
-        if isMcSeat {
+        if seat.isMCSeat, !isLockedEmptySeat {
             // v17：MC 底色 `.mc-bg`（H5 linear-gradient 17deg #1F003D 0%, #440127 51.53%, #000000 100%）
             // 17deg 近似垂直，用 top→bottom LinearGradient 近似
             Rectangle().fill(
@@ -220,10 +229,12 @@ struct PartyRoomBigSeatCell: View {
     private var videoLayer: some View {
         if seat.occupied, seat.seatType == 1 {
             if isSelf, isLocalCameraActive, let cm = camera {
-                CameraPreview(camera: cm, agora: nil)
+                CameraPreview(camera: cm, agora: nil, scalingMode: .aspectFill)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
             } else if !isSelf, let idx = seat.seatIndex, (seat.cameraEnabled ?? 0) == 1 {
                 PartyRemoteVideoView(seatIndex: idx, engine: engine)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
             } else {
                 cameraOffPlaceholder
@@ -232,13 +243,27 @@ struct PartyRoomBigSeatCell: View {
     }
 
     private var cameraOffPlaceholder: some View {
-        // v7.4：ring 居中于 ZStack，与 headFrameOverlay 同 y 中心（用户 2026-07-14 requirement）
-        // 与 emptyLayer 同款布局，保持空位/占用关摄像头/头像占用三态位置一致
+        // 视频关闭不是空位：保留用户头像；关闭视频图标作为头像右上角的顶层状态标识。
+        // 外环和头像同心；此状态明确不显示头像框。
         ZStack {
             Image("partySeatRing")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 72, height: 72)
+
+            AvatarView(urlString: seat.avatar, size: 64, kind: .user, disablesTap: true)
+                .clipShape(Circle())
+                // 大号状态图标直接覆盖头像右上区域，而非悬在头像外侧。
+                .overlay(alignment: .topTrailing) {
+                    Image(systemName: "video.slash.fill")
+                        .font(.system(size: 21, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 38, height: 38)
+                        .background(Circle().fill(Color.black.opacity(0.72)))
+                        .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
+                        .offset(x: 8, y: -8)
+                        .accessibilityHidden(true)
+                }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -265,8 +290,8 @@ struct PartyRoomBigSeatCell: View {
                         .foregroundColor(.white.opacity(0.9))
                         .accessibilityHidden(true)
                 }
-                // idx 底部独立布局（不影响 ring 中心位置）
-                if let idx = seat.seatIndex, (seat.lockFlag ?? 0) != 1 {
+                // idx 底部独立布局（不影响 ring 中心位置）；锁位也保留编号。
+                if let idx = seat.seatIndex {
                     VStack {
                         Spacer()
                         Text("\(idx)")
@@ -281,12 +306,16 @@ struct PartyRoomBigSeatCell: View {
     }
 
     private var emptyRing: some View {
-        // v3：视频位专用空位图标 partyVideoSeatEmpty（上视频位.png，用户 2026-07-11 correction）
-        // fallback 链共享自 emptyRingAssetName（partyVideoSeatEmpty → partySeatEmpty → partySeatRing）
-        Image(emptyRingAssetName)
+        // 锁位不显示空位切图中的沙发，只保留圆环与中心锁图标。
+        Image(isLockedEmptySeat ? "partySeatRing" : emptyRingAssetName)
             .resizable()
             .scaledToFit()
             .frame(width: 72, height: 72)
+    }
+
+    /// 锁位视觉优先级最高：空位被锁时只显示锁与编号。
+    private var isLockedEmptySeat: Bool {
+        !seat.occupied && (seat.lockFlag ?? 0) == 1
     }
 
     // MARK: - Overlays
@@ -307,6 +336,17 @@ struct PartyRoomBigSeatCell: View {
             }
             .padding(6)
         }
+    }
+
+    /// 禁麦状态需要覆盖视频位与音频位，避免只有小麦位能看见该状态。
+    private var microphoneMutedBadge: some View {
+        Image("partyIconMicMuted")
+            .resizable()
+            .scaledToFit()
+            .frame(width: 18, height: 18)
+            .padding(4)
+            .background(Circle().fill(Color.black.opacity(0.35)))
+            .accessibilityLabel(Text(L10n.Party.seatMuted))
     }
 
     private var nameChip: some View {
@@ -346,7 +386,8 @@ struct PartyRoomBigSeatCell: View {
     }
 
     private var formattedGems: String {
-        PartyNumberFormat.compact(seat.giftValueCountInt)
+        // PK 期 SELECTING 强制归零（对齐 H5 audio-wrap.vue :93-97 seatScore）
+        PartyNumberFormat.compact(PartyBattleSeatDisplay.giftValueCountInt(for: seat))
     }
 
     // v10：overlayMicIndicator 已删除，mic 图标改到 nameChip 内名字后面

@@ -88,6 +88,9 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
                 self.hasJoined = true
                 self.connected = true
                 self.imAlive = true
+                // 派对房观众数**含自己**（对齐 H5 用户端 usePartyHooks.js:305
+                // `audienceNum = onlineUserCount || 0`，无 -1；安卓 PartyRoomVM.kt 同款）。
+                // 直播房 useLiveRoom.js:347 才 -1 减主播；派对房无此语义（房主也算参与者）。
                 self.onlineCount = chatroom?.onlineUserCount ?? 0
                 AppLogger.party.info("[PartyChat] enter ok online=\(self.onlineCount, privacy: .public)")
                 self.pullHistory()
@@ -263,9 +266,23 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
            !nickName.isEmpty {
             ext["nickname"] = nickName
         }
+        let source: PublicChatMessageSource? = {
+            let messageId = m.messageId
+            guard !messageId.isEmpty,
+                  let fromAccid = m.from, !fromAccid.isEmpty else {
+                return nil
+            }
+            return PublicChatMessageSource(
+                messageId: messageId,
+                timetag: Int64(m.timestamp * 1000),
+                fromAccid: fromAccid
+            )
+        }()
         return UnifiedPublicChatMessage(
+            timestamp: Date(timeIntervalSince1970: m.timestamp),
             sender: PartyPublicChatAdapter.makeSender(from: ext, fallbackNickname: m.senderName, isSelf: isSelf),
-            variant: .text(content: text)
+            variant: .text(content: text),
+            source: source
         )
     }
 
@@ -304,8 +321,14 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
             id: old.id,
             timestamp: old.timestamp,
             sender: old.sender,
-            variant: newVariant
+            variant: newVariant,
+            source: old.source
         )
+    }
+
+    /// 删除指定公屏消息的本地副本。服务端删除成功后立即调用，和 H5 的乐观移除保持一致。
+    func removeMessage(id: UUID) {
+        messages.removeAll { $0.id == id }
     }
 
     private func trimIfNeeded() {
@@ -353,10 +376,15 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
             case .notification:
                 if let obj = m.messageObject as? NIMNotificationObject,
                    let content = obj.content as? NIMChatroomNotificationContent {
+                    // 对齐 H5 party.js:1013 过滤自己：仅当事件 target 不是自己时才计入观众数增减
+                    // （云信 chatroom member.userId 即 yxAccid，与 SessionStore.user.yxAccid 直比）
+                    let mineYxAccid = SessionStore.shared.user?.yxAccid ?? ""
+                    let evtUserId = content.targets?.first?.userId ?? ""
+                    let isSelf = !evtUserId.isEmpty && evtUserId == mineYxAccid
                     if content.eventType == .enter {
-                        memberDelta += 1
+                        if !isSelf { memberDelta += 1 }
                     } else if content.eventType == .exit {
-                        memberDelta -= 1
+                        if !isSelf { memberDelta -= 1 }
                     }
                 }
 
@@ -432,6 +460,10 @@ protocol PartyRoomChatManagerDelegate: AnyObject {
     func partyRoomChatDidRequireSeatListReload(_ chat: PartyRoomChatManager, msgTimestampMs: Int64)
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveProhibitMic payload: [String: Any], raw: NIMMessage)
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveMediaUpdate payload: [String: Any], raw: NIMMessage)
+    /// 1010 全房音乐总开关；关闭时 UI 必须立刻隐藏音乐入口。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveRoomMusicAvailability payload: [String: Any], raw: NIMMessage)
+    /// 1011 切歌 / 1013 房间音乐开关。H5 以 currentMusicInfo 合并 payload。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveMusicUpdate payload: [String: Any], switchOnly: Bool, raw: NIMMessage)
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveGift payload: [String: Any], raw: NIMMessage)
     /// v23（2026-07-13）用户进场动画（attachType=80）：VIP/带座驾用户进入派对房时触发座驾 SVGA/MP4 全屏特效
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveEnterAnimation payload: [String: Any], raw: NIMMessage)
@@ -459,13 +491,16 @@ protocol PartyRoomChatManagerDelegate: AnyObject {
     /// 1049 房间通告公屏广播。payload 期望 `{ text, roomId }`—— roomId 校验后落公屏。
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveRoomAnnouncement payload: [String: Any], raw: NIMMessage)
 
-    /// 1050 幸运数字抽数公屏卡片（⚠️ 直读 ext，无 ext.data 包裹）。
+    /// 1050 幸运数字抽数公屏卡片（优先 ext.data，缺失时回退顶层 ext）。
     /// ext 期望 `{ userId, nickname, luckyNumber, giftId, ... }` —— 真机 preflight。
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveLuckyNumberDraw payload: [String: Any], raw: NIMMessage)
 
-    /// 1051 幸运数字中奖公屏广播（⚠️ 直读 ext）。
+    /// 1051 幸运数字中奖公屏广播（优先 ext.data，缺失时回退顶层 ext）。
     /// ext 期望 `{ userId, nickname, luckyNumber, winAmount, ... }` —— 真机 preflight。
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveLuckyNumberWin payload: [String: Any], raw: NIMMessage)
+
+    /// 1052 幸运数字中奖个人弹窗（NIM CustomSystemNotification，仅中奖者收到）。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveLuckyNumberPersonalWin payload: [String: Any])
 
     /// 136 游戏中奖公屏通知（全服，session 通道主入口 + Party 通道兜底）。
     /// payload 期望 `{ avatar, nickname, winAmount, gameName, gameIcon, gameId, gameType, messageSkin }` —— 真机 preflight。

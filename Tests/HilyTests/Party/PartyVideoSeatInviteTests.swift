@@ -32,6 +32,7 @@ final class PartyVideoSeatInviteTests: XCTestCase {
         XCTAssertEqual(invite?.fromUserId, "1001")
         XCTAssertEqual(invite?.fromNickname, "Alice")
         XCTAssertEqual(invite?.roomId, "7777")
+        XCTAssertEqual(invite?.ttlSeconds, 30)
         XCTAssertEqual(invite?.timestamp, ts)
     }
 
@@ -141,5 +142,30 @@ final class PartyVideoSeatInviteTests: XCTestCase {
         let payload: [String: Any] = ["inviteId": "i1", "seatIndex": 1]
         let invite = PartyVideoSeatInvite.from(payload: payload, fallbackRoomId: fallbackRoom, timestampMs: custom)
         XCTAssertEqual(invite?.timestamp, custom)
+    }
+
+    func test_ttlMissingOrInvalid_defaultsToThirtySeconds() {
+        let missing = PartyVideoSeatInvite.from(
+            payload: ["inviteId": "i1", "seatIndex": 1],
+            fallbackRoomId: fallbackRoom,
+            timestampMs: ts
+        )
+        let invalid = PartyVideoSeatInvite.from(
+            payload: ["inviteId": "i2", "seatIndex": 1, "ttl": 0],
+            fallbackRoomId: fallbackRoom,
+            timestampMs: ts
+        )
+        XCTAssertEqual(missing?.ttlSeconds, 30)
+        XCTAssertEqual(invalid?.ttlSeconds, 30)
+    }
+
+    func test_inviteResult_keepsTargetUserIdAndSystemText() {
+        let result = PartyVideoSeatInviteResult(
+            kind: .rejected,
+            payload: ["targetUserId": NSNumber(value: 1001), "text": "declined"]
+        )
+        XCTAssertEqual(result.kind, .rejected)
+        XCTAssertEqual(result.targetUserId, "1001")
+        XCTAssertEqual(result.systemText, "declined")
     }
 }

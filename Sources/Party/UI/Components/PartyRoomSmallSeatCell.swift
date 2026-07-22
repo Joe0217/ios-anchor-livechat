@@ -13,10 +13,16 @@ struct PartyRoomSmallSeatCell: View {
     enum SizeVariant { case `default`, sm }
 
     let seat: PartyRoomSeat
+    /// 是否为当前主播；周任务奖励效果只在本人的当前麦位播放。
+    var isSelf: Bool = false
     /// v15：是否正在说话（PartyStore.isSpeaking 派生）；空位时恒 false
     var isSpeaking: Bool = false
     /// v17：尺寸变体（对齐 H5 30 麦 sm + @media(<380) 缩小）
     var sizeVariant: SizeVariant = .default
+
+    /// PK-aware gems 显示（SELECTING 期强制 0，对齐 H5 audio-wrap.vue :93-97）
+    /// cell 直接订阅 battleStore 触发 SELECTING → RUNNING 时 gems 数字自动重绘
+    @ObservedObject private var battleStore = PartyBattleStore.shared
 
     /// v17：avatar 尺寸按 variant 派生 —— sm=35pt / default=46pt（对齐 H5 :deep(.audio-avatar-inner) 35.52px）
     private var avatarSize: CGFloat {
@@ -36,8 +42,10 @@ struct PartyRoomSmallSeatCell: View {
     private var avatarStack: some View {
         ZStack {
             // v2：空位用 Component 7 切图（`partySeatEmpty`）；占用状态继续用 partySeatRing 装饰环
-            // Fallback：Component 7 asset 未导入时空位也用 partySeatRing 兜底
-            Image(seat.occupied ? "partySeatRing" : (UIImage(named: "partySeatEmpty") != nil ? "partySeatEmpty" : "partySeatRing"))
+            // 锁位不显示空位切图内的沙发，仅保留圆环和锁图标。
+            Image(seat.occupied || isLockedEmptySeat
+                  ? "partySeatRing"
+                  : (UIImage(named: "partySeatEmpty") != nil ? "partySeatEmpty" : "partySeatRing"))
                 .resizable()
                 .scaledToFit()
                 .frame(width: avatarSize + 8,
@@ -63,7 +71,7 @@ struct PartyRoomSmallSeatCell: View {
 
             // v15：锁麦位视觉标识（对齐 H5 空位 lockFlag=1 显示 lock icon 阻止上麦）
             // 只在空位显示，占用位不显示（占用时 lockFlag 无实际业务约束）
-            if !seat.occupied, (seat.lockFlag ?? 0) == 1 {
+            if isLockedEmptySeat {
                 Image(systemName: "lock.fill")
                     .font(.system(size: sizeVariant == .sm ? 15 : 20, weight: .semibold))
                     .foregroundColor(.white.opacity(0.85))
@@ -76,6 +84,10 @@ struct PartyRoomSmallSeatCell: View {
             PartyEmojiSVGAOverlay(seatUserId: seat.userId)
                 .frame(width: avatarSize + 12, height: avatarSize + 12)
 
+            // Party 2049 静态礼物收礼效果（H5 gift-animator-receiver）。
+            PartyGiftReceiverEffect(userId: seat.userId, size: 50)
+            PartyWeeklyTaskRewardSeatEffect(isSelf: isSelf, size: avatarSize + 18)
+
             // v13：badgeCorner (partyBadgeBubble 右上角泡泡) 去掉（用户 2026-07-13 requirement）
             // v10：mic 图标移到 footer 名字后面（去掉 bottom-left corner overlay）
         }
@@ -85,8 +97,7 @@ struct PartyRoomSmallSeatCell: View {
         // `(!microphoneEnabled && userId) || !seatMicrophoneEnabled` 语义）。
         // 默认 ??1（假定开麦），避免后端漏字段时误显。
         .overlay(alignment: .bottomTrailing) {
-            if seat.occupied,
-               (seat.microphoneEnabled ?? 1) != 1 || (seat.seatMicrophoneEnabled ?? 1) != 1 {
+            if !isLockedEmptySeat, seat.isMicrophoneMuted {
                 Image("partyIconMicMuted")
                     .resizable()
                     .scaledToFit()
@@ -94,6 +105,16 @@ struct PartyRoomSmallSeatCell: View {
                     .accessibilityLabel(Text(L10n.Party.seatMuted))
             }
         }
+        .overlay(alignment: .topLeading) {
+            if !isLockedEmptySeat, seat.isMCSeat {
+                PartyMCSeatBadge(compact: true)
+                    .offset(x: -3, y: -3)
+            }
+        }
+    }
+
+    private var isLockedEmptySeat: Bool {
+        !seat.occupied && (seat.lockFlag ?? 0) == 1
     }
 
     @ViewBuilder
@@ -135,18 +156,16 @@ struct PartyRoomSmallSeatCell: View {
                     Image("partyGems")
                         .resizable().scaledToFit()
                         .frame(width: 10, height: 10)
-                    Text(PartyNumberFormat.compact(seat.giftValueCountInt))
+                    // PK 期 SELECTING 强制归零（对齐 H5 audio-wrap.vue :93-97 seatScore）
+                    Text(PartyNumberFormat.compact(PartyBattleSeatDisplay.giftValueCountInt(for: seat)))
                         .font(Theme.Typography.partyRoomGemsNumber)
                         .foregroundColor(Theme.Palette.partyRoomGemsText)
                 }
             }
         } else if let idx = seat.seatIndex {
-            // v15：锁麦位不显示数字（视觉焦点让给 lock 图标）
-            if (seat.lockFlag ?? 0) != 1 {
-                Text("\(idx)")
-                    .font(Theme.Typography.partyRoomEmptyIndex)
-                    .foregroundColor(Theme.Palette.partyRoomEmptyIndex)
-            }
+            Text("\(idx)")
+                .font(Theme.Typography.partyRoomEmptyIndex)
+                .foregroundColor(Theme.Palette.partyRoomEmptyIndex)
         }
     }
 }

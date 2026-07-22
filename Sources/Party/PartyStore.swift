@@ -1,4 +1,5 @@
 import Combine
+import AVFoundation
 import Foundation
 import NIMSDK
 import SwiftUI  // @AppStorage（E v2 §3 partySaveInfo.autoEnter{On,Off}Application 本地持久化）
@@ -36,6 +37,10 @@ final class PartyStore: ObservableObject {
     @Published private(set) var isJoinedChannel: Bool = false   // RTC joined
     @Published private(set) var imAlive: Bool = false           // NIM chatroom enterOK
     @Published private(set) var lastGiftEvent: PartyGiftEvent?
+    /// 1052 幸运数字中奖个人弹窗；只在当前 Party 房已加入且房间匹配时写入。
+    @Published private(set) var luckyNumberWinPayload: PartyLuckyNumberWinPayload?
+    /// Party 房静态礼物效果专用状态机；SVGA/MP4 仍由 GiftEffectCenter 跨场景播放。
+    let giftEffects = PartyGiftEffectCoordinator.shared
     @Published private(set) var roomState: PartyRoomState = .idle {
         didSet {
             guard oldValue != roomState else { return }
@@ -55,11 +60,22 @@ final class PartyStore: ObservableObject {
     @Published private(set) var lastInviteResult: PartyVideoSeatInviteResult?
     @Published private(set) var lastError: PartyRoomError?
 
+    /// 密码房预校验成功后的单次 enter 响应。列表页必须在 push 前完成密码校验；
+    /// PartyRoomView 随后消费此响应继续 RTC/NIM 入房，避免对 `/room/enter` 重复请求。
+    private var prevalidatedRoomEntry: (roomId: String, info: PartyRoomInfo)?
+    /// 设备权限不足时由 PartyRoomView 弹窗；确认成功后继续用户原本的上麦/开媒体动作。
+    @Published var mediaPermissionAlertRequirement: MediaPermissionGate.Requirement?
+    private var pendingMediaPermissionAction: (() async -> Void)?
+    /// H5 同款视频位邀请 30 秒冷却，防止对同一普通用户重复发送 1040。
+    private var videoSeatInviteCooldowns: [String: Date] = [:]
+
     /// 是否已关注当前房主（对齐 H5 `currentPartyInfo.isFollowOwner`）。
     /// 进房时初始化自 `roomInfo.isFollowOwner`；`toggleFollowAnchor()` 后翻转。
     @Published private(set) var isFollowingAnchor: Bool = false
     /// 关注切换请求是否在飞（防连点重复请求）
     @Published private(set) var isTogglingFollow: Bool = false
+    /// 名片卡/个人页等外部入口成功关注后，按 userId 同步当前房主的顶部关注态。
+    private var followRelationObserver: NSObjectProtocol?
 
     /// v12：房主头像装饰框 URL（对齐 H5 `ownerInfo.headFrame` = `apiPartyGetUser.headFrameSmallImg`）。
     /// enterRoom 完成后 async 拉；`.svga` 结尾 iOS 暂 fallback 到无装饰（G/H 期接 SVGA 播放器）。
@@ -104,20 +120,32 @@ final class PartyStore: ObservableObject {
     @Published private(set) var micApplicationsState: PartyMicApplicationsState = .idle
     /// Mic Application 开关（来源：1021 IM 广播）
     @Published private(set) var micApplicationSwitchOn: Bool = false
+    /// 音乐的实际启用状态。`roomMusicSwitc` 仅表示该房支持音乐，不能用于展示 ON/OFF。
+    @Published private(set) var isRoomMusicEnabled: Bool = false
+    /// H5 `currentMusicInfo` 的单一真值，供右下角音乐组件和管理面板共同观察。
+    @Published private(set) var roomMusicSettings: PartyMusicSettings = .empty
+    /// 普通用户本地的音乐收听开关（H5 `userMusicSwitch`）；不影响其他麦位声音。
+    @Published private(set) var isRoomMusicAudible: Bool = true
     /// 队列总长度（1018 payload num 消费；用于外部 badge/系统消息计数）
     @Published private(set) var queueSeatNum: Int = 0
     /// 观众端 "我的申请"（inIndex 排队位序 + rejectedAt 30s 冷却）
     @Published private(set) var myApplyInfo: PartyMyApplyInfo = .init()
     /// agreeSeat 并发占位集合：房主快速批准两申请时排除已挑走的 seatIndex 防冲突（spec §2 R6）
     private var pendingApproveSeatIndex: Set<Int> = []
+    /// 只读快照供 UI 选座 sheet 过滤已挑走的位（对齐安卓 SeatRosterDialog 排除同时批准冲突）
+    var pendingApproveSeatIndexSet: Set<Int> { pendingApproveSeatIndex }
     /// applying 超时兜底 Task：inIndex > 0 持续 5min 无 IM → 本地自动 giveUp（spec §2 R9）
     private var applyingTimeoutTask: Task<Void, Never>? = nil
     /// 开关 API 幂等 flag（防连点，与 Confirm 分开 flag 隔离）
     private var isBusyMicSwitch: Bool = false
+    private var isBusyRoomMusicSwitch: Bool = false
+    private var isBusyRoomMusicControl: Bool = false
+    @Published private(set) var isUploadingRoomMusic: Bool = false
     /// spec §0 throttle：所有 Mic Application 类 mutating async 用 isBusy flag 幂等（防 spam 双请求）
     private var isBusyApplyMic: Bool = false
     private var isBusyCancelMyMicApplication: Bool = false
-    private var isBusyRefuseMicApplication: Bool = false
+    /// 对齐 approve 路径 per-userId 幂等（房主快速拒绝 A/B 两条时不阻塞跨 userId）
+    private var isBusyRefuseUserIds: Set<String> = []
     /// agreeMicApplication 用 per-userId set 幂等（同一申请者不重复批准，不同申请者可并发）
     private var pendingApproveUserId: Set<String> = []
 
@@ -145,6 +173,8 @@ final class PartyStore: ObservableObject {
     /// - 本地状态，非服务端字段（Agora `adjustPlaybackSignalVolume` 是本端 SDK 行为）
     /// - 退房 resetState 归 false；不需持久化（每次进房从默认状态开始)
     @Published private(set) var isRoomMuted: Bool = false
+    /// H5 `partyBaseConfig.kickOutInterval` 的小时显示值；未加载时为 0，名片卡只提供永久踢出。
+    @Published private(set) var kickOutHours: Int = 0
 
     // MARK: - Expression / Emoji Panel (F 里程碑 · 2026-07-17)
 
@@ -249,6 +279,58 @@ final class PartyStore: ObservableObject {
         return owner == me
     }
 
+    /// 幸运数字的“房主专属”能力（历史记录与 `adminCanSet`）。
+    /// 不复用 `selfRole == .owner`：后者为管理动作把平台管理员提权为 owner，
+    /// 而 H5 只允许真实房主进入历史并修改“允许房管设置”。
+    var isLuckyNumberRoomOwner: Bool {
+        if roomInfo?.roomRoleType == PartyRoomRoleType.owner.rawValue {
+            return true
+        }
+        return isSelfRoomOwner
+    }
+
+    /// H5 `feachOnSeat` / `feachExchangeSeat` 同款门禁：普通用户不能进入 MC 位。
+    /// 放在 Store 层，保证排麦 CTA、切麦确认等其他入口不会绕过点击层判断。
+    private func isAudienceMCSeat(_ seatIndex: Int) -> Bool {
+        selfRole == .audience
+            && seatList.first(where: { $0.seatIndex == seatIndex })?.isMCSeat == true
+    }
+
+    /// 普通用户只能通过 1040 视频位邀请进入视频位，不能自行上麦、换位或排麦申请。
+    private func isAudienceVideoSeat(_ seatIndex: Int) -> Bool {
+        selfRole == .audience
+            && seatList.first(where: { $0.seatIndex == seatIndex })?.isVideoSeat == true
+    }
+
+    private func mediaRequirement(forSeatType seatType: Int?) -> MediaPermissionGate.Requirement {
+        // 派对房上麦后的 RTC 路径包含本地音视频能力；统一要求相机和麦克风，
+        // 防止语音位在未授权相机时仍可绕过进入本地工作态。
+        .liveStream
+    }
+
+    private func requireMediaAccess(
+        _ requirement: MediaPermissionGate.Requirement,
+        retry: @escaping () async -> Void
+    ) async -> Bool {
+        guard await MediaPermissionGate.requestAccess(for: requirement) else {
+            mediaPermissionAlertRequirement = requirement
+            pendingMediaPermissionAction = retry
+            return false
+        }
+        return true
+    }
+
+    func retryMediaPermissionFromAlert(_ requirement: MediaPermissionGate.Requirement) async {
+        let action = pendingMediaPermissionAction
+        mediaPermissionAlertRequirement = nil
+        pendingMediaPermissionAction = nil
+        if await MediaPermissionGate.requestAccess(for: requirement) {
+            await action?()
+        } else {
+            MediaPermissionGate.openAppSettings()
+        }
+    }
+
     /// 当前登录 userId 的 UInt 形式（用于声网 uid 比较）
     var myRtcUid: UInt? {
         guard let id = SessionStore.shared.user?.userId, id > 0 else { return nil }
@@ -303,6 +385,18 @@ final class PartyStore: ObservableObject {
         // 本 router 在直播聊天室通道短路（避免下游意外消费派对房 attachType）；
         // 派对房通道仍由 chat.processIncoming → chatRouter.processCustom 单一路径维持。
         NIMService.shared.registerRouter(chatRouter)
+        followRelationObserver = NotificationCenter.default.addObserver(
+            forName: .followRelationChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let userInfo = notification.userInfo,
+                  let userId = userInfo["userId"] as? Int,
+                  let followFlag = userInfo["followFlag"] as? Int else { return }
+            Task { @MainActor [weak self] in
+                self?.syncFollowRelation(userId: userId, followFlag: followFlag)
+            }
+        }
     }
 
     /// E-spec §0.2 F-05：登出时切断 chatRouter 全局注册。
@@ -314,6 +408,25 @@ final class PartyStore: ObservableObject {
     }
 
     // MARK: - enterRoom
+
+    /// H5 密码房流程：输入完整 4 位密码后先请求 `/room/enter`，只有成功才允许导航进房。
+    /// 成功响应暂存为一次性结果，供紧接着的 `enterRoom` 消费并继续完整入房链路。
+    func validateRoomEntryPassword(roomId: String, password: String) async -> PartyRoomError? {
+        prevalidatedRoomEntry = nil
+        guard password.count == 4, password.allSatisfy(\.isNumber) else {
+            return .passwordWrong
+        }
+
+        do {
+            let info = try await PartyAPI.enterRoom(roomId: roomId, password: password)
+            prevalidatedRoomEntry = (roomId, info)
+            return nil
+        } catch let api as PartyAPIError {
+            return PartyRoomErrorMapper.map(api)
+        } catch {
+            return .enterFailed(underlying: error.localizedDescription)
+        }
+    }
 
     func enterRoom(roomId: String, password: String? = nil) async {
         // P 项目权限管理：三层防护 Store 层 · 走统一 gate helper（v2 code-review 补迁移 · 与其他 5 处对齐）
@@ -329,25 +442,31 @@ final class PartyStore: ObservableObject {
 
         // Step 1: HTTP enter
         let info: PartyRoomInfo
-        do {
-            info = try await PartyAPI.enterRoom(roomId: roomId, password: password)
-        } catch let api as PartyAPIError {
-            let mapped = PartyRoomErrorMapper.map(api)
-            roomState = .ended
-            lastError = mapped
-            AppLogger.party.error("[PartyStore] enter HTTP failed: \(api.localizedDescription, privacy: .private)")
-            return
-        } catch let dec as DecodingError {
-            roomState = .ended
-            let detail = "enter 解码: \(dec)"
-            lastError = .enterFailed(underlying: detail)
-            AppLogger.party.error("[PartyStore] enter decoding error: \(String(describing: dec), privacy: .public)")
-            return
-        } catch {
-            roomState = .ended
-            lastError = .enterFailed(underlying: error.localizedDescription)
-            AppLogger.party.error("[PartyStore] enter unknown error: \(String(describing: error), privacy: .public)")
-            return
+        if let prevalidated = prevalidatedRoomEntry, prevalidated.roomId == roomId {
+            prevalidatedRoomEntry = nil
+            info = prevalidated.info
+        } else {
+            prevalidatedRoomEntry = nil
+            do {
+                info = try await PartyAPI.enterRoom(roomId: roomId, password: password)
+            } catch let api as PartyAPIError {
+                let mapped = PartyRoomErrorMapper.map(api)
+                roomState = .ended
+                lastError = mapped
+                AppLogger.party.error("[PartyStore] enter HTTP failed: \(api.localizedDescription, privacy: .private)")
+                return
+            } catch let dec as DecodingError {
+                roomState = .ended
+                let detail = "enter 解码: \(dec)"
+                lastError = .enterFailed(underlying: detail)
+                AppLogger.party.error("[PartyStore] enter decoding error: \(String(describing: dec), privacy: .public)")
+                return
+            } catch {
+                roomState = .ended
+                lastError = .enterFailed(underlying: error.localizedDescription)
+                AppLogger.party.error("[PartyStore] enter unknown error: \(String(describing: error), privacy: .public)")
+                return
+            }
         }
 
         // Step 2: 写入本地状态 + 预对账
@@ -359,6 +478,11 @@ final class PartyStore: ObservableObject {
         // 初始化排麦申请开关（对齐安卓 PartyRoomVM.setPartyRoomInfo 同步 onSeatApplySwitch；
         // 1021 广播只在切换时下发，进房初始态必须从 enter response 拉；nil fallback 到 false）
         micApplicationSwitchOn = info.onSeatApplySwitch ?? false
+        isRoomMusicEnabled = false
+        roomMusicSettings = .empty
+        isRoomMusicAudible = true
+        // 对齐安卓 PartyRoomInfo.queueSeatNum：进房 badge 初始态从 enter 响应拉，避免"进已有排队房 badge 显示 0"
+        queueSeatNum = info.queueSeatNum ?? 0
         // v16：字段真机对齐诊断 —— 若后端 `isFollowOwner` 字段名不匹配 / 不返回，
         // 用户报"已关注房间重进显示未关注"时可查此 log 确认后端行为
         AppLogger.party.info("[PartyStore] enter isFollowOwner raw=\(String(describing: info.isFollowOwner), privacy: .public) → isFollowingAnchor=\(self.isFollowingAnchor, privacy: .public)")
@@ -366,6 +490,8 @@ final class PartyStore: ObservableObject {
         Task { [weak self] in await self?.loadOwnerInfoIfNeeded() }
         // v16.4：房间背景 async 拉（enterRoom response 不返 bigImgUrl，需独立接口获取房主已设背景）
         Task { [weak self] in await self?.loadCurrentRoomBackground() }
+        // H5 也在进房后单独拉 music/settings；roomMusicSwitc 只控制入口可见性。
+        Task { [weak self] in await self?.loadRoomMusicSettings() }
         roomState = .entering
 
         // Step 3: RTC join
@@ -527,12 +653,18 @@ final class PartyStore: ObservableObject {
         onMikeStartTime = nil
         // F 期 Room Mute 状态回归默认；SDK 层无需显式复位（engine 也会随下次 join 重建）
         isRoomMuted = false
+        isRoomMusicEnabled = false
+        roomMusicSettings = .empty
+        isRoomMusicAudible = true
         onlineUserCount = 0
         isJoinedChannel = false
         imAlive = false
         lastGiftEvent = nil
+        luckyNumberWinPayload = nil
+        giftEffects.reset()
         pendingVideoSeatInvite = nil
         lastInviteResult = nil
+        videoSeatInviteCooldowns = [:]
         isFollowingAnchor = false
         isTogglingFollow = false
         // v12：房主头像框 state 清（退房后下次进新房需重拉）
@@ -550,12 +682,18 @@ final class PartyStore: ObservableObject {
         isBusySwitchRoomMode = false
         micApplicationsState = .idle
         micApplicationSwitchOn = false
+        isRoomMusicEnabled = false
+        roomMusicSettings = .empty
+        isRoomMusicAudible = true
         queueSeatNum = 0
         myApplyInfo = .init()
         pendingApproveSeatIndex = []
         applyingTimeoutTask?.cancel()
         applyingTimeoutTask = nil
         isBusyMicSwitch = false
+        isBusyRoomMusicSwitch = false
+        isBusyRoomMusicControl = false
+        isUploadingRoomMusic = false
         // E spec §3：黑名单状态清 —— 退房需清残留，避免下次进新房带入旧列表
         blocklistState = .idle
         isBusyRemoveBlocklist = []
@@ -575,6 +713,10 @@ final class PartyStore: ObservableObject {
         expressionListState = .idle
         emojiQueueMap = [:]
         isLoadingExpressionList = false
+
+        // F-1a v4 (2026-07-18)：退房清 Battle Team PK 残留 state（对齐 H5 usePartyHooks.js:181 + g-agora-party.vue:586）
+        // 不清则下次进新房上一场 PK sheet / 冷却入口 / pending 申请脏读污染
+        PartyBattleStore.shared.reset()
     }
 
     // MARK: - 房主保存设置后本地同步（v8.2）
@@ -835,10 +977,29 @@ final class PartyStore: ObservableObject {
         AppLogger.party.info("[PartyStore] updateCurrentRoomBackground id=\(bg.id, privacy: .public) bigImgUrl=\(bg.bigImgUrl ?? "nil", privacy: .public) epoch=\(self.backgroundEpoch, privacy: .public)")
     }
 
-    // TODO(F 里程碑)：接入 IM 1025 (PartyAttachType.roomBgUpdate) broadcast 消费。
-    // 目前 owner 端 Settings 层直接调 updateCurrentRoomBackground 是唯一写路径；
-    // audience 端 / 跨设备同步能力等 F 期后端 IM 1025 payload 契约稳定后统一 route 到本方法。
-    // 参见 review finding #14。
+    /// 删除 Party 房公屏文本消息。服务端成功后立即移除本地副本，等待云信撤回时不重复处理。
+    /// 对齐 H5 `party-msg-delete-popup.vue`；仅管理角色且仅远端文本消息可操作。
+    func deletePartyMessage(_ message: UnifiedPublicChatMessage) async -> Bool {
+        guard selfRole == .owner || selfRole == .admin,
+              let roomId = roomInfo?.id, !roomId.isEmpty,
+              let source = message.source,
+              case .text = message.variant else {
+            return false
+        }
+        do {
+            try await PartyAPI.deletePartyMessage(
+                roomId: roomId,
+                messageId: source.messageId,
+                timetag: source.timetag,
+                fromAccid: source.fromAccid
+            )
+            chat.removeMessage(id: message.id)
+            return true
+        } catch {
+            AppLogger.party.error("[PartyStore] deletePartyMessage failed: \(String(describing: error), privacy: .private)")
+            return false
+        }
+    }
 
     // MARK: - 关注房主（对齐 H5 header-wrap.vue L139-140 handleFollowOrNo）
 
@@ -870,6 +1031,15 @@ final class PartyStore: ObservableObject {
         }
     }
 
+    /// 消费跨页面关注关系广播；仅目标为当前房主时更新，其他用户的变更不影响房间顶部。
+    private func syncFollowRelation(userId: Int, followFlag: Int) {
+        guard let ownerId = roomInfo?.ownerId,
+              ownerId == String(userId),
+              followFlag == 0 || followFlag == 1 else { return }
+        isFollowingAnchor = followFlag == 1
+        AppLogger.party.info("[PartyStore] synced owner follow uid=\(userId, privacy: .public) isFollowing=\(self.isFollowingAnchor, privacy: .public)")
+    }
+
     /// RTC + Chat 双 ready 才标 .joined
     private func markJoinedIfReady() {
         guard roomState == .entering else { return }
@@ -883,11 +1053,52 @@ final class PartyStore: ObservableObject {
            !OnlineStatusStore.shared.userSetOnline {
             OnlineStatusStore.shared.setUserSetOnline(true)
         }
+        // F-1a v3 (2026-07-18)：进房完成时拉 PK 全局开关（对齐 H5 usePartyHooks.js:609
+        // `_battleStore.loadGlobalConfig().catch(() => {})`），关闭态隐藏 PK 入口
+        // + refresh 兜底 state（对齐 usePartyHooks.js :607 `_battleStore.refresh(_rid)`）
+        let rid = roomInfo?.id ?? ""
+        Task { [weak self] in
+            guard let self else { return }
+            await PartyBattleStore.shared.loadGlobalConfig()
+            if !rid.isEmpty {
+                await PartyBattleStore.shared.refreshIfNeeded(roomId: rid)
+            }
+            await self.loadPartyBaseConfigIfNeeded()
+        }
+    }
+
+    private func loadPartyBaseConfigIfNeeded() async {
+        guard kickOutHours == 0 else { return }
+        do {
+            let config = try await PartyAPI.getPartyBaseConfig()
+            let seconds = max(0, config.kickOutInterval ?? 0)
+            kickOutHours = seconds / 3_600
+        } catch {
+            AppLogger.party.warning("[PartyStore] getPartyBaseConfig failed: \(String(describing: error), privacy: .private)")
+        }
     }
 
     // MARK: - 上下麦 / 媒体切换
 
     func requestOnSeat(seatIndex: Int) async {
+        guard !isAudienceMCSeat(seatIndex) else {
+            lastError = .underlying(.business(
+                code: "MC_SEAT_RESTRICTED",
+                message: L10n.Party.mcSeatCannotTake
+            ))
+            return
+        }
+        guard !isAudienceVideoSeat(seatIndex) else {
+            lastError = .underlying(.business(
+                code: "VIDEO_SEAT_INVITE_ONLY",
+                message: L10n.PartyRoom.videoSeatNeedsInviteToast
+            ))
+            return
+        }
+        let requirement = mediaRequirement(forSeatType: seatList.first(where: { $0.seatIndex == seatIndex })?.seatType)
+        guard await requireMediaAccess(requirement, retry: { [weak self] in
+            await self?.requestOnSeat(seatIndex: seatIndex)
+        }) else { return }
         guard let info = roomInfo, roomState == .joined else { return }
         do {
             _ = try await PartyAPI.onSeat(
@@ -927,6 +1138,24 @@ final class PartyStore: ObservableObject {
     /// - targetSeatType 取自目标麦位 seatType（1=video / 2=voice），后端需知道目标位类型做校验
     /// - 成功后等服务端 1001 seat/update 广播 → seatList 更新触发 postMikeList，不乐观更新
     func requestExchangeSeat(targetSeatIndex: Int, targetSeatType: Int) async {
+        guard !isAudienceMCSeat(targetSeatIndex) else {
+            lastError = .underlying(.business(
+                code: "MC_SEAT_RESTRICTED",
+                message: L10n.Party.mcSeatCannotTake
+            ))
+            return
+        }
+        guard !isAudienceVideoSeat(targetSeatIndex) else {
+            lastError = .underlying(.business(
+                code: "VIDEO_SEAT_INVITE_ONLY",
+                message: L10n.PartyRoom.videoSeatNeedsInviteToast
+            ))
+            return
+        }
+        let requirement = mediaRequirement(forSeatType: targetSeatType)
+        guard await requireMediaAccess(requirement, retry: { [weak self] in
+            await self?.requestExchangeSeat(targetSeatIndex: targetSeatIndex, targetSeatType: targetSeatType)
+        }) else { return }
         guard let info = roomInfo, selfSeat != nil, roomState == .joined else { return }
         do {
             try await PartyAPI.exchangeSeat(
@@ -948,13 +1177,28 @@ final class PartyStore: ObservableObject {
 
     /// v15 房主/房管：禁 / 解禁他人麦位（对齐 H5 feachProhibitSeat + usePartyHooks.js:1157）。
     /// - mute=true → operatorType=6（禁麦）；mute=false → operatorType=7（解禁麦）
-    /// - 前置：selfRole==.owner || .admin；seatIndex 是**占用位**（seatMicrophoneEnabled 是服务端管理态）
+    /// - 前置：selfRole==.owner || .admin；服务端可对语音空位预设 `seatMicrophoneEnabled`
+    /// - 视频位不允许禁麦；若历史脏数据已使视频位处于禁麦，仅允许 operatorType=7 解禁
     /// - 服务端下发 1008 广播 → seat.seatMicrophoneEnabled 切换 → isSpeaking 派生自动过滤禁麦位不显 pulse
     func requestProhibitSeat(seatIndex: Int, mute: Bool) async {
         guard let info = roomInfo, roomState == .joined else { return }
         guard selfRole == .owner || selfRole == .admin else {
             AppLogger.party.notice("[PartyStore] prohibitSeat rejected: not owner/admin")
             return
+        }
+        guard let seat = seatList.first(where: { $0.seatIndex == seatIndex }) else {
+            AppLogger.party.notice("[PartyStore] prohibitSeat rejected: seat missing index=\(seatIndex, privacy: .public)")
+            return
+        }
+        if seat.isVideoSeat {
+            guard !mute else {
+                AppLogger.party.notice("[PartyStore] prohibitSeat rejected: video seat cannot be muted index=\(seatIndex, privacy: .public)")
+                return
+            }
+            guard seat.isSeatMicrophoneProhibited else {
+                AppLogger.party.notice("[PartyStore] prohibitSeat skip: video seat is already unmuted index=\(seatIndex, privacy: .public)")
+                return
+            }
         }
         do {
             try await PartyAPI.prohibitSeat(
@@ -998,6 +1242,67 @@ final class PartyStore: ObservableObject {
             lastError = .underlying(.networkError)
             AppLogger.party.error("[PartyStore] holdSeat(take) failed: \(String(describing: error), privacy: .private)")
         }
+    }
+
+    /// H5 空麦位 Invite 分流：视频位邀请普通用户先发 1040；其他情况直接抱上麦。
+    /// 返回 true 表示请求已成功发出，供邀请列表关闭面板。
+    func requestInviteToSeat(seat: PartyRoomSeat, candidate: PartySeatInviteCandidate) async -> Bool {
+        guard let info = roomInfo,
+              roomState == .joined,
+              let seatIndex = seat.seatIndex else { return false }
+        guard selfRole == .owner || selfRole == .admin else {
+            AppLogger.party.notice("[PartyStore] inviteToSeat rejected: not owner/admin")
+            return false
+        }
+        guard let currentSeat = seatList.first(where: { $0.seatIndex == seatIndex }), !currentSeat.occupied else {
+            lastError = .seatOccupied
+            return false
+        }
+        guard !seatList.contains(where: { $0.userId == candidate.userId }) else {
+            AppLogger.party.notice("[PartyStore] inviteToSeat rejected: user already on seat")
+            return false
+        }
+
+        let requiresVideoInvite = currentSeat.seatType == PartyRoomSeatType.video.rawValue
+            && candidate.userType == 1
+        if requiresVideoInvite, isVideoSeatInviteCoolingDown(candidate.userId) {
+            AppLogger.party.notice("[PartyStore] inviteToSeat rejected: video invite cooling down")
+            return false
+        }
+
+        do {
+            if requiresVideoInvite {
+                try await PartyAPI.inviteOnSeat(
+                    roomId: info.id ?? "",
+                    yxRoomId: info.yxRoomId ?? "",
+                    seatIndex: seatIndex,
+                    targetUserId: candidate.userId,
+                    roomTempId: info.roomTempIdInt
+                )
+                videoSeatInviteCooldowns[candidate.userId] = Date().addingTimeInterval(30)
+            } else {
+                try await PartyAPI.holdSeat(
+                    roomId: info.id ?? "",
+                    seatIndex: seatIndex,
+                    targetUserId: candidate.userId,
+                    yxRoomId: info.yxRoomId ?? "",
+                    operatorType: 4,
+                    roomTempId: info.roomTempIdInt
+                )
+            }
+            return true
+        } catch let api as PartyAPIError {
+            lastError = PartyRoomErrorMapper.map(api)
+        } catch {
+            lastError = .underlying(.networkError)
+            AppLogger.party.error("[PartyStore] inviteToSeat failed: \(String(describing: error), privacy: .private)")
+        }
+        return false
+    }
+
+    func isVideoSeatInviteCoolingDown(_ userId: String, now: Date = .now) -> Bool {
+        guard let expiry = videoSeatInviteCooldowns[userId] else { return false }
+        return expiry > now
     }
 
     /// 抱下麦(仅"抱下"分支)。对齐 H5 `feachHoldSeat({operatorType: 3, seatIndex, targetUserId})`
@@ -1107,6 +1412,16 @@ final class PartyStore: ObservableObject {
     /// 切换自己麦克风（type=1）或摄像头（type=2）开关。
     /// 本地立即更新中间态（UI 立即反馈），服务端下发 1008 后由 reload 同步 seatList 持久态。
     func toggleSelfMedia(type: Int, enable: Bool) async {
+        // 视频位必须持续开麦。仅允许开启动作修复历史 `microphoneEnabled=0` 脏数据。
+        if type == 1, !enable, selfSeat?.isVideoSeat == true {
+            AppLogger.party.notice("[PartyStore] updateMedia rejected: video seat cannot mute microphone")
+            return
+        }
+        if enable {
+            guard await requireMediaAccess(.liveStream, retry: { [weak self] in
+                await self?.toggleSelfMedia(type: type, enable: enable)
+            }) else { return }
+        }
         guard let info = roomInfo, let me = selfSeat, let idx = me.seatIndex else { return }
         do {
             try await PartyAPI.updateMedia(
@@ -1127,6 +1442,9 @@ final class PartyStore: ObservableObject {
     /// 后端内部置 byInvite=true 直接 doOnSeat 绕过排队。
     /// 接受成功后立即 `updateMedia(type=3, enable=1)` 自动开麦+摄像头（安卓行为）。
     func acceptVideoSeatInvite() async {
+        guard await requireMediaAccess(.liveStream, retry: { [weak self] in
+            await self?.acceptVideoSeatInvite()
+        }) else { return }
         guard let invite = pendingVideoSeatInvite, let info = roomInfo else { return }
         pendingVideoSeatInvite = nil
         do {
@@ -1173,6 +1491,28 @@ final class PartyStore: ObservableObject {
         }
     }
 
+    /// 视频位邀请倒计时结束：主动回传 `action=3`，让服务端清理 token 并向邀请方发送 1043。
+    /// 与 H5 `video-seat-invite-popup` 一致；请求失败时仍关闭本地弹窗，后端 TTL 是最终兜底。
+    func timeoutVideoSeatInvite() async {
+        guard let invite = pendingVideoSeatInvite, let info = roomInfo else {
+            pendingVideoSeatInvite = nil
+            return
+        }
+        pendingVideoSeatInvite = nil
+        do {
+            try await PartyAPI.respondInvite(
+                roomId: info.id ?? "",
+                yxRoomId: info.yxRoomId ?? "",
+                seatIndex: invite.seatIndex,
+                inviteId: invite.inviteId,
+                action: 3,
+                roomTempId: info.roomTempIdInt
+            )
+        } catch {
+            AppLogger.party.error("[PartyStore] timeoutInvite failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
     /// 清空待响应邀请（用户长时间未操作时由 UI 调用）
     func clearPendingVideoSeatInvite() {
         pendingVideoSeatInvite = nil
@@ -1190,7 +1530,7 @@ final class PartyStore: ObservableObject {
         guard let id = roomInfo?.id, !id.isEmpty else { return }
         do {
             let seats = try await PartyAPI.seatList(roomId: id)
-            seatList = seats
+            replaceSeatListPreservingGiftValues(seats)
             postMikeList()
             AppLogger.party.info("[PartyStore] seatList reloaded count=\(seats.count, privacy: .public)")
         } catch {
@@ -1198,18 +1538,20 @@ final class PartyStore: ObservableObject {
         }
     }
 
-    /// F-1a Task 9：PartyBattle SELECTING 开始时清参战麦位 giftValueCount（对齐 H5 partyBattle.ts:335-351）
+    /// F-1a Task 9 v2 (2026-07-17)：PartyBattle SELECTING 开始 / PK ENDED 时清**所有已占麦位** giftValueCount
     ///
-    /// 只清红蓝队参战 uid 的 seat.giftValueCount = 0，中立位不清。
-    /// PartyBattleStore.onSelectingStart 调此 API。
+    /// 对齐 H5 partyBattle.ts:332-336 + :541-543 注释：
+    /// > "原先只清红/蓝队快照成员，遗漏中立位、以及 SELECTING 之后经 1101/审批中途入队的人，
+    /// >  导致这些麦位残留历史累计值。改为清全部已占麦位，覆盖所有参与展示的麦位。"
+    ///
+    /// 调用点：`PartyBattleStore.onSelectingStart` + `PartyBattleStore.onEnd`
     ///
     /// PartyRoomSeat 所有字段 `let`（immutable struct），通过 Codable round-trip 覆盖 `giftValueCount`
     /// 后 replace seatList[i]（保持 model 定义不动，避免侵入其他模块字段可变性契约）。
-    func clearGiftValueCount(uids: Set<String>) {
-        guard !uids.isEmpty else { return }
+    func resetAllSeatGiftValue() {
         var updated = 0
         for i in seatList.indices {
-            guard let uid = seatList[i].userId, uids.contains(uid) else { continue }
+            guard seatList[i].userId != nil else { continue }
             let curr = seatList[i].giftValueCount ?? 0
             guard curr != 0 else { continue }
             guard let reset = try? Self.replaceGiftValueCount(seatList[i], with: 0) else {
@@ -1219,7 +1561,7 @@ final class PartyStore: ObservableObject {
             updated += 1
         }
         AppLogger.party.info(
-            "[PartyStore] clearGiftValueCount uids=\(uids.count, privacy: .public) updated=\(updated, privacy: .public)")
+            "[PartyStore] resetAllSeatGiftValue updated=\(updated, privacy: .public)")
     }
 
     /// Codable round-trip 覆盖 seat 单字段（let 字段替代方案）
@@ -1229,6 +1571,15 @@ final class PartyStore: ObservableObject {
         dict["giftValueCount"] = newValue
         let updated = try JSONSerialization.data(withJSONObject: dict)
         return try JSONDecoder().decode(PartyRoomSeat.self, from: updated)
+    }
+
+    /// 服务端的 seat/list / 1001 全量麦位消息通常不包含 `giftValueCount`。
+    /// 同一用户仍在麦时保留本地 2049 累加值；换人或新上麦不迁移，确保从 0 开始。
+    private func replaceSeatListPreservingGiftValues(_ incomingSeats: [PartyRoomSeat]) {
+        seatList = PartySeatGiftValue.preservingLocalValues(
+            from: seatList,
+            in: incomingSeats
+        )
     }
 
     // MARK: - 麦位-RTC 对账中心（spec §1.4.5）
@@ -1281,6 +1632,18 @@ final class PartyStore: ObservableObject {
 
         // 2. 自己在麦 / 不在麦
         if let me = mySelf {
+            // 服务端抱上麦/模板切换也会直接更新 seatList，不能只依赖点击上麦入口。
+            // 未授权时保持本地 RTC 下麦，确认授权后重跑对账再开启采集。
+            let requirement = mediaRequirement(forSeatType: me.seatType)
+            guard MediaPermissionGate.hasAccess(for: requirement) else {
+                mediaPermissionAlertRequirement = requirement
+                pendingMediaPermissionAction = { [weak self] in
+                    await self?.resumeLocalMediaAfterPermissionGranted()
+                }
+                rtc.downSeat()
+                disableLocalVideoCapture()
+                return
+            }
             // 上麦 = 主播工作态；对齐直播/匹配的自动上线行为
             // （LiveSettingsView.onAppear / RootView.ensureUserOnlineHook）
             if !OnlineStatusStore.shared.userSetOnline {
@@ -1308,6 +1671,10 @@ final class PartyStore: ObservableObject {
             disableLocalVideoCapture()
             rtc.downSeat()
         }
+    }
+
+    private func resumeLocalMediaAfterPermissionGranted() async {
+        postMikeList()
     }
 
     // MARK: - 视频位本端采集（M5）
@@ -1397,6 +1764,10 @@ final class PartyStore: ObservableObject {
     /// 房主切模板（spec §1）。isBusy 2000ms 幂等；成功后本地立即调 handleRoomModeChanged
     /// （不等 IM 1017 回执，云信可能不发自己回执导致状态分裂）。
     func switchRoomMode(to tempId: Int) async {
+        guard selfRole == .owner else {
+            AppLogger.party.notice("[PartyStore] switchRoomMode rejected: not owner/platformAdmin")
+            return
+        }
         guard !isBusySwitchRoomMode else {
             AppLogger.party.notice("[PartyStore] switchRoomMode skip: busy")
             return
@@ -1441,7 +1812,7 @@ final class PartyStore: ObservableObject {
         if let tempId = newTempId, roomInfo?.roomTempIdInt == tempId {
             AppLogger.party.info("[PartyStore] handleRoomModeChanged idempotent tempId=\(tempId, privacy: .public) cause=\(String(describing: cause), privacy: .public)")
             if let s = seats {
-                seatList = s
+                replaceSeatListPreservingGiftValues(s)
                 postMikeList()
             }
             return
@@ -1449,7 +1820,7 @@ final class PartyStore: ObservableObject {
 
         // 步骤 3：全量替换 seatList + RTC bindings 对账（等价 postMikeList）
         if let s = seats {
-            seatList = s
+            replaceSeatListPreservingGiftValues(s)
             postMikeList()
         } else {
             // IM payload 缺 seats（或本地兜底路径）→ 全量重拉兜底
@@ -1504,12 +1875,18 @@ final class PartyStore: ObservableObject {
         do {
             let resp = try await PartyAPI.getQueueSeatList(roomId: info.id ?? "", pageSize: 99)
             queueSeatNum = resp.totalNum
+            // 对齐安卓 §3.3「按钮态按 myIndex > 0 显示"申请/放弃"」+ §5「弹窗以 myIndex > 0 为准」：
+            // 服务端权威 myIndex 覆盖本地（kill app 重进 myApplyInfo 已 reset 但服务端队列还在时恢复）；
+            // 仅在服务端 > 0 时覆盖以避免刚 applyMic 完的本地 inIndex 被"records 空 → myIndex 0"清掉
+            if resp.myIndex > 0, myApplyInfo.inIndex == 0 {
+                myApplyInfo.inIndex = resp.myIndex
+            }
             if resp.records.isEmpty {
                 micApplicationsState = .empty
             } else {
                 micApplicationsState = .loaded(resp.records)
             }
-            AppLogger.party.info("[PartyStore] getQueueSeatList ok total=\(resp.totalNum, privacy: .public) rec=\(resp.records.count, privacy: .public)")
+            AppLogger.party.info("[PartyStore] getQueueSeatList ok total=\(resp.totalNum, privacy: .public) rec=\(resp.records.count, privacy: .public) myIndex=\(resp.myIndex, privacy: .public)")
         } catch {
             AppLogger.party.error("[PartyStore] getQueueSeatList failed: \(String(describing: error), privacy: .private)")
             micApplicationsState = .error(L10n.Party.errorNetworkLost)
@@ -1527,6 +1904,20 @@ final class PartyStore: ObservableObject {
         // spec §0 throttle：防 spam 双 tap 发重复 onSeat
         guard !isBusyApplyMic else {
             AppLogger.party.notice("[PartyStore] applyMic skip: busy")
+            return
+        }
+        guard !isAudienceMCSeat(seatIndex) else {
+            lastError = .underlying(.business(
+                code: "MC_SEAT_RESTRICTED",
+                message: L10n.Party.mcSeatCannotTake
+            ))
+            return
+        }
+        guard !isAudienceVideoSeat(seatIndex) else {
+            lastError = .underlying(.business(
+                code: "VIDEO_SEAT_INVITE_ONLY",
+                message: L10n.PartyRoom.videoSeatNeedsInviteToast
+            ))
             return
         }
         guard let info = roomInfo, roomState == .joined else { return }
@@ -1555,6 +1946,10 @@ final class PartyStore: ObservableObject {
             let mapped = PartyRoomErrorMapper.map(api)
             lastError = mapped
             AppLogger.party.error("[PartyStore] applyMic failed: \(String(describing: api), privacy: .private)")
+            // 对齐安卓 MicApplicationListDialog §3.3：10008(麦位被占)/10009(麦位空) → 全量重拉对账
+            // （复用 requestOnSeat 的 pattern；不重试，仅刷新麦位）
+            if case .seatOccupied = mapped { await reloadSeatListFromServer() }
+            if case .seatEmpty = mapped { await reloadSeatListFromServer() }
         } catch {
             lastError = .underlying(.networkError)
         }
@@ -1587,6 +1982,10 @@ final class PartyStore: ObservableObject {
     /// 房主/房管批准申请（spec §2）。seatIndex nil 时挑首空位（排除 pendingApproveSeatIndex 防并发冲突）。
     /// 无可用位 → toast + 不调接口（spec §2 R7）。
     func agreeMicApplication(userId: String, seatIndex: Int?) async {
+        guard selfRole == .owner || selfRole == .admin else {
+            AppLogger.party.notice("[PartyStore] agreeMic rejected: not owner/admin")
+            return
+        }
         // spec §0 throttle（per-userId）：同一申请者防连点重复批准；不同 userId 允许并发（seat 占位靠 pendingApproveSeatIndex）
         guard !pendingApproveUserId.contains(userId) else {
             AppLogger.party.notice("[PartyStore] agreeMic skip: userId=\(userId, privacy: .public) already in-flight")
@@ -1594,14 +1993,37 @@ final class PartyStore: ObservableObject {
         }
         guard let info = roomInfo, roomState == .joined else { return }
         // 目标 seatIndex：外部指定优先；否则挑首空位排除已占位
+        // 对齐安卓 MicApplicationInfo.canOnHostSeat：从当前列表拿申请人对应 flag；true 允许挑接待位
+        let allowHostSeat: Bool = {
+            let items: [PartyMicApplication]
+            switch micApplicationsState {
+            case .loaded(let arr), .refreshing(let arr): items = arr
+            default: items = []
+            }
+            return items.first { $0.userId == userId }?.canOnHostSeat ?? false
+        }()
         let targetIndex: Int
         if let idx = seatIndex {
             targetIndex = idx
-        } else if let idx = firstAvailableSeatIndexExcludingPending() {
+        } else if let idx = firstAvailableSeatIndexExcludingPending(allowHostSeat: allowHostSeat) {
             targetIndex = idx
         } else {
             AppLogger.party.notice("[PartyStore] agreeMic no available seat")
             lastError = .underlying(.business(code: "MIC_NO_SEAT", message: L10n.Party.micApplicationNoSeatAvailable))
+            return
+        }
+
+        // 排麦批准只允许进入语音位。视频位必须改走 1040 邀请流程，避免外部调用绕过选座页禁用态。
+        guard let targetSeat = seatList.first(where: { $0.seatIndex == targetIndex }),
+              !targetSeat.occupied,
+              !targetSeat.isVideoSeat,
+              !pendingApproveSeatIndex.contains(targetIndex),
+              allowHostSeat || !targetSeat.isMCSeat else {
+            AppLogger.party.notice("[PartyStore] agreeMic invalid target seat=\(targetIndex, privacy: .public)")
+            lastError = .underlying(.business(
+                code: "MIC_INVALID_APPROVE_SEAT",
+                message: L10n.Party.micApplicationNoSeatAvailable
+            ))
             return
         }
 
@@ -1633,14 +2055,19 @@ final class PartyStore: ObservableObject {
     }
 
     /// 房主/房管拒绝申请（spec §2）。服务端下发 1018 op=3 → 被拒者本地设 rejectedAt 冷却。
+    /// 幂等 per-userId：同 userId 快速连点只发一次；不同 userId 允许并发（对齐 approve 路径）
     func refuseMicApplication(userId: String) async {
-        guard !isBusyRefuseMicApplication else {
-            AppLogger.party.notice("[PartyStore] refuseMic skip: busy")
+        guard selfRole == .owner || selfRole == .admin else {
+            AppLogger.party.notice("[PartyStore] refuseMic rejected: not owner/admin")
+            return
+        }
+        guard !isBusyRefuseUserIds.contains(userId) else {
+            AppLogger.party.notice("[PartyStore] refuseMic skip: userId=\(userId, privacy: .public) already in-flight")
             return
         }
         guard let info = roomInfo, roomState == .joined else { return }
-        isBusyRefuseMicApplication = true
-        defer { isBusyRefuseMicApplication = false }
+        isBusyRefuseUserIds.insert(userId)
+        defer { isBusyRefuseUserIds.remove(userId) }
         do {
             try await PartyAPI.refuseQueueSeat(
                 roomId: info.id ?? "",
@@ -1654,10 +2081,14 @@ final class PartyStore: ObservableObject {
         }
     }
 
-    /// 房主切换 Mic Application 开关（spec §2）。isBusy 幂等。
+    /// 房主/房管切换 Mic Application 开关（spec §2）。isBusy 幂等。
     /// UI 层负责前置协议弹窗（首次切换时基于 autoEnter{On,Off}Application flag 判断）。
-    /// 成功后**不本地乐观更新** `micApplicationSwitchOn`——等 1021 广播到达统一同步（避免与观众端不一致）。
+    /// 成功后立即回写本地状态（对齐 H5），1021 广播作为跨端最终同步。
     func toggleMicApplicationSwitch(enable: Bool) async {
+        guard selfRole == .owner || selfRole == .admin else {
+            AppLogger.party.notice("[PartyStore] toggleMicApplicationSwitch rejected: not room manager")
+            return
+        }
         guard !isBusyMicSwitch else {
             AppLogger.party.notice("[PartyStore] toggleMicApplicationSwitch skip: busy")
             return
@@ -1668,10 +2099,346 @@ final class PartyStore: ObservableObject {
 
         do {
             try await PartyAPI.updateOnSeatEnable(roomId: info.id ?? "", enable: enable ? 1 : 0)
+            guard roomInfo?.id == info.id else { return }
+            micApplicationSwitchOn = enable
+            roomInfo = info.withUpdated(onSeatApplySwitch: enable)
             AppLogger.party.info("[PartyStore] updateOnSeatEnable ok enable=\(enable, privacy: .public)")
         } catch {
             AppLogger.party.error("[PartyStore] updateOnSeatEnable failed: \(String(describing: error), privacy: .private)")
             lastError = .underlying((error as? PartyAPIError) ?? .networkError)
+        }
+    }
+
+    // MARK: - Room Music (H5 room-mana-popup.vue)
+
+    /// 拉取房间音乐的实际 ON/OFF 状态。进房时调用；仅在音乐功能对当前房开放时请求。
+    func loadRoomMusicSettings() async {
+        guard let info = roomInfo,
+              let roomId = info.id,
+              !roomId.isEmpty,
+              info.isRoomMusicAvailable else {
+            isRoomMusicEnabled = false
+            roomMusicSettings = .empty
+            return
+        }
+
+        do {
+            let settings = try await PartyAPI.getMusicSettings(roomId: roomId)
+            // 进房/退房期间的旧请求不能覆盖新房状态。
+            guard roomInfo?.id == roomId else { return }
+            applyRoomMusicSettings(settings)
+            AppLogger.party.info("[PartyStore] music settings loaded enabled=\(settings.isEnabled, privacy: .public)")
+        } catch is CancellationError {
+            return
+        } catch {
+            // 读取失败时保持保守 OFF；入口仍保留，房主可以重试切换。
+            AppLogger.party.notice("[PartyStore] load music settings failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    /// 房主/房管切换房间音乐。成功后乐观回写，与 H5 `switchEnableMusic` 一致。
+    func toggleRoomMusic() async {
+        guard selfRole == .owner || selfRole == .admin else {
+            AppLogger.party.notice("[PartyStore] toggleRoomMusic rejected: not room manager")
+            return
+        }
+        guard !isBusyRoomMusicSwitch,
+              let info = roomInfo,
+              roomState == .joined,
+              info.isRoomMusicAvailable,
+              let roomId = info.id,
+              !roomId.isEmpty else {
+            return
+        }
+
+        let targetEnabled = !isRoomMusicEnabled
+        isBusyRoomMusicSwitch = true
+        defer { isBusyRoomMusicSwitch = false }
+        do {
+            try await PartyAPI.setMusicEnabled(
+                roomId: roomId,
+                yxRoomId: info.yxRoomId ?? "",
+                enabled: targetEnabled
+            )
+            guard roomInfo?.id == roomId else { return }
+            applyRoomMusicSettings(roomMusicSettings.updating(
+                playStatus: 0,
+                isEnabled: targetEnabled
+            ))
+            AppLogger.party.info("[PartyStore] music enabled=\(targetEnabled, privacy: .public)")
+        } catch {
+            AppLogger.party.error("[PartyStore] toggle music failed: \(String(describing: error), privacy: .private)")
+            lastError = .underlying((error as? PartyAPIError) ?? .networkError)
+        }
+    }
+
+    /// 普通用户只控制自己的音乐流收听；房主/房管打开的是管理面板，不调用本方法。
+    func toggleRoomMusicAudible() {
+        guard roomState == .joined,
+              roomMusicSettings.isEnabled,
+              roomMusicSettings.playStatus == 1,
+              let roomId = roomInfo?.id,
+              let agoraUID = UInt(roomId) else {
+            return
+        }
+        isRoomMusicAudible.toggle()
+        rtc.setRemoteAudio(uid: agoraUID, enabled: isRoomMusicAudible)
+        AppLogger.party.info("[PartyStore] room music audible=\(self.isRoomMusicAudible, privacy: .public)")
+    }
+
+    /// 管理员从音乐面板选中歌曲。与 H5 一致，先乐观更新，接口失败再回滚。
+    func playRoomMusic(_ item: PartyMusicItem) async {
+        guard let info = roomInfo,
+              let roomId = info.id,
+              !roomId.isEmpty,
+              roomState == .joined,
+              isRoomMusicEnabled,
+              isRoomManager,
+              !isBusyRoomMusicControl else { return }
+        let previous = roomMusicSettings
+        let musicType = item.musicType == 0 ? 1 : item.musicType
+        let next = previous.updating(
+            currentSongId: item.id,
+            songName: item.songName,
+            musicType: musicType,
+            playStatus: 1
+        )
+        isBusyRoomMusicControl = true
+        applyRoomMusicSettings(next)
+        defer { isBusyRoomMusicControl = false }
+        do {
+            try await PartyAPI.playMusic(
+                songId: item.id,
+                roomId: roomId,
+                musicType: musicType,
+                playMode: next.playMode,
+                volume: next.volume,
+                actionType: 1
+            )
+        } catch {
+            guard roomInfo?.id == roomId else { return }
+            applyRoomMusicSettings(previous)
+            lastError = .underlying((error as? PartyAPIError) ?? .networkError)
+            AppLogger.party.error("[PartyStore] play room music failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    func toggleRoomMusicPlayback() async {
+        guard let songId = roomMusicSettings.currentSongId,
+              !songId.isEmpty else { return }
+        let actionType = roomMusicSettings.playStatus == 1 ? 2 : 1
+        await updateRoomMusicPlayback(songId: songId, actionType: actionType)
+    }
+
+    func updateRoomMusicVolume(_ volume: Int) async {
+        await updateRoomMusicConfiguration(volume: volume)
+    }
+
+    func cycleRoomMusicPlayMode() async {
+        let nextMode = roomMusicSettings.playMode == 3 ? 1 : max(roomMusicSettings.playMode + 1, 1)
+        await updateRoomMusicConfiguration(playMode: nextMode)
+    }
+
+    /// 本地音乐上传：校验格式/大小，上传 OSS 后写入 Party 音乐库。
+    @discardableResult
+    func uploadLocalRoomMusic(fileURL: URL) async -> Bool {
+        guard isRoomManager,
+              let roomId = roomInfo?.id,
+              !roomId.isEmpty,
+              !isUploadingRoomMusic else { return false }
+
+        let extensionName = fileURL.pathExtension.lowercased()
+        let allowedExtensions: Set<String> = ["mp3", "wav", "flac", "aac", "m4a", "ogg"]
+        guard allowedExtensions.contains(extensionName) else {
+            AppToastCenter.shared.show(L10n.Party.musicInvalidFormat)
+            return false
+        }
+
+        isUploadingRoomMusic = true
+        defer { isUploadingRoomMusic = false }
+        do {
+            let payload = try await Self.readLocalMusicFile(fileURL: fileURL, fileFormat: extensionName)
+            guard payload.data.count <= 10 * 1024 * 1024 else {
+                AppToastCenter.shared.show(L10n.Party.musicFileTooLarge)
+                return false
+            }
+            let credential = try await OssCredentialService.shared.getOssUploadParam()
+            let remoteURL = try await OssUploadService.shared.uploadPublicFile(
+                fileData: payload.data,
+                credential: credential,
+                objectKey: Self.roomMusicObjectKey(fileFormat: extensionName),
+                contentType: Self.musicContentType(fileFormat: extensionName)
+            )
+            try await PartyAPI.addLocalMusic(
+                roomId: roomId,
+                music: PartyLocalMusicUpload(
+                    songName: payload.songName,
+                    musicURL: remoteURL,
+                    durationSeconds: payload.durationSeconds,
+                    fileFormat: extensionName
+                )
+            )
+            AppToastCenter.shared.show(L10n.Party.musicUploadSucceeded)
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            AppLogger.party.error("[PartyStore] upload local music failed: \(String(describing: error), privacy: .private)")
+            AppToastCenter.shared.show(L10n.Party.musicUploadFailed)
+            return false
+        }
+    }
+
+    func deleteLocalRoomMusic(ids: [String]) async -> Bool {
+        guard isRoomManager,
+              let roomId = roomInfo?.id,
+              !roomId.isEmpty,
+              !ids.isEmpty else { return false }
+        do {
+            try await PartyAPI.deleteLocalMusic(roomId: roomId, musicIDs: ids)
+            AppToastCenter.shared.show(L10n.Party.musicDeleteSucceeded)
+            return true
+        } catch {
+            AppLogger.party.error("[PartyStore] delete local music failed: \(String(describing: error), privacy: .private)")
+            AppToastCenter.shared.show(L10n.Party.musicDeleteFailed)
+            return false
+        }
+    }
+
+    func applyRoomMusicUpdate(_ payload: [String: Any], switchOnly: Bool) {
+        let next = roomMusicSettings.applying(payload: payload)
+        applyRoomMusicSettings(next)
+        AppLogger.party.info("[PartyStore] music IM switchOnly=\(switchOnly, privacy: .public) enabled=\(next.isEnabled, privacy: .public) play=\(next.playStatus, privacy: .public)")
+    }
+
+    func applyRoomMusicAvailability(_ payload: [String: Any]) {
+        guard let enabled = PartyValueNormalizer.intify(payload["roomMusicSwitch"] ?? payload["roomMusicSwitc"]),
+              let info = roomInfo else { return }
+        roomInfo = info.withUpdated(roomMusicSwitc: enabled)
+        if enabled == 0 {
+            applyRoomMusicSettings(roomMusicSettings.updating(playStatus: 0, isEnabled: false))
+        }
+    }
+
+    private var isRoomManager: Bool {
+        selfRole == .owner || selfRole == .admin
+    }
+
+    private func updateRoomMusicPlayback(songId: String, actionType: Int) async {
+        guard let info = roomInfo,
+              let roomId = info.id,
+              !roomId.isEmpty,
+              roomState == .joined,
+              isRoomManager,
+              isRoomMusicEnabled,
+              !isBusyRoomMusicControl else { return }
+        let previous = roomMusicSettings
+        let next = previous.updating(playStatus: actionType == 1 ? 1 : 0)
+        isBusyRoomMusicControl = true
+        applyRoomMusicSettings(next)
+        defer { isBusyRoomMusicControl = false }
+        do {
+            try await PartyAPI.playMusic(
+                songId: songId,
+                roomId: roomId,
+                musicType: next.musicType,
+                playMode: next.playMode,
+                volume: next.volume,
+                actionType: actionType
+            )
+        } catch {
+            guard roomInfo?.id == roomId else { return }
+            applyRoomMusicSettings(previous)
+            lastError = .underlying((error as? PartyAPIError) ?? .networkError)
+        }
+    }
+
+    private func updateRoomMusicConfiguration(volume: Int? = nil, playMode: Int? = nil) async {
+        guard let info = roomInfo,
+              let roomId = info.id,
+              !roomId.isEmpty,
+              let songId = roomMusicSettings.currentSongId,
+              !songId.isEmpty,
+              roomState == .joined,
+              isRoomManager,
+              isRoomMusicEnabled,
+              !isBusyRoomMusicControl else { return }
+        let previous = roomMusicSettings
+        let next = previous.updating(volume: volume, playMode: playMode)
+        isBusyRoomMusicControl = true
+        applyRoomMusicSettings(next)
+        defer { isBusyRoomMusicControl = false }
+        do {
+            try await PartyAPI.updateMusic(
+                songId: songId,
+                roomId: roomId,
+                volume: next.volume,
+                playMode: next.playMode,
+                playStatus: next.playStatus
+            )
+        } catch {
+            guard roomInfo?.id == roomId else { return }
+            applyRoomMusicSettings(previous)
+            lastError = .underlying((error as? PartyAPIError) ?? .networkError)
+        }
+    }
+
+    private func applyRoomMusicSettings(_ settings: PartyMusicSettings) {
+        roomMusicSettings = settings
+        isRoomMusicEnabled = settings.isEnabled
+        if (!settings.isEnabled || settings.playStatus != 1), let agoraUID = roomMusicAgoraUID {
+            rtc.setRemoteAudio(uid: agoraUID, enabled: false)
+        } else if let agoraUID = roomMusicAgoraUID {
+            rtc.setRemoteAudio(uid: agoraUID, enabled: isRoomMusicAudible)
+        }
+    }
+
+    private var roomMusicAgoraUID: UInt? {
+        guard let roomId = roomInfo?.id else { return nil }
+        return UInt(roomId)
+    }
+
+    private struct LocalMusicFilePayload: Sendable {
+        let data: Data
+        let songName: String
+        let durationSeconds: Int
+    }
+
+    private nonisolated static func readLocalMusicFile(fileURL: URL, fileFormat: String) async throws -> LocalMusicFilePayload {
+        try await Task.detached(priority: .userInitiated) {
+            let accessGranted = fileURL.startAccessingSecurityScopedResource()
+            defer {
+                if accessGranted { fileURL.stopAccessingSecurityScopedResource() }
+            }
+            let data = try Data(contentsOf: fileURL)
+            let asset = AVURLAsset(url: fileURL)
+            let duration = try await asset.load(.duration)
+            let stem = fileURL.deletingPathExtension().lastPathComponent
+            return LocalMusicFilePayload(
+                data: data,
+                songName: stem.isEmpty ? "music" : stem,
+                durationSeconds: max(Int(duration.seconds.rounded()), 0)
+            )
+        }.value
+    }
+
+    private nonisolated static func roomMusicObjectKey(fileFormat: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        let date = formatter.string(from: Date())
+        let uuid = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        return "party/music/\(date)/\(uuid).\(fileFormat)"
+    }
+
+    private nonisolated static func musicContentType(fileFormat: String) -> String {
+        switch fileFormat {
+        case "aac": return "audio/aac"
+        case "flac": return "audio/flac"
+        case "m4a": return "audio/mp4"
+        case "ogg": return "audio/ogg"
+        case "wav": return "audio/wav"
+        default: return "audio/mpeg"
         }
     }
 
@@ -1687,6 +2454,7 @@ final class PartyStore: ObservableObject {
     /// spec §3：`loadBlocklistTask` cancel 上一次未完成的拉取，防 sheet 快关快开时旧 API cancel
     /// 抛错走 catch 分支污染新 sheet 状态（verify P1 #3 PLAUSIBLE）。CancellationError 静默丢弃。
     func loadBlocklist(reason: PartyBlocklistLoadReason) async {
+        guard selfRole == .owner || selfRole == .admin else { return }
         guard let info = roomInfo, roomState == .joined else { return }
         guard let idStr = info.id, let roomIdInt = Int(idStr) else {
             AppLogger.party.error("[PartyStore] loadBlocklist bad roomId=\(info.id ?? "nil", privacy: .public)")
@@ -1754,6 +2522,10 @@ final class PartyStore: ObservableObject {
     /// - 成功后**乐观本地 filter** —— 无 IM 广播（spec §2），其他管理员端下次刷新才同步
     /// - 失败抛 throws 让 view 层做 error toast（与 H5 差异化：H5 无差别弹成功，spec §0 校验 point 6）
     func removeFromBlocklist(userId: String) async throws {
+        guard selfRole == .owner || selfRole == .admin else {
+            AppLogger.party.notice("[PartyStore] removeFromBlocklist rejected: not owner/admin")
+            throw PartyAPIError.networkError
+        }
         // per-userId 幂等
         guard !isBusyRemoveBlocklist.contains(userId) else {
             AppLogger.party.notice("[PartyStore] removeFromBlocklist skip: userId=\(userId, privacy: .public) in-flight")
@@ -1804,6 +2576,10 @@ final class PartyStore: ObservableObject {
     /// - 无 IM 广播：加锁瞬间已在房观众不 kick（对齐 H5）；跨端一致靠 `enterRoom` 拦截返 10006
     /// - 失败 sheet 层需保持打开让用户可重试 → 错误通过 `lastError` 上抛让 view 层 toast
     func lockRoom(password: String) async {
+        guard selfRole == .owner else {
+            AppLogger.party.notice("[PartyStore] lockRoom rejected: not owner/platformAdmin")
+            return
+        }
         guard !isBusyLockRoom else {
             AppLogger.party.notice("[PartyStore] lockRoom skip: busy")
             return
@@ -1841,6 +2617,10 @@ final class PartyStore: ObservableObject {
     /// - 无二次确认：tap Lock Room 已锁态 → 直接调（对齐 H5 无二次确认弹窗）
     /// - 无密码字段：对齐 H5 `feachLockRoom({ lockFlag: 0 })` payload 省略 password
     func unlockRoom() async {
+        guard selfRole == .owner else {
+            AppLogger.party.notice("[PartyStore] unlockRoom rejected: not owner/platformAdmin")
+            return
+        }
         guard !isBusyLockRoom else {
             AppLogger.party.notice("[PartyStore] unlockRoom skip: busy")
             return
@@ -1936,6 +2716,10 @@ final class PartyStore: ObservableObject {
     ///   不再 lastError.localizedDescription diff（同错误消息连续两次会误判成功）
     @discardableResult
     func setMCSeat(seatIndex: Int) async -> Bool {
+        guard selfRole == .owner else {
+            AppLogger.party.notice("[PartyStore] setMCSeat rejected: not owner/platformAdmin")
+            return false
+        }
         guard !isBusyMCSeat else {
             AppLogger.party.notice("[PartyStore] setMCSeat skip: busy")
             return false
@@ -1979,6 +2763,10 @@ final class PartyStore: ObservableObject {
     /// - **返回 Bool 明示成功/失败**（verify P0 fix）
     @discardableResult
     func closeMCSeat() async -> Bool {
+        guard selfRole == .owner else {
+            AppLogger.party.notice("[PartyStore] closeMCSeat rejected: not owner/platformAdmin")
+            return false
+        }
         guard !isBusyMCSeat else {
             AppLogger.party.notice("[PartyStore] closeMCSeat skip: busy")
             return false
@@ -2017,11 +2805,15 @@ final class PartyStore: ObservableObject {
 
     /// 挑首空位（排除 `pendingApproveSeatIndex` 已占位），供 `agreeMicApplication` seatIndex=nil 分支用。
     /// nil 表示无可用空位。
-    private func firstAvailableSeatIndexExcludingPending() -> Int? {
+    /// - Parameter allowHostSeat: 是否允许挑接待位（对齐安卓 MicApplicationInfo.canOnHostSeat 语义）；
+    ///   默认 false（接待位是 MC 专用位；房主批准普通申请不应自动挑到接待位）
+    private func firstAvailableSeatIndexExcludingPending(allowHostSeat: Bool = false) -> Int? {
         for seat in seatList {
             guard let idx = seat.seatIndex, idx > 0 else { continue }
             if seat.occupied { continue }
             if pendingApproveSeatIndex.contains(idx) { continue }
+            if seat.isVideoSeat { continue }
+            if !allowHostSeat, (seat.isHostSeat ?? 0) == 1 { continue }
             return idx
         }
         return nil
@@ -2078,6 +2870,11 @@ extension PartyStore: PartyRTCEngineDelegate {
     func partyRTCEngine(_ engine: PartyRTCEngine, didJoinedRemoteUid uid: UInt) {
         // 远端加入触发对账（确保新进入的远端音量状态正确）
         postMikeList()
+        // 音乐流使用 roomId 作为 Agora uid，且通常不在 seatList 中；因此必须单独恢复
+        // 该流的本端收听状态。与 H5 在 user-published 后调用 switchMusicSound 的时机一致。
+        if uid == roomMusicAgoraUID {
+            applyRoomMusicSettings(roomMusicSettings)
+        }
     }
 
     func partyRTCEngine(_ engine: PartyRTCEngine, didOfflineRemoteUid uid: UInt) {
@@ -2197,7 +2994,7 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         AppLogger.party.notice("[PartyStore] 1001 seatUpdate payload keys=\(Array(payload.keys), privacy: .public)")
         if let seats = decodeSeatListField(payload) {
             AppLogger.party.notice("[PartyStore] 1001 direct seatList replace count=\(seats.count, privacy: .public)")
-            seatList = seats
+            replaceSeatListPreservingGiftValues(seats)
             postMikeList()
         } else {
             AppLogger.party.notice("[PartyStore] 1001 fallback to reloadSeatListFromServer")
@@ -2249,6 +3046,16 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         // 安卓确认 §3.6：1008 payload `{roomId, seatIndex, seatType, userId, cameraEnabled(0/1), microphoneEnabled(0/1)}`。
         // 定向更新（取代全量 reload）。
         applyMediaUpdate(payload, isProhibit: false)
+    }
+
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveRoomMusicAvailability payload: [String: Any], raw: NIMMessage) {
+        _ = raw
+        applyRoomMusicAvailability(payload)
+    }
+
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveMusicUpdate payload: [String: Any], switchOnly: Bool, raw: NIMMessage) {
+        _ = raw
+        applyRoomMusicUpdate(payload, switchOnly: switchOnly)
     }
 
     /// 把 1008 / 1015 payload 的字段定向更新到 seatList 对应麦位 → 触发 postMikeList 对账。
@@ -2305,6 +3112,16 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         )
         lastGiftEvent = event
 
+        // 对齐 H5 `updateRoomSeatGiftValue`：2049 的 `gems` 是单个接收人的本次收礼值，
+        // 按 `receiveUserList[].userId` 累加到正在该麦位上的用户，驱动所有麦位视图实时刷新。
+        if event.gems.isFinite, event.gems > 0 {
+            seatList = PartySeatGiftValue.adding(
+                gems: event.gems,
+                to: event.receiverUserIds,
+                seats: seatList
+            )
+        }
+
         // v3（2026-07-15）：礼物消息进公屏 feed（`.gift` variant + 可能派生 `.luckyGift`）
         //  对齐 H5 party.js newGiftMessage：giftSmallImg 从后端字段取；单接收人 / 多接收人 UI 由 Row 组件处理
         let giftIcon: String? = (payload["giftSmallImg"] as? String)
@@ -2327,17 +3144,83 @@ extension PartyStore: PartyRoomChatManagerDelegate {
             ))
         }
 
-        // Task 10：接入跨场景礼物特效引擎。payload 可能含 `gifts` 数组（compressed 批量）或单条；
-        // GiftEffectIntake.ingest 内部按 giftId 校验，无效字段直接返 false 不打扰。
+        // Party 房特效：静态礼物走 H5 同款中央 + 收礼麦位 + 飘屏；SVGA/MP4 才交给通用全屏播放器。
+        // payload 兼容 compressed 批量与真实 2049 单条两种形态。
         let scopeId = roomInfo?.id ?? ""
         let mineYxAccid = SessionStore.shared.user?.yxAccid ?? ""
-        if let gifts = payload["gifts"] as? [[String: Any]] {
-            for gift in gifts {
-                GiftEffectIntake.ingest(scene: .party, scopeId: scopeId, payload: gift, mineYxAccid: mineYxAccid)
+        let myUserId = myUserIdString
+        let visibleRecipientIds = Set(seatList.compactMap(\.userId))
+        let giftPayloads = (payload["gifts"] as? [[String: Any]]) ?? [payload]
+        for giftPayload in giftPayloads {
+            guard let effect = PartyGiftEffectItem.from(payload: giftPayload) else { continue }
+            giftEffects.enqueue(
+                effect,
+                myUserId: myUserId,
+                visibleRecipientIds: visibleRecipientIds
+            )
+            if effect.hasPlayableAnimation {
+                GiftEffectIntake.ingest(
+                    scene: .party,
+                    scopeId: scopeId,
+                    payload: giftPayload,
+                    mineYxAccid: mineYxAccid
+                )
             }
-        } else {
-            GiftEffectIntake.ingest(scene: .party, scopeId: scopeId, payload: payload, mineYxAccid: mineYxAccid)
+            if let winningEffect = PartyLuckyGiftWinEffect.from(
+                payload: giftPayload,
+                myUserId: myUserId
+            ) {
+                // 对齐 H5 `party.js:newGiftMessage`：非发送者收到 Lucky Gift 中奖广播时，
+                // 用同一全局 SVGA 队列播放固定中奖动画，文字内容由 `luckyGiftWin` 覆盖层消费。
+                GiftEffectCenter.shared.enqueue(
+                    GiftEffectItem(
+                        sceneKey: GiftEffectSceneKey(scene: .party, scopeId: scopeId),
+                        senderYxAccid: winningEffect.senderUserId ?? "",
+                        senderNickname: winningEffect.senderNickname ?? "",
+                        senderAvatarUrl: winningEffect.senderAvatarURL,
+                        giftId: effect.giftId,
+                        giftName: effect.giftName,
+                        giftCount: winningEffect.totalReward,
+                        giftPrice: 0,
+                        animationUrl: PartyLuckyGiftWinEffect.animationURL,
+                        staticImgUrl: nil,
+                        timestamp: Int64(raw.timestamp * 1000),
+                        isSelfSent: false,
+                        luckyGiftWin: GiftEffectLuckyGiftWin(
+                            senderAvatarUrl: winningEffect.senderAvatarURL,
+                            senderNickname: winningEffect.senderNickname ?? "",
+                            reward: winningEffect.totalReward
+                        )
+                    )
+                )
+            }
         }
+
+        // 财富榜累加与麦位收礼值同样以 `gems` 有效为前提（对齐 H5 updateRoomSeatGiftValue）。
+        if event.gems.isFinite, event.gems > 0 {
+            applyContributionDelta(payload: payload)
+        }
+    }
+
+    /// 送礼消息触发的房间财富榜累加。对齐 H5 `party.js:1478`：
+    /// ```js
+    /// this.currentPartyInfo.contributionCostNum = new Decimal(this.currentPartyInfo.contributionCostNum || 0)
+    ///     .plus(new Decimal(cost || 0)).toNumber()
+    /// ```
+    /// cost 字段来自 gift IM payload；缺失/0 时不改。roomInfo?.contributionCostNum 是 String 存储，
+    /// Int 解析 + 累加 + 回写字符串。
+    private func applyContributionDelta(payload: [String: Any]) {
+        guard let info = roomInfo else { return }
+        // cost 可能是 Int / String / Double 混发（后端非严格）
+        let cost: Int
+        if let n = payload["cost"] as? Int { cost = n }
+        else if let d = payload["cost"] as? Double { cost = Int(d) }
+        else if let s = payload["cost"] as? String, let n = Int(s) { cost = n }
+        else { return }  // 缺失字段静默 skip
+        guard cost > 0 else { return }
+        let old = info.contributionCostNumInt
+        let updated = old + cost
+        roomInfo = info.withUpdated(contributionCostNum: String(updated))
     }
 
     /// v23（2026-07-13）派对房用户进场座驾动画 attachType=1004 → EnterEffectCenter 全屏 SVGA/MP4 座驾特效
@@ -2446,12 +3329,15 @@ extension PartyStore: PartyRoomChatManagerDelegate {
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveInviteResult result: PartyVideoSeatInviteResult) {
         lastInviteResult = result
+        if let targetUserId = result.targetUserId {
+            videoSeatInviteCooldowns.removeValue(forKey: targetUserId)
+        }
         // v3（2026-07-15）：1047 广播型接受 → 公屏系统消息（对齐 H5 chat-list.vue L221 msgType='videoSeatInviteAccept'）
         // 房主视角 = 看到"xxx 上了视频位"；被邀请者接受成功也看到反馈
-        if result == .broadcast {
-            // 昵称从 payload 拿不到（PartyVideoSeatInviteResult 是 enum 无参数），只显示通用文案；
-            // 后端若在 1047 payload 内带 nickname 字段，可扩展 delegate 携带更多信息
-            let text = String(format: L10n.Party.videoSeatInviteAcceptedFormat, L10n.Party.defaultUser)
+        if result.kind == .broadcast {
+            let text = result.systemText?.isEmpty == false
+                ? result.systemText!
+                : String(format: L10n.Party.videoSeatInviteAcceptedFormat, L10n.Party.defaultUser)
             chatRouter.postSystemVideoSeatInvite(text)
         }
     }
@@ -2493,10 +3379,19 @@ extension PartyStore: PartyRoomChatManagerDelegate {
     /// 1018 排麦通知（spec §2）。4 分支：1=申请 / 2=同意 / 3=拒绝 / 4=放弃
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveQueueSeatUpdate payload: [String: Any], raw: NIMMessage) {
         _ = raw
+        // 对齐安卓 §3.4「data 含 roomId」+ 项目 1049 handler pattern：payload.roomId 校验防跨房错乱
+        let payloadRoomId = PartyValueNormalizer.stringify(payload["roomId"]) ?? ""
+        if !payloadRoomId.isEmpty, let current = roomInfo?.id, current != payloadRoomId {
+            AppLogger.party.notice("[PartyStore] 1018 drop: roomId=\(payloadRoomId, privacy: .public) current=\(current, privacy: .public)")
+            return
+        }
         let operation = PartyValueNormalizer.intify(payload["operation"]) ?? 0
-        let num = PartyValueNormalizer.intify(payload["num"]) ?? 0
         let userId = PartyValueNormalizer.stringify(payload["userId"]) ?? ""
-        queueSeatNum = num
+        // P1-8 守卫：num 字段缺失时保持前值不动，避免误清 badge（后端 partial 序列化兜底）
+        if let num = PartyValueNormalizer.intify(payload["num"]) {
+            queueSeatNum = num
+        }
+        let num = queueSeatNum
 
         let mine = (myUserIdString ?? "") == userId && !userId.isEmpty
 
@@ -2545,7 +3440,9 @@ extension PartyStore: PartyRoomChatManagerDelegate {
             }
             AppLogger.party.info("[PartyStore] 1018 op=4 giveUp user=\(userId, privacy: .public) mine=\(mine, privacy: .public)")
         default:
-            AppLogger.party.notice("[PartyStore] 1018 unknown operation=\(operation, privacy: .public) num=\(num, privacy: .public)")
+            // 未知 op 兜底：refresh 列表让 UI 与服务端最终一致（后端加 op=5/6 时客户端不脱轨）
+            AppLogger.party.notice("[PartyStore] 1018 unknown operation=\(operation, privacy: .public) num=\(num, privacy: .public); fallback refresh")
+            Task { [weak self] in await self?.refreshMicApplications() }
         }
     }
 
@@ -2559,9 +3456,17 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         AppLogger.party.info("[PartyStore] 1021 micApplicationSwitch enable=\(enable, privacy: .public)")
 
         // 关时顺手关面板旧列表（避免观众端卡在旧数据）
+        // 对齐安卓 PartyRoomVM:646 `enable==0 → queueSeatNum=0, setIsApplyMic(false)`：
+        // 房主关开关时，本地排队中的观众端申请自动作废，需清 myApplyInfo.inIndex + 停超时兜底 task
         if !on {
             micApplicationsState = .empty
             queueSeatNum = 0
+            if myApplyInfo.inIndex > 0 {
+                myApplyInfo.inIndex = 0
+                applyingTimeoutTask?.cancel()
+                applyingTimeoutTask = nil
+                AppLogger.party.info("[PartyStore] 1021 switch off → cleared local applyInfo")
+            }
         }
 
         // 公屏系统消息（v3：kind = .application → PublicChatVariant.partyModeSwitch）
@@ -2589,19 +3494,51 @@ extension PartyStore: PartyRoomChatManagerDelegate {
 
     // MARK: - v3（2026-07-15）Step 2 通知公屏 handler 业务实装
 
-    /// 1019 房管变更（仅本人被设/取消房管时公屏文案）。
+    /// 1019 房管变更（仅本人被设/取消房管时更新权限并追加公屏文案）。
     /// payload 期望 `{ userId, authType }`；authType 1=设房管 / 2=取消（真机 preflight）
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveAuthUpdate payload: [String: Any], raw: NIMMessage) {
         _ = raw
         AppLogger.party.info("[PartyStore] 1019 authUpdate payloadKeys=\(Array(payload.keys), privacy: .public)")
-        // 仅本人被操作时才落公屏
+        // 仅本人被操作时才更新本地权限并落公屏。
         let targetUserId = PartyValueNormalizer.stringify(payload["userId"]) ?? ""
         guard targetUserId == (myUserIdString ?? "") else { return }
         let authType = PartyValueNormalizer.intify(payload["authType"]) ?? 0
+        let updatedRole: PartyRoomRoleType
+        switch authType {
+        case 1:
+            updatedRole = .admin
+        case 2:
+            updatedRole = .audience
+        default:
+            AppLogger.party.notice("[PartyStore] 1019 ignored unknown authType=\(authType, privacy: .public)")
+            return
+        }
+
+        // 未上麦时 selfRole 从 roomInfo 取；在麦时 selfSeat 优先，因此两处都要同步。
+        if let info = roomInfo {
+            roomInfo = info.withUpdated(roomRoleType: updatedRole.rawValue)
+        }
+        if let selfIndex = seatList.firstIndex(where: { $0.userId == targetUserId }),
+           let updatedSeat = Self.replacingRoleType(of: seatList[selfIndex], with: updatedRole.rawValue) {
+            seatList[selfIndex] = updatedSeat
+        }
+        PartyBattleStore.shared.refreshPermissions()
+
         let text = authType == 1
             ? L10n.Party.authUpdateSetAdmin
             : L10n.Party.authUpdateRemoveAdmin
         chatRouter.postSystemAuthUpdate(text)
+    }
+
+    /// PartyRoomSeat 使用不可变字段；以 Codable round-trip 定向更新 1019 广播中的角色字段。
+    private static func replacingRoleType(of seat: PartyRoomSeat, with roleType: Int) -> PartyRoomSeat? {
+        guard let data = try? JSONEncoder().encode(seat),
+              var dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        dict["roomRoleType"] = roleType
+        guard let updatedData = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
+        return try? JSONDecoder().decode(PartyRoomSeat.self, from: updatedData)
     }
 
     /// F 期房主管理批（2026-07-17）1025 roomBgUpdate / 1026 roomBgExpire 消费。
@@ -2643,26 +3580,51 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         chatRouter.postAnnouncement(String(format: L10n.Party.roomAnnouncementFormat, text))
     }
 
-    /// 1050 幸运数字抽数公屏卡片（⚠️ 直读 ext，H5 party.js:602 特殊分支）
+    /// 1050 幸运数字抽数公屏卡片（H5 语义：优先 ext.data，缺失时回退顶层 ext）
     /// ext 期望 `{ userId, nickname, luckyNumber, giftId, ... }`
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveLuckyNumberDraw payload: [String: Any], raw: NIMMessage) {
         _ = raw
-        AppLogger.party.info("[PartyStore] 1050 luckyNumberDraw extKeys=\(Array(payload.keys), privacy: .public)")
-        let nickname = (payload["nickname"] as? String) ?? (payload["fromNick"] as? String) ?? L10n.Party.defaultUser
-        let number = PartyValueNormalizer.intify(payload["luckyNumber"]) ?? 0
-        let text = String(format: L10n.Party.luckyNumberDrawFormat, nickname, number)
-        chatRouter.postAnnouncement(text)
+        AppLogger.party.info("[PartyStore] 1050 luckyNumberDraw payloadKeys=\(Array(payload.keys), privacy: .public)")
+        guard let message = PartyPublicChatAdapter.luckyNumberPublic(payload: payload, didWin: false) else {
+            AppLogger.party.notice("[PartyStore] 1050 drop invalid lucky number payload")
+            return
+        }
+        chat.appendMessage(message)
     }
 
-    /// 1051 幸运数字中奖公屏广播（⚠️ 直读 ext）
+    /// 1051 幸运数字中奖公屏广播（H5 语义：优先 ext.data，缺失时回退顶层 ext）
     /// ext 期望 `{ userId, nickname, luckyNumber, winAmount, ... }`
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveLuckyNumberWin payload: [String: Any], raw: NIMMessage) {
         _ = raw
-        AppLogger.party.info("[PartyStore] 1051 luckyNumberWin extKeys=\(Array(payload.keys), privacy: .public)")
-        let nickname = (payload["nickname"] as? String) ?? (payload["fromNick"] as? String) ?? L10n.Party.defaultUser
-        let number = PartyValueNormalizer.intify(payload["luckyNumber"]) ?? 0
-        let text = String(format: L10n.Party.luckyNumberWinFormat, nickname, number)
-        chatRouter.postAnnouncement(text)
+        AppLogger.party.info("[PartyStore] 1051 luckyNumberWin payloadKeys=\(Array(payload.keys), privacy: .public)")
+        guard let message = PartyPublicChatAdapter.luckyNumberPublic(payload: payload, didWin: true) else {
+            AppLogger.party.notice("[PartyStore] 1051 drop invalid lucky number payload")
+            return
+        }
+        chat.appendMessage(message)
+    }
+
+    /// 1052 幸运数字中奖个人通知。系统通知可能来自离线补发，必须确认仍在当前房内。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveLuckyNumberPersonalWin payload: [String: Any]) {
+        _ = chat
+        guard roomState == .joined,
+              let win = PartyLuckyNumberWinPayload.from(payload: payload) else {
+            AppLogger.party.notice("[PartyStore] 1052 drop: not joined or invalid payload")
+            return
+        }
+
+        if let notifiedRoomId = win.roomId, !notifiedRoomId.isEmpty {
+            let currentRoomIds = Set([roomInfo?.id, roomInfo?.yxRoomId].compactMap { $0 }.filter { !$0.isEmpty })
+            guard currentRoomIds.contains(notifiedRoomId) else {
+                AppLogger.party.notice("[PartyStore] 1052 drop room mismatch")
+                return
+            }
+        }
+        luckyNumberWinPayload = win
+    }
+
+    func dismissLuckyNumberWinPopup() {
+        luckyNumberWinPayload = nil
     }
 
     /// 136 全服游戏中奖公屏（session.js 主入口 + Party 通道兜底）
@@ -2786,6 +3748,10 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         giftIcon: String? = nil,
         giftPrice: Int? = nil
     ) async {
+        guard selfRole == .owner else {
+            AppLogger.party.notice("[PartyStore] setPrivateCall rejected: not owner/platformAdmin")
+            return
+        }
         guard let info = roomInfo, let roomId = info.id, !roomId.isEmpty else {
             AppLogger.party.notice("[PartyStore] setPrivateCall skip: roomInfo missing")
             return

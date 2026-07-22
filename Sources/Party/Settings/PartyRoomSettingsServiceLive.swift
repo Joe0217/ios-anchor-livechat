@@ -32,13 +32,18 @@ struct PartyRoomSettingsServiceLive: PartyRoomSettingsService {
 }
 
 struct PartyAdminServiceLive: PartyAdminService {
+    /// H5 用户端无独立"房管列表"接口；房管弹窗（`party-admin-popup.vue`）拉 `getViewers` 传 `type: 1`，
+    /// 前端按 `roomRoleType === 2` 筛出"已是房管"。iOS 复用同路径。
     func fetchAdminList(roomId: String) async throws -> [PartyRoomAdmin] {
-        try await PartyAPI.roomAdminList(roomId: roomId)
+        let viewers = try await PartyAPI.partyOnlineViewers(roomId: roomId, type: 1)
+        return viewers
+            .filter { $0.roomRoleType == 2 }
+            .map { PartyRoomAdmin(userId: $0.userId, nickname: $0.nickname, icon: $0.avatar) }
     }
     func setAdmin(roomId: String, userId: String) async throws {
-        try await PartyAPI.setRoomAdmin(roomId: roomId, userId: userId)
+        try await PartyAPI.setAdmin(roomId: roomId, userId: userId, operationType: 1)
     }
     func removeAdmin(roomId: String, userId: String) async throws {
-        try await PartyAPI.removeRoomAdmin(roomId: roomId, userId: userId)
+        try await PartyAPI.setAdmin(roomId: roomId, userId: userId, operationType: 2)
     }
 }
