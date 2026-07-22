@@ -275,16 +275,11 @@ struct FeedbackView: View {
     private var toastOverlay: some View {
         if let msg = vm.toast {
             Text(msg)
-                .font(.system(size: 14))
-                .foregroundColor(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(Color.black.opacity(0.75), in: Capsule())
-                .padding(.top, 60)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .toastStyle()
+                .transition(Toast.transition)
                 .task(id: msg) {
                     do {
-                        try await Task.sleep(nanoseconds: 2_000_000_000)
+                        try await Task.sleep(nanoseconds: Toast.dismissDurationNanos)
                         try Task.checkCancellation()
                     } catch { return }
                     vm.clearToast()

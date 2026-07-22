@@ -118,6 +118,7 @@ struct EditProfileView: View {
             NicknameEditSheet(initial: store.draft.nickname) { newName in
                 store.editNickname(newName)
             }
+            .giftPanelSheetBackground()
         }
         .alert(
             L10n.EditProfile.successDialogTitle,
@@ -396,18 +397,12 @@ struct EditProfileView: View {
             // Critical case（size/format 相关）走 .alert，不重复顶部 toast，避免双弹（用户需求 #1）
             if let key = store.transientToast, !Self.isCriticalAlert(key) {
                 Text(Self.translate(key))
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.black.opacity(0.75))
-                    .clipShape(Capsule())
-                    .padding(.top, 8)
+                    .toastStyle()
+                    .transition(Toast.transition)
                     .task(id: key) {
-                        try? await Task.sleep(nanoseconds: 2_000_000_000)
+                        try? await Task.sleep(nanoseconds: Toast.dismissDurationNanos)
                         store.clearTransientToast()
                     }
-                    .transition(.opacity)
             }
         }
     }

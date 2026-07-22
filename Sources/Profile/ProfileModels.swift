@@ -76,6 +76,8 @@ struct AnchorInfo: Codable {
     let banAlways: Bool?           // 永久封禁
     let bannedSubType: Int?        // 临时封禁时长(小时)
     let type: Int?                 // 审核结果类型:2=通过 / 9=代理 / 其他=拒绝或未审核
+    /// 主播角色：H5 `setMineInfo` 以它决定是否离开受限模式。
+    let userType: Int?
 
     // Finding #8 修 2026-07-10：手写 init(from:) 让 birthday 支持 String/Int/Double 混发 decode
     // 其它字段沿用 decodeIfPresent 语义（与 Swift 自动 synthesized 一致；写全一遍是因为一旦手写 init(from:) 就会禁用 auto synthesize）
@@ -113,11 +115,12 @@ struct AnchorInfo: Codable {
         self.language = try c.decodeIfPresent(String.self, forKey: .language)
         self.countryId = try c.decodeIfPresent(String.self, forKey: .countryId)
         // 2026-07-16 新增审核态字段
-        self.valid = try c.decodeIfPresent(Int.self, forKey: .valid)
-        self.onReview = try c.decodeIfPresent(Bool.self, forKey: .onReview)
-        self.banAlways = try c.decodeIfPresent(Bool.self, forKey: .banAlways)
-        self.bannedSubType = try c.decodeIfPresent(Int.self, forKey: .bannedSubType)
-        self.type = try c.decodeIfPresent(Int.self, forKey: .type)
+        self.valid = c.decodeFlexibleInt(forKey: .valid)
+        self.onReview = c.decodeFlexibleBool(forKey: .onReview)
+        self.banAlways = c.decodeFlexibleBool(forKey: .banAlways)
+        self.bannedSubType = c.decodeFlexibleInt(forKey: .bannedSubType)
+        self.type = c.decodeFlexibleInt(forKey: .type)
+        self.userType = c.decodeFlexibleInt(forKey: .userType)
     }
 
     /// Memberwise init 保留供 EditProfileView+Preview 等 test/preview 代码继续用位置参数构造
@@ -134,7 +137,7 @@ struct AnchorInfo: Codable {
          email: String?, birthday: String?, phone: String?, inviteCode: String?,
          language: String?, countryId: String?,
          valid: Int? = nil, onReview: Bool? = nil, banAlways: Bool? = nil,
-         bannedSubType: Int? = nil, type: Int? = nil) {
+         bannedSubType: Int? = nil, type: Int? = nil, userType: Int? = nil) {
         self.userId = userId; self.nickname = nickname; self.icon = icon; self.sex = sex; self.age = age
         self.countryCode = countryCode; self.signature = signature; self.signatureVaild = signatureVaild
         self.level = level; self.levelName = levelName; self.callPrice = callPrice
@@ -148,6 +151,7 @@ struct AnchorInfo: Codable {
         self.language = language; self.countryId = countryId
         self.valid = valid; self.onReview = onReview; self.banAlways = banAlways
         self.bannedSubType = bannedSubType; self.type = type
+        self.userType = userType
     }
 
     /// 2026-07-16：由登录响应直接构造 `mine`，对齐 H5 `loginSuccess → setMineInfo(res)`（`stores/modules/user.js:74-131`）。
@@ -168,31 +172,13 @@ struct AnchorInfo: Codable {
             email: nil, birthday: nil, phone: nil, inviteCode: nil,
             language: nil, countryId: nil,
             valid: r.valid, onReview: r.onReview, banAlways: r.banAlways,
-            bannedSubType: r.bannedSubType, type: r.type
+            bannedSubType: r.bannedSubType, type: r.type, userType: r.userType
         )
     }
 }
 
-/// KeyedDecodingContainer helper：字段可能是 String / Int / Double / null 时的兼容 decode
-/// 对齐 .claude/rules/ios-decode-userid-compat.md 精神——H5 接口混发数字/字符串是常态，不能严格 String decode
-extension KeyedDecodingContainer {
-    func decodeFlexibleString(forKey key: Key) -> String? {
-        // `try?` 已把 `T??` flatten 成 `T?`（Swift 5+），单层 if let 就够；
-        // 若再写 `, let s` 是对已解开的 non-optional String 再解一次 → "conditional binding must have Optional" 报错
-        if let s = try? decodeIfPresent(String.self, forKey: key) { return s }
-        if let i = try? decodeIfPresent(Int64.self, forKey: key) { return String(i) }
-        if let d = try? decodeIfPresent(Double.self, forKey: key) { return String(Int64(d)) }
-        return nil
-    }
-
-    /// Int 版：接口混发 Int / String / Double 时的兼容 decode
-    func decodeFlexibleInt(forKey key: Key) -> Int? {
-        if let i = try? decodeIfPresent(Int.self, forKey: key) { return i }
-        if let s = try? decodeIfPresent(String.self, forKey: key), let i = Int(s) { return i }
-        if let d = try? decodeIfPresent(Double.self, forKey: key) { return Int(d) }
-        return nil
-    }
-}
+// 通用 KeyedDecodingContainer 兼容 helper 已迁移到 Sources/Core/Extensions/CodableExtensions.swift
+// (2026-07-17 H 里程碑 · LiveGiftTask spec §4 · HilyTests 白名单精确 include)
 
 /// 主播工作台数据统计（H5 `mineInfo.dataStatistics`，getAnchorInfo 响应字段）。
 /// H5 蓝本 work/index.vue L498/509/520：`callNum` 是**在线时长**（秒），`weeklyDiamonds` 是**平均通话时长**（秒），

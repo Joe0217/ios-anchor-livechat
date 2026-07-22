@@ -21,6 +21,8 @@ struct MomentPostRow: View {
     var translation: String? = nil
     /// v23（2026-07-13）：tap 翻译按钮回调。nil = 不显示按钮(如 textContent 为空)
     var onTapTranslate: (() -> Void)? = nil
+    /// v25（2026-07-13）:翻译进行中。true 时按钮替换为 ProgressView + 灰色 label,防二次触发
+    var isTranslating: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -52,6 +54,7 @@ struct MomentPostRow: View {
     /// v23（2026-07-13）：翻译区(对齐 H5 c-circleContent.vue L204-210)。
     /// - 已翻译:显示译文
     /// - 未翻译 + `onTapTranslate` non-nil:显示绿色 "Translate" 文字按钮(对齐 H5 label="Translate" color=#15FF3E)
+    /// - 翻译中(isTranslating=true):ProgressView + 灰色 label,disable tap 防重触
     /// - 未翻译 + `onTapTranslate` nil:不显示(caller 未接入翻译能力,如未来某个 preview 或 mock 入口)
     @ViewBuilder
     private func translationSection(originalText: String) -> some View {
@@ -63,17 +66,27 @@ struct MomentPostRow: View {
                 .fixedSize(horizontal: false, vertical: true)
         } else if let onTap = onTapTranslate {
             // 未翻译:显示 Translate 按钮(对齐 H5 CTranslate label="Translate" color=#15FF3E)
+            // v25:isTranslating 时替换为 ProgressView + 灰色 label,disable
             Button(action: onTap) {
                 HStack(spacing: 4) {
-                    Image(systemName: "character.book.closed.fill")
-                        .font(.system(size: 12, weight: .semibold))
+                    if isTranslating {
+                        ProgressView()
+                            .controlSize(.mini)
+                            .tint(.white.opacity(0.6))
+                    } else {
+                        Image(systemName: "character.book.closed.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
                     Text(L10n.publicScreenTranslate)
                         .font(.system(size: 14, weight: .medium))
                 }
-                .foregroundColor(Color(red: 21/255, green: 1.0, blue: 62/255)) // #15FF3E
+                .foregroundColor(isTranslating
+                    ? Color.white.opacity(0.5)
+                    : Color(red: 21/255, green: 1.0, blue: 62/255)) // #15FF3E
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .disabled(isTranslating)
         }
     }
 
@@ -81,7 +94,9 @@ struct MomentPostRow: View {
         HStack(spacing: 10) {
             // 动态作者头像：作为通用组件，按"他人头像"规则 persistent=false，不污染缓存。
             // 若实际就是登录账号自己的头像（"我的"动态 tab），NSCache 命中后仍能复用。
-            AvatarView(urlString: post.icon, size: 36, kind: .anchor)
+            // userId: post.userId → 环境自探 .list → 跳详情页
+            AvatarView(urlString: post.icon, size: 36, kind: .anchor,
+                       userId: post.userId.map(String.init))
 
             VStack(alignment: .leading, spacing: 2) {
                 // 对齐 H5 `font-500 text-16` 昵称字号

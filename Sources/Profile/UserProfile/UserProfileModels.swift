@@ -131,6 +131,9 @@ protocol UserProfileServiceProtocol {
 
 // MARK: - Destination Helper（详情 ↔ 私聊互跳）
 
+// UI extension 依赖 UserProfileView / ChatDetailContainer / SessionStore（均不在 HilyTests 白名单）
+// #if !HILY_TESTS 屏蔽 test target 编译（pre-existing 遗漏；本轮 H-5 顺手修阻塞点）
+#if !HILY_TESTS
 extension View {
     /// 集中注册详情页 (`UserProfileRoute`) + 从详情页 push 出来的私聊页 (`ChatFromProfileRoute`)
     /// 两个 destination 到当前 NavigationStack。
@@ -171,3 +174,4 @@ extension View {
             }
     }
 }
+#endif

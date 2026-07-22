@@ -60,7 +60,8 @@ struct MomentTabView: View {
                             translation: post.postId.flatMap { store.translations[$0] },
                             onTapTranslate: (post.postId != nil && !(post.textContent ?? "").isEmpty)
                                 ? { store.translateIfNeeded(postId: post.postId!, text: post.textContent ?? "") }
-                                : nil
+                                : nil,
+                            isTranslating: post.postId.map { store.pendingTranslateIds.contains($0) } ?? false
                         )
                         .onAppear {
                             if post.id == posts.last?.id, store.state.hasMore {

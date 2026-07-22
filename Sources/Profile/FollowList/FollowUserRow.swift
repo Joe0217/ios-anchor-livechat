@@ -29,7 +29,8 @@ struct FollowUserRow: View {
     }
 
     private var avatar: some View {
-        AvatarView(urlString: user.icon, size: 48, kind: .user)
+        AvatarView(urlString: user.icon, size: 48, kind: .user,
+                   userId: user.userId.map(String.init))
             .overlay(Circle().strokeBorder(Color.white.opacity(0.08), lineWidth: 1))
             .accessibilityHidden(true)
     }

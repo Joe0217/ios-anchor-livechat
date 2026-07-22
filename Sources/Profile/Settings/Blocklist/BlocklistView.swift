@@ -197,18 +197,13 @@ struct BlocklistView: View {
     private var transientErrorToast: some View {
         if let msg = vm.transientError {
             Text(msg)
-                .font(Theme.Typography.blocklistToast)
-                .foregroundColor(Theme.Palette.blocklistRetryText)
-                .padding(.horizontal, Theme.Metric.blocklistToastHPadding)
-                .padding(.vertical, Theme.Metric.blocklistToastVPadding)
-                .background(Theme.Palette.blocklistToastBackground, in: Capsule())
-                .padding(.top, Theme.Metric.blocklistToastTopPadding)
-                .transition(.move(edge: .top).combined(with: .opacity))
+                .toastStyle()
+                .transition(Toast.transition)
                 .task(id: msg) {
                     // review #4：Task.sleep 被取消时不应继续清掉新 msg 的 transientError。
                     // 改用 try 而非 try? + Task.checkCancellation 显式守卫
                     do {
-                        try await Task.sleep(nanoseconds: 2_000_000_000)
+                        try await Task.sleep(nanoseconds: Toast.dismissDurationNanos)
                         try Task.checkCancellation()
                     } catch {
                         return

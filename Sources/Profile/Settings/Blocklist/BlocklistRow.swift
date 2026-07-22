@@ -35,7 +35,8 @@ struct BlocklistRow: View {
     // MARK: - 头像
 
     private var avatar: some View {
-        AvatarView(urlString: item.icon, size: Theme.Metric.blocklistAvatarSize, kind: .user)
+        AvatarView(urlString: item.icon, size: Theme.Metric.blocklistAvatarSize, kind: .user,
+                   userId: item.userId)
             .accessibilityHidden(true)
     }
 
