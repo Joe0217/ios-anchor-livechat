@@ -22,6 +22,9 @@ struct CurrentCallInfo {
     /// 远端基本资料（来自 joinCall）
     var remoteNickname: String = ""
     var remoteIcon: String = ""
+    /// 远端主播等级（`createCall` / `joinCall` 返回的 `levelName`）。
+    /// 通话信息卡据此决定是否展示 SS 徽章。
+    var remoteLevelName: String = ""
     /// 远端头像框 URL（joinCall 返回 headFrame；H5 g-waitingCall 佩戴场景显示）。
     /// **iOS 局限**：H5 支持 SVGA 动画头像框（`.svga` 后缀），iOS 侧暂只渲染静态图（PNG/WebP）；
     /// 服务端下发 SVGA 时 CachedAsyncImage 加载失败静默不显示，J 里程碑接入 SVGA 后续支持。
@@ -165,4 +168,21 @@ struct JoinCallResult: Codable {
     /// L 里程碑：通话来源标记。'matchV4' → Match 命中；nil / 'liveCall' / 其他 → 非 Match 来源。
     /// MatchStore 通过 CallStore.$lastJoinCallSource 观察此字段决定 matchState 迁移。
     let source: String?
+}
+
+/// F 里程碑：POST /api/call/record/v2/queryCall 响应
+///
+/// 用途：CallStore 收到 RTM VideoCall 后调用此接口拉取 `callerType`。
+/// 派对房分支只在 `callerType == 5` 时接受来电（PartyCall 抢占）；其他值 reject。
+///
+/// **⚠️ 字段真实性待 Step 3 首次真机 log 校准**：预估基于安卓源码梳理 §附录 B +
+/// PartyRoomDataManager.kt:654-688。真机首次调用后按 log 补 CodingKeys alias 兼容。
+struct QueryCallResponse: Codable {
+    /// 通话来源类型。5 = PartyCall；其他值走非派对分支。
+    let callerType: Int?
+    /// 主叫用户 id（String/Int 双兼容·遵循 ios-decode-userid-compat rule；真机校准后补 CodingKeys）
+    let fromUserId: String?
+    /// 声网频道 id
+    let channelId: String?
+    // TODO: [im-payload-real-log-over-code-assumption] Step 3 前必真机 log 补齐字段（可能含 giftId / partyRoomId / partyPrivateCallOpen 等）
 }

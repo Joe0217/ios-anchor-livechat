@@ -284,8 +284,8 @@ final class MatchStore: ObservableObject {
 
     /// 用户点开启按钮的入口。可能来自 `.ended / .blocked` 态。
     ///
-    /// v3 §5.1 F3 修正后的顺序（**删除 beauty pre-check**，见 RA21）：
-    /// `isOpen 返 1 → toggleMatch(1) 返 1 → cameraSession.start() → matchState=.matching`
+    /// 开启顺序：
+    /// `camera permission → isOpen 返 1 → toggleMatch(1) 成功 → cameraSession.start() → matchState=.matching`
     func openMatch() async {
         // P 项目权限管理：.call bit 覆盖匹配 · 走统一 gate helper（不 assertionFailure · Finding 4/8）
         // v2 code-review: gate 拒绝时 set lastToast 让 UI 有反馈（对齐同函数其他失败分支 pattern），
@@ -300,6 +300,17 @@ final class MatchStore: ObservableObject {
             logger.warning("openMatch called in unexpected state=\(String(describing: self.state))")
             return
         }
+
+        // 相机是匹配的必要条件。先授权再入池，避免服务端已开池但本地无法采集时立刻补发 status=0。
+        // MatchStore 在单测 target 中保持 Foundation-only，因此权限 UI 仅由 app target 承担。
+        #if !HILY_TESTS
+        guard await MediaPermissionGate.requestAccess(for: .camera) else {
+            logger.notice("openMatch rejected: camera permission unavailable")
+            lastToast = .cameraStartFailed
+            MediaPermissionAlertCenter.shared.present(for: .camera)
+            return
+        }
+        #endif
 
         // 用户诉求 2026-07-08：offline 时自动上线（对齐 H5 !IMOnline && setIMOnline(true) 语义）
         // 用户主动开匹配 = 想接来电 → 自动切在线；比 gate 后要求"先手动上线"体验更好
@@ -377,6 +388,7 @@ final class MatchStore: ObservableObject {
             return
         }
 
+        logger.notice("closeMatch: explicit UI/lifecycle close (silent=\(silent))")
         stopFaceCheck()  // #3d：关匹配同步停人脸检测
         cameraSession?.stop()
         state = .ended

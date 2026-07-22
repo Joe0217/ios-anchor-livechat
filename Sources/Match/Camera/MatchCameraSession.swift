@@ -1,6 +1,9 @@
 import Combine
 import Foundation
 import UIKit
+import os
+
+private let logger = Logger(subsystem: "com.anchor.livechat", category: "MatchCameraSession")
 
 /// L 里程碑：匹配态独立摄像头会话（`MatchCameraSessionProtocol` 具体实现）。
 ///
@@ -92,9 +95,11 @@ final class MatchCameraSession: MatchCameraSessionProtocol, ObservableObject {
         CameraManager.requestAccess { [weak self] granted in
             guard let self else { return }
             if granted {
+                logger.info("MatchCameraSession start: camera permission granted")
                 self.camera.start()
                 self.startStartupTimeoutGuard()
             } else {
+                logger.warning("MatchCameraSession start: camera permission denied")
                 self.errorSubject.send(.permissionDenied)
             }
         }
@@ -111,6 +116,7 @@ final class MatchCameraSession: MatchCameraSessionProtocol, ObservableObject {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             guard let self else { return }
             if !self.camera.session.isRunning {
+                logger.warning("MatchCameraSession start: session not running after 3s")
                 self.errorSubject.send(.startTimeout)
             }
         }

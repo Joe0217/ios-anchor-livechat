@@ -52,6 +52,9 @@ final class CallStore: ObservableObject {
                     livingCallIntroToken = UUID()
                 }
             }
+            if state == .connected, oldValue != .connected {
+                sendConnectedNimSignalIfPossible()
+            }
             // C-4 Wave2 gap-critic-004：AudioSession 生命周期挂载
             // - 首次进入 .connecting/.connected 时 activate（直播私 call 走 LiveStore 主导，不激活）
             // - 转 .idle 时 deactivate（endLocally scheduleEndedToIdle 500ms 后）
@@ -68,6 +71,9 @@ final class CallStore: ObservableObject {
             }
         }
     }
+
+    /// 机器人通话在 `createCall` 网络请求期间也必须视为真人通话忙碌，防止两个流程抢占 Agora 单例。
+    var blocksRobotCall: Bool { state != .idle || isStartingDirectCall }
 
     /// IM 场景闸门 wiring：state 离开/进入 .idle 同步 IMSceneGate（通话相关 sysMsg 过滤）。
     ///
@@ -90,6 +96,9 @@ final class CallStore: ObservableObject {
     @Published private(set) var callElapsed: Int = 0
     @Published private(set) var current: CurrentCallInfo = CurrentCallInfo()
     @Published private(set) var lastError: String = ""
+    /// 通话媒体权限弹窗由 RootView 承载，避免主叫尚未进入 CallView 时没有反馈。
+    @Published var mediaPermissionAlertRequirement: MediaPermissionGate.Requirement?
+    private var pendingMediaPermissionAction: (() async -> Void)?
     /// RTM client 是否已 login（永真直到 stop）。语义：login 已建立 → 信令通道存在。
     /// **注意**：不等于"RTM 连接当前可用"——断网/重连中时仍为 true。UI 用 `rtmConnectionState` 判定实时连接态。
     @Published private(set) var isSignalingReady: Bool = false
@@ -103,13 +112,13 @@ final class CallStore: ObservableObject {
     @Published private(set) var callWaitState: Int = 0
     /// sysMsg 90 通话充值累计钻石奖励
     @Published private(set) var callWaitBonus: Int = 0
-    /// sysMsg -1 最近一条远端文字（C 期 UI 绑订显示气泡 / 翻译 toast）
+    /// sysMsg -1 最近一条远端文字（通话公屏以 `callChatMessages` 为单一渲染数据源）。
     @Published private(set) var callRecentRemoteText: String?
-    /// sysMsg -1 远端文字附带的 chatBubble id
-    @Published private(set) var callChatBubble: Int = 0
+    /// sysMsg -1 远端文字附带的 chatBubble 九宫格图片 URL。
+    @Published private(set) var callChatBubble: String?
 
     /// 公屏消息历史队列（对齐 H5 `homeStore.talkListInCall[]`）。上限 50 防增长；追加即修剪。
-    /// - 消费者：CallMessageScroller（通话中控条上方 300×270 反向滚动区域）
+    /// - 消费者：CallMessageScroller（左侧 270×300 可滚动区域）
     /// - 生产者：
     ///   - handleRemoteText（sysMsg -1）→ 追加对方 text
     ///   - GiftEffectSysMsgRouter（sysMsg 4 liveCallGift）→ 追加对方 gift
@@ -209,7 +218,15 @@ final class CallStore: ObservableObject {
 
     private var signaling: CallSignaling?
     private var myUserId: Int = 0
+    /// `createCall` 尚未返回时也占用真人通话入场权；否则机器人来电可在 await 间隙启动 RTC。
+    private var isStartingDirectCall = false
     private var callOutTimeoutTask: Task<Void, Never>?
+    /// H5 g-waitingCall 对来电也执行 30s 自动结束；独立任务避免干扰主叫超时桶。
+    private var callInTimeoutTask: Task<Void, Never>?
+    /// 避免 RTC 状态/资料回填同时触发时对同一通话重复发送 CONNECTED 辅助信令。
+    private var nimConnectedSignalCallId: String?
+    /// endLocally 内含 await（RTC leave / callRate）；期间其它信令可能重入，必须只允许一个收尾事务。
+    private var isEndingCall = false
     /// ended → idle 的延迟切换 task。被 stop()/新 callOut 触发时必须 cancel，否则会异步把
     /// 已经被新通话覆盖的 state 重置回 .idle。
     private var endedToIdleTask: Task<Void, Never>?
@@ -481,6 +498,7 @@ final class CallStore: ObservableObject {
     /// 再做后续清理，避免下次 start 拿到半销毁 SDK singleton。
     func stop() async {
         cancelCallOutTimeout()
+        cancelCallInTimeout()
         cancelStartRetry()
         nwMonitor?.cancel()
         nwMonitor = nil
@@ -496,6 +514,8 @@ final class CallStore: ObservableObject {
         myUserId = 0
         state = .idle
         current = CurrentCallInfo()
+        isEndingCall = false
+        isStartingDirectCall = false
         // 退登链路：销毁 AgoraRtcEngineKit 全局单例。
         // stop() 仅在 RootView.syncSessionDependent 的 logout 分支调用（唯一路径），
         // 接通后下次登录时 sharedEngine(with:) 会拿到干净的新 singleton。
@@ -523,18 +543,22 @@ final class CallStore: ObservableObject {
             lastError = L10n.userProfileNetworkError
             return
         }
+        guard !RobotCallStore.shared.blocksOtherCalls else {
+            lastError = L10n.callErrorLocalBusy
+            AppLogger.call.notice("[CallStore] callOut blocked: robot call is active")
+            return
+        }
+        guard isSignalingReady, let signaling, acquireDirectCallAdmission() else {
+            if lastError.isEmpty { lastError = L10n.userProfileNetworkError }
+            AppLogger.call.notice("⚠️ [CallStore] callOut 跳过 state=\(self.state.rawValue, privacy: .public) starting=\(self.isStartingDirectCall, privacy: .public) signaling=\(self.signaling != nil, privacy: .public)")
+            return
+        }
+        defer { isStartingDirectCall = false }
+        guard await requireMediaAccess(.liveStream, retry: { [weak self] in
+            await self?.callOut(remoteUserId: remoteUserId)
+        }) else { return }
         // code-review Finding 5：内部化 preflight 让 caller 简化（原 4 处 caller preflight 分裂：POCDebug 无 / ChatDetail 缺 isSignalingReady / LiveList+UserProfile 全套）
         // signaling 未就绪 / 通话中 / calling → set lastError 让 view 层 observe → 统一反馈路径
-        guard isSignalingReady else {
-            lastError = L10n.userProfileNetworkError
-            AppLogger.call.notice("⚠️ [CallStore] callOut aborted: signaling not ready")
-            return
-        }
-        guard state == .idle, let signaling else {
-            if lastError.isEmpty { lastError = L10n.userProfileNetworkError }
-            AppLogger.call.notice("⚠️ [CallStore] callOut 跳过 state=\(self.state.rawValue, privacy: .public) signaling=\(self.signaling != nil, privacy: .public)")
-            return
-        }
         guard let remoteUid = Int(remoteUserId), remoteUid > 0 else {
             lastError = L10n.callErrorInvalidRemoteUserId
             return
@@ -556,6 +580,11 @@ final class CallStore: ObservableObject {
             lastError = L10n.callErrorCreateFailed
             return
         }
+        guard state == .idle, self.signaling === signaling, !RobotCallStore.shared.blocksOtherCalls else {
+            lastError = L10n.callErrorLocalBusy
+            AppLogger.call.notice("[CallStore] callOut abandoned after createCall: another call acquired RTC")
+            return
+        }
 
         // 2) 初始化 currentCallInfo（含 createCall 返回的对方资料）
         var info = CurrentCallInfo()
@@ -567,6 +596,7 @@ final class CallStore: ObservableObject {
         info.remoteYxAccid = res.yxAccid ?? ""
         info.remoteNickname = res.nickname ?? ""
         info.remoteIcon = res.icon ?? ""
+        info.remoteLevelName = res.levelName ?? ""
         info.remoteAge = res.age ?? 0
         info.remoteCountryCode = res.countryCode ?? ""
         info.remoteVideoPrice = res.videoPrice ?? 0
@@ -585,8 +615,10 @@ final class CallStore: ObservableObject {
 
         // 5) 发 RTM VideoCall（H5 await _publishMessage）
         let ok = await signaling.publish(buildMessage(action: .videoCall))
+        guard state == .calling, current.callId == info.callId else { return }
         if !ok {
             lastError = L10n.callErrorSendFailed
+            sendCallNimSignal(.cancel)
             // H5 callOutCancel L1065/1076：主动取消桶 answerTime=0
             await endLocally(reason: .beginCallError, rateCategory: .canceled, rateType: .caller, answerTime: 0, abnormal: 1)
             return
@@ -601,6 +633,7 @@ final class CallStore: ObservableObject {
         if let signaling {
             _ = await signaling.publish(buildMessage(action: .cancel))
         }
+        sendCallNimSignal(.cancel)
         // H5 callOutCancel L1065/1076：主动取消桶 answerTime=0
         await endLocally(reason: .localHangUp, rateCategory: .canceled, rateType: .caller, answerTime: 0, abnormal: 0)
     }
@@ -612,13 +645,53 @@ final class CallStore: ObservableObject {
     /// 用 closure 而非直接引 MatchStore：避免 CallStore 与 MatchStore 相互依赖 + test target 隔离
     var isMatchActive: (() -> Bool)?
 
+    /// 所有真人通话入口在任何 await 之前先抢占 admission，避免机器人通话或另一通来电穿过异步窗口。
+    private func acquireDirectCallAdmission() -> Bool {
+        guard state == .idle,
+              !isStartingDirectCall,
+              !RobotCallStore.shared.blocksOtherCalls
+        else {
+            return false
+        }
+        isStartingDirectCall = true
+        return true
+    }
+
+    private func requireMediaAccess(
+        _ requirement: MediaPermissionGate.Requirement,
+        retry: @escaping () async -> Void
+    ) async -> Bool {
+        guard await MediaPermissionGate.requestAccess(for: requirement) else {
+            mediaPermissionAlertRequirement = requirement
+            pendingMediaPermissionAction = retry
+            return false
+        }
+        return true
+    }
+
+    func retryMediaPermissionFromAlert(_ requirement: MediaPermissionGate.Requirement) async {
+        let action = pendingMediaPermissionAction
+        mediaPermissionAlertRequirement = nil
+        pendingMediaPermissionAction = nil
+        if await MediaPermissionGate.requestAccess(for: requirement) {
+            await action?()
+        } else {
+            MediaPermissionGate.openAppSettings()
+        }
+    }
+
     // MARK: - 被叫：接受 / 拒绝
 
     /// L 里程碑：匹配态收到 videoCall 时的自动接听入口（对齐 H5 useCallApi.js:437-441）。
     /// 由 handleIncomingVideoCall 内 `isMatchActive?() == true` 分支调用，不弹浮层。
     /// 与 acceptIncomingFromLive 的差异：`frontGameType = .direct`（走标准 CallView g-waitingCall→g-faceTime 分支）
     func acceptIncomingFromMatch(msg: CallMessage) async {
-        guard state == .idle, let signaling else {
+        guard acquireDirectCallAdmission() else {
+            await publishRejectBusy(msg: msg, reason: "busy")
+            return
+        }
+        defer { isStartingDirectCall = false }
+        guard let signaling else {
             AppLogger.call.notice("⚠️ [CallStore] acceptIncomingFromMatch 跳过 state=\(self.state.rawValue, privacy: .public)")
             return
         }
@@ -626,6 +699,9 @@ final class CallStore: ObservableObject {
             AppLogger.call.notice("⚠️ [CallStore] acceptIncomingFromMatch 缺 fromRoomId")
             return
         }
+        guard await requireMediaAccess(.liveStream, retry: { [weak self] in
+            await self?.acceptIncomingFromMatch(msg: msg)
+        }) else { return }
 
         // 1) 初始化 currentCallInfo（被叫 in / frontGameType=.direct，让 CallView 走标准分支）
         var info = CurrentCallInfo()
@@ -642,6 +718,7 @@ final class CallStore: ObservableObject {
         let ok = await signaling.publish(buildMessage(action: .accept))
         guard ok else {
             lastError = L10n.callErrorAcceptFailed
+            sendCallNimSignal(.reject)
             await endLocally(reason: .beginCallError, rateCategory: nil, rateType: .callee, answerTime: 0, abnormal: 1)
             return
         }
@@ -666,14 +743,19 @@ final class CallStore: ObservableObject {
             do {
                 let r = try await CallService.joinCall(channelId: fromRoomId)
                 self.lastJoinCallSource = r.source
-                guard self.state != .idle, self.current.callId == msg.callId else { return }
+                guard self.state != .idle, self.state != .ended, self.state != .failed,
+                      self.current.callId == msg.callId,
+                      self.current.channelId == fromRoomId else { return }
                 self.current.remoteYxAccid = r.yxAccid ?? self.current.remoteYxAccid
                 self.current.remoteNickname = r.nickname ?? self.current.remoteNickname
                 self.current.remoteIcon = r.icon ?? self.current.remoteIcon
+                self.current.remoteLevelName = r.levelName ?? self.current.remoteLevelName
                 self.current.remoteHeadFrame = r.headFrame ?? self.current.remoteHeadFrame
                 self.current.remoteAge = r.age ?? self.current.remoteAge
                 self.current.remoteCountryCode = r.countryCode ?? self.current.remoteCountryCode
                 self.current.remoteVideoPrice = r.videoPrice ?? self.current.remoteVideoPrice
+                self.sendCallNimSignal(.online)
+                self.sendConnectedNimSignalIfPossible()
             } catch {
                 self.lastJoinCallSource = nil
                 AppLogger.call.notice("⚠️ [CallStore] Match auto-accept joinCall 拉对方资料失败 err=\(error.localizedDescription, privacy: .private)")
@@ -689,7 +771,12 @@ final class CallStore: ObservableObject {
     /// - 跳过弹浮层等候用户操作的 calling 中间态视觉环节
     /// - 显式标记 `frontGameType = .live`，CallView UI 据此显示"直播私 call"标识 + "挂断回直播"
     func acceptIncomingFromLive(msg: CallMessage) async {
-        guard state == .idle, let signaling else {
+        guard acquireDirectCallAdmission() else {
+            await publishRejectBusy(msg: msg, reason: "busy")
+            return
+        }
+        defer { isStartingDirectCall = false }
+        guard let signaling else {
             AppLogger.call.notice("⚠️ [CallStore] acceptIncomingFromLive 跳过 state=\(self.state.rawValue, privacy: .public) signaling=\(self.signaling != nil, privacy: .public)")
             return
         }
@@ -697,6 +784,9 @@ final class CallStore: ObservableObject {
             AppLogger.call.notice("⚠️ [CallStore] acceptIncomingFromLive 缺 fromRoomId")
             return
         }
+        guard await requireMediaAccess(.liveStream, retry: { [weak self] in
+            await self?.acceptIncomingFromLive(msg: msg)
+        }) else { return }
 
         // 1) 初始化 currentCallInfo（被叫 in / frontGameType=.live）
         var info = CurrentCallInfo()
@@ -713,6 +803,7 @@ final class CallStore: ObservableObject {
         let ok = await signaling.publish(buildMessage(action: .accept))
         guard ok else {
             lastError = L10n.callErrorAcceptFailed
+            sendCallNimSignal(.reject)
             await endLocally(reason: .beginCallError, rateCategory: nil, rateType: .callee, answerTime: 0, abnormal: 1)
             return
         }
@@ -743,14 +834,19 @@ final class CallStore: ObservableObject {
                 // L 里程碑：无条件 assign source（不受 state guard 约束）——
                 // MatchStore 订阅此字段实时判定 matchState 迁移。LIVE 私 call 通常 source='liveCall' 或 nil。
                 self.lastJoinCallSource = r.source
-                guard self.state != .idle, self.current.callId == msg.callId else { return }
+                guard self.state != .idle, self.state != .ended, self.state != .failed,
+                      self.current.callId == msg.callId,
+                      self.current.channelId == fromRoomId else { return }
                 self.current.remoteYxAccid = r.yxAccid ?? self.current.remoteYxAccid
                 self.current.remoteNickname = r.nickname ?? self.current.remoteNickname
                 self.current.remoteIcon = r.icon ?? self.current.remoteIcon
+                self.current.remoteLevelName = r.levelName ?? self.current.remoteLevelName
                 self.current.remoteHeadFrame = r.headFrame ?? self.current.remoteHeadFrame
                 self.current.remoteAge = r.age ?? self.current.remoteAge
                 self.current.remoteCountryCode = r.countryCode ?? self.current.remoteCountryCode
                 self.current.remoteVideoPrice = r.videoPrice ?? self.current.remoteVideoPrice
+                self.sendCallNimSignal(.online)
+                self.sendConnectedNimSignalIfPossible()
             } catch {
                 // L 里程碑：joinCall 失败 → source 置 nil（MatchStore 保守视为非 matchV4）
                 self.lastJoinCallSource = nil
@@ -765,7 +861,12 @@ final class CallStore: ObservableObject {
     /// 与 acceptIncomingFromLive 的唯一差异：`frontGameType = .party`。其余时序、信令、joinRtc、
     /// 接通率上报、joinCall 拉资料完全一致（复用直播私 call 立即接听模式 · D-1 决策：无 5s delay）。
     func acceptIncomingFromParty(msg: CallMessage) async {
-        guard state == .idle, let signaling else {
+        guard acquireDirectCallAdmission() else {
+            await publishRejectBusy(msg: msg, reason: "busy")
+            return
+        }
+        defer { isStartingDirectCall = false }
+        guard let signaling else {
             AppLogger.call.notice("⚠️ [CallStore] acceptIncomingFromParty 跳过 state=\(self.state.rawValue, privacy: .public) signaling=\(self.signaling != nil, privacy: .public)")
             return
         }
@@ -773,6 +874,9 @@ final class CallStore: ObservableObject {
             AppLogger.call.notice("⚠️ [CallStore] acceptIncomingFromParty 缺 fromRoomId")
             return
         }
+        guard await requireMediaAccess(.liveStream, retry: { [weak self] in
+            await self?.acceptIncomingFromParty(msg: msg)
+        }) else { return }
 
         // 1) 初始化 currentCallInfo（被叫 in / frontGameType=.party）
         var info = CurrentCallInfo()
@@ -789,6 +893,7 @@ final class CallStore: ObservableObject {
         let ok = await signaling.publish(buildMessage(action: .accept))
         guard ok else {
             lastError = L10n.callErrorAcceptFailed
+            sendCallNimSignal(.reject)
             await endLocally(reason: .beginCallError, rateCategory: nil, rateType: .callee, answerTime: 0, abnormal: 1)
             return
         }
@@ -814,14 +919,19 @@ final class CallStore: ObservableObject {
             do {
                 let r = try await CallService.joinCall(channelId: fromRoomId)
                 self.lastJoinCallSource = r.source
-                guard self.state != .idle, self.current.callId == msg.callId else { return }
+                guard self.state != .idle, self.state != .ended, self.state != .failed,
+                      self.current.callId == msg.callId,
+                      self.current.channelId == fromRoomId else { return }
                 self.current.remoteYxAccid = r.yxAccid ?? self.current.remoteYxAccid
                 self.current.remoteNickname = r.nickname ?? self.current.remoteNickname
                 self.current.remoteIcon = r.icon ?? self.current.remoteIcon
+                self.current.remoteLevelName = r.levelName ?? self.current.remoteLevelName
                 self.current.remoteHeadFrame = r.headFrame ?? self.current.remoteHeadFrame
                 self.current.remoteAge = r.age ?? self.current.remoteAge
                 self.current.remoteCountryCode = r.countryCode ?? self.current.remoteCountryCode
                 self.current.remoteVideoPrice = r.videoPrice ?? self.current.remoteVideoPrice
+                self.sendCallNimSignal(.online)
+                self.sendConnectedNimSignalIfPossible()
             } catch {
                 self.lastJoinCallSource = nil
                 AppLogger.call.notice("⚠️ [CallStore] PARTY joinCall 拉对方资料失败 channel=\(fromRoomId, privacy: .private) err=\(error.localizedDescription, privacy: .private)")
@@ -832,7 +942,11 @@ final class CallStore: ObservableObject {
     /// 被叫接受通话。
     func accept(auto: Bool = false) async {
         guard state == .calling, current.inOrOut == .in, let signaling else { return }
+        guard await requireMediaAccess(.liveStream, retry: { [weak self] in
+            await self?.accept(auto: auto)
+        }) else { return }
         let info = current
+        cancelCallInTimeout()
 
         // 1) 通知主叫 —— 必须成功才能前进
         //    ⚠️ publish 失败时**不切 .connecting**：否则主叫永远收不到 Accept、30s 后发
@@ -841,6 +955,7 @@ final class CallStore: ObservableObject {
         let ok = await signaling.publish(buildMessage(action: .accept))
         guard ok else {
             lastError = L10n.callErrorAcceptFailed
+            sendCallNimSignal(.reject)
             await endLocally(reason: .beginCallError, rateCategory: nil, rateType: .callee, answerTime: 0, abnormal: 1)
             return
         }
@@ -864,7 +979,9 @@ final class CallStore: ObservableObject {
     /// 被叫拒绝通话。
     func reject() async {
         guard state == .calling, current.inOrOut == .in, let signaling else { return }
+        cancelCallInTimeout()
         _ = await signaling.publish(buildMessage(action: .reject))
+        sendCallNimSignal(.reject)
         // H5 callInCancel L1119/1129：被叫主动拒接桶 answerTime=0
         await endLocally(reason: .localHangUp, rateCategory: .rejected, rateType: .callee, answerTime: 0, abnormal: 0)
     }
@@ -884,6 +1001,7 @@ final class CallStore: ObservableObject {
         if let signaling {
             _ = await signaling.publish(buildMessage(action: .hangup))
         }
+        sendCallNimSignal(.hangUp)
         await endLocally(reason: .localHangUp, rateCategory: nil, rateType: .caller, answerTime: 0, abnormal: 0)
     }
 
@@ -1057,6 +1175,47 @@ final class CallStore: ObservableObject {
         }
     }
 
+    /// H5 `sendCustomSysMsg` 的 iOS 对应：RTM 仍负责状态迁移，NIM 只做弱网兜底。
+    private func sendCallNimSignal(_ type: CallNimType) {
+        let peer = current.remoteYxAccid
+        let channelId = current.channelId
+        guard !peer.isEmpty, !channelId.isEmpty else {
+            AppLogger.call.debug("[CallStore] NIM call signal skip type=\(type.rawValue, privacy: .public): missing peer/channel")
+            return
+        }
+        let payload: [String: Any] = [
+            "attachType": -3,
+            "channelId": channelId,
+            "type": type.rawValue,
+        ]
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload),
+              let content = String(data: data, encoding: .utf8) else {
+            AppLogger.call.warning("[CallStore] NIM call signal encode failed type=\(type.rawValue, privacy: .public)")
+            return
+        }
+
+        let notification = NIMCustomSystemNotification(content: content)
+        notification.sendToOnlineUsersOnly = true
+        let setting = NIMCustomSystemNotificationSetting()
+        setting.shouldBeCounted = false
+        setting.apnsEnabled = false
+        notification.setting = setting
+        let session = NIMSession(peer, type: .P2P)
+        NIMSDK.shared().systemNotificationManager.sendCustomNotification(notification, to: session) { error in
+            if let error {
+                AppLogger.call.notice("[CallStore] NIM call signal failed type=\(type.rawValue, privacy: .public) err=\(error.localizedDescription, privacy: .private)")
+            }
+        }
+    }
+
+    private func sendConnectedNimSignalIfPossible() {
+        guard !current.callId.isEmpty, nimConnectedSignalCallId != current.callId else { return }
+        guard !current.remoteYxAccid.isEmpty else { return }
+        nimConnectedSignalCallId = current.callId
+        sendCallNimSignal(.connected)
+    }
+
     // MARK: - 内部：RTC 建链
     //
     // 本端 join channel 完成后 state 不切 .connected——必须等远端 didJoinedOfUid 回调
@@ -1098,14 +1257,22 @@ final class CallStore: ObservableObject {
                             rateType: CallRateType,
                             answerTime: Int = 0,
                             abnormal: Int) async {
+        guard state != .idle, !isEndingCall else {
+            AppLogger.call.debug("[endLocally] duplicate end ignored reason=\(reason.rawValue, privacy: .public)")
+            return
+        }
+        isEndingCall = true
         // 【归因日志】通话结束入口统一记录：谁触发 + 触发时上下文
         // 用于排查"自动结束"：搜索 🔴 [endLocally] 一眼看到 reason + 触发路径栈
         AppLogger.call.notice("🔴 [endLocally] reason=\(reason.rawValue, privacy: .public) rateCat=\(rateCategory.map { String($0.rawValue) } ?? "nil", privacy: .public) rateType=\(rateType.rawValue, privacy: .public) state=\(self.state.rawValue, privacy: .public) elapsed=\(self.callElapsed, privacy: .public)s frontGame=\(String(describing: self.current.frontGameType), privacy: .public) inOrOut=\(String(describing: self.current.inOrOut), privacy: .public) answerTime=\(answerTime, privacy: .public) abnormal=\(abnormal, privacy: .public) callWaitState=\(self.callWaitState, privacy: .public) lastError='\(self.lastError, privacy: .private)'")
         cancelCallOutTimeout()
+        cancelCallInTimeout()
         let info = current
         current.hangupReason = reason
         // v5.4：await 等 didLeaveChannelWith，避免后续 start/join 拿到半销毁 singleton
         if state != .idle { await agora.leave() }
+        // logout/stop 可能在 leave 期间把通话重置为 idle；此时不能用旧通话继续上报或覆写状态。
+        guard state != .idle, current.callId == info.callId else { return }
         // ⚠️ 主播端**不调** `/callOver`（后端无此路由 → 404；该接口是用户端独有的，后端按
         // 用户端 callOver 触发结算）。本端只做 RTC leave + 状态复位 + callRate（可选）。
         if !info.channelId.isEmpty, let cat = rateCategory {
@@ -1156,9 +1323,10 @@ final class CallStore: ObservableObject {
             guard let self, !Task.isCancelled, self.state == .ended else { return }
             self.state = .idle
             self.current = CurrentCallInfo()
+            self.isEndingCall = false
             // H M4：HUD 顶级 @Published 不在 current 内，需单独 reset，避免新通话 HUD 残留旧气泡
             self.callRecentRemoteText = nil
-            self.callChatBubble = 0
+            self.callChatBubble = nil
             self.callWaitBonus = 0
             self.callWaitState = 0
             // 拨打失败提示：idle 时清空，避免下次通话继承旧 error 文案
@@ -1202,6 +1370,7 @@ final class CallStore: ObservableObject {
             if let signaling = self.signaling {
                 _ = await signaling.publish(self.buildMessage(action: .cancel))
             }
+            self.sendCallNimSignal(.cancel)
             // 拨打失败提示：30s 无应答 → "对方无应答"
             self.lastError = L10n.callErrorRemoteNoAnswer
             // H5 handleCallingTimeout L540：timeout 桶 answerTime 字面 30
@@ -1212,6 +1381,31 @@ final class CallStore: ObservableObject {
     private func cancelCallOutTimeout() {
         callOutTimeoutTask?.cancel()
         callOutTimeoutTask = nil
+    }
+
+    /// 来电 30 秒未接听，按 H5 `callInCancel` 路径发 Reject，并记入被叫拒接桶。
+    private func startCallInTimeout() {
+        cancelCallInTimeout()
+        callInTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(CallTuning.callInTimeoutSeconds * 1_000_000_000))
+            guard let self, !Task.isCancelled,
+                  self.state == .calling, self.current.inOrOut == .in else { return }
+            let callId = self.current.callId
+            AppLogger.call.notice("⏰ [callInTimeout] 来电 30s 未操作 → 自动拒接 remoteUid=\(self.current.remoteUserId, privacy: .private)")
+            if let signaling = self.signaling {
+                _ = await signaling.publish(self.buildMessage(action: .reject, rejectReason: "timeout"))
+            }
+            self.sendCallNimSignal(.reject)
+            // publish 期间可能已收到对端 Cancel 或用户刚好点了接听；避免二次收尾覆盖新状态。
+            guard self.state == .calling, self.current.inOrOut == .in, self.current.callId == callId else { return }
+            self.lastError = L10n.callErrorRemoteNoAnswer
+            await self.endLocally(reason: .localHangUp, rateCategory: .rejected, rateType: .callee, answerTime: 0, abnormal: 0)
+        }
+    }
+
+    private func cancelCallInTimeout() {
+        callInTimeoutTask?.cancel()
+        callInTimeoutTask = nil
     }
 }
 
@@ -1260,6 +1454,11 @@ extension CallStore: CallSignalingDelegate {
         // 发出错误 permission_denied reject，误挂断主叫方 A→Y 的合法通话）
         guard msg.remoteUserId == myUserId else {
             AppLogger.call.notice("⚠️ [CallStore] 来电 remoteUserId(\(msg.remoteUserId, privacy: .private)) 与本端(\(self.myUserId, privacy: .private)) 不符，忽略")
+            return
+        }
+        guard !RobotCallStore.shared.blocksOtherCalls, !isStartingDirectCall else {
+            AppLogger.call.notice("[CallStore] incoming call blocked: robot call or outgoing admission active")
+            await publishRejectBusy(msg: msg, reason: "busy")
             return
         }
         // P 项目权限管理：三层防护 RTM 被动接收层 · 走统一 gate helper（不 assertionFailure · Finding 4/8）
@@ -1389,6 +1588,7 @@ extension CallStore: CallSignalingDelegate {
         info.callStartTime = Date().timeIntervalSince1970 * 1000
         current = info
         state = .calling
+        startCallInTimeout()
 
         // 3s 超时拉对方资料（失败仅影响 UI 展示，不影响接通能力）
         Task { @MainActor in
@@ -1397,15 +1597,19 @@ extension CallStore: CallSignalingDelegate {
                 // L 里程碑：无条件 assign source —— MatchStore 订阅此字段实时判定 matchState 迁移。
                 // 若 source=='matchV4' → MatchStore 转 .matchingCalling；非 matchV4 → .matchingSuspended
                 self.lastJoinCallSource = r.source
-                guard self.state == .calling, self.current.inOrOut == .in,
+                guard self.state != .idle, self.state != .ended, self.state != .failed,
+                      self.current.callId == msg.callId,
                       self.current.channelId == fromRoomId else { return }
                 self.current.remoteYxAccid = r.yxAccid ?? self.current.remoteYxAccid
                 self.current.remoteNickname = r.nickname ?? self.current.remoteNickname
                 self.current.remoteIcon = r.icon ?? self.current.remoteIcon
+                self.current.remoteLevelName = r.levelName ?? self.current.remoteLevelName
                 self.current.remoteHeadFrame = r.headFrame ?? self.current.remoteHeadFrame
                 self.current.remoteAge = r.age ?? self.current.remoteAge
                 self.current.remoteCountryCode = r.countryCode ?? self.current.remoteCountryCode
                 self.current.remoteVideoPrice = r.videoPrice ?? self.current.remoteVideoPrice
+                self.sendCallNimSignal(.online)
+                self.sendConnectedNimSignalIfPossible()
 
                 // L Gap-5：匹配来电内部自动 accept（对齐前次 acceptIncomingFromMatch 语义，仅时序前移到 source 到达后）
                 if r.source == "matchV4", self.isMatchActive?() == true,
@@ -1418,6 +1622,26 @@ extension CallStore: CallSignalingDelegate {
                 self.lastJoinCallSource = nil
                 AppLogger.call.notice("⚠️ [CallStore] joinCall 拉对方资料失败/超时 channel=\(fromRoomId, privacy: .private) err=\(error.localizedDescription, privacy: .private)")
             }
+        }
+    }
+
+    /// 处理 H5 `attachType=-3` 辅助信令。它不能直接驱动状态机，避免与 RTM 重复结束。
+    func handleNimCallSignal(type: String, channelId: String, sender: String) {
+        guard !channelId.isEmpty, channelId == current.channelId,
+              !sender.isEmpty, sender == current.remoteYxAccid,
+              let signal = CallNimType(rawValue: type) else { return }
+        switch signal {
+        case .online:
+            AppLogger.call.debug("[CallStore] peer NIM online channel=\(channelId, privacy: .private)")
+        case .reject:
+            guard state == .calling, current.inOrOut == .out else { return }
+            lastError = L10n.callErrorRemoteRejected
+            AppLogger.call.debug("[CallStore] peer NIM reject; waiting for RTM authoritative end")
+        case .cancel, .connected:
+            AppLogger.call.debug("[CallStore] peer NIM signal type=\(type, privacy: .public); RTM owns state transition")
+        case .hangUp:
+            current.hangupReason = .remoteHangUp
+            AppLogger.call.debug("[CallStore] peer NIM hangup recorded; waiting for RTM authoritative end")
         }
     }
 
@@ -1523,25 +1747,25 @@ extension CallStore: CallSignalingDelegate {
 
 extension CallStore {
 
-    /// sysMsg -1：通话内远端文字消息（含翻译 + chatBubble）。
-    /// H5 message.js:636-665 解码 `unescape(content)` + 调 translateText API；
-    /// iOS H 阶段落 callRecentRemoteText + 追加 callChatMessages 历史队列（Wave 6+ 完整）。
-    func handleRemoteText(_ text: String, chatBubble: Int? = nil) {
+    /// sysMsg -1：通话内远端文字消息。
+    /// 对齐 H5 `message.js`：文字立即进入 `talkListInCall`，随后自动翻译并更新同一条；
+    /// `chatBubble` 是发送方透传的九宫格图片 URL，不是本地样式编号。
+    func handleRemoteText(_ text: String, chatBubble: String? = nil) {
         guard !text.isEmpty else { return }
         callRecentRemoteText = text
-        if let cb = chatBubble { callChatBubble = cb }
-        // 追加历史队列供公屏 CallMessageScroller 消费（对齐 H5 talkListInCall.unshift）。
-        // Wave 6 backlog：translation 字段接翻译 API 结果；level/isVip 接远端 ext.userLevel 字段。
+        callChatBubble = chatBubble
         let sender = CallChatMessage.Sender(
             nickname: current.remoteNickname.isEmpty ? current.remoteUserIdString : current.remoteNickname,
             level: nil,
             isVip: false,
             isSpecial: false,
-            chatBubble: chatBubble.map(String.init),
+            chatBubble: chatBubble,
             nicknameColor: .default
         )
-        appendChatMessage(.text(sender: sender, content: text, translation: nil))
-        AppLogger.call.info("[CallStore] handleRemoteText len=\(text.count, privacy: .public) bubble=\(chatBubble ?? -1, privacy: .public)")
+        let message = CallChatMessage.text(sender: sender, content: text, translation: nil)
+        appendChatMessage(message)
+        translateRemoteCallText(messageID: message.id, text: text)
+        AppLogger.call.info("[CallStore] handleRemoteText len=\(text.count, privacy: .public) hasBubble=\(chatBubble?.isEmpty == false, privacy: .public)")
     }
 
     // MARK: - 公屏消息队列 append helper（Phase A3）
@@ -1555,11 +1779,8 @@ extension CallStore {
     }
 
     /// 主播本地回显（对齐 H5 sendMessage `talkListInCall.unshift({user:'my', ...})`）。
-    /// 不区分远端 vs 本地 sender —— UI 用 sender.nickname == 主播 nickname 判断左/右侧对齐或色彩差异（当前无此差异）。
     func echoLocalChatText(_ text: String) {
         guard !text.isEmpty else { return }
-        // v22（2026-07-11 反悔）：用户明示主播端公屏应显示主播真实昵称，不用 "User" 通用标签
-        // 撤销 2026-07-10 的 L10n.callSignalLabelUser 改动
         let mine = AnchorInfoStore.shared.mine
         let sender = CallChatMessage.Sender(
             nickname: mine?.nickname ?? "",
@@ -1567,13 +1788,13 @@ extension CallStore {
             isVip: false,
             isSpecial: false,
             chatBubble: mine?.chatBubble,
-            nicknameColor: .default,   // 本端消息用白色（H5 my 语义），非 .her 橙色
-            isSelf: true               // 本端主播发的 → UI 不显示翻译图标（对齐 H5 !isSelf 条件）
+            nicknameColor: .default,
+            isSelf: true
         )
         appendChatMessage(.text(sender: sender, content: text, translation: nil))
     }
 
-    /// 追加对方消息翻译结果(对齐 H5 messageScroller.vue translatedClick + PublicChatListView.setTranslation)。
+    /// 追加对方消息自动翻译结果（对齐 H5 收到 attachType=-1 后的 translateText）。
     /// 命中不到 msgId 或非 `.text` payload 时静默 no-op。
     func setChatTranslation(messageId: UUID, translation: String) {
         guard let idx = callChatMessages.firstIndex(where: { $0.id == messageId }) else { return }
@@ -1585,6 +1806,30 @@ extension CallStore {
             sender: old.sender,
             payload: .text(content: content, translation: translation)
         )
+    }
+
+    /// H5 收到 attachType=-1 后自动调 translateText；失败时保留原文，不影响通话公屏流。
+    private func translateRemoteCallText(messageID: UUID, text: String) {
+        let key = AppConfigStore.shared.microsoftTranslatorKey ?? AppConfigStore.translatorKeyFallback
+        let area = AppConfigStore.shared.microsoftTranslatorArea ?? AppConfigStore.translatorAreaFallback
+        let targetLanguage: String = {
+            switch AppLocaleStore.shared.current {
+            case .en: return "en"
+            case .ar: return "ar"
+            case .tr: return "tr"
+            case .system: return Locale.current.language.languageCode?.identifier ?? "en"
+            }
+        }()
+        Task { @MainActor [weak self] in
+            do {
+                let translated = try await MicrosoftTranslateService.shared.translate(
+                    text: text, targetLang: targetLanguage, key: key, area: area
+                )
+                self?.setChatTranslation(messageId: messageID, translation: translated)
+            } catch {
+                AppLogger.call.warning("[CallStore] auto translate failed msgId=\(messageID.uuidString, privacy: .public) err=\(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     /// sysMsg 4 liveCallGift payload 消费：追加礼物 cell 到公屏（Phase A4）。
@@ -1735,12 +1980,13 @@ extension CallStore {
         echoLocalChatText(trimmed)
         // 2. NIM P2P 自定义消息 fire-and-forget
         let mine = AnchorInfoStore.shared.mine
+        let encodedNickname = mine?.nickname?.addingPercentEncoding(withAllowedCharacters: .callMessageNicknameAllowed) ?? ""
         let payload: [String: Any] = [
             "attachType": -1,
             "content": trimmed,
             "ext": [
                 "userLevel": mine?.level ?? 0,
-                "fromNickName": mine?.nickname ?? "",
+                "fromNickName": encodedNickname,
                 "chatBubble": mine?.chatBubble ?? ""
             ]
         ]
@@ -1765,3 +2011,7 @@ extension CallStore {
     }
 }
 
+private extension CharacterSet {
+    /// 对齐 JavaScript `encodeURIComponent`：昵称不允许让 JSON/P2P 消息字段产生歧义。
+    static let callMessageNicknameAllowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_.!~*'()"))
+}

@@ -135,8 +135,8 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
     /// `{base}/webSocket?ciphertext={AES_ECB_Hex(JSON({"appToken":uuid}))}`
     ///
     /// ⚠️ cipher 算法与主接口请求体**完全不同**：
-    ///   - 主接口请求体：AES-128-CBC + key `9986sdff5s4f1123` + IV + Base64 输出
-    ///   - WS 握手 cipher：AES-128-ECB + key `9976kk4322578894`（无 IV）+ Hex 输出
+    ///   - 主接口请求体：AES-128-CBC + 由配置注入的 key/IV + Base64 输出
+    ///   - WS 握手 cipher：AES-128-ECB + 独立配置 key（无 IV）+ Hex 输出
     /// 对应 H5 `src/utils/index.js:361` 的 `encryptAes(data)`。Hex 字符串只含 `0-9 a-f`，
     /// 没有 `+ / =` 那些 URL 歧义字符，因此无需 percent-encode。
     private func buildHandshakeURL() -> URL? {

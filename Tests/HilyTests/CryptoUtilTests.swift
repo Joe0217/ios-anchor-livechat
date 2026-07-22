@@ -4,11 +4,7 @@ import XCTest
 /// 待测源码（CryptoUtil/AppConfig 等）已通过 project.yml 的 HilyTests.sources 编进 HilyTests 模块，
 /// 与测试代码同 module，无需 `@testable import`。
 ///
-/// dev 环境密钥（AppConfig 的 fallback，运行在测试 bundle 时 Info.plist 缺键 → 自动回退）：
-/// - aesKey: `9986sdff5s4f1123`
-/// - aesIV:  `9986sdff5s4y456a`
-/// - wsAesKey: `9976kk4322578894`
-/// - appId:  `20735424`
+/// Test target config values are non-sensitive fixtures supplied by AppConfig.TestDefaults.
 final class CryptoUtilTests: XCTestCase {
 
     // MARK: - MD5（大写十六进制）
@@ -112,7 +108,7 @@ final class CryptoUtilTests: XCTestCase {
 
     func testAESECB_encryptWithDifferentKey_producesDifferentCipher() {
         let plain = "{\"x\":1}"
-        let a = CryptoUtil.aesEncryptECBToHex(plain, key: "9976kk4322578894")  // dev ws key
+        let a = CryptoUtil.aesEncryptECBToHex(plain, key: "test-ws-key-1234")
         let b = CryptoUtil.aesEncryptECBToHex(plain, key: "1234567890abcdef")
         XCTAssertNotNil(a)
         XCTAssertNotNil(b)

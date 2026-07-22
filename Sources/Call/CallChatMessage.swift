@@ -1,6 +1,6 @@
 import Foundation
 
-/// 通话公屏消息（对齐 H5 `homeStore.talkListInCall[]` + 通话设计稿.png 5 变体）。
+/// 通话公屏消息（对齐 H5 `homeStore.talkListInCall[]`）。
 ///
 /// **数据来源**：
 /// - 本地回显：主播输入文字 sendCallText 后立即 push（H5 sendMessage 本地 unshift 语义）
@@ -8,16 +8,12 @@ import Foundation
 /// - 远端 sysMsg 4：GiftEffectSysMsgRouter 消费 liveCallGift payload 时同步追加礼物 cell
 /// - 远端 sysMsg 90：appendWaitBonus 时可选追加充值奖励 cell（可选路径）
 ///
-/// **视觉变体**（CallMessageScroller.messageCell 消费）：
-/// | 变体          | 触发字段                                | 样式               |
-/// |---|---|---|
-/// | default text  | payload=.text + sender 无标记            | 无背景，昵称品牌绿 + 内容白色 |
-/// | Lv 徽章       | payload=.text + sender.level != nil       | 浅紫半透明背景 + 星级徽章 |
-/// | SS special    | payload=.text + sender.isSpecial=true    | 深紫渐变背景 + 亮粉昵称 |
-/// | VIP 花式      | payload=.text + sender.isVip=true         | 金色 VIP 徽章 + Lv 徽章可同存 |
-/// | gift          | payload=.gift                             | 礼物图 46pt + `x N` 数字 |
+/// **H5 视觉变体**：
+/// - default text：黑色 50% 圆角气泡，远端原文与翻译分两行
+/// - custom text：`chatBubble` 九宫格背景，仅显示译文（无译文时显示原文）
+/// - gift：46pt 礼物图与数量
 ///
-/// 消息模型不感知渲染细节；`Sender` 的字段是否存在决定 UI 变体分支。
+/// `Sender` 保留通话信令元信息，但通话公屏只消费 `isSelf` 与 `chatBubble`。
 struct CallChatMessage: Identifiable, Equatable {
     let id: UUID
     let timestamp: Date
@@ -25,20 +21,19 @@ struct CallChatMessage: Identifiable, Equatable {
     let payload: Payload
 
     struct Sender: Equatable {
-        /// 昵称——展示头显示（"Rola:" 前缀）；空则用 L10n.callSignalLabelUser 兜底。
+        /// 发送方昵称（用于通话外消息链路；通话公屏显示本端/远端语义标签）。
         var nickname: String
-        /// 主播 / 用户等级；有值 → 渲染 Lv.N 星级徽章 + 浅紫半透明背景。
+        /// 发送方等级（通话消息协议透传字段，当前 H5 通话公屏不展示）。
         var level: Int?
-        /// VIP 用户 → 渲染金色 VIP 徽章。
+        /// VIP 标记（通话消息协议透传字段，当前 H5 通话公屏不展示）。
         var isVip: Bool = false
-        /// levelName == "SS" 等最高档 → 渲染深紫渐变特殊气泡(Angelica 样式)。
+        /// 特殊等级标记（通话消息协议透传字段，当前 H5 通话公屏不展示）。
         var isSpecial: Bool = false
-        /// VIP 用户特有的自定义气泡边框图 URL(H5 `chatBubble` 字段)。
-        /// 当前 iOS 未渲染 border-image(Wave 6 backlog),保留字段供未来接入。
+        /// 发送方透传的九宫格气泡 URL（H5 `chatBubble`）。
         var chatBubble: String?
-        /// 昵称色(H5 `user === 'her'` → 橙色,其他 → 绿色)。默认 nil → UI 层按 sender kind 派色。
+        /// 历史字段；通话公屏颜色改由 `isSelf` 派生，保持与 H5 `user === 'her'` 一致。
         var nicknameColor: NicknameColor = .default
-        /// 是否本机主播发的消息(对齐 H5 `isSelf`)。true 时 UI 层不显示翻译图标——只翻译对方消息。
+        /// 是否本机主播发的消息（对齐 H5 `user === 'my'`）。
         var isSelf: Bool = false
 
         enum NicknameColor: Equatable {

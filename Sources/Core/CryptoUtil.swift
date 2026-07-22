@@ -80,13 +80,13 @@ enum CryptoUtil {
     //
     // ⚠️ 与主接口的 CBC+Base64 完全是两套不同的 AES：
     //   H5 src/utils/index.js:361 encryptAes(data):
-    //     key='9976kk4322578894'（不是主接口的 9986…）
+    //     key 由 HILY_WS_AES_KEY 注入（不是主接口的 CBC key）
     //     mode=ECB（不是 CBC，故无 IV）
     //     输出 encrypted.ciphertext.toString() = 小写 Hex（不是 Base64）
     // 注：H5 那里写了 `iv: srcs` 看似传了 IV，但 CryptoJS ECB 模式会**忽略**该参数，实际行为等价于
     // "无 IV"。本端 CCCrypt 传 nil IV 与 H5 ECB 实际行为完全等价。
     // 接入点：仅 WSHeartbeat 握手时的 ciphertext query 参数用。
-    // 密钥由 xcconfig 注入到 Info.plist，AppConfig.wsAesKey 兜底回 dev 默认值。
+    // 密钥由 xcconfig 注入到 Info.plist；缺失配置时 AppConfig 会 fail-fast。
 
     static func aesEncryptECBToHex(_ plain: String, key: String = AppConfig.wsAesKey) -> String? {
         guard let input = plain.data(using: .utf8) else { return nil }

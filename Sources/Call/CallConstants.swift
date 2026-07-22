@@ -73,9 +73,8 @@ enum CallOverReason: Int {
 
 // MARK: - NIM 辅助信令 attachType=-3 子类型（H5 CALL_NIM_TYPE_NUMBER，注意是字符串）
 //
-// 与 RTM 信令并行的兜底通道。H5 message.js -3 实际只处理 0/1/2/3 四类，
-// 主叫 createCall 后立刻给被叫 P2P 发 CONNECTED 是另一个时机的用法（对端 IM 在线探测）。
-// C 范围仅做 RTM happy path，NIM 通道留位但暂不挂入收发逻辑（避免双通道竞态调试）。
+// 与 RTM 信令并行的兜底通道。H5 message.js 消费 0/1/2/3，useCallApi 接通后还会发送 4。
+// RTM 是状态机真值；NIM 仅作弱网辅助通知，不能直接驱动状态迁移，避免双通道重复收尾。
 enum CallNimType: String {
     case online    = "0"   // 对端 IM 在线探测
     case reject    = "1"   // 远端拒绝（被叫→主叫）
@@ -84,15 +83,16 @@ enum CallNimType: String {
     case connected = "4"   // 远端已接通
 }
 
-// MARK: - 通话来源（H5 CALL_FRONT_GAME_TYPE_NUMBER 4 类）
+// MARK: - 通话来源（H5 CALL_FRONT_GAME_TYPE_NUMBER + 安卓 callerType 5 类）
 //
-// C 里程碑仅实现 .direct 分支；其余三类（match/live/bot）枚举位预留，
-// 让 D（直播转私 call）/F（PartyCall 抢占）/J（机器人）阶段无需改 CallStore 签名。
+// C 里程碑起做 .direct；D 补 .live；F 补 .party（安卓 callerType==5）。
+// .match / .bot 枚举位预留。
 enum CallFrontGameType: Int {
     case direct = 1   // 直接拨打
-    case match  = 2   // 视频匹配（C 不做）
-    case live   = 3   // 直播间私 call（D 里程碑）
-    case bot    = 4   // 机器人通话（J 里程碑）
+    case match  = 2   // 视频匹配
+    case live   = 3   // 直播间私 call（D）
+    case bot    = 4   // 机器人通话（J）
+    case party  = 5   // 派对房私 call（F · 对齐安卓 callerType==5）
 }
 
 // MARK: - callRate 接通率四节点（POST /callRate body）
@@ -119,6 +119,8 @@ enum CallRateUserType: Int {
 enum CallTuning {
     /// 主叫拨出超时 30s（与 H5 callTimeOutNum 一致）
     static let callOutTimeoutSeconds: TimeInterval = 30
+    /// 被叫待接听超时 30s（与 H5 g-waitingCall 的 overtime 一致）
+    static let callInTimeoutSeconds: TimeInterval = 30
     /// joinCall 拉对方资料 3s 超时（H5 useCallApi.joinCallGetUserInfo Promise.race）
     static let joinCallTimeoutSeconds: TimeInterval = 3
     /// RTM 快速重试梯度（秒），累计 7s 覆盖瞬时抖动

@@ -16,7 +16,7 @@ protocol MatchServiceProtocol {
     /// `POST /api/match/pool/open` —— 开/关匹配池。
     /// - parameter status: 1=开启 / 0=关闭
     /// - parameter faceCheckStatus: 人脸检测失败时上报 1；MVP 阶段人脸抽检未做，恒 nil
-    /// - returns: true=后端接受（返 1）；false=后端拒绝或异常
+    /// - returns: true=请求成功；业务码失败或网络异常会抛错
     func toggleMatch(status: Int, faceCheckStatus: Int?) async throws -> Bool
 
     /// `POST /api/anchor/getMatchPoolData` —— Match tab 首屏数据（跑马灯 + 用户列表）。
@@ -58,9 +58,11 @@ final class MatchService: MatchServiceProtocol {
         var body: [String: Any] = ["status": status]
         if let fs = faceCheckStatus { body["faceCheckStatus"] = fs }
         let data = try await APIClient.shared.post("/api/match/pool/open", body: body)
+        // APIClient 已验证 envelope `code == "0000"`；该接口在真实环境成功时返回加密后的
+        // `0`，不是 isOpen 接口使用的 1/2/3 状态码。不能将它再误判为开关失败。
         let value = Self.decodeInt(from: data)
-        logger.info("toggleMatch status=\(status) fs=\(faceCheckStatus ?? -1) result=\(value)")
-        return value == 1
+        logger.info("toggleMatch status=\(status) fs=\(faceCheckStatus ?? -1) result=\(value) accepted=true")
+        return true
     }
 
     func loadMatchPoolData() async throws -> MatchPoolData {

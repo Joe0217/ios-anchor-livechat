@@ -5,22 +5,11 @@ import Foundation
 /// channelId / rtcToken / uid 全部由后端 `/api/index/getAgoraRtmToken`、`/api/live/beginLiveRoom` 动态下发，
 /// 原 POC 长期常量已删除。
 ///
-/// 走 AppConfig.plistString 同款守卫（DEBUG fallback / Release fatalError），
-/// 避免 prod 漏配 HILY_AGORA_APP_ID 时悄悄落回 dev AppID 误连 dev 声网项目。
-///
-/// **Release binary 隔离**：`DevDefaults` `#if DEBUG/#else` 切换，Release 编译时 dev AppID
-/// 字面量不参与编译，防 `strings IPA` 提取（与 AppConfig.DevDefaults 同款机制）。
+/// 走 AppConfig.plistString 守卫。任何构建漏配 HILY_AGORA_APP_ID 都会直接失败，
+/// 避免源码 fallback 让应用误连错误的声网项目。
 enum AgoraConfig {
-    /// 声网 AppID（dev 默认；prod 通过 xcconfig 覆盖）
+    /// 声网 AppID（由 xcconfig 注入）
     static var appId: String {
-        AppConfig.plistString("HilyAgoraAppID", fallback: DevDefaults.appId)
-    }
-
-    private enum DevDefaults {
-        #if DEBUG
-        static let appId = "4af61c7a92f447d3a582308b5817dbd2"
-        #else
-        static let appId = ""
-        #endif
+        AppConfig.plistString("HilyAgoraAppID")
     }
 }

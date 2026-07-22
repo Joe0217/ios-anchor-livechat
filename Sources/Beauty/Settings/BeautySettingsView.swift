@@ -39,6 +39,10 @@ struct BeautySettingsView: View {
     @State private var showExitConfirm: Bool = false
     /// Save 按钮写盘失败时的 error alert 展示态（防 silent data loss，对齐 error-handling.md）
     @State private var showSaveError: Bool = false
+    /// 只有拿到相机授权后才创建预览并开放美颜参数操作。
+    @State private var isCameraAuthorized: Bool = false
+    /// 系统授权弹窗异步返回时，页面可能已经被 pop；必须在真离页时取消，避免重新启动相机。
+    @State private var authorizationTask: Task<Void, Never>?
 
     enum Tab: Int, Hashable, CaseIterable {
         case skin = 0, shape, filter, sticker
@@ -66,42 +70,63 @@ struct BeautySettingsView: View {
 
     var body: some View {
         ZStack {
-            // 全屏预览
-            BeautyPreviewPanel(camera: camera, sharer: sharer)
-                .ignoresSafeArea()
+            if isCameraAuthorized {
+                // 全屏预览
+                BeautyPreviewPanel(camera: camera, sharer: sharer)
+                    .ignoresSafeArea()
 
-            // 顶部悬浮：X + Save
-            VStack {
-                topBar
+                // 顶部悬浮：X + Save
+                VStack {
+                    topBar
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                    Spacer()
+                }
+
+                // 底部 sheet
+                VStack(spacing: 0) {
+                    Spacer()
+                    toggleAndSlider
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 10)
+                    sheetContent
+                }
+            } else {
+                // 授权弹窗返回前仍提供退出路径；拒绝后会自动返回上一页再展示权限提示。
+                VStack {
+                    HStack {
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .frame(width: 32, height: 32)
+                                .background(Color.black.opacity(0.4), in: Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(L10n.commonBack)
+
+                        Spacer()
+                    }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
-                Spacer()
-            }
 
-            // 底部 sheet
-            VStack(spacing: 0) {
-                Spacer()
-                toggleAndSlider
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 10)
-                sheetContent
+                    Spacer()
+                }
             }
         }
         .navigationBarHidden(true)
         .background(Color.black.ignoresSafeArea())
         .onAppear {
-            camera.start()
-            sharer.attach(camera.renderer as AnyObject & BeautyRenderer, token: .preview)
-            if camera.isBeautyFallback {
-                sharer.reportSetupResult(.failure(.genericSetupFailed))
-            } else {
-                sharer.reportSetupResult(.success(()))
-            }
-            camera.renderer.apply(store.settings)  // 首帧一致
+            requestCameraPermission()
         }
         .onDisappear {
             // v5.3.3 双守卫：切后台 SwiftUI 也会调 onDisappear（snapshot 用），仅在真 dismount 时清理
             guard scenePhase != .background else { return }
+            authorizationTask?.cancel()
+            authorizationTask = nil
+            guard isCameraAuthorized else { return }
             // 保存语义：真 dismount 时兜底 revert 未保存修改（若用户绕过 X 按钮走系统 back gesture / 上级 pop）
             store.revert()
             sharer.detach(camera.renderer as AnyObject & BeautyRenderer)
@@ -112,7 +137,9 @@ struct BeautySettingsView: View {
             store.objectWillChange
                 .throttle(for: 0.06, scheduler: DispatchQueue.main, latest: true)
         ) { _ in
-            camera.renderer.apply(store.settings)
+            if isCameraAuthorized {
+                camera.renderer.apply(store.settings)
+            }
         }
         // 需求 2: Recover 二次确认弹窗
         .alert(
@@ -154,6 +181,28 @@ struct BeautySettingsView: View {
             if let error = store.lastPersistenceError {
                 Text(String(describing: error))
             }
+        }
+    }
+
+    private func requestCameraPermission() {
+        authorizationTask?.cancel()
+        authorizationTask = Task { @MainActor in
+            guard await MediaPermissionGate.requestAccess(for: .camera) else {
+                guard !Task.isCancelled else { return }
+                dismiss()
+                MediaPermissionAlertCenter.shared.presentAfterCurrentPageDismissal(for: .camera)
+                return
+            }
+            guard !Task.isCancelled else { return }
+            isCameraAuthorized = true
+            camera.start()
+            sharer.attach(camera.renderer as AnyObject & BeautyRenderer, token: .preview)
+            if camera.isBeautyFallback {
+                sharer.reportSetupResult(.failure(.genericSetupFailed))
+            } else {
+                sharer.reportSetupResult(.success(()))
+            }
+            camera.renderer.apply(store.settings)  // 首帧一致
         }
     }
 

@@ -88,6 +88,33 @@ enum CallService {
     /// POST /api/chat/callRate —— 接听率统计上报。answered/rejected/timeout/canceled 各调一次。
     /// 本端为主播，userType 默认 .anchor；callType（主/被叫）由调用方传。
     /// C 范围只保留调用入口，业务层是否真发由 CallStore 控制（默认不发，留给 implement 阶段补开关）。
+    // MARK: - 查询来电类型（F 期新增，用于 PartyCall 抢占判定）
+
+    /// POST /api/call/record/v2/queryCall —— F 期收到 RTM VideoCall 后查询 `callerType`。
+    ///
+    /// 用途：CallStore.handleIncomingVideoCall 派对分支入口调用，判定是否为 PartyCall（`callerType == 5`）。
+    /// 超时 6s 视为非 PartyCall，一律 reject（spec §7 B19 保守策略，避免走 direct 误路径与 sharedEngine 打架）。
+    ///
+    /// **⚠️ 真机 log 校准（2026-07-15）**：后端 body 必需字段是 `searchValue`（对齐 `joinCall` 同款），
+    /// 不是预估的 `fromUserId+channelId`；错传会返 `code=1001 "searchValue must not be null"`。
+    /// **⚠️ response 字段真实性待 Step 3 真机 log 校准**（agent-recon-field-names-unverified rule）。
+    static func queryCall(fromUserId: Int, channelId: String) async throws -> QueryCallResponse {
+        // fromUserId 参数保留供未来扩展；当前 body 仅需 searchValue=channelId（对齐 joinCall）
+        _ = fromUserId
+        let body: [String: Any] = [
+            "searchValue": channelId,
+        ]
+        return try await withTimeout(seconds: 6) {
+            let data = try await APIClient.shared.post("/api/call/record/v2/queryCall", body: body)
+            return try JSONDecoder().decode(QueryCallResponse.self, from: data)
+        }
+    }
+
+    // MARK: - 接通率上报（四节点）
+
+    /// POST /api/chat/callRate —— 接听率统计上报。answered/rejected/timeout/canceled 各调一次。
+    /// 本端为主播，userType 默认 .anchor；callType（主/被叫）由调用方传。
+    /// C 范围只保留调用入口，业务层是否真发由 CallStore 控制（默认不发，留给 implement 阶段补开关）。
     static func callRate(channelId: String,
                          callType: CallRateType,
                          category: CallRateCategory,

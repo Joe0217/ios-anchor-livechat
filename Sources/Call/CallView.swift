@@ -104,53 +104,96 @@ private struct CallWaitingView: View {
     @ObservedObject var store: CallStore
 
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
+        GeometryReader { proxy in
+            ZStack {
+                waitingBackground(size: proxy.size)
 
-            // 对方头像 / 名字
-            RemoteAvatar(icon: store.current.remoteIcon,
-                         nickname: store.current.remoteNickname,
-                         headFrame: store.current.remoteHeadFrame,
-                         userId: store.current.remoteUserIdString)
-
-            Text(store.current.remoteNickname.isEmpty ? store.current.remoteUserIdString : store.current.remoteNickname)
-                .font(.title2).foregroundStyle(.white)
-
-            Text(subtitle).font(.subheadline).foregroundStyle(.white.opacity(0.75))
-
-            // 圆环倒计时（主叫 30s）：elapsed 走 CallStore.callElapsed（统一收敛，避免 view 内 Timer.publish 后台 backlog）
-            if store.current.inOrOut == .out {
-                CountdownRing(elapsed: store.callElapsed, total: Int(CallTuning.callOutTimeoutSeconds))
-                    .frame(width: 80, height: 80)
-                    .padding(.top, 8)
+                VStack(spacing: 0) {
+                    header
+                    Spacer()
+                    buttons
+                        .padding(.bottom, bottomPadding(for: proxy.safeAreaInsets.bottom))
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, topPadding(for: proxy.safeAreaInsets.top))
+                .frame(width: proxy.size.width, height: proxy.size.height)
             }
-
-            Spacer()
-
-            buttons.padding(.bottom, 40)
+            .frame(width: proxy.size.width, height: proxy.size.height)
+            .clipped()
         }
-        .padding()
+        .ignoresSafeArea()
     }
 
-    private var subtitle: String {
-        store.current.inOrOut == .out ? L10n.callSubtitleCallingOut : L10n.callSubtitleIncoming
+    private var header: some View {
+        HStack(spacing: 10) {
+            AvatarView(urlString: store.current.remoteIcon,
+                       size: 48,
+                       kind: .user,
+                       headwearURL: store.current.remoteHeadFrame,
+                       headwearRatio: 1.35,
+                       persistent: false,
+                       disablesTap: true)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(store.current.remoteNickname.isEmpty ? store.current.remoteUserIdString : store.current.remoteNickname)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Text(L10n.callWaitingForAnswer)
+                    .font(.system(size: 16))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            WaitingCallCountdownRing(elapsed: store.callElapsed,
+                                     total: Int(CallTuning.callInTimeoutSeconds))
+                .frame(width: 46, height: 46)
+                .accessibilityLabel("\(store.callElapsed) / \(Int(CallTuning.callInTimeoutSeconds))")
+        }
+        .frame(height: 86)
     }
 
     @ViewBuilder private var buttons: some View {
         if store.current.inOrOut == .out {
-            CircleButton(systemName: "phone.down.fill", color: .red, label: L10n.callActionCancel) {
+            WaitingCallActionButton(systemName: "phone.down.fill", color: Color(red: 252 / 255, green: 74 / 255, blue: 70 / 255), label: L10n.callActionCancel) {
                 Task { await store.cancel() }
             }
         } else {
-            HStack(spacing: 60) {
-                CircleButton(systemName: "phone.down.fill", color: .red, label: L10n.callActionReject) {
+            HStack(spacing: 100) {
+                WaitingCallActionButton(systemName: "phone.down.fill", color: Color(red: 252 / 255, green: 74 / 255, blue: 70 / 255), label: L10n.callActionReject) {
                     Task { await store.reject() }
                 }
-                CircleButton(systemName: "phone.fill", color: .green, label: L10n.callActionAccept) {
+                WaitingCallActionButton(systemName: "phone.fill", color: Color(red: 0, green: 213 / 255, blue: 146 / 255), label: L10n.callActionAccept) {
                     Task { await store.accept() }
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func waitingBackground(size: CGSize) -> some View {
+        if let url = URL(string: store.current.remoteIcon), !store.current.remoteIcon.isEmpty {
+            CachedAsyncImage(url: url, contentMode: .fill, persistent: false) {
+                Image("defaultAvatar").resizable().scaledToFill()
+            }
+            .frame(width: size.width, height: size.height)
+            .clipped()
+        } else {
+            Image("defaultAvatar")
+                .resizable()
+                .scaledToFill()
+                .frame(width: size.width, height: size.height)
+                .clipped()
+        }
+    }
+
+    private func topPadding(for safeAreaTop: CGFloat) -> CGFloat {
+        max(20, safeAreaTop + 8)
+    }
+
+    private func bottomPadding(for safeAreaBottom: CGFloat) -> CGFloat {
+        max(60, safeAreaBottom + 24)
     }
 }
 
@@ -178,7 +221,7 @@ private struct CallFaceTimeView: View {
     @State private var isChromeVisible: Bool = true
     /// C-4 Wave1 gap-018：顶部 X 按钮触发的挂断二次确认 confirmationDialog
     @State private var showHangupConfirm: Bool = false
-    /// C-4 Wave4 gap-004/005 占位：底部 askForGift / more 按钮点击后 2s 自消的 Coming Soon toast
+    /// 索要礼物请求失败时的反馈 toast。
     @State private var showComingSoonToast: String?
     /// v22（2026-07-10）：askForGift 被拒 toast 显隐（token 变化 → task 触发 2s 展示）
     @State private var askForGiftRejectedVisible: Bool = false
@@ -191,8 +234,10 @@ private struct CallFaceTimeView: View {
     /// RemoteVideoView / CameraPreview 声明位置不变（view identity 稳定，避免 dismantle）。
     /// 参考 rule swiftui-camera-preview.md §2 —— frame 变化触发 updateUIView 而非 dismantleUIView。
     @State private var isLocalMain: Bool = false
-    /// Phase C：主播公屏输入框（对齐 H5 sendMessage `showInput` 展开）
+    /// H5 `showInput`：点击聊天按钮后原位替换底部工具栏。
     @State private var showChatInput: Bool = false
+    @State private var chatInputText: String = ""
+    @FocusState private var isChatInputFocused: Bool
     /// Phase D：礼物 picker sheet
     @State private var showGiftPicker: Bool = false
     /// Phase D：askForGift 15s 冷却剩余秒数（>0 时按钮 disabled + 显示倒计时；对齐 H5 disableCountdown）
@@ -211,10 +256,8 @@ private struct CallFaceTimeView: View {
             RemoteVideoView(manager: store.agora)
                 .modifier(VideoLayoutModifier(isMain: !isLocalMain,
                                               pipOffset: pipTotalOffset,
-                                              pipTopExtra: pipTopExtraForCurrentScene))
-                // contentShape 已在 modifier 内 apply（锁定在 PIP 内容 frame），不要在外层再挂
-                // Rectangle 覆盖 —— 否则外层全屏 frame 的 hit shape 会让 tap main 区域也命中 PIP。
-                .onTapGesture(perform: handleRemoteTap)
+                                              pipTopExtra: pipTopExtraForCurrentScene,
+                                              onTap: handleRemoteTap))
                 .zIndex(isLocalMain ? 1 : 0)
                 // v22（2026-07-10）：PIP 状态（isLocalMain=true 时远端是 PIP）跟随 isChromeVisible 隐藏
                 .opacity((!isLocalMain || isChromeVisible) ? 1 : 0)
@@ -249,7 +292,11 @@ private struct CallFaceTimeView: View {
                 }
                 topBar.padding(.top, 12).padding(.horizontal, 16)
                 Spacer()
-                bottomBar.padding(.bottom, 12)
+                if showChatInput {
+                    callChatInputBar
+                } else {
+                    bottomBar.padding(.bottom, 12)
+                }
             }
             .opacity(isChromeVisible ? 1 : 0)
             .animation(.easeInOut(duration: 0.2), value: isChromeVisible)
@@ -263,11 +310,12 @@ private struct CallFaceTimeView: View {
                 .overlay(cameraPreviewLockOverlay)
                 .modifier(VideoLayoutModifier(isMain: isLocalMain,
                                               pipOffset: pipTotalOffset,
-                                              pipTopExtra: pipTopExtraForCurrentScene))
-                // contentShape 由 modifier 内 apply —— tap 只在 PIP 内容区（110×160）命中，main 时命中全屏
-                .onTapGesture(perform: handleLocalTap)
+                                              pipTopExtra: pipTopExtraForCurrentScene,
+                                              onTap: handleLocalTap))
                 .gesture(pipDragGesture)
-                .zIndex(isLocalMain ? 0 : 1)
+                // 本地成为主窗时置于 chrome 后方；否则会因其声明在 chrome 之后而覆盖顶部信息、消息和底部操作。
+                // 本地作为 PIP 时仍维持最高视频层级，确保小窗可见且可拖动。
+                .zIndex(isLocalMain ? -1 : 1)
                 .animation(.easeInOut(duration: 0.25), value: isLocalMain)
                 .animation(.easeInOut(duration: 0.2), value: store.isCallWaitLocked)
                 .animation(.interactiveSpring(response: 0.3, dampingFraction: 0.75), value: pipDragOffset)
@@ -293,19 +341,16 @@ private struct CallFaceTimeView: View {
                 .allowsHitTesting(false)
             }
 
-            // C-4 Wave4 gap-002 P0：公屏消息 MessageScroller 骨架（左侧下方 300×270 反向滚动，对齐 H5 g-faceTime index.vue:30-33）
-            // 消费 store.callRecentRemoteText（当前只有单条 4s 自消，未来 Wave 6 接 NIM 通话通道扩展为历史队列）
-            // v22（2026-07-10）：公屏跟随 isChromeVisible 一起显隐（对齐 H5 switchShowAll 语义）
+            // H5 g-faceTime：左侧 270×300 可滚动公屏，随 chrome 一起显隐。
             CallMessageScroller(store: store)
                 .frame(width: 270, height: 300)
                 .padding(.leading, 12)
                 .padding(.bottom, 128)  // 让位底部 bottomBar
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                .allowsHitTesting(false)
                 .opacity(isChromeVisible ? 1 : 0)
                 .animation(.easeInOut(duration: 0.2), value: isChromeVisible)
 
-            // C-4 Wave4 Coming Soon toast（askForGift / more 占位按钮点击时显示 2s）
+            // 索要礼物请求失败反馈。
             if let toastText = showComingSoonToast {
                 Text(toastText)
                     .font(.subheadline).bold()
@@ -403,23 +448,13 @@ private struct CallFaceTimeView: View {
         } message: { reason in
             Text(reasonMessage(for: reason))
         }
-        // Phase C: chat 输入框 sheet
-        .sheet(isPresented: $showChatInput) { chatInputSheet.giftPanelSheetBackground() }
         // Phase D: gift picker sheet（CommonGiftPanel 内部已铺渐变，无需 modifier）
         .sheet(isPresented: $showGiftPicker) { giftPickerSheet }
         // Phase E: report sheet
         .sheet(isPresented: $showReportSheet) { reportSheet.giftPanelSheetBackground() }
     }
 
-    // MARK: - Phase C/D/E · 3 sheet content（@ViewBuilder 抽出减 body 类型推导复杂度）
-
-    @ViewBuilder
-    private var chatInputSheet: some View {
-        CallChatInputSheet(store: store)
-            .presentationDetents([.height(50)])
-            .presentationDragIndicator(.visible)
-            .preferredColorScheme(.dark)
-    }
+    // MARK: - Phase D/E · sheet content（@ViewBuilder 抽出减 body 类型推导复杂度）
 
     @ViewBuilder
     private var giftPickerSheet: some View {
@@ -458,7 +493,7 @@ private struct CallFaceTimeView: View {
                 askGiftDisableCountdown = max(0, askGiftDisableCountdown - 1)
             }
         }
-        // 调 API（fire-and-forget，Wave 6 backlog 加失败 toast）
+        // 调 API；失败时保留冷却，防止连续点击造成重复请求，并向主播明确反馈。
         let peer = store.current.remoteYxAccid
         let giftId = gift.id
         Task {
@@ -466,6 +501,9 @@ private struct CallFaceTimeView: View {
                 try await GiftService.askFor(beAskYxAccid: peer, giftId: giftId)
             } catch {
                 AppLogger.call.error("[Call] askFor FAIL giftId=\(giftId, privacy: .public) err=\(error.localizedDescription, privacy: .public)")
+                await MainActor.run {
+                    showComingSoonToast = error.localizedDescription
+                }
             }
         }
     }
@@ -592,17 +630,18 @@ private struct CallFaceTimeView: View {
         .background(.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    /// SS 徽章 + 国旗 emoji + 国家码（缺字段时自动降级）
-    // TODO(H/I 里程碑)：SS 徽章目前是占位——后端 CreateCallResult/JoinCallResult 已有 `levelName`
-    // 字段 (CallModels.swift:142/163)，未来按 levelName 分档切图，当前仅视觉对齐设计稿。
+    /// SS 徽章 + 国旗 emoji + 国家码（缺字段时自动降级）。
+    /// `levelName` 由 createCall / joinCall 注入 `CurrentCallInfo`，仅 SS 主播展示徽章。
     @ViewBuilder
     private var anchorBadgesRow: some View {
         HStack(spacing: 4) {
-            Image("CallAnchorBadgeSS")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 18, height: 18)
-                .accessibilityHidden(true)
+            if store.current.remoteLevelName.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == "SS" {
+                Image("CallAnchorBadgeSS")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 18, height: 18)
+                    .accessibilityLabel("SS")
+            }
             // 严格 ISO 2 字节 code 才展示徽章行（flagEmoji 对非法输入回退 "🌐"；用 count==2 守卫避免
             // "🌐 USA" 类退化视觉。H5 主播端契约后端总是 2 字节 ISO）
             let code = store.current.remoteCountryCode.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -735,8 +774,7 @@ private struct CallFaceTimeView: View {
 
     private var bottomBar: some View {
         // 设计稿 通话设计稿.png 底部布局（非均匀分布）：chat 靠左边缘，gift+more 组靠右边缘
-        // Phase C/D/E 完整接后端：
-        // - chat → showChatInput sheet → CallStore.sendCallText（P2P 自定义消息 attachType=-1）
+        // H5 g-faceTime：chat 点击后原位展开输入栏；礼物/反馈各自保持原入口。
         // - gift → showGiftPicker → CommonGiftPanel.callAskFor → GiftService.askFor + 15s 冷却
         // - more → showReportSheet → ReportUserSheet（复用 H-0 已有组件，H5 c-feedbackPopup 对齐）
         HStack(spacing: 0) {
@@ -744,6 +782,7 @@ private struct CallFaceTimeView: View {
                                   label: L10n.callActionChatInput,
                                   size: 56) {
                 showChatInput = true
+                DispatchQueue.main.async { isChatInputFocused = true }
             }
             Spacer(minLength: 24)
             HStack(spacing: 26) {
@@ -758,6 +797,46 @@ private struct CallFaceTimeView: View {
         }
         .padding(.horizontal, 24)
         .frame(maxWidth: .infinity)
+    }
+
+    /// H5 `input-bar`：原位覆盖底部工具栏，单行 200 字符，回车发送，失焦 300ms 后收起。
+    private var callChatInputBar: some View {
+        TextField(L10n.callChatInputPlaceholder, text: $chatInputText)
+            .textFieldStyle(.plain)
+            .font(.system(size: 14))
+            .foregroundStyle(.black)
+            .submitLabel(.send)
+            .focused($isChatInputFocused)
+            .onSubmit(sendChatInput)
+            .onChange(of: chatInputText) { text in
+                if text.count > 200 {
+                    chatInputText = String(text.prefix(200))
+                }
+            }
+            .onChange(of: isChatInputFocused) { focused in
+                guard !focused else { return }
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 300_000_000)
+                    guard !isChatInputFocused else { return }
+                    showChatInput = false
+                }
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 32)
+            .background(.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 12)
+            .background(Color(red: 243 / 255, green: 244 / 255, blue: 250 / 255))
+            .onAppear { isChatInputFocused = true }
+    }
+
+    private func sendChatInput() {
+        let text = chatInputText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        store.sendCallText(text)
+        chatInputText = ""
+        isChatInputFocused = false
+        showChatInput = false
     }
 
     /// 礼物按钮：15s 冷却期间 disabled + 显示倒计时角标
@@ -929,6 +1008,8 @@ private struct VideoLayoutModifier: ViewModifier {
     let pipOffset: CGSize
     /// 场景相关额外 top 偏移（直播私 call 顶部有 liveCallBanner 挤压空间，传 50 避免与 topBar 重叠）
     var pipTopExtra: CGFloat = 0
+    /// 手势必须挂在内容 frame 内，不能挂在末尾的全屏对齐容器上；否则点击 PIP 会同时命中主画面，触发清屏。
+    let onTap: () -> Void
 
     private let pipWidth: CGFloat = 110
     private let pipHeight: CGFloat = 160
@@ -952,6 +1033,7 @@ private struct VideoLayoutModifier: ViewModifier {
             // 若把 contentShape 放在最外层 `.frame(maxWidth: .infinity)` 之后，会让 hit shape 扩大到全屏 →
             // 用户 tap main 区域也会命中 PIP view 触发 swap（bug）。
             .contentShape(RoundedRectangle(cornerRadius: isMain ? 0 : pipCornerRadius, style: .continuous))
+            .onTapGesture(perform: onTap)
             .padding(.trailing, isMain ? 0 : pipTrailing)
             .padding(.top, isMain ? 0 : pipTop)
             .offset(x: isMain ? 0 : pipOffset.width,
@@ -999,6 +1081,51 @@ private struct CountdownRing: View {
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white)
         }
+    }
+}
+
+/// H5 g-waitingCall 的 46pt 正计时圆环：0→30，显示已等待秒数而不是剩余秒数。
+private struct WaitingCallCountdownRing: View {
+    let elapsed: Int
+    let total: Int
+
+    var body: some View {
+        let progress = total > 0 ? min(Double(elapsed) / Double(total), 1) : 0
+        ZStack {
+            Circle().stroke(.white.opacity(0.28), lineWidth: 3)
+            Circle()
+                .trim(from: 0, to: progress)
+                .stroke(Color(red: 25 / 255, green: 137 / 255, blue: 250 / 255), style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .animation(.linear(duration: 1), value: elapsed)
+            Text("\(min(elapsed, total))")
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(.white)
+        }
+    }
+}
+
+/// H5 待接听页的纯圆形操作键；视觉不带文字，保留 VoiceOver 标签。
+private struct WaitingCallActionButton: View {
+    let systemName: String
+    let color: Color
+    let label: String
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            CallHaptics.impact(.medium)
+            action()
+        } label: {
+            Image(systemName: systemName)
+                .font(.system(size: 27, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 60, height: 60)
+                .background(color, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -1390,35 +1517,25 @@ private struct CongratsBonusSheet: View {
     }
 }
 
-// MARK: - 公屏消息 MessageScroller（对齐 H5 messageScroller.vue + 通话设计稿.png 5 变体）
+// MARK: - 通话公屏（对齐 H5 g-faceTime/messageScroller.vue）
 
-/// 通话内公屏消息滚动区域。数据源 `CallStore.callChatMessages`（历史队列，上限 50）。
-///
-/// **5 视觉变体**（sender 字段决定分支）：
-/// 1. `default text` — 无背景，昵称品牌绿 + 内容白色
-/// 2. `Lv text` — 浅紫半透明背景 + Lv.N 星级徽章 + 昵称绿 + 内容白色
-/// 3. `SS special` — 深紫渐变背景 + SS 徽章 + 亮粉昵称 + 内容白色
-/// 4. `VIP fancy` — Lv徽章 + 金色 VIP 徽章 + 昵称绿 + 内容白色
-/// 5. `gift` — 无背景，昵称绿 + 礼物图 40pt + `x N` 数字
-///
-/// 翻译行（可选）：`content.translation != nil` → 消息下方追加 A 头像 icon + 灰色翻译文字。
+/// H5 仅有三种消息呈现：默认文字、穿戴 chatBubble 的文字、礼物图片和数量。
+/// 队列按旧到新保存，列表始终滚至最新一行，视觉等价于 H5 的 `flex-col-reverse + unshift`。
 private struct CallMessageScroller: View {
     @ObservedObject var store: CallStore
-    /// 防重入 map:正在翻译中的 msgId(对齐 PublicChatListView.pendingTranslateIds)
-    @State private var pendingTranslateIds: Set<UUID> = []
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     ForEach(store.callChatMessages) { msg in
                         messageCell(msg)
                             .id(msg.id)
-                            .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
             }
             .onChange(of: store.callChatMessages.count) { _ in
                 if let last = store.callChatMessages.last?.id {
@@ -1428,206 +1545,88 @@ private struct CallMessageScroller: View {
         }
     }
 
-    // MARK: - Cell 分派
-
     @ViewBuilder
     private func messageCell(_ msg: CallChatMessage) -> some View {
         switch msg.payload {
         case let .text(content, translation):
-            textCell(msg: msg, content: content, translation: translation)
+            textCell(sender: msg.sender, content: content, translation: translation)
         case let .gift(imageURL, count):
-            giftCell(sender: msg.sender, imageURL: imageURL, count: count)
+            giftCell(imageURL: imageURL, count: count)
         case let .bonus(amount):
             bonusCell(amount: amount)
         }
     }
 
-    // MARK: - text cell（含 5 变体分支）
-
     @ViewBuilder
-    private func textCell(msg: CallChatMessage,
+    private func textCell(sender: CallChatMessage.Sender,
                           content: String,
                           translation: String?) -> some View {
-        let sender = msg.sender
-        // 翻译图标只对"对方消息 + 未翻译"显示(对齐 H5 messageScroller `!item.isSelf`)
-        // v24（2026-07-13）:改 inline 图标跟随文字末尾(用户反馈)
-        let showTranslateInline = !sender.isSelf && translation == nil && !content.isEmpty
-        // v25:翻译中沙漏(pendingTranslateIds hit)
-        let isTranslating = pendingTranslateIds.contains(msg.id)
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(alignment: .center, spacing: 4) {
-                if let level = sender.level {
-                    UserLevelBadge(level: level, size: .small)
+        let displayText = (translation?.isEmpty == false ? translation : nil) ?? content
+        if let bubble = sender.chatBubble, !bubble.isEmpty, let bubbleURL = URL(string: bubble) {
+            Text("\(senderLabel(sender)): \(displayText)")
+                .font(.system(size: 13))
+                .foregroundStyle(.white)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .fill(.black.opacity(0.5))
+                        NinePatchImageView(url: bubbleURL)
+                    }
                 }
-                if sender.isVip {
-                    VIPBadge(size: .small)
-                }
-                if sender.isSpecial {
-                    Image("CallAnchorBadgeSS")
-                        .resizable().aspectRatio(contentMode: .fit)
-                        .frame(width: 16, height: 16)
-                        .accessibilityHidden(true)
-                }
-                nicknameContentText(nickname: sender.nickname.isEmpty ? L10n.callSignalLabelUser : sender.nickname,
-                                    nicknameColor: resolveNicknameColor(sender.nicknameColor, isSpecial: sender.isSpecial),
-                                    content: content,
-                                    showTranslateInline: showTranslateInline,
-                                    isTranslating: isTranslating)
-            }
-            if let translation, !translation.isEmpty {
-                translationRow(translation: translation,
-                               onDarkBackground: sender.isSpecial)
-            }
-        }
-        .padding(.horizontal, 10).padding(.vertical, 6)
-        .background(textCellBackground(sender: sender))
-        .frame(maxWidth: 270, alignment: .leading)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if showTranslateInline && !isTranslating { handleTapTranslate(msg: msg, text: content) }
-        }
-        .accessibilityAddTraits(showTranslateInline ? .isButton : [])
-    }
-
-    /// tap 翻译处理:防重入 + 调 MicrosoftTranslateService + Store setChatTranslation(对齐 PublicChatListView.handleTapTranslate)
-    private func handleTapTranslate(msg: CallChatMessage, text: String) {
-        guard !pendingTranslateIds.contains(msg.id) else { return }
-        pendingTranslateIds.insert(msg.id)
-        let key = AppConfigStore.shared.microsoftTranslatorKey ?? AppConfigStore.translatorKeyFallback
-        let area = AppConfigStore.shared.microsoftTranslatorArea ?? AppConfigStore.translatorAreaFallback
-        let targetLang: String = {
-            switch AppLocaleStore.shared.current {
-            case .en: return "en"
-            case .ar: return "ar"
-            case .tr: return "tr"
-            case .system: return Locale.current.language.languageCode?.identifier ?? "en"
-            }
-        }()
-        Task { @MainActor in
-            defer { pendingTranslateIds.remove(msg.id) }
-            do {
-                let translated = try await MicrosoftTranslateService.shared.translate(
-                    text: text, targetLang: targetLang, key: key, area: area
-                )
-                store.setChatTranslation(messageId: msg.id, translation: translated)
-            } catch {
-                AppLogger.call.warning("[CallStore] translate failed msgId=\(msg.id.uuidString, privacy: .public)")
-                // 静默失败(对齐 H5 messageScroller + PublicChatListView)
-            }
-        }
-    }
-
-    /// 昵称 + `:  ` + 内容 + (可选)inline 翻译图标(Text 插值嵌套,禁 `+` 拼接对齐 swiftui-body-type-check-timeout.md)
-    /// v24：翻译图标 SF Symbol 作为 attachment 内联在 content 末尾,随 wrap 到最后一行末
-    /// v25：loading 时图标切换为 hourglass + 灰色,tap 期间视觉反馈
-    private func nicknameContentText(nickname: String,
-                                     nicknameColor: Color,
-                                     content: String,
-                                     showTranslateInline: Bool = false,
-                                     isTranslating: Bool = false) -> some View {
-        let nickTx = Text(nickname).foregroundColor(nicknameColor)
-        let bodyTx = Text(":  \(content)").foregroundColor(.white)
-        let iconName = isTranslating ? "hourglass" : "character.book.closed.fill"
-        let iconColor: Color = isTranslating
-            ? Color.white.opacity(0.5)
-            : Color(red: 196/255, green: 155/255, blue: 1.0) // #C49BFF
-        let iconTx = Text(" ") + Text(Image(systemName: iconName))
-            .foregroundColor(iconColor)
-        return Group {
-            if showTranslateInline {
-                Text("\(nickTx)\(bodyTx)\(iconTx)")
-            } else {
-                Text("\(nickTx)\(bodyTx)")
-            }
-        }
-        .font(.system(size: 13, weight: .medium))
-        .lineLimit(3)
-        .multilineTextAlignment(.leading)
-    }
-
-    private func resolveNicknameColor(_ kind: CallChatMessage.Sender.NicknameColor,
-                                      isSpecial: Bool) -> Color {
-        if isSpecial { return Color(red: 1.0, green: 0.10, blue: 0.65) }
-        switch kind {
-        case .default: return Color(red: 0.42, green: 0.87, blue: 0.55)
-        case .her:     return Color(red: 0.93, green: 0.48, blue: 0.31)
-        case .special: return Color(red: 1.0, green: 0.10, blue: 0.65)
-        }
-    }
-
-    /// 消息背景：default 无 / Lv 浅紫 / SS 深紫渐变 / VIP 金框
-    @ViewBuilder
-    private func textCellBackground(sender: CallChatMessage.Sender) -> some View {
-        if sender.isSpecial {
-            // SS 深紫渐变
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(
-                    LinearGradient(colors: [Color(red: 0.36, green: 0.10, blue: 0.44),
-                                            Color(red: 0.58, green: 0.15, blue: 0.55)],
-                                   startPoint: .leading, endPoint: .trailing)
-                )
-        } else if sender.isVip {
-            // VIP 金色描边 + 浅紫底
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(red: 0.36, green: 0.28, blue: 0.48).opacity(0.55))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color(red: 1.0, green: 0.80, blue: 0.30), lineWidth: 1)
-                )
-        } else if sender.level != nil {
-            // Lv 浅紫半透明
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color(red: 0.42, green: 0.34, blue: 0.55).opacity(0.40))
+                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .frame(maxWidth: 270, alignment: .leading)
         } else {
-            Color.clear
+            VStack(alignment: .leading, spacing: 3) {
+                textLine(sender: sender, text: content, color: sender.isSelf ? .white : remoteTextColor)
+                if let translation, !translation.isEmpty {
+                    Divider().overlay(.white.opacity(0.35))
+                    textLine(sender: sender, text: translation, color: remoteTextColor)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .frame(maxWidth: 270, alignment: .leading)
         }
     }
 
-    // MARK: - 翻译行（A 头像 icon + 灰色文字）
-
-    private func translationRow(translation: String, onDarkBackground: Bool) -> some View {
-        HStack(spacing: 5) {
-            AutoTranslateBadge()
-            Text(translation)
-                .font(.system(size: 12))
-                .foregroundColor(onDarkBackground
-                                 ? .white.opacity(0.85)
-                                 : .white.opacity(0.55))
-                .lineLimit(2)
-        }
+    private func textLine(sender: CallChatMessage.Sender, text: String, color: Color) -> some View {
+        Text("\(senderLabel(sender)): \(text)")
+            .font(.system(size: 14))
+            .foregroundStyle(color)
+            .fixedSize(horizontal: false, vertical: true)
+            .multilineTextAlignment(.leading)
     }
 
-    // MARK: - gift cell
+    private func senderLabel(_ sender: CallChatMessage.Sender) -> String {
+        sender.isSelf ? L10n.callSignalLabelYou : L10n.callSignalLabelUser
+    }
 
-    private func giftCell(sender: CallChatMessage.Sender,
-                          imageURL: String,
+    private var remoteTextColor: Color {
+        Color(red: 238 / 255, green: 122 / 255, blue: 80 / 255)
+    }
+
+    private func giftCell(imageURL: String,
                           count: Int) -> some View {
         HStack(alignment: .center, spacing: 6) {
-            let nickname = sender.nickname.isEmpty ? L10n.callSignalLabelUser : sender.nickname
-            let nameColor = resolveNicknameColor(sender.nicknameColor, isSpecial: sender.isSpecial)
-            Text("\(Text(nickname).foregroundColor(nameColor))\(Text(":  ").foregroundColor(.white))")
-                .font(.system(size: 13, weight: .medium))
-            // v22（2026-07-10）：改用 CachedAsyncImage（NSCache + URLCache 双层持久缓存），
-            // 修复 AsyncImage 无强缓存 → 滚动重拉失败导致的礼物图不显示
             CachedAsyncImage(url: URL(string: imageURL), contentMode: .fill) {
                 Image(systemName: "gift.fill")
                     .font(.system(size: 16))
                     .foregroundColor(.white.opacity(0.55))
-                    .frame(width: 40, height: 40)
+                    .frame(width: 46, height: 46)
                     .background(Color.white.opacity(0.08))
             }
-            .frame(width: 40, height: 40)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .frame(width: 46, height: 46)
             Text("x \(count)")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(Color(red: 1.0, green: 0.80, blue: 0.30))
+                .font(.system(size: 14))
+                .foregroundColor(.white)
                 .monospacedDigit()
         }
-        .padding(.horizontal, 10).padding(.vertical, 4)
         .frame(maxWidth: 270, alignment: .leading)
     }
-
-    // MARK: - bonus cell（充值奖励，粉橙渐变胶囊；当前未启用，Phase A 已完成 wiring 备用）
 
     private func bonusCell(amount: Int) -> some View {
         HStack(spacing: 4) {
@@ -1641,52 +1640,6 @@ private struct CallMessageScroller: View {
                            startPoint: .leading, endPoint: .trailing),
             in: Capsule()
         )
-    }
-}
-
-// MARK: - 公屏小组件（复用直播 LevelBadge/VipBadge + 本地 A 自动翻译 icon）
-
-/// 自动翻译 icon —— 小灰圆 + "A"（对齐设计稿 Row 3/5/6 翻译前置图标）
-private struct AutoTranslateBadge: View {
-    var body: some View {
-        Text("A")
-            .font(.system(size: 10, weight: .bold))
-            .foregroundColor(.white.opacity(0.75))
-            .frame(width: 14, height: 14)
-            .background(
-                Circle().stroke(Color.white.opacity(0.55), lineWidth: 0.8)
-            )
-            .accessibilityHidden(true)
-    }
-}
-
-/// 远程图片缓存展示（Wave 6 前用简版 AsyncImage；后续接项目 ImageCache 时替换）
-private struct CachedRemoteImage: View {
-    let urlString: String
-    var size: CGFloat = 40
-
-    var body: some View {
-        if let url = URL(string: urlString) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let img):
-                    img.resizable().aspectRatio(contentMode: .fill)
-                default:
-                    placeholder
-                }
-            }
-            .frame(width: size, height: size)
-        } else {
-            placeholder.frame(width: size, height: size)
-        }
-    }
-
-    private var placeholder: some View {
-        Image(systemName: "gift.fill")
-            .font(.system(size: size * 0.4))
-            .foregroundColor(.white.opacity(0.55))
-            .frame(width: size, height: size)
-            .background(Color.white.opacity(0.08))
     }
 }
 
@@ -1741,81 +1694,5 @@ private struct LivingCallIntroAnimation: View {
                 Circle().stroke(.white.opacity(0.6), lineWidth: 2)
             )
             .shadow(color: .black.opacity(0.4), radius: 8, y: 2)
-    }
-}
-
-// MARK: - Phase C · 主播公屏文字输入 sheet（对齐 H5 g-faceTime/index.vue:405-427 showInput）
-
-/// 通话中主播输入文字消息的底部 sheet（.presentationDetents([.height(160)])）。
-/// 键盘弹起时 SwiftUI 自动挤压 sheet 内容；`onSubmit` + Send 按钮双入口触发发送。
-private struct CallChatInputSheet: View {
-    @ObservedObject var store: CallStore
-    @Environment(\.dismiss) private var dismiss
-    @State private var text: String = ""
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            inputField
-            sendButton
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        // alignment: .bottom 让 HStack 贴 sheet 底部 —— 键盘弹起后 sheet 底与键盘顶贴合，
-        // HStack 自然紧贴键盘上方（原 .top 让 HStack 靠 sheet 顶，与键盘间隔整个 sheet 高度）
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-        .background(Color(red: 0.08, green: 0.08, blue: 0.09))
-        .onAppear { focused = true }
-    }
-
-    private var inputField: some View {
-        TextField(L10n.callChatInputPlaceholder, text: $text, axis: .vertical)
-            .textFieldStyle(.plain)
-            .lineLimit(1...3)
-            .font(.system(size: 15))
-            .padding(.horizontal, 12).padding(.vertical, 10)
-            .background(Color.white.opacity(0.10),
-                        in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .foregroundColor(.white)
-            .tint(Color(red: 1.0, green: 0.10, blue: 0.65))
-            .focused($focused)
-            .onSubmit(sendAndClose)
-    }
-
-    private var sendButton: some View {
-        Button(action: sendAndClose) {
-            Text(L10n.callChatInputSend)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white)
-                .padding(.horizontal, 16).padding(.vertical, 10)
-                .background(sendButtonBg)
-        }
-        .disabled(!canSend)
-        .buttonStyle(.plain)
-    }
-
-    /// view-based background（对齐 rule swiftui-background-in-shape-signature §正例 A）
-    @ViewBuilder
-    private var sendButtonBg: some View {
-        if canSend {
-            Capsule().fill(
-                LinearGradient(colors: [Color(red: 0.90, green: 0.20, blue: 0.60),
-                                        Color(red: 1.0, green: 0.10, blue: 0.65)],
-                               startPoint: .leading, endPoint: .trailing)
-            )
-        } else {
-            Capsule().fill(Color.gray.opacity(0.35))
-        }
-    }
-
-    private var canSend: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    private func sendAndClose() {
-        guard canSend else { return }
-        store.sendCallText(text)
-        text = ""
-        dismiss()
     }
 }
