@@ -46,6 +46,30 @@
 "work.scorePrefix"           = "Score: ";
 "work.needMoreFormat"        = "(Need %d more to level up)";
 
+"dataStatistics.navTitle"                    = "Data Statistics";
+"dataStatistics.bannerSubtitle"               = "Track your performance and level progress";
+"dataStatistics.totalDislikeRate"             = "Total Dislike Rate";
+"dataStatistics.offsetDislike"                = "Offset Dislike >";
+"dataStatistics.removeDislike"                = "Remove Dislike";
+"dataStatistics.removeDislikeDescription"     = "You can use points each week to permanently remove dislikes, with a weekly limit. If the limit is exceeded, you will need to wait until next week to redeem points. Complete your deductions during the week, as points are reset at the beginning of each new week.";
+"dataStatistics.dislikeRate"                  = "Dislike Rate";
+"dataStatistics.dislikeRateDescription"       = "Users will give a like or dislike after the call ends. Dislikes related to host types affect your dislike rate, which is shown on your profile. To reduce dislikes, communicate more during the call or earn points by sending messages. Points can be used to permanently remove dislikes.";
+"dataStatistics.likes"                        = "Likes";
+"dataStatistics.dislikes"                     = "Dislikes";
+"dataStatistics.privateAndLiveOnly"           = "(Only private and live calls are calculated)";
+"dataStatistics.category"                     = "Category";
+"dataStatistics.week"                         = "Week";
+"dataStatistics.levelAnswerRate"              = "Level Answer Rate";
+"dataStatistics.levelAvgDuration"             = "Level Avg Duration";
+"dataStatistics.levelCalls"                   = "Level Calls";
+"dataStatistics.levelUpdateTime"              = "Level Update Time";
+"dataStatistics.currentLevelBenefits"         = "Current Level Benefits";
+"dataStatistics.currentPoints"                = "Current Points";
+"dataStatistics.remainingChancesFormat"       = "%@ Points / %@ Chances Remaining";
+"dataStatistics.offset"                       = "Offset";
+"dataStatistics.deductionSucceeded"           = "You've offset one dislike";
+"dataStatistics.deductionUnavailable"         = "Your points are insufficient";
+
 "work.levelText.topHost"     = "You are a top host";
 
 "call.reconnect"             = "Reconnect";
@@ -172,6 +196,27 @@
 "live.rankBadge"             = "Leaderboard";
 "live.refresh"               = "Refresh";
 "live.onlineDot"             = "Online";
+
+// Home ranking (/rank)
+"home.rank.title"            = "Leaderboard";
+"home.rank.charm"            = "Charm";
+"home.rank.wealth"           = "Wealth";
+"home.rank.couple"           = "Couple";
+"home.rank.day"              = "Day";
+"home.rank.week"             = "Week";
+"home.rank.month"            = "Month";
+"home.rank.rules"            = "Ranking Rules";
+"home.rank.rules.text"       = "Rankings are calculated for the selected period. Rewards are subject to the current event rules.";
+"home.rank.rules.charm"      = "Charm and wealth rankings are calculated for the selected period. Rewards are subject to the current event rules.";
+"home.rank.rules.couple"     = "Couple rankings are calculated for the selected period. Rewards are subject to the current event rules.";
+"home.rank.myRanking"        = "My Ranking";
+"home.rank.notRanked"        = "99+";
+"home.rank.noData"           = "No rankings yet";
+"home.rank.hostPlaceholder"  = "Host name";
+"home.rank.userPlaceholder"  = "User name";
+"home.rank.mystery"          = "Mystery";
+"home.rank.notOnListYet"     = "Not on the list yet";
+"home.rank.keepSendingGifts" = "Keep sending gifts and climb the ranking";
 
 // MARK: - List 子页（设计稿还原）
 "liveList.segment.online"    = "Online";
@@ -372,7 +417,7 @@
 "wishSetting.ruleDoc"                = "We promise to use the wishes fairly and sincerely, and to abide by the platform rules. Any violation may result in account restrictions.";
 "wishSetting.save"                   = "Save";
 "wishSetting.pleaseEnterTheme"       = "Please enter theme";
-"wishSetting.themeMaxLen"            = "Theme cannot exceed 20 characters";
+"wishSetting.themeMaxLen"            = "Theme cannot exceed 15 characters";
 "wishSetting.submittedForReview"     = "Submitted for review";
 "wishSetting.pleaseAgreeRule"        = "Please agree to the Wish Commitment Guidelines";
 "wishSetting.pleaseAddGift"          = "Please add at least one wish gift";
@@ -381,6 +426,13 @@
 "wishSetting.saved"                  = "Saved";
 "wishSetting.reviewStatus"           = "Review status";
 "wishSetting.reviewStatusIntro"      = "Once approved, the private template will be visible to users.";
+"wishSetting.auditRecords"           = "Wish Promise Records";
+"wishSetting.audit.all"              = "All";
+"wishSetting.audit.pending"          = "Pending";
+"wishSetting.audit.approved"         = "Approved";
+"wishSetting.audit.rejected"         = "Rejected";
+"wishSetting.audit.empty"            = "No records yet";
+"wishSetting.audit.rejectReason"     = "Reject reason";
 "wishSetting.type.commonSub"         = "Suitable for all streamers";
 "wishSetting.type.privateSub"        = "Visible only to yourself";
 "wishSetting.type.noTextSub"         = "Cover only";
@@ -397,6 +449,10 @@
 "liveRoom.permissionAlertTitle" = "Camera Permission Required";
 "liveRoom.permissionAlertOK" = "OK";
 "liveRoom.permissionAlertMessage" = "Please enable Camera access in Settings → Hily → Camera";
+"mediaPermission.cameraRequired" = "Camera access is required. Enable it in Settings, then restart Hily to continue.";
+"mediaPermission.microphoneRequired" = "Microphone access is required. Enable it in Settings, then restart Hily to continue.";
+"mediaPermission.liveRequired" = "Camera and microphone access are required. Enable them in Settings, then restart Hily to continue.";
+"mediaPermission.alertTitle" = "Permissions Required";
 "liveRoom.statusLiveFormat"  = "Live %@";
 "liveRoom.statusConnecting"  = "Connecting...";
 "liveRoom.status.idle"       = "Idle";
@@ -427,6 +483,7 @@
 "liveRoom.rank.errorRetry"        = "Failed to load. Tap to retry.";
 "liveRoom.rank.ownMe"             = "Me";
 "liveRoom.rank.diffFormat"        = "%@ to next rank";
+"liveRoom.rank.toNext"            = "To next rank:";
 "liveRoom.retry"                  = "Retry";
 "liveRoom.rank.tab.now"           = "Now";
 "liveRoom.rank.tab.today"         = "Today";
@@ -440,6 +497,7 @@
 "liveRoom.contribution.empty.record"      = "No gift records yet";
 "liveRoom.contribution.errorRetry"        = "Failed to load. Tap to retry.";
 "liveRoom.contribution.last90dFormat"     = "%@ (last 90d)";
+"liveRoom.contribution.last90d"           = "Last 90d";
 "liveRoom.contribution.sentAction"        = "sent";
 "liveRoom.setting.effect"                 = "Effects";
 "liveRoom.setting.announcement"           = "Announcement";
@@ -612,9 +670,11 @@
 "call.error.remoteRejected"    = "The call was declined";
 "call.error.remoteNoAnswer"    = "No answer";
 "call.error.remoteBusy"        = "User is busy";
+"call.error.localBusy"         = "A call is already in progress";
 "auth.sessionExpired"          = "Session expired, please sign in again";
 
 // MARK: - Call 1v1 真实通话视图（CallView.swift）
+"call.waiting.answer"       = "Waiting for the other to answer...";
 "call.subtitle.callingOut"   = "Calling...";
 "call.subtitle.incoming"     = "is inviting you to a video call";
 "call.action.cancel"         = "Cancel";
@@ -1019,12 +1079,47 @@
 "party.tools.title"                      = "Room Tools";
 "party.tool.lockRoom"                    = "Lock Room";
 "party.tool.music"                       = "Music";
+"party.music.title"                      = "Music";
+"party.music.playlist"                   = "Playlist";
+"party.music.local"                      = "Local";
+"party.music.liked"                      = "Liked";
+"party.music.empty"                      = "No music available";
+"party.music.edit"                       = "Edit";
+"party.music.upload"                     = "Upload";
+"party.music.delete"                     = "Delete";
+"party.music.selectAll"                  = "Select All";
+"party.music.invalidFormat"              = "Unsupported audio format";
+"party.music.fileTooLarge"               = "Audio files must be 10 MB or smaller";
+"party.music.uploadSucceeded"            = "Music uploaded";
+"party.music.uploadFailed"               = "Failed to upload music";
+"party.music.deleteSucceeded"            = "Music deleted";
+"party.music.deleteFailed"               = "Failed to delete music";
 "party.tool.settings"                    = "Settings";
 "party.tool.micApplication"              = "Mic Application";
 "party.tool.roomMode"                    = "Room Mode";
 "party.tool.blocklist"                   = "Blocklist";
 "party.tool.mcSeat"                      = "MC Seat";
 "party.tool.privateCall"                 = "Private Call";
+"party.tool.currencyExchange"            = "Currency";
+"party.currency.exchangeTitle"           = "Room Currency";
+"party.currency.balanceTitle"            = "Balance";
+"party.currency.gems"                    = "Gems";
+"party.currency.diamonds"                = "Diamonds";
+"party.currency.coins"                   = "Coins";
+"party.currency.target"                  = "Exchange to";
+"party.currency.available"               = "Available";
+"party.currency.amountPlaceholder"       = "Enter amount";
+"party.currency.all"                     = "All";
+"party.currency.diamondRate"             = "1 Gem = 1 Diamond";
+"party.currency.coinRateHint"            = "The final coin amount is settled by the server.";
+"party.currency.exchangeAction"          = "Exchange";
+"party.currency.refresh"                 = "Refresh balance";
+"party.currency.balanceLoadFailed"       = "Unable to load your balance";
+"party.currency.invalidAmount"           = "Enter a positive whole number of Gems";
+"party.currency.insufficientBalance"     = "Insufficient Gems";
+"party.currency.diamondExchangeSuccessFormat" = "%lld Gems exchanged for Diamonds";
+"party.currency.coinExchangeSuccess"     = "Gems exchanged for Coins";
+"party.currency.exchangeFailed"          = "Exchange failed";
 "party.privateCall.openConfirmLabel"     = "Open private call";
 "party.tool.comingSoon"                  = "Coming soon";
 // F-spec §5.1 PartyPrivateCallSettingSheet
@@ -1060,6 +1155,8 @@
 "party.mcSeat.submit"                    = "Set MC Seat";
 "party.mcSeat.tips"                      = "Only the owner and admins can take the MC seat";
 "party.mcSeat.badge"                     = "MC";
+"party.mcSeat.cannotTake"                = "Cannot take the MC seat";
+"party.mcSeat.change"                    = "Change MC";
 "party.mcSeat.confirmEmpty"              = "Set this empty seat as the MC seat?";
 "party.mcSeat.confirmPrivilegedFormat"   = "%@ is currently a manager. Set this seat as the MC seat?";
 "party.mcSeat.confirmNormalFormat"       = "%@ will be removed from the seat. Set this seat as the MC seat?";
@@ -1069,11 +1166,19 @@
 
 // v3（2026-07-15）Step 2 通知公屏系统消息
 "party.videoSeat.inviteAcceptedFormat"   = "%@ joined the video seat";
+"party.videoSeat.feedbackReject"         = "Video seat invitation was declined";
+"party.videoSeat.feedbackTimeout"        = "Video seat invitation timed out";
+"party.videoSeat.feedbackLeave"          = "The invited user left the room";
+"party.videoSeat.feedbackOccupied"       = "The video seat is already occupied";
+"party.videoSeat.feedbackAlreadyOn"      = "The invited user is already on a seat";
+"party.videoSeat.feedbackJoinFailed"     = "The invited user could not join the video seat";
 "party.authUpdate.setAdmin"              = "You have been set as room admin";
 "party.authUpdate.removeAdmin"           = "You are no longer a room admin";
 "party.roomAnnouncement.format"          = "Room announcement: %@";
 "party.luckyNumber.drawFormat"           = "%1$@ drew lucky number %2$d";
 "party.luckyNumber.winFormat"            = "%1$@ won lucky number %2$d";
+"party.luckyNumber.matched"              = "Successfully matched the lucky number";
+"party.luckyNumber.personalWinFormat"    = "Fantastic! You matched lucky number %d";
 "party.create.section.name"              = "Room Name";
 "party.create.name.placeholder"          = "Up to 20 characters";
 "party.create.hint.needName"             = "Enter room name to continue";
@@ -1096,6 +1201,11 @@
 "party.invite.accept"                    = "Accept";
 "party.invite.reject"                    = "Decline";
 "party.invite.messageFormat"             = "%@ invited you to take video seat %d";
+"party.invite.expiresFormat"             = "Expires in %d seconds";
+"party.seatInvite.title"                  = "Mic invitation";
+"party.seatInvite.empty"                  = "No users online";
+"party.seatInvite.joined"                 = "Joined";
+"party.seatInvite.inviting"               = "Inviting";
 "party.selfActions.title"                = "My Seat";
 "party.selfActions.micOn"                = "Turn On Mic";
 "party.selfActions.micOff"               = "Turn Off Mic";
@@ -1104,6 +1214,8 @@
 "party.selfActions.leaveSeat"            = "Leave Seat";
 "party.input.placeholder"                = "Say something…";
 "party.gift.messageFormat"               = "🎁 %@ sent %@ x%d";
+"party.giftEffect.sendsTo"               = "Sends to";
+"party.giftEffect.peopleFormat"          = "%d people";
 
 "party.state.joined"                     = "Joined";
 "party.state.entering"                   = "Joining…";
@@ -1139,7 +1251,8 @@
 "party.roomMode.loadError"               = "Failed to load modes";
 
 /* MARK: - E spec §3 Mic Application */
-"party.micApplication.sheetTitle"        = "Mic Applications";
+"party.micApplication.sheetTitle"        = "Application List";
+"party.micApplication.peopleApplyFormat" = "%d people apply";
 "party.micApplication.emptyState"        = "No applications";
 "party.micApplication.approve"           = "Approve";
 "party.micApplication.reject"            = "Reject";
@@ -1153,9 +1266,13 @@
 "party.micApplication.switchOffBody"     = "Users can no longer request seats.";
 "party.micApplication.switchOnSystemMsg" = "The mic application is turned on";
 "party.micApplication.switchOffSystemMsg" = "The mic application is removed";
-"party.micApplication.cancel"            = "Cancel Request";
+"party.micApplication.cancel"            = "Give up";
 "party.micApplication.tapEmptySeatHint"  = "Tap an empty seat to request";
-"party.micApplication.submit"            = "Request Seat";
+"party.micApplication.submit"            = "Apply";
+"party.deleteMessage"                    = "Delete message";
+"party.deleteMessageConfirm"             = "Delete this message?";
+"party.messageDeleted"                   = "Message deleted";
+"party.deleteMessageFailed"              = "Failed to delete message";
 "party.approveSeatPicker.title"          = "Assign Seat";
 "party.approveSeatPicker.subtitleFormat" = "Approve %@ to which seat?";
 "party.approveSeatPicker.seatNumberFormat" = "Seat #%d";
@@ -1472,9 +1589,13 @@
 "wishlist.progress.complete"     = "Complete";
 "wishlist.panel.title"           = "%@'s wish list for this round";
 "wishlist.panel.subtitle"        = "Help the live streamer achieve their small wish and get rewards!";
+"wishlist.panel.empty"           = "No wishlist set this session";
 "wishlist.panel.top6Title"       = "Top Gifters";
 "wishlist.panel.top6Empty"       = "Only the top 6 by gift value are shown";
-"wishlist.achieved.title"        = "Wish Achieved!";
+"wishlist.float.complete"        = "Wish complete,";
+"wishlist.float.thanks"          = "Thank you my hero!";
+"wishlist.top1.prefix"           = "is now my";
+"wishlist.top1.suffix"           = "supporter";
 
 /* EditProfile 用户资料编辑页（I 里程碑，对齐 H5 anchor-livechat-h5/src/views/profile/index.vue） */
 "editProfile.navTitle"                             = "Edit Profile";
@@ -1587,9 +1708,24 @@
 /* 顶栏 Rank / Viewers sheet（对齐 H5 room-rank.vue） */
 "partyRoom.rank.tab.contribution"        = "Contribution";
 "partyRoom.rank.tab.honor"               = "Honor";
+"partyRoom.rank.tab.gameTask"            = "Game Task";
+"partyRoom.rank.tab.daily"               = "Daily";
+"partyRoom.rank.period.today"            = "Today";
+"partyRoom.rank.period.yesterday"        = "Yesterday";
 "partyRoom.rank.viewersTitle"            = "Viewers";
 "partyRoom.rank.emptyRank"               = "No ranking yet";
 "partyRoom.rank.emptyViewers"            = "No viewers yet";
+"partyRoom.weeklyTask.title"             = "Weekly Task";
+"partyRoom.weeklyTask.liveTime"          = "Mic time";
+"partyRoom.weeklyTask.empty"             = "No weekly tasks right now";
+"partyRoom.weeklyTask.loadMore"          = "View More";
+"partyRoom.weeklyTask.reward.title"      = "Congratulations";
+"partyRoom.weeklyTask.reward.confirm"    = "Got it";
+"partyRoom.weeklyTask.reward.fallback"   = "Reward";
+"partyRoom.a11y.weeklyTask"              = "Weekly task";
+"partyRoom.hotTask.title"                = "Hot Room Task";
+"partyRoom.hotRoomGuide.title"           = "Join a Hot Room";
+"partyRoom.hotRoomGuide.action"          = "Go Now";
 "partyRoom.tab.all"                      = "All";
 "partyRoom.tab.chat"                     = "Chat";
 "partyRoom.tab.gift"                     = "Gift";
@@ -1635,10 +1771,28 @@
 // F 期便利功能 Room Mute toggle 状态化文案（2026-07-17）
 "partyRoom.toolMenu.roomMute.on"         = "Mute Room";
 "partyRoom.toolMenu.roomMute.off"        = "Unmute Room";
+"partyRoom.toolMenu.interactiveGames"    = "Interactive Games";
+"partyRoom.toolMenu.basicTools"          = "Basic tools";
+"partyRoom.toolMenu.pk"                  = "PK";
+"partyRoom.toolMenu.free"                = "Free";
+"partyRoom.toolMenu.settings"            = "Settings";
+"partyRoom.toolMenu.luckyNumberSent"     = "Lucky number sent";
+"partyRoom.toolMenu.range"               = "Range";
+"partyRoom.toolMenu.setLuckyNumber"      = "Set the lucky number";
+"partyRoom.toolMenu.allowAdmins"         = "Allow admins to set the lucky number";
+"partyRoom.toolMenu.save"                = "Save";
+"partyRoom.toolMenu.invalidLuckyNumber"  = "Please enter a valid number";
+"partyRoom.toolMenu.luckyNumberSaved"    = "Lucky number saved";
+"partyRoom.toolMenu.history"             = "History";
+"partyRoom.toolMenu.historyHint"         = "This list shows the records of users in the room matching the lucky numbers in the last 3 days.";
+"partyRoom.toolMenu.noHistory"           = "No history yet";
+"partyRoom.toolMenu.loadMore"            = "View More";
 // F 期便利功能 ShareLink 深链
 "partyRoom.share.messageFormat"          = "Join my Party Room! %@";
+"party.shareInvite.title"                 = "Invite";
+"party.shareInvite.sent"                  = "Invitation Sent";
 "partyRoom.seat.locked"                  = "The seat is locked";
-"partyRoom.seat.videoNeedsInvite"        = "Requires invitation from the Room Owner/Admin";
+"partyRoom.seat.videoNeedsInvite"        = "Video seats require host invitation";
 "partyRoom.switchSeat.title"             = "Switch to this seat?";
 "partyRoom.switchSeat.confirm"           = "Switch";
 "partyRoom.adminSeat.title"              = "Manage seat";
@@ -1664,3 +1818,23 @@
 "liveRoom.task.rules.title.tycoon"       = "Active Tycoon Task Rules";
 "liveRoom.task.rules.body.liveGift"      = "1. Target users: All users in the live room\n2. Progress behavior: Paid activities including gifting, lucky draw, live connection and private call\n3. Reset cycle: Calculated on weekly basis, data resets every week\n4. Progress calculation: Calculated in accordance with relevant task standards";
 "liveRoom.task.rules.body.tycoon"        = "1. Target users: Users tagged with Active Tycoon\n2. Progress behavior: Paid activities including gifting, lucky draw, live connection and private call by tagged users\n3. Reset cycle: Calculated on weekly basis, data resets every week\n4. Progress calculation: Calculated in accordance with relevant task standards";
+"liveRoom.roulette.tip"                  = "Turn on Wheel";
+
+"robotCall.incoming.title"               = "Newbie";
+"robotCall.incoming.support"             = "Official support";
+"robotCall.incoming.waiting"             = "Waiting for response";
+"robotCall.action.accept"                = "Answer";
+"robotCall.action.reject"                = "Reject";
+"robotCall.action.end"                   = "End call";
+"robotCall.minimumDuration"              = "The call duration must not be less than 10 seconds";
+"robotCall.acceptFailed"                 = "Unable to answer this call. Please try again later.";
+"robotCall.reward.title"                 = "Congratulations";
+"robotCall.noReward.title"               = "Keep it up";
+"robotCall.duration.format"              = "Call duration: %@";
+"robotCall.reward.duration.format"       = "Current call duration has reached: %@";
+"robotCall.reward.coins.format"          = "%@ coins earned";
+"robotCall.reward.ok"                    = "OK";
+
+"paidBullet.dislike"                     = "Dislike";
+"paidBullet.dislikeFailed"               = "Unable to submit dislike. Please try again.";
+"paidBullet.earningsToast"               = "+%lld Coins (Paid Bullet)";

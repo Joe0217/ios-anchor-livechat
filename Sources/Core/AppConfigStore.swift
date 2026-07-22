@@ -35,6 +35,19 @@ final class AppConfigStore: ObservableObject {
     @Published private(set) var freeMsgPoints: Int?
     @Published private(set) var microsoftTranslatorKey: String?
     @Published private(set) var microsoftTranslatorArea: String?
+    /// v26（2026-07-15）：PK 后端配置（对齐 H5 `app.js:459-466` pkStore.pkSettings）
+    /// - `pk_match_duration` → 随机匹配重试阶段时长（秒；nil 兜底 300s）
+    /// - `pk_effective_value` → PK 有效值阈值（PKHistoryPopup 提示用）
+    /// - `pk_gift_queue` → PK 期礼物队列最大长度（GiftEffect PK 期重排用；nil 兜底 15）
+    @Published private(set) var pkMatchDuration: Int?
+    @Published private(set) var pkEffectiveValue: Int?
+    @Published private(set) var pkGiftQueue: Int?
+    /// v26（2026-07-15）：通话充值等待页 UX 参数（对齐 H5 `app.js:454-455` call_config JSON 二次 parse）
+    /// - `call_wait_time` → 充值等待主倒计时秒数（nil 兜底 60；对齐 H5 topBar.vue:20 `|| 60`）
+    /// - `anchor_call_balance_reward_on_low` → 提示文案预计奖励数（nil 兜底 100；对齐 H5 waitRechargeTips.vue `|| 100`）
+    ///   ⚠️ iOS 目前无对应"预计奖励文案"UI 组件，字段先接入等 UI 补齐时消费
+    @Published private(set) var callWaitTime: Int?
+    @Published private(set) var anchorCallBalanceRewardOnLow: Int?
     @Published private(set) var isLoaded: Bool = false
 
     // MARK: - 硬编 fallback（对齐 H5 前端明文，密钥非新增暴露面）
@@ -49,6 +62,12 @@ final class AppConfigStore: ObservableObject {
         "microsoft_translator_config",
         "pay_msg_points",
         "free_msg_points",
+        // v26（2026-07-15）：pkSettings 3 key（对齐 H5 app.js:446 batch）
+        "pk_match_duration",
+        "pk_effective_value",
+        "pk_gift_queue",
+        // v26（2026-07-15）：通话充值等待 UX 参数（对齐 H5 app.js:446 batch；后端 JSON string 二次 parse）
+        "call_config",
     ]
 
     // MARK: - 依赖注入
@@ -71,6 +90,24 @@ final class AppConfigStore: ObservableObject {
             achorHideButton = dict["achor_hide_button"] as? String
             payMsgPoints = Self.intFromAny(dict["pay_msg_points"])
             freeMsgPoints = Self.intFromAny(dict["free_msg_points"])
+            // v26（2026-07-15）：pkSettings 3 key（对齐 H5 app.js:459-466 intFromAny 转数字）
+            pkMatchDuration = Self.intFromAny(dict["pk_match_duration"])
+            pkEffectiveValue = Self.intFromAny(dict["pk_effective_value"])
+            pkGiftQueue = Self.intFromAny(dict["pk_gift_queue"])
+
+            // v26（2026-07-15）：call_config JSON string 二次 parse（对齐 H5 app.js:454-455 jsonStrTranslateJson）
+            // H5 结构：{call_wait_time: Int|String, anchor_call_balance_reward_on_low: Int|String}
+            if let raw = dict["call_config"] as? String,
+               let data = raw.data(using: .utf8),
+               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                callWaitTime = Self.intFromAny(obj["call_wait_time"])
+                anchorCallBalanceRewardOnLow = Self.intFromAny(obj["anchor_call_balance_reward_on_low"])
+                logger.info("[AppConfig] call_config parsed: callWaitTime=\(self.callWaitTime ?? -1) rewardOnLow=\(self.anchorCallBalanceRewardOnLow ?? -1)")
+            } else {
+                callWaitTime = nil
+                anchorCallBalanceRewardOnLow = nil
+                logger.info("[AppConfig] call_config missing or parse failed; will use CallStore local fallback (60/100)")
+            }
 
             // 2. microsoft_translator_config: JSON string 二次 parse（H5 `app.js:421`）
             if let raw = dict["microsoft_translator_config"] as? String,
@@ -86,7 +123,7 @@ final class AppConfigStore: ObservableObject {
             }
 
             isLoaded = true
-            logger.info("[AppConfig] activate success: achor_hide_button=\(self.achorHideButton ?? "nil", privacy: .public) payPoints=\(self.payMsgPoints ?? -1) freePoints=\(self.freeMsgPoints ?? -1)")
+            logger.info("[AppConfig] activate success: achor_hide_button=\(self.achorHideButton ?? "nil", privacy: .public) payPoints=\(self.payMsgPoints ?? -1) freePoints=\(self.freeMsgPoints ?? -1) pkMatchDur=\(self.pkMatchDuration ?? -1) pkEffective=\(self.pkEffectiveValue ?? -1) pkGiftQueue=\(self.pkGiftQueue ?? -1)")
         } catch {
             // 网络失败 / 后端异常兜底：不阻塞 view，用 fallback + isLoaded=true
             microsoftTranslatorKey = Self.translatorKeyFallback
@@ -103,6 +140,11 @@ final class AppConfigStore: ObservableObject {
         freeMsgPoints = nil
         microsoftTranslatorKey = nil
         microsoftTranslatorArea = nil
+        pkMatchDuration = nil
+        pkEffectiveValue = nil
+        pkGiftQueue = nil
+        callWaitTime = nil
+        anchorCallBalanceRewardOnLow = nil
         isLoaded = false
     }
 

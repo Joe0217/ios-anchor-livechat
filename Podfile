@@ -2,6 +2,16 @@ platform :ios, '16.0'
 
 # 云信 NIM SDK 只有 CocoaPods 分发（无 SPM），与现有 SPM(声网)/embedded framework(相芯) 共存。
 # 工作流：xcodegen generate 后需重新 pod install；构建用 Hily.xcworkspace。
+
+# 打包环境切换新增的 Release-Test / Release-Dev configuration 必须显式声明为 release 型，
+# 否则 CocoaPods 默认只为 Debug/Release 生成 xcconfig，新增 configuration 会缺 Pods 引用导致
+# 真机 build 报 `No such module 'AgoraRtcKit'` / dyld not loaded。
+project 'Hily.xcodeproj',
+  'Debug' => :debug,
+  'Release' => :release,
+  'Release-Test' => :release,
+  'Release-Dev' => :release
+
 target 'Hily' do
   use_frameworks!
   pod 'NIMSDK_LITE', '~> 10.10.0'  # IM + 聊天室（V2NIMChatroomClient），不含多余 RTC

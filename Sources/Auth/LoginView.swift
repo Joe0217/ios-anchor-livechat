@@ -25,14 +25,8 @@ struct LoginView: View {
                         session.pendingRegister = nil     // 消费掉
                     }
                 }
-                .onChange(of: session.needsResubmit) { rs in
-                    if let rs {
-                        let cachedPwd = KeychainStore.getString(for: KeychainKey.pendingRegisterPassword)
-                        registerStore.hydrate(from: rs.mineInfo, cachedPassword: cachedPwd)
-                        pathHolder.path.append(RegisterRoute.basicInfo)
-                        session.needsResubmit = nil
-                    }
-                }
+                // 2026-07-16：`needsResubmit` onChange 已删除。未审核账号登录后 RootView 分流到
+                // RestrictedTabView,Resubmit 由 MineRestrictedView.handleResubmit 触发 hydrate + push。
                 .navigationDestination(for: RegisterRoute.self) { route in
                     Group {
                         switch route {

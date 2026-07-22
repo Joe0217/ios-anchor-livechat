@@ -2,7 +2,8 @@ import Foundation
 import os
 
 /// 全局配置：值由 xcconfig 注入到 Info.plist，运行时从 plist 读出。
-/// 多环境切换走 Config/Config-Dev.xcconfig ↔ Config/Config-Prod.xcconfig。
+/// 多环境切换走 Config/Config-Dev.xcconfig ↔ Config-Test.xcconfig ↔ Config-Prod.xcconfig
+/// （当前 Debug 绑 Test / Release 绑 Prod；切回 dev 改 project.yml configFiles.Debug + ./bin/regen.sh）。
 ///
 /// **fallback 策略**（防 prod 悄悄落回 dev 密钥）：
 /// - **DEBUG**：plist 缺失 / 残留字面 "$(VAR)" 时回 dev 默认值（`DevDefaults.*`）——真机直跑
@@ -27,15 +28,12 @@ enum AppConfig {
 
     /// 系统通知 P2P session 的 yxAccId（H5 `VITE_NOTIFICATION_SEEION_ID`）。
     ///
-    /// dev=`video-sky-test` / test|prod=`video-sky-prod`。此 session 承载后端"系统通知"类
-    /// P2P 消息，在会话列表中**从常规 Flame/Prime/Stranger 3 tab 排除**，专门显示在 Flame
-    /// 顶部 System 入口（对齐 H5 `session.js:81, 107, 331`）。
+    /// dev=`video-sky-test` / test|prod=`video-sky-prod`（值随 xcconfig 环境切换而变，
+    /// 不再绑 build config —— Debug + Config-Test 也能取到 prod 的 session id，避免 P2P 系统消息路由错乱）。
+    /// 此 session 承载后端"系统通知"类 P2P 消息，在会话列表中**从常规 Flame/Prime/Stranger 3 tab 排除**，
+    /// 专门显示在 Flame 顶部 System 入口（对齐 H5 `session.js:81, 107, 331`）。
     static var notificationYxAccId: String {
-        #if DEBUG
-        return "video-sky-test"
-        #else
-        return "video-sky-prod"
-        #endif
+        plistString("HilyNotificationYxAccId", fallback: DevDefaults.notificationYxAccId)
     }
 
     // MARK: - 主接口 AES-128-CBC
@@ -44,7 +42,7 @@ enum AppConfig {
 
     // MARK: - sapi（vvi）AES-128-CBC
     // dev 巧合与主接口同套（已在 Config-Dev.xcconfig 显式声明 HILY_SAPI_AES_KEY/IV，不再共用 HILY_AES_KEY/IV）；
-    // test 是 cbilx4v7vgz6jpw7 / dmnry3u8bhk5zq9f；prod 是另一套（Config-Prod.xcconfig 切换时务必同时换 sapi 密钥）。
+    // test/prod 是同一套 cbilx4v7vgz6jpw7 / dmnry3u8bhk5zq9f（对齐 H5 VITE_APP_ISDEV=false 分支）。
     static var sapiAesKey: String  { plistString("HilySAPIAESKey", fallback: DevDefaults.sapiAesKey) }
     static var sapiAesIV: String   { plistString("HilySAPIAESIV",  fallback: DevDefaults.sapiAesIV) }
 
@@ -58,6 +56,12 @@ enum AppConfig {
     static let termsOfServiceURL    = "https://h5.livehot.site/#/agreement"
     /// 隐私政策外链
     static let privacyPolicyURL     = "https://h5.livehot.site/#/privacy"
+
+    /// F 期便利功能：派对房 ShareLink 深链前缀（2026-07-17）。
+    /// 完整格式：`\(partyShareBaseURL)\(roomId)`；由用户端 h5ui 承接跳转，主播端只做**站外分享出口**，
+    /// 不承接进入侧 deep link（主播不会通过分享链回自己房）。
+    /// 后端若下发短链 API（`apiGetShareUrl`）时可替换；暂用兜底常量。
+    static let partyShareBaseURL    = "https://h5.livehot.site/#/party?roomId="
 
     // MARK: - 内部
 
@@ -93,6 +97,7 @@ enum AppConfig {
         static let ocpApimKey   = "9ec52f6d03cd4d5985a6a2c8bb1ce5ee"
         static let appVersion   = "2.2.0"
         static let nimAppKey    = "124f689baed25c488e1330bc42e528af"
+        static let notificationYxAccId = "video-sky-test"
         static let aesKey       = "9986sdff5s4f1123"
         static let aesIV        = "9986sdff5s4y456a"
         static let sapiAesKey   = "9986sdff5s4f1123"
@@ -106,6 +111,7 @@ enum AppConfig {
         static let ocpApimKey   = ""
         static let appVersion   = ""
         static let nimAppKey    = ""
+        static let notificationYxAccId = ""
         static let aesKey       = ""
         static let aesIV        = ""
         static let sapiAesKey   = ""

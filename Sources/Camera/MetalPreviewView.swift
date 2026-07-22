@@ -27,6 +27,14 @@ final class MetalPreviewView: MTKView {
     private var currentImage: CIImage?
     /// 可取消的前台首帧绘制任务（v5.3.1 修双切场景：300ms 内再次后台时 cancel 避免 drawable 仍 nil 时 setNeedsDisplay 空跑）
     private var pendingForegroundDraw: DispatchWorkItem?
+    /// Party 视频位使用：等比放大到填满容器，并从中心裁剪溢出区域。
+    var forceAspectFill = false {
+        didSet {
+            if oldValue != forceAspectFill {
+                setNeedsDisplay()
+            }
+        }
+    }
 
     init(device: MTLDevice?) {
         // 项目仅 iPhone iOS 16+，所有目标设备均支持 Metal——理论上不会失败；
@@ -132,7 +140,7 @@ final class MetalPreviewView: MTKView {
         let imgAspect = image.extent.width / image.extent.height
         let drawAspect = size.width / size.height
         let aspectDelta = abs(imgAspect - drawAspect) / min(imgAspect, drawAspect)
-        let useFit = aspectDelta > 0.5
+        let useFit = !forceAspectFill && aspectDelta > 0.5
         let scale = useFit
             ? min(size.width / image.extent.width, size.height / image.extent.height)  // aspectFit 留背景色
             : max(size.width / image.extent.width, size.height / image.extent.height)  // aspectFill 铺满

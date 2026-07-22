@@ -40,6 +40,8 @@
 	<string>$(HILY_APP_VERSION)</string>
 	<key>HilyNIMAppKey</key>
 	<string>$(HILY_NIM_APP_KEY)</string>
+	<key>HilyNotificationYxAccId</key>
+	<string>$(HILY_NOTIFICATION_YX_ACC_ID)</string>
 	<key>HilyOcpApimKey</key>
 	<string>$(HILY_OCP_APIM_KEY)</string>
 	<key>HilySAPIAESIV</key>

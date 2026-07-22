@@ -3,18 +3,17 @@
 // 工程仅 dev 调试构建，Debug+Release 都借 debug 版 Pods xcconfig，足够编译过。
 #include? "../Pods/Target Support Files/Pods-Hily/Pods-Hily.debug.xcconfig"
 
-// Dev 环境构建配置（dev 与 test 共用一套密钥）
+// Dev 环境构建配置（dev 是完全独立的一套密钥，与 test/prod 不共用）
 //
 // 用法：project.yml configFiles 段绑定到 Debug/Release configuration。
 //      Xcode build 把 $(HILY_*) 替换进 Info.plist；运行时 AppConfig 从 plist 读取。
 //      AppConfig 内置 fallback：若 plist 仍为 "$(VAR)"（未替换）或缺失，回 dev 默认值。
 //
-// Prod 上线步骤：
-//   1. cp Config/Config-Dev.xcconfig Config/Config-Prod.xcconfig
-//   2. 替换 host/AES key/IV/ocpApimKey/NIM appKey/Agora appId 为 prod 真实值
-//   3. project.yml configFiles.Release 改为 Config/Config-Prod.xcconfig
-//   4. xcodegen generate
-//   Config-Prod.xcconfig 已在 .gitignore，不入库。
+// 多环境切换（当前 Debug 绑 test / Release 绑 prod）：
+//   - 切回 dev 调试：project.yml configFiles.Debug 改为 Config/Config-Dev.xcconfig，./bin/regen.sh
+//   - 切到预发布 test：configFiles.Debug 改为 Config/Config-Test.xcconfig，./bin/regen.sh
+//   - Release archive 已绑 Config-Prod.xcconfig，无需切换
+//   Config-Test.xcconfig / Config-Prod.xcconfig 均已在 .gitignore，不入库（真实业务密钥）。
 //
 // 注意：xcconfig 的 "//" 是注释符。URL 完整带 scheme 会被截断（"https://" 之后全被吞）。
 //       故此处只存 host，scheme 由 Swift 代码拼接（详见 AppConfig.apiBaseURL）。
@@ -32,12 +31,15 @@ HILY_APP_VERSION = 2.2.0
 // 云信 NIM
 HILY_NIM_APP_KEY = 124f689baed25c488e1330bc42e528af
 
+// 系统通知 P2P session 的 yxAccId（H5 VITE_NOTIFICATION_SEEION_ID）；dev=test 集群，test/prod=prod 集群
+HILY_NOTIFICATION_YX_ACC_ID = video-sky-test
+
 // 主接口请求体 AES-128-CBC
 HILY_AES_KEY = 9986sdff5s4f1123
 HILY_AES_IV = 9986sdff5s4y456a
 
 // sapi（vvi 背包商城 / 派对房）请求体 AES-128-CBC
-// dev 巧合与主接口同套；test 是 cbilx4v7vgz6jpw7 / dmnry3u8bhk5zq9f；prod 是另一套（见 Config-Prod.xcconfig）
+// dev 巧合与主接口同套；test/prod 是同一套 cbilx4v7vgz6jpw7 / dmnry3u8bhk5zq9f（对齐 H5 VITE_APP_ISDEV=false 分支）
 HILY_SAPI_AES_KEY = 9986sdff5s4f1123
 HILY_SAPI_AES_IV = 9986sdff5s4y456a
 

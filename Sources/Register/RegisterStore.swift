@@ -50,7 +50,8 @@ final class RegisterStore: ObservableObject {
 
     // MARK: - 场景标记
 
-    /// 被拒重录场景：session.needsResubmit trigger → hydrate 后置 true → Submit 走 A3 hostReSubmitView
+    /// 被拒重录场景：MineRestrictedView.handleResubmit trigger → hydrate 后置 true → Submit 走 A3 hostReSubmitView
+    /// (2026-07-16 前是 LoginView session.needsResubmit onChange 触发,重构后迁到受限首屏的 Resubmit 按钮)
     @Published var isResubmit: Bool = false
 
     /// Finding #12 修 2026-07-10：VideoSlotView 判"是否已录"派生态；
@@ -73,7 +74,8 @@ final class RegisterStore: ObservableObject {
         logger.info("[RegisterStore] begin firstTime email=\(email, privacy: .private)")
     }
 
-    /// 被拒重录进入前：LoginView 监听 session.needsResubmit → 携 mineInfo + Keychain cached password
+    /// 被拒重录进入前：MineRestrictedView.handleResubmit 拉一次 getAnchorInfo → 携 mineInfo + Keychain cached password
+    /// (2026-07-16 前挂 LoginView 监听 session.needsResubmit,重构后迁到受限首屏 Resubmit 按钮)
     ///
     /// v3 NEW-5：cachedPassword nil 时从 Keychain 兜底读（KeychainKey.pendingRegisterPassword）
     func hydrate(from mineInfo: AnchorInfo, cachedPassword: String? = nil) {
@@ -176,6 +178,11 @@ final class RegisterStore: ObservableObject {
             RegisterAnalytics.report(.appSign)
             logger.info("[RegisterStore] submit success userId=\(result.userId ?? -1, privacy: .private) isResubmit=\(self.isResubmit, privacy: .public)")
             reset()
+            // 2026-07-16 修:submit 成功后 nav path 必须 reset。restricted resubmit flow submit 成功后
+            // 不走 logout(直接 applyLogin userType=2 切 MainTabView),shared path 残留 [basicInfo,
+            // required, videoRecord, videoPreview]。若之后审核态又变 restricted (sysMsg 58 reject)
+            // 再进 MineRestrictedView → NavigationStack 从 shared path 恢复直接跳到 videoPreview。
+            RegisterPathHolder.shared.reset()
         } catch let e as APIError {
             // 2026-07-12 修：APIError code=-1 是 iOS 内部客户端错误（envelope 解析失败——服务端空 body / 非 JSON / gateway 崩溃）
             // 而非后端业务码；e.message 是内部化文案 "Server response error"，用户看到不 actionable

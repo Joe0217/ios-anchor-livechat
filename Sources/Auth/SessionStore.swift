@@ -286,7 +286,7 @@ final class SessionStore: ObservableObject {
     /// iOS 侧 LoginResult 是首次登录快照,若审核态在服务端变化(通过/被拒/临时封禁)本地不知情。sysMsg 58 push 只在
     /// App 在线时能收到;冷启动或长时间离线的账号必须主动拉一次审核态确认。
     ///
-    /// 数据源:AnchorInfoStore.shared.refresh() 拉 getAnchorInfo → info?.valid/onReview/banAlways/bannedSubType/type
+    /// 数据源:AnchorInfoStore.shared.refresh() 拉 getAnchorInfo → info?.userType/valid/onReview/banAlways/bannedSubType/type
     /// 同步回 self.user (LoginResult),save() 持久化到 Keychain。
     ///
     /// 失败静默:refresh 内部已 non-fatal(anchor/mine/gift 3 接口任一失败不 throw),info 可能仍为 nil;此时不覆盖 user,
@@ -304,7 +304,9 @@ final class SessionStore: ObservableObject {
             loginUuid: current.loginUuid,
             yxAccid: current.yxAccid,
             imToken: current.imToken,
-            userType: info.type ?? current.userType,       // type 覆盖 userType(H5 setMineInfo 同款语义)
+            // H5 `setMineInfo` 以 userType 决定 isHost；type 仅用于受限页的审核提示。
+            // 审核通过后服务端通常只更新 userType，若仍用 type 覆盖会让 iOS 卡在受限模式。
+            userType: info.userType ?? info.type ?? current.userType,
             nickname: info.nickname ?? current.nickname,
             icon: info.icon ?? current.icon,
             valid: info.valid ?? current.valid,

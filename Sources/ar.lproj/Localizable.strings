@@ -48,6 +48,30 @@
 "work.scorePrefix"           = "النقاط: ";
 "work.needMoreFormat"        = "(تحتاج %d نقطة إضافية للترقية)";
 
+"dataStatistics.navTitle"                    = "إحصاءات البيانات";
+"dataStatistics.bannerSubtitle"               = "تابع أداءك وتقدم مستواك";
+"dataStatistics.totalDislikeRate"             = "معدل عدم الإعجاب الإجمالي";
+"dataStatistics.offsetDislike"                = "تعويض عدم الإعجاب >";
+"dataStatistics.removeDislike"                = "إزالة عدم الإعجاب";
+"dataStatistics.removeDislikeDescription"     = "يمكنك استخدام النقاط كل أسبوع لإزالة حالات عدم الإعجاب بشكل دائم، مع حد أسبوعي. إذا تم تجاوز الحد، ستحتاج إلى الانتظار حتى الأسبوع المقبل لاستبدال النقاط. أكمل خصوماتك خلال الأسبوع، حيث يتم إعادة تعيين النقاط في بداية كل أسبوع جديد.";
+"dataStatistics.dislikeRate"                  = "معدل عدم الإعجاب";
+"dataStatistics.dislikeRateDescription"       = "سيقدم المستخدمون إعجابًا أو عدم إعجاب بعد انتهاء المكالمة. تؤثر حالات عدم الإعجاب المتعلقة بأنواع المضيف على معدل عدم الإعجاب في ملفك الشخصي. لتقليلها، تواصل أكثر أثناء المكالمة أو اكسب نقاطًا بإرسال الرسائل. يمكن استخدام النقاط لإزالة حالات عدم الإعجاب بشكل دائم.";
+"dataStatistics.likes"                        = "الإعجابات";
+"dataStatistics.dislikes"                     = "عدم الإعجابات";
+"dataStatistics.privateAndLiveOnly"           = "(يتم حساب المكالمات الخاصة والمباشرة فقط)";
+"dataStatistics.category"                     = "فئة";
+"dataStatistics.week"                         = "الأسبوع";
+"dataStatistics.levelAnswerRate"              = "معدل رد المستوى";
+"dataStatistics.levelAvgDuration"             = "متوسط مدة المستوى";
+"dataStatistics.levelCalls"                   = "مكالمات المستوى";
+"dataStatistics.levelUpdateTime"              = "وقت تحديث المستوى";
+"dataStatistics.currentLevelBenefits"         = "مزايا المستوى الحالي";
+"dataStatistics.currentPoints"                = "النقاط الحالية";
+"dataStatistics.remainingChancesFormat"       = "%@ نقطة / %@ فرصة متبقية";
+"dataStatistics.offset"                       = "خصم";
+"dataStatistics.deductionSucceeded"           = "لقد قمت بتعويض حالة عدم إعجاب واحدة";
+"dataStatistics.deductionUnavailable"         = "نقاطك غير كافية";
+
 "work.levelText.topHost"     = "أنت مضيف من الطراز الأول";
 
 "call.reconnect"             = "إعادة الاتصال";
@@ -174,6 +198,27 @@
 "live.rankBadge"             = "لوحة الصدارة";
 "live.refresh"               = "تحديث";
 "live.onlineDot"             = "متصل";
+
+// Home ranking (/rank)
+"home.rank.title"            = "لوحة الصدارة";
+"home.rank.charm"            = "الجاذبية";
+"home.rank.wealth"           = "الثروة";
+"home.rank.couple"           = "الثنائي";
+"home.rank.day"              = "يومي";
+"home.rank.week"             = "أسبوعي";
+"home.rank.month"            = "شهري";
+"home.rank.rules"            = "قواعد الترتيب";
+"home.rank.rules.text"       = "يتم احتساب الترتيب للفترة المحددة. تخضع المكافآت لقواعد الفعالية الحالية.";
+"home.rank.rules.charm"      = "يتم احتساب ترتيب الجاذبية والثروة للفترة المحددة. تخضع المكافآت لقواعد الفعالية الحالية.";
+"home.rank.rules.couple"     = "يتم احتساب ترتيب الثنائي للفترة المحددة. تخضع المكافآت لقواعد الفعالية الحالية.";
+"home.rank.myRanking"        = "ترتيبي";
+"home.rank.notRanked"        = "+99";
+"home.rank.noData"           = "لا توجد ترتيبـات بعد";
+"home.rank.hostPlaceholder"  = "اسم المضيف";
+"home.rank.userPlaceholder"  = "اسم المستخدم";
+"home.rank.mystery"          = "غامض";
+"home.rank.notOnListYet"     = "لست ضمن القائمة بعد";
+"home.rank.keepSendingGifts" = "استمر في إرسال الهدايا للصعود في الترتيب";
 
 // MARK: - List 子页（设计稿还原）
 "liveList.segment.online"    = "متصل";
@@ -374,7 +419,7 @@
 "wishSetting.ruleDoc"                = "نتعهد باستخدام الأمنيات بإنصاف وصدق، والالتزام بقواعد المنصة. أي انتهاك قد يؤدي إلى تقييد الحساب.";
 "wishSetting.save"                   = "حفظ";
 "wishSetting.pleaseEnterTheme"       = "يرجى إدخال الموضوع";
-"wishSetting.themeMaxLen"            = "لا يمكن أن يتجاوز الموضوع 20 حرفًا";
+"wishSetting.themeMaxLen"            = "لا يمكن أن يتجاوز الموضوع 15 حرفًا";
 "wishSetting.submittedForReview"     = "تم الإرسال للمراجعة";
 "wishSetting.pleaseAgreeRule"        = "يرجى الموافقة على إرشادات التزام الأمنية";
 "wishSetting.pleaseAddGift"          = "يرجى إضافة هدية أمنية واحدة على الأقل";
@@ -383,6 +428,13 @@
 "wishSetting.saved"                  = "تم الحفظ";
 "wishSetting.reviewStatus"           = "حالة المراجعة";
 "wishSetting.reviewStatusIntro"      = "بمجرد الموافقة، سيكون القالب الخاص مرئيًا للمستخدمين.";
+"wishSetting.auditRecords"           = "سجلات وعود الأمنيات";
+"wishSetting.audit.all"              = "الكل";
+"wishSetting.audit.pending"          = "قيد المراجعة";
+"wishSetting.audit.approved"         = "تمت الموافقة";
+"wishSetting.audit.rejected"         = "مرفوض";
+"wishSetting.audit.empty"            = "لا توجد سجلات";
+"wishSetting.audit.rejectReason"     = "سبب الرفض";
 "wishSetting.type.commonSub"         = "مناسب لجميع البث";
 "wishSetting.type.privateSub"        = "مرئي لك فقط";
 "wishSetting.type.noTextSub"         = "الغلاف فقط";
@@ -441,6 +493,10 @@
 "liveRoom.permissionAlertTitle" = "إذن الكاميرا مطلوب";
 "liveRoom.permissionAlertOK" = "حسنًا";
 "liveRoom.permissionAlertMessage" = "يرجى تفعيل الوصول للكاميرا في الإعدادات ← Hily ← الكاميرا";
+"mediaPermission.cameraRequired" = "يلزم السماح بالوصول إلى الكاميرا. فعّلها في الإعدادات، ثم أعد تشغيل Hily للمتابعة.";
+"mediaPermission.microphoneRequired" = "يلزم السماح بالوصول إلى الميكروفون. فعّله في الإعدادات، ثم أعد تشغيل Hily للمتابعة.";
+"mediaPermission.liveRequired" = "يلزم السماح بالوصول إلى الكاميرا والميكروفون. فعّلهما في الإعدادات، ثم أعد تشغيل Hily للمتابعة.";
+"mediaPermission.alertTitle" = "الأذونات مطلوبة";
 "liveRoom.statusLiveFormat"  = "بث %@";
 "liveRoom.statusConnecting"  = "جاري الاتصال...";
 "liveRoom.status.idle"       = "غير متصل";
@@ -471,6 +527,7 @@
 "liveRoom.rank.errorRetry"        = "فشل التحميل. انقر لإعادة المحاولة.";
 "liveRoom.rank.ownMe"             = "أنا";
 "liveRoom.rank.diffFormat"        = "%@ للوصول إلى المرتبة التالية";
+"liveRoom.rank.toNext"            = "إلى الترتيب التالي:";
 "liveRoom.retry"                  = "إعادة المحاولة";
 "liveRoom.rank.tab.now"           = "الآن";
 "liveRoom.rank.tab.today"         = "اليوم";
@@ -484,6 +541,7 @@
 "liveRoom.contribution.empty.record"      = "لا توجد سجلات هدايا بعد";
 "liveRoom.contribution.errorRetry"        = "فشل التحميل. انقر لإعادة المحاولة.";
 "liveRoom.contribution.last90dFormat"     = "%@ (آخر 90 يوماً)";
+"liveRoom.contribution.last90d"           = "آخر 90 يوماً";
 "liveRoom.contribution.sentAction"        = "أرسل";
 "liveRoom.setting.effect"                 = "المؤثرات";
 "liveRoom.setting.announcement"           = "الإعلان";
@@ -656,9 +714,11 @@
 "call.error.remoteRejected"    = "تم رفض المكالمة";
 "call.error.remoteNoAnswer"    = "لا يرد";
 "call.error.remoteBusy"        = "المستخدم مشغول";
+"call.error.localBusy"         = "هناك مكالمة جارية بالفعل";
 "auth.sessionExpired"          = "انتهت صلاحية الجلسة، يرجى تسجيل الدخول مرة أخرى";
 
 // MARK: - Call 1v1 真实通话视图（CallView.swift）
+"call.waiting.answer"       = "في انتظار رد الطرف الآخر...";
 "call.subtitle.callingOut"   = "جاري الاتصال...";
 "call.subtitle.incoming"     = "يدعوك إلى مكالمة فيديو";
 "call.action.cancel"         = "إلغاء";
@@ -1068,12 +1128,47 @@
 "party.tools.title"                      = "أدوات الغرفة";
 "party.tool.lockRoom"                    = "قفل الغرفة";
 "party.tool.music"                       = "موسيقى";
+"party.music.title"                      = "الموسيقى";
+"party.music.playlist"                   = "قائمة التشغيل";
+"party.music.local"                      = "محلي";
+"party.music.liked"                      = "المفضلة";
+"party.music.empty"                      = "لا توجد موسيقى متاحة";
+"party.music.edit"                       = "تحرير";
+"party.music.upload"                     = "رفع";
+"party.music.delete"                     = "حذف";
+"party.music.selectAll"                  = "تحديد الكل";
+"party.music.invalidFormat"              = "تنسيق الصوت غير مدعوم";
+"party.music.fileTooLarge"               = "يجب ألا يتجاوز ملف الصوت 10 ميغابايت";
+"party.music.uploadSucceeded"            = "تم رفع الموسيقى";
+"party.music.uploadFailed"               = "فشل رفع الموسيقى";
+"party.music.deleteSucceeded"            = "تم حذف الموسيقى";
+"party.music.deleteFailed"               = "فشل حذف الموسيقى";
 "party.tool.settings"                    = "الإعدادات";
 "party.tool.micApplication"              = "طلب الميكروفون";
 "party.tool.roomMode"                    = "وضع الغرفة";
 "party.tool.blocklist"                   = "قائمة الحظر";
 "party.tool.mcSeat"                      = "مقعد MC";
 "party.tool.privateCall"                 = "مكالمة خاصة";
+"party.tool.currencyExchange"            = "العملة";
+"party.currency.exchangeTitle"           = "عملة الغرفة";
+"party.currency.balanceTitle"            = "الرصيد";
+"party.currency.gems"                    = "جواهر";
+"party.currency.diamonds"                = "ألماس";
+"party.currency.coins"                   = "عملات";
+"party.currency.target"                  = "التحويل إلى";
+"party.currency.available"               = "المتاح";
+"party.currency.amountPlaceholder"       = "أدخل المبلغ";
+"party.currency.all"                     = "الكل";
+"party.currency.diamondRate"             = "1 جوهرة = 1 ألماسة";
+"party.currency.coinRateHint"            = "يحدد الخادم المبلغ النهائي للعملات.";
+"party.currency.exchangeAction"          = "تحويل";
+"party.currency.refresh"                 = "تحديث الرصيد";
+"party.currency.balanceLoadFailed"       = "تعذر تحميل رصيدك";
+"party.currency.invalidAmount"           = "أدخل عددًا صحيحًا موجبًا من الجواهر";
+"party.currency.insufficientBalance"     = "جواهر غير كافية";
+"party.currency.diamondExchangeSuccessFormat" = "تم تحويل %lld جوهرة إلى ألماس";
+"party.currency.coinExchangeSuccess"     = "تم تحويل الجواهر إلى عملات";
+"party.currency.exchangeFailed"          = "فشل التحويل";
 "party.privateCall.openConfirmLabel"     = "فتح المكالمة الخاصة";
 "party.tool.comingSoon"                  = "قريبًا";
 // F-spec §5.1 إعدادات مكالمة الحفلة
@@ -1109,6 +1204,8 @@
 "party.mcSeat.submit"                    = "تعيين مقعد MC";
 "party.mcSeat.tips"                      = "يمكن للمالك والمشرفين فقط الجلوس في مقعد MC";
 "party.mcSeat.badge"                     = "MC";
+"party.mcSeat.cannotTake"                = "لا يمكنك الجلوس في مقعد MC";
+"party.mcSeat.change"                    = "تغيير MC";
 "party.mcSeat.confirmEmpty"              = "هل تريد تعيين هذا المقعد الفارغ كمقعد MC؟";
 "party.mcSeat.confirmPrivilegedFormat"   = "‏%@ مدير حالياً. هل تريد تعيين هذا المقعد كمقعد MC؟";
 "party.mcSeat.confirmNormalFormat"       = "سيتم إخراج ‏%@ من المقعد. هل تريد تعيين هذا المقعد كمقعد MC؟";
@@ -1118,11 +1215,19 @@
 
 // v3（2026-07-15）Step 2 通知公屏系统消息
 "party.videoSeat.inviteAcceptedFormat"   = "انضم %@ إلى مقعد الفيديو";
+"party.videoSeat.feedbackReject"         = "تم رفض دعوة مقعد الفيديو";
+"party.videoSeat.feedbackTimeout"        = "انتهت مهلة دعوة مقعد الفيديو";
+"party.videoSeat.feedbackLeave"          = "غادر المستخدم المدعو الغرفة";
+"party.videoSeat.feedbackOccupied"       = "مقعد الفيديو مشغول بالفعل";
+"party.videoSeat.feedbackAlreadyOn"      = "المستخدم المدعو موجود بالفعل على مقعد";
+"party.videoSeat.feedbackJoinFailed"     = "تعذر على المستخدم المدعو الانضمام إلى مقعد الفيديو";
 "party.authUpdate.setAdmin"              = "لقد تم تعيينك كمشرف على الغرفة";
 "party.authUpdate.removeAdmin"           = "لم تعد مشرفًا على الغرفة";
 "party.roomAnnouncement.format"          = "إعلان الغرفة: %@";
 "party.luckyNumber.drawFormat"           = "سحب %1$@ الرقم المحظوظ %2$d";
 "party.luckyNumber.winFormat"            = "فاز %1$@ بالرقم المحظوظ %2$d";
+"party.luckyNumber.matched"              = "تمت مطابقة الرقم المحظوظ بنجاح";
+"party.luckyNumber.personalWinFormat"    = "رائع! لقد طابقت الرقم المحظوظ %d";
 "party.create.section.template"          = "اختر القالب";
 "party.create.template.loading"          = "جارٍ تحميل القوالب…";
 "party.create.template.empty"            = "لا توجد قوالب متاحة في dev";
@@ -1138,6 +1243,11 @@
 "party.invite.accept"                    = "قبول";
 "party.invite.reject"                    = "رفض";
 "party.invite.messageFormat"             = "دعاك %@ للجلوس في مقعد الفيديو %d";
+"party.invite.expiresFormat"             = "تنتهي خلال %d ثانية";
+"party.seatInvite.title"                  = "دعوة للميكروفون";
+"party.seatInvite.empty"                  = "لا يوجد مستخدمون متصلون";
+"party.seatInvite.joined"                 = "على الميكروفون";
+"party.seatInvite.inviting"               = "جارٍ إرسال الدعوة";
 "party.selfActions.title"                = "مقعدي";
 "party.selfActions.micOn"                = "تشغيل الميكروفون";
 "party.selfActions.micOff"               = "إيقاف الميكروفون";
@@ -1146,6 +1256,8 @@
 "party.selfActions.leaveSeat"            = "مغادرة المقعد";
 "party.input.placeholder"                = "قُل شيئًا…";
 "party.gift.messageFormat"               = "🎁 أرسل %@ %@ ×%d";
+"party.giftEffect.sendsTo"               = "أرسل إلى";
+"party.giftEffect.peopleFormat"          = "%d أشخاص";
 
 "party.state.joined"                     = "تم الانضمام";
 "party.state.entering"                   = "جارٍ الانضمام…";
@@ -1181,7 +1293,8 @@
 "party.roomMode.loadError"               = "فشل تحميل الأوضاع";
 
 /* MARK: - E spec §3 Mic Application */
-"party.micApplication.sheetTitle"        = "طلبات المايك";
+"party.micApplication.sheetTitle"        = "قائمة الطلبات";
+"party.micApplication.peopleApplyFormat" = "%d أشخاص تقدموا بطلب";
 "party.micApplication.emptyState"        = "لا توجد طلبات";
 "party.micApplication.approve"           = "موافقة";
 "party.micApplication.reject"            = "رفض";
@@ -1195,9 +1308,13 @@
 "party.micApplication.switchOffBody"     = "لن يتمكن المستخدمون من طلب المقاعد بعد الآن.";
 "party.micApplication.switchOnSystemMsg" = "تم تشغيل طلبات المايك";
 "party.micApplication.switchOffSystemMsg" = "تمت إزالة طلبات المايك";
-"party.micApplication.cancel"            = "إلغاء الطلب";
+"party.micApplication.cancel"            = "اِسْتَسْلِم";
 "party.micApplication.tapEmptySeatHint"  = "اضغط على مقعد فارغ لتقديم طلب";
-"party.micApplication.submit"            = "طلب المقعد";
+"party.micApplication.submit"            = "قَدّم";
+"party.deleteMessage"                    = "حذف الرسالة";
+"party.deleteMessageConfirm"             = "حذف هذه الرسالة؟";
+"party.messageDeleted"                   = "تم حذف الرسالة";
+"party.deleteMessageFailed"              = "فشل حذف الرسالة";
 "party.approveSeatPicker.title"          = "تعيين مقعد";
 "party.approveSeatPicker.subtitleFormat" = "الموافقة على %@ لأي مقعد؟";
 "party.approveSeatPicker.seatNumberFormat" = "المقعد رقم %d";
@@ -1472,9 +1589,13 @@
 "wishlist.progress.complete"     = "مكتمل";
 "wishlist.panel.title"           = "قائمة أمنيات %@ لهذه الجولة";
 "wishlist.panel.subtitle"        = "ساعد المذيع على تحقيق أمنياته واحصل على مكافآت!";
+"wishlist.panel.empty"           = "لم يتم تعيين قائمة أمنيات لهذه الجلسة";
 "wishlist.panel.top6Title"       = "أفضل المهدين";
 "wishlist.panel.top6Empty"       = "يتم عرض أفضل 6 حسب قيمة الهدية فقط";
-"wishlist.achieved.title"        = "تحققت الأمنية!";
+"wishlist.float.complete"        = "تحققت الأمنية،";
+"wishlist.float.thanks"          = "شكرًا يا بطلي!";
+"wishlist.top1.prefix"           = "أصبح الآن";
+"wishlist.top1.suffix"           = "داعمي";
 
 /* EditProfile 用户资料编辑页（I 里程碑） */
 "editProfile.navTitle"                             = "تعديل الملف الشخصي";
@@ -1547,9 +1668,24 @@
 /* 顶栏 Rank / Viewers sheet */
 "partyRoom.rank.tab.contribution"        = "المساهمة";
 "partyRoom.rank.tab.honor"               = "الشرف";
+"partyRoom.rank.tab.gameTask"            = "مهمة اللعبة";
+"partyRoom.rank.tab.daily"               = "يومي";
+"partyRoom.rank.period.today"            = "اليوم";
+"partyRoom.rank.period.yesterday"        = "أمس";
 "partyRoom.rank.viewersTitle"            = "المشاهدون";
 "partyRoom.rank.emptyRank"               = "لا يوجد ترتيب بعد";
 "partyRoom.rank.emptyViewers"            = "لا يوجد مشاهدون بعد";
+"partyRoom.weeklyTask.title"             = "المهمة الأسبوعية";
+"partyRoom.weeklyTask.liveTime"          = "وقت الميكروفون";
+"partyRoom.weeklyTask.empty"             = "لا توجد مهام أسبوعية الآن";
+"partyRoom.weeklyTask.loadMore"          = "عرض المزيد";
+"partyRoom.weeklyTask.reward.title"      = "تهانينا";
+"partyRoom.weeklyTask.reward.confirm"    = "حسنًا";
+"partyRoom.weeklyTask.reward.fallback"   = "مكافأة";
+"partyRoom.a11y.weeklyTask"              = "المهمة الأسبوعية";
+"partyRoom.hotTask.title"                = "مهمة الغرفة الرائجة";
+"partyRoom.hotRoomGuide.title"           = "انضم إلى غرفة رائجة";
+"partyRoom.hotRoomGuide.action"          = "اذهب الآن";
 
 "partyRoom.tab.all"                      = "الكل";
 "partyRoom.tab.chat"                     = "الدردشة";
@@ -1596,10 +1732,28 @@
 // F 期便利功能 Room Mute toggle 状态化文案
 "partyRoom.toolMenu.roomMute.on"         = "كتم صوت الغرفة";
 "partyRoom.toolMenu.roomMute.off"        = "إلغاء كتم الغرفة";
+"partyRoom.toolMenu.interactiveGames"    = "الألعاب التفاعلية";
+"partyRoom.toolMenu.basicTools"          = "الأدوات الأساسية";
+"partyRoom.toolMenu.pk"                  = "PK";
+"partyRoom.toolMenu.free"                = "مجاني";
+"partyRoom.toolMenu.settings"            = "الإعدادات";
+"partyRoom.toolMenu.luckyNumberSent"     = "تم إرسال رقم الحظ";
+"partyRoom.toolMenu.range"               = "النطاق";
+"partyRoom.toolMenu.setLuckyNumber"      = "تعيين رقم الحظ";
+"partyRoom.toolMenu.allowAdmins"         = "السماح للمشرفين بتعيين رقم الحظ";
+"partyRoom.toolMenu.save"                = "حفظ";
+"partyRoom.toolMenu.invalidLuckyNumber"  = "يرجى إدخال رقم صالح";
+"partyRoom.toolMenu.luckyNumberSaved"    = "تم حفظ رقم الحظ";
+"partyRoom.toolMenu.history"             = "السجل";
+"partyRoom.toolMenu.historyHint"         = "تعرض هذه القائمة سجلات المستخدمين في الغرفة الذين طابقوا أرقام الحظ خلال آخر 3 أيام.";
+"partyRoom.toolMenu.noHistory"           = "لا يوجد سجل بعد";
+"partyRoom.toolMenu.loadMore"            = "عرض المزيد";
 // F 期便利功能 ShareLink 深链
 "partyRoom.share.messageFormat"          = "انضم إلى غرفة الحفلة الخاصة بي! %@";
+"party.shareInvite.title"                 = "دعوة";
+"party.shareInvite.sent"                  = "تم إرسال الدعوة";
 "partyRoom.seat.locked"                  = "المقعد مقفل";
-"partyRoom.seat.videoNeedsInvite"        = "يتطلب دعوة من مالك الغرفة/المسؤول";
+"partyRoom.seat.videoNeedsInvite"        = "مقاعد الفيديو تتطلب دعوة من المضيف";
 "partyRoom.switchSeat.title"             = "التبديل إلى هذا المقعد؟";
 "partyRoom.switchSeat.confirm"           = "تبديل";
 "partyRoom.adminSeat.title"              = "إدارة المقعد";
@@ -1625,3 +1779,23 @@
 "liveRoom.task.rules.title.tycoon"       = "قواعد مهمة رجل أعمال نشط";
 "liveRoom.task.rules.body.liveGift"      = "1. المستخدمون المستهدفون: جميع المستخدمين في غرفة البث المباشر\n2. سلوك التقدم: الأنشطة المدفوعة بما في ذلك إرسال الهدايا والسحب الترفيهي والاتصال المباشر والمكالمات الخاصة\n3. دورة إعادة التعيين: يتم احتسابها أسبوعياً، تتم إعادة تعيين البيانات كل أسبوع\n4. حساب التقدم: يتم احتسابه وفقاً لمعايير المهمة ذات الصلة";
 "liveRoom.task.rules.body.tycoon"        = "1. المستخدمون المستهدفون: المستخدمون الموسومون بـ رجل أعمال نشط\n2. سلوك التقدم: الأنشطة المدفوعة بما في ذلك إرسال الهدايا والسحب الترفيهي والاتصال المباشر والمكالمات الخاصة من قِبل المستخدمين الموسومين\n3. دورة إعادة التعيين: يتم احتسابها أسبوعياً، تتم إعادة تعيين البيانات كل أسبوع\n4. حساب التقدم: يتم احتسابه وفقاً لمعايير المهمة ذات الصلة";
+"liveRoom.roulette.tip"                  = "شغّل العجلة";
+
+"robotCall.incoming.title"               = "مبتدئ";
+"robotCall.incoming.support"             = "دعم رسمي";
+"robotCall.incoming.waiting"             = "بانتظار الرد";
+"robotCall.action.accept"                = "رد";
+"robotCall.action.reject"                = "رفض";
+"robotCall.action.end"                   = "إنهاء المكالمة";
+"robotCall.minimumDuration"              = "يجب ألا تقل مدة المكالمة عن 10 ثوانٍ";
+"robotCall.acceptFailed"                 = "تعذر الرد على هذه المكالمة. حاول لاحقاً.";
+"robotCall.reward.title"                 = "تهانينا";
+"robotCall.noReward.title"               = "استمر في المحاولة";
+"robotCall.duration.format"              = "مدة المكالمة: %@";
+"robotCall.reward.duration.format"       = "وصلت مدة المكالمة الحالية إلى: %@";
+"robotCall.reward.coins.format"          = "تم ربح %@ عملة";
+"robotCall.reward.ok"                    = "حسناً";
+
+"paidBullet.dislike"                     = "لا يعجبني";
+"paidBullet.dislikeFailed"               = "تعذر إرسال عدم الإعجاب. حاول مرة أخرى.";
+"paidBullet.earningsToast"               = "+%lld عملات (رسالة مدفوعة)";

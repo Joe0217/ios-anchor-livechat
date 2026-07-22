@@ -16,5 +16,6 @@ Vendor/FaceUnity/_ref/
 Pods/
 .spm/
 
-# 多环境密钥：dev 入库（Config-Dev.xcconfig），prod 不入库
+# 多环境密钥：dev 入库（Config-Dev.xcconfig）；test/prod 不入库（真实业务密钥同等敏感）
+Config/Config-Test.xcconfig
 Config/Config-Prod.xcconfig

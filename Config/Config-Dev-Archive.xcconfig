@@ -1,0 +1,45 @@
+// CocoaPods 集成：base config 由本文件占用，必须显式 #include Pods xcconfig 否则
+// frameworks/xcfilelist 路径丢失（xcodegen 重生项目时此 include 必须保留）。
+// 本文件专用于 Release-Test configuration（Hily-Test scheme Archive），必须 include
+// release-test 版 Pods xcconfig；用 debug 版会导致 archive 时 dyld/framework 搜索路径不匹配。
+#include? "../Pods/Target Support Files/Pods-Hily/Pods-Hily.release-test.xcconfig"
+
+// Dev 环境 Archive 构建配置（Hily-Test scheme 打测试包用）
+//
+// 与 Config-Dev.xcconfig 密钥完全一致，唯一差别是 include 的 Pods xcconfig 版本
+// （Config-Dev include debug 版给日常 Run 用；本文件 include release-test 版给 Archive 用）。
+//
+// 用法：project.yml configFiles.Release-Test 绑定到本文件；Xcode 顶部 Scheme 选
+//      Hily-Test → Product → Archive 即出 Dev 环境测试包。
+//
+// ⚠️ 修改密钥时必须同步 Config-Dev.xcconfig，两者保持一致（除 include 行）。
+
+// API 域名（仅 host）
+HILY_API_HOST = anchor.cphub.link
+HILY_SAPI_HOST = vvi.cphub.link
+HILY_SOCKET_HOST = api.seain.site
+
+// 主接口鉴权与业务版本
+HILY_APP_ID = 20735424
+HILY_OCP_APIM_KEY = 9ec52f6d03cd4d5985a6a2c8bb1ce5ee
+HILY_APP_VERSION = 2.2.0
+
+// 云信 NIM（dev 独立集群）
+HILY_NIM_APP_KEY = 124f689baed25c488e1330bc42e528af
+
+// 系统通知 P2P session 的 yxAccId
+HILY_NOTIFICATION_YX_ACC_ID = video-sky-test
+
+// 主接口请求体 AES-128-CBC
+HILY_AES_KEY = 9986sdff5s4f1123
+HILY_AES_IV = 9986sdff5s4y456a
+
+// sapi（vvi 背包商城 / 派对房）请求体 AES-128-CBC（dev 巧合与主接口同套）
+HILY_SAPI_AES_KEY = 9986sdff5s4f1123
+HILY_SAPI_AES_IV = 9986sdff5s4y456a
+
+// WebSocket 握手 AES-128-ECB（全环境同）
+HILY_WS_AES_KEY = 9976kk4322578894
+
+// 声网 Agora（dev 独立 appId）
+HILY_AGORA_APP_ID = 4af61c7a92f447d3a582308b5817dbd2

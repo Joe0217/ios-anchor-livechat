@@ -93,6 +93,22 @@ final class OssUploadService: OssUploadServiceProtocol {
         )
     }
 
+    /// 公开文件上传。音频等非图像媒体复用同一份 STS / PostObject 链路，
+    /// 仅由调用方提供 MIME 与 object key；音频也使用长超时 session。
+    func uploadPublicFile(fileData: Data,
+                          credential: OssCredential,
+                          objectKey: String,
+                          contentType: String) async throws -> String {
+        try await performUpload(
+            fileData: fileData,
+            credential: credential,
+            objectKey: objectKey,
+            contentType: contentType,
+            objectAcl: nil,
+            useVideoSession: true
+        )
+    }
+
     private func performUpload(fileData: Data,
                                credential: OssCredential,
                                objectKey: String,

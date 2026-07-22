@@ -137,6 +137,8 @@ targets:
       - path: Tests/HilyTests
       # 把待测纯 Swift 文件作为 test target 自己的源码编译（独立 module，零 SDK 依赖）
       - path: Sources/Core/CryptoUtil.swift
+      # 未审核登录/审核态字段兼容解码（纯 Foundation）
+      - path: Sources/Auth/AuthModels.swift
       - path: Sources/Core/AppConfig.swift
       - path: Sources/Core/AppLogger.swift
       - path: Sources/Core/KeychainStore.swift
@@ -213,6 +215,8 @@ targets:
       - path: Sources/Message/Chat/Services/CheckPrivateInfoService.swift
       - path: Sources/Message/Chat/Services/ChatTypeResolver.swift
       - path: Sources/Call/CallCooldownGuard.swift
+      # J 机器人通话：NIM 132/133 payload 解析（纯 Foundation）
+      - path: Sources/RobotCall/RobotCallModels.swift
       # H-3 step 1a-5：SendPrivateInfoService + PrivateMediaSelection（P2PChatStore.sendPrivate 依赖）
       - path: Sources/Message/Chat/Services/SendPrivateInfoService.swift
       - path: Sources/Message/Chat/P2PChatState.swift
@@ -227,6 +231,12 @@ targets:
       - path: Sources/PublicChat/Store/UnifiedPublicChatFeed.swift
       # Phase 1 T8：抽出的 PublicChatMessage struct（原在 NIMChatroomManager.swift，纯 Foundation）
       - path: Sources/Live/PublicScreen/LivePublicChatPayload.swift
+      # 直播公屏 50 条容量 + 猜拳获胜通知字段解析（零 SDK，独立单测）
+      - path: Sources/Live/PublicScreen/PublicChatMessagesStore.swift
+      - path: Sources/Live/PublicScreen/RpsWinNotificationPayload.swift
+      # H 里程碑：直播付费跑马灯过滤/去重/点踩状态机（真实 sapi service 不入 tests）
+      - path: Sources/Live/Marquee/PaidBulletServiceProtocol.swift
+      - path: Sources/Live/Marquee/PaidBulletQueue.swift
       # Phase 1 T9：adapter 读 messageType → 派 PublicChatVariant
       - path: Sources/Live/PublicScreen/PublicChatMessageType.swift
       - path: Sources/PublicChat/Adapters/LivePublicChatAdapter.swift
@@ -244,8 +254,10 @@ targets:
       # E 里程碑 C 档单测（2026-06-26）：派对房 model / 解析 / Identity / 跨通道归一化（纯 Foundation + Codable，零 SDK 依赖）
       - path: Sources/Party/Models/PartyEnums.swift
       - path: Sources/Party/Models/PartyEvents.swift
+      - path: Sources/Party/GiftEffect/PartyGiftEffectItem.swift
       - path: Sources/Party/Models/PartyRoomInfo.swift
       - path: Sources/Party/Models/PartyRoomSeat.swift
+      - path: Sources/Party/Models/PartySeatInviteCandidate.swift
       - path: Sources/Party/Utils/PartyValueNormalizer.swift
       - path: Sources/Party/NIM/PartyKickedOutGuard.swift
       # E 里程碑 派对房列表接入主 tab (2026-07-09)：Store 状态机 + Service protocol + PreviewFake（纯 Foundation，零 SDK 依赖）
@@ -376,6 +388,10 @@ targets:
       - path: Sources/Party/Network/PartyGiftSendServiceProtocol.swift
       - path: Sources/Party/Network/PartyBalanceServiceProtocol.swift
       - path: Sources/Party/UI/Gift/PartyGiftPanelBridge.swift
+      # I 里程碑：房币兑换纯模型/协议/Store；Default service 依赖 PartyAPIClient 不入白名单
+      - path: Sources/Party/Currency/PartyCurrencyModels.swift
+      - path: Sources/Party/Currency/PartyCurrencyService.swift
+      - path: Sources/Party/Currency/PartyCurrencyStore.swift
       # H 里程碑 · 直播间任务面板(LiveGiftTask)Step 1a：Model + Service protocol + 4 Store 全部零 SDK 依赖
       # 依赖：CodableExtensions (decodeFlexibleInt) + TaskCenterModels (ActiveTycoonTaskVO 复用)
       - path: Sources/Core/Extensions/CodableExtensions.swift
@@ -386,6 +402,10 @@ targets:
       - path: Sources/Live/GiftTask/LiveGiftTaskHistoryStore.swift
       - path: Sources/Live/GiftTask/ActiveTycoonTaskStore.swift
       - path: Sources/Live/GiftTask/LiveGiftTaskSheetStore.swift
+      # 直播心愿单：模型 + service protocol/decoder + store（收礼 IM 与首轮拉取的竞态回归测试）
+      - path: Sources/Live/Wishlist/WishlistModels.swift
+      - path: Sources/Live/Wishlist/WishlistService.swift
+      - path: Sources/Live/Wishlist/WishlistStore.swift
       # F-1a Task 1-6 (2026-07-17)：派对房 PK 战队 · 状态枚举 + double/string 兼容 + 错误枚举 + 主 state Codable + 10 endpoints + 12 IM payload + 全局开关 Java Map style parser（纯 Foundation）
       - path: Sources/Party/Battle/Models/PartyBattleTypes.swift
       - path: Sources/Party/Battle/Models/PartyBattleServiceError.swift

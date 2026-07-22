@@ -12,6 +12,12 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "Agora")
 /// - `tokenPrivilegeWillExpire` 真正续期（拉新 token → renewToken）
 /// - 109/110 error code 同链路；续期失败 → store.forceEnd(.disconnected)
 final class AgoraManager: NSObject, ObservableObject {
+    /// 主播推流与客态观看使用同一 RTC 引擎，但 channel media options 完全不同。
+    /// 把角色显式收在这里，避免客态误发布本地音视频或初始化外部视频帧来源。
+    enum JoinRole: Equatable {
+        case broadcaster
+        case audience
+    }
     /// rawValue 走英文 internal code（用于 logger / 调试日志，绝不直接显示到 UI）；
     /// 用户可见的 status 文案统一走 `var label: String` 经 L10n。
     enum State: String {
@@ -119,7 +125,8 @@ final class AgoraManager: NSObject, ObservableObject {
     func join(channelId: String,
               token: String,
               uid: UInt,
-              profile: AgoraChannelProfile = .liveBroadcasting) {
+              profile: AgoraChannelProfile = .liveBroadcasting,
+              role: JoinRole = .broadcaster) {
         guard engine == nil else { return }
 
         let config = AgoraRtcEngineConfig()
@@ -135,28 +142,34 @@ final class AgoraManager: NSObject, ObservableObject {
         kit.enableVideo()
         kit.enableAudio()
 
-        kit.setExternalVideoSource(true, useTexture: true, sourceType: .videoFrame)
-        kit.setVideoEncoderConfiguration(
-            AgoraVideoEncoderConfiguration(
-                size: CGSize(width: 720, height: 1280),
-                frameRate: AgoraVideoFrameRate.fps30.rawValue,
-                bitrate: AgoraVideoBitrateStandard,
-                orientationMode: .fixedPortrait,
-                mirrorMode: .disabled
+        if role == .broadcaster {
+            kit.setExternalVideoSource(true, useTexture: true, sourceType: .videoFrame)
+            kit.setVideoEncoderConfiguration(
+                AgoraVideoEncoderConfiguration(
+                    size: CGSize(width: 720, height: 1280),
+                    frameRate: AgoraVideoFrameRate.fps30.rawValue,
+                    bitrate: AgoraVideoBitrateStandard,
+                    orientationMode: .fixedPortrait,
+                    mirrorMode: .disabled
+                )
             )
-        )
+        } else {
+            // sharedEngine 可能来自上一场主播直播；客态必须主动关闭外部帧源，
+            // 否则退出主播房后立刻进他人直播间仍可能错误保留 publish track。
+            kit.setExternalVideoSource(false, useTexture: true, sourceType: .videoFrame)
+        }
         kit.setDefaultAudioRouteToSpeakerphone(true)
 
         let option = AgoraRtcChannelMediaOptions()
-        option.clientRoleType = .broadcaster
-        option.publishCustomVideoTrack = true
-        option.publishMicrophoneTrack = true
+        option.clientRoleType = role == .broadcaster ? .broadcaster : .audience
+        option.publishCustomVideoTrack = role == .broadcaster
+        option.publishMicrophoneTrack = role == .broadcaster
         option.autoSubscribeAudio = true
         option.autoSubscribeVideo = true
 
         state = .joining
         message = ""
-        logger.info("joinChannel channel=\(channelId) uid=\(uid)")
+        logger.info("joinChannel channel=\(channelId) uid=\(uid) role=\(role == .broadcaster ? "broadcaster" : "audience")")
         let ret = kit.joinChannel(byToken: token,
                                   channelId: channelId,
                                   uid: uid,
@@ -373,6 +386,17 @@ final class AgoraManager: NSObject, ObservableObject {
         if empty {
             applyEncoderQuality(.normal)
         }
+    }
+
+    /// 客态 PK 收到主播的 `attachType=-8` 后，只静音对手扩展频道的音频；主直播频道音频保持不变。
+    func mutePKOppositeAudio(channel: String, uid: UInt, muted: Bool) {
+        guard let engine else { return }
+        pkLock.lock()
+        let connection = pkConnections[channel]
+        pkLock.unlock()
+        guard let connection else { return }
+        engine.muteRemoteAudioStreamEx(uid, mute: muted, connection: connection)
+        logger.info("PK opponent audio muted=\(muted) channel=\(channel, privacy: .public)")
     }
 
     /// PKChannelDelegate 在 SDK 子线程读字典；锁内拷贝引用 + 锁外返回，避免长持锁。

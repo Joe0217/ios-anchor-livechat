@@ -22,8 +22,16 @@ import MetalKit
 /// PIP 在 dismantleUIView 时**精确注销自己那一格**，本体的 sink 始终留在字典里——不依赖任何
 /// SwiftUI re-eval 时机，杜绝 v5.3.3 ~ v5.7 的所有调度盲点。
 struct CameraPreview: UIViewRepresentable {
+    /// 本地预览的画面缩放策略。
+    /// Party 视频位需始终铺满麦位容器；其余使用方维持现有的自适应策略。
+    enum ScalingMode: Equatable {
+        case adaptive
+        case aspectFill
+    }
+
     let camera: CameraManager
     var agora: AgoraManager? = nil
+    var scalingMode: ScalingMode = .adaptive
 
     func makeCoordinator() -> Coordinator {
         Coordinator(camera: camera)
@@ -31,11 +39,13 @@ struct CameraPreview: UIViewRepresentable {
 
     func makeUIView(context: Context) -> MetalPreviewView {
         let view = MetalPreviewView(device: MTLCreateSystemDefaultDevice())
+        view.forceAspectFill = scalingMode == .aspectFill
         context.coordinator.attach(view: view, agora: agora)
         return view
     }
 
     func updateUIView(_ uiView: MetalPreviewView, context: Context) {
+        uiView.forceAspectFill = scalingMode == .aspectFill
         // v5.8：updateUIView 也 attach，覆盖 agora 引用可能变化的情况（例：CallView 重建 store.agora）。
         // 字典 set 同 key 是幂等的（覆盖闭包，不再 race；订阅字典本身就承担去重）。
         context.coordinator.attach(view: uiView, agora: agora)

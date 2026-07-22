@@ -26,6 +26,21 @@ enum AppConfigService {
         return dict
     }
 
+    /// 2026-07-16 便利方法：拉取官方 WhatsApp 号(对齐 H5 `getConfigByKey({searchValue: 'WhatsApp'})`)。
+    /// 服务端未配置 or 拉取失败均返回 nil,UI 层用硬编码 fallback。
+    /// 受限首屏 mineRestricted/newsRestricted + Work 页 联系客服 3 处复用。
+    static func fetchWhatsAppPhone() async -> String? {
+        do {
+            let dict = try await fetch(keys: ["WhatsApp"])
+            if let s = dict["WhatsApp"] as? String, !s.isEmpty { return s }
+            if let n = dict["WhatsApp"] as? NSNumber { return n.stringValue }
+            return nil
+        } catch {
+            logger.error("[AppConfig] fetchWhatsAppPhone failed: \(String(describing: error), privacy: .public)")
+            return nil
+        }
+    }
+
     /// 便利方法：拉取"长时间无操作自动离线"阈值（分钟）。
     /// 服务端未配置 or 拉取失败均返回 0（AutoOfflineMonitor 内 0 = 不启用）。
     static func fetchAutoOfflineReminderMinutes() async -> Int {

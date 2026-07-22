@@ -48,6 +48,30 @@
 "work.scorePrefix"           = "Skor: ";
 "work.needMoreFormat"        = "(Seviye atlamak için %d puan daha gerekli)";
 
+"dataStatistics.navTitle"                    = "Veri İstatistikleri";
+"dataStatistics.bannerSubtitle"               = "Performansınızı ve seviye ilerlemenizi takip edin";
+"dataStatistics.totalDislikeRate"             = "Toplam Beğenmeme Oranı";
+"dataStatistics.offsetDislike"                = "Beğenmemeyi Telafi Et >";
+"dataStatistics.removeDislike"                = "Beğenmemeyi Kaldır";
+"dataStatistics.removeDislikeDescription"     = "Beğenmemeleri kalıcı olarak kaldırmak için her hafta puanlarınızı, haftalık bir limit dahilinde kullanabilirsiniz. Limit aşılırsa, puanları kullanmak için önümüzdeki haftaya kadar beklemeniz gerekecektir. Kesintilerinizi hafta içinde tamamlayın, çünkü puanlar her yeni haftanın başında sıfırlanır.";
+"dataStatistics.dislikeRate"                  = "Beğenmeme Oranı";
+"dataStatistics.dislikeRateDescription"       = "Kullanıcılar arama bittikten sonra beğeni veya beğenmeme verecektir. Sunucu türleriyle ilgili beğenmemeler, profilinizde gösterilen beğenmeme oranınızı etkiler. Beğenmemeleri azaltmak için görüşme sırasında daha fazla iletişim kurun veya mesaj göndererek puan kazanın. Puanlar, beğenmemeleri kalıcı olarak kaldırmak için kullanılabilir.";
+"dataStatistics.likes"                        = "Beğeniler";
+"dataStatistics.dislikes"                     = "Beğenmeyenler";
+"dataStatistics.privateAndLiveOnly"           = "(Yalnızca özel ve canlı aramalar hesaplanır)";
+"dataStatistics.category"                     = "Kategori";
+"dataStatistics.week"                         = "Hafta";
+"dataStatistics.levelAnswerRate"              = "Seviye Yanıt Oranı";
+"dataStatistics.levelAvgDuration"             = "Seviye Ort. Süre";
+"dataStatistics.levelCalls"                   = "Seviye Aramaları";
+"dataStatistics.levelUpdateTime"              = "Seviye Güncelleme Zamanı";
+"dataStatistics.currentLevelBenefits"         = "Mevcut Seviye Avantajları";
+"dataStatistics.currentPoints"                = "Mevcut Puanlar";
+"dataStatistics.remainingChancesFormat"       = "%@ Puan / %@ Kalan Şans";
+"dataStatistics.offset"                       = "Telafi";
+"dataStatistics.deductionSucceeded"           = "Bir beğenmemeyi telafi ettiniz";
+"dataStatistics.deductionUnavailable"         = "Puanlarınız yetersiz";
+
 "work.levelText.topHost"     = "Sen üst düzey bir yayıncısın";
 
 "call.reconnect"             = "Yeniden Bağlan";
@@ -174,6 +198,27 @@
 "live.rankBadge"             = "Lider Tablosu";
 "live.refresh"               = "Yenile";
 "live.onlineDot"             = "Çevrimiçi";
+
+// Home ranking (/rank)
+"home.rank.title"            = "Lider Tablosu";
+"home.rank.charm"            = "Çekicilik";
+"home.rank.wealth"           = "Servet";
+"home.rank.couple"           = "Çift";
+"home.rank.day"              = "Gün";
+"home.rank.week"             = "Hafta";
+"home.rank.month"            = "Ay";
+"home.rank.rules"            = "Sıralama Kuralları";
+"home.rank.rules.text"       = "Sıralamalar seçilen dönem için hesaplanır. Ödüller geçerli etkinlik kurallarına tabidir.";
+"home.rank.rules.charm"      = "Çekicilik ve servet sıralamaları seçilen dönem için hesaplanır. Ödüller geçerli etkinlik kurallarına tabidir.";
+"home.rank.rules.couple"     = "Çift sıralamaları seçilen dönem için hesaplanır. Ödüller geçerli etkinlik kurallarına tabidir.";
+"home.rank.myRanking"        = "Sıralamam";
+"home.rank.notRanked"        = "99+";
+"home.rank.noData"           = "Henüz sıralama yok";
+"home.rank.hostPlaceholder"  = "Yayıncı adı";
+"home.rank.userPlaceholder"  = "Kullanıcı adı";
+"home.rank.mystery"          = "Gizemli";
+"home.rank.notOnListYet"     = "Henüz listede değilsin";
+"home.rank.keepSendingGifts" = "Sıralamada yükselmek için hediye göndermeye devam et";
 
 // MARK: - List 子页（设计稿还原）
 "liveList.segment.online"    = "Çevrimiçi";
@@ -374,7 +419,7 @@
 "wishSetting.ruleDoc"                = "Dilekleri adil ve içten kullanmayı ve platform kurallarına uymayı taahhüt ediyoruz. Herhangi bir ihlal hesap kısıtlamasına yol açabilir.";
 "wishSetting.save"                   = "Kaydet";
 "wishSetting.pleaseEnterTheme"       = "Lütfen konu girin";
-"wishSetting.themeMaxLen"            = "Konu 20 karakteri aşamaz";
+"wishSetting.themeMaxLen"            = "Konu 15 karakteri aşamaz";
 "wishSetting.submittedForReview"     = "İncelemeye gönderildi";
 "wishSetting.pleaseAgreeRule"        = "Lütfen Dilek Taahhüt Kurallarını kabul edin";
 "wishSetting.pleaseAddGift"          = "Lütfen en az bir dilek hediyesi ekleyin";
@@ -383,6 +428,13 @@
 "wishSetting.saved"                  = "Kaydedildi";
 "wishSetting.reviewStatus"           = "İnceleme durumu";
 "wishSetting.reviewStatusIntro"      = "Onaylandıktan sonra, özel şablon kullanıcılara görünür olacak.";
+"wishSetting.auditRecords"           = "Dilek Sözü Kayıtları";
+"wishSetting.audit.all"              = "Tümü";
+"wishSetting.audit.pending"          = "İncelemede";
+"wishSetting.audit.approved"         = "Onaylandı";
+"wishSetting.audit.rejected"         = "Reddedildi";
+"wishSetting.audit.empty"            = "Henüz kayıt yok";
+"wishSetting.audit.rejectReason"     = "Red nedeni";
 "wishSetting.type.commonSub"         = "Tüm yayıncılara uygun";
 "wishSetting.type.privateSub"        = "Yalnızca kendine görünür";
 "wishSetting.type.noTextSub"         = "Yalnızca kapak";
@@ -441,6 +493,10 @@
 "liveRoom.permissionAlertTitle" = "Kamera İzni Gerekli";
 "liveRoom.permissionAlertOK" = "Tamam";
 "liveRoom.permissionAlertMessage" = "Ayarlar → Hily → Kamera bölümünden kamera erişimini etkinleştirin";
+"mediaPermission.cameraRequired" = "Kamera erişimi gerekli. Ayarlar'dan etkinleştirin, ardından devam etmek için Hily'yi yeniden başlatın.";
+"mediaPermission.microphoneRequired" = "Mikrofon erişimi gerekli. Ayarlar'dan etkinleştirin, ardından devam etmek için Hily'yi yeniden başlatın.";
+"mediaPermission.liveRequired" = "Kamera ve mikrofon erişimi gerekli. Ayarlar'dan etkinleştirin, ardından devam etmek için Hily'yi yeniden başlatın.";
+"mediaPermission.alertTitle" = "İzinler Gerekli";
 "liveRoom.statusLiveFormat"  = "Canlı %@";
 "liveRoom.statusConnecting"  = "Bağlanılıyor...";
 "liveRoom.status.idle"       = "Boşta";
@@ -471,6 +527,7 @@
 "liveRoom.rank.errorRetry"        = "Yükleme başarısız. Tekrar denemek için dokunun.";
 "liveRoom.rank.ownMe"             = "Ben";
 "liveRoom.rank.diffFormat"        = "Sonraki sıralamaya %@";
+"liveRoom.rank.toNext"            = "Sonraki sıralamaya:";
 "liveRoom.retry"                  = "Tekrar dene";
 "liveRoom.rank.tab.now"           = "Şimdi";
 "liveRoom.rank.tab.today"         = "Bugün";
@@ -484,6 +541,7 @@
 "liveRoom.contribution.empty.record"      = "Henüz hediye kaydı yok";
 "liveRoom.contribution.errorRetry"        = "Yükleme başarısız. Tekrar denemek için dokunun.";
 "liveRoom.contribution.last90dFormat"     = "%@ (son 90 gün)";
+"liveRoom.contribution.last90d"           = "Son 90 gün";
 "liveRoom.contribution.sentAction"        = "gönderdi";
 "liveRoom.setting.effect"                 = "Efektler";
 "liveRoom.setting.announcement"           = "Duyuru";
@@ -656,9 +714,11 @@
 "call.error.remoteRejected"    = "Arama reddedildi";
 "call.error.remoteNoAnswer"    = "Cevap yok";
 "call.error.remoteBusy"        = "Kullanıcı meşgul";
+"call.error.localBusy"         = "Devam eden bir görüşme var";
 "auth.sessionExpired"          = "Oturum süresi doldu, lütfen tekrar giriş yapın";
 
 // MARK: - Call 1v1 真实通话视图（CallView.swift）
+"call.waiting.answer"       = "Diğer tarafın yanıtlaması bekleniyor...";
 "call.subtitle.callingOut"   = "Aranıyor...";
 "call.subtitle.incoming"     = "sizi görüntülü aramaya davet ediyor";
 "call.action.cancel"         = "İptal";
@@ -1068,12 +1128,47 @@
 "party.tools.title"                      = "Oda Araçları";
 "party.tool.lockRoom"                    = "Odayı Kilitle";
 "party.tool.music"                       = "Müzik";
+"party.music.title"                      = "Müzik";
+"party.music.playlist"                   = "Çalma listesi";
+"party.music.local"                      = "Yerel";
+"party.music.liked"                      = "Beğenilenler";
+"party.music.empty"                      = "Müzik yok";
+"party.music.edit"                       = "Düzenle";
+"party.music.upload"                     = "Yükle";
+"party.music.delete"                     = "Sil";
+"party.music.selectAll"                  = "Tümünü seç";
+"party.music.invalidFormat"              = "Desteklenmeyen ses biçimi";
+"party.music.fileTooLarge"               = "Ses dosyası en fazla 10 MB olabilir";
+"party.music.uploadSucceeded"            = "Müzik yüklendi";
+"party.music.uploadFailed"               = "Müzik yüklenemedi";
+"party.music.deleteSucceeded"            = "Müzik silindi";
+"party.music.deleteFailed"               = "Müzik silinemedi";
 "party.tool.settings"                    = "Ayarlar";
 "party.tool.micApplication"              = "Mikrofon Başvurusu";
 "party.tool.roomMode"                    = "Oda Modu";
 "party.tool.blocklist"                   = "Engellenenler";
 "party.tool.mcSeat"                      = "MC Koltuğu";
 "party.tool.privateCall"                 = "Özel Arama";
+"party.tool.currencyExchange"            = "Para Birimi";
+"party.currency.exchangeTitle"           = "Oda Para Birimi";
+"party.currency.balanceTitle"            = "Bakiye";
+"party.currency.gems"                    = "Mücevher";
+"party.currency.diamonds"                = "Elmas";
+"party.currency.coins"                   = "Jeton";
+"party.currency.target"                  = "Şuna dönüştür";
+"party.currency.available"               = "Kullanılabilir";
+"party.currency.amountPlaceholder"       = "Miktar girin";
+"party.currency.all"                     = "Tümü";
+"party.currency.diamondRate"             = "1 Mücevher = 1 Elmas";
+"party.currency.coinRateHint"            = "Nihai jeton tutarını sunucu belirler.";
+"party.currency.exchangeAction"          = "Dönüştür";
+"party.currency.refresh"                 = "Bakiyeyi yenile";
+"party.currency.balanceLoadFailed"       = "Bakiyeniz yüklenemedi";
+"party.currency.invalidAmount"           = "Pozitif tam sayı Mücevher girin";
+"party.currency.insufficientBalance"     = "Yetersiz Mücevher";
+"party.currency.diamondExchangeSuccessFormat" = "%lld Mücevher Elmasa dönüştürüldü";
+"party.currency.coinExchangeSuccess"     = "Mücevher Jetona dönüştürüldü";
+"party.currency.exchangeFailed"          = "Dönüştürme başarısız";
 "party.privateCall.openConfirmLabel"     = "Özel aramayı aç";
 "party.tool.comingSoon"                  = "Yakında";
 // F-spec §5.1 Parti Araması Ayarları
@@ -1109,6 +1204,8 @@
 "party.mcSeat.submit"                    = "MC Koltuğunu Ayarla";
 "party.mcSeat.tips"                      = "MC koltuğuna yalnızca sahip ve yöneticiler oturabilir";
 "party.mcSeat.badge"                     = "MC";
+"party.mcSeat.cannotTake"                = "MC koltuğuna oturamazsınız";
+"party.mcSeat.change"                    = "MC'yi Değiştir";
 "party.mcSeat.confirmEmpty"              = "Bu boş koltuk MC koltuğu olarak ayarlansın mı?";
 "party.mcSeat.confirmPrivilegedFormat"   = "%@ şu anda yönetici. Bu koltuk MC koltuğu olarak ayarlansın mı?";
 "party.mcSeat.confirmNormalFormat"       = "%@ koltuktan çıkarılacak. Bu koltuk MC koltuğu olarak ayarlansın mı?";
@@ -1118,11 +1215,19 @@
 
 // v3（2026-07-15）Step 2 通知公屏系统消息
 "party.videoSeat.inviteAcceptedFormat"   = "%@ video koltuğuna katıldı";
+"party.videoSeat.feedbackReject"         = "Video koltuğu daveti reddedildi";
+"party.videoSeat.feedbackTimeout"        = "Video koltuğu davetinin süresi doldu";
+"party.videoSeat.feedbackLeave"          = "Davet edilen kullanıcı odadan ayrıldı";
+"party.videoSeat.feedbackOccupied"       = "Video koltuğu zaten dolu";
+"party.videoSeat.feedbackAlreadyOn"      = "Davet edilen kullanıcı zaten bir koltukta";
+"party.videoSeat.feedbackJoinFailed"     = "Davet edilen kullanıcı video koltuğuna katılamadı";
 "party.authUpdate.setAdmin"              = "Oda yöneticisi olarak atandınız";
 "party.authUpdate.removeAdmin"           = "Artık oda yöneticisi değilsiniz";
 "party.roomAnnouncement.format"          = "Oda duyurusu: %@";
 "party.luckyNumber.drawFormat"           = "%1$@ %2$d şanslı sayısını çekti";
 "party.luckyNumber.winFormat"            = "%1$@ %2$d şanslı sayısını kazandı";
+"party.luckyNumber.matched"              = "Şanslı sayı başarıyla eşleşti";
+"party.luckyNumber.personalWinFormat"    = "Harika! %d şanslı sayısını eşleştirdiniz";
 "party.create.section.template"          = "Şablon Seç";
 "party.create.template.loading"          = "Şablonlar yükleniyor…";
 "party.create.template.empty"            = "dev'de kullanılabilir şablon yok";
@@ -1138,6 +1243,11 @@
 "party.invite.accept"                    = "Kabul Et";
 "party.invite.reject"                    = "Reddet";
 "party.invite.messageFormat"             = "%@ sizi %d numaralı video koltuğuna davet etti";
+"party.invite.expiresFormat"             = "%d saniye içinde sona erer";
+"party.seatInvite.title"                  = "Mikrofon daveti";
+"party.seatInvite.empty"                  = "Çevrimiçi kullanıcı yok";
+"party.seatInvite.joined"                 = "Mikrofonda";
+"party.seatInvite.inviting"               = "Davet gönderiliyor";
 "party.selfActions.title"                = "Koltuğum";
 "party.selfActions.micOn"                = "Mikrofonu Aç";
 "party.selfActions.micOff"               = "Mikrofonu Kapat";
@@ -1146,6 +1256,8 @@
 "party.selfActions.leaveSeat"            = "Koltuktan Kalk";
 "party.input.placeholder"                = "Bir şeyler söyleyin…";
 "party.gift.messageFormat"               = "🎁 %@ %@ ×%d gönderdi";
+"party.giftEffect.sendsTo"               = "Şuna gönderdi";
+"party.giftEffect.peopleFormat"          = "%d kişi";
 
 "party.state.joined"                     = "Katıldınız";
 "party.state.entering"                   = "Katılıyor…";
@@ -1181,7 +1293,8 @@
 "party.roomMode.loadError"               = "Modlar yüklenemedi";
 
 /* MARK: - E spec §3 Mic Application */
-"party.micApplication.sheetTitle"        = "Mikrofon Başvuruları";
+"party.micApplication.sheetTitle"        = "Başvuru Listesi";
+"party.micApplication.peopleApplyFormat" = "%d kişi başvuruyor";
 "party.micApplication.emptyState"        = "Başvuru yok";
 "party.micApplication.approve"           = "Onayla";
 "party.micApplication.reject"            = "Reddet";
@@ -1195,9 +1308,13 @@
 "party.micApplication.switchOffBody"     = "Kullanıcılar artık koltuk talep edemez.";
 "party.micApplication.switchOnSystemMsg" = "Mikrofon başvuruları açıldı";
 "party.micApplication.switchOffSystemMsg" = "Mikrofon başvuruları kaldırıldı";
-"party.micApplication.cancel"            = "İsteği İptal Et";
+"party.micApplication.cancel"            = "Vazgeç";
 "party.micApplication.tapEmptySeatHint"  = "Talep göndermek için boş bir koltuğa dokunun";
-"party.micApplication.submit"            = "Koltuk İste";
+"party.micApplication.submit"            = "Başvur";
+"party.deleteMessage"                    = "Mesajı sil";
+"party.deleteMessageConfirm"             = "Bu mesaj silinsin mi?";
+"party.messageDeleted"                   = "Mesaj silindi";
+"party.deleteMessageFailed"              = "Mesaj silinemedi";
 "party.approveSeatPicker.title"          = "Koltuk Ata";
 "party.approveSeatPicker.subtitleFormat" = "%@'yi hangi koltuğa onaylıyorsunuz?";
 "party.approveSeatPicker.seatNumberFormat" = "%d numaralı koltuk";
@@ -1472,9 +1589,13 @@
 "wishlist.progress.complete"     = "Tamamlandı";
 "wishlist.panel.title"           = "%@'in bu turdaki dilek listesi";
 "wishlist.panel.subtitle"        = "Yayıncının küçük dileğini gerçekleştirmesine yardım et, ödüller kazan!";
+"wishlist.panel.empty"           = "Bu oturum için dilek listesi ayarlanmadı";
 "wishlist.panel.top6Title"       = "En İyi Bağışçılar";
 "wishlist.panel.top6Empty"       = "Sadece hediye değerine göre en iyi 6 gösterilir";
-"wishlist.achieved.title"        = "Dilek Gerçekleşti!";
+"wishlist.float.complete"        = "Dilek tamamlandı,";
+"wishlist.float.thanks"          = "teşekkürler kahramanım!";
+"wishlist.top1.prefix"           = "artık benim";
+"wishlist.top1.suffix"           = "destekçim";
 
 /* EditProfile 用户资料编辑页（I 里程碑） */
 "editProfile.navTitle"                             = "Profili Düzenle";
@@ -1547,9 +1668,24 @@
 /* 顶栏 Rank / Viewers sheet */
 "partyRoom.rank.tab.contribution"        = "Katkı";
 "partyRoom.rank.tab.honor"               = "Onur";
+"partyRoom.rank.tab.gameTask"            = "Oyun Görevi";
+"partyRoom.rank.tab.daily"               = "Günlük";
+"partyRoom.rank.period.today"            = "Bugün";
+"partyRoom.rank.period.yesterday"        = "Dün";
 "partyRoom.rank.viewersTitle"            = "İzleyiciler";
 "partyRoom.rank.emptyRank"               = "Henüz sıralama yok";
 "partyRoom.rank.emptyViewers"            = "Henüz izleyici yok";
+"partyRoom.weeklyTask.title"             = "Haftalık Görev";
+"partyRoom.weeklyTask.liveTime"          = "Mikrofon süresi";
+"partyRoom.weeklyTask.empty"             = "Şu anda haftalık görev yok";
+"partyRoom.weeklyTask.loadMore"          = "Daha Fazlasını Gör";
+"partyRoom.weeklyTask.reward.title"      = "Tebrikler";
+"partyRoom.weeklyTask.reward.confirm"    = "Tamam";
+"partyRoom.weeklyTask.reward.fallback"   = "Ödül";
+"partyRoom.a11y.weeklyTask"              = "Haftalık görev";
+"partyRoom.hotTask.title"                = "Popüler Oda Görevi";
+"partyRoom.hotRoomGuide.title"           = "Popüler Odaya Katıl";
+"partyRoom.hotRoomGuide.action"          = "Şimdi Git";
 
 "partyRoom.tab.all"                      = "Tümü";
 "partyRoom.tab.chat"                     = "Sohbet";
@@ -1596,10 +1732,28 @@
 // F dönemi Room Mute toggle durum metinleri
 "partyRoom.toolMenu.roomMute.on"         = "Odayı Sessize Al";
 "partyRoom.toolMenu.roomMute.off"        = "Odanın Sesini Aç";
+"partyRoom.toolMenu.interactiveGames"    = "Etkileşimli oyunlar";
+"partyRoom.toolMenu.basicTools"          = "Temel araçlar";
+"partyRoom.toolMenu.pk"                  = "PK";
+"partyRoom.toolMenu.free"                = "Ücretsiz";
+"partyRoom.toolMenu.settings"            = "Ayarlar";
+"partyRoom.toolMenu.luckyNumberSent"     = "Şanslı sayı gönderildi";
+"partyRoom.toolMenu.range"               = "Aralık";
+"partyRoom.toolMenu.setLuckyNumber"      = "Şanslı sayıyı belirle";
+"partyRoom.toolMenu.allowAdmins"         = "Yöneticilerin şanslı sayıyı belirlemesine izin ver";
+"partyRoom.toolMenu.save"                = "Kaydet";
+"partyRoom.toolMenu.invalidLuckyNumber"  = "Lütfen geçerli bir sayı girin";
+"partyRoom.toolMenu.luckyNumberSaved"    = "Şanslı sayı kaydedildi";
+"partyRoom.toolMenu.history"             = "Geçmiş";
+"partyRoom.toolMenu.historyHint"         = "Bu liste, son 3 gün içinde odadaki şanslı sayılarla eşleşen kullanıcıların kayıtlarını gösterir.";
+"partyRoom.toolMenu.noHistory"           = "Henüz geçmiş yok";
+"partyRoom.toolMenu.loadMore"            = "Daha Fazla Göster";
 // F dönemi ShareLink derin bağlantı
 "partyRoom.share.messageFormat"          = "Parti Odama katıl! %@";
+"party.shareInvite.title"                 = "Davet Et";
+"party.shareInvite.sent"                  = "Davet Gönderildi";
 "partyRoom.seat.locked"                  = "Koltuk kilitli";
-"partyRoom.seat.videoNeedsInvite"        = "Oda Sahibi/Yöneticiden davet gerekli";
+"partyRoom.seat.videoNeedsInvite"        = "Video koltukları sunucu daveti gerektirir";
 "partyRoom.switchSeat.title"             = "Bu koltuğa geçilsin mi?";
 "partyRoom.switchSeat.confirm"           = "Geç";
 "partyRoom.adminSeat.title"              = "Koltuğu yönet";
@@ -1626,3 +1780,23 @@
 "liveRoom.task.rules.title.tycoon"       = "Active Tycoon Görev Kuralları";
 "liveRoom.task.rules.body.liveGift"      = "1. Hedef kullanıcılar: Canlı yayın odasındaki tüm kullanıcılar\n2. İlerleme davranışı: Hediye gönderme, şanslı çekiliş, canlı bağlantı ve özel arama dahil ödemeli aktiviteler\n3. Sıfırlama döngüsü: Haftalık olarak hesaplanır, veriler her hafta sıfırlanır\n4. İlerleme hesaplaması: İlgili görev standartlarına göre hesaplanır";
 "liveRoom.task.rules.body.tycoon"        = "1. Hedef kullanıcılar: Active Tycoon etiketli kullanıcılar\n2. İlerleme davranışı: Etiketli kullanıcıların hediye gönderme, şanslı çekiliş, canlı bağlantı ve özel arama dahil ödemeli aktiviteleri\n3. Sıfırlama döngüsü: Haftalık olarak hesaplanır, veriler her hafta sıfırlanır\n4. İlerleme hesaplaması: İlgili görev standartlarına göre hesaplanır";
+"liveRoom.roulette.tip"                  = "Çarkı aç";
+
+"robotCall.incoming.title"               = "Yeni Başlayan";
+"robotCall.incoming.support"             = "Resmi destek";
+"robotCall.incoming.waiting"             = "Yanıt bekleniyor";
+"robotCall.action.accept"                = "Yanıtla";
+"robotCall.action.reject"                = "Reddet";
+"robotCall.action.end"                   = "Aramayı bitir";
+"robotCall.minimumDuration"              = "Arama süresi 10 saniyeden az olamaz";
+"robotCall.acceptFailed"                 = "Bu arama yanıtlanamadı. Lütfen daha sonra tekrar deneyin.";
+"robotCall.reward.title"                 = "Tebrikler";
+"robotCall.noReward.title"               = "Devam edin";
+"robotCall.duration.format"              = "Arama süresi: %@";
+"robotCall.reward.duration.format"       = "Mevcut arama süresi şuna ulaştı: %@";
+"robotCall.reward.coins.format"          = "%@ coin kazanıldı";
+"robotCall.reward.ok"                    = "Tamam";
+
+"paidBullet.dislike"                     = "Beğenmedim";
+"paidBullet.dislikeFailed"               = "Beğenmeme bildirimi gönderilemedi. Lütfen tekrar deneyin.";
+"paidBullet.earningsToast"               = "+%lld Coin (Ücretli mesaj)";
