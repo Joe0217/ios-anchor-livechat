@@ -276,6 +276,7 @@ struct ChatDetailView: View {
                 onDismiss: { showMediaSheet = false }
             )
             .sheetTopInset()
+            .giftPanelSheetBackground()
             .presentationDetents([.height(280)])
             .presentationDragIndicator(.hidden)
         }
@@ -289,6 +290,7 @@ struct ChatDetailView: View {
                 onDismiss: { showPrivateMediaSheet = false }
             )
             .sheetTopInset()
+            .giftPanelSheetBackground()
             .presentationDetents([.height(280)])
             .presentationDragIndicator(.hidden)
         }
@@ -413,8 +415,12 @@ struct ChatDetailView: View {
 
             // 对方 = 用户（kind: .user）；接入 headwear 字段后可补头像框
             // 系统会话(system information)nav 无头像,对齐 H5 CNavBar :title (systemMsg.vue L249)
+            // userId: peerUserId → 头像 tap 走内置分派（全屏 → 跳详情；半屏 popup → 弹名片卡）
             if !isSystemSession {
-                AvatarView(url: peerAvatarURL, size: ChatConstants.navAvatarSize, kind: .user)
+                AvatarView(url: peerAvatarURL,
+                           size: ChatConstants.navAvatarSize,
+                           kind: .user,
+                           userId: peerUserId.map(String.init))
             }
 
             Text(peerNickname)

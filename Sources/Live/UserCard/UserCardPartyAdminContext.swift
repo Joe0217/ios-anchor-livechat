@@ -12,7 +12,7 @@ import Foundation
 /// - admin 只能操作 audience(观众/普通用户);owner 可操作 admin+audience
 ///
 /// **单项按钮显示规则**(对齐 H5 party-user-card.vue L649 单按钮切换):
-/// - `Mute/Unmute`:目标在**语音麦位**上(seatType=voice)+ 目标非房主
+/// - `Mute/Unmute`:语音麦位可切换；视频位只在历史管理员禁麦时显示 Unmute
 /// - `Take`(抱上麦):目标**不在麦位** + 目标非房主(caller 需保证有空音频位;PartyStore MVP 走首空位)
 /// - `Leave`(抱下麦):目标**在麦位** + 目标非房主
 /// - `Set/Remove Admin`:**仅 owner** 可看;目标可以是 audience(设为 admin) 或 admin(移除)
@@ -54,18 +54,23 @@ struct PartyAdminContext {
     }
 
     /// 是否显示整条 admin action row(H5 showAdminActions 精简版;caller 判 isSelf 后再传 context)
-    var canShowAdminActions: Bool {
+    func canShowAdminActions(targetRole: PartyRoomRoleType?) -> Bool {
         guard hasAdminPermission else { return false }
+        let role = targetRole ?? targetRoleType
         // 目标是房主 → 隐藏(不可操作)
-        if targetRoleType == .owner { return false }
+        if role == .owner { return false }
         // 房管只能操作普通用户(audience)
-        if selfRole == .admin && targetRoleType != .audience { return false }
+        if selfRole == .admin && role != .audience { return false }
         return true
     }
 
-    /// 是否显示 Mute/Unmute(仅目标在语音麦位)
+    /// 是否显示 Mute/Unmute。
+    /// 视频位不允许禁麦；仅在历史管理员禁麦脏数据存在时提供解禁入口。
     var canShowMuteToggle: Bool {
         guard let seat = targetSeat, let type = seat.seatType else { return false }
+        if type == PartyRoomSeatType.video.rawValue {
+            return seat.isSeatMicrophoneProhibited
+        }
         return type == PartyRoomSeatType.voice.rawValue
     }
 
@@ -82,23 +87,22 @@ struct PartyAdminContext {
     }
 
     /// 是否显示 Set/Remove Admin(**仅 owner** 可见)
-    var canShowSetAdmin: Bool {
-        selfRole == .owner
+    func canShowSetAdmin(targetRole: PartyRoomRoleType?) -> Bool {
+        selfRole == .owner && (targetRole ?? targetRoleType) != .owner
     }
 
     /// 是否显示 Kick out(目标为 audience)
-    var canShowKickOut: Bool {
-        targetRoleType == .audience
+    func canShowKickOut(targetRole: PartyRoomRoleType?) -> Bool {
+        (targetRole ?? targetRoleType) == .audience
     }
 
-    /// 目标当前是否已被禁麦(seatMicrophoneEnabled == 0)
+    /// 目标当前是否被管理员禁麦(seatMicrophoneEnabled == 0)
     var isTargetMuted: Bool {
-        guard let seat = targetSeat, let enabled = seat.seatMicrophoneEnabled else { return false }
-        return enabled == 0
+        targetSeat?.isSeatMicrophoneProhibited == true
     }
 
     /// 目标当前是否已是房管
-    var isTargetAdmin: Bool {
-        targetRoleType == .admin
+    func isTargetAdmin(targetRole: PartyRoomRoleType?) -> Bool {
+        (targetRole ?? targetRoleType) == .admin
     }
 }

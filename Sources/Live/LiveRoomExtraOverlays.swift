@@ -46,22 +46,13 @@ struct LiveRoomExtraOverlaysModifier: ViewModifier {
             .sheet(isPresented: $showWishlistPanel) {
                 WishlistAnchorPanel(store: wishlistStore,
                                     isPresented: $showWishlistPanel,
-                                    liveRecordId: liveRecordId)
+                                    liveRecordId: liveRecordId,
+                                    onGifterTap: { userCardUserId = $0 })
                     .sheetTopInset()
+                    .giftPanelSheetBackground()
                     .presentationDetents([.fraction(0.4)])
                     .presentationDragIndicator(.visible)
             }
     }
 
-    /// UserCard 挂载：nil = 不显示；非 nil = 显示对应 userId 的 popup
-    @ViewBuilder
-    private var userCardOverlay: some View {
-        if let uid = userCardUserId {
-            UserCardPopup(userId: uid,
-                          isPresented: Binding(
-                            get: { userCardUserId != nil },
-                            set: { if !$0 { userCardUserId = nil } }
-                          ))
-        }
-    }
 }

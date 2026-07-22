@@ -1,56 +1,124 @@
 import Foundation
 
-/// Wishlist 数据源 protocol（H 里程碑接入真 API）
+/// Wishlist 数据源协议。
 ///
-/// **真 API 契约**（对齐 H5 wishlist store）：
-/// - 获取心愿单: POST `/api/agora/live/getAnchorWishlist`  body: `{ searchValue: anchorUserId }`
-/// - Top6: POST `/api/live/wish/gifter/top6`  body: `{ liveRecordId, anchorId }`
-/// - 加密: AES-128-CBC + Hex（走 APIClient 主链路自动处理）
+/// H5 实际调用：
+/// - POST `/api/agora/live/getAnchorWishlist` body `{ searchValue }`
+/// - GET `/api/live/wish/gifter/top6?liveRecordId=&anchorId=`
 protocol WishlistServiceProtocol {
     func fetchWishlist(anchorUserId: String) async throws -> [WishlistItem]
     func fetchTop6(liveRecordId: String, anchorId: String) async throws -> [WishlistTop6Item]
 }
 
-/// Fakes 实现（Level B）—— 3 条 wishlist：1 已完成 + 2 未完成
-struct WishlistServiceFakes: WishlistServiceProtocol {
-    func fetchWishlist(anchorUserId: String) async throws -> [WishlistItem] {
-        try await Task.sleep(nanoseconds: 200_000_000)
-        // v17 Fakes：Rose/Star/Crown 用真实图片 URL（H 期接真 API 时后端返回该字段）
-        return [
-            WishlistItem(id: "g1", giftName: "Rose",
-                         giftIconUrl: "https://img.hnhily.link/mstatic/gift/rose_small.webp",
-                         giftPrice: 100, targetCount: 100, completedCount: 100,
-                         promiseText: "Complete rose wish for a special dance 💃"),
-            WishlistItem(id: "g2", giftName: "Star",
-                         giftIconUrl: "https://img.hnhily.link/mstatic/gift/star_small.webp",
-                         giftPrice: 500, targetCount: 55, completedCount: 45,
-                         promiseText: "Let's reach the star wish together!"),
-            WishlistItem(id: "g3", giftName: "Crown",
-                         giftIconUrl: "https://img.hnhily.link/mstatic/gift/crown_small.webp",
-                         giftPrice: 2000, targetCount: 30, completedCount: 8,
-                         promiseText: nil),
-        ]
-    }
-
-    func fetchTop6(liveRecordId: String, anchorId: String) async throws -> [WishlistTop6Item] {
-        try await Task.sleep(nanoseconds: 200_000_000)
-        return [
-            WishlistTop6Item(id: "u1", userId: "u1", nickname: "Alice",  avatarUrl: nil, totalDiamond: 12000, rank: 1),
-            WishlistTop6Item(id: "u2", userId: "u2", nickname: "Bob",    avatarUrl: nil, totalDiamond: 8000,  rank: 2),
-            WishlistTop6Item(id: "u3", userId: "u3", nickname: "Charlie", avatarUrl: nil, totalDiamond: 5500,  rank: 3),
-            WishlistTop6Item(id: "u4", userId: "u4", nickname: "David",  avatarUrl: nil, totalDiamond: 2000,  rank: 4),
-            .emptySlot(at: 5),
-            .emptySlot(at: 6),
-        ]
-    }
-}
-
-/// 真 API 实现（H 里程碑接入）
+/// 真 API 实现。后端历史上会混发数字/字符串和不同外层容器，解析保持与 H5 的宽松行为一致。
 struct WishlistServiceReal: WishlistServiceProtocol {
     func fetchWishlist(anchorUserId: String) async throws -> [WishlistItem] {
-        try await WishlistServiceFakes().fetchWishlist(anchorUserId: anchorUserId)
+        let data = try await APIClient.shared.post(
+            "/api/agora/live/getAnchorWishlist",
+            body: ["searchValue": anchorUserId]
+        )
+        return try Self.parseWishlist(data)
     }
+
     func fetchTop6(liveRecordId: String, anchorId: String) async throws -> [WishlistTop6Item] {
-        try await WishlistServiceFakes().fetchTop6(liveRecordId: liveRecordId, anchorId: anchorId)
+        let data = try await APIClient.shared.get(
+            "/api/live/wish/gifter/top6",
+            query: ["liveRecordId": liveRecordId, "anchorId": anchorId]
+        )
+        return try Self.parseTop6(data)
+    }
+
+    static func parseWishlist(_ data: Data) throws -> [WishlistItem] {
+        let raw = try JSONSerialization.jsonObject(with: data)
+        return extractList(from: raw).compactMap { value in
+            guard let item = value as? [String: Any],
+                  let id = string(item["giftId"] ?? item["id"]), !id.isEmpty else {
+                return nil
+            }
+            let target = max(0, int(item["giftNum"]) ?? 0)
+            let completed = max(0, min(target, int(item["compelteGiftNum"] ?? item["completedGiftNum"]) ?? 0))
+            return WishlistItem(
+                id: id,
+                giftName: string(item["giftName"] ?? item["name"]) ?? "",
+                giftIconUrl: string(item["giftSmallImg"] ?? item["giftImg"] ?? item["giftIcon"]),
+                giftPrice: max(0, int(item["giftPrice"]) ?? 0),
+                targetCount: target,
+                completedCount: completed,
+                isMarkedCompleted: bool(item["completed"]) ?? false,
+                promiseText: string(item["promiseText"])
+            )
+        }
+    }
+
+    static func parseTop6(_ data: Data) throws -> [WishlistTop6Item] {
+        let raw = try JSONSerialization.jsonObject(with: data)
+        let items = extractList(from: raw).enumerated().compactMap { offset, value -> WishlistTop6Item? in
+            guard let item = value as? [String: Any],
+                  let userId = string(item["userId"]), !userId.isEmpty else {
+                return nil
+            }
+            return WishlistTop6Item(
+                id: userId,
+                userId: userId,
+                nickname: string(item["nickname"] ?? item["nickName"]),
+                avatarUrl: string(item["avatar"] ?? item["icon"]),
+                totalDiamond: max(0, int64(item["totalDia"] ?? item["totalDiamond"]) ?? 0),
+                // H5 直接按接口数组的索引填充 6 个槽位，不按 rank 字段重排。
+                rank: offset + 1
+            )
+        }
+        return Array(items.prefix(6))
+    }
+
+    private static func extractList(from raw: Any) -> [Any] {
+        if let list = raw as? [Any] { return list }
+        guard let object = raw as? [String: Any] else { return [] }
+        for key in ["result", "wishlist", "records", "list", "data"] {
+            if let value = object[key] {
+                let list = extractList(from: value)
+                if !list.isEmpty || value is [Any] { return list }
+            }
+        }
+        return []
+    }
+
+    private static func string(_ value: Any?) -> String? {
+        if let text = value as? String { return text }
+        if let number = int64(value) { return String(number) }
+        return nil
+    }
+
+    private static func int(_ value: Any?) -> Int? {
+        guard let number = int64(value) else { return nil }
+        return Int(clamping: number)
+    }
+
+    private static func int64(_ value: Any?) -> Int64? {
+        if let number = value as? Int64 { return number }
+        if let number = value as? Int { return Int64(number) }
+        if let number = value as? NSNumber {
+            let type = String(cString: number.objCType)
+            guard type != "c", type != "B" else { return nil }
+            return number.int64Value
+        }
+        if let text = value as? String { return Int64(text) }
+        return nil
+    }
+
+    private static func bool(_ value: Any?) -> Bool? {
+        if let value = value as? Bool { return value }
+        if let value = value as? NSNumber {
+            let type = String(cString: value.objCType)
+            guard type == "c" || type == "B" else { return value.intValue != 0 }
+            return value.boolValue
+        }
+        if let value = value as? String {
+            switch value.lowercased() {
+            case "true", "1": return true
+            case "false", "0": return false
+            default: return nil
+            }
+        }
+        return nil
     }
 }

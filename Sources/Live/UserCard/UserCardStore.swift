@@ -98,7 +98,15 @@ final class UserCardStore: ObservableObject {
                 } else {
                     try await service.follow(userId: userId)
                 }
-                // Service 层已 post `.followRelationChanged`(UserProfileService.follow 内)
+                // 名片卡自己的 service 不广播关系变更；成功后按跨页同步契约主动广播。
+                // 这会让当前 Party 房间在名片目标为房主时立即更新顶部关注按钮。
+                if let followedUserId = Int(userId) {
+                    NotificationCenter.default.post(
+                        name: .followRelationChanged,
+                        object: self,
+                        userInfo: ["userId": followedUserId, "followFlag": wasFollowed ? 0 : 1]
+                    )
+                }
                 logger.info("toggleFollow uid=\(userId, privacy: .private) wasFollowed=\(wasFollowed) ok")
             } catch {
                 logger.warning("toggleFollow uid=\(userId, privacy: .private) failed: \(String(describing: error), privacy: .private)")
@@ -126,7 +134,9 @@ final class UserCardStore: ObservableObject {
             followingCount: info.followingCount,
             liveWelcome: info.liveWelcome, medals: info.medals,
             giftWalls: info.giftWalls,
-            isBlocked: info.isBlocked, isFollowed: info.isFollowed
+            isBlocked: info.isBlocked,
+            isFollowed: info.isFollowed,
+            roomRoleType: info.roomRoleType
         )
     }
 

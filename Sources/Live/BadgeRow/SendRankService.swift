@@ -20,6 +20,55 @@ enum SendRankType: String, CaseIterable {
     case week
 }
 
+/// Rank APIs mix JSON number, string, and boolean wire types across backend versions. Normalize
+/// them here so valid data does not silently render as zero or false.
+enum LiveRankValueParser {
+    static func string(_ value: Any?) -> String? {
+        if let text = value as? String {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        if let number = int64(value) { return String(number) }
+        return nil
+    }
+
+    static func int(_ value: Any?) -> Int? {
+        guard let number = int64(value) else { return nil }
+        return Int(clamping: number)
+    }
+
+    static func int64(_ value: Any?) -> Int64? {
+        if value is Bool { return nil }
+        if let number = value as? Int64 { return number }
+        if let number = value as? Int { return Int64(number) }
+        if let number = value as? NSNumber {
+            let type = String(cString: number.objCType)
+            guard type != "c", type != "B" else { return nil }
+            return number.int64Value
+        }
+        if let text = value as? String {
+            return Int64(text.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return nil
+    }
+
+    static func bool(_ value: Any?) -> Bool? {
+        if let value = value as? Bool { return value }
+        if let value = value as? NSNumber {
+            let type = String(cString: value.objCType)
+            return type == "c" || type == "B" ? value.boolValue : value.intValue != 0
+        }
+        if let value = value as? String {
+            switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "true", "1": return true
+            case "false", "0": return false
+            default: return nil
+            }
+        }
+        return nil
+    }
+}
+
 /// 送礼榜单条条目（response 元素结构）
 struct SendRankEntry: Identifiable, Equatable {
     let id: String              // userId
@@ -53,33 +102,19 @@ struct SendRankServiceReal: SendRankServiceProtocol {
         }
 
         return rawList.enumerated().compactMap { (idx, item) in
-            // userId 多态兼容（Int / Int64 / NSNumber / String）
-            let uid: String? = {
-                if let s = item["userId"] as? String, !s.isEmpty { return s }
-                if let n = item["userId"] as? Int64 { return String(n) }
-                if let n = item["userId"] as? Int { return String(n) }
-                if let n = item["userId"] as? NSNumber { return n.stringValue }
-                return nil
-            }()
-            guard let userId = uid else { return nil }
+            guard let userId = LiveRankValueParser.string(item["userId"]) else { return nil }
 
-            var cost: Int64 = 0
-            if let v = item["costNum"] as? Int64 { cost = v }
-            else if let v = item["costNum"] as? Int { cost = Int64(v) }
-            else if let v = item["costNum"] as? NSNumber { cost = v.int64Value }
-
-            let rank: Int = (item["rank"] as? Int)
-                ?? ((item["rank"] as? NSNumber)?.intValue)
-                ?? (idx + 1)
+            let cost = max(0, LiveRankValueParser.int64(item["costNum"]) ?? 0)
+            let rank = max(1, LiveRankValueParser.int(item["rank"]) ?? (idx + 1))
 
             return SendRankEntry(
                 id: userId,
                 userId: userId,
-                nickname: (item["nickname"] as? String) ?? (item["nickName"] as? String) ?? "",
-                avatarUrl: item["icon"] as? String,
-                level: (item["userLevel"] as? Int) ?? (item["level"] as? Int) ?? 0,
-                isVip: (item["vipFlag"] as? Bool) ?? false,
-                isActiveTycoon: (item["activeTycoon"] as? Bool) ?? false,
+                nickname: LiveRankValueParser.string(item["nickname"] ?? item["nickName"]) ?? "",
+                avatarUrl: LiveRankValueParser.string(item["icon"] ?? item["avatar"]),
+                level: max(0, LiveRankValueParser.int(item["userLevel"] ?? item["level"]) ?? 0),
+                isVip: LiveRankValueParser.bool(item["vipFlag"] ?? item["isVip"]) ?? false,
+                isActiveTycoon: LiveRankValueParser.bool(item["activeTycoon"]) ?? false,
                 costNum: cost,
                 rank: rank
             )
@@ -147,23 +182,16 @@ struct ViewersServiceReal: ViewersServiceProtocol {
         }
 
         return rawList.compactMap { item in
-            let uid: String? = {
-                if let s = item["userId"] as? String, !s.isEmpty { return s }
-                if let n = item["userId"] as? Int64 { return String(n) }
-                if let n = item["userId"] as? Int { return String(n) }
-                if let n = item["userId"] as? NSNumber { return n.stringValue }
-                return nil
-            }()
-            guard let userId = uid else { return nil }
+            guard let userId = LiveRankValueParser.string(item["userId"]) else { return nil }
             return ViewerEntry(
                 id: userId,
                 userId: userId,
-                nickname: (item["nickname"] as? String) ?? (item["nickName"] as? String) ?? "",
-                avatarUrl: item["icon"] as? String,
-                level: (item["userLevel"] as? Int) ?? (item["level"] as? Int) ?? 0,
-                isVip: (item["vipFlag"] as? Bool) ?? false,
-                isActiveTycoon: (item["activeTycoon"] as? Bool) ?? false,
-                countryId: item["countryId"] as? String
+                nickname: LiveRankValueParser.string(item["nickname"] ?? item["nickName"]) ?? "",
+                avatarUrl: LiveRankValueParser.string(item["icon"] ?? item["avatar"]),
+                level: max(0, LiveRankValueParser.int(item["userLevel"] ?? item["level"]) ?? 0),
+                isVip: LiveRankValueParser.bool(item["vipFlag"] ?? item["isVip"]) ?? false,
+                isActiveTycoon: LiveRankValueParser.bool(item["activeTycoon"]) ?? false,
+                countryId: LiveRankValueParser.string(item["countryId"])
             )
         }
     }

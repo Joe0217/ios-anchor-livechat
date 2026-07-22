@@ -1,5 +1,20 @@
 import Foundation
 
+/// 幸运礼物中奖 SVGA 的动态文字内容。
+///
+/// `animationUrl` 承载固定的庆祝动画，而此模型承载 H5 叠加在动画上的发送者信息和中奖金额。
+public struct GiftEffectLuckyGiftWin: Equatable, Sendable {
+    public let senderAvatarUrl: String?
+    public let senderNickname: String
+    public let reward: Int
+
+    public init(senderAvatarUrl: String?, senderNickname: String, reward: Int) {
+        self.senderAvatarUrl = senderAvatarUrl
+        self.senderNickname = senderNickname
+        self.reward = reward
+    }
+}
+
 /// 一次礼物发送事件，对应特效队列中的一个播放单元
 public struct GiftEffectItem: Identifiable, Equatable, Sendable {
     public let id: UUID
@@ -20,6 +35,8 @@ public struct GiftEffectItem: Identifiable, Equatable, Sendable {
     public let timestamp: Int64
     /// 是否由本端账号发出（用于 isSelfSent 判断方向）
     public let isSelfSent: Bool
+    /// Party Lucky Gift 中奖时的附加文本效果；普通礼物为 nil。
+    public let luckyGiftWin: GiftEffectLuckyGiftWin?
 
     public init(
         id: UUID = UUID(),
@@ -34,7 +51,8 @@ public struct GiftEffectItem: Identifiable, Equatable, Sendable {
         animationUrl: String?,
         staticImgUrl: String?,
         timestamp: Int64,
-        isSelfSent: Bool
+        isSelfSent: Bool,
+        luckyGiftWin: GiftEffectLuckyGiftWin? = nil
     ) {
         self.id = id
         self.sceneKey = sceneKey
@@ -49,6 +67,7 @@ public struct GiftEffectItem: Identifiable, Equatable, Sendable {
         self.staticImgUrl = staticImgUrl
         self.timestamp = timestamp
         self.isSelfSent = isSelfSent
+        self.luckyGiftWin = luckyGiftWin
     }
 }
 

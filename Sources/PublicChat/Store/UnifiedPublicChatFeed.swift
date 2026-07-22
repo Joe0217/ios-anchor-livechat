@@ -46,7 +46,8 @@ final class UnifiedPublicChatFeed: ObservableObject {
             id: old.id,
             timestamp: old.timestamp,
             sender: old.sender,
-            variant: newVariant
+            variant: newVariant,
+            source: old.source
         )
     }
 

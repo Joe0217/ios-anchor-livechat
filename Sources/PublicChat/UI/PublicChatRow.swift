@@ -23,9 +23,9 @@ struct PublicChatRow: View {
     var body: some View {
         Group {
             switch message.variant.discriminator {
-            case .text, .anchor, .gift, .luckyGift, .system:
+            case .text, .anchor, .gift, .luckyGift, .partyLuckyNumber, .system:
                 textGiftGroup
-            case .enterRoom, .officialBoostEnter, .announcement, .pkNotify, .partyModeSwitch:
+            case .enterRoom, .officialBoostEnter, .announcement, .pkNotify, .partyModeSwitch, .partyBattle:
                 notifyGroup
             case .rpsWin, .wheelRes, .winnerBroadcast, .wishlistEffect, .diamondGift, .gameWinNotify:
                 activityGroup
@@ -67,6 +67,8 @@ struct PublicChatRow: View {
             }
         case .luckyGift(let url, let count, let total):
             RowLuckyGift(sender: message.sender, iconURL: url, count: count, totalReward: total, theme: theme)
+        case .partyLuckyNumber(let number, let didWin):
+            RowPartyLuckyNumber(sender: message.sender, number: number, didWin: didWin)
         case .system(let text):
             RowAnnouncement(text: text, kind: theme.scene == .party ? .partyRoom : .liveOfficial, theme: theme)
         default:
@@ -87,6 +89,9 @@ struct PublicChatRow: View {
         case .partyModeSwitch(let text, _):
             // v3：Party 房系统消息（切模板 / 排麦开关 / 房管变更 / 视频位邀请接受）居中卡片，无头像
             RowPartyModeSwitch(text: text)
+        case .partyBattle(_, let text, let highlight):
+            // Party 房 PK 系统消息（对齐 H5 chat-list.vue :333-392 · PK icon + 半透黑底 + 黄色高亮）
+            RowPartyBattle(text: text, highlight: highlight)
         default:
             EmptyView()
         }
@@ -101,8 +106,8 @@ struct PublicChatRow: View {
         case .winnerBroadcast(let name, let qty, let img, let cta, let avatar):
             RowWinnerBroadcast(activityName: name, quantity: qty, imageURL: img,
                                joinCTA: cta, avatar: avatar, theme: theme)
-        case .wishlistEffect(let text, let icon):
-            RowWishlistEffect(text: text, iconURL: icon, theme: theme)
+        case .wishlistEffect:
+            RowWishlistEffect(sender: message.sender)
         case .diamondGift(let sub):
             RowDiamondGift(subType: sub, theme: theme)
         case .gameWinNotify(let payload):
@@ -259,6 +264,143 @@ private struct RowPartyModeSwitch: View {
             .padding(.vertical, 4)
             .frame(maxWidth: 288, alignment: .leading)   // 与 announcement 249 + gameWin 280 同档
             .background(Color.black.opacity(0.30), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+/// Party 房幸运数字公屏（1050 抽数 / 1051 中奖）。
+/// 对齐 H5 `chat-list.vue`：复用普通用户的头像、昵称、等级、VIP、勋章与角色头部，
+/// 抽数显示 "Lucky number: N"，中奖额外显示成功文案。
+private struct RowPartyLuckyNumber: View {
+    let sender: SenderProfile?
+    let number: Int
+    let didWin: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            PartyAvatarWithFrame(
+                avatarURL: sender?.avatarURL,
+                headFrame: sender?.headFrame,
+                userId: sender?.userId
+            )
+            VStack(alignment: .leading, spacing: 6) {
+                PartyNicknameRow(sender: sender)
+                VStack(alignment: .leading, spacing: didWin ? 6 : 0) {
+                    HStack(alignment: .center, spacing: 6) {
+                        CachedAsyncImage(
+                            url: URL(string: "https://file.lovetravel.link/mstatic/lucky-num/lucky-num-icon.webp"),
+                            contentMode: .fit,
+                            persistent: true
+                        ) {
+                            Image(systemName: "number.circle.fill")
+                                .resizable()
+                                .scaledToFit()
+                                .foregroundColor(Color(red: 1.0, green: 0.83, blue: 0.34))
+                        }
+                        .frame(width: 26, height: 26)
+                        .accessibilityHidden(true)
+
+                        HStack(alignment: .firstTextBaseline, spacing: 4) {
+                            Text(L10n.PartyRoom.toolMenuLuckyNumber + ":")
+                                .font(.system(size: 13))
+                                .foregroundColor(.white)
+                            // H5 is 18px; the iOS requirement increases the previous 13pt value by 6pt.
+                            LuckyNumberGradientText(value: "\(number)", fontSize: 19)
+                        }
+                    }
+                    if didWin {
+                        Text(L10n.Party.luckyNumberMatched)
+                            .font(.system(size: 13))
+                            .foregroundColor(.white)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .frame(maxWidth: 213, alignment: .leading)
+                .background(Color.black.opacity(0.40), in: RoundedRectangle(cornerRadius: 12))
+            }
+        }
+    }
+}
+
+/// Shared with Party Lucky Number history and win surfaces.
+/// Matches H5 `.lucky-number-value`: `#FCF2DC -> #FDD481`, 270 degrees.
+struct LuckyNumberGradientText: View {
+    let value: String
+    let fontSize: CGFloat
+    var weight: Font.Weight = .medium
+
+    var body: some View {
+        Text(value)
+            .font(.system(size: fontSize, weight: weight))
+            .monospacedDigit()
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [
+                        Color(red: 252 / 255, green: 242 / 255, blue: 220 / 255),
+                        Color(red: 253 / 255, green: 212 / 255, blue: 129 / 255),
+                    ],
+                    startPoint: .trailing,
+                    endPoint: .leading
+                )
+            )
+            .environment(\.layoutDirection, .leftToRight)
+    }
+}
+
+/// Party 房 Battle Team PK 系统消息（对齐 H5 chat-list.vue :333-392 完整视觉）
+///
+/// 视觉结构（H5 4 kind 完全一致）：
+/// - 左侧 32×32 PK 图标（与顶部进度条两侧的 `PK` 标识一致）
+/// - 右侧半透黑底 rounded-12 卡（`bg-#000/30 px-8 py-4`）
+/// - 13pt 文字，白色 + 关键数字/名字用 #FFE600 黄色高亮
+private struct RowPartyBattle: View {
+    let text: String
+    /// 高亮数字/名字（对齐 H5 `<span class="mx-2 c-#FFE600">{{ N }}</span>`）
+    /// - 非 nil：文本中若含 `{highlight}` 占位符则替换为黄色片段；否则拼在末尾
+    /// - nil：整段白色（如 forceEnd 无高亮）
+    let highlight: String?
+
+    private static let highlightColor = Color(red: 1.0, green: 0.9, blue: 0.0)  // #FFE600
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Image("partyPkLogo")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 24, height: 24)
+                .frame(width: 32, height: 32)
+
+            // 半透黑底 rounded-12 卡（H5 max-w-213 min-h-22 rounded-12 bg-#000/30 px-8 py-4）
+            Group {
+                if let hl = highlight, !hl.isEmpty {
+                    combinedText(hl)
+                } else {
+                    Text(text)
+                        .foregroundColor(.white)
+                }
+            }
+            .font(.system(size: 13))
+            .lineLimit(3)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .frame(maxWidth: 240, alignment: .leading)
+            .background(Color.black.opacity(0.30), in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    /// 高亮拼接：若 text 含占位符 `{h}` 则替换为黄色片段；否则黄色片段拼在末尾
+    private func combinedText(_ hl: String) -> Text {
+        if text.contains("{h}") {
+            let parts = text.components(separatedBy: "{h}")
+            var out = Text(parts[0]).foregroundColor(.white)
+            for i in 1..<parts.count {
+                out = out + Text(" \(hl) ").foregroundColor(Self.highlightColor).bold() + Text(parts[i]).foregroundColor(.white)
+            }
+            return out
+        }
+        return Text(text).foregroundColor(.white)
+            + Text(" \(hl)").foregroundColor(Self.highlightColor).bold()
     }
 }
 

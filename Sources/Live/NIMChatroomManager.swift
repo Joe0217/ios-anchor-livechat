@@ -4,19 +4,6 @@ import os
 
 // PublicChatMessage / LiveRawPayload 结构定义已迁到 `Sources/Live/PublicScreen/LivePublicChatPayload.swift`（Phase 1 T8）
 
-/// 公屏消息独立 ObservableObject：与 LiveStore.networkDebugStore 同模式。
-/// 让 `NIMChatroomManager.objectWillChange` 不因每条公屏消息发射，避免 LiveRoomView 整树重渲染
-/// （review P1-3）。子 view `PublicScreenList` 直接订阅本 store，append 仅触发子 view 重算。
-@MainActor
-final class PublicChatMessagesStore: ObservableObject {
-    @Published var messages: [PublicChatMessage] = []
-
-    func append(_ msg: PublicChatMessage, limit: Int = 80) {
-        messages.append(msg)
-        if messages.count > limit { messages.removeFirst(messages.count - limit) }
-    }
-}
-
 /// 在线人数独立 ObservableObject（review 202606260029 P1-1）：onlineCount 在 .enter/.exit 通知下
 /// >1Hz 变化，原 @Published 挂在 NIMChatroomManager 上会触发 LiveRoomView 整树（CameraPreview /
 /// RemoteVideoView / PKOverlayHost / publicScreen）重算。抽出独立 store 后仅 topBar 子 view
@@ -54,8 +41,8 @@ final class NIMChatroomManager: NSObject, ObservableObject {
     let enterRoomQueue = EnterRoomFloatQueue()
     /// v8 钻石盲盒飘屏队列（attachType 1030-1033 触发）
     let diamondGiftQueue = DiamondGiftFloatQueue()
-    /// v9 付费弹幕飘屏队列（H5 attachType 1050 触发；本轮 Fakes 骨架）
-    let paidBulletQueue = PaidBulletQueue()
+    /// 直播付费跑马灯：1050 与派对房幸运数字同号，只在本直播聊天室内解析。
+    let paidBulletQueue = PaidBulletQueue(service: PaidBulletServiceReal())
     /// v10 钻石收益 store（顶部 Contribution 徽章数字，attachType 50 收礼后 refresh）
     let contributionStore = LiveContributionStore()
     /// v10 主播 Rank 位次 store（顶部 Rank 徽章数字，进房一次拉 receiveRankV3）
@@ -66,18 +53,40 @@ final class NIMChatroomManager: NSObject, ObservableObject {
     let wishAchievedQueue = WishAchievedQueue()
     /// v11 顶部右侧 Top2 送礼头像 store（H 里程碑接入 IM attachType 50/56 分发；本轮 Fakes）
     let topRankStore = LiveTopRankStore()
+    /// v25（2026-07-17）直播间任务面板进度 store —— IM attachType 50 触发 refreshOnGift 重拉
+    /// （对齐 H5 handleLiveGiftMessage:live.js:937 收 50 号消息后调 updateLiveGiftTask；
+    /// H5 outer gate `attachType===50` 已过滤 1/4 case，iOS 只挂 50 case，不挂 sendGift/liveCallGift）
+    let liveGiftTaskStore = LiveGiftTaskStore(service: LiveGiftTaskServiceReal())
     /// 长连接态；当前无 view 订阅（grep 0 命中），保留为普通字段供内部状态机使用，不发 publish。
     private(set) var connected = false
 
+    /// v24（B3 禁言状态机）：LiveRoomView 挂载后注入；notification `NIMChatroomEventType.addMute` /
+    /// `.removeMute` / `.addMuteTemporarily` / `.removeMuteTemporarily` 事件命中"主播本人是 target"时
+    /// 分派到 [`LiveStore.applyGag/applyUngag`](../LiveStore.swift)；weak 避免循环引用。
+    weak var liveStore: LiveStore?
+    /// 客态直播间设置本回调，收到 44/62 时退出远端 RTC 与聊天室；主态保持 nil，仍由 LiveStore 接管。
+    var onRoomEnded: (() -> Void)?
+
     private var roomId = ""
+    /// 付费跑马灯使用业务直播间 ID；不能误用云信聊天室 ID `roomId`。
+    private var paidBulletContext: PaidBulletQueue.Context?
     private var hasJoined = false   // 防止重复 enter 导致 NIMSDK delegate 重复 add → 公屏双播
+    /// 客态展示的观众数应排除房主，而不是排除当前观众自己；主态未设置时继续排除当前主播。
+    private var audienceOwnerYxAccount: String?
     /// v19 主播自己的 IM 账号（用于过滤 memberEnter/Exit 和 fetchMembers 时排除主播本人）
     /// 对齐 H5 `userStore.mineInfo.yxAccid`（NIM SDK 里的 IM 账号 ID）
     private var anchorYxAccount: String? {
         NIMSDK.shared().loginManager.currentAccount()
     }
+
+    private var audienceExcludedYxAccount: String? {
+        audienceOwnerYxAccount ?? anchorYxAccount
+    }
     /// v19 30s 观众数纠错定时器（对齐 H5 startAudienceSyncTimer live.js:155-162）
     private var audienceSyncTimer: Timer?
+    private lazy var rpsWinQueue = RpsWinNotificationQueue { [weak self] message in
+        self?.messagesStore.append(message)
+    }
 
     /// 兜底：LiveRoomView.onDisappear 的 leave() 受 scenePhase + state 双守卫，logout / 路由切换等
     /// 非 .ended 路径下 view 销毁会跳过 leave；deinit 在此强制注销 NIMSDK delegate 防回调残留。
@@ -131,6 +140,24 @@ final class NIMChatroomManager: NSObject, ObservableObject {
         }
     }
 
+    /// LiveRoomView 在进云信聊天室前注入付费跑马灯的直播业务上下文。
+    func configurePaidBullet(roomId: Int, viewerUserId: Int, countryCode: String) {
+        guard roomId > 0, viewerUserId > 0 else {
+            paidBulletContext = nil
+            return
+        }
+        paidBulletContext = PaidBulletQueue.Context(
+            roomId: roomId,
+            viewerUserId: viewerUserId,
+            countryCode: countryCode
+        )
+    }
+
+    /// 客态入房前注入房主云信账号。主态不调用，保持既有在线人数与通知计数语义。
+    func configureAudience(ownerYxAccount: String?) {
+        audienceOwnerYxAccount = ownerYxAccount?.isEmpty == false ? ownerYxAccount : nil
+    }
+
     /// v19 拉取聊天室成员列表（对齐 H5 getAudienceList live.js:121-137）
     ///
     /// - NIM 用 `NIMChatroomFetchMemberTypeTemp` (临时成员=在线观众)，对标 H5 `type: 'regularReverse'`
@@ -151,7 +178,7 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                     AppLogger.im.warning("🟡 [Chatroom] fetchChatroomMembers error=\(error.localizedDescription, privacy: .public)")
                     return
                 }
-                let anchorId = self.anchorYxAccount
+                let anchorId = self.audienceExcludedYxAccount
                 let count = (members ?? []).filter { m in
                     // 过滤主播本人（对齐 H5 member.account !== yxAccid）
                     guard let uid = m.userId else { return false }
@@ -184,6 +211,12 @@ final class NIMChatroomManager: NSObject, ObservableObject {
     private func rollbackEnterFailure() {
         NIMSDK.shared().chatManager.remove(self)
         NIMSDK.shared().chatroomManager.remove(self)
+        rpsWinQueue.reset()
+        paidBulletQueue.clear()
+        paidBulletContext = nil
+        audienceOwnerYxAccount = nil
+        onRoomEnded = nil
+        messagesStore.clear()
         roomId = ""
         hasJoined = false
         connected = false
@@ -192,6 +225,12 @@ final class NIMChatroomManager: NSObject, ObservableObject {
     func leave() {
         guard !roomId.isEmpty else { return }
         stopAudienceSyncTimer()   // v19 停 30s 定时器
+        rpsWinQueue.reset()
+        paidBulletQueue.clear()
+        paidBulletContext = nil
+        audienceOwnerYxAccount = nil
+        onRoomEnded = nil
+        messagesStore.clear()
         NIMSDK.shared().chatManager.remove(self)
         NIMSDK.shared().chatroomManager.remove(self)
         NIMSDK.shared().chatroomManager.exitChatroom(roomId, completion: nil)
@@ -213,7 +252,7 @@ final class NIMChatroomManager: NSObject, ObservableObject {
     /// - Returns: `true` = caller 可清空 inputText（发送成功 or 输入本来就空/未进房，清空无副作用）；
     ///            `false` = NIM SDK send 抛错，caller 应保留 inputText 让用户重试（对齐 spec R5）
     @discardableResult
-    func sendText(_ text: String) -> Bool {
+    func sendText(_ text: String, replyToNick: String? = nil, replyToUserId: String? = nil) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, hasJoined else { return true }
         let capped = String(trimmed.prefix(200))
@@ -225,6 +264,7 @@ final class NIMChatroomManager: NSObject, ObservableObject {
         let nickname = anchor.displayName.isEmpty ? session?.nickname : anchor.displayName
         let avatar = anchor.info?.icon ?? anchor.mine?.icon ?? session?.icon
         let userLevel = anchor.info?.level ?? anchor.mine?.level
+        let selfYxAccid = anchorYxAccount ?? session?.yxAccid
 
         messagesStore.append(PublicChatMessage(
             text: capped,
@@ -234,23 +274,88 @@ final class NIMChatroomManager: NSObject, ObservableObject {
             userLevel: userLevel,
             isHost: true,
             isVip: false,   // AnchorInfoStore/SessionStore 目前无 isVip 字段；观众端自身补齐
-            messageType: .regular
+            messageType: .regular,
+            // v24（B4）：本地 echo 也带 replyToNick 让公屏立即渲染"@ nick:" 格式
+            senderYxAccId: selfYxAccid,
+            senderUserId: anchorUserId.isEmpty ? nil : anchorUserId,
+            replyToNick: replyToNick,
+            isSelf: true
         ))
 
         // 云信广播（remoteExt = dict 直接赋值，禁止 JSONSerialization → String 转换）
+        // v24（B4 · 对齐 H5 sendMessageToUser L332-340）：**只**放 `userId/chatBubble/replyNick` 三字段
+        // `replyUserId` 是 H5 未使用的自造字段（rule im-payload-real-log-over-code-assumption），
+        // 不进 payload；仅本地 pendingReplyTo 保留供 UI 用
         let msg = NIMMessage()
         msg.text = capped
-        msg.remoteExt = [
-            "userId": anchorUserId,
+        var remoteExt: [String: Any] = [
+            "userId": anchorUserId as Any,
             "chatBubble": ""   // v22 Phase 3 / chatBubble 里程碑接入 mineInfo.chatBubble
         ]
+        if let nick = replyToNick, !nick.isEmpty {
+            remoteExt["replyNick"] = nick
+        }
+        msg.remoteExt = remoteExt
         let nimSession = NIMSession(roomId, type: .chatroom)
         do {
             try NIMSDK.shared().chatManager.send(msg, to: nimSession)
-            AppLogger.im.info("🟢 [Chatroom] sendText ok len=\(capped.count, privacy: .public)")
+            AppLogger.im.info("🟢 [Chatroom] sendText ok len=\(capped.count, privacy: .public) reply=\(replyToNick ?? "-", privacy: .public)")
             return true
         } catch {
             AppLogger.im.error("🔴 [Chatroom] sendText failed: \(String(describing: error), privacy: .private)")
+            return false
+        }
+    }
+
+    /// 向本直播间广播 PK 对手静音状态。
+    ///
+    /// 对齐 H5 `livePk.toggleOpponentMute`：自定义消息顶层字段必须包含
+    /// `attachType=-8` 与 `muteOppositeAnchor=0/1`，供观众端立即切换对手音频。
+    /// `data` 保持 JSON 字符串形态，兼容 H5 `sendCustomMsg` 的消息契约。
+    @discardableResult
+    func sendPKMuteBroadcast(muted: Bool) -> Bool {
+        guard hasJoined else {
+            AppLogger.im.warning("[Chatroom] PK mute broadcast skipped: not joined")
+            return false
+        }
+
+        let muteFlag = muted ? 1 : 0
+        let innerPayload: [String: Any] = [
+            "muteOppositeAnchor": muteFlag,
+            "attachType": -8,
+        ]
+        guard JSONSerialization.isValidJSONObject(innerPayload),
+              let innerData = try? JSONSerialization.data(withJSONObject: innerPayload),
+              let innerJSON = String(data: innerData, encoding: .utf8) else {
+            AppLogger.im.error("[Chatroom] PK mute broadcast JSON encode failed")
+            return false
+        }
+
+        let payload: [String: Any] = [
+            "attachType": -8,
+            "muteOppositeAnchor": muteFlag,
+            "data": innerJSON,
+        ]
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload),
+              let json = String(data: data, encoding: .utf8) else {
+            AppLogger.im.error("[Chatroom] PK mute broadcast payload encode failed")
+            return false
+        }
+
+        let attachment = GenericCustomAttachment(rawDict: payload, rawJSON: json)
+        let customObject = NIMCustomObject()
+        customObject.attachment = attachment
+        let message = NIMMessage()
+        message.messageObject = customObject
+        message.remoteExt = payload
+
+        do {
+            try NIMSDK.shared().chatManager.send(message, to: NIMSession(roomId, type: .chatroom))
+            AppLogger.im.info("[Chatroom] PK mute broadcast sent muted=\(muted, privacy: .public)")
+            return true
+        } catch {
+            AppLogger.im.error("[Chatroom] PK mute broadcast failed: \(String(describing: error), privacy: .private)")
             return false
         }
     }
@@ -261,9 +366,14 @@ final class NIMChatroomManager: NSObject, ObservableObject {
 
     /// v12 payload 数值字段多态解析（后端 giftPrice/giftNum/cost 混发 Int/Int64/NSNumber/String）
     static func readInt64(_ raw: Any?) -> Int64? {
+        if raw is Bool { return nil }
         if let v = raw as? Int64 { return v }
         if let v = raw as? Int { return Int64(v) }
-        if let v = raw as? NSNumber { return v.int64Value }
+        if let v = raw as? NSNumber {
+            let type = String(cString: v.objCType)
+            guard type != "c", type != "B" else { return nil }
+            return v.int64Value
+        }
         if let v = raw as? String, let n = Int64(v) { return n }
         return nil
     }
@@ -271,6 +381,13 @@ final class NIMChatroomManager: NSObject, ObservableObject {
     /// v22（2026-07-10）：Int 兼容读取（NSNumber → Int 直接 as? Int 在大数 / JSON parse 场景可能 nil）
     static func readInt(_ raw: Any?) -> Int? {
         readInt64(raw).map(Int.init)
+    }
+
+    /// userId / giftId 会在 Int、NSNumber 与 String 间混发，统一转为稳定 String 再参与匹配。
+    static func readString(_ raw: Any?) -> String? {
+        if let value = raw as? String, !value.isEmpty { return value }
+        if let value = readInt64(raw) { return String(value) }
+        return nil
     }
 
     /// v22：Bool 兼容读取（remoteExt 从 JSON parse 时布尔可能是 NSNumber(0/1)，as? Bool 可能 fail）
@@ -286,6 +403,7 @@ final class NIMChatroomManager: NSObject, ObservableObject {
     /// 路由器按 protocol 短路决定消费；公屏文本副作用（-9 pkChatNotice）由本方法兼顾。
     fileprivate func processIncoming(_ batch: [NIMMessage]) {
         var items: [PublicChatMessage] = []
+        var rpsWinItems: [PublicChatMessage] = []
         var delta = 0
 
         for m in batch {
@@ -338,10 +456,36 @@ final class NIMChatroomManager: NSObject, ObservableObject {
             }
 
             if let payload {
+                // 直播付费跑马灯与派对房幸运数字共用 numeric attachType=1050。
+                // 此处仅在 Live NIMChatroomManager 消费，PartyMessageRouter 的 1050 保持不变。
+                if Self.readInt(payload["attachType"]) == 1050 {
+                    if let context = paidBulletContext {
+                        switch paidBulletQueue.receive(payload: payload, context: context) {
+                        case .ignored:
+                            break
+                        case .enqueued(_, let firstHostEarnings):
+                            if let earnings = firstHostEarnings {
+                                AppToastCenter.shared.show(
+                                    String(format: L10n.paidBulletEarningsToast, earnings)
+                                )
+                            }
+                        }
+                    } else {
+                        AppLogger.im.debug("[Chatroom] paid bullet ignored: live context unavailable")
+                    }
+                    continue
+                }
                 let at = AttachType(raw: payload["attachType"])
                 // H M5：路由统一走 NIMService.dispatch；PKNIMRouter / GiftMessageRouter / SystemMessageRouter
                 // 等按 protocol 短路决定消费
                 NIMService.shared.dispatch(at, payload: payload, context: .liveChatroom(roomId: roomId))
+
+                // 主态的 44/62 由 SystemMessageRouter → LiveStore.forceEnd 处理；客态没有 LiveStore，
+                // 必须在聊天室通道直接退房，语义对齐 H5 `@live-end="quitLiveRoom"`。
+                if at == .forceEndLive || at == .banned {
+                    onRoomEnded?()
+                    continue
+                }
 
                 // 公屏文本副作用：-9 pkChatNotice 的 content 直接展示（对齐 H5 handelPkNotification）
                 // v22 Phase 1（2026-07-10）：改用 .pkNotify 变体渲染暗红 D33901/30 气泡（H5 L519-521）
@@ -443,9 +587,33 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                     if at == .liveGiftRankUpdate {
                         Task { [weak self] in await self?.contributionStore.refresh() }
                         AppLogger.im.debug("💎 [Chatroom] attachType 50 → contribution refresh() (对齐 H5 handleLiveGiftMessage)")
+                        // v25 (2026-07-17) 直播间任务面板同排触发：收 50 号消息 → 重拉 getLiveGiftTask 更新进度
+                        // （对齐 H5 live.js:937 updateLiveGiftTask()；只挂 50 case，H5 outer gate 已过滤 1/4）
+                        liveGiftTaskStore.refreshOnGift()
+                        AppLogger.im.debug("🎯 [Chatroom] attachType 50 → liveGiftTaskStore.refreshOnGift() (对齐 H5 handleLiveGiftMessage)")
+
+                        // H5 `handleLiveGiftMessage`：命中心愿礼物时推进进度并即时刷新已打开面板的 Top6。
+                        // 线上 50 消息偶发漏发 `compelteGiftNum`，此时用本次 giftNum 增量兜底；
+                        // `completeGiftNum` 是后端逐步修正拼写后的兼容字段。
+                        if let giftId = Self.readString(data["giftId"]) {
+                            let completed = Self.readInt(
+                                data["compelteGiftNum"]
+                                    ?? data["completedGiftNum"]
+                                    ?? data["completeGiftNum"]
+                            )
+                            let receivedCount = Self.readInt(data["giftNum"] ?? data["num"]) ?? 1
+                            _ = wishlistStore.applyGiftProgress(
+                                giftId: giftId,
+                                completedCount: completed,
+                                receivedCount: receivedCount
+                            )
+                        }
                     }
-                    // v16 兜底：额外调 apiSendRank(rankType='now') 更新 Top2（不依赖 msg[] 解析成功）
-                    Task { [weak self] in await self?.topRankStore.refresh() }
+                    // msg[] 是 H5 的权威完整榜单，直接采用并避免 API 旧响应覆盖它。
+                    // 仅 payload 缺少 msg[] 时才用 apiSendRank 兜底。
+                    if msgArray == nil {
+                        Task { [weak self] in await self?.topRankStore.refresh() }
+                    }
 
                     // v22 Phase 1（2026-07-10）：attachType 50 含 gift 明细，追加公屏 gift row
                     // （im-payload-real-log-over-code-assumption：后端真实通道，attachType 1 从未发过）
@@ -467,6 +635,8 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                             let msgType: PublicChatMessageType = totalReward > 0
                                 ? .luckyGift(giftIconUrl: giftIcon, count: Int(giftNum), totalReward: totalReward)
                                 : .gift(giftIconUrl: giftIcon, giftName: giftName, count: Int(giftNum))
+                            // v24（B1 M3 finding）：gift-path 也 decode activeTycoon → 让 RowGift 徽章接线生效
+                            let isActiveTycoon = Self.readBool(data["activeTycoon"])
                             items.append(PublicChatMessage(
                                 text: "",
                                 isSystem: false,
@@ -475,7 +645,8 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                                 userLevel: userLevel,
                                 isHost: isHost,
                                 isVip: isVip,
-                                messageType: msgType
+                                messageType: msgType,
+                                isActiveTycoon: isActiveTycoon
                             ))
                         }
                     }
@@ -517,6 +688,8 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                     let msgType: PublicChatMessageType = totalReward > 0
                         ? .luckyGift(giftIconUrl: giftIcon, count: count, totalReward: totalReward)
                         : .gift(giftIconUrl: giftIcon, giftName: giftName, count: count)
+                    // v24（B1 M3 finding）：gift-path 也 decode activeTycoon → 让 RowGift 徽章接线生效
+                    let sendGiftIsActiveTycoon = Self.readBool(data["activeTycoon"])
 
                     items.append(PublicChatMessage(
                         text: "",
@@ -526,7 +699,8 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                         userLevel: userLevel,
                         isHost: isHost,
                         isVip: isVip,
-                        messageType: msgType
+                        messageType: msgType,
+                        isActiveTycoon: sendGiftIsActiveTycoon
                     ))
                     continue   // gift/luckyGift row 已 append，跳过下方默认分支
 
@@ -537,18 +711,14 @@ final class NIMChatroomManager: NSObject, ObservableObject {
 
                 // v18 猜拳获胜（attachType 144 LIVA_GAME_NOTIFY）
                 case .guessGameWinner:
-                    let nickname = (data["nickname"] as? String) ?? (m.senderName)
-                    let medalUrl = data["medalUrl"] as? String
-                    let medalHours: Int? = (data["grantedHours"] as? Int)
-                        ?? (data["medalHours"] as? Int)
-                        ?? ((data["grantedHours"] as? NSNumber)?.intValue)
-                    items.append(PublicChatMessage(
+                    let rpsPayload = RpsWinNotificationPayload(data: data, fallbackNickname: m.senderName)
+                    rpsWinItems.append(PublicChatMessage(
                         text: "",
                         isSystem: false,
-                        senderNickname: nickname,
+                        senderNickname: rpsPayload.nickname,
                         senderAvatar: nil,
                         userLevel: nil, isHost: false, isVip: false,
-                        messageType: .rpsWin(medalUrl: medalUrl, medalHours: medalHours)
+                        messageType: .rpsWin(medalUrl: rpsPayload.medalURL, medalHours: rpsPayload.medalHours)
                     ))
                     continue
 
@@ -577,15 +747,34 @@ final class NIMChatroomManager: NSObject, ObservableObject {
 
                 // v18 心愿单 TOP1 登顶（attachType 251）
                 case .wishlistTop1:
-                    let nickname = (data["nickname"] as? String) ?? (data["fromNick"] as? String)
+                    let nickname = (data["nickname"] as? String)
+                        ?? (data["fromNick"] as? String)
+                        ?? m.senderName
+                    let userId = Self.readString(data["userId"] ?? data["sendUserId"])
                     items.append(PublicChatMessage(
                         text: "",
                         isSystem: false,
                         senderNickname: nickname,
-                        senderAvatar: nil,
+                        senderAvatar: (data["avatar"] as? String) ?? (data["fromAvatar"] as? String),
                         userLevel: nil, isHost: false, isVip: false,
-                        messageType: .wishlistEffect
+                        messageType: .wishlistEffect,
+                        senderYxAccId: (data["sendYxAccid"] as? String) ?? (data["senderYxAccid"] as? String),
+                        senderUserId: userId
                     ))
+                    continue
+
+                // H5 不为 250 写公屏；252/253 只更新本地进度并重播顶部横幅。
+                case .wishlistFirst:
+                    continue
+                case .wishlistPoolDone, .wishlistGiftDone:
+                    _ = wishlistStore.markCompleted(
+                        wholePool: at == .wishlistPoolDone,
+                        giftId: Self.readString(data["giftId"]),
+                        hasGiftId: data["giftId"].map { !($0 is NSNull) } ?? false
+                    )
+                    // H5 每次 252/253 都重播横幅；消息可能先于 wishlist 接口回包到达，
+                    // 因此不能以本地 item 是否命中作为展示条件。
+                    wishAchievedQueue.show()
                     continue
 
                 // v18 钻石盲盒 4 subType（1030 发包 / 1032 瓜分 / 1033 结算 or 过期）
@@ -678,7 +867,12 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                         ?? Self.readInt(payload["level"])
                         ?? listInnerUserLevel
                     let isVip = Self.readBool(data["isVip"]) || Self.readBool(payload["isVip"]) || (listInnerIsVip ?? false)
-                    AppLogger.im.debug("🚗 [Chatroom] attachType=\(String(describing: at), privacy: .public) userLevel=\(userLevel ?? -1, privacy: .public) isVip=\(isVip, privacy: .public) vehicle=\(vehicleItemImg ?? "nil", privacy: .public) dataKeys=\(data.keys.joined(separator: ","), privacy: .public) payloadKeys=\(payload.keys.joined(separator: ","), privacy: .public)")
+                    // v24（B1 活跃大R）：activeTycoon 提前解析，供公屏 Row 徽章 + EnterRoomFloat 金色底两路共用
+                    // TODO: [im-payload-real-log-over-code-assumption] 真机首次收到 attachType=80 通过 🚗 log
+                    //   校对 activeTycoon / senderYxAccid 字段真实位置；当前基于 H5 蓝本 + GiftEffect 同款 fallback
+                    let isActiveTycoon = Self.readBool(data["activeTycoon"])
+                        || Self.readBool(payload["activeTycoon"])
+                    AppLogger.im.debug("🚗 [Chatroom] attachType=\(String(describing: at), privacy: .public) userLevel=\(userLevel ?? -1, privacy: .public) isVip=\(isVip, privacy: .public) activeTycoon=\(isActiveTycoon, privacy: .public) vehicle=\(vehicleItemImg ?? "nil", privacy: .public) dataKeys=\(data.keys.joined(separator: ","), privacy: .public) payloadKeys=\(payload.keys.joined(separator: ","), privacy: .public)")
                     items.append(PublicChatMessage(
                         text: "",
                         isSystem: false,
@@ -688,7 +882,8 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                         isHost: false,
                         isVip: isVip,
                         messageType: inLiveChannel == 1 ? .officialBoostEnter : .enterRoom,
-                        itemSmallImg: vehicleItemImg
+                        itemSmallImg: vehicleItemImg,
+                        isActiveTycoon: isActiveTycoon
                     ))
                     // v23（2026-07-11）用户进场双链路（对齐 H5 userEntranceFloat + giftQueue 分离）：
                     //   链路 1: EnterRoomFloatQueue —— 公屏上方胶囊 banner（无 vehicle 也播）
@@ -697,10 +892,6 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                     // - 主播自己进场 filter drop（H5 payload 里的 sender 永远是观众/客人，防御性过滤）
                     // - activeTycoon 大 R 用金色底图（H5 live_userRR_bg.webp）
                     // - EnterEffectCenter scopeId 与 enterEffectScene modifier 同源用 self.roomId
-                    // TODO: [im-payload-real-log-over-code-assumption] 真机首次收到 attachType=80 通过上方 🚗 log
-                    //   校对 activeTycoon / senderYxAccid 字段真实位置；当前基于 H5 蓝本 + GiftEffect 同款 fallback
-                    let isActiveTycoon = Self.readBool(data["activeTycoon"])
-                        || Self.readBool(payload["activeTycoon"])
                     let mineYxAccid = SessionStore.shared.user?.yxAccid ?? ""
                     let senderAccid = (data["senderYxAccid"] as? String)
                         ?? (data["sendYxAccid"] as? String)
@@ -743,6 +934,54 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                         }
                     }
                     continue
+                case .activeTycoonEnter:
+                    // v24（B1 · 对齐 H5 §9.6 handleActiveTycoonEnterToast · live.js:713–739）：
+                    // 活跃大 R 进房触发顶部 Toast；同 userId 当天去重。
+                    // **isHost + isStreaming 门禁在 iOS 主播端 App 里等价于 `hasJoined`**：
+                    //   NIMChatroomManager 只在主播自己开播成功后 enter 聊天室；只要 hasJoined=true
+                    //   即"是本主播房间 + 开播中"（对齐 H5 铁律"仅主态主播开播中弹"）
+                    // TODO: [im-payload-real-log-over-code-assumption] `data.userId` vs `data.sendUserId` 真机 log 后 finalize
+                    // v24 B4 兜底：Bool 桥接排除（ios-decode-userid-compat rule）
+                    let tycoonUserIdStr: String = {
+                        if let s = data["userId"] as? String, !s.isEmpty { return s }
+                        if let n = data["userId"] as? NSNumber {
+                            let c = String(cString: n.objCType)
+                            if c != "c" && c != "B" { return n.stringValue }
+                        }
+                        if let s = data["sendUserId"] as? String, !s.isEmpty { return s }
+                        if let n = data["sendUserId"] as? NSNumber {
+                            let c = String(cString: n.objCType)
+                            if c != "c" && c != "B" { return n.stringValue }
+                        }
+                        return ""
+                    }()
+                    AppLogger.im.debug("💎 [Chatroom] activeTycoonEnter userId=\(tycoonUserIdStr, privacy: .private) hasJoined=\(self.hasJoined, privacy: .public) dataKeys=\(data.keys.joined(separator: ","), privacy: .public)")
+                    ActiveTycoonToastCenter.shared.trigger(
+                        userId: tycoonUserIdStr,
+                        isHost: self.hasJoined,
+                        isStreaming: self.hasJoined
+                    )
+                    // v24（B1 M2 finding · 对齐 H5 §9.6 showActiveTycoonEntrance live.js:978-987）：
+                    // Big-R 用户即使不带座驾进房，也需要金色胶囊 banner —— 追加 EnterRoomFloatQueue enqueue
+                    // 用 IM payload 里的 nickname/avatar/userLevel/isVip（尽量兼容多字段名）
+                    let tycoonNickname: String? = (data["nickname"] as? String)
+                        ?? (data["username"] as? String)
+                        ?? (data["fromNick"] as? String)
+                    let tycoonAvatar: String? = (data["icon"] as? String)
+                        ?? (data["avatar"] as? String)
+                        ?? (data["fromAvatar"] as? String)
+                    let tycoonLevel = Self.readInt(data["userLevel"]) ?? Self.readInt(data["level"]) ?? 0
+                    let tycoonIsVip = Self.readBool(data["isVip"])
+                    if self.hasJoined, let nickname = tycoonNickname, !nickname.isEmpty {
+                        enterRoomQueue.addToQueue(EnterRoomFloatQueue.Item(
+                            nickname: nickname,
+                            avatarUrl: tycoonAvatar,
+                            userLevel: tycoonLevel,
+                            isVip: tycoonIsVip,
+                            isActiveTycoon: true
+                        ))
+                    }
+                    continue
                 case .knownButUnhandled, .unknown:
                     // 已知但不实现（132/133/1004/1007/1014/...）+ unknown：仅静默 dispatch（router 已分发），不污染公屏
                     continue
@@ -775,7 +1014,7 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                     ext = parsed
                 }
                 let extType = ext["type"] as? String ?? ""
-                let nickname = (ext["fromNick"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                var nickname = (ext["fromNick"] as? String).flatMap { $0.isEmpty ? nil : $0 }
                     ?? (ext["fromNickName"] as? String).flatMap { $0.isEmpty ? nil : $0 }
                     ?? m.senderName
                 let level = Self.readInt(ext["userLevel"]) ?? Self.readInt(ext["level"])
@@ -789,9 +1028,9 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                 case "wheelRes":
                     msgType = .wheelRes
                 case "rpsWinNotify":
-                    let medalUrl = ext["medalUrl"] as? String
-                    let medalHours = Self.readInt(ext["grantedHours"]) ?? Self.readInt(ext["medalHours"])
-                    msgType = .rpsWin(medalUrl: medalUrl, medalHours: medalHours)
+                    let rpsPayload = RpsWinNotificationPayload(data: ext, fallbackNickname: nickname)
+                    nickname = rpsPayload.nickname
+                    msgType = .rpsWin(medalUrl: rpsPayload.medalURL, medalHours: rpsPayload.medalHours)
                 case "pk_notification":
                     msgType = .pkNotify
                 case "enterRoom":
@@ -802,7 +1041,23 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                 }
 
                 let itemSmallImg = (ext["itemSmallImg"] as? String) ?? (ext["vehicleImg"] as? String)
-                AppLogger.im.debug("💬 [Chatroom] text ext.type='\(extType, privacy: .public)' → msgType=\(String(describing: msgType), privacy: .public) body='\(body.prefix(40), privacy: .public)'")
+                // v24（B1）：activeTycoon 字段透传（对齐 H5 messageScroller.vue L373 徽章 gating）
+                let isActiveTycoon = Self.readBool(ext["activeTycoon"])
+                // v24（B4 · 对齐 H5 §9.12.5 live.js:244 ext.replyNick decode + ios-decode-userid-compat.md）
+                let replyToNick = (ext["replyNick"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                let senderUserIdStr: String? = {
+                    if let s = ext["userId"] as? String, !s.isEmpty { return s }
+                    if let n = ext["userId"] as? NSNumber {
+                        let c = String(cString: n.objCType)
+                        if c != "c" && c != "B" { return n.stringValue }
+                    }
+                    return nil
+                }()
+                let senderYxAccId = m.from
+                let mineYxAccid = anchorYxAccount ?? SessionStore.shared.user?.yxAccid
+                let isSelf = !(senderYxAccId ?? "").isEmpty
+                    && senderYxAccId == mineYxAccid
+                AppLogger.im.debug("💬 [Chatroom] text ext.type='\(extType, privacy: .public)' → msgType=\(String(describing: msgType), privacy: .public) reply=\(replyToNick ?? "-", privacy: .public) isSelf=\(isSelf, privacy: .public) body='\(body.prefix(40), privacy: .public)'")
                 items.append(PublicChatMessage(
                     text: body,
                     isSystem: false,
@@ -812,7 +1067,12 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                     isHost: isHost,
                     isVip: isVip,
                     messageType: msgType,
-                    itemSmallImg: itemSmallImg
+                    itemSmallImg: itemSmallImg,
+                    isActiveTycoon: isActiveTycoon,
+                    senderYxAccId: senderYxAccId,
+                    senderUserId: senderUserIdStr,
+                    replyToNick: replyToNick,
+                    isSelf: isSelf
                 ))
             case .custom:
                 // v22（2026-07-10）：解码失败静默 log，不再 append "[Gift/Custom message]" 污染公屏
@@ -827,12 +1087,33 @@ final class NIMChatroomManager: NSObject, ObservableObject {
                 if let obj = m.messageObject as? NIMNotificationObject,
                    let content = obj.content as? NIMChatroomNotificationContent {
                     let evtUserId: String = content.targets?.first?.userId ?? ""
-                    let isAnchorSelf = !evtUserId.isEmpty && evtUserId == anchorYxAccount
+                    let isAnchorSelf = !evtUserId.isEmpty && evtUserId == audienceExcludedYxAccount
                     if content.eventType == .enter {
                         if !isAnchorSelf { delta += 1 }
                     } else if content.eventType == .exit {
                         if !isAnchorSelf && presenceStore.onlineCount + delta > 0 {
                             delta -= 1
+                        }
+                    }
+                    // v24（B3 · 对齐 H5 §9.16 handleNotificationMessage gagMember/ungagMember）：
+                    // NIMSDK 直接暴露 typed enum，比 H5 JSON attach.type 更结构化
+                    // - addMute(305) / addMuteTemporarily(314) → 被禁言（gagMember）
+                    // - removeMute(306) / removeMuteTemporarily(315) → 被解禁（ungagMember）
+                    // 门禁：仅当"主播本人是 target"才处理（对齐 H5 attach.from === yxAccid 守卫）
+                    // targets?.contains(where:) 支持多 target 场景（NIM 单次通知可能包含多人）
+                    let isMuteEvent = content.eventType == .addMute
+                                   || content.eventType == .addMuteTemporarily
+                    let isUnmuteEvent = content.eventType == .removeMute
+                                     || content.eventType == .removeMuteTemporarily
+                    if isMuteEvent || isUnmuteEvent {
+                        let mineInTargets = content.targets?.contains(where: { $0.userId == anchorYxAccount }) ?? false
+                        AppLogger.im.debug("🔇 [Chatroom] mute event=\(String(describing: content.eventType), privacy: .public) mineInTargets=\(mineInTargets, privacy: .public) targetsCount=\(content.targets?.count ?? 0, privacy: .public)")
+                        if mineInTargets {
+                            if isMuteEvent {
+                                liveStore?.applyGag()
+                            } else {
+                                liveStore?.applyUngag()
+                            }
                         }
                     }
                 }
@@ -841,10 +1122,12 @@ final class NIMChatroomManager: NSObject, ObservableObject {
             }
         }
 
-        guard !items.isEmpty || delta != 0 else { return }
+        guard !items.isEmpty || !rpsWinItems.isEmpty || delta != 0 else { return }
         // v11 修复：直接 append 完整 PublicChatMessage 保留结构化字段（senderNickname/userLevel/isVip 等），
         // 供 ChatRowRegular / ChatRowGift 分派子视图渲染。原 push(text,system) 只保留 2 字段会丢失所有徽章信息
         for it in items { messagesStore.append(it) }
+        // 对齐 H5 `enqueueRpsWinNotify`：attachType=144 首条立即，其余 10 秒间隔，待发最多 20 条。
+        for item in rpsWinItems { rpsWinQueue.enqueue(item) }
         if delta != 0 {
             presenceStore.onlineCount = max(0, presenceStore.onlineCount + delta)
         }

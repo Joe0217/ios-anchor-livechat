@@ -10,6 +10,9 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "GiftSer
 /// `sendGift` / `giftDelivery` 等归 H 里程碑（礼物系统整体接入）。
 enum GiftService {
     /// 场景枚举（对齐 H5 `giftStore.getGiftListData('CALL')`）。私 call 礼物场景用 CALL；心愿单用 WISH。
+    ///
+    /// **派对房场景不在此**：H5 派对房走独立 sapi 接口 `apiPartyGetRoomGift`（`PartyAPI.getPartyRoomGift`），
+    /// 不走本 `/api/gift/v3/getGiftList`（主接口不识别 PARTY_ROOM/PARTY_GIFT scene → 后端返 1001 parameter.error）。
     enum Scene: String {
         case call = "CALL"
         case live = "LIVE"

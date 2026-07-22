@@ -10,7 +10,7 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "sys-msg
 ///
 /// **M4 范围**：H 核心 12 case（spec §6.2 渐进式接入）：
 /// - 强制下播 / 合规：44 forceEndLive / 61 complianceWarning / 62 banned / 63 boostingExposure / 64 boostingExposureExit
-/// - 通话相关（C 期缺口）：-3 callCancel（占位）/ -6 callPayWaitState / -1 callRemoteMessage / 15 callIncomePerMinute / 18 callGiftIncome / 90 callRechargeReward
+/// - 通话相关：-3 callCancel 辅助信令 / -6 callPayWaitState / -1 callRemoteMessage / 15 callIncomePerMinute / 18 callGiftIncome / 90 callRechargeReward
 /// - SessionStore：-4 followIncrement / 58 anchorAuditChange
 ///
 /// **未覆盖 case**（spec §6.2 R2 缓解）：进入 default 分支仅 `logger.debug` 不噪音不阻塞业务，
@@ -35,6 +35,7 @@ final class SystemMessageRouter: MessageRouter {
     weak var liveStore: LiveStore?
     weak var callStore: CallStore?
     weak var sessionStore: SessionStore?
+    weak var robotCallStore: RobotCallStore?
 
     /// 回前台 5s 冷却结束时间。NIM SDK 重连完成 `loginOK` 后会**逐条补发**离线 backlog
     /// （NIMService.swift:288-298 注释自承），此时 applicationState 已是 .active，单 background
@@ -114,8 +115,20 @@ final class SystemMessageRouter: MessageRouter {
             callStore?.appendGiftIncome(num: delta)
         case .callRechargeReward(let delta):
             callStore?.appendWaitBonus(num: delta)
-        case .callCancelLogOnly(let type):
-            logger.info("[SysMsgRouter] callCancel type=\(type, privacy: .public) — RTM 主路径已处理")
+        case .callNimSignal(let type, let channelId, let sender):
+            callStore?.handleNimCallSignal(type: type, channelId: channelId, sender: sender)
+        case .robotCallIncoming(let invite):
+            guard let invite else {
+                logger.warning("[SysMsgRouter] robot call incoming missing required payload")
+                break
+            }
+            robotCallStore?.receiveIncoming(invite)
+        case .robotCallReward(let reward):
+            guard let reward else {
+                logger.warning("[SysMsgRouter] robot call reward missing recordId")
+                break
+            }
+            robotCallStore?.receiveReward(reward)
         case .followIncrement:
             sessionStore?.incrementFollow()
         case .anchorAuditChange(let s, let c):

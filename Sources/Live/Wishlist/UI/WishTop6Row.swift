@@ -5,6 +5,7 @@ import SwiftUI
 /// 6 个头像槽位；Top 1-3 有金/银/铜皇冠，Top 4-6 无
 struct WishTop6Row: View {
     let gifters: [WishlistTop6Item]
+    let onGifterTap: (WishlistTop6Item) -> Void
 
     var body: some View {
         VStack(spacing: 8) {
@@ -30,12 +31,20 @@ struct WishTop6Row: View {
     }
 
     private func slot(_ g: WishlistTop6Item) -> some View {
-        VStack(spacing: 4) {
+        Button {
+            guard !g.isEmpty else { return }
+            onGifterTap(g)
+        } label: {
+            VStack(spacing: 4) {
             ZStack {
                 if g.isEmpty {
                     Circle().fill(Color.white.opacity(0.08)).frame(width: 48, height: 48)
                 } else {
-                    AvatarView(urlString: g.avatarUrl, size: 48, kind: .user)
+                    AvatarView(urlString: g.avatarUrl,
+                               size: 48,
+                               kind: .user,
+                               userId: g.userId,
+                               disablesTap: true)
                 }
                 // Top 1-3 皇冠角标
                 if !g.isEmpty && g.rank <= 3 {
@@ -51,10 +60,25 @@ struct WishTop6Row: View {
                     .frame(width: 48, height: 48)
                 }
             }
-            Text(g.isEmpty ? "--" : formatDiamond(g.totalDiamond))
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(g.isEmpty ? .white.opacity(0.4) : Color(hex: 0xFFE600))
+                if g.isEmpty {
+                    Text("--")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.4))
+                } else {
+                    HStack(spacing: 2) {
+                        Image("coins")
+                            .resizable()
+                            .frame(width: 8, height: 8)
+                            .accessibilityHidden(true)
+                        Text(formatDiamond(g.totalDiamond))
+                    }
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(Color(hex: 0xFFE600))
+                }
+            }
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(g.isEmpty ? Text(L10n.wishlistTop6Empty) : Text(g.nickname ?? formatDiamond(g.totalDiamond)))
     }
 
     private func crownColor(_ rank: Int) -> Color {

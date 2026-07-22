@@ -1,17 +1,22 @@
 import SwiftUI
 
-/// B-8 · PK 结果动画覆盖层（对齐 H5 `pkBattleViewResultAnimation.vue`）。
+/// B-8 · PK 结果动画覆盖层（对齐 H5 `pkBattleViewResultAnimation.vue` + `pk-result-{win,loss,draw}.svga`）。
 ///
-/// H5 用 SVGA 动画（pk-result-win / lose / draw）；iOS 侧无 SVGA 资源，用 SwiftUI 近似还原：
-/// - 惩罚阶段开始瞬间显示（对齐 H5 `watch pkStore.isPunishing`）
-/// - 105x105 中央圆盘 + 大字号 WIN/LOSE/DRAW + 缩放弹跳动画（0.6s scaleIn + hold + fadeOut）
-/// - 结果判定：我方 pkCounter vs 对方 oppositePkCounter（大 = win / 小 = lose / 等 = draw）
-/// - 触发方式：由父 view (PKArenaView) 监听 `store.state == .punishing` 触发一次 `show`
+/// **触发**：`store.state` 转为 `.punishing` 时首次播放（`hasPlayed` 幂等 flag）。
+/// 播完 SVGA 或超时 → `visible=false` 淡出隐藏。同一轮 PK 只播一次。
+///
+/// **视觉**（2026-07-11 从 SwiftUI scale/opacity 弹跳改造为真 SVGA）：
+/// - 300×300 中央 SVGA 动画（win/loss/draw 三个资源按胜负分派）
+/// - `loops=1` 播完 fire onFinish 触发淡出
+///
+/// **胜负判定**：我方 `pkCounter` vs 对方 `oppositePkCounter`
+/// - my > opp → win / my < opp → lose / my == opp → draw
 struct PKBattleResultAnimation: View {
     @ObservedObject var store: PKStore
-    @State private var scale: CGFloat = 0.4
-    @State private var opacity: Double = 0
+    @State private var visible: Bool = false
     @State private var hasPlayed: Bool = false
+    /// 播完后的 nonce（换 resource 也换 nonce 让 SwiftUI 重建 UIView）
+    @State private var playNonce: Int = 0
 
     private var result: Result {
         let my = store.scores?.pkCounter ?? 0
@@ -21,61 +26,52 @@ struct PKBattleResultAnimation: View {
         return .draw
     }
 
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(colorForResult.opacity(0.35))
-                .frame(width: 105, height: 105)
-                .overlay(
-                    Circle().stroke(colorForResult, lineWidth: 3)
-                )
-            Text(textForResult)
-                .font(.system(size: 22, weight: .heavy))
-                .foregroundColor(.white)
-                .shadow(color: colorForResult, radius: 4)
+    private var svgaResource: String {
+        switch result {
+        case .win:  return "pk-result-win"
+        case .lose: return "pk-result-loss"
+        case .draw: return "pk-result-draw"
         }
-        .scaleEffect(scale)
-        .opacity(opacity)
-        .allowsHitTesting(false)
+    }
+
+    var body: some View {
+        Group {
+            if visible {
+                PKSVGAPlayerView(resource: svgaResource,
+                                 loops: 1,
+                                 onFinish: handleFinish)
+                    .id(playNonce)
+                    .frame(width: 300, height: 300)
+                    .allowsHitTesting(false)
+                    .accessibilityLabel(Text(resultA11yText))
+            }
+        }
         .onChange(of: store.state) { newState in
             if newState == .punishing && !hasPlayed {
                 hasPlayed = true
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.5)) {
-                    scale = 1.0
-                    opacity = 1.0
-                }
-                // hold 1.4s → fade
-                Task {
-                    try? await Task.sleep(nanoseconds: 1_400_000_000)
-                    withAnimation(.easeOut(duration: 0.4)) {
-                        opacity = 0
-                    }
-                }
+                playNonce &+= 1
+                withAnimation(.easeIn(duration: 0.15)) { visible = true }
             } else if newState != .punishing {
                 hasPlayed = false
-                scale = 0.4
-                opacity = 0
+                visible = false
             }
         }
+    }
+
+    private func handleFinish() {
+        // SVGA 播完淡出（clearsAfterStop=true 会自动清帧，无需 stopAnimation）
+        withAnimation(.easeOut(duration: 0.4)) { visible = false }
     }
 
     // MARK: - Result
 
     private enum Result { case win, lose, draw }
 
-    private var textForResult: String {
+    private var resultA11yText: String {
         switch result {
         case .win:  return L10n.PK.resultWin
         case .lose: return L10n.PK.resultLose
         case .draw: return L10n.PK.resultDraw
-        }
-    }
-
-    private var colorForResult: Color {
-        switch result {
-        case .win:  return Color(hex: 0xFFD700)   // 金
-        case .lose: return Color(hex: 0xE40132)   // 红
-        case .draw: return Color(hex: 0x00B8FF)   // 蓝
         }
     }
 }

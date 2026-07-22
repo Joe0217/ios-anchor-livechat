@@ -13,6 +13,13 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveCon
 @MainActor
 final class LiveContributionStore: ObservableObject {
     @Published private(set) var currentLiveIncome: Int64 = 0
+    /// 主态默认取当前登录主播；客态进房时改为被观看主播，避免把自己的直播收入渲染到他人房间。
+    private var anchorUserId: String?
+
+    func configure(anchorUserId: String) {
+        self.anchorUserId = anchorUserId.isEmpty ? nil : anchorUserId
+        currentLiveIncome = 0
+    }
 
     /// 进房初始化拉取
     func loadInitial() {
@@ -32,12 +39,13 @@ final class LiveContributionStore: ObservableObject {
     /// iOS 对齐：LiveRoomView.onAppear → loadInitial → refresh()；
     /// NIMChatroomManager processIncoming 收 attachType 50 → refresh() 重拉
     func refresh() async {
-        guard let uid = SessionStore.shared.user?.userId else {
+        let uid = anchorUserId ?? SessionStore.shared.user?.userId.map(String.init)
+        guard let uid, !uid.isEmpty else {
             logger.warning("Contribution refresh skipped: no session userId")
             return
         }
         do {
-            let body: [String: Any] = ["searchValue": "\(uid)"]
+            let body: [String: Any] = ["searchValue": uid]
             let data = try await APIClient.shared.post("/api/agora/live/getRoomAndJoinRoom", body: body)
             let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
             // response.currentLiveIncome 多态解析（Int64/Int/NSNumber）
@@ -77,5 +85,8 @@ final class LiveContributionStore: ObservableObject {
     }
 
     /// logout / 离房清理
-    func clear() { currentLiveIncome = 0 }
+    func clear() {
+        currentLiveIncome = 0
+        anchorUserId = nil
+    }
 }

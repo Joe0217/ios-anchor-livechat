@@ -100,7 +100,9 @@ struct PKBattleTop3Contributors: View {
     private func avatarSlot(user: PKTopUser?, rank: Int) -> some View {
         ZStack(alignment: .bottomTrailing) {
             // 2026-07-07 v5：空占位对齐 H5 icon-top-empty.webp 意图；AvatarView 传 nil URL 自动走 defaultUserAvatar 兜底
-            AvatarView(urlString: user?.displayAvatar, size: avatarSize, kind: .user)
+            // userId: user.userId → 环境自探 .liveRoom → 弹名片卡（PK 属于直播间上下文）
+            AvatarView(urlString: user?.displayAvatar, size: avatarSize, kind: .user,
+                       userId: user?.userId.map(String.init))
                 .overlay(Circle().stroke(borderColor(rank), lineWidth: 1))
 
             // 右下角 rank icon（H5 `absolute bottom--6 right-0` = 悬出 avatar 右下 6pt）

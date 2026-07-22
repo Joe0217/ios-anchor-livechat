@@ -13,20 +13,26 @@ final class LiveAnchorRankStore: ObservableObject {
     @Published private(set) var currentRank: Int?
 
     /// 显示文案（对齐 H5 逻辑）：
-    /// - 1-100 → "No.X"
-    /// - >100 → "100+"
-    /// - -1 → "99+"（H5 兼容值）
+    /// - 0-100 → "No.X"（H5 明确保留 0）
+    /// - >100 → "No.100+"
+    /// - -1 → "No.99+"（H5 顶部组件兼容值）
     /// - nil → "--"
     var displayText: String {
         guard let rank = currentRank else { return "--" }
-        if rank == -1 { return "99+" }
-        if rank > 100 { return "100+" }
-        if rank <= 0 { return "--" }
+        if rank == -1 { return "No.99+" }
+        if rank > 100 { return "No.100+" }
         return "No.\(rank)"
     }
 
     /// v13 复用 RankService（Fakes 或 Real），避免硬编码 15
     private var service: RankServiceProtocol = RankServiceReal()
+    /// 主态默认当前主播；客态由进房结果注入被观看主播 id。
+    private var anchorUserId: String?
+
+    func configure(anchorUserId: String) {
+        self.anchorUserId = anchorUserId.isEmpty ? nil : anchorUserId
+        currentRank = nil
+    }
 
     /// 进房初始化拉取（对齐 H5 onMounted → apiReceiveRank({anchorUserId, rankType:'week'}) → currentAnchorRank）
     func loadInitial() {
@@ -44,12 +50,13 @@ final class LiveAnchorRankStore: ObservableObject {
 
     private func load() async {
         // 对齐 H5 liveRoomTopAnchorRank.vue：apiReceiveRank({anchorUserId, rankType:'week'}) → res.currentAnchorRank
-        guard let uid = SessionStore.shared.user?.userId else {
+        let uid = anchorUserId ?? SessionStore.shared.user?.userId.map(String.init)
+        guard let uid, !uid.isEmpty else {
             logger.warning("AnchorRank load skipped: no session userId")
             return
         }
         do {
-            let page = try await service.fetchWeekRank(period: .week, anchorUserId: String(uid))
+            let page = try await service.fetchWeekRank(period: .week, anchorUserId: uid)
             currentRank = page.anchorOwnRank
             logger.info("AnchorRank loaded from service: \(self.displayText, privacy: .public)")
         } catch {

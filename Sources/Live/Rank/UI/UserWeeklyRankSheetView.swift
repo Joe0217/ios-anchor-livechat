@@ -18,23 +18,28 @@ struct UserWeeklyRankSheetView: View {
     @Binding var isPresented: Bool
     let anchorUserId: Int
     let dbId: Int
+    let onUserTap: (String) -> Void
 
-    @State private var topTab: RankSheetTopTab = .viewers
+    @State private var topTab: RankSheetTopTab
     @State private var subTab: SendRankType = .now
     @State private var viewersList: [ViewerEntry] = []
     @State private var viewersLoading = true
     @State private var rankLists: [SendRankType: [SendRankEntry]] = [:]
-    @State private var rankLoading: SendRankType? = nil
+    @State private var loadingRankTabs: Set<SendRankType> = []
 
     private let viewersService: ViewersServiceProtocol
     private let rankService: SendRankServiceProtocol
 
     init(isPresented: Binding<Bool>, anchorUserId: Int, dbId: Int,
+         initialTopTab: RankSheetTopTab = .viewers,
+         onUserTap: @escaping (String) -> Void = { _ in },
          viewersService: ViewersServiceProtocol = ViewersServiceReal(),
          rankService: SendRankServiceProtocol = SendRankServiceReal()) {
         self._isPresented = isPresented
         self.anchorUserId = anchorUserId
         self.dbId = dbId
+        self.onUserTap = onUserTap
+        self._topTab = State(initialValue: initialTopTab)
         self.viewersService = viewersService
         self.rankService = rankService
     }
@@ -53,7 +58,13 @@ struct UserWeeklyRankSheetView: View {
         .background(Color(hex: 0x1A0033).ignoresSafeArea())
         .onAppear {
             Task { await loadViewers() }
-            Task { await loadRank(.now) }
+            Task {
+                await loadRank(.now)
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                guard !Task.isCancelled else { return }
+                await loadRank(.today)
+                await loadRank(.week)
+            }
         }
     }
 
@@ -102,7 +113,7 @@ struct UserWeeklyRankSheetView: View {
     private func subTabButton(_ tab: SendRankType, label: String) -> some View {
         Button {
             subTab = tab
-            if rankLists[tab] == nil {
+            if rankLists[tab] == nil, !loadingRankTabs.contains(tab) {
                 Task { await loadRank(tab) }
             }
         } label: {
@@ -132,7 +143,7 @@ struct UserWeeklyRankSheetView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(viewersList) { viewer in
-                            ViewerRow(viewer: viewer)
+                            ViewerRow(viewer: viewer, onUserTap: onUserTap)
                             Divider().background(Color.white.opacity(0.06))
                         }
                     }
@@ -151,7 +162,7 @@ struct UserWeeklyRankSheetView: View {
     private var topGifterContent: some View {
         Group {
             let list = rankLists[subTab] ?? []
-            if rankLoading == subTab && list.isEmpty {
+            if loadingRankTabs.contains(subTab) && list.isEmpty {
                 ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if list.isEmpty {
                 emptyView(text: L10n.liveRoomRankEmpty, icon: "trophy")
@@ -160,7 +171,7 @@ struct UserWeeklyRankSheetView: View {
                     LazyVStack(spacing: 0) {
                         if subTab == .week {
                             // Week Tab 头部前 3 名大卡片（对齐 H5 userWeeklyRank L372-439）
-                            WeekTopThreeCards(top3: Array(list.prefix(3)))
+                            WeekTopThreeCards(top3: Array(list.prefix(3)), onUserTap: onUserTap)
                                 .padding(.vertical, 8)
                             ForEach(Array(list.dropFirst(3))) { entry in
                                 sendRankRow(entry)
@@ -186,7 +197,14 @@ struct UserWeeklyRankSheetView: View {
     private func sendRankRow(_ entry: SendRankEntry) -> some View {
         HStack(spacing: 12) {
             rankBadge(entry.rank)
-            AvatarView(urlString: entry.avatarUrl, size: 40, kind: .user, userId: entry.userId)
+            Button { onUserTap(entry.userId) } label: {
+                AvatarView(urlString: entry.avatarUrl,
+                           size: 40,
+                           kind: .user,
+                           userId: entry.userId,
+                           disablesTap: true)
+            }
+            .buttonStyle(.plain)
             VStack(alignment: .leading, spacing: 3) {
                 Text(entry.nickname)
                     .font(.system(size: 16, weight: .bold))
@@ -272,20 +290,22 @@ struct UserWeeklyRankSheetView: View {
     }
 
     private func loadRank(_ tab: SendRankType) async {
-        rankLoading = tab
+        guard !loadingRankTabs.contains(tab) else { return }
+        loadingRankTabs.insert(tab)
+        defer { loadingRankTabs.remove(tab) }
         do {
             let list = try await rankService.fetchSendRank(rankType: tab, dbId: dbId)
-            rankLists[tab] = list
+            rankLists[tab] = Array(list.prefix(100))
         } catch {
             // 保持现有
         }
-        rankLoading = nil
     }
 }
 
 /// v16 Week Tab 前 3 名大卡片（对齐 H5 userWeeklyRank L372-439：h160 渐变 + 第 2 名向上偏移 -20）
 private struct WeekTopThreeCards: View {
     let top3: [SendRankEntry]
+    let onUserTap: (String) -> Void
 
     var body: some View {
         // H5 顺序：[1 (top1 居中), 0 (top2 左), 2 (top3 右)]，第 2 名向上偏移 -20
@@ -317,8 +337,15 @@ private struct WeekTopThreeCards: View {
                 .font(.system(size: 20))
                 .foregroundColor(crownColor(rank))
             ZStack(alignment: .bottom) {
-                AvatarView(urlString: entry.avatarUrl, size: 48, kind: .user, userId: entry.userId)
-                    .overlay(Circle().stroke(crownColor(rank), lineWidth: 2))
+                Button { onUserTap(entry.userId) } label: {
+                    AvatarView(urlString: entry.avatarUrl,
+                               size: 48,
+                               kind: .user,
+                               userId: entry.userId,
+                               disablesTap: true)
+                        .overlay(Circle().stroke(crownColor(rank), lineWidth: 2))
+                }
+                .buttonStyle(.plain)
                 // v18 Q4: Week 前 3 名等级徽章（对齐 H5 userWeeklyRank Week Tab Top3 level badge h18 z-3）
                 // 2026-07-10 迁移到公共组件 UserLevelBadge
                 if entry.level > 0 {
@@ -370,10 +397,18 @@ private struct WeekTopThreeCards: View {
 /// v16 观众列表 row（对齐 H5 userWeeklyRank L358-411 Viewers Tab）
 private struct ViewerRow: View {
     let viewer: ViewerEntry
+    let onUserTap: (String) -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            AvatarView(urlString: viewer.avatarUrl, size: 40, kind: .user, userId: viewer.userId)
+            Button { onUserTap(viewer.userId) } label: {
+                AvatarView(urlString: viewer.avatarUrl,
+                           size: 40,
+                           kind: .user,
+                           userId: viewer.userId,
+                           disablesTap: true)
+            }
+            .buttonStyle(.plain)
             VStack(alignment: .leading, spacing: 3) {
                 Text(viewer.nickname)
                     .font(.system(size: 16, weight: .medium))

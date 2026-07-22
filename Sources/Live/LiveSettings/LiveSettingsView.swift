@@ -15,6 +15,8 @@ struct LiveSettingsView: View {
     /// push 到 LiveRoomView 的参数持有；本页不显示美颜 UI。
     @StateObject private var beautyParams = BeautyParameters()
     @State private var goLive = false
+    @State private var showBeautySettings = false
+    @State private var showBeautyPermissionAlert = false
     /// 无直播权限 / 开播接口报错时，store 通过 `shouldDismiss` 信号触发 pop 返回
     @Environment(\.dismiss) private var dismiss
 
@@ -71,6 +73,24 @@ struct LiveSettingsView: View {
                 .animation(.easeInOut(duration: 0.2), value: store.toastMessage)
                 .allowsHitTesting(false)
             }
+
+            if let requirement = store.mediaPermissionAlertRequirement {
+                MediaPermissionDialog(
+                    requirement: requirement,
+                    onCancel: { store.mediaPermissionAlertRequirement = nil },
+                    onConfirm: {
+                        Task { await store.retryMediaPermissionFromAlert(requirement) }
+                    }
+                )
+                .zIndex(100)
+            } else if showBeautyPermissionAlert {
+                MediaPermissionDialog(
+                    requirement: .camera,
+                    onCancel: { showBeautyPermissionAlert = false },
+                    onConfirm: retryBeautyCameraPermission
+                )
+                .zIndex(100)
+            }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { startBar }
         .navigationTitle(L10n.liveSettingsNavTitle)
@@ -85,6 +105,9 @@ struct LiveSettingsView: View {
                     beauty: beautyParams
                 )
             }
+        }
+        .navigationDestination(isPresented: $showBeautySettings) {
+            BeautySettingsView()
         }
         .task { await store.load() }
         .onAppear {
@@ -369,9 +392,10 @@ struct LiveSettingsView: View {
 
     private var beautyCard: some View {
         cardBlock(title: L10n.liveSettingsBeautyTitle) {
-            // K 里程碑：激活跳转到独立美颜设置页（spec §0.4 Q6）
-            // stage 3：L10n 文案已含 ">>>"，删 chevron.right icon 与 wishlist 卡视觉一致
-            NavigationLink(value: WorkRoute.beautySettings) {
+            // 先完成相机授权才 push 美颜页，避免未授权时进入不可操作的预览页面。
+            Button {
+                openBeautySettings()
+            } label: {
                 Text(L10n.liveSettingsGoToSettings)
                     .font(.footnote)
                     .foregroundStyle(Color.pink)
@@ -381,6 +405,27 @@ struct LiveSettingsView: View {
             }
             .buttonStyle(.plain)
             .disabled(isBusy)
+        }
+    }
+
+    private func openBeautySettings() {
+        Task { @MainActor in
+            guard await MediaPermissionGate.requestAccess(for: .camera) else {
+                showBeautyPermissionAlert = true
+                return
+            }
+            showBeautySettings = true
+        }
+    }
+
+    private func retryBeautyCameraPermission() {
+        Task { @MainActor in
+            guard await MediaPermissionGate.requestAccess(for: .camera) else {
+                MediaPermissionGate.openAppSettings()
+                return
+            }
+            showBeautyPermissionAlert = false
+            showBeautySettings = true
         }
     }
 

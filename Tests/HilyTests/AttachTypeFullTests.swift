@@ -144,12 +144,14 @@ final class AttachTypeFullTests: XCTestCase {
         XCTAssertEqual(AttachType(raw: "AGENT_RECHARGE_NOTIFY"), .agentRecharge)
     }
 
-    // MARK: - 9. knownButUnhandled（仅 log debug 不噪音）
+    // MARK: - 9. J 机器人通话 + knownButUnhandled（仅 log debug 不噪音）
+
+    func test_robotCall_attachTypes_roundTrip() {
+        assertRoundTrip(.robotCallReward, raw: "132")
+        assertRoundTrip(.robotCallIncoming, raw: "133")
+    }
 
     func test_knownButUnhandled_explicitInts() {
-        // 路线图明确不做（虚拟来电）
-        assertKnownButUnhandled(AttachType(raw: NSNumber(value: 132)), expectedRaw: "132")
-        assertKnownButUnhandled(AttachType(raw: NSNumber(value: 133)), expectedRaw: "133")
         // 派对房 legacy gift
         assertKnownButUnhandled(AttachType(raw: NSNumber(value: 1007)), expectedRaw: "1007")
         // 派对房 F 期非 range case

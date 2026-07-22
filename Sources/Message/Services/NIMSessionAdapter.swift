@@ -167,6 +167,13 @@ final class NIMSessionAdapter: NSObject, MessageSessionProviderProtocol {
         // ext 通道 A —— serverExt 跨端同步（H5 session.extra 等价）
         let ext = parseServerExt(recent.serverExt)
 
+        // 已读态派生:最后一条是我方消息 → 看 isRemoteRead → sent/read;不是我方 → none
+        // (NIMMessage.h:280 isRemoteRead 仅 P2P outgoing 有效,契约见 review-verify-sdk-behavior 规则)
+        let readState: LastMessageReadState = {
+            guard lastMsg.isOutgoingMsg else { return .none }
+            return lastMsg.isRemoteRead ? .read : .sent
+        }()
+
         return MessageSession(
             id: sessionId,
             peerNickname: nickname,
@@ -175,7 +182,8 @@ final class NIMSessionAdapter: NSObject, MessageSessionProviderProtocol {
             lastMessageTimestamp: timestamp,
             unreadCount: recent.unreadCount,
             isTop: false,
-            ext: ext
+            ext: ext,
+            lastMessageReadState: readState
         )
     }
 

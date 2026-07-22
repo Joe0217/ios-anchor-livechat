@@ -36,6 +36,7 @@ struct GiftPanelFooter: View {
     /// 场景兼容：仅当 config 有 balance source 时可点（`.hidden` 场景 balanceView 本身不渲染）
     /// 其他场景（callGate/wishGift/liveDisplayOnly/imBind/callAskFor）balance 默认 hidden，
     /// 无需额外分支。
+    /// refreshBalance 进行中：胶囊右侧显示 ProgressView 提示"刷新中"（isRefreshingBalance @Published 驱动）
     private var balanceView: some View {
         Button(action: {
             Task { await store.refreshBalance() }
@@ -48,13 +49,20 @@ struct GiftPanelFooter: View {
                 Text(store.balanceValue.map { "\($0)" } ?? "--")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white)
+                if store.isRefreshingBalance {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(.white.opacity(0.85))
+                        .scaleEffect(0.6)
+                        .frame(width: 12, height: 12)
+                }
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
             .background(Capsule().fill(Color.white.opacity(0.08)))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(store.isBusy)
+        .disabled(store.isBusy || store.isRefreshingBalance)
     }
 
     // MARK: - Stepper

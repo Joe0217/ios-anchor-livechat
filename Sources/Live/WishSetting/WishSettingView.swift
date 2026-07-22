@@ -1,10 +1,11 @@
+import SafariServices
 import SwiftUI
 
 /// 愿望单设置页（L-spec-愿望单设置页 v1，stage 2 视觉对齐设计稿 `/Users/joe/Downloads/开播设置.png`）。
 ///
 /// **stage 2 修订**（对齐设计稿 6 处差异）：
 /// - 新增 Review status 卡片（顶部第 1 张卡）+ 右上 Record 按钮（stage 1 disabled）
-/// - Wish theme 字数上限 15 → 20（对齐设计稿 "(0/20)"；H5 code 15 已过时）
+/// - Wish theme 字数上限为 H5 当前规则的 15 个字符
 /// - Select template：3 chip 卡片（大图标 + 主标题 + 副标题）替代文字胶囊；用切图 wishTemplateCommon/Private/NoText
 /// - Add wish gift：礼物行改为**横向 layout**（图 + 名 + 价 + 数量输入 + ✕）替代 tile 网格
 /// - Save 按钮改为紫→红渐变
@@ -15,6 +16,9 @@ struct WishSettingView: View {
 
     @State private var showTemplateDropdown = false
     @State private var showGiftPicker = false
+    @State private var showAuditRecords = false
+    @State private var ruleGuidelinesPresentation: WishCommitmentGuidelinesPresentation?
+    @State private var isOpeningRuleGuidelines = false
 
     var body: some View {
         ZStack {
@@ -65,8 +69,16 @@ struct WishSettingView: View {
             .presentationDetents([.fraction(0.5), .fraction(0.8)])
             .presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $store.showRuleDoc) {
-            ruleDocSheet.giftPanelSheetBackground()
+        .sheet(item: $ruleGuidelinesPresentation) { presentation in
+            WishCommitmentSafariView(url: presentation.url)
+                .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showAuditRecords) {
+            WishSettingAuditRecordsSheet()
+                .sheetTopInset()
+                .giftPanelSheetBackground()
+                .presentationDetents([.fraction(0.7)])
+                .presentationDragIndicator(.visible)
         }
         .alert(L10n.wishSettingSubmittedForReview, isPresented: $store.showSubmitSuccessAlert) {
             Button(L10n.giftPickerConfirm, role: .cancel) { }
@@ -95,12 +107,14 @@ struct WishSettingView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
-                // Record 按钮（stage 1 disabled + Coming Soon，走独立 Audit Records M spec）
-                Text(L10n.wishSettingRecord)
-                    .font(.caption.bold())
-                    .foregroundStyle(.white.opacity(0.55))
-                    .padding(.horizontal, 14).padding(.vertical, 6)
-                    .background(Color.pink.opacity(0.35), in: Capsule())
+                Button { showAuditRecords = true } label: {
+                    Text(L10n.wishSettingRecord)
+                        .font(.caption.bold())
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14).padding(.vertical, 6)
+                        .background(Color.pink.opacity(0.8), in: Capsule())
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -144,6 +158,11 @@ struct WishSettingView: View {
                     .padding(.trailing, 46)   // 让位给右下计数
                     .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
                     .disabled(store.state == .submittingTheme)
+                    .onChange(of: store.wishTheme) { value in
+                        if value.count > WishSettingStore.themeMaxLen {
+                            store.wishTheme = String(value.prefix(WishSettingStore.themeMaxLen))
+                        }
+                    }
 
                     Text("(\(store.wishTheme.count)/\(WishSettingStore.themeMaxLen))")
                         .font(.caption2).foregroundStyle(.white.opacity(0.5))
@@ -186,9 +205,10 @@ struct WishSettingView: View {
     private func templateChip(type: PromiseType, iconAsset: String, titleKey: String, subtitleKey: String) -> some View {
         let selected = store.promiseType == type
         return Button {
+            // H5 切换任一类型都会立即收起旧类型的模板列表，不能等异步拉取结束。
+            showTemplateDropdown = false
             Task {
                 await store.changeType(type)
-                if type == .none { showTemplateDropdown = false }
             }
         } label: {
             VStack(spacing: 6) {
@@ -226,14 +246,9 @@ struct WishSettingView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Button {
                     Task {
-                        if !showTemplateDropdown {
-                            if store.promiseType == .common && store.commonTemplates.isEmpty {
-                                await store.fetchCommonTemplates()
-                            } else if store.promiseType == .private_ && store.privateTemplates.isEmpty {
-                                await store.fetchPrivateTemplates()
-                            }
-                        }
-                        showTemplateDropdown.toggle()
+                        showTemplateDropdown = await store.shouldOpenTemplateDropdown(
+                            currentlyOpen: showTemplateDropdown
+                        )
                     }
                 } label: {
                     HStack {
@@ -267,7 +282,9 @@ struct WishSettingView: View {
             } else {
                 VStack(spacing: 6) {
                     ForEach(store.commonTemplates) { tpl in
-                        templateRow(tpl, deletable: false) {
+                        templateRow(tpl,
+                                    isSelected: store.promiseTemplateId == tpl.id,
+                                    deletable: false) {
                             store.pickCommonTemplate(tpl)
                             showTemplateDropdown = false
                         }
@@ -283,7 +300,9 @@ struct WishSettingView: View {
             } else {
                 VStack(spacing: 6) {
                     ForEach(store.privateTemplates) { tpl in
-                        templateRow(tpl, deletable: true) {
+                        templateRow(tpl,
+                                    isSelected: store.promiseText == tpl.content,
+                                    deletable: true) {
                             store.pickPrivateTemplate(tpl)
                             showTemplateDropdown = false
                         }
@@ -293,14 +312,21 @@ struct WishSettingView: View {
         }
     }
 
-    private func templateRow(_ tpl: WishTemplate, deletable: Bool, onSelect: @escaping () -> Void) -> some View {
+    private func templateRow(_ tpl: WishTemplate,
+                             isSelected: Bool,
+                             deletable: Bool,
+                             onSelect: @escaping () -> Void) -> some View {
         HStack {
             Button(action: onSelect) {
                 Text(tpl.content).font(.footnote).foregroundStyle(.white.opacity(0.85))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
-            if deletable {
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .font(.caption.bold())
+                    .foregroundStyle(.pink)
+            } else if deletable {
                 Button {
                     Task { await store.deletePrivateTemplate(tpl) }
                 } label: {
@@ -428,13 +454,14 @@ struct WishSettingView: View {
                     Text(L10n.wishSettingRuleAgreeShort)
                         .font(.caption).foregroundStyle(.white.opacity(0.85))
                     Button {
-                        store.showRuleDoc = true
+                        Task { await openCommitmentGuidelines() }
                     } label: {
                         Text(L10n.wishSettingRuleLink)
                             .font(.caption.bold())
                             .foregroundStyle(.pink)
                     }
                     .buttonStyle(.plain)
+                    .disabled(isOpeningRuleGuidelines)
                     Spacer()
                 }
 
@@ -445,25 +472,25 @@ struct WishSettingView: View {
         }
     }
 
-    private var ruleDocSheet: some View {
-        NavigationStack {
-            ZStack {
-                Theme.Palette.screenBackground.ignoresSafeArea()
-                ScrollView {
-                    Text(L10n.wishSettingRuleDoc)
-                        .font(.footnote).foregroundStyle(.white.opacity(0.85))
-                        .padding(16)
-                }
+    /// H5 从 `wish_commitment_standard` 配置读取承诺规范地址；未配置或请求失败仅提示。
+    private func openCommitmentGuidelines() async {
+        guard !isOpeningRuleGuidelines else { return }
+        isOpeningRuleGuidelines = true
+        defer { isOpeningRuleGuidelines = false }
+
+        do {
+            let configs = try await AppConfigService.fetch(keys: ["wish_commitment_standard"])
+            guard let rawURL = configs["wish_commitment_standard"] as? String,
+                  let url = URL(string: rawURL),
+                  let scheme = url.scheme?.lowercased(),
+                  scheme == "https" || scheme == "http" else {
+                store.showToast(L10n.wishSettingNoTemplateAvailable)
+                return
             }
-            .navigationTitle(L10n.wishSettingRuleLink)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(L10n.giftPickerConfirm) { store.showRuleDoc = false }.foregroundStyle(.pink)
-                }
-            }
+            ruleGuidelinesPresentation = WishCommitmentGuidelinesPresentation(url: url)
+        } catch {
+            store.showToast(L10n.wishSettingNoTemplateAvailable)
         }
-        .preferredColorScheme(.dark)
     }
 
     // MARK: - Save bar（渐变按钮）
@@ -474,8 +501,8 @@ struct WishSettingView: View {
             Button {
                 // P0-1：Save 按钮始终可点；tap 后按 canSave 4 项失败原因分层给具体 toast（对齐 H5 index.vue:351-364）
                 // P1-2：成功保存 → toast "Saved" → 600ms 延迟 pop（对齐 H5 index.vue:396-397）
-                if store.submitTapped() == .saved {
-                    Task {
+                Task {
+                    if await store.submitTapped() == .saved {
                         try? await Task.sleep(nanoseconds: 600_000_000)
                         dismiss()
                     }
@@ -496,6 +523,7 @@ struct WishSettingView: View {
                     .opacity(store.canSave ? 1 : 0.5)
             }
             .buttonStyle(.plain)
+            .disabled(store.isSubmittingSave)
             .padding(.horizontal, 16).padding(.vertical, 10)
         }
         .background(Theme.Palette.screenBackground)
@@ -525,6 +553,149 @@ struct WishSettingView: View {
         }
         .padding(12)
         .background(Color.red.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+private struct WishCommitmentGuidelinesPresentation: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+}
+
+/// iOS 没有 H5 的 iframe 路由时，以应用内 Safari 承载后台配置的规范页。
+private struct WishCommitmentSafariView: UIViewControllerRepresentable {
+    let url: URL
+
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
+}
+
+/// H5 `wishlist-audit-records.vue` 的审核记录 sheet：All / Pending / Approved / Rejected 四档筛选。
+private struct WishSettingAuditRecordsSheet: View {
+    private struct Filter: Identifiable {
+        let status: Int?
+        let title: String
+        var id: String {
+            guard let status else { return "all" }
+            return String(status)
+        }
+    }
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedStatus: Int?
+    @State private var items: [WishPromiseAuditItem] = []
+    @State private var isLoading = false
+
+    private let statuses: [Filter] = [
+        Filter(status: nil, title: L10n.wishSettingAuditAll),
+        Filter(status: 0, title: L10n.wishSettingAuditPending),
+        Filter(status: 1, title: L10n.wishSettingAuditApproved),
+        Filter(status: 2, title: L10n.wishSettingAuditRejected),
+    ]
+
+    var body: some View {
+        VStack(spacing: 14) {
+            HStack {
+                Text(L10n.wishSettingAuditRecords)
+                    .font(.headline).foregroundStyle(.white)
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.75))
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+            }
+
+            HStack(spacing: 6) {
+                ForEach(statuses) { filter in
+                    Button { selectedStatus = filter.status } label: {
+                        Text(filter.title)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 7)
+                            .background(selectedStatus == filter.status ? Color.pink : Color.white.opacity(0.1), in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Group {
+                if isLoading {
+                    ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if items.isEmpty {
+                    Text(L10n.wishSettingAuditEmpty)
+                        .font(.footnote).foregroundStyle(.white.opacity(0.5))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 8) {
+                            ForEach(items) { item in
+                                recordRow(item)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .task(id: selectedStatus) { await load() }
+        .preferredColorScheme(.dark)
+    }
+
+    private func recordRow(_ item: WishPromiseAuditItem) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .top, spacing: 8) {
+                Text(item.content).font(.system(size: 14)).foregroundStyle(.white)
+                Spacer(minLength: 8)
+                Text(statusTitle(item.status))
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(statusColor(item.status))
+            }
+            if item.status == 2, let reason = item.rejectReason, !reason.isEmpty {
+                Text("\(L10n.wishSettingAuditRejectReason): \(reason)")
+                    .font(.system(size: 11)).foregroundStyle(Color.red.opacity(0.9))
+            }
+            if let time = item.auditTime ?? item.createTime, !time.isEmpty {
+                Text(time).font(.system(size: 10)).foregroundStyle(.white.opacity(0.4))
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func load() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            items = try await WishSettingService.getPromiseAuditList(status: selectedStatus)
+        } catch {
+            items = []
+        }
+    }
+
+    private func statusTitle(_ status: Int) -> String {
+        switch status {
+        case 0: return L10n.wishSettingAuditPending
+        case 1: return L10n.wishSettingAuditApproved
+        case 2: return L10n.wishSettingAuditRejected
+        default: return ""
+        }
+    }
+
+    private func statusColor(_ status: Int) -> Color {
+        switch status {
+        case 0: return .orange
+        case 1: return Color(hex: 0x17DC74)
+        case 2: return .red
+        default: return .white.opacity(0.5)
+        }
     }
 }
 

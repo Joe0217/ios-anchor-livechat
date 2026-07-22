@@ -43,6 +43,9 @@ final class LiveSettingsStore: ObservableObject {
     @Published var toastMessage: String?
     private var toastClearTask: Task<Void, Never>?
 
+    /// 系统相机/麦克风权限拒绝时展示；由 View 弹窗并驱动确认后的再次请求。
+    @Published var mediaPermissionAlertRequirement: MediaPermissionGate.Requirement?
+
     /// 无直播权限 / 开播接口报错时，展示 toast 后自动 pop 返回。
     /// View 侧 `.onChange(of: shouldDismiss)` 观察此信号调用 `dismiss()`。
     @Published var shouldDismiss: Bool = false
@@ -74,6 +77,9 @@ final class LiveSettingsStore: ObservableObject {
     ///
     /// userType 守卫（对齐 `LivePrepareView.startLive():89-97`）：只有 `userType == 2`（已审核主播）放行。
     /// 无权限 / API 报错（含 code=1111 request.failed）走 `showErrorAndDismiss` → toast + 自动 pop 返回。
+    ///
+    /// F 期 Live↔Party 互斥守卫（对齐安卓 isLiveing||isPartying toast，2026-07-17）：
+    /// 派对房活跃态时任何入口 push 到本页都被拦回（Work tab 的 NavigationLink 无法拦，此处兜底）。
     func load() async {
         guard let user = session.user else {
             showErrorAndDismiss(L10n.livePrepareGuardUnverified)
@@ -81,6 +87,10 @@ final class LiveSettingsStore: ObservableObject {
         }
         if user.userType != 2 {
             showErrorAndDismiss(user.userType == 9 ? L10n.livePrepareGuardAgent : L10n.livePrepareGuardUnverified)
+            return
+        }
+        if PartyStore.shared.roomState == .joined {
+            showErrorAndDismiss(L10n.Party.mutexBlockedByParty)
             return
         }
         state = .loading
@@ -153,6 +163,14 @@ final class LiveSettingsStore: ObservableObject {
         state = .starting
         lock.lock()
 
+        // 先进入 starting 并锁住界面，再弹系统授权框。否则多个 tap 可在 await 返回后并发建房。
+        guard await MediaPermissionGate.requestAccess(for: .liveStream) else {
+            state = .editing
+            lock.unlock()
+            mediaPermissionAlertRequirement = .liveStream
+            return
+        }
+
         do {
             let giftParam: (id: Int64, price: Int64)? = selectedGift.map { ($0.id, $0.giftPrice) }
             // L-spec：读 WishSettingSharedStore 组装 wishlistList / promiseType / promiseTemplateId / promiseText
@@ -206,6 +224,15 @@ final class LiveSettingsStore: ObservableObject {
     /// 手动清除 error（View onChange 美颜参数时触发，红队 🟠#6）
     func clearErrorIfNeeded() {
         if case .error = state { state = .editing }
+    }
+
+    func retryMediaPermissionFromAlert(_ requirement: MediaPermissionGate.Requirement) async {
+        mediaPermissionAlertRequirement = nil
+        if await MediaPermissionGate.requestAccess(for: requirement) {
+            await startTapped()
+        } else {
+            MediaPermissionGate.openAppSettings()
+        }
     }
 
     // MARK: - stage 3：回显上次已选私 call 礼物（对齐 H5 index.vue:117-128 setPrivaCallGift）

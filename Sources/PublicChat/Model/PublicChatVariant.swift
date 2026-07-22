@@ -8,14 +8,21 @@ enum PublicChatVariant: Equatable {
     case enterRoom(vehicleImg: String?, itemSmallImg: String?)
     case officialBoostEnter
     case pkNotify(richText: [RichSegment])
-    case rpsWin(medalUrl: String?, medalHours: Int?)
+    case rpsWin(medalUrl: String?, medalHours: Double?)
     case wheelRes(resultText: String, resultHighlight: String?)
     case announcement(text: String, kind: AnnouncementKind)
     case winnerBroadcast(activityName: String, quantity: Int?, imageURL: String?, joinCTA: String?, avatar: String?)
-    case wishlistEffect(text: String, iconURL: String?)
-    case diamondGift(subType: DiamondGiftSubType)
+    /// 心愿单 TOP1 变更。昵称和 userId 由消息 sender 承载，便于点击打开资料卡。
+    case wishlistEffect
+    case diamondGift(subType: PublicChatDiamondGiftSubType)
     case gameWinNotify(payload: GameWinPayload)
     case partyModeSwitch(text: String, kind: ModeSwitchKind)
+    /// Party 房 1050 抽数 / 1051 中奖公屏。发送者资料由 `sender` 承载，复用用户公屏头部。
+    case partyLuckyNumber(number: Int, didWin: Bool)
+    /// Party 房 Battle Team PK 系统消息（对齐 H5 chat-list.vue :333-392 · 4 kind 独立视觉）
+    /// - `text`：主文案
+    /// - `highlight`：高亮数字/名字（H5 用 #FFE600 黄色）· nil 表示无高亮
+    case partyBattle(kind: PartyBattleSystemKind, text: String, highlight: String?)
     case bonus(amount: Int)
     case system(text: String)
 
@@ -23,7 +30,7 @@ enum PublicChatVariant: Equatable {
         case text, anchor, gift, luckyGift, enterRoom, officialBoostEnter,
              pkNotify, rpsWin, wheelRes, announcement, winnerBroadcast,
              wishlistEffect, diamondGift, gameWinNotify, partyModeSwitch,
-             bonus, system
+             partyLuckyNumber, partyBattle, bonus, system
     }
 
     var discriminator: Discriminator {
@@ -43,6 +50,8 @@ enum PublicChatVariant: Equatable {
         case .diamondGift: return .diamondGift
         case .gameWinNotify: return .gameWinNotify
         case .partyModeSwitch: return .partyModeSwitch
+        case .partyLuckyNumber: return .partyLuckyNumber
+        case .partyBattle: return .partyBattle
         case .bonus: return .bonus
         case .system: return .system
         }

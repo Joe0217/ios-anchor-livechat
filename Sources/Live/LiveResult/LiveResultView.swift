@@ -19,6 +19,8 @@ struct LiveResultView: View {
     @State private var showGiftersSheet = false
     /// 提示 toast（未来其它占位提示复用）
     @State private var comingSoonToast: String? = nil
+    /// 结束页头像点击展示的用户名片卡。
+    @State private var userCardPresentation: UserCardPresentation? = nil
 
     /// **B spec v7 push 架构**：结果页复用宿主 NavigationStack（Work/Home path），私聊/详情
     /// 直接 push 到外层 stack —— back 天然 pop 回结果页；swipe-back 原生可用；无 fullScreenCover 层。
@@ -58,6 +60,13 @@ struct LiveResultView: View {
             if case .emptyRange = store.state { return }
             await store.load()
         }
+        // 直播结束后 LiveStore 已不处于 living，必须显式保留直播场景语义；否则 AvatarView
+        // 会把结束页头像误分派为资料详情页。
+        .userCardSheet(item: $userCardPresentation)
+        .avatarUserCardPresenter { uid in
+            userCardPresentation = UserCardPresentation(userId: uid)
+        }
+        .avatarTapEnvironmentOverride(.liveRoom)
         .preferredColorScheme(.dark)
     }
 
@@ -265,8 +274,7 @@ struct LiveResultView: View {
                             item: item,
                             isFollowing: store.followInFlight.contains(item.userId),
                             onFollow: { Task { await store.follow(userId: item.userId) } },
-                            onMessage: { if let yx = item.yxAccid { hostPath.append(yx) } },
-                            onAvatarTap: { hostPath.append(UserProfileRoute.userId(item.userId)) }
+                            onMessage: { if let yx = item.yxAccid { hostPath.append(yx) } }
                         )
                         .frame(maxWidth: .infinity)
                     }
@@ -294,8 +302,7 @@ struct LiveResultView: View {
                             item: item,
                             isFollowing: store.followInFlight.contains(item.userId),
                             onFollow: { Task { await store.follow(userId: item.userId) } },
-                            onMessage: { if let yx = item.yxAccid { hostPath.append(yx) } },
-                            onAvatarTap: { hostPath.append(UserProfileRoute.userId(item.userId)) }
+                            onMessage: { if let yx = item.yxAccid { hostPath.append(yx) } }
                         )
                         .padding(.vertical, 6)
                     }
@@ -326,8 +333,7 @@ struct LiveResultView: View {
                                 item: item,
                                 isFollowing: store.followInFlight.contains(item.userId),
                                 onFollow: { Task { await store.follow(userId: item.userId) } },
-                                onMessage: { if let yx = item.yxAccid { sheetChatPath.append(yx) } },
-                                onAvatarTap: { sheetChatPath.append(UserProfileRoute.userId(item.userId)) }
+                                onMessage: { if let yx = item.yxAccid { sheetChatPath.append(yx) } }
                             )
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -364,6 +370,12 @@ struct LiveResultView: View {
             // 详情↔聊天互跳所有 destination(UserProfileRoute + ChatFromProfileRoute) 统一注册；
             // sheet 场景须显式隐藏 system nav bar（内部 view 自带自定义 navBar，否则叠加）
             .userProfileAndChatDestinations(hidesSystemNavigationBar: true)
+            // 系统 sheet 会盖住结果页根层的 overlay，故完整榜单内独立挂名片卡承载。
+            .userCardSheet(item: $userCardPresentation)
+            .avatarUserCardPresenter { uid in
+                userCardPresentation = UserCardPresentation(userId: uid)
+            }
+            .avatarTapEnvironmentOverride(.liveRoom)
             .preferredColorScheme(.dark)
         }
     }
@@ -372,13 +384,10 @@ struct LiveResultView: View {
 
     private func toastOverlay(text: String) -> some View {
         Text(text)
-            .font(.footnote)
-            .foregroundStyle(.white)
-            .padding(.horizontal, 14).padding(.vertical, 8)
-            .background(Color.black.opacity(0.8), in: Capsule())
-            .transition(.opacity)
+            .toastStyle()
+            .transition(Toast.transition)
             .task(id: text) {
-                try? await Task.sleep(nanoseconds: 2_000_000_000)
+                try? await Task.sleep(nanoseconds: Toast.dismissDurationNanos)
                 if !Task.isCancelled { comingSoonToast = nil }
             }
     }
@@ -392,20 +401,17 @@ private struct TopGifterCell: View {
     let isFollowing: Bool
     let onFollow: () -> Void
     let onMessage: () -> Void
-    let onAvatarTap: () -> Void
 
     var body: some View {
         // 外层 ZStack .topTrailing：Follow 按钮相对**整卡**定位到右上角
         //（对齐 H5 topGiftersItem.vue:20 `absolute top-0 right-0`）
         ZStack(alignment: .topTrailing) {
             VStack(spacing: 6) {
-                Button(action: onAvatarTap) {
-                    AvatarView(urlString: item.icon, size: 50, kind: .user, persistent: false)
-                        .contentShape(Circle())
-                }
-                .buttonStyle(.plain)
-                .padding(.top, 14)
-                .accessibilityLabel(item.nickname ?? "")
+                // 头像 tap 走内置分派（结束页显式保留直播场景 → 弹名片卡）。
+                AvatarView(urlString: item.icon, size: 50, kind: .user, persistent: false,
+                           userId: String(item.userId))
+                    .padding(.top, 14)
+                    .accessibilityLabel(item.nickname ?? "")
 
                 Text(item.nickname ?? "")
                     .font(.system(size: 14))
@@ -448,16 +454,13 @@ private struct PrivateCallRow: View {
     let isFollowing: Bool
     let onFollow: () -> Void
     let onMessage: () -> Void
-    let onAvatarTap: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
-            Button(action: onAvatarTap) {
-                AvatarView(urlString: item.icon, size: 50, kind: .user, persistent: false)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(item.nickname ?? "")
+            // 头像 tap 走内置分派（结束页显式保留直播场景 → 弹名片卡）。
+            AvatarView(urlString: item.icon, size: 50, kind: .user, persistent: false,
+                       userId: String(item.userId))
+                .accessibilityLabel(item.nickname ?? "")
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.nickname ?? "")
@@ -505,16 +508,13 @@ private struct GifterFullRow: View {
     let isFollowing: Bool
     let onFollow: () -> Void
     let onMessage: () -> Void
-    let onAvatarTap: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
-            Button(action: onAvatarTap) {
-                AvatarView(urlString: item.icon, size: 50, kind: .user, persistent: false)
-                    .contentShape(Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(item.nickname ?? "")
+            // 头像 tap 走内置分派（结束页显式保留直播场景 → 弹名片卡）。
+            AvatarView(urlString: item.icon, size: 50, kind: .user, persistent: false,
+                       userId: String(item.userId))
+                .accessibilityLabel(item.nickname ?? "")
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.nickname ?? "")
@@ -522,7 +522,7 @@ private struct GifterFullRow: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 HStack(spacing: 3) {
-                    Image("liveResultDiamond")
+                    Image("coins")
                         .renderingMode(.original)
                         .resizable()
                         .aspectRatio(contentMode: .fit)

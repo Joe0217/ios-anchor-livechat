@@ -17,6 +17,8 @@ struct GiftEffectRoot: View {
             CentralEffectLayer(bridge: GiftEffectCenter.shared.currentBridge)
             // 顶层：底部小飘窗（GiftEffect 无动画资源礼物）
             MicroToastLayer(bridge: GiftEffectCenter.shared.microToastBridge)
+            // Party Lucky Gift 中奖发送者/金额文字，显示在固定中奖 SVGA 上方。
+            LuckyGiftWinTextLayer(bridge: GiftEffectCenter.shared.currentBridge)
         }
         .allowsHitTesting(false)
         .ignoresSafeArea()

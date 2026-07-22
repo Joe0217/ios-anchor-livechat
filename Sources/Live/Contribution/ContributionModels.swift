@@ -14,6 +14,8 @@ struct ContributionEntry: Identifiable, Equatable {
     let nickname: String
     let avatarUrl: String?
     let level: Int
+    let isVip: Bool
+    let countryId: String?
     let thisLiveDiamond: Int64  // 本场直播贡献
     let last90DaysDiamond: Int64 // 过去 90 天累计
 }
@@ -29,6 +31,8 @@ struct GiftRecord: Identifiable, Equatable {
     let giftIconUrl: String?
     let quantity: Int           // 送礼数量
     let diamondEach: Int64      // 单个钻石价
+    /// H5 直接展示后端的 `formattedTime`；缺失时才回退本地相对时间。
+    let formattedTime: String?
     var totalDiamond: Int64 { Int64(quantity) * diamondEach }
 }
 

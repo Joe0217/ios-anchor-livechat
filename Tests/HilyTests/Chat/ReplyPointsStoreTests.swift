@@ -279,7 +279,7 @@ final class ReplyPointsStoreTests: XCTestCase {
         await store.beginSession(peer: peer, tipTexts: FakeReplyPointsTipTexts.all)
         store.onReceiveUserMsg(peer: peer, msgId: "u1", timestamp: 1, msgType: "pay", isGift: false, stimulateTipText: "s")
 
-        await store.onSendAnchorMsg(peer: peer, msgType: "text")
+        await store.onSendAnchorMsg(peer: peer)
 
         XCTAssertEqual(store.sessions[peer]?.currentProgress, 15, "服务端权威覆盖")
         XCTAssertEqual(store.pendingSettleResult?.settled, true)
@@ -298,7 +298,7 @@ final class ReplyPointsStoreTests: XCTestCase {
         store.onReceiveUserMsg(peer: peer, msgId: "u1", timestamp: 1, msgType: "pay", isGift: false, stimulateTipText: "s")
         XCTAssertNotNil(store.sessions[peer]?.lastUserMsgInfo)
 
-        await store.onSendAnchorMsg(peer: peer, msgType: "text")
+        await store.onSendAnchorMsg(peer: peer)
 
         XCTAssertNil(store.sessions[peer]?.lastUserMsgInfo, "Critical-5：失败也清 lastUserMsgInfo（防重放）")
         XCTAssertFalse(store.sessions[peer]?.hasHistoryReply ?? true, "失败不 mark hasHistoryReply")
@@ -315,7 +315,7 @@ final class ReplyPointsStoreTests: XCTestCase {
         await store.beginSession(peer: peer, tipTexts: FakeReplyPointsTipTexts.all)
         store.onReceiveUserMsg(peer: peer, msgId: "u1", timestamp: 1, msgType: "pay", isGift: false, stimulateTipText: "s")
 
-        await store.onSendAnchorMsg(peer: peer, msgType: "text")
+        await store.onSendAnchorMsg(peer: peer)
 
         // 未覆盖：仍是初始 anchorPoint + onReceive 累加 5
         XCTAssertEqual(store.sessions[peer]?.currentProgress, 5 + 5)
@@ -335,7 +335,7 @@ final class ReplyPointsStoreTests: XCTestCase {
         state.lastUserMsgInfo = LastUserMsgInfo(msgId: "gift-1", timestamp: 1, msgType: "pay", isGift: true)
         store._testSeedSession(peer: peer, state)
 
-        await store.onSendAnchorMsg(peer: peer, msgType: "text")
+        await store.onSendAnchorMsg(peer: peer)
 
         XCTAssertEqual(svc.settleCalls.count, 0, "isGift 短路不调 settle")
         XCTAssertNil(store.sessions[peer]?.lastUserMsgInfo, "isGift 短路仍清 lastUserMsgInfo")
@@ -352,9 +352,9 @@ final class ReplyPointsStoreTests: XCTestCase {
         await store.beginSession(peer: peer, tipTexts: FakeReplyPointsTipTexts.all)
         store.onReceiveUserMsg(peer: peer, msgId: "u1", timestamp: 1, msgType: "pay", isGift: false, stimulateTipText: "s")
 
-        await store.onSendAnchorMsg(peer: peer, msgType: "text")
-        await store.onSendAnchorMsg(peer: peer, msgType: "text")
-        await store.onSendAnchorMsg(peer: peer, msgType: "text")
+        await store.onSendAnchorMsg(peer: peer)
+        await store.onSendAnchorMsg(peer: peer)
+        await store.onSendAnchorMsg(peer: peer)
 
         XCTAssertEqual(svc.settleCalls.count, 1, "只第 1 条调 settle；后 2 条 lastUserMsgInfo nil 短路")
     }
@@ -404,7 +404,7 @@ final class ReplyPointsStoreTests: XCTestCase {
         let store = makeStore(service: svc)
         await store.beginSession(peer: peer, tipTexts: FakeReplyPointsTipTexts.all)
         store.onReceiveUserMsg(peer: peer, msgId: "u1", timestamp: 1, msgType: "pay", isGift: false, stimulateTipText: "s")
-        await store.onSendAnchorMsg(peer: peer, msgType: "text")   // hasHistoryReply=true
+        await store.onSendAnchorMsg(peer: peer)   // hasHistoryReply=true
 
         let now = Date(timeIntervalSince1970: Double(1) / 1000 + 20 * 60)   // +20min
         store.checkReplyRemindTrigger(peer: peer, tipText: "reply-remind", now: now)
@@ -505,7 +505,7 @@ final class ReplyPointsStoreTests: XCTestCase {
         let store = makeStore(service: svc)
         await store.beginSession(peer: peer, tipTexts: FakeReplyPointsTipTexts.all)
         store.onReceiveUserMsg(peer: peer, msgId: "u1", timestamp: 1, msgType: "pay", isGift: false, stimulateTipText: "s")
-        await store.onSendAnchorMsg(peer: peer, msgType: "text")
+        await store.onSendAnchorMsg(peer: peer)
 
         XCTAssertEqual(store.currentUserSendPaidMessageCount, 1)
         XCTAssertNotNil(store.pendingSettleResult)

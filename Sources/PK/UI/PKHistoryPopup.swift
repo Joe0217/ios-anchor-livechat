@@ -38,13 +38,28 @@ struct PKHistoryPopup: View {
                 .ignoresSafeArea()
         )
         .task { store.onAppear() }
-        // TODO i18n: 外部工具反复 revert `pk.record.*` L10n keys；暂用硬编码英文让 build 通过，
-        // 待查明 linter 干扰源后正式接入 L10n.PK.recordXxx
-        .alert("Effective wins",
-               isPresented: $showEffectiveTip) {
-            Button(L10n.liveRoomPermissionAlertOK, role: .cancel) {}
-        } message: {
-            Text("Number of PK matches won with PK score above the effective threshold this week.")
+    }
+
+    /// v26（2026-07-15）：`?` 点击提示对齐 H5 pkHistoryPopup.vue L141-153 van-popover
+    /// H5 是深色小气泡（theme dark + max-width 280），iOS 用 SwiftUI .popover + presentationCompactAdaptation
+    /// 强制气泡样式（iOS 16.4+；16.0-16.3 fallback 到 sheet 也可接受）
+    /// 文案参数化 pkEffectiveValue（对齐 H5 `pk.Number of PK won with PK score {0}`，取自 AppConfigStore.pkEffectiveValue）
+    @ViewBuilder
+    private var effectiveTipContent: some View {
+        // TODO i18n: 外部工具反复 revert `pk.record.*` L10n keys；文案待正式接入 L10n
+        let threshold = AppConfigStore.shared.pkEffectiveValue ?? 0
+        let tip = Text("Number of PK matches this week with PK score reaching \(threshold) (considered as effective PK).")
+            .font(.system(size: 12))
+            .foregroundColor(.white)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .frame(maxWidth: 280, alignment: .leading)
+            .background(Color(hex: 0x1A1A1A))
+        if #available(iOS 16.4, *) {
+            tip.presentationCompactAdaptation(.popover)
+        } else {
+            tip
         }
     }
 
@@ -93,12 +108,15 @@ struct PKHistoryPopup: View {
                     .font(.system(size: 13))
                     .foregroundColor(Color(hex: 0xFFE600))
             }
-            Button { showEffectiveTip = true } label: {
+            Button { showEffectiveTip.toggle() } label: {
                 Image(systemName: "questionmark.circle.fill")
                     .font(.system(size: 14))
                     .foregroundColor(.white.opacity(0.8))
             }
             .buttonStyle(.plain)
+            .popover(isPresented: $showEffectiveTip) {
+                effectiveTipContent
+            }
             Spacer(minLength: 0)
         }
         .padding(.horizontal, 16).padding(.vertical, 16)
@@ -312,7 +330,9 @@ private struct PKHistoryRow: View {
 
     private var oppositeSide: some View {
         VStack(spacing: 8) {
-            AvatarView(urlString: record.oppositeAvatar, size: 44, kind: .anchor)
+            // userId: 对方 anchorId → 环境自探 .liveRoom → 弹名片卡（PK 历史弹窗在直播间上下文）
+            AvatarView(urlString: record.oppositeAvatar, size: 44, kind: .anchor,
+                       userId: record.oppositeAnchorId)
                 .overlay(Circle().stroke(Color(hex: 0x69BCFF), lineWidth: 2))
             Text(record.oppositeNickname ?? "")
                 .font(.system(size: 13))

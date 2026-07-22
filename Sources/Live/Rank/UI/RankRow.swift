@@ -3,13 +3,21 @@ import SwiftUI
 /// 单条排名 row（对齐 H5 girlWeeklyRank.vue rank + avatar + nickname + level badge + diamond count）
 struct RankRow: View {
     let entry: RankEntry
+    let onUserTap: (String) -> Void
 
     var body: some View {
         HStack(spacing: 12) {
             // 排名徽章：Top1/2/3 高亮色，其余灰白
             rankBadge
 
-            AvatarView(urlString: entry.avatarUrl, size: 40, kind: .user, userId: entry.userId)
+            Button { onUserTap(entry.userId) } label: {
+                AvatarView(urlString: entry.avatarUrl,
+                           size: 40,
+                           kind: .user,
+                           userId: entry.userId,
+                           disablesTap: true)
+            }
+            .buttonStyle(.plain)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(entry.nickname)

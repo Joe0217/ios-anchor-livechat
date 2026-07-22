@@ -25,13 +25,16 @@ struct RankSheetView: View {
     @StateObject private var store: RankStore
     @Binding var isPresented: Bool
     private let onRankUpdate: ((Int?) -> Void)?
+    private let onUserTap: (String) -> Void
 
     init(anchorUserId: String,
          isPresented: Binding<Bool>,
-         onRankUpdate: ((Int?) -> Void)? = nil) {
+         onRankUpdate: ((Int?) -> Void)? = nil,
+         onUserTap: @escaping (String) -> Void = { _ in }) {
         self._store = StateObject(wrappedValue: RankStore(anchorUserId: anchorUserId))
         self._isPresented = isPresented
         self.onRankUpdate = onRankUpdate
+        self.onUserTap = onUserTap
     }
 
     var body: some View {
@@ -108,7 +111,7 @@ struct RankSheetView: View {
                     ScrollView {
                         LazyVStack(spacing: 0) {
                             ForEach(page.entries) { entry in
-                                RankRow(entry: entry)
+                                RankRow(entry: entry, onUserTap: onUserTap)
                                 Divider().background(Color.white.opacity(0.06))
                             }
                         }
@@ -153,35 +156,38 @@ struct RankSheetView: View {
         let state: RankStore.LoadState = store.selectedPeriod == .week
             ? store.weekState : store.lastWeekState
         if case .loaded(let page) = state {
+            let localUser = SessionStore.shared.user
             HStack(spacing: 10) {
-                // rank 为 nil 或 ≤0（无效值/未上榜）统一显示 "--"
-                if let rank = page.anchorOwnRank, rank > 0 {
-                    Text("\(rank)")
-                        .font(.system(size: 14, weight: .heavy))
-                        .foregroundColor(Color(hex: 0xFE00DE))
-                        .frame(width: 28)
-                } else {
-                    Text("--")
-                        .font(.system(size: 14, weight: .heavy))
-                        .foregroundColor(.white.opacity(0.5))
-                        .frame(width: 28)
-                }
-                AvatarView(urlString: page.anchorAvatarUrl, size: 40, kind: .user)
-                Text(page.anchorNickname.isEmpty ? L10n.liveRoomRankOwnMe : page.anchorNickname)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                // "距下一名" 差值 —— 向右靠（用户 v18 反馈）
-                if let diff = page.diffToPrevious, diff > 0 {
-                    HStack(spacing: 3) {
+                Text(anchorRankText(page.anchorOwnRank))
+                    .font(.system(size: 14, weight: .heavy))
+                    .foregroundColor(page.anchorOwnRank == nil ? .white.opacity(0.5) : Color(hex: 0xFE00DE))
+                    .frame(width: 28)
+                AvatarView(urlString: localUser?.icon, size: 40, kind: .user)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(localUser?.nickname?.isEmpty == false ? localUser?.nickname ?? L10n.liveRoomRankOwnMe : L10n.liveRoomRankOwnMe)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                    HStack(spacing: 4) {
                         Image("coins")
                             .resizable()
                             .frame(width: 14, height: 14)
-                        Text(String(format: L10n.liveRoomRankDiffFormat, "\(diff)"))
-                            .font(.system(size: 12))
+                        Text("\(page.anchorIncome)")
+                            .font(.system(size: 13, weight: .medium))
                             .foregroundColor(Color(hex: 0xFFE000))
                     }
+                }
+                Spacer(minLength: 8)
+                HStack(spacing: 3) {
+                    Text(L10n.liveRoomRankToNext)
+                        .font(.system(size: 12))
+                        .foregroundColor(.white)
+                    Image("coins")
+                        .resizable()
+                        .frame(width: 14, height: 14)
+                    Text("\(max(0, page.diffToPrevious ?? 0))")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(hex: 0xFFE000))
                 }
             }
             .padding(.horizontal, 15).padding(.vertical, 12)
@@ -192,5 +198,10 @@ struct RankSheetView: View {
             )
             .overlay(Rectangle().frame(height: 1).foregroundColor(.white.opacity(0.2)), alignment: .top)
         }
+    }
+
+    private func anchorRankText(_ rank: Int?) -> String {
+        guard let rank else { return "--" }
+        return rank > 100 || rank == -1 ? "100+" : "\(rank)"
     }
 }

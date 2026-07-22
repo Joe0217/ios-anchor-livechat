@@ -267,21 +267,25 @@ struct RouletteSettingSheet: View {
         // 仅收数字（对齐 H5 diamond input 语义）
         let digits = newValue.filter { $0.isNumber }
         if digits != newValue { priceText = digits }
-        store.draftPrice = Int(digits) ?? 0
+        store.updateDraftPrice(Int(digits) ?? 0)
     }
 
     private func openEditSheet() {
         priceFocused = false
-        showEditSheet = true
+        guard store.requirePrice() else { return }
+        Task {
+            await store.reloadSectorsForEditing()
+            showEditSheet = true
+        }
     }
 
     private func handleEnable() {
         priceFocused = false
         Task {
-            await store.enableWheel()
+            let succeeded = await store.enableWheel()
             // 成功后立即关 sheet + 上抛 toast 到 LiveRoomView（sheet 内 overlay toast 会随 dismount 消失）
             // 失败态：不关 sheet，保留 sheet 内 store.toast 显示错误
-            guard store.savedConfig.enabled else { return }
+            guard succeeded else { return }
             isPresented = false
             onToast?(L10n.liveRoomRouletteToastStarted)
         }
@@ -289,16 +293,22 @@ struct RouletteSettingSheet: View {
 
     private func handleFinishEditing() {
         priceFocused = false
-        Task { await store.finishEditing() }
+        Task {
+            let succeeded = await store.finishEditing()
+            // 对齐 H5 finishEditingBtn：保存成功后关闭外层转盘设置，并在全局层展示成功提示。
+            guard succeeded else { return }
+            isPresented = false
+            onToast?(L10n.liveRoomRouletteToastStarted)
+        }
     }
 
     private func handleClose() {
         priceFocused = false
         Task {
-            await store.closeWheel()
+            let succeeded = await store.closeWheel()
             // 成功后立即关 sheet + 上抛 toast（对齐 H5 closeWheelBtn emit('closePopup')）
             // closeWheel 成功后 savedConfig.enabled=false；失败保留 true 让 sheet 内 toast 显示错误
-            guard !store.savedConfig.enabled else { return }
+            guard succeeded else { return }
             isPresented = false
             onToast?(L10n.liveRoomRouletteToastStopped)
         }

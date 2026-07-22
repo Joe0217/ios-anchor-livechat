@@ -24,10 +24,12 @@ struct RankListPage: Equatable {
     let anchorOwnRank: Int?
     /// 距上一名的差值（nil = 未上榜 or 已第一名）
     let diffToPrevious: Int64?
+    /// 主播在当前周期已收礼的 coins（接口 `costNum`，H5 固定显示在底栏）。
+    let anchorIncome: Int64
     /// 主播自己昵称/头像（顶部展示）
     let anchorNickname: String
     let anchorAvatarUrl: String?
 
-    static let empty = RankListPage(entries: [], anchorOwnRank: nil, diffToPrevious: nil,
+    static let empty = RankListPage(entries: [], anchorOwnRank: nil, diffToPrevious: nil, anchorIncome: 0,
                                      anchorNickname: "", anchorAvatarUrl: nil)
 }

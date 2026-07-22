@@ -73,3 +73,45 @@ public struct WishTemplate: Codable, Equatable, Identifiable, Sendable {
         self.content = (try? c.decode(String.self, forKey: .content)) ?? ""
     }
 }
+
+/// 自由承诺审核记录（对齐 H5 `wishlist-audit-records.vue`）。
+struct WishPromiseAuditItem: Identifiable, Equatable, Decodable {
+    let id: Int64
+    let content: String
+    let status: Int
+    let rejectReason: String?
+    let createTime: String?
+    let auditTime: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, content, status, rejectReason, createTime, auditTime
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let value = try? c.decode(Int64.self, forKey: .id) {
+            id = value
+        } else if let text = try? c.decode(String.self, forKey: .id), let value = Int64(text) {
+            id = value
+        } else {
+            id = 0
+        }
+        if let value = try? c.decode(Int.self, forKey: .status) {
+            status = value
+        } else if let text = try? c.decode(String.self, forKey: .status), let value = Int(text) {
+            status = value
+        } else {
+            status = 0
+        }
+        content = (try? c.decode(String.self, forKey: .content)) ?? ""
+        rejectReason = try? c.decode(String.self, forKey: .rejectReason)
+        createTime = Self.string(c, key: .createTime)
+        auditTime = Self.string(c, key: .auditTime)
+    }
+
+    private static func string(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> String? {
+        if let value = try? c.decode(String.self, forKey: key) { return value }
+        if let value = try? c.decode(Int64.self, forKey: key) { return String(value) }
+        return nil
+    }
+}

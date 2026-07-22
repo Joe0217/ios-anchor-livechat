@@ -64,6 +64,17 @@ final class IMSceneFilterTests: XCTestCase {
         ))
     }
 
+    func test_robotCall_messages_areAllowedWithoutAnActiveScene() {
+        XCTAssertTrue(IMSceneFilter.allows(
+            attachType: .robotCallIncoming, context: .sysMsg,
+            active: [], graceUntil: noGrace, now: now
+        ))
+        XCTAssertTrue(IMSceneFilter.allows(
+            attachType: .robotCallReward, context: .sysMsg,
+            active: [], graceUntil: noGrace, now: now
+        ))
+    }
+
     // MARK: - 必收清单（mustReceive）
 
     func test_mustReceive_forceEndLive_alwaysAllowed() {
@@ -255,6 +266,17 @@ final class IMSceneFilterTests: XCTestCase {
         XCTAssertFalse(IMSceneFilter.allows(
             attachType: .partyInviteVideoSeat(subType: 1040), context: .sysMsg,
             active: [.party], graceUntil: noGrace, now: now
+        ))
+    }
+
+    func test_partyLuckyNumberPersonalDialog_passesOnlyWhenPartyActive() {
+        XCTAssertTrue(IMSceneFilter.allows(
+            attachType: .partyLuckyNumberPersonalDialog, context: .sysMsg,
+            active: [.party], graceUntil: noGrace, now: now
+        ))
+        XCTAssertFalse(IMSceneFilter.allows(
+            attachType: .partyLuckyNumberPersonalDialog, context: .sysMsg,
+            active: [.live], graceUntil: noGrace, now: now
         ))
     }
 

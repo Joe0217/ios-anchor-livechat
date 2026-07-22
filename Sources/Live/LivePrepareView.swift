@@ -3,6 +3,7 @@ import UserNotifications
 
 /// 开播准备页（对应 H5 liveSetting）：设置标题 + 美颜预览，点击开始直播调用真实 beginLiveRoom 后进入直播间。
 struct LivePrepareView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var camera = CameraManager()
     @StateObject private var params = BeautyParameters()
     @State private var title = ""
@@ -11,6 +12,11 @@ struct LivePrepareView: View {
     @State private var isStarting = false
     @State private var roomInfo: LiveRoomInfo?
     @State private var goLive = false
+    /// 取消已离页的异步授权回调，避免用户返回上页后相机被重新打开。
+    @State private var previewAuthorizationTask: Task<Void, Never>?
+    @State private var startLiveTask: Task<Void, Never>?
+    @State private var permissionRequirement: MediaPermissionGate.Requirement = .camera
+    @State private var showPermissionAlert: Bool = false
 
     private var displayTitle: String { title.isEmpty ? L10n.livePrepareDefaultTitle : title }
 
@@ -25,6 +31,14 @@ struct LivePrepareView: View {
                 settingsPanel
             }
             .padding()
+
+            if showPermissionAlert {
+                MediaPermissionDialog(
+                    requirement: permissionRequirement,
+                    onCancel: { showPermissionAlert = false },
+                    onConfirm: retryMediaPermission
+                )
+            }
         }
         .navigationTitle(L10n.livePrepareNavTitle)
         .navigationBarTitleDisplayMode(.inline)
@@ -35,16 +49,19 @@ struct LivePrepareView: View {
         }
         .onAppear {
             camera.renderer.updateParameters(params)
-            CameraManager.requestAccess { ok in
-                authorized = ok
-                if ok { camera.start() }
-            }
+            requestPreviewPermission(openSettingsOnFailure: false)
             // BackgroundMonitor "切后台超限强制下播" 用本地通知在 1:40 提醒用户回 App。
             // 权限前置到开播前静默请求（notDetermined 时才弹系统 dialog）；
             // 拒绝也不影响后续开播（willEnterForeground 结算主路径不依赖通知）。
             requestNotificationAuthorizationIfNeeded()
         }
         .onDisappear {
+            // SwiftUI 切后台也会调 onDisappear；此时保留任务和 session，回前台继续预览。
+            guard scenePhase != .background else { return }
+            previewAuthorizationTask?.cancel()
+            startLiveTask?.cancel()
+            previewAuthorizationTask = nil
+            startLiveTask = nil
             // 进入直播间时也会触发：直播间用自己的相机，这里停掉预览相机让出摄像头
             camera.stop()
         }
@@ -94,7 +111,7 @@ struct LivePrepareView: View {
     }
 
     /// 对应 H5 handleStartLive：getMyLiveRoom（拿封面/配置）→ beginLiveRoom（真建房）
-    private func startLive() {
+    private func startLive(openSettingsOnPermissionFailure: Bool = false) {
         // A 收尾：userType 守卫。userType==2 已审核主播才允许开播；
         // ==9 代理账号 / nil 或其他值 视为未审核完成（H5 同样限制非主播账号入口）。
         guard let user = SessionStore.shared.user else {
@@ -105,12 +122,27 @@ struct LivePrepareView: View {
             errorMsg = (user.userType == 9) ? L10n.livePrepareGuardAgent : L10n.livePrepareGuardUnverified
             return
         }
+        guard !isStarting else { return }
+        // 权限弹窗期间同样锁住按钮，避免多个授权回调并发建房。
         isStarting = true
-        errorMsg = ""
-        Task { @MainActor in
+        previewAuthorizationTask?.cancel()
+        previewAuthorizationTask = nil
+        startLiveTask?.cancel()
+        startLiveTask = Task { @MainActor in
+            guard await MediaPermissionGate.requestAccess(for: .liveStream) else {
+                guard !Task.isCancelled else { return }
+                isStarting = false
+                permissionRequirement = .liveStream
+                showPermissionAlert = true
+                if openSettingsOnPermissionFailure { MediaPermissionGate.openAppSettings() }
+                return
+            }
+            guard !Task.isCancelled else { return }
+            errorMsg = ""
             do {
                 // getMyLiveRoom + beginLiveRoom 合并，拿完整频道/token
                 let info = try await LiveService.startLive(liveDescribe: displayTitle)
+                guard !Task.isCancelled else { return }
                 guard let ch = info.agoraChannelId, !ch.isEmpty,
                       let tk = info.rtcToken, !tk.isEmpty else {
                     errorMsg = L10n.livePrepareErrorNoChannel
@@ -134,6 +166,32 @@ struct LivePrepareView: View {
                 errorMsg = String(format: L10n.livePrepareErrorGeneric, error.localizedDescription)
                 isStarting = false
             }
+        }
+    }
+
+    private func requestPreviewPermission(openSettingsOnFailure: Bool) {
+        previewAuthorizationTask?.cancel()
+        previewAuthorizationTask = Task { @MainActor in
+            let granted = await MediaPermissionGate.requestAccess(for: .camera)
+            guard !Task.isCancelled else { return }
+            authorized = granted
+            if granted {
+                showPermissionAlert = false
+                camera.start()
+            } else {
+                permissionRequirement = .camera
+                showPermissionAlert = true
+                if openSettingsOnFailure { MediaPermissionGate.openAppSettings() }
+            }
+        }
+    }
+
+    private func retryMediaPermission() {
+        switch permissionRequirement {
+        case .camera:
+            requestPreviewPermission(openSettingsOnFailure: true)
+        case .microphone, .liveStream:
+            startLive(openSettingsOnPermissionFailure: true)
         }
     }
 

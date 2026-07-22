@@ -298,7 +298,8 @@ struct UserCardPopup: View {
                     .padding(.top, 6)
 
                 // 派对房 admin action row(对齐 H5 party-user-card.vue L640-668)
-                if let ctx = partyAdminContext, ctx.canShowAdminActions {
+                if let ctx = partyAdminContext,
+                   ctx.canShowAdminActions(targetRole: partyRole(info)) {
                     partyAdminActionRow(info: info, context: ctx)
                         .padding(.top, 24)
                 }
@@ -306,10 +307,12 @@ struct UserCardPopup: View {
             .padding(.horizontal, 15)
             .padding(.bottom, 34)
 
-            // 左上 Block pill
-            blockPill(info: info)
-                .padding(.leading, 15)
-                .padding(.top, 15)
+            // 主播/虚拟主播名片不提供拉黑操作；仅普通用户或机器人可拉黑。
+            if !info.isAnchor {
+                blockPill(info: info)
+                    .padding(.leading, 15)
+                    .padding(.top, 15)
+            }
         }
     }
 
@@ -766,16 +769,16 @@ struct UserCardPopup: View {
                 }
             }
             // 3. Set/Remove Admin(仅 owner)
-            if ctx.canShowSetAdmin {
+            if ctx.canShowSetAdmin(targetRole: partyRole(info)) {
                 partyAdminButton(
-                    imageName: ctx.isTargetAdmin ? "partyUserCardAdminRemove" : "partyUserCardAdminAdd",
-                    label: ctx.isTargetAdmin ? L10n.userCardPartyRemoveAdmin : L10n.userCardPartySetAdmin
+                    imageName: ctx.isTargetAdmin(targetRole: partyRole(info)) ? "partyUserCardAdminRemove" : "partyUserCardAdminAdd",
+                    label: ctx.isTargetAdmin(targetRole: partyRole(info)) ? L10n.userCardPartyRemoveAdmin : L10n.userCardPartySetAdmin
                 ) {
-                    ctx.onSetAdmin(info.userId, !ctx.isTargetAdmin)
+                    ctx.onSetAdmin(info.userId, !ctx.isTargetAdmin(targetRole: partyRole(info)))
                 }
             }
             // 4. Kick out(仅目标 audience)
-            if ctx.canShowKickOut {
+            if ctx.canShowKickOut(targetRole: partyRole(info)) {
                 partyAdminButton(
                     imageName: "partyUserCardKickOut",
                     label: L10n.userCardPartyKick
@@ -786,6 +789,11 @@ struct UserCardPopup: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private func partyRole(_ info: UserCardInfo) -> PartyRoomRoleType? {
+        guard let raw = info.roomRoleType else { return nil }
+        return PartyRoomRoleType(rawValue: raw)
     }
 
     /// 单个圆形 admin 按钮:切图 40x40 + 6pt 间距 + 白色 500 fw 12pt 文案(对齐 H5 `size-40 + mt-6`)

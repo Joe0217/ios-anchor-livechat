@@ -20,17 +20,13 @@ struct TopRankItem: Identifiable, Equatable {
 ///
 /// **数据源三重兜底**：
 /// 1. **进房 loadInitial** → 调 apiSendRank 拉初始 Top2（进房瞬间即显示）
-/// 2. **IM attachType 50/56 到达** → NIMChatroomManager 触发 refresh() 再拉一次（对齐 H5 事件驱动）
+/// 2. **IM attachType 50/56 到达且不带完整 msg[]** → NIMChatroomManager 触发 refresh() 兜底
 /// 3. **收 attachType 1 sendGift** → 同样触发 refresh()（H5 handleLiveGiftMessage 逻辑）
 ///
-/// **规则**（对齐 H5 slice(0, 2) + cost > 1 过滤）：
+/// **规则**（对齐 H5 slice(0, 2) + UI 的 cost > 1 门禁）：
 /// - 只保留 Top 2
-/// - 无贡献用户（cost <= 1）过滤掉
-///
-/// **v22 加固**（用户反馈"Top2 随用户离开而消失"）：
-/// 采用"只覆盖、不清空"语义 —— 后端 rankList 抖动（用户离开导致列表变短 / 空）
-/// 时保留现有 items，只在收到含 cost>1 的新有效榜单时才替换。场次切换由
-/// `setRoomId(_:)` 检测 dbId 变化时主动清空。
+/// - 首名 cost <= 1 时由 View 隐藏整个 Top2 区域
+/// - 收到空榜必须清空，避免已离场用户遗留在顶部
 @MainActor
 final class LiveTopRankStore: ObservableObject {
     @Published private(set) var items: [TopRankItem] = []
@@ -38,6 +34,10 @@ final class LiveTopRankStore: ObservableObject {
     private let service: SendRankServiceProtocol
     /// 直播间 dbId（apiSendRank 需要）—— setRoomId 后才能真正调 API
     private var dbId: Int?
+    /// IM 全量榜单和房间切换都会推进版本，避免较晚返回的 API 覆盖权威 IM 数据。
+    private var dataGeneration = 0
+    /// 同一 generation 内也只接受最新一次 API 刷新的结果。
+    private var latestRefreshID = 0
 
     init(service: SendRankServiceProtocol = SendRankServiceReal()) {
         self.service = service
@@ -48,6 +48,7 @@ final class LiveTopRankStore: ObservableObject {
     func setRoomId(_ id: Int?) {
         if dbId != id {
             items = []
+            dataGeneration &+= 1
         }
         dbId = id
     }
@@ -63,26 +64,28 @@ final class LiveTopRankStore: ObservableObject {
     /// - dbId 未设置或为 0 → 保持 items 为空（尚未开播完成）
     /// - API 失败 → 保持现有 items 不变（避免闪空态）
     func refresh() async {
-        guard let dbId, dbId > 0 else {
+        guard let roomID = dbId, roomID > 0 else {
             logger.debug("TopRank refresh skipped: dbId not set")
             return
         }
+        latestRefreshID &+= 1
+        let refreshID = latestRefreshID
+        let generation = dataGeneration
         do {
-            let list = try await service.fetchSendRank(rankType: .now, dbId: dbId)
-            // slice(0, 2) + cost > 1 过滤（对齐 H5 语义）
-            let top2 = list.prefix(2).enumerated().compactMap { (idx, entry) -> TopRankItem? in
+            let list = try await service.fetchSendRank(rankType: .now, dbId: roomID)
+            guard refreshID == latestRefreshID,
+                  generation == dataGeneration,
+                  dbId == roomID else {
+                logger.debug("TopRank refresh discarded: superseded by newer room/rank data")
+                return
+            }
+            // H5 updateTopList 直接 slice(0, 2)。cost 门禁属于 UI，而非 store 过滤规则。
+            let top2 = list.prefix(2).enumerated().map { (idx, entry) in
                 TopRankItem(userId: entry.userId, avatarUrl: entry.avatarUrl,
                             cost: entry.costNum, rank: idx + 1)
             }
-            // v22 修：Top2 一旦拿到有效数据就固定展示，实时更新只覆盖不清空
-            // ——空 list / first.cost<=1（表明后端本次没有有效榜单，多因某 Top 用户离开引发的 rankList 抖动）
-            // 保持现有 items 不动，避免"用户离开导致头像消失"的产品反馈
-            guard let first = top2.first, first.cost > 1 else {
-                logger.info("TopRank refresh kept: incoming empty/invalid (current items=\(self.items.count) retained)")
-                return
-            }
             items = top2
-            logger.info("TopRank refreshed from apiSendRank: \(self.items.count) items (first cost=\(self.items.first?.cost ?? 0))")
+            logger.info("TopRank refreshed from apiSendRank: \(self.items.count) items")
         } catch {
             logger.error("TopRank refresh failed: \(String(describing: error), privacy: .public)")
             // 保持现有 items，不清空（避免 API 抖动导致 UI 闪烁）
@@ -93,35 +96,24 @@ final class LiveTopRankStore: ObservableObject {
     ///
     /// **对齐 H5 setFromRankList**：msg[] 是完整送礼榜，slice(0, 2) 截前 2；非累加语义
     func setFromRankList(_ rankList: [[String: Any]]) {
+        dataGeneration &+= 1
         var parsed: [TopRankItem] = []
         for (idx, entry) in rankList.prefix(2).enumerated() {
-            var uid: String?
-            if let s = entry["userId"] as? String, !s.isEmpty { uid = s }
-            else if let n = entry["userId"] as? Int64 { uid = String(n) }
-            else if let n = entry["userId"] as? Int { uid = String(n) }
-            else if let n = entry["userId"] as? NSNumber { uid = n.stringValue }
-            guard let userId = uid else { continue }
+            guard let userId = LiveRankValueParser.string(entry["userId"]) else { continue }
 
-            let icon = entry["icon"] as? String
-            var cost: Int64 = 0
-            if let c64 = entry["cost"] as? Int64 { cost = c64 }
-            else if let c = entry["cost"] as? Int { cost = Int64(c) }
-            else if let n = entry["cost"] as? NSNumber { cost = n.int64Value }
+            let icon = LiveRankValueParser.string(entry["icon"] ?? entry["avatar"])
+            let cost = max(0, LiveRankValueParser.int64(entry["cost"] ?? entry["costNum"]) ?? 0)
 
             parsed.append(TopRankItem(userId: userId, avatarUrl: icon, cost: cost, rank: idx + 1))
         }
-        // v22 修：与 refresh() 一致 —— 空/first.cost<=1 保留现有 items（不因用户离开清空 Top2）
-        guard let first = parsed.first, first.cost > 1 else {
-            logger.info("TopRank setFromRankList kept: incoming empty/invalid (current items=\(self.items.count) retained)")
-            return
-        }
         items = parsed
-        logger.info("TopRank setFromRankList: \(self.items.count) items (first cost=\(self.items.first?.cost ?? 0))")
+        logger.info("TopRank setFromRankList: \(self.items.count) items")
     }
 
     /// logout / 离房清理
     func clear() {
         items = []
         dbId = nil
+        dataGeneration &+= 1
     }
 }

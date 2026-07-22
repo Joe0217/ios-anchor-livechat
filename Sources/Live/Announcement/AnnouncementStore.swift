@@ -28,7 +28,7 @@ final class AnnouncementStore: ObservableObject {
     private let service: AnnouncementServiceProtocol
     private let roomId: String
 
-    init(service: AnnouncementServiceProtocol = AnnouncementServiceFakes(),
+    init(service: AnnouncementServiceProtocol = AnnouncementServiceReal(),
          roomId: String) {
         self.service = service
         self.roomId = roomId

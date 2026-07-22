@@ -27,6 +27,9 @@ struct CommonGiftPanelConfig {
     /// tap "Recharge" 按钮触发（phase = insufficientBalance 时 · H-5）；
     /// 主动重拉一次 balance；若仍不足 caller 可挂 toast/CTA
     var onRechargeRequested: (() -> Void)?
+    /// F-spec 派对房私 call 场景：cell 内钻石图标用蓝色（对齐设计稿要求）。
+    /// 默认 false 保持其他场景（callGate 黄 / partySend 紫）行为不变。
+    var useBlueDiamond: Bool
 
     init(tabs: [GiftPanelTab] = [.popular],
                 initialTab: GiftPanelTab? = nil,
@@ -42,7 +45,8 @@ struct CommonGiftPanelConfig {
                 title: String? = nil,
                 dataSource: GiftPanelDataSource,
                 onDismiss: (() -> Void)? = nil,
-                onRechargeRequested: (() -> Void)? = nil) {
+                onRechargeRequested: (() -> Void)? = nil,
+                useBlueDiamond: Bool = false) {
         self.tabs = tabs
         self.initialTab = initialTab
         self.footer = footer
@@ -58,6 +62,7 @@ struct CommonGiftPanelConfig {
         self.dataSource = dataSource
         self.onDismiss = onDismiss
         self.onRechargeRequested = onRechargeRequested
+        self.useBlueDiamond = useBlueDiamond
     }
 
     /// 校验后的 initialTab（不在 tabs 里 → 降 tabs.first；tabs 为空 → .popular）
@@ -168,18 +173,23 @@ extension CommonGiftPanelConfig {
     /// - Parameter minPrice: 门槛下限，展示层过滤
     /// - Parameter initialSelection: 之前选过的 gift；被 minPrice 过滤时静默 clear（对齐 H5）
     /// - Parameter onConfirm: 确认回调；nil 表示用户 confirm 但无选中（"移除"语义，对齐旧行为）
+    /// - Parameter useBlueDiamond: F-spec 派对房私 call 场景传 true 让 cell 钻石显示蓝色；默认 false（直播场景保持黄色）
+    /// - Parameter confirmLabel: 自定义 confirm 按钮文案；nil 走默认（`L10n.giftPickerConfirm`）。F-spec 关闭态弹起时传 "Open private call"
     static func callGate(minPrice: Int64,
                          initialSelection: GiftListData?,
-                         onConfirm: @escaping (GiftListData?) -> Void) -> Self {
+                         onConfirm: @escaping (GiftListData?) -> Void,
+                         useBlueDiamond: Bool = false,
+                         confirmLabel: String? = nil) -> Self {
         Self(
             tabs: [.popular],
-            footer: .confirm(label: L10n.giftPickerConfirm, onConfirm: { gift, _ in onConfirm(gift) }),
+            footer: .confirm(label: confirmLabel ?? L10n.giftPickerConfirm, onConfirm: { gift, _ in onConfirm(gift) }),
             countStepper: .hidden,
             minPrice: minPrice,
             initialSelection: initialSelection,
             interaction: .selectable,
             title: L10n.giftPickerTitle,
-            dataSource: DefaultGiftDataSource(scene: .call)
+            dataSource: DefaultGiftDataSource(scene: .call),
+            useBlueDiamond: useBlueDiamond
         )
     }
 
@@ -192,6 +202,8 @@ extension CommonGiftPanelConfig {
                 if let g = gift { onConfirm(g, count) }
             }),
             countStepper: .visible(range: 1...99),
+            // H5 `wishSetting/index.vue` 仅允许 giftPrice >= 1200 的 LIVE Popular 礼物进入心愿单。
+            minPrice: 1_200,
             interaction: .selectable,
             title: L10n.giftPickerTitle,
             dataSource: DefaultGiftDataSource(scene: .live)

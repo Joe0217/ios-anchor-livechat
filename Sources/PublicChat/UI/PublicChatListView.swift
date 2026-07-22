@@ -18,9 +18,15 @@ struct PublicChatListView: View {
     let theme: PublicChatTheme
     /// 关闭翻译（如系统消息 feed / 派对房 sub-mode 特殊需求）
     var translationEnabled: Bool = true
+    /// v24（B4 · 对齐 H5 §9.12.4）：Screen 公屏 @回复 回调；nil = 关闭 hi 气泡功能
+    var onScreenReply: ((UnifiedPublicChatMessage) -> Void)? = nil
+    /// v24（B4）：MSG 半屏私聊回调；nil = 关闭 hi 气泡的 MSG 分支（Screen 仍可 wired）
+    var onMsgOpen: ((UnifiedPublicChatMessage) -> Void)? = nil
 
     /// 防重入 map：正在翻译中的 msgId（避免用户狂点重复请求）
     @State private var pendingTranslateIds: Set<UUID> = []
+    /// v24 B4：当前弹 hi 动作 confirmationDialog 的目标消息（同一时刻至多 1 个）
+    @State private var hiActionMsg: UnifiedPublicChatMessage? = nil
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -30,7 +36,9 @@ struct PublicChatListView: View {
                         PublicChatRow(
                             message: msg,
                             theme: theme,
-                            onTapTranslate: translationEnabled ? handleTapTranslate : nil
+                            onTapTranslate: translationEnabled ? handleTapTranslate : nil,
+                            isTranslating: pendingTranslateIds.contains(msg.id),
+                            onTapHi: hiEnabled ? handleTapHi : nil
                         ).id(msg.id)
                     }
                 }
@@ -40,7 +48,49 @@ struct PublicChatListView: View {
             }
             .background(theme.containerBackground)
             .onChange(of: feed.messages.count, perform: handleMessagesCountChange(proxy: proxy))
+            .confirmationDialog(
+                nicknameForHiDialog,
+                isPresented: Binding(
+                    get: { hiActionMsg != nil },
+                    set: { if !$0 { hiActionMsg = nil } }
+                ),
+                titleVisibility: .visible
+            ) {
+                hiDialogButtons
+            }
         }
+    }
+
+    /// hi 气泡功能启用门禁：至少 Screen 或 MSG 之一非 nil
+    private var hiEnabled: Bool { onScreenReply != nil || onMsgOpen != nil }
+
+    private var nicknameForHiDialog: String {
+        hiActionMsg?.sender?.nickname ?? ""
+    }
+
+    @ViewBuilder
+    private var hiDialogButtons: some View {
+        if let msg = hiActionMsg {
+            if let cb = onScreenReply {
+                Button(L10n.publicScreenHiScreen) {
+                    cb(msg)
+                    hiActionMsg = nil
+                }
+            }
+            if let cb = onMsgOpen {
+                Button(L10n.publicScreenHiMsg) {
+                    cb(msg)
+                    hiActionMsg = nil
+                }
+            }
+            Button(L10n.commonCancel, role: .cancel) {
+                hiActionMsg = nil
+            }
+        }
+    }
+
+    private func handleTapHi(_ msg: UnifiedPublicChatMessage) {
+        hiActionMsg = msg
     }
 
     private func handleMessagesCountChange(proxy: ScrollViewProxy) -> (Int) -> Void {

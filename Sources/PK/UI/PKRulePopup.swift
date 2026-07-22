@@ -174,7 +174,9 @@ struct PKRulePopup: View {
 /// SwiftUI 的 `.fullScreenCover` 默认背景不透明会遮盖底下视图。
 /// 通过 UIViewRepresentable 拿到 hosting controller 的 view 层，把 backgroundColor 设为 `.clear`，
 /// 让 fullScreenCover 只保留内容层（半透黑蒙层 + 中央卡片），底下的 PKInviteSheet 视觉透过来。
-private struct ClearFullScreenCoverBackground: UIViewRepresentable {
+///
+/// v22（2026-07-11）：从 private 改为 internal，让 PKInviteSheet 的其他 fullScreenCover popup 也可复用。
+struct ClearFullScreenCoverBackground: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
         DispatchQueue.main.async { [weak view] in

@@ -11,6 +11,7 @@ struct WishlistAnchorPanel: View {
     @ObservedObject var store: WishlistStore
     @Binding var isPresented: Bool
     let liveRecordId: String
+    let onGifterTap: (String) -> Void
 
     private let columns = [
         GridItem(.flexible(), spacing: 8),
@@ -23,16 +24,28 @@ struct WishlistAnchorPanel: View {
             header
             ScrollView {
                 VStack(spacing: 16) {
-                    // 礼物卡 grid
-                    LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(store.items) { item in
-                            WishGiftCell(item: item)
+                    if store.items.isEmpty {
+                        Text(L10n.wishlistPanelEmpty)
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.5))
+                            .padding(.vertical, 28)
+                    } else {
+                        LazyVGrid(columns: columns, spacing: 12) {
+                            ForEach(store.items) { item in
+                                WishGiftCell(item: item)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+
+                    WishTop6Row(gifters: store.topSixSlots) { gifter in
+                        guard let userId = gifter.userId, !userId.isEmpty else { return }
+                        // H5 先关闭高层心愿面板，再展示资料卡，避免 sheet 覆盖资料卡。
+                        isPresented = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            onGifterTap(userId)
                         }
                     }
-                    .padding(.horizontal, 16)
-                    Divider().background(Color.white.opacity(0.1))
-                    // Top6
-                    WishTop6Row(gifters: store.topGifters)
                         .padding(.horizontal, 16).padding(.bottom, 16)
                 }
                 .padding(.top, 12)

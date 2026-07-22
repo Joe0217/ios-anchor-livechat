@@ -201,6 +201,13 @@ struct UserCardServiceReal: UserCardServiceProtocol {
         // 后端在 getAnchorPersonalCard 响应是否返回未真机验证 → fallback false(UI 无 badge、不 crash)。
         // 待真机 log:UserCardService raw= 抓一次 dump 后校对字段名。
         let isActiveTycoon: Bool = decodeBoolOrInt(dict["activeTycoon"])
+        let roomRoleType: Int? = {
+            if let value = dict["roomRoleType"] as? Int { return value }
+            if let value = dict["roomRoleType"] as? String { return Int(value) }
+            if let value = dict["role"] as? Int { return value }
+            if let value = dict["role"] as? String { return Int(value) }
+            return nil
+        }()
 
         return UserCardInfo(
             userId: userId,
@@ -222,7 +229,8 @@ struct UserCardServiceReal: UserCardServiceProtocol {
             giftWalls: giftWalls,
             isBlocked: isBlocked,
             isFollowed: isFollowed,
-            isActiveTycoon: isActiveTycoon
+            isActiveTycoon: isActiveTycoon,
+            roomRoleType: roomRoleType
         )
     }
 

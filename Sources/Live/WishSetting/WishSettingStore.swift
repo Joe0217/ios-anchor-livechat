@@ -7,10 +7,7 @@ import os
 /// 承载：3 档 promiseType 切换 / 模板 dropdown 数据 / wishlist 礼物 3-上限操作 / wishTheme 独立提交审核 /
 /// ruleChecked 勾选 / Save 组合校验 + 持久化到 SharedStore。
 ///
-/// **stage 1 简化项**（对齐 L spec §0）：
-/// - SubmitSuccess 用 `showSubmitSuccessAlert: Bool` 触发系统 Alert，不做 modal 组件
-/// - 承诺规范链接留 `showRuleDoc: Bool` 触发只读文案 sheet（无外链）
-/// - Audit Records 顶部按钮 disabled，暂不做
+/// 审核成功、承诺规范和审核记录均沿用 H5 的实际入口与数据流。
 @MainActor
 final class WishSettingStore: ObservableObject {
 
@@ -23,7 +20,7 @@ final class WishSettingStore: ObservableObject {
     @Published var wishTheme: String = ""
     @Published var ruleChecked: Bool = false
     @Published var showSubmitSuccessAlert: Bool = false
-    @Published var showRuleDoc: Bool = false
+    @Published private(set) var isSubmittingSave: Bool = false
 
     /// P1-2：toast（对齐 H5 `showToast`）—— 20004 承诺审核中 / 其它可修正边界用 toast，
     /// 与 `state=.error` 语义区分（后者是接口/系统错误的 error banner）
@@ -47,8 +44,8 @@ final class WishSettingStore: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
     private let logger = Logger(subsystem: "com.anchor.livechat", category: "WishSettingStore")
 
-    /// Wish theme 字数上限（对齐设计稿"(0/20)"；H5 code 15 已过时）
-    static let themeMaxLen: Int = 20
+    /// H5 `wishlist-free-text.vue` / `wishSetting/index.vue` 的真实限制。
+    static let themeMaxLen: Int = 15
 
     // MARK: - Derived
 
@@ -71,6 +68,7 @@ final class WishSettingStore: ObservableObject {
         self.promiseType = shared.promiseType
         self.promiseTemplateId = shared.promiseTemplateId
         self.promiseText = shared.promiseText
+        self.wishTheme = shared.wishTheme
         self.ruleChecked = shared.ruleChecked
         bindSharedForwarding()
     }
@@ -125,6 +123,40 @@ final class WishSettingStore: ObservableObject {
 
     func fetchPrivateTemplates() async {
         await WishSettingSharedStore.shared.ensurePrivateTemplates()
+    }
+
+    /// 对齐 H5 `toggleDropdown`：模板尚在请求时先等待；池为空时只提示，不展开一个空列表。
+    func shouldOpenTemplateDropdown(currentlyOpen: Bool) async -> Bool {
+        guard promiseType != .none else { return false }
+        guard !currentlyOpen else { return false }
+
+        switch promiseType {
+        case .common:
+            if !loadingTemplates {
+                await fetchCommonTemplates()
+            }
+            while loadingTemplates, !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+            guard !Task.isCancelled, !commonTemplates.isEmpty else {
+                if !Task.isCancelled { showToast(L10n.wishSettingNoTemplateAvailable) }
+                return false
+            }
+        case .private_:
+            if !loadingPrivate {
+                await fetchPrivateTemplates()
+            }
+            while loadingPrivate, !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+            guard !Task.isCancelled, !privateTemplates.isEmpty else {
+                if !Task.isCancelled { showToast(L10n.wishSettingNoTemplateAvailable) }
+                return false
+            }
+        case .none:
+            return false
+        }
+        return true
     }
 
     func pickCommonTemplate(_ tpl: WishTemplate) {
@@ -239,18 +271,19 @@ final class WishSettingStore: ObservableObject {
             promiseType: promiseType,
             promiseTemplateId: promiseTemplateId,
             promiseText: promiseText,
+            wishTheme: wishTheme,
             ruleChecked: ruleChecked
         )
         logger.info("save ok wishlist=\(self.wishlist.count) promiseType=\(self.promiseType.rawValue)")
         return true
     }
 
-    /// P0-1：Save 按钮 tap 入口（对齐 H5 `onSubmit` index.vue:351-364）
+    /// P0-1：Save 按钮 tap 入口（对齐 H5 `onSubmit` index.vue:351-397）
     /// Save 按钮改为**始终可点**；本方法按 canSave 4 项失败原因分层给具体 toast。
     /// 若 canSave 通过 → save() 持久化 → 触发 P1-2 "Saved" toast 后延迟 pop。
     /// 返回：`.saved` = View 层显 "Saved" toast + 延迟 pop；`.failed` = 已经 toast 具体错因，view 不 pop
     enum SubmitResult { case saved, failed }
-    func submitTapped() -> SubmitResult {
+    func submitTapped() async -> SubmitResult {
         // P0-1 分层校验（顺序对齐 H5 index.vue:352-360 不可改）
         if !ruleChecked {
             showToast(L10n.wishSettingPleaseAgreeRule)
@@ -268,8 +301,21 @@ final class WishSettingStore: ObservableObject {
             showToast(L10n.wishSettingPleasePickPrivate)
             return .failed
         }
+        guard !isSubmittingSave else { return .failed }
+        isSubmittingSave = true
+        defer { isSubmittingSave = false }
         // 全过 → 持久化
         _ = save()  // canSave 已保证过；save 内的 guard 不会命中 return false
+        // H5 `saveAndBack`：首次勾选规则后先提交同意回执；成功才写本地标记，
+        // 失败仍保存配置，但下次开播会继续弹规则确认。
+        if ruleChecked, !UserDefaults.standard.bool(forKey: "wishRuleAgreed") {
+            do {
+                try await LiveService.clickWishAgreement()
+                UserDefaults.standard.set(true, forKey: "wishRuleAgreed")
+            } catch {
+                logger.warning("clickWishAgreement failed while saving wishlist: \(String(describing: error), privacy: .private)")
+            }
+        }
         // P1-2 saveAndBack 反馈（对齐 H5 index.vue:396-397 `showToast('Saved') + 600ms history.back()`）
         showToast(L10n.wishSettingSaved)
         return .saved

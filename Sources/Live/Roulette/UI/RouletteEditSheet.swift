@@ -139,8 +139,11 @@ struct RouletteEditSheet: View {
             inputFocused = false
             commitInputIfNeeded()
             Task {
-                await store.confirmEdit()
-                isPresented = false
+                let succeeded = await store.confirmEdit()
+                // H5 saveBtn 仅在服务端保存成功后关闭 interactionPopup。
+                if succeeded {
+                    isPresented = false
+                }
             }
         } label: {
             Text(L10n.liveRoomRouletteEditConfirm)

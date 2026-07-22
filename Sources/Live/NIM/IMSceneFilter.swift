@@ -129,20 +129,29 @@ enum IMSceneFilter {
         case .sendGift:                     // 1 / 'SEND_GIFT'
             return active.contains(.live) || active.contains(.call)
 
-        // ===== PK / 派对房：spec 锁定不走 sysMsg，sysMsg 路径直接 drop =====
-        // （它们的真实通道是 liveChatroom / partyChatroom，由 router context guard 处理）
+        // ===== PK / 派对房：大部分消息不走 sysMsg =====
+        // 周任务 1022/1023 是安卓确认的 P2P CustomNotification，必须在 Party 活跃时放行。
         case .pkInvite, .pkScoreUpdate, .pkInviteAck, .pkStatusBundle,
              .pkMuteBroadcast, .pkChatNotice,
              .partySeatUpdate, .partyKickedOut, .partyUpdateMedia,
              .partySeatUpdateList, .partyProhibitMic, .partyGiftCompressed,
+             .partyPrivateCallNotify,  // 1029 派对房私 call 状态通知（聊天室通道，非 sysMsg）
              .partyInviteVideoSeat:
             return false
+
+        case .partyTaskProgress, .partyTaskReward:
+            return active.contains(.party)
+
+        // 1052 是仅中奖者收到的 CustomSystemNotification；只在当前 Party 房活跃时消费。
+        case .partyLuckyNumberPersonalDialog:
+            return active.contains(.party)
 
         // ===== 全局 toast / J 期：任何场景都可能弹（活动 / 猜拳 / 任务奖励 / CP 排行）=====
         case .activityWinnerPublic, .guessGameWinner, .activityApproved,
              .activityRemind30Min, .anchorTaskReward,
              .userRechargeSuccess, .userBindAfterRecharged, .userBindAfterNotRecharged,
-             .cpRankReward, .cpRankPreEnd, .activeTycoonEnter, .agentRecharge:
+             .cpRankReward, .cpRankPreEnd, .activeTycoonEnter, .agentRecharge,
+             .robotCallIncoming, .robotCallReward:
             return true
 
         // ===== 兜底 =====

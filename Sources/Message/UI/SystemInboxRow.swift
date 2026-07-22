@@ -27,30 +27,19 @@ struct SystemInboxRow: View {
     }
 
     private var iconView: some View {
-        Circle()
-            .fill(iconBg)
+        // 用切图 icon(对齐设计稿 消息列表-未读已读.png)——绿信封/紫铃铛/蓝耳机 3 色分色圆形头像
+        Image(iconAssetName)
+            .resizable()
+            .scaledToFit()
             .frame(width: 48, height: 48)
-            .overlay(
-                Image(systemName: iconName)
-                    .font(.system(size: 22))
-                    .foregroundStyle(.white)
-            )
             .accessibilityHidden(true)
     }
 
-    private var iconName: String {
+    private var iconAssetName: String {
         switch entry.kind {
-        case .station:      return "envelope.fill"
-        case .notification: return "bell.fill"
-        case .admin:        return "person.crop.circle.badge.questionmark"
-        }
-    }
-
-    private var iconBg: Color {
-        switch entry.kind {
-        case .station:      return Color.orange.opacity(0.85)
-        case .notification: return Color.blue.opacity(0.85)
-        case .admin:        return Color.purple.opacity(0.85)
+        case .station:      return "messageInboxStation"      // 绿色信封(Platform 切图)
+        case .notification: return "messageInboxNotification" // 紫色铃铛(system 切图)
+        case .admin:        return "messageInboxAdmin"        // 蓝色耳机(administrator 切图)
         }
     }
 

@@ -14,12 +14,20 @@ enum AnnouncementKind: Equatable { case liveOfficial, partyRoom }
 
 enum ModeSwitchKind: Equatable { case mode, application, authUpdate, videoSeatInvite }
 
+/// Party 房 Battle Team PK 4 种系统消息 kind（对齐 H5 chat-list.vue :333-392）
+///
+/// - `.selecting`：1100 开战预告（"The room has initiated a team PK ..."）
+/// - `.normalEnd`：1110 kind=victory 正常结算（"Red Team wins! Total score ..."）
+/// - `.forceEnd`：1110 kind=force_ended 房主强制结束（"The room ended this PK early"）
+/// - `.mvp`：1110 kind=mvp MVP 播报（"This MVP: {name} ({team}) Personal Gift ..."）
+enum PartyBattleSystemKind: Equatable { case selecting, normalEnd, forceEnd, mvp }
+
 struct Mention: Equatable, Hashable {
     let userId: String
     let userName: String
 }
 
-enum DiamondGiftSubType: Equatable {
+enum PublicChatDiamondGiftSubType: Equatable {
     case send(senderName: String, tierName: String?, totalDiamonds: Int64)
     case claim(userName: String, diamonds: Int64)
     case settled(topUserName: String, topDiamonds: Int64)

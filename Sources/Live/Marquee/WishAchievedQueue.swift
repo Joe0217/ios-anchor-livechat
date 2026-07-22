@@ -1,45 +1,41 @@
 import Foundation
 
-/// 心愿达成飘屏队列（对齐 H5 attachType 252 整池完成 / 253 单礼物达成）
+/// 心愿达成横幅状态（对齐 H5 `wishlist-complete-float.vue`）。
+///
+/// H5 对连续 252/253 的处理不是排队，而是重新播放 6 秒动画；这里保持相同语义，
+/// 新事件会取消旧计时并用新 id 重建视图。
 @MainActor
 final class WishAchievedQueue: ObservableObject {
     struct Item: Identifiable, Equatable {
         let id = UUID()
-        let giftName: String
-        let giftIconUrl: String?
-        /// 是否整池完成（252）vs 单礼物达成（253）
-        let isWholePool: Bool
     }
 
     @Published private(set) var current: Item?
-    private var pending: [Item] = []
-    private var isPlaying: Bool = false
+    private var visibilityTask: Task<Void, Never>?
 
-    /// 单条显示 3s（对齐 H5 飘屏时长）
-    private let displayDuration: TimeInterval = 3.0
+    private let displayDuration: UInt64 = 6_000_000_000
 
-    func addToQueue(_ item: Item) {
-        pending.append(item)
-        playNextIfIdle()
+    func show() {
+        visibilityTask?.cancel()
+        current = nil
+        let item = Item()
+        visibilityTask = Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self, !Task.isCancelled else { return }
+            self.current = item
+            do {
+                try await Task.sleep(nanoseconds: self.displayDuration)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, self.current?.id == item.id else { return }
+            self.current = nil
+        }
     }
 
     func clear() {
-        pending.removeAll()
+        visibilityTask?.cancel()
+        visibilityTask = nil
         current = nil
-        isPlaying = false
-    }
-
-    private func playNextIfIdle() {
-        guard !isPlaying, !pending.isEmpty else { return }
-        let next = pending.removeFirst()
-        current = next
-        isPlaying = true
-        Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64((self?.displayDuration ?? 3.0) * 1_000_000_000))
-            guard let self else { return }
-            self.current = nil
-            self.isPlaying = false
-            self.playNextIfIdle()
-        }
     }
 }

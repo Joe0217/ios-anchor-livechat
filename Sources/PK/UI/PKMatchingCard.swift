@@ -139,7 +139,8 @@ struct PKMatchingCard: View {
         }
     }
 
-    /// matching：Progress ring + "Searching..." + Cancel
+    /// matching：SVGA 15s 环形倒计时（对齐 H5 `pk-matching-15s.svga`）+ "Searching..." + Cancel
+    /// SVGA loops=0 无限循环（超过 15s 后进 retry 阶段视觉不变，H5 也是同一动画持续到 matched）
     private var matchingContent: some View {
         VStack(spacing: 0) {
             HStack {
@@ -148,16 +149,14 @@ struct PKMatchingCard: View {
             }
             .padding(.top, 6).padding(.trailing, 12)
 
-            ProgressView()
-                .progressViewStyle(.circular)
-                .tint(.white)
-                .scaleEffect(1.4)
-                .padding(.top, 8)
+            PKSVGAPlayerView(resource: "pk-matching-15s", loops: 0)
+                .frame(width: 171, height: 64)     // 对齐 H5 pkMatchingCard.vue L180 `h-64 w-171`
+                .padding(.top, 4)
 
             Text(L10n.PK.matchingSubtitle)
                 .font(.system(size: 13))
                 .foregroundColor(.white)
-                .padding(.top, 12)
+                .padding(.top, 8)
         }
     }
 
@@ -167,8 +166,10 @@ struct PKMatchingCard: View {
             HStack(spacing: 16) {
                 selfAvatar
                 pkCenterIcon
+                // userId: 对方主播 id → 环境自探 .liveRoom → 弹名片卡
                 AvatarView(urlString: store.ctx?.oppositeAvatar,
-                           size: 44, kind: .anchor)
+                           size: 44, kind: .anchor,
+                           userId: (store.ctx?.oppositeUserId).map(String.init))
                     .overlay(Circle().stroke(Color(hex: 0xFF9DEA), lineWidth: 2))
             }
             .padding(.top, 28)

@@ -41,3 +41,20 @@ struct RoulettePresetTexts: Equatable {
     let items: [RoulettePreset]
     static let empty = RoulettePresetTexts(items: [])
 }
+
+/// 猜拳（RPS · Rock Paper Scissors）规则参数（对齐 H5 §9.2.2 `rpsRulesSheet.vue` L5-11）。
+///
+/// H5 优先读 `liveStore.rpsConfig.{price, bestOf, grantedHours, medalCap}`；后端接口暂未对接，
+/// 一期用默认值兜底。**v24 B2 iOS 仅落地组件 + 默认值**；接口对接留后期里程碑（H 附加或 J 收尾）。
+struct RpsRulesConfig: Equatable {
+    /// 每局价格（钻石）
+    var price: Int = 300
+    /// 局数（Best of N）
+    var bestOf: Int = 3
+    /// 获胜勋章基础小时数（H5 `grantedHours`）
+    var medalBase: Int = 2
+    /// 勋章累计上限小时数（H5 `medalCap`）
+    var medalCap: Int = 72
+
+    static let `default` = RpsRulesConfig()
+}

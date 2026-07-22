@@ -82,7 +82,6 @@ extension GlobalP2PMessageObserver: NIMChatManagerDelegate {
         if attachType == 35 {
             synthesizeRechargeNotification(originalMessage: nim, attach: dict)
         }
-        // 未来其他跨会话通知类型（如 attachType 90 通话充值等待）可在此扩展
     }
 
     /// 合成一条充值通知消息塞进 notification P2P 会话（对齐 H5 handleUserRechargeNotification）。

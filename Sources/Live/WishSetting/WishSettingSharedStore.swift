@@ -17,6 +17,7 @@ final class WishSettingSharedStore: ObservableObject {
     @Published var promiseType: PromiseType = .none
     @Published var promiseTemplateId: Int64 = 0
     @Published var promiseText: String = ""
+    @Published var wishTheme: String = ""
     @Published var ruleChecked: Bool = false
 
     // MARK: - App 级 cache（stage 2 优化：跨 view 重建保留，避免 view 每次 push 都拉后端）
@@ -97,6 +98,8 @@ final class WishSettingSharedStore: ObservableObject {
         let promiseType: Int
         let promiseTemplateId: Int64
         let promiseText: String
+        /// Optional keeps persisted snapshots created before `wishTheme` was added readable.
+        let wishTheme: String?
         let ruleChecked: Bool
     }
 
@@ -105,6 +108,7 @@ final class WishSettingSharedStore: ObservableObject {
                 promiseType: PromiseType,
                 promiseTemplateId: Int64,
                 promiseText: String,
+                wishTheme: String,
                 ruleChecked: Bool) {
         // 序列化前重赋 sortWeight = index（对齐 H5 index.vue:220）
         let reweighted = wishlist.enumerated().map { (idx, g) -> WishGift in
@@ -116,6 +120,7 @@ final class WishSettingSharedStore: ObservableObject {
         self.promiseType = promiseType
         self.promiseTemplateId = promiseTemplateId
         self.promiseText = promiseText
+        self.wishTheme = wishTheme
         self.ruleChecked = ruleChecked
         persist()
     }
@@ -128,6 +133,7 @@ final class WishSettingSharedStore: ObservableObject {
         promiseType = .none
         promiseTemplateId = 0
         promiseText = ""
+        wishTheme = ""
         ruleChecked = false
         commonTemplates = []
         privateTemplates = []
@@ -144,6 +150,7 @@ final class WishSettingSharedStore: ObservableObject {
             promiseType: promiseType.rawValue,
             promiseTemplateId: promiseTemplateId,
             promiseText: promiseText,
+            wishTheme: wishTheme,
             ruleChecked: ruleChecked
         )
         if let data = try? JSONEncoder().encode(snap) {
@@ -160,6 +167,7 @@ final class WishSettingSharedStore: ObservableObject {
         self.promiseType = PromiseType(rawValue: snap.promiseType) ?? .none
         self.promiseTemplateId = snap.promiseTemplateId
         self.promiseText = snap.promiseText
+        self.wishTheme = snap.wishTheme ?? ""
         self.ruleChecked = snap.ruleChecked
     }
 }

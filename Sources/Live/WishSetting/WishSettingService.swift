@@ -36,32 +36,41 @@ enum WishSettingService {
                                              body: ["content": content])
     }
 
+    /// GET `/api/live/wish/promise/audit/list?status=&pageNo=&pageSize=`。
+    static func getPromiseAuditList(status: Int?, pageNo: Int = 1, pageSize: Int = 20) async throws -> [WishPromiseAuditItem] {
+        var query: [String: Any] = ["pageNo": pageNo, "pageSize": pageSize]
+        if let status { query["status"] = status }
+        let data = try await APIClient.shared.get("/api/live/wish/promise/audit/list", query: query)
+        return parseAuditList(data)
+    }
+
     // MARK: - wishGiftMaxNum
 
     /// POST `/api/agora/live/getNum` → 心愿池礼物种类上限（默认 3；后端可下发）
     static func getWishGiftMaxNum() async throws -> Int {
         let data = try await APIClient.shared.post("/api/agora/live/getNum", body: [:])
-        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return 3
-        }
         // H5 兜底逻辑：`res?.result?.wishGiftMaxNum ?? res?.wishGiftMaxNum ?? res?.result ?? res`
-        // P2-3：NSNumber 排除 Bool 桥接（`.claude/rules/ios-decode-userid-compat.md` §3 严谨版）
-        if let n = obj["wishGiftMaxNum"] as? Int { return n }
-        if let n = nonBoolInt(obj["wishGiftMaxNum"]) { return n }
-        if let result = obj["result"] as? [String: Any] {
-            if let n = result["wishGiftMaxNum"] as? Int { return n }
-            if let n = nonBoolInt(result["wishGiftMaxNum"]) { return n }
+        guard let raw = try? JSONSerialization.jsonObject(with: data) else { return 3 }
+        if let obj = raw as? [String: Any] {
+            if let n = positiveInt(obj["wishGiftMaxNum"]) { return n }
+            if let result = obj["result"] as? [String: Any],
+               let n = positiveInt(result["wishGiftMaxNum"]) {
+                return n
+            }
+            if let n = positiveInt(obj["result"]) { return n }
         }
-        if let n = obj["result"] as? Int { return n }
-        return 3
+        return positiveInt(raw) ?? 3
     }
 
-    /// NSNumber 转 Int（排除 Bool 桥接：objCType `c`/`B` 是 Bool）
-    private static func nonBoolInt(_ v: Any?) -> Int? {
-        guard let n = v as? NSNumber else { return nil }
+    /// JSON 数字可能位于 root/result，也可能以数字字符串返回；排除 Bool 桥接并拒绝非正值。
+    private static func positiveInt(_ value: Any?) -> Int? {
+        if let value = value as? Int, value > 0 { return value }
+        if let value = value as? String, let number = Int(value), number > 0 { return number }
+        guard let n = value as? NSNumber else { return nil }
         let cType = String(cString: n.objCType)
         guard cType != "c" && cType != "B" else { return nil }
-        return n.intValue
+        let number = n.intValue
+        return number > 0 ? number : nil
     }
 
     // MARK: - Parse helpers
@@ -94,6 +103,26 @@ enum WishSettingService {
         // 未匹配任何 candidate → 后端可能升级了字段命名；log top-level keys 供排查（不 log value 避免敏感数据）
         let topKeys = Array(obj.keys).sorted().joined(separator: ",")
         logger.warning("parseTemplateList: no known list field matched, topKeys=[\(topKeys, privacy: .public)]; returning []")
+        return []
+    }
+
+    private static func parseAuditList(_ data: Data) -> [WishPromiseAuditItem] {
+        guard let object = try? JSONSerialization.jsonObject(with: data) else { return [] }
+        let candidates: [Any?] = [
+            object,
+            (object as? [String: Any])?["result"],
+            ((object as? [String: Any])?["result"] as? [String: Any])?["records"],
+            (object as? [String: Any])?["records"],
+            (object as? [String: Any])?["list"],
+        ]
+        for candidate in candidates {
+            guard let raw = candidate as? [[String: Any]],
+                  let bytes = try? JSONSerialization.data(withJSONObject: raw),
+                  let list = try? JSONDecoder().decode([WishPromiseAuditItem].self, from: bytes) else {
+                continue
+            }
+            return list
+        }
         return []
     }
 }

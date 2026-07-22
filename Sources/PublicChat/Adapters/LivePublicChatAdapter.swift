@@ -15,7 +15,7 @@ enum LivePublicChatAdapter {
             )
         }
         let sender = SenderProfile(
-            userId: nil,   // Live model 未持 userId（@ mention 落地时再补）
+            userId: m.senderUserId,   // v24 B4：ext.userId 透传
             nickname: m.senderNickname ?? "",
             avatarURL: m.senderAvatar,
             userLevel: m.userLevel,
@@ -25,9 +25,11 @@ enum LivePublicChatAdapter {
             medals: [],
             chatBubble: nil,
             isPlatformAdmin: false,
-            isSelf: false,
+            isSelf: m.isSelf,          // v24 B4：主播自发消息不弹 hi 气泡
             isNewUser: false,
-            nicknameColor: m.isHost ? .anchor : .default
+            nicknameColor: m.isHost ? .anchor : .default,
+            headFrame: nil,
+            isActiveTycoon: m.isActiveTycoon   // v24 B1：大 R 徽章门禁
         )
         return UnifiedPublicChatMessage(
             sender: sender,
@@ -40,7 +42,7 @@ enum LivePublicChatAdapter {
         case .anchor:
             return .anchor(content: m.text)
         case .regular:
-            return .text(content: m.text)
+            return .text(content: m.text, mentions: [], translation: nil, replyToNick: m.replyToNick)
         case .gift(let iconUrl, let name, let count):
             return .gift(iconURL: iconUrl, name: name, count: count)
         case .luckyGift(let iconUrl, let count, let total):
@@ -61,7 +63,7 @@ enum LivePublicChatAdapter {
             return .winnerBroadcast(activityName: activity, quantity: qty,
                                     imageURL: nil, joinCTA: nil, avatar: nil)
         case .wishlistEffect:
-            return .wishlistEffect(text: m.text, iconURL: nil)
+            return .wishlistEffect
         case .diamondGift(let oldSubType):
             return .diamondGift(subType: convertDiamondSubType(oldSubType))
         }

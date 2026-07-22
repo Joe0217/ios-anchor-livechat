@@ -24,15 +24,19 @@ enum GiftPanelTab: String, Hashable, CaseIterable {
         }
     }
 
-    /// 后端 v3 group name 映射（spec §1.5，硬编码；未知 group drop + log）
+    /// 后端 v3 group name 映射。
+    /// H5 Party 房会把任意 tabCode/tabName 含 `lucky` 的分组识别为 Lucky Gift；保留该宽松兜底，
+    /// 防后端下发 `Lucky Gifts` / `lucky-gift` 时礼物架缓存丢失该组，进而漏掉收礼特效分流。
     static func fromGroupName(_ raw: String) -> GiftPanelTab? {
-        switch raw.lowercased() {
+        let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if normalized.contains("lucky") {
+            return .luckyGift
+        }
+        switch normalized {
         case "popular":
             return .popular
         case "exclusive", "exclusive gift", "luxury":
             return .exclusiveGift
-        case "lucky", "lucky gift", "luckygift":
-            return .luckyGift
         default:
             return nil
         }

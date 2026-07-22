@@ -12,7 +12,7 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "PKServi
 /// startPkMatch / cancelMatch / joinPk / invitePk / handleInvite / endPk / endPunishing /
 /// getPkTop3RankList / getPkStatus / mutePkRoom / updateInviteSwitch /
 /// **getRecommendAnchorList / queryInviteSwitch / getPkRankList**（贡献榜 sheet）。
-/// **占位 3 个**（throw `.notImplemented`，待 H/I 接续）：getPkRecordList / getPkInfo / selectPKRuleIcon。
+/// **后续范围外**：selectPKRuleIcon 以外不再保留客态 PK 占位；`getPkInfo` 已由客态观看页接入。
 enum PKService {
     // MARK: - 通用响应解码 helper
 
@@ -232,9 +232,32 @@ enum PKService {
                                             userInfo: [NSLocalizedDescriptionKey: "getRecommendAnchorList decode failed"]))
     }
 
-    /// 占位：PK 历史记录（G 范围外）。
-    static func getPkRecordList(currentPage: Int?, pageSize: Int?) async throws -> [PKTopUser] {
-        throw PKServiceError.notImplemented
+    /// PK 历史记录分页（`POST /api/pk/getPkRecordList` body `{currentPage, pageSize}`）。
+    ///
+    /// H5 蓝本：`anchor-livechat-h5/src/api/livePk/index.ts:113` getPkHistoryApi +
+    /// `pkHistoryPopup.vue` useServerPagination dataPath='records'。
+    /// **响应**：`{records: [...], validWinCount, totalPkCount, hasMore?}` — 首页含统计元数据
+    static func getPkRecordList(currentPage: Int = 1, pageSize: Int = 20) async throws -> PKRecordPage {
+        let body: [String: Any] = ["currentPage": currentPage, "pageSize": pageSize]
+        let data: Data
+        do {
+            data = try await APIClient.shared.post("/api/pk/getPkRecordList", body: body)
+        } catch let err as APIError {
+            throw PKServiceError.business(code: err.code, message: err.message)
+        }
+        // 2026-07-13 修：后端 `result: null` 语义 = 无数据（对齐 H5 `res || []`）。APIClient 剥 envelope
+        // 后 data 是字面 "null"（4 字节）→ decode keyed container throw valueNotFound。判 null 兜底空 page
+        // 避免 store loadMoreIfNeeded 死循环（catch 后 hasMore 仍 true → sentinel 反复触发）
+        if let jsonAny = try? JSONSerialization.jsonObject(with: data, options: [.allowFragments]),
+           jsonAny is NSNull {
+            return PKRecordPage.emptyNoMore
+        }
+        do {
+            return try JSONDecoder().decode(PKRecordPage.self, from: data)
+        } catch {
+            logger.error("decode /api/pk/getPkRecordList failed: \(String(describing: error), privacy: .private)")
+            throw PKServiceError.decode(error)
+        }
     }
 
     /// 查询接受邀请开关状态（2026-06-25 G #11 落地：邀请弹窗 UI 接入）。
@@ -266,9 +289,16 @@ enum PKService {
         return true
     }
 
-    /// 占位：客态 PK 进房拉双主播信息（G 客态范围外）。
+    /// 客态 PK 进房拉双方主播、比分、频道和阶段信息。
+    ///
+    /// 对齐 H5 `getPkInfoApi({ anchorId })`。保留原始 Data 由客态的宽松解析器读取，
+    /// 因后端 `pkDuration` / top3 / avatar 等字段存在 Number/String/对象数组混发。
     static func getPkInfo(anchorId: Int) async throws -> Data {
-        throw PKServiceError.notImplemented
+        do {
+            return try await APIClient.shared.post("/api/pk/getPkInfo", body: ["anchorId": anchorId])
+        } catch let err as APIError {
+            throw PKServiceError.business(code: err.code, message: err.message)
+        }
     }
 
     /// PK 规则图片 URL（`POST /api/agora/live/selectPKRuleIcon`）。

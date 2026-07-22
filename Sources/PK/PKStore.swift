@@ -10,7 +10,7 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "PKStore
 /// **9 态闭环**：idle → matching/inviting/invited → starting → inPK → punishing → endingPK → idle；
 /// 异常进 failed。状态迁移调用方分为：
 /// - **用户操作**：startRandomMatch / cancelMatch / inviteByAnchorId / acceptInvite / rejectInvite / cancelInvite / endPKActive / endPunishActive / userToggledInviteSwitch
-/// - **NIM 推送**：handle97 / handle98 / handle99 / handle100(子分发 7/8/9/10/-1) / handleMute
+/// - **NIM 推送**：handle97 / handle98 / handle99 / handle100(子分发 7/8/9/10/-1)
 /// - **生命周期**：reconcileOnReconnect / teardown
 ///
 /// **callState 联动**（spec §2.4 表 + LiveStore.setCallState 内部已 `guard state == .living` 双保险）：
@@ -31,6 +31,10 @@ final class PKStore: ObservableObject {
     @Published private(set) var ctx: PKContext?
     @Published private(set) var scores: PKScoreUpdate?
     @Published private(set) var receivedInvite: PKInviteInfo?
+    /// 本直播间观众是否应静音 PK 对手。仅在 API 与聊天室广播都成功后更新，对齐 H5。
+    @Published private(set) var isOpponentMuted: Bool = false
+    /// 静音请求在途时禁用 UI，避免快速连点导致状态与广播顺序交叉。
+    @Published private(set) var isUpdatingOpponentMute: Bool = false
 
     /// 邀请弹窗：接受邀请开关 UI 绑定值（true=允许接收邀请；对齐 H5 acceptInvitation）。
     /// 加载入口 `loadInviteSwitchIfNeeded()`；写入入口 `setInviteSwitch(accept:)`。
@@ -245,18 +249,21 @@ final class PKStore: ObservableObject {
         }
     }
 
-    /// RETRY 5min 倒计时；超时仍未匹配 → 调 cancelMatch 回 idle。
+    /// RETRY 倒计时；超时仍未匹配 → 调 cancelMatch 回 idle。
+    /// v26（2026-07-15）：时长从 AppConfigStore.pkMatchDuration 读（对齐 H5 pkStore.pkSettings.retryMatchDuration
+    /// = 后端 pk_match_duration）；后端未配置或未拉到时用 300s（5min）本地兜底
     private func scheduleMatchingRetryTimeout() {
         matchingRetryTask?.cancel()
+        let retrySeconds = AppConfigStore.shared.pkMatchDuration ?? 300
         matchingRetryTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 300_000_000_000)
+            try? await Task.sleep(nanoseconds: UInt64(retrySeconds) * 1_000_000_000)
             guard let self else { return }
             if Task.isCancelled { return }
             guard self.state == .matching else {
                 logger.info("🟡 [PK Match] RETRY timer fired but state already moved (state=\(self.state.rawValue, privacy: .public))")
                 return
             }
-            logger.notice("🔴 [PK Match] RETRY 5min 超时 → 自动回 idle")
+            logger.notice("🔴 [PK Match] RETRY \(retrySeconds)s 超时 → 自动回 idle")
             await self.cancelMatch()
         }
     }
@@ -766,15 +773,28 @@ final class PKStore: ObservableObject {
         }
     }
 
-    /// attachType=-8 静音对方广播（H5 同步走 mutePkRoom API + NIM 广播）。
-    func handleMute(_ mute: Bool) async {
-        guard state == .inPK else { return }
+    /// 切换本直播间观众的对手音频状态。
+    ///
+    /// 严格对齐 H5 `toggleOpponentMute`：先调用 `mutePkRoom`，再发送 `attachType=-8`
+    /// 聊天室自定义消息；两步都成功后才更新按钮状态。
+    func toggleOpponentMute() async {
+        guard state == .inPK, !isUpdatingOpponentMute else { return }
+        let muted = !isOpponentMuted
+        isUpdatingOpponentMute = true
+        defer { isUpdatingOpponentMute = false }
+
         do {
-            try await PKService.mutePkRoom(mute: mute)
+            try await PKService.mutePkRoom(mute: muted)
         } catch {
             logger.warning("mutePkRoom API failed: \(String(describing: error), privacy: .private)")
+            return
         }
-        // attachType=-8 NIM 广播由 NIMChatroomManager 在 M4 接入时附带
+
+        guard nim?.sendPKMuteBroadcast(muted: muted) == true else {
+            logger.warning("PK mute broadcast failed; local state unchanged")
+            return
+        }
+        isOpponentMuted = muted
     }
 
     // MARK: - 中断重连（M5；本期留接口）
@@ -899,6 +919,8 @@ final class PKStore: ObservableObject {
         ctx = nil
         scores = nil
         receivedInvite = nil
+        isOpponentMuted = false
+        isUpdatingOpponentMute = false
         inviteRemainingSeconds = 0
         pkRemainingSeconds = 0
         punishRemainingSeconds = 0
@@ -967,6 +989,8 @@ final class PKStore: ObservableObject {
                         endTime: end,
                         pkType: pkType)
         scores = nil
+        isOpponentMuted = false
+        isUpdatingOpponentMute = false
         hasShownResult = false       // 新一轮 PK 起点，重置结果窗 flag
         transition(to: .inPK)
         startInPKCountdown(endAt: end)
@@ -1085,6 +1109,8 @@ final class PKStore: ObservableObject {
         await restoreInviteSwitchIfNeeded()
         ctx = nil
         receivedInvite = nil
+        isOpponentMuted = false
+        isUpdatingOpponentMute = false
         inviteRemainingSeconds = 0
         pkRemainingSeconds = 0
         punishRemainingSeconds = 0

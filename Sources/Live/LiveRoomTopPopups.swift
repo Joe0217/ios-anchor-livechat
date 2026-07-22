@@ -1,66 +1,25 @@
 import SwiftUI
 
-/// 顶部 Task / Audience placeholder popup（仅这 2 个保留 coming-soon 模式；
-/// Contribution / Rank / Roulette 已在 v7 迁到独立 sheet 视图对齐 H5）
-///
-/// **视觉**：复用 [PKPopupCard](../PK/UI/PKPopupCard.swift) 通用 popup 容器（gradient card + close X）。
-struct LiveRoomComingSoonPopup: View {
-    @Binding var isPresented: Bool
-    let title: String
-    /// 弹窗正文（不叫 body 避免与 View 协议 body 属性冲突）
-    let message: String
-
-    var body: some View {
-        PKPopupCard(isPresented: $isPresented, title: title) {
-            VStack(spacing: 20) {
-                Text(message)
-                    .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.85))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 12)
-                PKPopupButton(title: L10n.liveRoomCloseA11y, style: .solidPurple) {
-                    withAnimation(.easeInOut(duration: 0.15)) { isPresented = false }
-                }
-                .padding(.horizontal, 40)
-            }
-        }
-    }
-}
-
-/// 2 个 placeholder popup 合并为一个 ViewModifier，避免 LiveRoomView.body 里连续 .overlay
-/// 让 SwiftUI 类型推导超时。
-///
-/// **v7 收缩**（2026-07-07）：从 5 个（Task/Contribution/Rank/Audience/Roulette）缩为 2 个（Task/Audience）——
-/// Contribution/Rank/Roulette 已迁到独立 sheet 视图对齐 H5（Sources/Live/{Contribution,Rank,Roulette}/）
-struct TopPlaceholderPopupsModifier: ViewModifier {
-    @Binding var showTask: Bool
-    @Binding var showAudience: Bool
-
-    func body(content: Content) -> some View {
-        content
-            .overlay {
-                LiveRoomComingSoonPopup(isPresented: $showTask,
-                                        title: L10n.liveRoomTaskA11y,
-                                        message: L10n.liveRoomComingSoonTask)
-            }
-            .overlay {
-                LiveRoomComingSoonPopup(isPresented: $showAudience,
-                                        title: L10n.liveRoomAudienceA11y,
-                                        message: L10n.liveRoomComingSoonAudience)
-            }
-    }
-}
+// v25 (2026-07-17) H 里程碑 · LiveGiftTask spec §3.1:
+// - LiveRoomComingSoonPopup (占位 popup 容器) 已删,唯一 caller TopPlaceholderPopupsModifier 同步删除
+// - TopPlaceholderPopupsModifier 已删:Task 迁 LiveGiftTaskSheet(Sources/Live/GiftTask/);
+//   Audience 已在 v11 死代码化(tap → showRankSheet,showAudience binding 从未被写为 true)
+// - L10n.swift 里 liveRoomComingSoonTask / liveRoomComingSoonAudience 变孤儿 key,保留以免破坏
+//   en/ar/tr Localizable.strings 三份翻译(spec §3.1 v2 明示"先 grep 确认再删",保守保留)
 
 /// v7 顶部 3 sheet（Contribution / Rank / Roulette）+ Roulette intro overlay 合并 ViewModifier —— 缓解
 /// LiveRoomView.body 里 3 sheet + 1 overlay 让 SwiftUI 类型推导超时（与 TopPlaceholderPopupsModifier 同源修法）
 struct TopSheetsModifier: ViewModifier {
     let uidStr: String
     let roomIdStr: String
+    @ObservedObject var contributionStore: LiveContributionStore
     @Binding var showContribution: Bool
+    let onContributionUserTap: (String) -> Void
     /// v16：Rank 徽章 tap → 弹主播收礼周榜（girlWeeklyRank 语义）
     @Binding var showRank: Bool
     /// v16：观众数字 tap → 弹观众+送礼榜（userWeeklyRank 语义）
     @Binding var showUserWeeklyRank: Bool
+    @Binding var userWeeklyRankInitialTopTab: RankSheetTopTab
     /// v14 rank sheet load 完成后回填顶部 rank 徽章
     let onRankUpdate: (Int?) -> Void
     @Binding var showRouletteSetting: Bool
@@ -77,7 +36,16 @@ struct TopSheetsModifier: ViewModifier {
             .sheet(isPresented: $showContribution) {
                 ContributionSheetView(anchorId: uidStr,
                                       roomId: roomIdStr,
-                                      isPresented: $showContribution)
+                                      currentIncome: contributionStore.currentLiveIncome,
+                                      isPresented: $showContribution,
+                                      onUserTap: { userId in
+                                          guard !userId.isEmpty else { return }
+                                          // 资料卡同样是 sheet，先关闭贡献面板避免 sheet 覆盖。
+                                          showContribution = false
+                                          DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                              onContributionUserTap(userId)
+                                          }
+                                      })
                     .sheetTopInset()
                     .presentationDetents([.fraction(0.4)])
                     .presentationDragIndicator(.visible)   // 用顶部 X 关闭，隐藏 drag indicator
@@ -86,7 +54,14 @@ struct TopSheetsModifier: ViewModifier {
                 // Rank 徽章入口 → 主播收礼周榜（对齐 H5 girlWeeklyRank.vue）
                 RankSheetView(anchorUserId: uidStr,
                               isPresented: $showRank,
-                              onRankUpdate: onRankUpdate)
+                              onRankUpdate: onRankUpdate,
+                              onUserTap: { userId in
+                                  guard !userId.isEmpty else { return }
+                                  showRank = false
+                                  DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                                      onContributionUserTap(userId)
+                                  }
+                              })
                     .presentationDetents([.fraction(0.4)])
                     .presentationDragIndicator(.visible)
             }
@@ -95,7 +70,15 @@ struct TopSheetsModifier: ViewModifier {
                 UserWeeklyRankSheetView(
                     isPresented: $showUserWeeklyRank,
                     anchorUserId: Int(uidStr) ?? 0,
-                    dbId: Int(roomIdStr) ?? 0
+                    dbId: Int(roomIdStr) ?? 0,
+                    initialTopTab: userWeeklyRankInitialTopTab,
+                    onUserTap: { userId in
+                        guard !userId.isEmpty else { return }
+                        showUserWeeklyRank = false
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                            onContributionUserTap(userId)
+                        }
+                    }
                 )
                     .sheetTopInset()
                     .presentationDetents([.fraction(0.4)])

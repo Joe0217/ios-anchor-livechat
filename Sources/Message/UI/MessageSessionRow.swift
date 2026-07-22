@@ -37,7 +37,9 @@ struct MessageSessionRow: View {
     private var avatar: some View {
         // v4e：在线状态 dot 三态（对齐 H5 CAvatar 语义）与 AvatarView 内置绿点语义不同（三态：在线/离线/隐藏），
         // 因此不使用 showsOnlineDot，走外层 overlay 定制。
-        AvatarView(urlString: session.peerAvatarURL, size: 48, kind: .user)
+        // userId: session.id → 头像 tap 走内置分派跳详情（对齐用户明示"消息列表 tap 头像 → 详情"）；
+        // 头像外的行区 tap 仍走 onTap 打开会话（Button 只消费头像圆形 hit area）
+        AvatarView(urlString: session.peerAvatarURL, size: 48, kind: .user, userId: session.id)
             .overlay(alignment: .bottomTrailing) {
                 if let p = profile, p.hasOnlineStatus {
                     Circle()

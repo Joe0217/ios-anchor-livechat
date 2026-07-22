@@ -9,13 +9,8 @@ struct WishGiftCell: View {
 
     var body: some View {
         VStack(spacing: 6) {
-            // 礼物图（H 里程碑接真 giftIconUrl；当前用 SF Symbol 占位）
-            ZStack {
-                Circle().fill(Color.white.opacity(0.1)).frame(width: 45, height: 45)
-                Image(systemName: "gift.fill")
-                    .font(.system(size: 22))
-                    .foregroundColor(Color(hex: 0xFFE600))
-            }
+            giftIcon
+                .frame(width: 45, height: 45)
 
             Text(item.giftName)
                 .font(.system(size: 11, weight: .semibold))
@@ -29,7 +24,6 @@ struct WishGiftCell: View {
                     .foregroundColor(Color(hex: 0xFFE600))
             }
 
-            // 进度条 + 进度数字
             progressSection
         }
         .padding(8)
@@ -49,31 +43,46 @@ struct WishGiftCell: View {
 
     @ViewBuilder
     private var progressSection: some View {
-        if item.isCompleted {
-            HStack(spacing: 3) {
+        VStack(spacing: 5) {
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.white.opacity(0.15)).frame(height: 5)
+                    Capsule()
+                        .fill(LinearGradient(colors: [Color(hex: 0xFF9438), Color(hex: 0xFF0090), Color(hex: 0xFE00DE)],
+                                             startPoint: .leading, endPoint: .trailing))
+                        .frame(width: geo.size.width * CGFloat(item.progress), height: 5)
+                }
+            }
+            .frame(height: 5)
+
+            Text("\(item.completedCount) / \(item.targetCount)")
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.85))
+
+            if item.isCompleted {
+                HStack(spacing: 3) {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.system(size: 10))
                     .foregroundColor(Color(hex: 0x1AFFCD))
                 Text(L10n.wishlistProgressComplete)
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(Color(hex: 0x1AFFCD))
-            }
-        } else {
-            VStack(spacing: 3) {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Color.white.opacity(0.15)).frame(height: 4)
-                        Capsule()
-                            .fill(LinearGradient(colors: [Color(hex: 0xFF0090), Color(hex: 0xFF3CC4)],
-                                                 startPoint: .leading, endPoint: .trailing))
-                            .frame(width: geo.size.width * CGFloat(item.progress), height: 4)
-                    }
                 }
-                .frame(height: 4)
-                Text("\(item.completedCount)/\(item.targetCount)")
-                    .font(.system(size: 9))
-                    .foregroundColor(.white.opacity(0.7))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Color.white.opacity(0.12), in: Capsule())
             }
+        }
+    }
+
+    @ViewBuilder
+    private var giftIcon: some View {
+        CachedAsyncImage(url: URL(string: item.giftIconUrl ?? ""), contentMode: .fit, cdn: (.gift, .fit)) {
+            Image(systemName: "gift.fill")
+                .font(.system(size: 22))
+                .foregroundColor(Color(hex: 0xFFE600))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.white.opacity(0.1), in: Circle())
         }
     }
 }

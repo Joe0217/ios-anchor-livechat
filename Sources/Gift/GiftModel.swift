@@ -14,18 +14,33 @@ public struct GiftListData: Codable, Equatable, Identifiable, Sendable {
     public let giftSmallImg: String
     public let giftImg: String
     public let vaild: Int?
+    /// 礼物分类。Party 房 Lucky Gift 的消息可能不直接携带类型，需要用礼物架元数据兜底。
+    public let category: String?
+    /// 后端礼物类型，`6` 表示 Lucky Gift（与 H5 `giftTypeV2 === 6` 对齐）。
+    public let giftTypeV2: Int?
 
-    public init(id: Int64, name: String, giftPrice: Int64, giftSmallImg: String, giftImg: String, vaild: Int? = nil) {
+    public init(
+        id: Int64,
+        name: String,
+        giftPrice: Int64,
+        giftSmallImg: String,
+        giftImg: String,
+        vaild: Int? = nil,
+        category: String? = nil,
+        giftTypeV2: Int? = nil
+    ) {
         self.id = id
         self.name = name
         self.giftPrice = giftPrice
         self.giftSmallImg = giftSmallImg
         self.giftImg = giftImg
         self.vaild = vaild
+        self.category = category
+        self.giftTypeV2 = giftTypeV2
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, giftPrice, giftSmallImg, giftImg, vaild
+        case id, name, giftPrice, giftSmallImg, giftImg, vaild, category, giftTypeV2
     }
 
     public init(from decoder: Decoder) throws {
@@ -36,6 +51,13 @@ public struct GiftListData: Codable, Equatable, Identifiable, Sendable {
         self.giftSmallImg = (try? c.decode(String.self, forKey: .giftSmallImg)) ?? ""
         self.giftImg = (try? c.decode(String.self, forKey: .giftImg)) ?? ""
         self.vaild = try? c.decode(Int.self, forKey: .vaild)
+        self.category = try? c.decode(String.self, forKey: .category)
+        self.giftTypeV2 = Self.decodeOptionalInt(c, key: .giftTypeV2)
+    }
+
+    /// H5 Party 房 Lucky Gift 的礼物架兜底条件。
+    public var isLuckyGift: Bool {
+        category == "Lucky Gift" || giftTypeV2 == 6
     }
 
     /// String / Int64 双兼容 decode（H5 type.ts 类型声明与后端实际混发）
@@ -44,5 +66,11 @@ public struct GiftListData: Codable, Equatable, Identifiable, Sendable {
         if let s = try? c.decode(String.self, forKey: key), let i = Int64(s) { return i }
         throw DecodingError.dataCorruptedError(forKey: key, in: c,
             debugDescription: "\(key) neither Int64 nor String")
+    }
+
+    private static func decodeOptionalInt(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> Int? {
+        if let i = try? c.decode(Int.self, forKey: key) { return i }
+        if let s = try? c.decode(String.self, forKey: key), let i = Int(s) { return i }
+        return nil
     }
 }

@@ -7,7 +7,7 @@ import SwiftUI
 struct RowRpsWin: View {
     let sender: SenderProfile?
     let medalUrl: String?
-    let medalHours: Int?
+    let medalHours: Double?
     let theme: PublicChatTheme
 
     var body: some View {
@@ -35,7 +35,7 @@ struct RowRpsWin: View {
                             .frame(width: 50, height: 14)
                     }
                     if let h = medalHours {
-                        Text("*\(h)h")
+                        Text("*\(formattedHours(h))h")
                             .font(.system(size: 13))
                             .foregroundColor(.white)
                     }
@@ -61,5 +61,12 @@ struct RowRpsWin: View {
                         .stroke(Color(red: 174/255, green: 221/255, blue: 1.0).opacity(0.6), lineWidth: 1)
                 )
         )
+    }
+
+    private func formattedHours(_ value: Double) -> String {
+        if value.rounded() == value, value >= Double(Int.min), value <= Double(Int.max) {
+            return String(Int(value))
+        }
+        return String(value)
     }
 }

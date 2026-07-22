@@ -87,6 +87,7 @@ final class NIMService: NSObject, ObservableObject {
             let sysRouter = SystemMessageRouter.shared
             sysRouter.callStore = CallStore.shared
             sysRouter.sessionStore = SessionStore.shared
+            sysRouter.robotCallStore = RobotCallStore.shared
             NIMService.shared.registerRouter(sysRouter)
             // GiftEffect Call 场景 sysMsg 通道礼物 attachType=4 router（return false 不独占，
             // 保证 SystemMessageRouter 等下游仍能处理别的 sysMsg 副作用）
@@ -269,8 +270,14 @@ final class NIMService: NSObject, ObservableObject {
             Self.logger.notice("[NIMService] sysMsg content 非法 JSON，sender=\(notification.sender ?? "?", privacy: .private)")
             return
         }
-        let attachType = AttachType(raw: dict["attachType"])
-        dispatch(attachType, payload: dict, context: context)
+        var payload = dict
+        // 周任务这类没有 roomId 的 CustomNotification 仍需能拒绝跨房迟到消息并做去重。
+        // notificationId/timestamp 由 SDK 提供，不信任服务端 payload 中同名业务字段。
+        payload["_nimCustomNotificationId"] = notification.notificationId
+        payload["_nimCustomNotificationTimestamp"] = notification.timestamp
+        payload["_nimSender"] = notification.sender ?? ""
+        let attachType = AttachType(raw: payload["attachType"])
+        dispatch(attachType, payload: payload, context: context)
     }
 
     // MARK: - 错误码分流

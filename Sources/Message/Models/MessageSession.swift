@@ -16,6 +16,35 @@ struct MessageSession: Identifiable, Equatable, Hashable {
     let unreadCount: Int
     let isTop: Bool
     let ext: MessageSessionExt
+    /// 最后一条我方消息的已读态(对齐设计稿"消息列表-未读已读.png" preview 前面的勾)。
+    /// - `.none`:最后一条不是我方消息（不显示勾）
+    /// - `.sent`:我方已发送但对端未回执 → 灰色勾
+    /// - `.read`:对端已发送已读回执 → 绿色勾
+    /// 来源:NIMRecentSession.lastMessage 的 `isOutgoingMsg` + `isRemoteRead`。
+    var lastMessageReadState: LastMessageReadState = .none
+
+    /// 显式 init 让 `lastMessageReadState` 保持默认（兼容 test/preview 旧调用点）。
+    init(id: String, peerNickname: String, peerAvatarURL: String?,
+         lastMessage: String, lastMessageTimestamp: Int64,
+         unreadCount: Int, isTop: Bool, ext: MessageSessionExt,
+         lastMessageReadState: LastMessageReadState = .none) {
+        self.id = id
+        self.peerNickname = peerNickname
+        self.peerAvatarURL = peerAvatarURL
+        self.lastMessage = lastMessage
+        self.lastMessageTimestamp = lastMessageTimestamp
+        self.unreadCount = unreadCount
+        self.isTop = isTop
+        self.ext = ext
+        self.lastMessageReadState = lastMessageReadState
+    }
+}
+
+/// 最后一条我方消息的已读态（用于会话列表 preview 前的勾图标）。
+enum LastMessageReadState: Equatable, Hashable {
+    case none    // 最后一条不是我方消息 → 不显示
+    case sent    // 我方已发,对端未读 → 灰勾
+    case read    // 对端已读 → 绿勾
 }
 
 /// 会话业务扩展字段（`session.ext`）。对齐安卓 `MsgMainFragment.isFlame()` + H5 `session.js`。

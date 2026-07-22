@@ -6,10 +6,18 @@ import SwiftUI
 struct ContributionSheetView: View {
     @StateObject private var store: ContributionStore
     @Binding var isPresented: Bool
+    let currentIncome: Int64
+    let onUserTap: (String) -> Void
 
-    init(anchorId: String, roomId: String, isPresented: Binding<Bool>) {
+    init(anchorId: String,
+         roomId: String,
+         currentIncome: Int64,
+         isPresented: Binding<Bool>,
+         onUserTap: @escaping (String) -> Void) {
         self._store = StateObject(wrappedValue: ContributionStore(anchorId: anchorId, roomId: roomId))
+        self.currentIncome = currentIncome
         self._isPresented = isPresented
+        self.onUserTap = onUserTap
     }
 
     var body: some View {
@@ -24,25 +32,22 @@ struct ContributionSheetView: View {
     }
 
     /// 顶部本场收入 chip（对齐 H5 头部大数字显示）
-    @ViewBuilder
     private var incomeChip: some View {
-        if case .loaded(let page) = store.rankState {
-            VStack(spacing: 4) {
-                Text(L10n.liveRoomContributionCurrentLiveIncome)
-                    .font(.system(size: 12))
-                    .foregroundColor(.white.opacity(0.6))
-                HStack(spacing: 6) {
-                    Image("coins")
-                        .resizable().frame(width: 18, height: 18)
-                        .accessibilityHidden(true)
-                    Text("\(page.totalIncome)")
-                        .font(.system(size: 24, weight: .heavy))
-                        .foregroundColor(Color(hex: 0xFFE600))
-                }
+        VStack(spacing: 4) {
+            Text(L10n.liveRoomContributionCurrentLiveIncome)
+                .font(.system(size: 12))
+                .foregroundColor(.white.opacity(0.6))
+            HStack(spacing: 6) {
+                Image("coins")
+                    .resizable().frame(width: 18, height: 18)
+                    .accessibilityHidden(true)
+                Text("\(currentIncome)")
+                    .font(.system(size: 24, weight: .heavy))
+                    .foregroundColor(Color(hex: 0xFFE600))
             }
-            .frame(maxWidth: .infinity)
-            .padding(.top, 12).padding(.bottom, 8)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 12).padding(.bottom, 8)
     }
 
     private var tabBar: some View {
@@ -94,7 +99,7 @@ struct ContributionSheetView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(page.entries) { entry in
-                            ContributionRankRow(entry: entry)
+                            ContributionRankRow(entry: entry, onUserTap: onUserTap)
                             Divider().background(Color.white.opacity(0.06))
                         }
                     }
@@ -127,7 +132,7 @@ struct ContributionSheetView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(records) { r in
-                            GiftRecordRow(record: r)
+                            GiftRecordRow(record: r, onUserTap: onUserTap)
                             Divider().background(Color.white.opacity(0.06))
                         }
                         if hasMore {

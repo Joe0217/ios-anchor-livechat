@@ -16,23 +16,56 @@ struct MessageListView: View {
     @Binding var messagesPath: NavigationPath
     @State private var transientError: String?
     @State private var longPressedSession: MessageSession?
+    /// 顶部右 icon 触发的"清空当前 tab"确认对话框
+    @State private var showClearTabConfirm: Bool = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            // 顶部大标题（对齐设计稿 `消息列表-未读已读.png` 左上"News"）
-            HStack {
-                Text(L10n.messageNewsTitle)
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(.white)
-                Spacer()
-                // 右上角占位 icon 位（日程 / 礼盒）—— 具体功能未接（关联 CP Task / Mass Texting 独立业务）
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            .padding(.bottom, 8)
+        ZStack {
+            // 整页深紫渐变背景切图(设计稿"背景填图-高"),平铺满屏 + 底色兜底避免超尺寸留空
+            Color(hex: 0x0A0018).ignoresSafeArea()
+            Image("messageListBackground")
+                .resizable()
+                .scaledToFill()
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
 
-            categoryTabBar
-            content
+            VStack(spacing: 0) {
+                // 顶部大标题(对齐设计稿 `消息列表-未读已读.png` 左上"News")+ 右上 2 个 icon
+                HStack(spacing: 12) {
+                    Text(L10n.messageNewsTitle)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    // 左 icon:通话/消息记录切图(Frame 390 日历+时钟)——H5 tap 跳 /communication Records tab
+                    Button {
+                        messagesPath.append(MessageListView.callRecordsSentinel)
+                    } label: {
+                        Image("messageNavHistory")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    // 右 icon:清空当前 tab 会话列表(切图"清除.png")
+                    Button {
+                        showClearTabConfirm = true
+                    } label: {
+                        Image("messageNavClear")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+
+                categoryTabBar
+                content
+            }
         }
         .task {
             if case .idle = store.state {
@@ -68,6 +101,17 @@ struct MessageListView: View {
                 }
                 Button(L10n.messageActionCancel, role: .cancel) {}
             }
+        }
+        // 顶部右 icon 触发的清空当前 tab 会话确认（对齐 H5 news/index.vue:showEmpty）
+        .confirmationDialog(
+            L10n.messageClearTabTitle,
+            isPresented: $showClearTabConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.messageClearTabConfirm, role: .destructive) {
+                Task { await store.clearCategory(store.selectedCategory) }
+            }
+            Button(L10n.messageActionCancel, role: .cancel) {}
         }
     }
 
@@ -150,6 +194,18 @@ struct MessageListView: View {
         case .loaded:
             pageContent
         }
+    }
+
+    /// 顶部右上角 icon 按钮（对齐设计稿右上 2 icon 视觉；tap 弹 "Coming Soon" 占位 —— 业务待接）
+    private func topBarIconButton(systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(.white)
+                .frame(width: 32, height: 32)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var loadingState: some View {

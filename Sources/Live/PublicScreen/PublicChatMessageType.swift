@@ -27,8 +27,8 @@ enum PublicChatMessageType: Equatable {
     /// v18 官方推荐进房（inLiveChannel===1，对齐 H5 L595）
     case officialBoostEnter
     case pkNotify
-    /// v18 猜拳获胜（attachType 144）—— medalUrl + medalHours 完整字段
-    case rpsWin(medalUrl: String?, medalHours: Int?)
+    /// v18 猜拳获胜（attachType 144）—— medalUrl + medalHours（H5 `Number` 语义，允许小数）
+    case rpsWin(medalUrl: String?, medalHours: Double?)
     case wheelRes
     case announcement
     /// v18 活动中奖广播（attachType 140）

@@ -32,6 +32,8 @@ struct LiveRoomView: View {
     @Environment(\.scenePhase) private var scenePhase
 
     @State private var authorized = false
+    /// 直接进入直播间时的最后一道系统媒体权限门禁。
+    @State private var mediaPermissionTask: Task<Void, Never>?
     @State private var showBeauty = false
 
     // G 里程碑 M0 临时调试入口：手动加入/离开对手 PK 频道，验证 joinChannelEx 通路
@@ -98,14 +100,12 @@ struct LiveRoomView: View {
     @State private var lastPKState: PKStateMain = .idle
 
     // MARK: - 顶部按钮 popup / sheet 显隐
-    /// **v7 分层**（2026-07-07）：Task / Audience 保持 placeholder popup；Contribution / Rank / Roulette
-    /// 已迁到独立 sheet 对齐 H5 真交互（Sources/Live/{Contribution,Rank,Roulette}/）
-    @State private var showTaskPopup: Bool = false
-    // v11: audience popup 已删（tap → showRankSheet），保留 @State 以兼容 Modifier 编译（binding 未被读；linter 若清理可删）
-    @State private var showAudiencePopup: Bool = false
+    /// **v25**（2026-07-17）：Task 迁 LiveGiftTaskSheet(H 里程碑 · LiveGiftTask spec §3.1)；
+    /// Contribution / Rank / Roulette 已迁独立 sheet(Sources/Live/{Contribution,Rank,Roulette}/)
+    @State private var showTaskSheet: Bool = false
     @State private var showContributionSheet: Bool = false
     @State private var showRankSheet: Bool = false
-    /// v13 遗留（v16 后不再使用；保留 struct 兼容 Modifier 参数编译，见 TopSheetsModifier 已删该参数）
+    /// Top2 送礼头像与观众数共用榜单弹层，但 H5 要求分别落在 Top Gifter / Viewers 首 tab。
     @State private var rankSheetInitialTopTab: RankSheetTopTab = .topGifter
     /// v16：观众数字 tap → 弹独立 UserWeeklyRankSheet（对齐 H5 userWeeklyRank.vue）
     @State private var showUserWeeklyRankSheet: Bool = false
@@ -117,6 +117,9 @@ struct LiveRoomView: View {
     /// - true  → rouletteOpen.webp（开启态）
     /// 数据源：onAppear 拉 queryConfig 拿初始；SettingSheet 保存/切换时 callback 回传
     @State private var isRouletteEnabled: Bool = false
+    /// H5 规则：未开启转盘时，进房 5 秒后展示 5 秒引导气泡。
+    @State private var showRouletteTip: Bool = false
+    @State private var rouletteTipTask: Task<Void, Never>?
 
     // MARK: - v9 新增 State
     /// 虚拟道具特效开关 store（UserDefaults persist）
@@ -151,10 +154,14 @@ struct LiveRoomView: View {
     var body: some View {
         bodyStage1
             .animation(.easeInOut(duration: 0.2), value: pkStore.state)
-            .alert(L10n.liveRoomPermissionAlertTitle, isPresented: $store.permissionDeniedAlert) {
-                Button(L10n.liveRoomPermissionAlertOK) { dismiss() }
-            } message: {
-                Text(L10n.liveRoomPermissionAlertMessage)
+            .overlay {
+                if store.permissionDeniedAlert {
+                    MediaPermissionDialog(
+                        requirement: .liveStream,
+                        onCancel: { dismiss() },
+                        onConfirm: retryLiveMediaPermission
+                    )
+                }
             }
             // 关闭直播二次确认（对齐 H5 endLivePopup.vue：Kind reminder + Are you sure + Cancel/Confirm）
             .alert(L10n.liveRoomEndConfirmTitle,
@@ -170,7 +177,7 @@ struct LiveRoomView: View {
             // D 里程碑：CallView + returnLive 倒计时覆盖 —— 合并为单 overlay
             .overlay { callAndReturnLiveOverlays }
             .animation(.easeInOut(duration: 0.2), value: callState)
-            .onReceive(callStore.$state) { newState in callState = newState }
+            .onReceive(callStore.$state, perform: handleCallStateChange)
             .onReceive(store.$privateCallOpen, perform: handlePrivateCallOpenChange)
             .animation(.easeInOut(duration: 0.2), value: store.isWaitingReturnLive)
             // Task 9：GiftEffect / EnterEffect scope 均用 yxRoomId（云信房间 id）
@@ -214,16 +221,20 @@ struct LiveRoomView: View {
         // PK 4 popup（iteration 3 全套 UI 同步）挂在 PKOverlayHost 之上（z 序更高）——
         // rule swiftui-body-type-check-timeout：合并 4 个 overlay 为 1 个，ZStack 内保持原 z 顺序
         .overlay { pkPopupsOverlay }
-        // v7 顶部 2 个 placeholder popup（Task / Audience）；Contribution/Rank/Roulette 已迁独立 sheet
-        .modifier(TopPlaceholderPopupsModifier(showTask: $showTaskPopup,
-                                                showAudience: $showAudiencePopup))
-        // v8/v9/v10 5 层 overlay（送礼动画 / 进场飘屏 / 钻石盲盒飘屏 / 付费弹幕飘屏 / 心愿达成飘屏）
+        // v25 (2026-07-17) LiveGiftTask sheet 独立挂载(H 里程碑 · LiveGiftTask spec §3.1)
+        // 避免 TopSheetsModifier body type-check 超时:挂独立 ViewModifier
+        .modifier(LiveGiftTaskSheetModifier(
+            isPresented: $showTaskSheet,
+            store: nim.liveGiftTaskStore,
+            anchorId: SessionStore.shared.user?.userId.map(String.init) ?? "",
+            onUserTap: { uid in userCardUserId = uid }
+        ))
+        // v8/v9/v10 4 层 overlay（送礼动画 / 进场飘屏 / 钻石盲盒飘屏 / 心愿达成飘屏）。
+        // 付费跑马灯贴在公屏顶部，位置与 H5 BulletFloatManager 一致。
         .modifier(LiveOverlayHost(giftQueue: nim.giftAnimationQueue,
                                    enterRoomQueue: nim.enterRoomQueue,
                                    diamondQueue: nim.diamondGiftQueue,
-                                   paidBulletQueue: nim.paidBulletQueue,
-                                   wishAchievedQueue: nim.wishAchievedQueue,
-                                   isHost: true))
+                                   wishAchievedQueue: nim.wishAchievedQueue))
         // v9/v10 5 新 sheet/popup（虚拟道具开关 / 公告 / UserCard / Gift picker / 心愿单半屏面板）
         .modifier(LiveRoomExtraOverlaysModifier(
             virtualPropsStore: virtualPropsStore,
@@ -239,14 +250,19 @@ struct LiveRoomView: View {
         ))
         // 头像 tap 内置分派：直播中 → 弹名片卡（走 userCardUserId → LiveRoomExtraOverlaysModifier 内 .userCardSheet 挂载）
         .avatarUserCardPresenter { uid in userCardUserId = uid }
+        // LiveRoomView 持有独立 LiveStore，不能用 LiveStore.shared 推断场景。
+        .avatarTapEnvironmentOverride(.liveRoom)
         .onAppear(perform: handleStoresInitialLoad)
         // v7 Contribution / Rank / Roulette 独立 sheet（对齐 H5 真交互）
         .modifier(TopSheetsModifier(
             uidStr: SessionStore.shared.user?.userId.map(String.init) ?? "",
             roomIdStr: "\(roomInfo.id ?? 0)",
+            contributionStore: nim.contributionStore,
             showContribution: $showContributionSheet,
+            onContributionUserTap: { userCardUserId = $0 },
             showRank: $showRankSheet,
             showUserWeeklyRank: $showUserWeeklyRankSheet,
+            userWeeklyRankInitialTopTab: $rankSheetInitialTopTab,
             onRankUpdate: handleRankUpdate,
             showRouletteSetting: $showRouletteSetting,
             showRouletteIntro: $showRouletteIntro,
@@ -306,10 +322,15 @@ struct LiveRoomView: View {
             // G M3 / spec §6.1：PKArenaView 跨 .starting/.inPK/.punishing 三态用 if 链承载（铁律 §1）；
             // .id("pkArena") 锁 identity 避免 dismantleUIView 反复触发 → AgoraRtcVideoCanvas.view 黑屏。
             if isPKActive {
-                PKArenaView(store: pkStore, agora: agora)
+                PKArenaView(store: pkStore,
+                            agora: agora,
+                            onOpponentTap: { userCardUserId = $0 })
                     .id("pkArena")
                     .ignoresSafeArea()
                     .transition(.opacity)
+                    // `topContentWithFocusDismiss` 是全屏 hit region；不提升 PK arena 时它会先
+                    // 命中并吞掉 Top3 的 Button 点击，导致 PK 贡献榜 sheet 无法拉起。
+                    .zIndex(1)
             }
             VStack(spacing: 8) {
                 // 上部内容（heroTop / banner / Spacer / 公屏 / 私 call 开关）抽到 computed property，
@@ -528,12 +549,26 @@ struct LiveRoomView: View {
 
     // v14 Q3 sheet load 完成后回填顶部 rank 徽章（对齐 H5 "无推送→查看后更新"）
     private func handleRankUpdate(_ rank: Int?) { nim.anchorRankStore.setRank(rank) }
-    private func handleRouletteEnabledChanged(_ newValue: Bool) { isRouletteEnabled = newValue }
+    private func handleRouletteEnabledChanged(_ newValue: Bool) {
+        isRouletteEnabled = newValue
+        if newValue { cancelRouletteTip() }
+    }
     private func handleRouletteToast(_ msg: String) { withAnimation { comingSoonToast = msg } }
 
     // v22 私 call 开关反向同步：IM attachType 52（后端广播）走 store 更新，UI 层跟随
     private func handlePrivateCallOpenChange(_ open: Bool) {
         if privateCallOn != open { privateCallOn = open }
+    }
+
+    /// 对齐 H5：收到直播私 call 后关闭心愿单，避免 sheet 覆盖通话界面。
+    private func handleCallStateChange(_ newState: CallState) {
+        callState = newState
+        switch newState {
+        case .calling, .connecting, .connected:
+            showWishlistPanel = false
+        case .idle, .prepared, .ended, .failed:
+            break
+        }
     }
 
     /// v20 公告保存成功后：立即往公屏插入 announcement 消息（对齐 H5 pushRoomAnnouncementMsg）
@@ -552,7 +587,7 @@ struct LiveRoomView: View {
         ))
     }
 
-    /// v10/v11 触发 4 个 store 初始化拉取（进房时）
+    /// v10/v11/v25 触发 5 个 store 初始化拉取（进房时）
     private func handleStoresInitialLoad() {
         nim.contributionStore.loadInitial()
         nim.anchorRankStore.loadInitial()
@@ -563,6 +598,11 @@ struct LiveRoomView: View {
             anchorUserId: SessionStore.shared.user?.userId.map(String.init) ?? "",
             anchorNickname: SessionStore.shared.user?.nickname ?? title
         )
+        // v25 (2026-07-17) LiveGiftTaskStore 首次拉进度（对齐 H5 logined→updateLiveGiftTask）
+        // uid 传主播自己的 userId(对齐 H5 store `getLiveGiftTask({searchValue: currentLiveInfo.userId})`)
+        nim.liveGiftTaskStore.loadInitial(
+            anchorUserId: SessionStore.shared.user?.userId.map(String.init) ?? ""
+        )
         loadRouletteEnabledStatus()
     }
 
@@ -572,8 +612,10 @@ struct LiveRoomView: View {
         let uid = SessionStore.shared.user?.userId.map(String.init) ?? ""
         guard !uid.isEmpty else { return }
         Task {
-            if let cfg = try? await RouletteServiceReal().queryConfig(anchorUserId: uid) {
-                await MainActor.run { isRouletteEnabled = cfg.enabled }
+            let config = try? await RouletteServiceReal().queryConfig(anchorUserId: uid)
+            await MainActor.run {
+                isRouletteEnabled = config?.enabled ?? false
+                scheduleRouletteTipIfNeeded()
             }
         }
     }
@@ -612,6 +654,23 @@ struct LiveRoomView: View {
 
     /// 主 onAppear：suspend 离线监测 + Sharer attach + camera/agora/nim/pkStore 全套 wire
     private func handleMainOnAppear() {
+        // LiveSettings 已在建房前校验；这里保留防御性检查，覆盖未来直接进入 LiveRoomView 的入口。
+        guard MediaPermissionGate.hasAccess(for: .liveStream) else {
+            mediaPermissionTask?.cancel()
+            mediaPermissionTask = Task { @MainActor in
+                guard await MediaPermissionGate.requestAccess(for: .liveStream) else {
+                    guard !Task.isCancelled else { return }
+                    authorized = false
+                    store.onCameraError(.permissionDenied)
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                handleMainOnAppear()
+            }
+            return
+        }
+        mediaPermissionTask = nil
+
         // 长时间无操作自动离线：直播中暂停监测（对齐 H5 isBusy 停 timer）
         AutoOfflineMonitor.shared.suspend()
         camera.renderer.updateParameters(beauty)
@@ -642,18 +701,18 @@ struct LiveRoomView: View {
         // v5.1：同时注入 camera 让 monitor degrade 时节流推帧
         store.wire(agora, camera: camera)
 
-        CameraManager.requestAccess { ok in
-            authorized = ok
-            if ok {
-                camera.start()
-            } else {
-                store.onCameraError(.permissionDenied)
-            }
-        }
+        authorized = true
+        camera.start()
         agora.join(channelId: roomInfo.agoraChannelId ?? "",
                    token: roomInfo.rtcToken ?? "",
                    uid: UInt(roomInfo.userId ?? 0))
         if let yx = roomInfo.yxRoomId, let user = SessionStore.shared.user {
+            let anchor = AnchorInfoStore.shared
+            nim.configurePaidBullet(
+                roomId: roomInfo.id ?? 0,
+                viewerUserId: roomInfo.userId ?? user.userId ?? 0,
+                countryCode: anchor.info?.countryCode ?? anchor.mine?.countryCode ?? ""
+            )
             // H M5：IM 登录由 NIMOnlineKeeper.start 在 SessionStore.login 后已完成；
             // NIMChatroomManager.enter 仅进聊天室，不再传 account/token。
             nim.enter(roomId: "\(yx)",
@@ -689,12 +748,25 @@ struct LiveRoomView: View {
         SystemMessageRouter.shared.liveStore = store
     }
 
+    private func retryLiveMediaPermission() {
+        Task { @MainActor in
+            guard await MediaPermissionGate.requestAccess(for: .liveStream) else {
+                MediaPermissionGate.openAppSettings()
+                return
+            }
+            store.permissionDeniedAlert = false
+            handleMainOnAppear()
+        }
+    }
+
     /// v5.3.3 真根因修复：SwiftUI 在 ScenePhase=.background 时也会触发 onDisappear（snapshot 用），
     /// 若此时 tearDown camera/agora/nim，则切后台→回前台后帧分发永久断开（v5.8 已用 subscribers
     /// 字典让每个 CameraPreview 独立注销，仍以"真正 dismiss 才清理"为正路径）。
     private func handleOnDisappear() {
         // 场景 A（切后台）：guard 短路，资源保留等待回前台
         guard scenePhase != .background else { return }
+        mediaPermissionTask?.cancel()
+        mediaPermissionTask = nil
         // 场景 B（真 dismiss）：无论 .living / .forceEnding / .ending / .ended 都清资源。
         // 各清理调用均幂等（review 202607071524 F4 抽 helper 去重）。
         performLiveTeardown()
@@ -720,6 +792,7 @@ struct LiveRoomView: View {
     /// - `onDisappear`（非 background）：真 dismount 兜底
     /// 所有子操作均幂等——重复调用无副作用。
     private func performLiveTeardown() {
+        cancelRouletteTip()
         AutoOfflineMonitor.shared.resume()
         // K 里程碑 P0-2 fix：detach Sharer 订阅（camera.tearDown 前，确保栈顶变化及时）
         BeautyPipelineSharer.shared.detach(camera.renderer as AnyObject & BeautyRenderer)
@@ -731,6 +804,12 @@ struct LiveRoomView: View {
         camera.stop()
         NIMService.shared.unregisterRouter(pkStore.router)
         SystemMessageRouter.shared.liveStore = nil
+        // v25 (2026-07-17) LiveGiftTaskStore reset + 主动关 sheet 避免孤儿视图
+        nim.liveGiftTaskStore.reset()
+        nim.wishlistStore.reset()
+        nim.wishAchievedQueue.clear()
+        showTaskSheet = false
+        showWishlistPanel = false
         // G M3：PKStore teardown 取消倒计时 / 解 NQM 订阅 / 清字段
         Task { await pkStore.teardown() }
     }
@@ -951,22 +1030,26 @@ struct LiveRoomView: View {
             if let toast = comingSoonToast { comingSoonBanner(toast) }
             Spacer()
             HStack(alignment: .bottom, spacing: 8) {
-                PublicChatListView(
-                    feed: publicChatFeed,
-                    theme: .live,
-                    onScreenReply: handleScreenReply,
-                    onMsgOpen: handleMsgOpen
-                )
-                    .frame(maxHeight: 260)
-                    .onReceive(nim.messagesStore.$messages) { messages in
-                        publicChatFeed.replace(messages.map(LivePublicChatAdapter.adapt))
-                    }
-                    #if DEBUG
-                    .onTapGesture(count: 3) {
-                        PublicChatDebugInjector.injectAll(into: nim.messagesStore)
-                    }
-                    #endif
-                if !store.privateCallHiddenForPK {
+                VStack(spacing: 0) {
+                    PaidBulletFloat(queue: nim.paidBulletQueue)
+                    PublicChatListView(
+                        feed: publicChatFeed,
+                        theme: .live,
+                        onScreenReply: handleScreenReply,
+                        onMsgOpen: handleMsgOpen
+                    )
+                        .frame(maxHeight: 260)
+                        .onReceive(nim.messagesStore.$messages) { messages in
+                            publicChatFeed.replace(messages.map(LivePublicChatAdapter.adapt))
+                        }
+                        #if DEBUG
+                        .onTapGesture(count: 3) {
+                            PublicChatDebugInjector.injectAll(into: nim.messagesStore)
+                        }
+                        #endif
+                }
+                // 对齐 H5 `roomInfo.giftId && shouldShowPrivateCall`：未配置私呼礼物时不提供开关。
+                if !store.privateCallHiddenForPK, (roomInfo.giftId ?? 0) > 0 {
                     LiveRoomPrivateCallSwitch(isOn: $privateCallOn, onToggle: { next in
                         handlePrivateCallToggle(next)
                     })
@@ -997,15 +1080,21 @@ struct LiveRoomView: View {
                         || pkStore.state == .punishing,
             // v22（2026-07-11 用户明示）：对齐 H5 `endLivePopup.vue` —— 点关闭 X 不直接下播，弹确认
             onClose: { showEndLiveConfirm = true },
-            onTaskTap:         { showTaskPopup = true },
+            onTaskTap:         { showTaskSheet = true },
             onContributionTap: { showContributionSheet = true },
             // v16 入口分派：Rank 徽章 → RankSheetView（girlWeeklyRank）；观众数 → UserWeeklyRankSheet（userWeeklyRank）
             onRankTap:         { showRankSheet = true },
-            onAudienceTap:     { showUserWeeklyRankSheet = true },
+            onTopGifterUserTap: { userCardUserId = $0 },
+            onAudienceTap: {
+                rankSheetInitialTopTab = .viewers
+                showUserWeeklyRankSheet = true
+            },
             onRouletteTap:     handleRouletteTap,
             isRouletteEnabled: isRouletteEnabled,
+            showsRouletteTip: showRouletteTip,
             contributionStore: nim.contributionStore,
             anchorRankStore: nim.anchorRankStore,
+            liveGiftTaskStore: nim.liveGiftTaskStore,
             wishlistStore: nim.wishlistStore,
             onWishlistTap: { showWishlistPanel = true },
             topRankStore: nim.topRankStore
@@ -1014,13 +1103,45 @@ struct LiveRoomView: View {
 
     /// Roulette tap 路由（对齐 H5 首次引导 localStorage 按 userId scope）
     private func handleRouletteTap() {
+        cancelRouletteTip()
         let uidStr = SessionStore.shared.user?.userId.map(String.init) ?? ""
         let key = RouletteStore.introShownKey(userId: uidStr)
-        if UserDefaults.standard.bool(forKey: key) {
+        // H5 已开启转盘时直接进入设置页，首次引导只针对尚未启用且从未看过引导的主播。
+        if isRouletteEnabled || UserDefaults.standard.bool(forKey: key) {
             showRouletteSetting = true
         } else {
             showRouletteIntro = true
         }
+    }
+
+    private func scheduleRouletteTipIfNeeded() {
+        cancelRouletteTip()
+        guard !isRouletteEnabled else { return }
+
+        rouletteTipTask = Task { @MainActor in
+            do {
+                try await Task.sleep(nanoseconds: 5_000_000_000)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled, !isRouletteEnabled else { return }
+            withAnimation { showRouletteTip = true }
+
+            do {
+                try await Task.sleep(nanoseconds: 5_000_000_000)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            withAnimation { showRouletteTip = false }
+            rouletteTipTask = nil
+        }
+    }
+
+    private func cancelRouletteTip() {
+        rouletteTipTask?.cancel()
+        rouletteTipTask = nil
+        showRouletteTip = false
     }
 }
 
@@ -1266,20 +1387,16 @@ fileprivate struct LiveRoomTopActions: View {
     @ObservedObject var presence: ChatPresenceStore
     /// v11 顶部右侧 Top2 送礼头像 store（对齐 H5 liveStore.topRankList）
     @ObservedObject var topRankStore: LiveTopRankStore
-    /// v11 tap 观众数字 → 弹送礼周榜（对齐 H5 rankPopup）；上层直接 set showRankSheet=true
+    /// Top2 送礼用户头像 → 直接打开用户名片卡。
+    let onTopGifterUserTap: (String) -> Void
+    /// H5 观众数字点击传 type=0，默认进入 Viewers tab。
     let onAudienceTap: () -> Void
     let onClose: () -> Void
 
     var body: some View {
         HStack(spacing: Theme.Metric.liveRoomBadgeGap) {
-            // v11 Top2 送礼头像 —— 从固定切图升级为 store 驱动 + 金/紫边框 + 皇冠角标
-            // v22 tap → onAudienceTap（同观众数 tap，弹 UserWeeklyRankSheet）
-            // 对齐 H5 liveRoomTop.vue L228 `@click.stop="() => emit('openUserWeeklyRank', 1)"`
+            // Top2 送礼头像 → 名片卡；观众数入口仍打开观众榜。
             top2Avatars
-                .contentShape(Rectangle())
-                .onTapGesture(perform: onAudienceTap)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel(Text(L10n.liveRoomViewerCountA11y))
 
             // 观众数徽章 v6 改可点击（tap → 观众 popup）
             // v19 Q3 根治：对齐 H5 audienceNum（live.js:121-137 getAudienceList）：
@@ -1321,23 +1438,32 @@ fileprivate struct LiveRoomTopActions: View {
     /// 无送礼数据（items 为空）时不渲染，只保留观众数徽章 + 关闭按钮
     @ViewBuilder
     private var top2Avatars: some View {
-        if !topRankStore.items.isEmpty {
+        if let first = topRankStore.items.first, first.cost > 1 {
             HStack(spacing: -6) {
                 ForEach(topRankStore.items) { item in
-                    ZStack(alignment: .topTrailing) {
-                        AvatarView(urlString: item.avatarUrl,
-                                   size: Theme.Metric.liveRoomTopViewerSize,
-                                   kind: .user)
-                            .overlay(
-                                Circle().stroke(topRankBorderColor(item.rank), lineWidth: 1.5)
-                            )
-                        // 皇冠角标（对齐 H5 live-crown-1/2.webp 偏右上）
-                        Image(systemName: "crown.fill")
-                            .font(.system(size: 8, weight: .bold))
-                            .foregroundColor(topRankBorderColor(item.rank))
-                            .shadow(color: .black.opacity(0.3), radius: 1)
-                            .offset(x: 2, y: -4)
+                    Button {
+                        guard !item.userId.isEmpty else { return }
+                        onTopGifterUserTap(item.userId)
+                    } label: {
+                        ZStack(alignment: .topTrailing) {
+                            AvatarView(urlString: item.avatarUrl,
+                                       size: Theme.Metric.liveRoomTopViewerSize,
+                                       kind: .user,
+                                       userId: item.userId,
+                                       disablesTap: true)
+                                .overlay(
+                                    Circle().stroke(topRankBorderColor(item.rank), lineWidth: 1.5)
+                                )
+                            // 皇冠角标（对齐 H5 live-crown-1/2.webp 偏右上）
+                            Image(systemName: "crown.fill")
+                                .font(.system(size: 8, weight: .bold))
+                                .foregroundColor(topRankBorderColor(item.rank))
+                                .shadow(color: .black.opacity(0.3), radius: 1)
+                                .offset(x: 2, y: -4)
+                        }
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(L10n.liveRoomViewerCountA11y))
                 }
             }
         }
@@ -1360,20 +1486,23 @@ fileprivate func formatOnlineCount(_ n: Int) -> String {
 // 本次为视觉占位，点击回调交给父组件（当前 no-op；H/I 里程碑接入真数据）。
 fileprivate struct LiveRoomBadgeRow: View {
     let contributionValue: Int      // 顶部钻石累计（当场直播贡献值）
-    let rankPosition: Int?          // 收礼周榜位次（nil = 未上榜）
+    let rankText: String            // H5 `No.{{ currentAnchorRank }}` 的完整文案
+    let showsTask: Bool
     let onTaskTap: () -> Void
     let onContributionTap: () -> Void
     let onRankTap: () -> Void
 
     var body: some View {
         HStack(spacing: Theme.Metric.liveRoomBadgeGap) {
-            Button(action: onTaskTap) {
-                Image("liveRoomTaskBadge")
-                    .resizable()
-                    .frame(width: Theme.Metric.liveRoomBadgeHeight,
-                           height: Theme.Metric.liveRoomBadgeHeight)
+            if showsTask {
+                Button(action: onTaskTap) {
+                    Image("liveRoomTaskBadge")
+                        .resizable()
+                        .frame(width: Theme.Metric.liveRoomBadgeHeight,
+                               height: Theme.Metric.liveRoomBadgeHeight)
+                }
+                .accessibilityLabel(Text(L10n.liveRoomTaskA11y))
             }
-            .accessibilityLabel(Text(L10n.liveRoomTaskA11y))
 
             Button(action: onContributionTap) {
                 HStack(spacing: 4) {
@@ -1401,16 +1530,9 @@ fileprivate struct LiveRoomBadgeRow: View {
                         .resizable()
                         .frame(width: 18, height: 18)
                         .accessibilityHidden(true)
-                    // rank 为 nil 或 ≤0（无效值/未上榜）统一显示 "--"，对齐 LiveAnchorRankStore.displayText 语义
-                    if let rank = rankPosition, rank > 0 {
-                        Text(String(format: L10n.liveRoomRankFormat, rank))
-                            .font(Theme.Typography.liveRoomBadgeText)
-                            .foregroundColor(Theme.Palette.liveRoomRankNumber)
-                    } else {
-                        Text("--")
-                            .font(Theme.Typography.liveRoomBadgeText)
-                            .foregroundColor(Theme.Palette.liveRoomBadgeNumber)
-                    }
+                    Text(rankText)
+                        .font(Theme.Typography.liveRoomBadgeText)
+                        .foregroundColor(rankText == "--" ? Theme.Palette.liveRoomBadgeNumber : Theme.Palette.liveRoomRankNumber)
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .bold))
                         .foregroundColor(Theme.Palette.liveRoomBadgeNumber)
@@ -1453,51 +1575,66 @@ fileprivate struct LiveRoomWishlistCard: View {
     let onTap: () -> Void
     @State private var currentIndex: Int = 0
 
+    /// 只用礼物 ID 驱动 autoplay task：进度、Top6、热度等高频更新不能重置 4 秒计时。
+    private var carouselItemIdentity: String {
+        store.items.map(\.id).joined(separator: "|")
+    }
+
     /// 对齐 H5 wishlist.vue L62-122：卡片尺寸 80×108pt 竖排布局 + van-swipe autoplay 4s + 手动滑动
     var body: some View {
-        Group {
-            if store.items.isEmpty {
-                Button(action: onTap) { emptyCard }
-                    .buttonStyle(.plain)
-            } else if store.items.count == 1 {
-                // 单条不需要 TabView（避免 SwiftUI TabView 单页 warning + 无必要的 gesture 挂载）
-                Button(action: onTap) { cardContent(store.items[0]) }
-                    .buttonStyle(.plain)
-            } else {
-                // TabView(.page) 原生支持手动 swipe；currentIndex 双向绑定 → autoplay Timer 递增即触发翻页动画
-                TabView(selection: $currentIndex) {
-                    ForEach(Array(store.items.enumerated()), id: \.offset) { idx, item in
-                        Button(action: onTap) { cardContent(item) }
-                            .buttonStyle(.plain)
-                            .tag(idx)
-                    }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .frame(width: 80, height: 108)
-            }
+        wishlistContent
+        .onChange(of: store.items.count) { count in
+            // 礼物列表异步刷新或缩短时保持有效页码，后续 4 秒轮播可继续回到首项循环。
+            if currentIndex >= count { currentIndex = 0 }
         }
-        .frame(width: 80, height: 108)
-        .onReceive(Timer.publish(every: 4.0, on: .main, in: .common).autoconnect()) { _ in
-            guard store.items.count > 1 else { return }
-            withAnimation(.easeInOut(duration: 0.3)) {
-                currentIndex = (currentIndex + 1) % store.items.count
+        .task(id: carouselItemIdentity) {
+            // 不能在 body 用 Timer.publish：LiveRoomHero 会被热度/榜单等高频 @Published 更新重绘，
+            // 新 publisher 会在 4 秒前反复重连，最终永远不会 tick。
+            guard store.items.count > 1 else {
+                currentIndex = 0
+                return
+            }
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(4))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled, store.items.count > 1 else { return }
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    currentIndex = WishlistCarouselIndex.next(after: currentIndex, count: store.items.count)
+                }
             }
         }
     }
 
-    /// 空态：仅心愿单标签（对齐 H5 wishlist.vue v-if 无卡片时不渲染；本处保留可点击兜底容错）
-    private var emptyCard: some View {
-        VStack(spacing: 4) {
-            Image(systemName: "sparkles")
-                .font(.system(size: 22))
-                .foregroundColor(.white.opacity(0.4))
-            Text("Wishlist")
-                .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.6))
+    @ViewBuilder
+    private var wishlistContent: some View {
+        if store.items.isEmpty {
+            EmptyView()
+        } else if store.items.count == 1 {
+            // 单条不需要 TabView（避免 SwiftUI TabView 单页 warning + 无必要的 gesture 挂载）
+            Button(action: onTap) { cardContent(store.items[0]) }
+                .buttonStyle(.plain)
+        } else {
+            wishlistCarousel
         }
+    }
+
+    private var wishlistCarousel: some View {
+        // TabView(.page) 原生支持手动 swipe；currentIndex 双向绑定 → autoplay Timer 递增即触发翻页动画
+        TabView(selection: $currentIndex) {
+            ForEach(Array(store.items.enumerated()), id: \.offset) { idx, item in
+                cardContent(item)
+                    .tag(idx)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
         .frame(width: 80, height: 108)
-        .background(Color.black.opacity(0.3),
-                    in: RoundedRectangle(cornerRadius: 8))
+        .contentShape(Rectangle())
+        // TabView 会优先接管页内控件手势，导致后续页的 Button 不稳定；
+        // 点击统一由容器处理，轻点打开面板、横向拖动仍切换页面。
+        .simultaneousGesture(TapGesture().onEnded { _ in onTap() })
     }
 
     /// 单张卡片（对齐 H5 wishlist.vue L86-118 竖排布局）：
@@ -1535,7 +1672,7 @@ fileprivate struct LiveRoomWishlistCard: View {
             // 钻石价格（仅未完成态展示，对齐 H5 v-if="!isItemComplete"）
             if !item.isCompleted {
                 HStack(spacing: 2) {
-                    Image("liveRoomWishlistCoin")
+                    Image("coins")
                         .resizable().frame(width: 10, height: 10)
                         .accessibilityHidden(true)
                     Text("\(item.giftPrice)")
@@ -1665,15 +1802,19 @@ fileprivate struct LiveRoomHeroTopArea: View {
     let onTaskTap: () -> Void
     let onContributionTap: () -> Void
     let onRankTap: () -> Void
-    /// 观众徽章点击（v6 观众 popup）
+    /// Top2 送礼用户头像点击。
+    let onTopGifterUserTap: (String) -> Void
     let onAudienceTap: () -> Void
     /// 顶部互动转盘按钮点击（对齐 H5 liveRoomTop.vue L256-273 rouletteButton）
     let onRouletteTap: () -> Void
     /// 转盘 icon 两态开关（对齐 H5 rouletteStatus: true=rouletteOpen / false=rouletteClose）
     let isRouletteEnabled: Bool
+    let showsRouletteTip: Bool
     // v10 数据源接入
     @ObservedObject var contributionStore: LiveContributionStore
     @ObservedObject var anchorRankStore: LiveAnchorRankStore
+    /// H5 `v-if="liveStore.giftTask.taskAmount"`：任务接口没有有效目标时不展示入口。
+    @ObservedObject var liveGiftTaskStore: LiveGiftTaskStore
     @ObservedObject var wishlistStore: WishlistStore
     let onWishlistTap: () -> Void
     /// v11 顶部右侧 Top2 送礼头像 store
@@ -1693,13 +1834,15 @@ fileprivate struct LiveRoomHeroTopArea: View {
                 Spacer()
                 LiveRoomTopActions(presence: presence,
                                    topRankStore: topRankStore,
+                                   onTopGifterUserTap: onTopGifterUserTap,
                                    onAudienceTap: onAudienceTap,
                                    onClose: onClose)
             }
             .padding(.bottom, 6)   // v22 主播胶囊栏下方补 6pt gap（外层 VStack spacing=0 会让其与 badges 行紧贴）
             HStack(alignment: .top) {
                 LiveRoomBadgeRow(contributionValue: Int(contributionStore.currentLiveIncome),   // v10 动态
-                                 rankPosition: anchorRankStore.currentRank,                       // v10 动态
+                                 rankText: anchorRankStore.displayText,
+                                 showsTask: liveGiftTaskStore.isIconVisible,
                                  onTaskTap: onTaskTap,
                                  onContributionTap: onContributionTap,
                                  onRankTap: onRankTap)
@@ -1712,6 +1855,20 @@ fileprivate struct LiveRoomHeroTopArea: View {
                         .contentShape(Rectangle())
                 }
                 .accessibilityLabel(Text(L10n.liveRoomRouletteA11y))
+                .overlay(alignment: .leading) {
+                    if showsRouletteTip {
+                        Text(L10n.liveRoomRouletteTip)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .padding(.horizontal, 10)
+                            .frame(height: 25)
+                            .background(Color.black.opacity(0.65), in: Capsule())
+                            .offset(x: -112)
+                            .accessibilityHidden(true)
+                    }
+                }
             }
             // PK 中隐藏 Wishlist（对齐 H5 pkBattleView 布局）
             if !isPKActive {

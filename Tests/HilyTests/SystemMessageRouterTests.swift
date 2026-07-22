@@ -66,13 +66,18 @@ final class SystemMessageRouterTests: XCTestCase {
 
     func test_minus1_callRemoteMessage_plainText() {
         let a = decide(.callRemoteMessage,
-                       payload: ["content": "hello", "ext": ["chatBubble": 7]])
-        XCTAssertEqual(a, .callRemoteText(text: "hello", chatBubble: 7))
+                       payload: ["content": "hello", "ext": ["chatBubble": "https://cdn.example.com/bubble.png"]])
+        XCTAssertEqual(a, .callRemoteText(text: "hello", chatBubble: "https://cdn.example.com/bubble.png"))
     }
 
     func test_minus1_callRemoteMessage_urlEncoded_decodes() {
         let a = decide(.callRemoteMessage, payload: ["content": "hello%20world%21"])
         XCTAssertEqual(a, .callRemoteText(text: "hello world!", chatBubble: nil))
+    }
+
+    func test_minus1_callRemoteMessage_unicodeEscaped_decodes() {
+        XCTAssertEqual(decide(.callRemoteMessage, payload: ["content": "\\u4F60\\u597D"]),
+                       .callRemoteText(text: "你好", chatBubble: nil))
     }
 
     func test_minus1_callRemoteMessage_emptyContent_emitsEmpty() {
@@ -124,15 +129,69 @@ final class SystemMessageRouterTests: XCTestCase {
         XCTAssertEqual(decide(.callRechargeReward), .callRechargeReward(delta: 0))
     }
 
-    // MARK: - 6. 通话取消 -3（仅 log）
+    // MARK: - 5b. J 机器人通话（132 / 133）
 
-    func test_minus3_callCancel_logsButConsumes() {
-        XCTAssertEqual(decide(.callCancel, payload: ["type": 2]),
-                       .callCancelLogOnly(type: 2))
+    func test_133_robotCallIncoming_decodesFlexiblePayload() {
+        let action = decide(
+            .robotCallIncoming,
+            payload: [
+                "id": 77,
+                "recordId": 88,
+                "fileUrl": "https://cdn.example.com/robot.mp4",
+                "agoraChannelId": 99,
+                "autoHangupTime": "45",
+                "userId": 100
+            ]
+        )
+
+        guard case .robotCallIncoming(let invite?) = action else {
+            return XCTFail("133 应产生可接听的机器人来电")
+        }
+        XCTAssertEqual(invite.videoId, "77")
+        XCTAssertEqual(invite.recordId, "88")
+        XCTAssertEqual(invite.fileURL.absoluteString, "https://cdn.example.com/robot.mp4")
+        XCTAssertEqual(invite.agoraChannelId, "99")
+        XCTAssertEqual(invite.autoHangupSeconds, 45)
+        XCTAssertEqual(invite.displayUserId, "100")
     }
 
-    func test_minus3_callCancel_missingType_fallbackMinusOne() {
-        XCTAssertEqual(decide(.callCancel), .callCancelLogOnly(type: -1))
+    func test_133_robotCallIncoming_missingRequiredField_isConsumedButInvalid() {
+        XCTAssertEqual(
+            decide(.robotCallIncoming, payload: ["id": 77, "recordId": 88]),
+            .robotCallIncoming(invite: nil)
+        )
+    }
+
+    func test_132_robotCallReward_decodesEligibleReward() {
+        let action = decide(
+            .robotCallReward,
+            payload: ["recordId": 88, "videoId": 77, "type": "1", "content": 12, "callTime": "63"]
+        )
+
+        guard case .robotCallReward(let reward?) = action else {
+            return XCTFail("132 应产生机器人通话结算奖励")
+        }
+        XCTAssertEqual(reward.recordId, "88")
+        XCTAssertEqual(reward.videoId, "77")
+        XCTAssertTrue(reward.isEligible)
+        XCTAssertEqual(reward.diamondText, "12")
+        XCTAssertEqual(reward.callDurationSeconds, 63)
+    }
+
+    // MARK: - 6. 通话辅助信令 -3
+
+    func test_minus3_callCancel_carriesStringTypeAndChannel() {
+        XCTAssertEqual(decide(.callCancel, payload: ["type": "2", "channelId": "c1", "_nimSender": "yx1"]),
+                       .callNimSignal(type: "2", channelId: "c1", sender: "yx1"))
+    }
+
+    func test_minus3_callCancel_acceptsLegacyIntegerType() {
+        XCTAssertEqual(decide(.callCancel, payload: ["type": 1]),
+                       .callNimSignal(type: "1", channelId: "", sender: ""))
+    }
+
+    func test_minus3_callCancel_missingFields_fallbackEmptyStrings() {
+        XCTAssertEqual(decide(.callCancel), .callNimSignal(type: "", channelId: "", sender: ""))
     }
 
     // MARK: - 7. SessionStore：-4 / 58
@@ -145,6 +204,15 @@ final class SystemMessageRouterTests: XCTestCase {
         XCTAssertEqual(decide(.anchorAuditChange,
                               payload: ["applyStatus": 0, "content": "approved"]),
                        .anchorAuditChange(applyStatus: 0, content: "approved"))
+    }
+
+    func test_58_anchorAuditChange_acceptsStringStatus() {
+        XCTAssertEqual(decide(.anchorAuditChange,
+                              payload: ["applyStatus": "0", "content": "approved"]),
+                       .anchorAuditChange(applyStatus: 0, content: "approved"))
+        XCTAssertEqual(decide(.anchorAuditChange,
+                              payload: ["applyStatus": "1", "content": "rejected"]),
+                       .anchorAuditChange(applyStatus: 1, content: "rejected"))
     }
 
     func test_58_anchorAuditChange_missingFields_fallbacks() {
@@ -162,6 +230,8 @@ final class SystemMessageRouterTests: XCTestCase {
         XCTAssertEqual(decide(.partySeatUpdate), .passThrough)
         XCTAssertEqual(decide(.partyKickedOut), .passThrough)
         XCTAssertEqual(decide(.partyInviteVideoSeat(subType: 1042)), .passThrough)
+        XCTAssertEqual(decide(.partyLuckyNumberPersonalDialog), .passThrough,
+                       "1052 必须继续交给 PartyMessageRouter 弹个人中奖弹窗")
     }
 
     /// H 礼物会话独立实现（送礼 / 心愿单 / 钻石福袋 / 排行榜 / 热度 / 进场动画）。

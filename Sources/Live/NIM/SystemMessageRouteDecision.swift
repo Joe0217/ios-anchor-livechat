@@ -17,13 +17,17 @@ enum SystemMessageAction: Equatable {
     case markBoostingExposure(on: Bool)
 
     // MARK: - CallStore 动作
-    case callRemoteText(text: String, chatBubble: Int?)
+    case callRemoteText(text: String, chatBubble: String?)
     case callWaitState(type: Int)
     case callIncome(delta: Int)
     case callGiftIncome(delta: Int)
     case callRechargeReward(delta: Int)
-    /// `.callCancel` RTM 主路径已处理；sysMsg 通道仅日志占位，避免链路下游误判仍消费。
-    case callCancelLogOnly(type: Int)
+    /// H5 `attachType=-3` 的通话辅助信令。RTM 仍是状态机真值，NIM 仅补充弱网提示与挂断原因。
+    case callNimSignal(type: String, channelId: String, sender: String)
+
+    // MARK: - J 机器人通话动作
+    case robotCallIncoming(invite: RobotCallInvite?)
+    case robotCallReward(reward: RobotCallReward?)
 
     // MARK: - SessionStore 动作
     case followIncrement
@@ -76,8 +80,10 @@ enum SystemMessageRouteDecision {
             return .markBoostingExposure(on: false)
         case .callRemoteMessage:
             let raw = (payload["content"] as? String) ?? ""
-            let decoded = raw.removingPercentEncoding ?? raw
-            let chatBubble = (payload["ext"] as? [String: Any])?["chatBubble"] as? Int
+            let decoded = Self.decodeCallText(raw)
+            let ext = payload["ext"] as? [String: Any]
+            let chatBubble = Self.optionalString(ext?["chatBubble"])
+                ?? Self.optionalString(payload["chatBubble"])
             return .callRemoteText(text: decoded, chatBubble: chatBubble)
         case .callPayWaitState:
             return .callWaitState(type: (payload["type"] as? Int) ?? 0)
@@ -88,16 +94,33 @@ enum SystemMessageRouteDecision {
         case .callRechargeReward:
             return .callRechargeReward(delta: (payload["giveDiamondNum"] as? Int) ?? 0)
         case .callCancel:
-            return .callCancelLogOnly(type: (payload["type"] as? Int) ?? -1)
+            let type: String
+            if let value = payload["type"] as? String {
+                type = value
+            } else if let value = payload["type"] as? Int {
+                type = String(value)
+            } else {
+                type = ""
+            }
+            return .callNimSignal(
+                type: type,
+                channelId: Self.stringValue(payload["channelId"]),
+                sender: Self.stringValue(payload["_nimSender"])
+            )
         case .followIncrement:
             return .followIncrement
         case .anchorAuditChange:
-            let s = (payload["applyStatus"] as? Int) ?? -1
+            // 审核状态接口会混发 Int / NSNumber / String，不能把字符串 "0" 当作缺字段。
+            let s = Self.intValue(payload["applyStatus"]) ?? -1
             let c = (payload["content"] as? String) ?? ""
             return .anchorAuditChange(applyStatus: s, content: c)
         case .forcedOffline:
             // 对齐安卓 CustomNotificationHandler → LiveEventBus "offline_msg"
             return .checkForcedBusy
+        case .robotCallIncoming:
+            return .robotCallIncoming(invite: RobotCallInvite(payload: payload))
+        case .robotCallReward:
+            return .robotCallReward(reward: RobotCallReward(payload: payload))
 
         // ===== chatroom 通道（PKNIMRouter / PartyMessageRouter 持有），sysMsg 通道直接放行 =====
 
@@ -106,6 +129,9 @@ enum SystemMessageRouteDecision {
             return .passThrough
         case .partySeatUpdate, .partyKickedOut, .partyUpdateMedia,
              .partySeatUpdateList, .partyProhibitMic, .partyGiftCompressed,
+             .partyTaskProgress, .partyTaskReward,
+             .partyPrivateCallNotify,  // 1029 派对房私 call 状态通知（聊天室通道，非 sysMsg）
+             .partyLuckyNumberPersonalDialog, // 1052 交给 PartyMessageRouter（sysMsg）
              .partyInviteVideoSeat:
             return .passThrough
 
@@ -158,5 +184,58 @@ enum SystemMessageRouteDecision {
         case .knownButUnhandled, .unknown:
             return .passThrough
         }
+    }
+
+    private static func stringValue(_ value: Any?) -> String {
+        if let value = value as? String { return value }
+        if let value = value as? Int { return String(value) }
+        return ""
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String {
+            return Int(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return nil
+    }
+
+    private static func optionalString(_ value: Any?) -> String? {
+        let string = stringValue(value).trimmingCharacters(in: .whitespacesAndNewlines)
+        return string.isEmpty ? nil : string
+    }
+
+    /// H5 使用 `unescape(content.replace(/\\u/g, '%u'))`，因此除 URL percent encoding 外还要兼容字面量 `\\uXXXX`。
+    private static func decodeCallText(_ raw: String) -> String {
+        let percentDecoded = raw.removingPercentEncoding ?? raw
+        var result = ""
+        var index = percentDecoded.startIndex
+
+        while index < percentDecoded.endIndex {
+            guard percentDecoded[index] == "\\" else {
+                result.append(percentDecoded[index])
+                index = percentDecoded.index(after: index)
+                continue
+            }
+            let uIndex = percentDecoded.index(after: index)
+            guard uIndex < percentDecoded.endIndex, percentDecoded[uIndex] == "u" else {
+                result.append(percentDecoded[index])
+                index = uIndex
+                continue
+            }
+            let hexStart = percentDecoded.index(after: uIndex)
+            guard let hexEnd = percentDecoded.index(hexStart, offsetBy: 4, limitedBy: percentDecoded.endIndex),
+                  hexEnd <= percentDecoded.endIndex,
+                  let scalarValue = UInt32(percentDecoded[hexStart..<hexEnd], radix: 16),
+                  let scalar = UnicodeScalar(scalarValue) else {
+                result.append(percentDecoded[index])
+                index = uIndex
+                continue
+            }
+            result.unicodeScalars.append(scalar)
+            index = hexEnd
+        }
+        return result
     }
 }

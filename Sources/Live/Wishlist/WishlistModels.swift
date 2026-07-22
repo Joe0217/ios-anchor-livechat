@@ -1,5 +1,13 @@
 import Foundation
 
+/// 顶部心愿单轮播的页码推进规则。独立出来保证自动轮播与手动分页后的下一轮一致。
+enum WishlistCarouselIndex {
+    static func next(after currentIndex: Int, count: Int) -> Int {
+        guard count > 0 else { return 0 }
+        return (max(0, currentIndex) + 1) % count
+    }
+}
+
 /// 心愿单单条 item（对齐 H5 `currentLiveInfo.wishlist[]` 字段）
 struct WishlistItem: Identifiable, Equatable {
     let id: String           // giftId
@@ -8,14 +16,46 @@ struct WishlistItem: Identifiable, Equatable {
     let giftPrice: Int
     let targetCount: Int     // H5 `giftNum` 目标数量
     let completedCount: Int  // H5 `compelteGiftNum` 已完成数量
+    /// 后端可直接下发 `completed=true`，H5 将其视为完成，即使计数不完整也要保留。
+    let isMarkedCompleted: Bool
     /// 承诺文案（多礼物共享首条，可为空）
     let promiseText: String?
 
     var progress: Double {
+        if isMarkedCompleted { return 1 }
         guard targetCount > 0 else { return 0 }
         return min(1.0, Double(completedCount) / Double(targetCount))
     }
-    var isCompleted: Bool { completedCount >= targetCount && targetCount > 0 }
+    var isCompleted: Bool { isMarkedCompleted || (completedCount >= targetCount && targetCount > 0) }
+
+    func updatingCompletedCount(_ value: Int) -> WishlistItem {
+        let normalizedCount = max(0, min(targetCount, value))
+        return WishlistItem(
+            id: id,
+            giftName: giftName,
+            giftIconUrl: giftIconUrl,
+            giftPrice: giftPrice,
+            targetCount: targetCount,
+            completedCount: normalizedCount,
+            // H5 用 attachType 50 的权威 `compelteGiftNum` 重算 completed，
+            // 因此不能让一次旧的完成事件永久锁定该状态。
+            isMarkedCompleted: targetCount > 0 && normalizedCount >= targetCount,
+            promiseText: promiseText
+        )
+    }
+
+    func markingCompleted() -> WishlistItem {
+        WishlistItem(
+            id: id,
+            giftName: giftName,
+            giftIconUrl: giftIconUrl,
+            giftPrice: giftPrice,
+            targetCount: targetCount,
+            completedCount: targetCount,
+            isMarkedCompleted: true,
+            promiseText: promiseText
+        )
+    }
 }
 
 /// Top6 贡献者单条（对齐 H5 `wishlist-anchor-panel.vue` fetchTop6）

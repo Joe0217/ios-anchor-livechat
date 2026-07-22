@@ -24,11 +24,4 @@ enum FirstLiveTracker {
     static func markConsumed() {
         UserDefaults.standard.set(false, forKey: key)
     }
-
-    #if DEBUG
-    /// DEBUG 期重置——供 Work → Hi 按钮 sheet 触发，方便反复测试规则页
-    static func reset() {
-        UserDefaults.standard.removeObject(forKey: key)
-    }
-    #endif
 }

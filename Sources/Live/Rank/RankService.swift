@@ -40,6 +40,7 @@ struct RankServiceFakes: RankServiceProtocol {
             entries: entries,
             anchorOwnRank: 6,           // v13: 15 → 6 对齐用户明示的真实排名（H 期接真 API 时废弃 Fakes）
             diffToPrevious: 200,
+            anchorIncome: 5_000,
             anchorNickname: "Me",
             anchorAvatarUrl: nil
         )
@@ -64,36 +65,21 @@ struct RankServiceReal: RankServiceProtocol {
         let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
 
         // 顶部 rank 徽章依赖字段（组件 liveRoomTopAnchorRank.vue L22 res.currentAnchorRank）
-        var anchorRank: Int?
-        if let v = dict["currentAnchorRank"] as? Int { anchorRank = v }
-        else if let v = dict["currentAnchorRank"] as? Int64 { anchorRank = Int(v) }
-        else if let v = dict["currentAnchorRank"] as? NSNumber { anchorRank = v.intValue }
+        let anchorRank = LiveRankValueParser.int(dict["currentAnchorRank"])
 
         // 底部悬浮条 diffNum（对齐 H5 girlWeeklyRank.vue 距上一名差值）
-        var diff: Int64?
-        if let v = dict["diffNum"] as? Int64 { diff = v }
-        else if let v = dict["diffNum"] as? Int { diff = Int64(v) }
-        else if let v = dict["diffNum"] as? NSNumber { diff = v.int64Value }
+        let diff = LiveRankValueParser.int64(dict["diffNum"])
+        let anchorIncome = max(0, LiveRankValueParser.int64(dict["costNum"]) ?? 0)
 
         // 榜单列表（H5 anchorReceiveRankList[]）
         var entries: [RankEntry] = []
         if let list = dict["anchorReceiveRankList"] as? [[String: Any]] {
             for (idx, item) in list.enumerated() {
-                let uid: String = {
-                    if let s = item["userId"] as? String { return s }
-                    if let n = item["userId"] as? Int64 { return String(n) }
-                    if let n = item["userId"] as? Int { return String(n) }
-                    if let n = item["userId"] as? NSNumber { return n.stringValue }
-                    return ""
-                }()
-                guard !uid.isEmpty else { continue }
-                var diamond: Int64 = 0
-                if let v = item["costNum"] as? Int64 { diamond = v }
-                else if let v = item["costNum"] as? Int { diamond = Int64(v) }
-                else if let v = item["costNum"] as? NSNumber { diamond = v.int64Value }
-                let level = (item["userLevel"] as? Int) ?? (item["level"] as? Int) ?? 0
-                let nick = (item["nickname"] as? String) ?? (item["nickName"] as? String) ?? ""
-                let icon = item["icon"] as? String ?? item["headImg"] as? String
+                guard let uid = LiveRankValueParser.string(item["userId"]) else { continue }
+                let diamond = max(0, LiveRankValueParser.int64(item["costNum"]) ?? 0)
+                let level = max(0, LiveRankValueParser.int(item["userLevel"] ?? item["level"]) ?? 0)
+                let nick = LiveRankValueParser.string(item["nickname"] ?? item["nickName"]) ?? ""
+                let icon = LiveRankValueParser.string(item["icon"] ?? item["headImg"])
                 entries.append(RankEntry(
                     id: uid, rank: idx + 1, userId: uid, nickname: nick,
                     avatarUrl: icon, level: level, diamond: diamond
@@ -105,8 +91,9 @@ struct RankServiceReal: RankServiceProtocol {
             entries: entries,
             anchorOwnRank: anchorRank,
             diffToPrevious: diff,
-            anchorNickname: (dict["nickname"] as? String) ?? "",
-            anchorAvatarUrl: dict["icon"] as? String
+            anchorIncome: anchorIncome,
+            anchorNickname: LiveRankValueParser.string(dict["nickname"]) ?? "",
+            anchorAvatarUrl: LiveRankValueParser.string(dict["icon"])
         )
     }
 }

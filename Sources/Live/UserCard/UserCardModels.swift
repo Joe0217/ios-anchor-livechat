@@ -2,12 +2,11 @@ import Foundation
 
 /// UserCard model(对齐 H5 `views/liveSetting/components/userCard.vue` L87 `getAnchorPersonalCard` 返回)。
 ///
-/// **iOS 主播端定位**: 只覆盖 H5 主播端 `views/liveSetting/` 场景(主播看用户)。
-/// H5 `views/liveRoom/`(主播看别的主播房)场景对应的 `isAnchor=true` 分支本项目不实现;
-/// `userType` 保留字段供未来"看别的主播房"里程碑再启用。
+/// **iOS 主播端定位**: 覆盖主播查看用户或其他主播的基础资料。
+/// 主播类目标沿用同一张资料卡，但不提供拉黑操作；完整主播房资料布局仍留待后续里程碑。
 struct UserCardInfo: Equatable {
     let userId: String
-    /// H5 后端字段:1=用户 / 2=主播 / 3=虚拟主播 / 4=机器人。本期 UI 不据此分支。
+    /// H5 后端字段:1=用户 / 2=主播 / 3=虚拟主播 / 4=机器人。主播类名片不显示拉黑操作。
     let userType: Int
     let nickname: String
     let avatarUrl: String?
@@ -40,12 +39,14 @@ struct UserCardInfo: Equatable {
     /// 若后端未返回则 fallback false（UI 无 badge，不 crash）。iOS 真机首次抓 log 后可能需
     /// 关联 SendRankService.isActiveTycoon 二次兜底（当前不做，等真机验证）。
     var isActiveTycoon: Bool = false
+    /// Party 房内角色。普通用户卡接口不返回时为 nil；Party 管理操作优先用麦位实时角色。
+    var roomRoleType: Int? = nil
 
     enum Gender: Equatable {
         case male, female, unknown
     }
 
-    /// 保留派生但**本期 UI 不用**(方便未来"看别的主播房"启用)
+    /// 主播与虚拟主播共用主播类名片权限。
     var isAnchor: Bool { userType == 2 || userType == 3 }
 }
 

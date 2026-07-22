@@ -72,6 +72,19 @@ final class LiveStore: ObservableObject {
     /// CallStore.handleIncomingVideoCall 直播态分支据此判定 busy reject（=false 拦截来电）。
     @Published private(set) var privateCallOpen: Bool = true
 
+    // MARK: - B3 禁言状态机（对齐 H5 §9.16 live.js:1009-1030 · 双字段 isBlockUser + whoBlock）
+
+    /// 主播被禁言 · 公屏输入框 disable 门禁
+    /// 由 [`applyGag()`](x-source-tag://applyGag) / [`applyUngag()`](x-source-tag://applyUngag) 驱动
+    @Published private(set) var isBlockUser: Bool = false
+
+    /// **whoBlock**（对齐 H5 shape）：0 无 / 1 系统 / 2 房主 / 3 系统+房主
+    /// - `1 system` 保留供未来 attachType 44/62/系统禁言事件初始化；本轮 iOS 主要处理 room 通道
+    /// - `3 both` 由 gag 累加或后端直接下发
+    @Published private(set) var whoBlock: WhoBlock = .none
+
+    enum WhoBlock: Int, Equatable { case none = 0, system = 1, room = 2, both = 3 }
+
     /// PK 期间私 call 开关"隐藏"标记（对齐 H5 liveRoom.vue:466 `shouldShowPrivateCall` 派生）。
     /// - true：LiveRoomView 里 LiveRoomPrivateCallSwitch **隐藏**（不渲染入口）
     /// - false：正常显示
@@ -175,6 +188,54 @@ extension LiveStore {
     func startLive(title: String) async {
         // TODO(M4): spec §8.2 + §14 任务 11；M1 用 attachLiving 替代
         logger.warning("LiveStore.startLive not implemented yet (M4); use attachLiving")
+    }
+
+    // MARK: - B3 禁言状态机 入口方法
+
+    /// - Tag: applyGag
+    /// 主播本人被禁言（对齐 H5 live.js:1009-1013 · gagMember frontMsgType）。
+    /// **累加语义**（iOS 增强 vs H5 无脑覆盖 =2）：
+    /// - none(0) → room(2)：普通房主/管理员禁言
+    /// - system(1) → both(3)：系统已禁言基础上再叠加房主禁言
+    /// - room(2) → room(2)：已房主禁言，重复触发无变化
+    /// - both(3) → both(3)：已双禁言，重复触发无变化
+    ///
+    /// **门禁**：调用方（NIMChatroomManager notification 分派）已判定"主播本人是禁言 target"，本方法不再校验
+    @MainActor
+    func applyGag() {
+        let next: WhoBlock
+        switch whoBlock {
+        case .none, .room:     next = .room
+        case .system, .both:   next = .both
+        }
+        if next != whoBlock {
+            logger.info("[B3] gag: whoBlock \(self.whoBlock.rawValue) → \(next.rawValue)")
+        }
+        whoBlock = next
+        isBlockUser = true
+    }
+
+    /// - Tag: applyUngag
+    /// 主播本人被解禁（对齐 H5 live.js:1015-1030 · ungagMember 三分支）：
+    /// - both(3)  → system(1)：仅解房主，保留系统禁言 → 仍禁言
+    /// - room(2)  → none(0)：全解 → 恢复发言
+    /// - system(1)→ system(1)：保持系统禁言（H5 case 1 语义等同 no-op）
+    /// - none(0)  → none(0)：无效 ungag
+    @MainActor
+    func applyUngag() {
+        let (nextWho, nextBlocked): (WhoBlock, Bool) = {
+            switch whoBlock {
+            case .both:   return (.system, true)    // 仅解房主留系统
+            case .room:   return (.none,   false)   // 全解
+            case .system: return (.system, true)    // 保持
+            case .none:   return (.none,   false)   // 无效
+            }
+        }()
+        if nextWho != whoBlock {
+            logger.info("[B3] ungag: whoBlock \(self.whoBlock.rawValue) → \(nextWho.rawValue)")
+        }
+        whoBlock = nextWho
+        isBlockUser = nextBlocked
     }
 
     /// living → ending → ended(endType=1)。LiveRoomView 点结束直播调用。
@@ -282,6 +343,10 @@ extension LiveStore {
         isWaitingReturnLive = false
         returnLiveCountdown = 0
         callState = 0
+        // v24（B3 M1 finding）：跨场次禁言态污染防守 —— A 场被禁言 endLive 后 whoBlock/isBlockUser
+        // 若不重置，B 场 attachLiving 直接进 .living 时输入框恒 disabled+"muted"，主播死锁无法发言
+        isBlockUser = false
+        whoBlock = .none
     }
 }
 

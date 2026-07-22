@@ -37,6 +37,8 @@ final class CommonGiftPanelStore: ObservableObject {
     @Published private(set) var count: Int = 1
     @Published private(set) var receiversSelection: Set<String>
     @Published private(set) var balanceValue: Int64?
+    /// refreshBalance 进行中标志（用户 tap 余额胶囊时右侧显示转圈；对齐 Footer.balanceView UX）
+    @Published private(set) var isRefreshingBalance: Bool = false
     /// dismiss 时判定"是否已完成用户 action"（instantSelect / confirm 后 / send sent 后）→ true 则 onDismiss 不触发
     private(set) var didCompleteAction: Bool = false
 
@@ -118,7 +120,12 @@ final class CommonGiftPanelStore: ObservableObject {
     /// - insufficientBalance 态用户完成充值后手动 refresh（本轮不做真充值页；下版本挂钩）
     func refreshBalance() async {
         guard let source = config.balance.source else { return }
-        self.balanceValue = await source.currentBalance()
+        // 标记进行中 → Footer.balanceView 右侧 ProgressView 显示；defer 兜底完成/取消都置 false
+        isRefreshingBalance = true
+        defer { isRefreshingBalance = false }
+        // 走真网络（refreshFromServer default 回退 currentBalance；派对房 override 调 API 拿最新 userDiamond）
+        // 之前只调 currentBalance() 返内部缓存 → 用户看不到实际变化 + 转圈瞬间闪过；改真拉才有 UX 反馈
+        self.balanceValue = await source.refreshFromServer()
     }
 
     // MARK: - Grid select / tab

@@ -21,9 +21,8 @@ import Foundation
 /// - I 期接代充时若后端 sysMsg 上送数字 99，需在 SystemMessageRouter 内按 context 双形态兜底
 ///
 /// **已知但不实现清单**（→ .knownButUnhandled，仅 logger.debug 不噪音）：
-/// - 132 / 133（虚拟来电，路线图明确不做）
 /// - 1007（派对房 legacy gift，新端一刀切忽略）
-/// - 派对房 F 期：1004 / 1014 / 1017 / 1018-1027 / 1049 / 1050-1052 / 1100-1112
+/// - 派对房 F 期：1052 是 CustomSystemNotification；其余聊天室扩展由 PartyMessageRouter 消费或降噪
 enum AttachType: Equatable {
 
     // MARK: - 合规/强制（B 已覆盖）
@@ -66,6 +65,8 @@ enum AttachType: Equatable {
     case forcedOffline            // 37 服务端主动踢下线（安卓 OFFLINE_MSG，触发 hasExceededCallLimit 检查）
     case privateCallEnterAnimation // 83 私 call 进场座驾动画
     case callRechargeReward       // 90 通话充值成功钻石奖励
+    case robotCallReward          // 132 机器人通话结算奖励（J）
+    case robotCallIncoming        // 133 机器人来电（J）
 
     // MARK: - 直播态扩展（H 礼物会话 / J 期补 UI）
 
@@ -86,7 +87,7 @@ enum AttachType: Equatable {
     case diamondBoxClaim       // 1032 瓜分
     case diamondBoxSettle      // 1033 结算
 
-    // MARK: - 派对房（E 已覆盖核心；F 期扩展走 .knownButUnhandled）
+    // MARK: - 派对房（E 已覆盖核心；1052 走系统通知，其余扩展按需接入）
     //
     // case 名对齐源码 `PartyAttachType` 实证（H 校验清单 §1.1.1 C 表早期描述错误）。
     // 派对房消息分发仍由 `PartyMessageRouter` 内部走 `PartyAttachType(rawValue:)` 业务侧；
@@ -97,6 +98,10 @@ enum AttachType: Equatable {
     case partyUpdateMedia          // 1008 麦克风/摄像头状态
     case partySeatUpdateList       // 1012 全量重拉麦位列表
     case partyProhibitMic          // 1015 禁麦 / 解禁
+    case partyTaskProgress         // 1022 主播周任务上麦时长
+    case partyTaskReward           // 1023 主播周任务自动发奖
+    case partyPrivateCallNotify    // 1029 派对房私 call 状态通知（F · calling/ended · 聊天室通道 · 安卓 PARTY_PRIVATE_CALL_NOTIFY；同值 GIFT_DOUBLED 靠 payload.status 字段辨识见 Sources/Party/Models/PartyPrivateCallNotify）
+    case partyLuckyNumberPersonalDialog // 1052 幸运数字中奖个人弹窗（CustomSystemNotification）
     case partyGiftCompressed       // 2049 派对房礼物（gzip）
     case partyInviteVideoSeat(subType: Int) // 1040-1048 视频位邀请 P2P 链 9 case
 
@@ -166,6 +171,8 @@ enum AttachType: Equatable {
         case .forcedOffline:              return "37"
         case .privateCallEnterAnimation:  return "83"
         case .callRechargeReward:         return "90"
+        case .robotCallReward:            return "132"
+        case .robotCallIncoming:          return "133"
         // 直播态扩展
         case .privateCallSwitchChange:    return "52"
         case .liveAnnouncement:           return "195"
@@ -185,6 +192,10 @@ enum AttachType: Equatable {
         case .partyUpdateMedia:      return "1008"
         case .partySeatUpdateList:   return "1012"
         case .partyProhibitMic:      return "1015"
+        case .partyTaskProgress:     return "1022"
+        case .partyTaskReward:       return "1023"
+        case .partyPrivateCallNotify: return "1029"
+        case .partyLuckyNumberPersonalDialog: return "1052"
         case .partyGiftCompressed:   return "2049"
         case .partyInviteVideoSeat(let sub): return "\(sub)"
         // 活动 / 任务 / 猜拳
@@ -212,12 +223,10 @@ enum AttachType: Equatable {
     /// 已知但不实现（log debug 不噪音）的数字 attachType。
     /// 来源：H 校验清单 §1.3 死代码规避清单 + spec §2.3 已知但不实现注释。
     private static let knownUnhandledInts: Set<Int> = [
-        // 路线图明确不做
-        132, 133,
         // 派对房 legacy gift
         1007,
         // 派对房 F 期扩展（1018-1027 + 1100-1112 由 range 兜底）
-        1004, 1014, 1017, 1049, 1050, 1051, 1052,
+        1004, 1014, 1017, 1049, 1050, 1051,
     ]
 
     init(raw: Any?) {
@@ -286,6 +295,8 @@ enum AttachType: Equatable {
         case 37:  return .forcedOffline
         case 83:  return .privateCallEnterAnimation
         case 90:  return .callRechargeReward
+        case 132: return .robotCallReward
+        case 133: return .robotCallIncoming
         // 直播态扩展
         case 52:  return .privateCallSwitchChange
         case 195: return .liveAnnouncement
@@ -305,6 +316,10 @@ enum AttachType: Equatable {
         case 1008: return .partyUpdateMedia
         case 1012: return .partySeatUpdateList
         case 1015: return .partyProhibitMic
+        case 1022: return .partyTaskProgress
+        case 1023: return .partyTaskReward
+        case 1029: return .partyPrivateCallNotify
+        case 1052: return .partyLuckyNumberPersonalDialog
         case 2049: return .partyGiftCompressed
         case 1040...1048: return .partyInviteVideoSeat(subType: n)
         // 活动 / 任务 / 猜拳

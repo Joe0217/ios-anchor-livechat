@@ -28,9 +28,10 @@ final class ContributionStore: ObservableObject {
     private let service: ContributionServiceProtocol
     private let anchorId: String
     private let roomId: String
-    private let pageSize: Int = 20
+    /// H5 首次直接请求 999 条，本端同样一次拉全，避免翻页导致历史记录缺失。
+    private let pageSize: Int = 999
 
-    init(service: ContributionServiceProtocol = ContributionServiceFakes(),
+    init(service: ContributionServiceProtocol = ContributionServiceReal(),
          anchorId: String, roomId: String) {
         self.service = service
         self.anchorId = anchorId

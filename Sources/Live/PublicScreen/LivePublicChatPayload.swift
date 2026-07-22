@@ -19,6 +19,16 @@ struct PublicChatMessage: Identifiable {
     let messageType: PublicChatMessageType
     /// v22（2026-07-10）：座驾图 URL（enterRoom / officialBoostEnter 场景专用）
     let itemSmallImg: String?
+    /// v24（B1 活跃大R）：大 R 徽章 + enterRoom 金色底
+    let isActiveTycoon: Bool
+    /// v24（B4 hi 气泡）：云信 fromAccid，MSG 半屏私聊时开对方 P2P 会话用
+    let senderYxAccId: String?
+    /// v24（B4 hi 气泡）：ext.userId，未来 @mention/名片卡定位用；String/Int 双兼容 decode 后统一 String
+    let senderUserId: String?
+    /// v24（B4 hi 气泡）：主播 @ 回复的对方昵称（ext.replyNick），非 nil 时公屏 anchor row 渲染 @ 格式
+    let replyToNick: String?
+    /// v24（B4 hi 气泡）：`fromAccid == self yxAccid`，主播自发消息不弹 hi 气泡
+    let isSelf: Bool
 
     init(text: String,
          isSystem: Bool,
@@ -28,7 +38,12 @@ struct PublicChatMessage: Identifiable {
          isHost: Bool = false,
          isVip: Bool = false,
          messageType: PublicChatMessageType = .regular,
-         itemSmallImg: String? = nil) {
+         itemSmallImg: String? = nil,
+         isActiveTycoon: Bool = false,
+         senderYxAccId: String? = nil,
+         senderUserId: String? = nil,
+         replyToNick: String? = nil,
+         isSelf: Bool = false) {
         self.text = text
         self.isSystem = isSystem
         self.senderNickname = senderNickname
@@ -38,5 +53,10 @@ struct PublicChatMessage: Identifiable {
         self.isVip = isVip
         self.messageType = messageType
         self.itemSmallImg = itemSmallImg
+        self.isActiveTycoon = isActiveTycoon
+        self.senderYxAccId = senderYxAccId
+        self.senderUserId = senderUserId
+        self.replyToNick = replyToNick
+        self.isSelf = isSelf
     }
 }

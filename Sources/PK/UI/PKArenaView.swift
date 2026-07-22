@@ -23,8 +23,9 @@ enum PKArenaLayout {
 struct PKArenaView: View {
     @ObservedObject var store: PKStore
     let agora: AgoraManager
+    /// 对手头像或昵称点击，由直播间宿主展示名片卡。
+    let onOpponentTap: (String) -> Void
 
-    @State private var isOpponentMuted: Bool = false
     /// PK 贡献榜 sheet 呈现 side（对齐 H5 pkBattleViewTop3Contributors.vue @click showMyRankList/showOpponentRankList）
     @State private var rankSheetSide: PKRankSide?
 
@@ -66,7 +67,16 @@ struct PKArenaView: View {
                 if let nickname = store.ctx?.oppositeNickname, !nickname.isEmpty {
                     HStack {
                         Spacer(minLength: 0)
-                        opponentNicknameChip(nickname: nickname)
+                        Button {
+                            if let opponentId = store.ctx?.oppositeUserId {
+                                onOpponentTap(String(opponentId))
+                            }
+                        } label: {
+                            opponentNicknameChip(nickname: nickname,
+                                                 avatarURL: store.ctx?.oppositeAvatar)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(Text(nickname))
                             // trailing padding = 0，胶囊右缘贴屏幕右边（对齐 H5 `inset-ie-0`）
                     }
                     // 胶囊 24pt 高 + 距视频底 8pt = 顶偏 32pt
@@ -85,10 +95,27 @@ struct PKArenaView: View {
                 }
                 .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
 
-                // 5) 惩罚开始 WIN/LOSE/DRAW 弹跳动画（居中于视频区）
+                // 5) 惩罚开始 WIN/LOSE/DRAW SVGA 动画（居中于视频区）
                 VStack {
-                    Spacer().frame(height: PKArenaLayout.topOffset + (PKArenaLayout.videoHeight - 105) / 2)
+                    Spacer().frame(height: PKArenaLayout.topOffset + (PKArenaLayout.videoHeight - 300) / 2)
                     PKBattleResultAnimation(store: store)
+                    Spacer(minLength: 0)
+                }
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+
+                // 6) PK 开始前 3-2-1 准备动画（`.inPK` 进入时首播，对齐 H5 pkBattleView
+                //    PreparingCountdownAnimation + PreparingUserInfoAnimation）
+                VStack {
+                    Spacer().frame(height: PKArenaLayout.topOffset + (PKArenaLayout.videoHeight - 320) / 2)
+                    PKPreparingAnimation(store: store)
+                    Spacer(minLength: 0)
+                }
+                .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+
+                // 7) PK 最后 5s 倒计时动画（`.inPK` 且 pkRemainingSeconds 首次进 [1,5] 触发）
+                VStack {
+                    Spacer().frame(height: PKArenaLayout.topOffset + (PKArenaLayout.videoHeight - 200) / 2)
+                    PKLast5sCountdownAnimation(store: store)
                     Spacer(minLength: 0)
                 }
                 .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
@@ -148,36 +175,27 @@ struct PKArenaView: View {
 
     private var opponentMuteButton: some View {
         Button {
-            isOpponentMuted.toggle()
-            // 2026-07-07 v6：接入真 API（原 TODO 消化）。PKStore.handleMute 内部已 guard state==.inPK；
-            // 非 PK 态点击 no-op 无副作用。API 失败已在 handleMute 内 catch logger.warning 兜底，UI 状态不回滚
-            Task { await store.handleMute(isOpponentMuted) }
+            Task { await store.toggleOpponentMute() }
         } label: {
-            Group {
-                if isOpponentMuted {
-                    Image("pkBattleMuteIcon")
-                        .resizable()
-                        .frame(width: 28, height: 28)
-                } else {
-                    Image(systemName: "speaker.wave.2.fill")
-                        .font(.system(size: 12))
-                        .foregroundColor(.white)
-                        .frame(width: 28, height: 28)
-                        .background(Color.black.opacity(0.4), in: Circle())
-                }
-            }
+            Image(systemName: store.isOpponentMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                .font(.system(size: 12))
+                .foregroundColor(.white)
+                .frame(width: 28, height: 28)
+                .background(Color.black.opacity(0.4), in: Circle())
+                .id(store.isOpponentMuted)
             .contentShape(Circle())
         }
-        .accessibilityLabel(Text(isOpponentMuted ? L10n.PK.opponentUnmute : L10n.PK.opponentMute))
+        .disabled(store.state != .inPK || store.isUpdatingOpponentMute)
+        .accessibilityLabel(Text(store.isOpponentMuted ? L10n.PK.opponentUnmute : L10n.PK.opponentMute))
     }
 
     // MARK: - 对手 nickname 胶囊
 
     /// 对齐 H5 pkBattleView.vue L354-367：`w-118 rounded-is-20 bg-black/40 p-4 backdrop-blur-10`
     /// LTR 下 `rounded-is-20` = 左半圆角 20pt（右侧接屏幕右边）
-    private func opponentNicknameChip(nickname: String) -> some View {
+    private func opponentNicknameChip(nickname: String, avatarURL: String?) -> some View {
         HStack(spacing: 6) {
-            AvatarView(urlString: nil, size: 24, kind: .user)
+            AvatarView(urlString: avatarURL, size: 24, kind: .user, disablesTap: true)
             Text(nickname)
                 .font(.system(size: 13))
                 .foregroundColor(.white)

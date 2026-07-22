@@ -26,6 +26,8 @@ struct LiveRoomInfo: Codable {
     let userId: Int?           // 主播 uid（与 rtcToken 绑定）
     let yxRoomId: Int?         // 云信聊天室 ID
     let hotScore: Int?
+    /// 私呼礼物未配置时 H5 不展示房内私呼开关。
+    let giftId: Int?
 }
 
 /// 直播开播相关接口（对应 H5 src/api/live）。请求头里的 loginToken 由 APIClient 自动附带。
@@ -123,7 +125,8 @@ enum LiveService {
             rtcToken: tokenRes.rtcToken,
             userId: intValue(merged["userId"]),
             yxRoomId: intValue(merged["yxRoomId"]),
-            hotScore: intValue(merged["hotScore"])
+            hotScore: intValue(merged["hotScore"]),
+            giftId: intValue(merged["giftId"])
         )
     }
 
