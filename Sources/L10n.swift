@@ -344,6 +344,16 @@ enum L10n {
         static var currencyDiamondExchangeSuccessFormat: String { localize("party.currency.diamondExchangeSuccessFormat", comment: "Gem to diamond exchange success, parameter: amount") }
         static var currencyCoinExchangeSuccess: String { localize("party.currency.coinExchangeSuccess", comment: "Gem to coin exchange success") }
         static var currencyExchangeFailed: String { localize("party.currency.exchangeFailed", comment: "Currency exchange failed") }
+        static var currencyRecord: String { localize("party.currency.record", comment: "Currency change records") }
+        static var currencyLoadMore: String { localize("party.currency.loadMore", comment: "Load more currency records") }
+        static var currencyRecordEmpty: String { localize("party.currency.recordEmpty", comment: "No currency records") }
+        static var currencyRecordLoadFailed: String { localize("party.currency.recordLoadFailed", comment: "Currency records failed to load") }
+        static var currencyExplainTitle: String { localize("party.currency.explainTitle", comment: "Gems explanation heading") }
+        static var currencyGemHowToGet: String { localize("party.currency.gemHowToGet", comment: "How to get Gems heading") }
+        static var currencyGemHowToGetDetail: String { localize("party.currency.gemHowToGetDetail", comment: "How to get Gems detail") }
+        static var currencyGemUse: String { localize("party.currency.gemUse", comment: "Gems use heading") }
+        static var currencyGemUseCoinDetail: String { localize("party.currency.gemUseCoinDetail", comment: "Gems exchange to coins note") }
+        static var currencyGemUseDiamondDetail: String { localize("party.currency.gemUseDiamondDetail", comment: "Gems exchange to diamonds note") }
         /// F-spec 关闭态弹 gift panel 时的 confirm 按钮标签："Open private call"
         static var privateCallOpenConfirmLabel: String { localize("party.privateCall.openConfirmLabel", comment: "关闭态选礼物 confirm 按钮：Open private call") }
         static var toolComingSoon: String { localize("party.tool.comingSoon", comment: "stub 项 toast") }

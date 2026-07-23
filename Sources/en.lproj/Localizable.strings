@@ -1120,6 +1120,16 @@
 "party.currency.diamondExchangeSuccessFormat" = "%lld Gems exchanged for Diamonds";
 "party.currency.coinExchangeSuccess"     = "Gems exchanged for Coins";
 "party.currency.exchangeFailed"          = "Exchange failed";
+"party.currency.record"                  = "Record";
+"party.currency.loadMore"                = "Load more";
+"party.currency.recordEmpty"             = "No records yet";
+"party.currency.recordLoadFailed"        = "Unable to load records";
+"party.currency.explainTitle"            = "Explain:";
+"party.currency.gemHowToGet"             = "How to get Gem";
+"party.currency.gemHowToGetDetail"       = "Get gift from party room";
+"party.currency.gemUse"                  = "The use of Gem";
+"party.currency.gemUseCoinDetail"        = "Note: Gems can be exchanged for coins, which can be used for withdrawal.";
+"party.currency.gemUseDiamondDetail"     = "Gem can be exchange for diamond for spending";
 "party.privateCall.openConfirmLabel"     = "Open private call";
 "party.tool.comingSoon"                  = "Coming soon";
 // F-spec §5.1 PartyPrivateCallSettingSheet

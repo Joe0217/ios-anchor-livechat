@@ -384,6 +384,8 @@ struct MainTabView: View {
                         case .bigR:           WorkComingSoonView(title: L10n.toolBigR)
                         case .props:          PropsMainView()
                         case .propsRules:     PropsRulesView()
+                        case .currencyExchange(let tab):
+                            PartyCurrencyExchangeView(initialTab: tab)
                         case .liveResult(let begin, let end, let endType):
                             LiveResultView(range: (begin, end), endType: endType, hostPath: $homePath)
                         }
@@ -507,6 +509,8 @@ struct MainTabView: View {
                                 PropsMainView()
                             case .propsRules:
                                 PropsRulesView()
+                            case .currencyExchange(let tab):
+                                PartyCurrencyExchangeView(initialTab: tab)
                             case .liveResult(let begin, let end, let endType):
                                 LiveResultView(range: (begin, end), endType: endType, hostPath: $workPath)
                             }

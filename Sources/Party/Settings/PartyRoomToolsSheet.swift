@@ -20,8 +20,6 @@ enum PartyRoomToolSheetKind: String, Identifiable {
     // F-spec Party Call：入口在派对房主 view 的浮动圆形按钮（非 tools sheet），
     // tap 打开时 activeRoomTool = .privateCall 挂 CommonGiftPanel.callGate sheet（复用直播设置同款）
     case privateCall
-    /// 房主资产账户：宝石兑换钻石或金币。
-    case currencyExchange
     var id: String { rawValue }
 }
 
@@ -37,8 +35,6 @@ enum PartyRoomToolSheetKind: String, Identifiable {
 struct PartyRoomToolsSheet: View {
     /// 房主 or 平台管理员判定（决定 Owner-only 项可见）
     let isOwner: Bool
-    /// 收益资产是账号私有资源，必须是当前房间真实房主，不能复用平台管理员提权后的 `isOwner`。
-    let isSelfRoomOwner: Bool
     /// 平台管理员（非房主）判定（MC Seat 也允许）
     let isPlatformAdmin: Bool
     let onTapSettings: () -> Void
@@ -58,8 +54,6 @@ struct PartyRoomToolsSheet: View {
     let onTapLockRoom: () -> Void
     /// E-spec MC Seat wire：房主/平台管理员 tap MC Seat → 关本 sheet + 350ms 后打开 activeRoomTool = .mcSeat
     let onTapMCSeat: () -> Void
-    /// 房币入口仅归真实房主，避免房管误操作个人资产账户。
-    let onTapCurrencyExchange: () -> Void
     /// 其他 stub 项 tap 通用回调（View 可 toast "Coming soon"）
     let onTapStub: (String) -> Void
 
@@ -122,11 +116,6 @@ struct PartyRoomToolsSheet: View {
                             isOn: isMCSeatEnabled
                         ) {
                             onTapMCSeat()
-                        }
-                    }
-                    if isSelfRoomOwner {
-                        toolItem(icon: "arrow.left.arrow.right.circle.fill", label: L10n.Party.toolCurrencyExchange) {
-                            onTapCurrencyExchange()
                         }
                     }
                     // F-spec Party Call：入口在派对房主 view 浮动按钮（非 tools sheet），此处不放 icon

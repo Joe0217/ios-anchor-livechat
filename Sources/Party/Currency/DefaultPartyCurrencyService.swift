@@ -29,4 +29,28 @@ struct DefaultPartyCurrencyService: PartyCurrencyService {
             body: ["gemNum": gems]
         )
     }
+
+    func fetchRecords(
+        tab: PartyCurrencyWalletTab,
+        page: Int,
+        pageSize: Int,
+        offset: String?
+    ) async throws -> [PartyCurrencyRecord] {
+        let path: String
+        let body: [String: Any]
+
+        switch tab {
+        case .diamonds:
+            // Android FlowRecordActivity: diamond/flow/record uses numbered pages.
+            path = "\(pathPrefix)/diamond/flow/record"
+            body = ["pageNum": page, "pageSize": pageSize]
+        case .gems:
+            // H5 gems/records.vue: the next page starts from the last record id.
+            path = "\(pathPrefix)/gem/query/exchange/record"
+            body = ["offset": offset ?? NSNull(), "pageSize": pageSize]
+        }
+
+        let data = try await PartyAPIClient.shared.post(path, body: body)
+        return try PartyCurrencyRecord.decodeList(from: data, page: page)
+    }
 }

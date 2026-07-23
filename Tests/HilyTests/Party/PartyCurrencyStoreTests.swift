@@ -54,6 +54,18 @@ final class PartyCurrencyStoreTests: XCTestCase {
 
         XCTAssertEqual(store.amountText, "12")
     }
+
+    func test_recordDecode_acceptsH5RecordFields() throws {
+        let data = Data(#"[{"id":"r1","remark":"Gift income","createTime":"1720000000000","costNum":"12.5"}]"#.utf8)
+
+        let records = try PartyCurrencyRecord.decodeList(from: data, page: 1)
+
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records[0].id, "r1")
+        XCTAssertEqual(records[0].remark, "Gift income")
+        XCTAssertEqual(records[0].amount, Decimal(string: "12.5"))
+        XCTAssertEqual(records[0].timestampMilliseconds, 1_720_000_000_000)
+    }
 }
 
 private final class FakePartyCurrencyService: PartyCurrencyService, @unchecked Sendable {
@@ -76,5 +88,14 @@ private final class FakePartyCurrencyService: PartyCurrencyService, @unchecked S
 
     func exchange(gems: Int64, target: PartyCurrencyTarget) async throws {
         exchangeCalls.append(ExchangeCall(gems: gems, target: target))
+    }
+
+    func fetchRecords(
+        tab: PartyCurrencyWalletTab,
+        page: Int,
+        pageSize: Int,
+        offset: String?
+    ) async throws -> [PartyCurrencyRecord] {
+        []
     }
 }

@@ -114,3 +114,131 @@ final class PartyCurrencyStore: ObservableObject {
         }
     }
 }
+
+/// 独立的流水分页状态，避免查看流水干扰余额刷新或兑换中的状态。
+@MainActor
+final class PartyCurrencyRecordStore: ObservableObject {
+    @Published private(set) var records: [PartyCurrencyRecord] = []
+    @Published private(set) var isLoading = false
+    @Published private(set) var didFailLoading = false
+    @Published private(set) var hasMore = true
+
+    private let service: PartyCurrencyService
+    private let pageSize = 20
+    private var activeTab: PartyCurrencyWalletTab?
+    private var requestID = UUID()
+    private var cache: [PartyCurrencyWalletTab: CachedState] = [:]
+
+    private struct CachedState {
+        var records: [PartyCurrencyRecord] = []
+        var hasMore = true
+        var nextPage = 1
+        var nextOffset: String?
+        var didLoad = false
+        var didFailLoading = false
+    }
+
+    init(service: PartyCurrencyService) {
+        self.service = service
+    }
+
+    /// 每个资产 tab 首次进入时拉取；同页切换恢复内存缓存，不重复请求。
+    func activate(tab: PartyCurrencyWalletTab) async {
+        guard activeTab != tab else { return }
+        requestID = UUID()
+        isLoading = false
+        activeTab = tab
+        let state = cache[tab] ?? CachedState()
+        apply(state)
+        guard !state.didLoad else { return }
+        await loadMore(tab: tab)
+    }
+
+    func refresh(tab: PartyCurrencyWalletTab) async {
+        requestID = UUID()
+        isLoading = false
+        activeTab = tab
+        // 下拉刷新保留已展示的流水；新首页成功后再在 loadMore 中原子替换。
+        var state = cache[tab] ?? CachedState()
+        state.hasMore = true
+        state.nextPage = 1
+        state.nextOffset = nil
+        state.didFailLoading = false
+        cache[tab] = state
+        apply(state)
+        await loadMore(tab: tab)
+    }
+
+    /// 流水页从导航栈移除时调用，避免下次进入看到旧余额变动。
+    func clearCache() {
+        requestID = UUID()
+        isLoading = false
+        activeTab = nil
+        cache.removeAll()
+        records = []
+        hasMore = true
+        didFailLoading = false
+    }
+
+    func loadMore(tab: PartyCurrencyWalletTab) async {
+        guard activeTab == tab, !isLoading else { return }
+        var state = cache[tab] ?? CachedState()
+        guard state.hasMore else { return }
+
+        let id = UUID()
+        requestID = id
+        isLoading = true
+        didFailLoading = false
+        defer {
+            if requestID == id {
+                isLoading = false
+            }
+        }
+
+        do {
+            let loaded = try await service.fetchRecords(
+                tab: tab,
+                page: state.nextPage,
+                pageSize: pageSize,
+                offset: state.nextOffset
+            )
+            guard requestID == id, activeTab == tab else { return }
+
+            let deduplicated = uniqueRecords(loaded)
+            if state.nextPage == 1 {
+                // 流水是追加型账本；刷新首页异常返回空数组时不抹掉已显示记录。
+                if !deduplicated.isEmpty || state.records.isEmpty {
+                    state.records = deduplicated
+                }
+            } else {
+                let existingIDs = Set(state.records.map(\.id))
+                state.records.append(contentsOf: deduplicated.filter { !existingIDs.contains($0.id) })
+            }
+            state.nextPage += 1
+            state.nextOffset = loaded.last?.cursor
+            state.hasMore = loaded.count == pageSize && (tab == .diamonds || state.nextOffset != nil)
+            state.didLoad = true
+            state.didFailLoading = false
+            cache[tab] = state
+            apply(state)
+        } catch is CancellationError {
+            return
+        } catch {
+            guard requestID == id else { return }
+            state.didFailLoading = true
+            cache[tab] = state
+            apply(state)
+        }
+    }
+
+    private func apply(_ state: CachedState) {
+        records = state.records
+        hasMore = state.hasMore
+        didFailLoading = state.didFailLoading
+    }
+
+    private func uniqueRecords(_ records: [PartyCurrencyRecord]) -> [PartyCurrencyRecord] {
+        var ids = Set<String>()
+        return records.filter { ids.insert($0.id).inserted }
+    }
+}

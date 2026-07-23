@@ -1512,7 +1512,6 @@ struct PartyRoomView: View {
         case .tools:
             PartyRoomToolsSheet(
                 isOwner: store.selfRole == .owner,
-                isSelfRoomOwner: store.isSelfRoomOwner,
                 // 平台超管在 selfRole 层已提权为 .owner（PartyStore.selfRole 首判 isPlatformAdmin），此参数保留
                 // 为语义冗余安全网 —— MC Seat `if isOwner || isPlatformAdmin` 条件下双重命中
                 isPlatformAdmin: store.roomInfo?.isPlatformAdmin ?? false,
@@ -1585,13 +1584,6 @@ struct PartyRoomView: View {
                         }
                     }
                 },
-                onTapCurrencyExchange: {
-                    Task { @MainActor in
-                        activeRoomTool = nil
-                        try? await Task.sleep(nanoseconds: 350_000_000)
-                        activeRoomTool = .currencyExchange
-                    }
-                },
                 onTapStub: { label in
                     // 关 sheet + 顶部 toast
                     Task { @MainActor in
@@ -1624,11 +1616,6 @@ struct PartyRoomView: View {
                         activeRoomTool = nil
                     }
                 )
-            }
-            .preferredColorScheme(.dark)
-        case .currencyExchange:
-            NavigationStack {
-                PartyCurrencyExchangeView()
             }
             .preferredColorScheme(.dark)
         case .blocklist:

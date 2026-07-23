@@ -1169,6 +1169,16 @@
 "party.currency.diamondExchangeSuccessFormat" = "%lld Mücevher Elmasa dönüştürüldü";
 "party.currency.coinExchangeSuccess"     = "Mücevher Jetona dönüştürüldü";
 "party.currency.exchangeFailed"          = "Dönüştürme başarısız";
+"party.currency.record"                  = "Kayıt";
+"party.currency.loadMore"                = "Daha fazla yükle";
+"party.currency.recordEmpty"             = "Henüz kayıt yok";
+"party.currency.recordLoadFailed"        = "Kayıtlar yüklenemedi";
+"party.currency.explainTitle"            = "Açıklama:";
+"party.currency.gemHowToGet"             = "Mücevher nasıl alınır";
+"party.currency.gemHowToGetDetail"       = "Party odasından hediye alın";
+"party.currency.gemUse"                  = "Mücevherin kullanımı";
+"party.currency.gemUseCoinDetail"        = "Not: Mücevherler, para çekmek için kullanılabilen jetonlara dönüştürülebilir.";
+"party.currency.gemUseDiamondDetail"     = "Mücevherler harcama için elmasa dönüştürülebilir";
 "party.privateCall.openConfirmLabel"     = "Özel aramayı aç";
 "party.tool.comingSoon"                  = "Yakında";
 // F-spec §5.1 Parti Araması Ayarları

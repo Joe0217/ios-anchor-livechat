@@ -21,7 +21,9 @@ struct WorkView: View {
             ScrollView {
                 VStack(spacing: Theme.Metric.sectionSpacing) {
                     WeeklyLevelHeader(vm: vm)
-                    LiveOverviewCardsRow(vm: vm)
+                    LiveOverviewCardsRow(vm: vm) { tab in
+                        path.append(WorkRoute.currencyExchange(tab: tab))
+                    }
                     StatCardsRow(vm: vm)
                     TodayIncomeCard(vm: vm)
                     ToolsSection(showNewbie: vm.showNewbie, showBigR: vm.showBigR)
@@ -221,6 +223,7 @@ enum WorkRoute: Hashable {
     case bigR               // J 里程碑：Star User 大 R 名单
     case props              // H · Props 虚拟道具主背包页（对齐 H5 /virtualProps）
     case propsRules         // H · Props FAQ 规则页（对齐 H5 /liveRule?type=2）
+    case currencyExchange(tab: PartyCurrencyWalletTab)
     /// 直播结果页（B spec v7 从 fullScreenCover 改为 push 页面；LiveRoomView state=.ended 触发切 tab + path 重建）。
     /// 关联字段：begin/endTimestamp（毫秒）+ endType（强制下播原因；nil 表示用户主动 endLive）
     case liveResult(begin: Int64, end: Int64, endType: Int?)

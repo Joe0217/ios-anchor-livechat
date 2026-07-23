@@ -12,6 +12,7 @@ import SwiftUI
 /// LazyVGrid 动态列数（4 卡 columns=2 → 3 卡 columns=3 单行等宽，视觉平衡）。
 struct LiveOverviewCardsRow: View {
     @ObservedObject var vm: WorkViewModel
+    let onCurrencyTap: (PartyCurrencyWalletTab) -> Void
     /// P 项目权限管理：观察 canCall 决定是否显示 Calls Today 卡
     @ObservedObject private var permission = SelfPermissionBridge.shared
 
@@ -21,6 +22,7 @@ struct LiveOverviewCardsRow: View {
         let number: String
         let numberColor: Color
         let label: String
+        let currencyTab: PartyCurrencyWalletTab?
     }
 
     private var cards: [CardData] {
@@ -30,23 +32,27 @@ struct LiveOverviewCardsRow: View {
                                 icon: "callsToday",
                                 number: "\(vm.dailyCalls)",
                                 numberColor: Color(hex: 0xFA06F4),
-                                label: L10n.workCallsToday))
+                                label: L10n.workCallsToday,
+                                currencyTab: nil))
         }
         arr.append(CardData(id: "coins",
                             icon: "coins",
                             number: "\(vm.weeklyCoins)",
                             numberColor: Color(hex: 0xF9991A),
-                            label: L10n.workCoins))
+                            label: L10n.workCoins,
+                            currencyTab: nil))
         arr.append(CardData(id: "diamonds",
                             icon: "diamonds",
                             number: "\(vm.walletDiamonds)",
                             numberColor: Color(hex: 0xF640DC),
-                            label: L10n.workDiamonds))
+                            label: L10n.workDiamonds,
+                            currencyTab: .diamonds))
         arr.append(CardData(id: "gems",
                             icon: "gems",
                             number: "\(vm.walletGems)",
                             numberColor: Color(hex: 0x3A8AE0),
-                            label: L10n.workGems))
+                            label: L10n.workGems,
+                            currencyTab: .gems))
         return arr
     }
 
@@ -60,10 +66,23 @@ struct LiveOverviewCardsRow: View {
     var body: some View {
         LazyVGrid(columns: gridColumns, spacing: Theme.Metric.statCardGap) {
             ForEach(cards) { card in
-                LiveOverviewCard(icon: card.icon,
-                                 number: card.number,
-                                 numberColor: card.numberColor,
-                                 label: card.label)
+                if let tab = card.currencyTab {
+                    Button {
+                        onCurrencyTap(tab)
+                    } label: {
+                        LiveOverviewCard(icon: card.icon,
+                                         number: card.number,
+                                         numberColor: card.numberColor,
+                                         label: card.label)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint(L10n.Party.currencyExchangeTitle)
+                } else {
+                    LiveOverviewCard(icon: card.icon,
+                                     number: card.number,
+                                     numberColor: card.numberColor,
+                                     label: card.label)
+                }
             }
         }
     }

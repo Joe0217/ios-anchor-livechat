@@ -1169,6 +1169,16 @@
 "party.currency.diamondExchangeSuccessFormat" = "تم تحويل %lld جوهرة إلى ألماس";
 "party.currency.coinExchangeSuccess"     = "تم تحويل الجواهر إلى عملات";
 "party.currency.exchangeFailed"          = "فشل التحويل";
+"party.currency.record"                  = "السجل";
+"party.currency.loadMore"                = "تحميل المزيد";
+"party.currency.recordEmpty"             = "لا توجد سجلات بعد";
+"party.currency.recordLoadFailed"        = "تعذر تحميل السجلات";
+"party.currency.explainTitle"            = "توضيح:";
+"party.currency.gemHowToGet"             = "كيفية الحصول على الجواهر";
+"party.currency.gemHowToGetDetail"       = "احصل على هدايا من غرفة Party";
+"party.currency.gemUse"                  = "استخدام الجواهر";
+"party.currency.gemUseCoinDetail"        = "ملاحظة: يمكن تحويل الجواهر إلى عملات يمكن استخدامها للسحب.";
+"party.currency.gemUseDiamondDetail"     = "يمكن تحويل الجواهر إلى ألماس للإنفاق";
 "party.privateCall.openConfirmLabel"     = "فتح المكالمة الخاصة";
 "party.tool.comingSoon"                  = "قريبًا";
 // F-spec §5.1 إعدادات مكالمة الحفلة

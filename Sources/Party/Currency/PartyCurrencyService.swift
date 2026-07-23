@@ -4,4 +4,10 @@ import Foundation
 protocol PartyCurrencyService: Sendable {
     func fetchBalance() async throws -> PartyCurrencyBalance
     func exchange(gems: Int64, target: PartyCurrencyTarget) async throws
+    func fetchRecords(
+        tab: PartyCurrencyWalletTab,
+        page: Int,
+        pageSize: Int,
+        offset: String?
+    ) async throws -> [PartyCurrencyRecord]
 }
