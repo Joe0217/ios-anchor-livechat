@@ -115,6 +115,9 @@ struct UserCardServiceReal: UserCardServiceProtocol {
         let headwearUrl = (dict["headwear"] as? String)
                        ?? (dict["headFrame"] as? String)
                        ?? (dict["headwearUrl"] as? String)
+        // H5 在资料卡背景上叠加 `cardFrame` 透明 PNG；兼容同义字段以免后端命名调整后丢失装饰。
+        let cardFrameUrl = ((dict["cardFrame"] as? String) ?? (dict["cardFrameUrl"] as? String))
+            .flatMap { $0.isEmpty ? nil : $0 }
         let yxAccid = dict["yxAccid"] as? String
 
         // Gender:H5 template `isAnchor` 时用 female webp,否则 male webp — 我们不管这个,
@@ -215,6 +218,7 @@ struct UserCardServiceReal: UserCardServiceProtocol {
             nickname: nickname,
             avatarUrl: avatarUrl,
             headwearUrl: headwearUrl,
+            cardFrameUrl: cardFrameUrl,
             yxAccid: yxAccid,
             gender: gender,
             age: age,
@@ -261,6 +265,7 @@ struct UserCardServiceFakes: UserCardServiceProtocol {
             nickname: "User_\(userId)",
             avatarUrl: nil,
             headwearUrl: nil,
+            cardFrameUrl: nil,
             yxAccid: "yx_\(userId)",
             gender: .female,
             age: 24,

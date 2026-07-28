@@ -347,7 +347,18 @@ struct ChatDetailView: View {
         // onMessageTap 传 nil:防"聊天页 → 名片卡 → Message → 聊天页" 循环反调,按钮自动 disabled
         .userCardSheet(
             item: Binding(
-                get: { userCardUserId.map { UserCardPresentation(userId: $0) } },
+                get: {
+                    userCardUserId.map { userId in
+                        let isPeer = peerUserId.map(String.init) == userId
+                        return UserCardPresentation(
+                            preview: UserCardPreview(
+                                userId: userId,
+                                nickname: isPeer ? peerNickname : nil,
+                                avatarUrl: isPeer ? peerAvatarURL?.absoluteString : nil
+                            )
+                        )
+                    }
+                },
                 set: { userCardUserId = $0?.userId }
             ),
             onMessageTap: nil
@@ -434,7 +445,11 @@ struct ChatDetailView: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 44)
-        .background(ChatPalette.navGradient)
+        .background {
+            if !isPopupMode {
+                ChatPalette.navGradient
+            }
+        }
     }
 
     // H-3 spec §1.5.5：nav callButton private var 已移除；handleTapCall 由 BottomActionBar tap 触发

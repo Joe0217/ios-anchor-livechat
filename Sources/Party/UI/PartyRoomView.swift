@@ -80,6 +80,8 @@ struct PartyRoomView: View {
     /// v12：消息未读徽章（对齐 [swiftui-keepalive-publisher-isolation] 复用 Live 侧 bridge pattern）
     @StateObject private var unreadBridge = MessageEntryUnreadBridge()
     /// P2-10：sortedSeats 缓存
+    /// 名片卡 Message → 半屏私聊；挂在 PartyRoomView 顶层避免与房间内其他 sheet 竞争。
+    @State private var chatSheetPeerYxAccid: String? = nil
     @State private var sortedSeatsCache: [PartyRoomSeat] = []
     /// 聊天区 tab（视觉状态本地维护；MVP 阶段 All/Chat/Gift 共用同一消息列表，
     /// 实际按 kind 过滤留待 F 期在 PartyMessageListView 内实现）
@@ -95,6 +97,8 @@ struct PartyRoomView: View {
     /// H-5：礼物面板 sheet 显隐（点底部礼物 icon 触发；对齐 H5 party-gift-popup.vue showPartyGiftPopup）
     @State private var showGiftPanel: Bool = false
     /// H-5：送礼成功 toast（sheet 内触发；主 body overlay 显示避免被 sheet 遮挡）
+    /// 麦位点击时已有的用户资料；目标切换或关闭时通过 userId 对齐，避免旧资料串到新名片卡。
+    @State private var userCardPreview: UserCardPreview? = nil
     @State private var giftSentToast: String? = nil
     /// F 里程碑（2026-07-17）：表情面板 sheet 显隐（对齐 H5 party-expression-popup.vue showEmojiPopup）
     @State private var showExpressionPanel: Bool = false
@@ -156,6 +160,10 @@ struct PartyRoomView: View {
             // 隐藏 nav bar：Party 房是全屏视觉铺满自定义顶栏，无系统 nav bar。
             // 保留 navigationBarBackButtonHidden 副作用禁 interactive pop（对齐 [default-swipe-back-on-push-pages] 业务态防误退例外）。
             .navigationBarBackButtonHidden(true)
+            .chatDetailBottomSheet(
+                peer: $chatSheetPeerYxAccid,
+                selfYxAccId: SessionStore.shared.user?.yxAccid ?? ""
+            )
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showSettings) {
                 settingsSheet.giftPanelSheetBackground()
@@ -297,10 +305,44 @@ struct PartyRoomView: View {
             // partyAdminContext:派对房 owner/admin 场景下嵌 admin action row
             .userCardSheet(
                 item: Binding(
-                    get: { userCardForUserId.map { UserCardPresentation(userId: $0) } },
-                    set: { userCardForUserId = $0?.userId }
+                    get: {
+                        userCardForUserId.map {
+                            UserCardPresentation(
+                                userId: $0,
+                                preview: userCardPreview?.userId == $0 ? userCardPreview : nil
+                            )
+                        }
+                    },
+                    set: {
+                        userCardForUserId = $0?.userId
+                        if $0 == nil { userCardPreview = nil }
+                    }
                 ),
-                onSendGiftTap: { _ in
+                onMessageTap: { _, yxAccid in
+                    guard let yxAccid, !yxAccid.isEmpty else { return }
+                    // 对齐 H5 直播名片的 openTalkPopup：关闭名片，再由顶层挂载半屏私聊。
+                    userCardForUserId = nil
+                    userCardPreview = nil
+                    DispatchQueue.main.async {
+                        chatSheetPeerYxAccid = yxAccid
+                    }
+                },
+                isPartyRoom: true,
+                onSendGiftTap: { info in
+                    let seatMatch = store.seatList.first {
+                        $0.yxAccid == info.yxAccid || $0.userId == info.userId
+                    }
+                    guard let yxAccid = info.yxAccid ?? seatMatch?.yxAccid,
+                          !yxAccid.isEmpty,
+                          yxAccid != "0" else {
+                        return
+                    }
+                    giftRecipientOverride = ReceiverItem(
+                        id: yxAccid,
+                        avatarURL: (info.avatarUrl ?? seatMatch?.avatar).flatMap(URL.init(string:)),
+                        seatIndex: seatMatch?.seatIndex
+                    )
+                    giftRecipientSelection.replace(with: [yxAccid])
                     // 先关名片卡再拉礼物面板;延迟 0.3s 避免同帧 dismiss+present 冲突(系统 sheet)
                     userCardForUserId = nil
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -310,7 +352,10 @@ struct PartyRoomView: View {
                 partyAdminContext: partyAdminContextForCard
             )
             // 头像 tap 内置分派：party 房中 → 弹名片卡（走 userCardForUserId binding）
-            .avatarUserCardPresenter { uid in userCardForUserId = uid }
+            .avatarUserCardPresenter { uid in
+                userCardPreview = nil
+                userCardForUserId = uid
+            }
             // v15：已在麦位点空位 → 切麦确认（对齐 H5 EnterSwitchPopup）
             .confirmationDialog(
                 L10n.PartyRoom.switchSeatTitle,
@@ -1397,6 +1442,7 @@ struct PartyRoomView: View {
                 Task { await store.requestLockSeat(seatIndex: idx, lock: !locked) }
             }
             // H5 `changeMC`：从空 MC 位的管理菜单打开 MC 设置页，而不是直接改当前位。
+            userCardPreview = seat.userCardPreview
             // 当前 iOS 的 MC API 权限与顶部工具入口一致，仅房主/平台超管可配置。
             if seat.isMCSeat, store.selfRole == .owner {
                 Button(L10n.Party.mcSeatChange) {

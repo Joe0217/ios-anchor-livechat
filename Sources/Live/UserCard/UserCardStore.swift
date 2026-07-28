@@ -19,7 +19,7 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "UserCar
 final class UserCardStore: ObservableObject {
     enum LoadState: Equatable {
         case idle
-        case loading
+        case loading(UserCardPreview?)
         case loaded(UserCardInfo)
         case error(String)
     }
@@ -35,15 +35,18 @@ final class UserCardStore: ObservableObject {
 
     private let service: UserCardServiceProtocol
     private let userId: String
+    private let preview: UserCardPreview?
     /// 主播自身是否正在直播中,派生 int 传给 blockUser API(H5 `appStore.isLiving ? 1 : 0`)
     private let isLiveProvider: @MainActor () -> Int
 
     init(userId: String,
+         preview: UserCardPreview? = nil,
          service: UserCardServiceProtocol = UserCardServiceReal(),
          isLiveProvider: @MainActor @escaping () -> Int = {
              LiveStore.shared.state == .living ? 1 : 0
          }) {
         self.userId = userId
+        self.preview = preview
         self.service = service
         self.isLiveProvider = isLiveProvider
     }
@@ -65,7 +68,7 @@ final class UserCardStore: ObservableObject {
     func retry() { Task { await load() } }
 
     private func load() async {
-        state = .loading
+        state = .loading(preview)
         do {
             let info = try await service.fetch(userId: userId)
             state = .loaded(info)
@@ -127,7 +130,8 @@ final class UserCardStore: ObservableObject {
         UserCardInfo(
             userId: info.userId, userType: info.userType,
             nickname: info.nickname, avatarUrl: info.avatarUrl,
-            headwearUrl: info.headwearUrl, yxAccid: info.yxAccid,
+            headwearUrl: info.headwearUrl, cardFrameUrl: info.cardFrameUrl,
+            yxAccid: info.yxAccid,
             gender: info.gender, age: info.age, countryEmoji: info.countryEmoji,
             level: info.level, levelName: info.levelName, isVip: info.isVip,
             followerCount: max(0, info.followerCount + delta),
@@ -136,6 +140,7 @@ final class UserCardStore: ObservableObject {
             giftWalls: info.giftWalls,
             isBlocked: info.isBlocked,
             isFollowed: info.isFollowed,
+            isActiveTycoon: info.isActiveTycoon,
             roomRoleType: info.roomRoleType
         )
     }

@@ -65,13 +65,17 @@ struct AudienceLiveRoomView: View {
             ))
             .userCardSheet(
                 item: Binding(
-                    get: { userCardUserId.map(UserCardPresentation.init(userId:)) },
+                    get: { userCardUserId.map { UserCardPresentation(userId: $0) } },
                     set: { userCardUserId = $0?.userId }
                 ),
                 onAvatarTap: openUserProfileFromCard,
                 onMessageTap: { _, yxAccid in
                     guard let yxAccid, !yxAccid.isEmpty else { return }
-                    chatSheetPeerYxAccId = yxAccid
+                    // 与主播端 H5 的 openTalkPopup 一致：关闭名片卡后展示半屏私聊。
+                    userCardUserId = nil
+                    DispatchQueue.main.async {
+                        chatSheetPeerYxAccId = yxAccid
+                    }
                 }
             )
             .avatarUserCardPresenter { userCardUserId = $0 }

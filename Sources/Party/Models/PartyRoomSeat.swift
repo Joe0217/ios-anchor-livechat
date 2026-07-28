@@ -220,3 +220,17 @@ struct PartyRoomSeat: Codable, Equatable, Identifiable {
     /// 改用业务键 seatIndex（麦位 1-13 唯一），nil 退化到 -1（极端情况，不影响生产）。
     var stableId: Int { seatIndex ?? -1 }
 }
+
+extension PartyRoomSeat {
+    /// 麦位列表已经给出的身份资料，用于名片卡详情加载期间的首屏。
+    var userCardPreview: UserCardPreview? {
+        guard let userId, !userId.isEmpty else { return nil }
+        return UserCardPreview(
+            userId: userId,
+            nickname: nickname,
+            avatarUrl: avatar,
+            headwearUrl: headFrame,
+            userType: userType
+        )
+    }
+}

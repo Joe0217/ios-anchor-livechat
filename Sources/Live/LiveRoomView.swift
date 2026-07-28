@@ -241,6 +241,7 @@ struct LiveRoomView: View {
             showEffectSwitchPopup: $showEffectSwitchPopup,
             showAnnouncementPopup: $showAnnouncementPopup,
             userCardUserId: $userCardUserId,
+            chatSheetPeerYxAccid: $chatSheetPeerYxAccid,
             showGiftPicker: $showGiftPicker,
             roomIdStr: "\(roomInfo.id ?? 0)",
             wishlistStore: nim.wishlistStore,

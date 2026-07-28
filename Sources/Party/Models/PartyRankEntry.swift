@@ -152,6 +152,94 @@ struct PartyGameTaskRankingResponse: Decodable {
         total = c.decodeFlexibleInt(forKey: .total) ?? list.count
     }
 }
+extension PartyRankEntry {
+    /// 大厅/房内榜单已有的用户资料，避免点名片卡后等待详情接口才出现身份信息。
+    var userCardPreview: UserCardPreview {
+        let countryEmoji = countryId.flatMap { code in
+            let flag = AnchorInfoStore.flagEmoji(from: code)
+            return flag == "🌐" ? nil : flag
+        }
+        let genderValue: UserCardInfo.Gender? = switch gender {
+        case 1: .male
+        case 2: .female
+        case .some: .unknown
+        case nil: nil
+        }
+        return UserCardPreview(
+            userId: userId,
+            nickname: nickname,
+            avatarUrl: avatar,
+            headwearUrl: headFrame,
+            gender: genderValue,
+            age: age,
+            countryEmoji: countryEmoji,
+            userType: userType
+        )
+    }
+}
+
+/// Party Rich / Room 周月榜奖励。H5 同时用它渲染已上榜用户和空名次的奖励预览。
+struct PartyLobbyRankReward: Decodable, Identifiable, Equatable, Hashable {
+    let id: String
+    let rankingPosition: Int?
+    let userType: Int?
+    let rewardType: Int?
+    let itemSmallImg: String?
+    let itemName: String?
+    let validDay: Int?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, itemId, rankingPosition, userType, rewardType, itemSmallImg, itemName, validDay, durationDays
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = c.decodeFlexibleString(forKey: .id)
+            ?? c.decodeFlexibleString(forKey: .itemId)
+            ?? UUID().uuidString
+        rankingPosition = c.decodeFlexibleInt(forKey: .rankingPosition)
+        userType = c.decodeFlexibleInt(forKey: .userType)
+        rewardType = c.decodeFlexibleInt(forKey: .rewardType)
+        itemSmallImg = c.decodeFlexibleString(forKey: .itemSmallImg)
+        itemName = c.decodeFlexibleString(forKey: .itemName)
+        validDay = c.decodeFlexibleInt(forKey: .validDay) ?? c.decodeFlexibleInt(forKey: .durationDays)
+    }
+}
+
+/// 大厅 Party Rich / Room 榜接口响应。
+struct PartyLobbyRankResponse: Decodable, Equatable {
+    let rankList: [PartyRankEntry]
+    let myRank: PartyRankEntry?
+    let rewardConfigs: [PartyLobbyRankReward]
+    let duration: Int?
+
+    private enum CodingKeys: String, CodingKey { case rankList, list, myRank, rewardConfigs, duration }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        rankList = (try? c.decode([PartyRankEntry].self, forKey: .rankList))
+            ?? (try? c.decode([PartyRankEntry].self, forKey: .list))
+            ?? []
+        myRank = try? c.decodeIfPresent(PartyRankEntry.self, forKey: .myRank)
+        rewardConfigs = (try? c.decode([PartyLobbyRankReward].self, forKey: .rewardConfigs)) ?? []
+        duration = c.decodeFlexibleInt(forKey: .duration)
+    }
+}
+
+/// 大厅卡片 Top3 头像响应。
+struct PartyLobbyTop3Response: Decodable, Equatable {
+    let partyRichTop3Avatar: [String]
+    let roomTop3Avatar: [String]
+
+    private enum CodingKeys: String, CodingKey { case partyRichTop3Avatar, roomTop3Avatar }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        partyRichTop3Avatar = (try? c.decode([String].self, forKey: .partyRichTop3Avatar)) ?? []
+        roomTop3Avatar = (try? c.decode([String].self, forKey: .roomTop3Avatar)) ?? []
+    }
+}
+
 
 /// 派对房榜单响应包装（贡献 / 荣誉榜返 `{rankList, myRank, duration}`）。
 struct PartyRankResponse: Decodable {

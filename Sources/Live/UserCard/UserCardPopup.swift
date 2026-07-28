@@ -7,6 +7,17 @@ import UIKit
 /// 保留 `sheet` 命名对齐 caller 侧已有语义,内部实现用 overlay-based scrim(不用系统 sheet)。
 struct UserCardPresentation: Identifiable, Equatable {
     let userId: String
+    let preview: UserCardPreview?
+
+    init(userId: String, preview: UserCardPreview? = nil) {
+        self.userId = userId
+        self.preview = preview
+    }
+
+    init(preview: UserCardPreview) {
+        self.init(userId: preview.userId, preview: preview)
+    }
+
     var id: String { userId }
 }
 
@@ -24,12 +35,14 @@ extension View {
     ///   - item: modal 承载 state,`nil` 关闭
     ///   - onAvatarTap: 头像 tap 回调(nil = 头像不可 tap)
     ///   - onMessageTap: Message 按钮 tap 回调(nil = Message 按钮 disabled)
-    ///   - onSendGiftTap: 送礼按钮 tap 回调(nil = 送礼按钮 disabled 半透)
-    ///   - partyAdminContext: 派对房 admin 上下文(nil = 非派对房场景,admin row 隐藏)
+    ///   - isPartyRoom: 是否由派对房拉起。仅此场景展示送礼与派对管理能力。
+    ///   - onSendGiftTap: 派对房送礼按钮 tap 回调(nil = 不显示送礼按钮)
+    ///   - partyAdminContext: 派对房 admin 上下文；仍须同时满足 `isPartyRoom` 才渲染管理操作。
     func userCardSheet(
         item: Binding<UserCardPresentation?>,
         onAvatarTap: (() -> Void)? = nil,
         onMessageTap: ((_ userId: String, _ yxAccid: String?) -> Void)? = nil,
+        isPartyRoom: Bool = false,
         onSendGiftTap: ((_ info: UserCardInfo) -> Void)? = nil,
         partyAdminContext: PartyAdminContext? = nil
     ) -> some View {
@@ -37,6 +50,7 @@ extension View {
             item: item,
             onAvatarTap: onAvatarTap,
             onMessageTap: onMessageTap,
+            isPartyRoom: isPartyRoom,
             onSendGiftTap: onSendGiftTap,
             partyAdminContext: partyAdminContext
         ))
@@ -49,13 +63,14 @@ private struct UserCardOverlayModifier: ViewModifier {
     @Binding var item: UserCardPresentation?
     let onAvatarTap: (() -> Void)?
     let onMessageTap: ((String, String?) -> Void)?
+    let isPartyRoom: Bool
     let onSendGiftTap: ((UserCardInfo) -> Void)?
     let partyAdminContext: PartyAdminContext?
 
     func body(content: Content) -> some View {
         content.overlay {
             ZStack(alignment: .bottom) {
-                if let p = item {
+                if let p = item, !isCurrentUser(p.userId) {
                     // Backdrop:半透黑 + tap 关闭 + 淡入淡出
                     Color.black.opacity(0.55)
                         .ignoresSafeArea()
@@ -68,8 +83,10 @@ private struct UserCardOverlayModifier: ViewModifier {
                     // Card:底部对齐 + slide up 转场;头像 offset -45 悬空到 backdrop 上
                     UserCardPopup(
                         userId: p.userId,
+                        preview: p.preview,
                         onAvatarTap: onAvatarTap,
                         onMessageTap: onMessageTap,
+                        isPartyRoom: isPartyRoom,
                         onSendGiftTap: onSendGiftTap,
                         partyAdminContext: partyAdminContext
                     )
@@ -77,7 +94,23 @@ private struct UserCardOverlayModifier: ViewModifier {
                 }
             }
             .animation(.easeInOut(duration: 0.25), value: item?.userId)
+            .onAppear(perform: dismissCurrentUserCardIfNeeded)
+            .onChange(of: item?.userId, perform: handlePresentationChange)
         }
+    }
+
+    private func handlePresentationChange(_: String?) {
+        dismissCurrentUserCardIfNeeded()
+    }
+
+    private func dismissCurrentUserCardIfNeeded() {
+        guard let userId = item?.userId, isCurrentUser(userId) else { return }
+        item = nil
+    }
+
+    private func isCurrentUser(_ userId: String) -> Bool {
+        guard let currentUserId = SessionStore.shared.user?.userId else { return false }
+        return userId == String(currentUserId)
     }
 }
 
@@ -96,11 +129,13 @@ private struct UserCardOverlayModifier: ViewModifier {
 /// - 底部 Follow / Message 双按钮
 struct UserCardPopup: View {
     let userId: String
+    let preview: UserCardPreview?
     var onAvatarTap: (() -> Void)? = nil
     var onMessageTap: ((_ userId: String, _ yxAccid: String?) -> Void)? = nil
-    /// 送礼按钮 tap 回调(nil = 按钮 disabled 半透,派对房 caller 传入实际打开 gift panel 实现)
+    /// 仅派对房可用；回调由 PartyRoomView 注入以打开礼物面板。
+    var isPartyRoom: Bool = false
     var onSendGiftTap: ((_ info: UserCardInfo) -> Void)? = nil
-    /// 派对房 admin 上下文(nil = 非派对房场景,admin row 隐藏)
+    /// 派对房 admin 上下文；非派对房即使意外注入也不会渲染操作。
     var partyAdminContext: PartyAdminContext? = nil
 
     @StateObject private var store: UserCardStore
@@ -120,15 +155,19 @@ struct UserCardPopup: View {
     @State private var pendingKickBanType: Int = 0
 
     init(userId: String,
+         preview: UserCardPreview? = nil,
          service: UserCardServiceProtocol = UserCardServiceReal(),
          onAvatarTap: (() -> Void)? = nil,
          onMessageTap: ((String, String?) -> Void)? = nil,
+         isPartyRoom: Bool = false,
          onSendGiftTap: ((UserCardInfo) -> Void)? = nil,
          partyAdminContext: PartyAdminContext? = nil) {
         self.userId = userId
-        self._store = StateObject(wrappedValue: UserCardStore(userId: userId, service: service))
+        self.preview = preview
+        self._store = StateObject(wrappedValue: UserCardStore(userId: userId, preview: preview, service: service))
         self.onAvatarTap = onAvatarTap
         self.onMessageTap = onMessageTap
+        self.isPartyRoom = isPartyRoom
         self.onSendGiftTap = onSendGiftTap
         self.partyAdminContext = partyAdminContext
     }
@@ -237,18 +276,167 @@ struct UserCardPopup: View {
     @ViewBuilder
     private var contentLayer: some View {
         switch store.state {
-        case .idle, .loading:
-            VStack {
-                Spacer(minLength: 80)
-                ProgressView().tint(.white)
-                Spacer(minLength: 40)
-            }
-            .frame(height: 300)
+        case .idle:
+            loadingSkeleton(preview: preview)
+        case .loading(let preview):
+            loadingSkeleton(preview: preview)
         case .loaded(let info):
             profileContent(info)
         case .error:
-            errorView
+            errorContent(preview: preview)
         }
+    }
+
+    // MARK: - 加载骨架
+
+    /// 详情接口未返回时保留触发点已知的身份信息，未知区域用固定尺寸骨架占位。
+    /// 这样网络慢时卡片仍能立即确认目标用户，同时避免 loaded 后整体高度突变。
+    private func loadingSkeleton(preview: UserCardPreview?) -> some View {
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: 8) {
+                previewAvatarBlock(preview: preview)
+                    .frame(height: Self.avatarBlockHeight - Self.avatarOverhang, alignment: .top)
+                    .offset(y: -Self.avatarOverhang)
+
+                previewIdentity(preview: preview)
+
+                skeletonBar(width: 124, height: 14)
+                    .padding(.top, 2)
+
+                previewMeta(preview: preview)
+
+                HStack(spacing: 44) {
+                    VStack(spacing: 6) {
+                        skeletonBar(width: 38, height: 18)
+                        skeletonBar(width: 72, height: 14)
+                    }
+                    VStack(spacing: 6) {
+                        skeletonBar(width: 38, height: 18)
+                        skeletonBar(width: 72, height: 14)
+                    }
+                }
+                .padding(.top, 6)
+
+                skeletonGiftWall
+                    .padding(.top, 8)
+
+                HStack(spacing: 12) {
+                    skeletonBar(width: nil, height: 44, cornerRadius: 22)
+                    skeletonBar(width: nil, height: 44, cornerRadius: 22)
+                }
+                .padding(.top, 6)
+            }
+            .padding(.horizontal, 15)
+            .padding(.bottom, 34)
+
+            skeletonBar(width: 54, height: 28, cornerRadius: 14)
+                .padding(.leading, 15)
+                .padding(.top, 15)
+        }
+        .background(cardFrameOverlay(urlString: preview?.cardFrameUrl))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L10n.profileLoading)
+    }
+
+    private func previewAvatarBlock(preview: UserCardPreview?) -> some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(hex: 0xFF9438), Color(hex: 0xFF0091), Color(hex: 0xFE00DE)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 96, height: 96)
+
+            Circle().fill(Color.white).frame(width: 91, height: 91)
+
+            previewAvatar(preview: preview)
+        }
+    }
+
+    @ViewBuilder
+    private func previewAvatar(preview: UserCardPreview?) -> some View {
+        if let headwearUrl = preview?.headwearUrl, HeadFrameView.isSVGAURL(headwearUrl) {
+            ZStack {
+                AvatarView(urlString: preview?.avatarUrl, size: 86, kind: .user)
+                HeadFrameView(urlString: headwearUrl, size: 116)
+                    .allowsHitTesting(false)
+            }
+        } else {
+            AvatarView(
+                urlString: preview?.avatarUrl,
+                size: 86,
+                kind: .user,
+                headwearURL: preview?.headwearUrl,
+                headwearRatio: 1.35
+            )
+        }
+    }
+
+    @ViewBuilder
+    private func previewIdentity(preview: UserCardPreview?) -> some View {
+        if let nickname = preview?.nickname, !nickname.isEmpty {
+            Text(nickname)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .center)
+        } else {
+            skeletonBar(width: 118, height: 20)
+        }
+    }
+
+    @ViewBuilder
+    private func previewMeta(preview: UserCardPreview?) -> some View {
+        if let preview,
+           preview.gender != nil || preview.countryEmoji != nil || preview.levelName != nil || preview.isVip == true || preview.isActiveTycoon == true {
+            HStack(spacing: 8) {
+                if let gender = preview.gender, let age = preview.age, gender != .unknown {
+                    HStack(spacing: 2) {
+                        Image(systemName: gender == .female ? "person.fill" : "person")
+                            .font(.system(size: 10))
+                        Text("\(age)").font(.system(size: 10))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 4).padding(.vertical, 2)
+                    .background(Capsule().fill(gender == .female ? Color(hex: 0xFF1AA7) : Color(hex: 0x205FFF)))
+                }
+                if let country = preview.countryEmoji { Text(country).font(.system(size: 16)) }
+                if preview.isActiveTycoon == true { ActiveTycoonBadge(style: .bigRText, size: .small) }
+                if let levelName = preview.levelName, !levelName.isEmpty {
+                    UserLevelBadge(level: preview.level ?? 0, size: .small)
+                }
+                if preview.isVip == true { VIPBadge(size: .small) }
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+        } else {
+            skeletonBar(width: 104, height: 18)
+        }
+    }
+
+    private var skeletonGiftWall: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            skeletonBar(width: 84, height: 16)
+            HStack(spacing: 12) {
+                ForEach(0..<5, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.white.opacity(0.12))
+                        .frame(width: 40, height: 40)
+                }
+            }
+        }
+        .padding(.horizontal, 15)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.08)))
+    }
+
+    private func skeletonBar(width: CGFloat?, height: CGFloat, cornerRadius: CGFloat = 6) -> some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(Color.white.opacity(0.14))
+            .frame(width: width, height: height)
     }
 
     // MARK: - 主要资料内容
@@ -298,7 +486,7 @@ struct UserCardPopup: View {
                     .padding(.top, 6)
 
                 // 派对房 admin action row(对齐 H5 party-user-card.vue L640-668)
-                if let ctx = partyAdminContext,
+                if isPartyRoom, let ctx = partyAdminContext,
                    ctx.canShowAdminActions(targetRole: partyRole(info)) {
                     partyAdminActionRow(info: info, context: ctx)
                         .padding(.top, 24)
@@ -313,6 +501,24 @@ struct UserCardPopup: View {
                     .padding(.leading, 15)
                     .padding(.top, 15)
             }
+        }
+        .background(cardFrameOverlay(urlString: info.cardFrameUrl))
+    }
+
+    /// 对齐 H5 `.card-frame-overlay`：透明中部 PNG 在卡片背景之上、正文之下，
+    /// 宽度随卡片，顶部向上扩展卡片高度的 26%，且不改变内容布局或命中区域。
+    @ViewBuilder
+    private func cardFrameOverlay(urlString: String?) -> some View {
+        if let urlString, !urlString.isEmpty, let url = URL(string: urlString) {
+            GeometryReader { geometry in
+                CachedAsyncImage(url: url, contentMode: .fit, persistent: true) {
+                    Color.clear
+                }
+                .frame(width: geometry.size.width)
+                .offset(y: -geometry.size.height * 0.26)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
     }
 
@@ -673,36 +879,37 @@ struct UserCardPopup: View {
         }
     }
 
-    // MARK: - 底部按钮(Send Gift + Message)
-    //
-    // v2 改造(2026-07-16):关注按钮移到昵称行 icon(未关注时显示 icon,tap 后消失),
-    // bottomButtons 原 Follow 位置改为 Send Gift 按钮 —— 对齐 H5 party-user-card.vue L614-624。
+    // MARK: - 底部按钮
 
+    @ViewBuilder
     private func bottomButtons(info: UserCardInfo) -> some View {
+        let canShowMessage = !info.isAnchor && onMessageTap != nil
+        let canShowGift = isPartyRoom && onSendGiftTap != nil
+        if canShowGift || canShowMessage {
         HStack(spacing: 12) {
-            // Send Gift(H5 深紫 #3625AA + 送礼切图 icon,替换原 Follow 位置)
-            Button {
-                onSendGiftTap?(info)
-            } label: {
-                HStack(spacing: 8) {
-                    Image("partyUserCardSendGift")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 24, height: 24)
-                    Text(L10n.userCardSendGift)
-                        .font(.system(size: 18, weight: .bold))
+            if let onSendGiftTap, canShowGift {
+                // 送礼仅属于 Party 房内用户卡；非 Party 场景不保留 disabled 占位按钮。
+                Button {
+                    onSendGiftTap(info)
+                } label: {
+                    HStack(spacing: 8) {
+                        Image("partyUserCardSendGift")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 24, height: 24)
+                        Text(L10n.userCardSendGift)
+                            .font(.system(size: 18, weight: .bold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(Capsule().fill(Color(hex: 0x3625AA)))
                 }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
-                .background(Capsule().fill(Color(hex: 0x3625AA)))
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            .disabled(onSendGiftTap == nil)
-            .opacity(onSendGiftTap == nil ? 0.5 : 1.0)
 
-            // Message(仅 onMessageTap != nil 时显示)
-            if onMessageTap != nil {
+            // 主播不支持从名片卡发起私聊。
+            if canShowMessage {
                 Button {
                     onMessageTap?(info.userId, info.yxAccid)
                 } label: {
@@ -729,6 +936,9 @@ struct UserCardPopup: View {
                 .disabled(info.isBlocked || info.yxAccid == nil || info.yxAccid?.isEmpty == true)
                 .opacity((info.isBlocked || info.yxAccid == nil) ? 0.5 : 1.0)
             }
+        }
+        } else {
+            EmptyView()
         }
     }
 
@@ -852,26 +1062,25 @@ struct UserCardPopup: View {
 
     // MARK: - Error view
 
-    private var errorView: some View {
-        VStack(spacing: 12) {
-            Spacer(minLength: 80)
-            Text(L10n.userCardErrorRetry)
-                .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.6))
-            Button {
-                store.retry()
-            } label: {
-                Text(L10n.liveRoomRetry)
-                    .font(.system(size: 14, weight: .semibold))
+    private func errorContent(preview: UserCardPreview?) -> some View {
+        loadingSkeleton(preview: preview)
+            .overlay(alignment: .bottom) {
+                HStack(spacing: 10) {
+                    Text(L10n.userCardErrorRetry)
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.7))
+                    Button(L10n.liveRoomRetry) {
+                        store.retry()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 20).padding(.vertical, 8)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
                     .background(Capsule().fill(Color.white.opacity(0.15)))
+                }
+                .padding(.bottom, 18)
             }
-            .buttonStyle(.plain)
-            Spacer(minLength: 40)
-        }
-        .frame(maxWidth: .infinity)
-        .frame(height: 300)
     }
 }
 

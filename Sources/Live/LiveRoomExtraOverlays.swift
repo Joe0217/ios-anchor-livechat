@@ -7,6 +7,8 @@ struct LiveRoomExtraOverlaysModifier: ViewModifier {
     @Binding var showEffectSwitchPopup: Bool
     @Binding var showAnnouncementPopup: Bool
     @Binding var userCardUserId: String?
+    /// 名片卡 Message → 半屏私聊。由 LiveRoomView 顶层唯一的 chatDetailBottomSheet 承载。
+    @Binding var chatSheetPeerYxAccid: String?
     @Binding var showGiftPicker: Bool
     let roomIdStr: String
     /// v10 心愿单 store + 面板 binding + liveRecordId（Top6 API 用）
@@ -29,12 +31,20 @@ struct LiveRoomExtraOverlaysModifier: ViewModifier {
             }
             // UserCard 名片卡:sheet 挂载(H5 主播端 userCard.vue 对齐,底部 sheet 形态)
             // 主播端直播间 tap 头像不跳 UserProfile(对齐 H5 `route.path === '/liveSetting'` 分支)
-            // Message 按钮暂未接聊天页(D 里程碑 chat push 就绪后再传 callback)
+            // H5 userCard 的 Message → openTalkPopup(yxAccid)：原生由房间顶层半屏私聊承载。
             .userCardSheet(
                 item: Binding(
                     get: { userCardUserId.map { UserCardPresentation(userId: $0) } },
                     set: { userCardUserId = $0?.userId }
-                )
+                ),
+                onMessageTap: { _, yxAccid in
+                    guard let yxAccid, !yxAccid.isEmpty else { return }
+                    // 对齐 H5 useMessageHooks.openTalkPopup：先关闭名片卡，再展示 TalkPopup。
+                    userCardUserId = nil
+                    DispatchQueue.main.async {
+                        chatSheetPeerYxAccid = yxAccid
+                    }
+                }
             )
             .sheet(isPresented: $showGiftPicker) {
                 // H-4 迁移：直播中礼物入口 = 纯展示（interaction=.readonly + footer=.none）
