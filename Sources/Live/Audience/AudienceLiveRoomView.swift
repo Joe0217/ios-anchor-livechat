@@ -18,6 +18,8 @@ struct AudienceLiveRoomView: View {
     @State private var showContribution = false
     @State private var showAnchorRank = false
     @State private var showAudienceRank = false
+    /// H5 顶部 Top2 与观众数共用用户周榜，但分别落在送礼榜和观众列表首 Tab。
+    @State private var audienceRankInitialTopTab: RankSheetTopTab = .viewers
     @State private var showTask = false
     @State private var showWishlist = false
     @State private var userCardUserId: String?
@@ -143,8 +145,14 @@ struct AudienceLiveRoomView: View {
                 presence: nim.presenceStore,
                 topRankStore: nim.topRankStore,
                 onAnchorTap: { userCardUserId = info.anchorUserIdString },
-                onTopGifterTap: { userCardUserId = $0 },
-                onAudienceTap: { showAudienceRank = true },
+                onTopGifterTap: { _ in
+                    audienceRankInitialTopTab = .topGifter
+                    showAudienceRank = true
+                },
+                onAudienceTap: {
+                    audienceRankInitialTopTab = .viewers
+                    showAudienceRank = true
+                },
                 onClose: leaveRoom
             )
             .padding(.horizontal, Theme.Metric.liveRoomScreenHPadding)
@@ -259,6 +267,7 @@ struct AudienceLiveRoomView: View {
                     isPresented: $showAudienceRank,
                     anchorUserId: info.anchorUserId,
                     dbId: info.liveRecordId,
+                    initialTopTab: audienceRankInitialTopTab,
                     onUserTap: { userCardUserId = $0 }
                 )
                 .sheetTopInset()
