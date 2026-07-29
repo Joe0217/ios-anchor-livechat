@@ -5,13 +5,12 @@ import Foundation
 /// **数据来源**：
 /// - 本地回显：主播输入文字 sendCallText 后立即 push（H5 sendMessage 本地 unshift 语义）
 /// - 远端 sysMsg -1：CallStore.handleRemoteText 追加对方文字
-/// - 远端 sysMsg 4：GiftEffectSysMsgRouter 消费 liveCallGift payload 时同步追加礼物 cell
 /// - 远端 sysMsg 90：appendWaitBonus 时可选追加充值奖励 cell（可选路径）
 ///
 /// **H5 视觉变体**：
 /// - default text：黑色 50% 圆角气泡，远端原文与翻译分两行
-/// - custom text：`chatBubble` 九宫格背景，仅显示译文（无译文时显示原文）
-/// - gift：46pt 礼物图与数量
+/// - custom text：`chatBubble` 九宫格背景，保留原文并在翻译完成后追加译文
+/// - gift：与直播公屏一致的 22pt 礼物图与数量
 ///
 /// `Sender` 保留通话信令元信息，但通话公屏只消费 `isSelf` 与 `chatBubble`。
 struct CallChatMessage: Identifiable, Equatable {

@@ -8,6 +8,7 @@
 @interface FUManager ()
 @property (nonatomic, strong) FUBeauty *beauty;
 @property (nonatomic, assign) BOOL didSetup;
+@property (atomic, assign) BOOL faceDetected;
 @end
 
 @implementation FUManager
@@ -61,7 +62,14 @@
     input.renderConfig.isFromFrontCamera = YES;
     input.renderConfig.isFromMirroredCamera = YES;
     FURenderOutput *output = [[FURenderKit shareRenderKit] renderWithInput:input];
+    // 必须在 renderWithInput 之后读取：FaceProcessor 在本帧 render 过程中更新检测结果。
+    // Swift 侧轮询发生在主线程，不能跨线程直接调用相芯 C API。
+    self.faceDetected = fuFaceProcessorGetNumResults() > 0;
     return output.pixelBuffer ? output.pixelBuffer : pixelBuffer;
+}
+
+- (BOOL)hasFaceDetected {
+    return self.beauty != nil && self.faceDetected;
 }
 
 - (void)updateBlur:(double)blur

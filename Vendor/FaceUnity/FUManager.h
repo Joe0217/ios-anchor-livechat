@@ -19,6 +19,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// CF_RETURNS_NOT_RETAINED：返回的 buffer 归 FURenderKit 所有，调用方不持有 +1
 - (CVPixelBufferRef)renderPixelBuffer:(CVPixelBufferRef)pixelBuffer CF_RETURNS_NOT_RETAINED;
 
+/// 最近一次渲染帧是否检测到人脸。
+/// 检测结果在渲染线程读取相芯 FaceProcessor，再以原子属性供 Swift 主线程查询。
+- (BOOL)hasFaceDetected;
+
 /// 更新美颜参数（均为 0~1）
 - (void)updateBlur:(double)blur
             whiten:(double)whiten

@@ -1,20 +1,109 @@
 import Foundation
 
-/// L 里程碑 #3d：人脸检测 protocol + stub 实现。
-///
-/// **本次范围**：Store 层调用 protocol 完成人脸检测轮询与 blocked 链路；真 SDK 集成留 J-合规里程碑。
-/// 真实现应桥接相芯 `fuFaceProcessorGetNumResults()` C API（在 Vendor/FaceUnity/FURenderKit
-/// 的 CNamaSDK.h 声明），OC 侧 FUManager 增加 `- (BOOL)hasFaceDetected` 方法，Swift 调用即可。
-///
-/// spec §10 BL-4：完整 J-合规集成 = 真 API 桥 + captureCanvasScreenshot + OSS 上传 + reportNoFace 接口。
+/// 匹配场景的人脸检测抽象。生产实现读取相芯最近一帧 FaceProcessor 结果；测试注入 fake。
 protocol FaceDetectionServiceProtocol {
-    /// 当前是否检测到人脸。真集成读 `fuFaceProcessorGetNumResults() > 0`；stub 默认 true。
+    /// 当前是否检测到人脸。
     func hasFace() -> Bool
 }
 
-/// Stub 实现：本里程碑默认返 true（相当于不实际检测，等 J 里程碑真集成）
+/// 测试与 Preview 用的可替换实现。生产不使用此类。
 final class FaceDetectionServiceStub: FaceDetectionServiceProtocol {
     static let shared = FaceDetectionServiceStub()
     private init() {}
     func hasFace() -> Bool { true }
 }
+
+#if !HILY_TESTS
+/// 相芯检测结果在 `FUManager.renderPixelBuffer` 的渲染线程更新，避免主线程和 SDK render 并发访问。
+final class FaceUnityFaceDetectionService: FaceDetectionServiceProtocol {
+    static let shared = FaceUnityFaceDetectionService()
+    private init() {}
+
+    func hasFace() -> Bool {
+        FUManager.shared().hasFaceDetected()
+    }
+}
+
+/// 匹配通话中的本地相机由 CallView 持有；弱引用确保通话结束后不保留任何画面或相机资源。
+@MainActor
+private final class MatchCallCameraReference {
+    weak var camera: CameraManager?
+}
+
+@MainActor
+enum MatchCallEvidenceSource {
+    private static let reference = MatchCallCameraReference()
+
+    static func bind(_ camera: CameraManager) {
+        reference.camera = camera
+    }
+
+    static func unbind(_ camera: CameraManager) {
+        guard reference.camera === camera else { return }
+        reference.camera = nil
+    }
+
+    /// CallFaceTimeView 初次出现和相机首帧之间有短窗口，最多等待 1 秒拿到当前通话帧。
+    static func captureJPEGData() async -> Data? {
+        for _ in 0..<10 {
+            if let data = await reference.camera?.latestFrameJPEGData(maximumAge: 3) {
+                return data
+            }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+            guard !Task.isCancelled else { return nil }
+        }
+        return nil
+    }
+}
+
+@MainActor
+final class MatchFaceEvidenceProvider: MatchFaceEvidenceProviding {
+    static let shared = MatchFaceEvidenceProvider()
+    private init() {}
+
+    func capturePreviewEvidence(from session: MatchCameraSessionProtocol?) async -> Data? {
+        await session?.latestFrameJPEGData()
+    }
+
+    func captureCallEvidence() async -> Data? {
+        await MatchCallEvidenceSource.captureJPEGData()
+    }
+
+    func uploadEvidence(_ imageData: Data) async throws -> String {
+        try await ImageUploader.shared.upload(rawData: imageData, preset: .feedback)
+    }
+}
+#endif
+
+enum FaceDetectionServiceFactory {
+    static var production: FaceDetectionServiceProtocol {
+        #if HILY_TESTS
+        return FaceDetectionServiceStub.shared
+        #else
+        return FaceUnityFaceDetectionService.shared
+        #endif
+    }
+}
+
+enum MatchFaceEvidenceProviderFactory {
+    static var production: MatchFaceEvidenceProviding? {
+        #if HILY_TESTS
+        return MatchFaceEvidenceTestProvider.shared
+        #else
+        return MatchFaceEvidenceProvider.shared
+        #endif
+    }
+}
+
+#if HILY_TESTS
+/// 保持现有 MatchStore 状态机单测的默认“有证据”前提；具体失败分支由测试显式注入 nil provider 覆盖。
+@MainActor
+final class MatchFaceEvidenceTestProvider: MatchFaceEvidenceProviding {
+    static let shared = MatchFaceEvidenceTestProvider()
+    private init() {}
+
+    func capturePreviewEvidence(from session: MatchCameraSessionProtocol?) async -> Data? { Data([0x00]) }
+    func captureCallEvidence() async -> Data? { Data([0x00]) }
+    func uploadEvidence(_ imageData: Data) async throws -> String { "test://match-face-evidence" }
+}
+#endif

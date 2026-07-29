@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreImage
 import CoreVideo
 import Foundation
 import QuartzCore
@@ -42,6 +43,11 @@ final class CameraManager: NSObject, ObservableObject {
     /// 锁保护：subscribe/unsubscribe 在 main queue，captureOutput 在 videoQueue 读，必须 NSLock。
     private let subscribersLock = NSLock()
     private var subscribers: [ObjectIdentifier: (CVPixelBuffer) -> Void] = [:]
+    private let latestFrameLock = NSLock()
+    private var latestProcessedFrame: CVPixelBuffer?
+    private var latestProcessedFrameDate: Date?
+    private let snapshotQueue = DispatchQueue(label: "com.anchor.livechat.camera.snapshot")
+    private let snapshotContext = CIContext(options: [.cacheIntermediates: false])
 
     /// 相机错误回调（LiveRoomView 注入；转发到 LiveStore.onCameraError）
     var onError: ((CameraError) -> Void)?
@@ -71,6 +77,34 @@ final class CameraManager: NSObject, ObservableObject {
         subscribersLock.unlock()
     }
 
+    /// 返回最近一帧美颜后画面，供热门任务或匹配合规取证上传；JPEG 编码在独立队列执行。
+    /// `maximumAge` 仅由需要当前证据的调用方传入，避免上传已经退出场景的旧帧。
+    func latestFrameJPEGData(maximumAge: TimeInterval? = nil) async -> Data? {
+        await withCheckedContinuation { continuation in
+            snapshotQueue.async { [weak self] in
+                guard let self else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                self.latestFrameLock.lock()
+                let pixelBuffer = self.latestProcessedFrame
+                let date = self.latestProcessedFrameDate
+                self.latestFrameLock.unlock()
+                guard let pixelBuffer,
+                      maximumAge == nil || (date.map { Date().timeIntervalSince($0) <= maximumAge! } ?? false) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                let image = CIImage(cvPixelBuffer: pixelBuffer)
+                guard let cgImage = self.snapshotContext.createCGImage(image, from: image.extent) else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.75))
+            }
+        }
+    }
+
     /// 推送给订阅者 sink 的目标帧率（v5.1 弱网降级用）。
     /// 相机仍以 30fps 采集，但当 targetFPS=15 时按时间间隔丢弃一半帧，避免帧堆积导致画面卡顿。
     /// nonisolated 字段，captureOutput 在 videoQueue 读取，Int 写读为原子操作。
@@ -86,6 +120,11 @@ final class CameraManager: NSObject, ObservableObject {
     /// 当前视频 device input；`switchCameraPosition` 移除旧 input 前需要引用它。
     private var currentVideoInput: AVCaptureDeviceInput?
     private var configured = false
+    /// 业务层显式 stop 后，不允许前台/中断结束通知重新打开已结束的采集。
+    /// 该标志独立于 `AVCaptureSession.isRunning`：后台中断时 session 会被系统停掉，
+    /// 但业务仍在进行，应当允许恢复；业务主动关闭时则必须保持关闭。
+    private let lifecycleLock = NSLock()
+    private var allowsAutomaticResume = false
 
     override init() {
         // B 里程碑 spec §6.2：FUBeautyRenderer setup 失败自动降级
@@ -161,6 +200,24 @@ final class CameraManager: NSObject, ObservableObject {
     // MARK: - 生命周期
 
     func start() {
+        setAutomaticResumeAllowed(true)
+        startSessionIfNeeded()
+    }
+
+    /// 显式停止代表当前业务不再需要本地采集。
+    /// 后续只有新的业务入口再次调用 `start()` 才能重新启用相机/麦克风所在的 session。
+    func stop() {
+        setAutomaticResumeAllowed(false)
+        DispatchQueue.main.async { [weak self] in
+            self?.stopInterruptionTracking()
+        }
+        sessionQueue.async { [weak self] in
+            guard let self, self.session.isRunning else { return }
+            self.session.stopRunning()
+        }
+    }
+
+    private func startSessionIfNeeded() {
         sessionQueue.async { [weak self] in
             guard let self else { return }
             self.configureIfNeeded()
@@ -168,11 +225,24 @@ final class CameraManager: NSObject, ObservableObject {
         }
     }
 
-    func stop() {
-        sessionQueue.async { [weak self] in
-            guard let self, self.session.isRunning else { return }
-            self.session.stopRunning()
+    private func resumeSessionIfNeeded() {
+        guard isAutomaticResumeAllowed else {
+            logger.info("Skip capture resume because the owning business already stopped")
+            return
         }
+        startSessionIfNeeded()
+    }
+
+    private func setAutomaticResumeAllowed(_ allowed: Bool) {
+        lifecycleLock.lock()
+        allowsAutomaticResume = allowed
+        lifecycleLock.unlock()
+    }
+
+    private var isAutomaticResumeAllowed: Bool {
+        lifecycleLock.lock()
+        defer { lifecycleLock.unlock() }
+        return allowsAutomaticResume
     }
 
     // MARK: - A-2 code-review Finding #4 修 2026-07-10：audio I/O 走 sessionQueue 串行
@@ -331,7 +401,7 @@ final class CameraManager: NSObject, ObservableObject {
     }
 
     @objc private func handleInterruptionEnded(_ note: Notification) {
-        logger.info("AVCaptureSession interruption ended; restart session")
+        logger.info("AVCaptureSession interruption ended; resume active capture session if needed")
         // L 里程碑：中断已恢复，累计计时归零
         DispatchQueue.main.async { [weak self] in self?.stopInterruptionTracking() }
         // v5.3.1 review #1 修订：先同步派发 onError 清 watcher，再 start()——
@@ -341,8 +411,9 @@ final class CameraManager: NSObject, ObservableObject {
         DispatchQueue.main.async { [weak self] in
             self?.onError?(.interruptionEnded)
         }
-        // v5.3：InterruptionEnded 时 session.isInterrupted 才变 false，此时 startRunning 才生效
-        start()
+        // v5.3：InterruptionEnded 时 session.isInterrupted 才变 false，此时 startRunning 才生效。
+        // 业务已显式 stop 时不能在这里反向重启。
+        resumeSessionIfNeeded()
     }
 
     /// v5.2：回前台防御性兜底
@@ -350,8 +421,8 @@ final class CameraManager: NSObject, ObservableObject {
     /// 而是被 iOS 内部排队，等 InterruptionEnded 后自动执行。
     /// 本入口保留作 InterruptionEnded 通知丢失时的最终兜底；正常路径由 handleInterruptionEnded 触发。
     @objc private func handleWillEnterForeground(_ note: Notification) {
-        logger.info("App will enter foreground; ensure capture session is running")
-        start()
+        logger.info("App will enter foreground; resume active capture session if needed")
+        resumeSessionIfNeeded()
     }
 
     /// v5.3.1 review #5 阻塞修复：CameraManager observer 跨 dismiss 仍响应导致摄像头灯亮。
@@ -361,10 +432,15 @@ final class CameraManager: NSObject, ObservableObject {
     /// 3. 同步 stop session（确保摄像头灯熄灭）
     func tearDown() {
         logger.info("CameraManager tearDown: removing observers, clearing subscribers, stopping session")
+        setAutomaticResumeAllowed(false)
         NotificationCenter.default.removeObserver(self)
         subscribersLock.lock()
         subscribers.removeAll()
         subscribersLock.unlock()
+        latestFrameLock.lock()
+        latestProcessedFrame = nil
+        latestProcessedFrameDate = nil
+        latestFrameLock.unlock()
         onError = nil
         stopInterruptionTracking()
         sessionQueue.async { [weak self] in
@@ -413,6 +489,10 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         if now - lastPushedAt < interval { return }
         lastPushedAt = now
         let processed = renderer.process(pixelBuffer)
+        latestFrameLock.lock()
+        latestProcessedFrame = processed
+        latestProcessedFrameDate = Date()
+        latestFrameLock.unlock()
         // v5.8：锁内拷贝 sink snapshot，锁外分发；避免长时间持锁阻塞 main queue 的 subscribe/unsubscribe。
         subscribersLock.lock()
         let sinks = Array(subscribers.values)

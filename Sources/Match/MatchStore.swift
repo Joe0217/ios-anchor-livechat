@@ -74,6 +74,9 @@ protocol MatchCameraSessionProtocol: AnyObject {
     /// 停止 session + 释放订阅
     func stop()
 
+    /// 返回本匹配预览会话最近一帧可用于合规取证的 JPEG；无新帧时返回 nil。
+    func latestFrameJPEGData() async -> Data?
+
     /// interruption 持续超时 published（>= 30s 时 fire）
     var timedOutPublisher: AnyPublisher<Void, Never> { get }
 
@@ -85,6 +88,14 @@ enum MatchCameraError: Equatable {
     case permissionDenied
     case startTimeout       // 3s 未 running / 未收到首帧
     case runtimeError(String)
+}
+
+/// 无脸取证的场景绑定抽象。Store 只编排 H5 时序，具体相机和 OSS 实现留在 app target。
+@MainActor
+protocol MatchFaceEvidenceProviding: AnyObject {
+    func capturePreviewEvidence(from session: MatchCameraSessionProtocol?) async -> Data?
+    func captureCallEvidence() async -> Data?
+    func uploadEvidence(_ imageData: Data) async throws -> String
 }
 
 // MARK: - MatchStore
@@ -144,21 +155,29 @@ final class MatchStore: ObservableObject {
     /// 后 weak 立即 nil，摄像头资源需由 Store 主动 collapse 而非依赖 view 生命周期）
     private var cameraSession: MatchCameraSessionProtocol?
 
-    /// #3d：人脸检测 service（stub 默认 true，J 里程碑替换真 FUManager 桥）
+    /// 生产读相芯最近一帧检测结果；单测通过构造注入 fake。
     private let faceDetection: FaceDetectionServiceProtocol
+    /// 取证必须绑定当前匹配预览或匹配通话相机，禁止从全局“最后一帧”猜测来源。
+    private let faceEvidenceProvider: MatchFaceEvidenceProviding?
     /// 30s 首次检测 timer + 3 次随机检测 timer 统一取消 task
     private var faceCheckTask: Task<Void, Never>?
     /// 5s 未露脸倒计时 task
     private var noFaceCountdownTask: Task<Void, Never>?
 
     /// 单例（对齐 CallStore.shared / LiveStore.shared / PartyStore.shared 模式）
-    static let shared = MatchStore(service: MatchService.shared, faceDetection: FaceDetectionServiceStub.shared)
+    static let shared = MatchStore(
+        service: MatchService.shared,
+        faceDetection: FaceDetectionServiceFactory.production,
+        faceEvidenceProvider: MatchFaceEvidenceProviderFactory.production
+    )
 
     /// 依赖注入 init（供单测传 Fake）。生产用 `.shared`。
     init(service: MatchServiceProtocol,
-         faceDetection: FaceDetectionServiceProtocol = FaceDetectionServiceStub.shared) {
+         faceDetection: FaceDetectionServiceProtocol = FaceDetectionServiceFactory.production,
+         faceEvidenceProvider: MatchFaceEvidenceProviding? = MatchFaceEvidenceProviderFactory.production) {
         self.service = service
         self.faceDetection = faceDetection
+        self.faceEvidenceProvider = faceEvidenceProvider
         loadFromPersistence()
     }
 
@@ -404,6 +423,18 @@ final class MatchStore: ObservableObject {
         }
 
         if !silent { lastToast = .turnOffSucceed }
+    }
+
+    /// 登出或主播资格撤销时结束本地匹配会话。
+    /// 不请求服务端：会话凭据已失效，但本地摄像头必须立即关闭。
+    func stopForSessionEnd() {
+        stopFaceCheck()
+        cameraSession?.stop()
+        wasConnectedInCall = false
+        showResumeMatchAlert = false
+        lastToast = nil
+        state = .ended
+        logger.info("stopForSessionEnd: local match session stopped")
     }
 
     // MARK: - 被动关匹配路径
@@ -689,14 +720,16 @@ final class MatchStore: ObservableObject {
     }
 
     /// 未露脸异常收尾（对齐 H5 handleFaceCheckException）
-    /// - 上报 reportNoFace（TODO：J 里程碑接入 OSS 截图 + 真接口）
-    /// - toggleMatch(0, faceCheckStatus:1) 关匹配（本次桶）
+    /// - 先获取当前场景的截图并上传；成功后才按 H5 语义上报与退池
+    /// - 本地封禁不依赖网络结果，避免用户在取证期间继续操作匹配
     /// - **匹配态**（.matching）：state → .blocked + camera.stop + showExitMatchPopup（"移除匹配"弹窗）
     /// - **通话态**（.matchingCalling，P1 对齐 H5 line 193-205 handleFaceCheckException('connected'/'random')）:
     ///   仅标 isMatchBlocked + toggleMatch(0,1)，**不改 state 也不弹 exitMatchPopup**（CallStore 主控此态；
     ///   通话结束时 handleCallStoreReturnedToIdle 判 isMatchBlocked → 转 .blocked）
     private func handleFaceCheckException(fromRandom: Bool) {
         let inCall = (state == .matchingCalling)
+        let previewSession = cameraSession
+        let evidenceProvider = faceEvidenceProvider
         logger.warning("handleFaceCheckException: fromRandom=\(fromRandom) inCall=\(inCall)")
         stopFaceCheck()
         isMatchBlocked = true
@@ -712,9 +745,34 @@ final class MatchStore: ObservableObject {
             lastToast = .noFaceDetected
         }
 
-        // 服务端上报（faceCheckStatus=1）—— OSS 截图 + reportNoFace 留 spec BL-4 J-合规
-        Task { [service] in
-            _ = try? await service.toggleMatch(status: 0, faceCheckStatus: 1)
+        // H5 c-goMatch.vue：只有截图上传成功才触发 reportNoFace 与 toggleMatch(0, 1)。
+        // 本地仍立即 blocked，避免用户绕过合规流程；服务端退池由取证成功的异步链路完成。
+        Task { [service, evidenceProvider, previewSession] in
+            guard let evidenceProvider else {
+                logger.warning("face violation evidence unavailable: no provider")
+                return
+            }
+            let imageData: Data?
+            if inCall {
+                imageData = await evidenceProvider.captureCallEvidence()
+            } else {
+                imageData = await evidenceProvider.capturePreviewEvidence(from: previewSession)
+            }
+            guard let imageData else {
+                logger.warning("face violation evidence unavailable: no fresh frame")
+                return
+            }
+            let imageURL: String
+            do {
+                imageURL = try await evidenceProvider.uploadEvidence(imageData)
+            } catch {
+                logger.error("face violation evidence upload failed: \(String(describing: error), privacy: .private)")
+                return
+            }
+            // H5 不等待两个请求互相完成；上传成功后同时发出，任一路失败不取消另一条。
+            async let report: Void? = try? await service.reportNoFace(imageURL: imageURL)
+            async let close: Bool? = try? await service.toggleMatch(status: 0, faceCheckStatus: 1)
+            _ = await (report, close)
         }
     }
 

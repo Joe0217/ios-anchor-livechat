@@ -428,6 +428,32 @@ final class MatchStoreTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
         let faceFailCloseCount = service.toggleMatchCalls.filter { $0.status == 0 && $0.faceCheckStatus == 1 }.count
         XCTAssertEqual(faceFailCloseCount, 1, "in-call face fail must send toggleMatch(0, faceCheckStatus:1)")
+        XCTAssertEqual(service.reportNoFaceURLs, ["test://match-face-evidence"])
+    }
+
+    /// P1-a 补：H5 仅在截图上传成功后才发违规上报与退池请求。
+    /// 本地仍应立即 block，防止证据不可用时继续使用匹配功能。
+    func test_P1a_noEvidence_doesNotSendViolationRequests() async {
+        MatchPersistedStore.resetForTesting()
+        let service = FakeMatchService()
+        let face = FakeFaceDetectionService()
+        let camera = FakeMatchCameraSession()
+        let store = MatchStore(
+            service: service,
+            faceDetection: face,
+            faceEvidenceProvider: nil
+        )
+        store.attachCameraSession(camera)
+        await store.openMatch()
+        store.handleCallStoreLeavingIdle()
+
+        face.stubbedHasFace = false
+        store.handleJoinCallSource("matchV4")
+
+        XCTAssertTrue(store.isMatchBlocked)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertFalse(service.toggleMatchCalls.contains { $0.status == 0 && $0.faceCheckStatus == 1 })
+        XCTAssertTrue(service.reportNoFaceURLs.isEmpty)
     }
 
     /// P1-b：进入 .matchingCalling 立即检测有脸 → state 正常保持 .matchingCalling，isMatchBlocked 不变

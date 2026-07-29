@@ -159,10 +159,9 @@ final class RobotCallStore: ObservableObject {
     }
 
     /// 登出/主播资格撤销时清理本地覆盖层和定时器；网络会话已失效，不再补发业务接口。
-    func resetForSessionEnd() {
+    func resetForSessionEnd() async {
         broadcastTask?.cancel()
         broadcastTask = nil
-        Task { [broadcaster] in await broadcaster.stop() }
         ringTimer?.cancel()
         ringTimer = nil
         callTimer?.cancel()
@@ -178,6 +177,7 @@ final class RobotCallStore: ObservableObject {
         deferredRewardTask?.cancel()
         deferredRewardTask = nil
         deferredRewards = []
+        await broadcaster.stop()
     }
 
     private var canPresentIncoming: Bool {

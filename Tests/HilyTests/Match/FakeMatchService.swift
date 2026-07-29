@@ -16,6 +16,7 @@ final class FakeMatchService: MatchServiceProtocol {
 
     private(set) var isMatchOpenCallCount = 0
     private(set) var toggleMatchCalls: [(status: Int, faceCheckStatus: Int?)] = []
+    private(set) var reportNoFaceURLs: [String] = []
     private(set) var loadPoolDataCallCount = 0
     private(set) var loadMatchListCalls: [(pageNum: Int, pageSize: Int)] = []
 
@@ -29,6 +30,10 @@ final class FakeMatchService: MatchServiceProtocol {
     func toggleMatch(status: Int, faceCheckStatus: Int?) async throws -> Bool {
         toggleMatchCalls.append((status, faceCheckStatus))
         return try toggleMatchResult.get()
+    }
+
+    func reportNoFace(imageURL: String) async throws {
+        reportNoFaceURLs.append(imageURL)
     }
 
     func loadMatchPoolData() async throws -> MatchPoolData {

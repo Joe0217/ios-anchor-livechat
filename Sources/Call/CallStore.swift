@@ -37,6 +37,7 @@ final class CallStore: ObservableObject {
         // didSet 在 @Published publish 之后调用，满足 SwiftUI 渲染先于业务回调的顺序。
         didSet {
             guard oldValue != state else { return }
+            updateAppSoundsForStateTransition()
             // F refactor：多观察者数组（原单 weak var observer 已改为 NSHashTable，spec §3.4 P0-2）
             notifyObservers { $0.callStore(self, stateDidChange: state, previous: oldValue) }
             updateElapsedTimer(prev: oldValue)
@@ -121,7 +122,7 @@ final class CallStore: ObservableObject {
     /// - 消费者：CallMessageScroller（左侧 270×300 可滚动区域）
     /// - 生产者：
     ///   - handleRemoteText（sysMsg -1）→ 追加对方 text
-    ///   - GiftEffectSysMsgRouter（sysMsg 4 liveCallGift）→ 追加对方 gift
+    ///   - handleRemoteGiftFromP2P（P2P SEND_GIFT）→ 追加对方 gift + 触发特效
     ///   - sendCallText / echoLocalChatText → 主播自己发送后本地回显
     ///   - appendWaitBonus 可选追加 bonus（当前未启用，等 UI 决定）
     @Published private(set) var callChatMessages: [CallChatMessage] = []
@@ -140,8 +141,6 @@ final class CallStore: ObservableObject {
     var isCallWaitLocked: Bool { callWaitState == 1 || callWaitState == 3 }
 
     private var callWaitTimerTask: Task<Void, Never>?
-    /// 充值锁定进入时刻，PAY_SUCCESS 时补偿 callElapsed（对齐 H5 callingStartTime += pauseDuration 语义）
-    private var callWaitPauseAt: Date?
 
     private static let callWaitPrimarySeconds = 60
     private static let callWaitFallbackSeconds = 5
@@ -213,6 +212,11 @@ final class CallStore: ObservableObject {
 
     /// RTC 管理器（CallView 用它做远端渲染 + push 美颜后的帧）
     let agora = AgoraManager()
+
+    /// 当前独立 1v1 通话使用的相机。直播私 call 复用直播相机，结束通话后仍要回直播，
+    /// 因此只关闭由通话自身创建的相机。
+    private weak var localCamera: CameraManager?
+    private var ownsLocalCamera = false
 
     // MARK: - 内部
 
@@ -288,6 +292,7 @@ final class CallStore: ObservableObject {
     private var emptyRoomDetector: CallEmptyRoomDetector!
 
     private init() {
+        AppSoundPlayer.shared.preload()
         // 远端用户加入 RTC channel 时 → state 切 .connected（声网 didJoinedOfUid 触发）
         // 远端用户离开 → 兜底切 ended（一般已被 RTM hangup 提前处理，这里只防消息丢失）
         agora.$remoteUid
@@ -317,16 +322,21 @@ final class CallStore: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in self?.handleAppWillEnterForeground() }
         }
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.handleAppDidBecomeActive() }
+        }
 
         // 黑屏空房间检测状态机构造（DM-20260616-003）
         // - getChannelId 读 current.channelId（通话结束后为空 → detector.tick 内 guard 短路）
         // - canShowPopup 与 RTC 本地异常框互斥（callAbnormalReason 非空时抑制倒计时弹窗）
-        // - onHangup 走标准挂断链路（本端主动挂断 = localHangUp）
+        // - onHangup 使用系统心跳异常结束原因（对齐 H5 systemAbnormal）
         emptyRoomDetector = CallEmptyRoomDetector(
             getChannelId: { [weak self] in self?.current.channelId },
             canShowPopup: { [weak self] in self?.callAbnormalReason == nil },
             onHangup: { [weak self] _ in
-                Task { @MainActor in await self?.hangup() }
+                Task { @MainActor in await self?.hangupForSystemHeartbeatFailure() }
             },
             onReport: { status in
                 AppLogger.call.info("🩺 [EmptyRoom] report status=\(status, privacy: .public)")
@@ -497,6 +507,7 @@ final class CallStore: ObservableObject {
     /// D 里程碑修复（v5.4）：改 async，等 `agora.leave()` 真正完成（didLeaveChannelWith 回调）
     /// 再做后续清理，避免下次 start 拿到半销毁 SDK singleton。
     func stop() async {
+        AppSoundPlayer.shared.stopIncomingCallRingtone()
         cancelCallOutTimeout()
         cancelCallInTimeout()
         cancelStartRetry()
@@ -506,6 +517,7 @@ final class CallStore: ObservableObject {
         endedToIdleTask = nil
         rtmStateCancellable?.cancel()
         rtmStateCancellable = nil
+        stopOwnedLocalCamera()
         if state != .idle { await agora.leave() }
         signaling?.logout()
         signaling = nil
@@ -547,6 +559,10 @@ final class CallStore: ObservableObject {
             lastError = L10n.callErrorLocalBusy
             AppLogger.call.notice("[CallStore] callOut blocked: robot call is active")
             return
+        }
+        // 最小化 Party 房仍占用 RTC/NIM；主动拨打前先完整退房，避免通话初始化被旧会话干扰。
+        if PartyStore.shared.isMinimized {
+            await PartyStore.shared.leaveMinimizedRoom()
         }
         guard isSignalingReady, let signaling, acquireDirectCallAdmission() else {
             if lastError.isEmpty { lastError = L10n.userProfileNetworkError }
@@ -947,6 +963,7 @@ final class CallStore: ObservableObject {
         }) else { return }
         let info = current
         cancelCallInTimeout()
+        AppSoundPlayer.shared.stopIncomingCallRingtone()
 
         // 1) 通知主叫 —— 必须成功才能前进
         //    ⚠️ publish 失败时**不切 .connecting**：否则主叫永远收不到 Accept、30s 后发
@@ -980,6 +997,7 @@ final class CallStore: ObservableObject {
     func reject() async {
         guard state == .calling, current.inOrOut == .in, let signaling else { return }
         cancelCallInTimeout()
+        AppSoundPlayer.shared.stopIncomingCallRingtone()
         _ = await signaling.publish(buildMessage(action: .reject))
         sendCallNimSignal(.reject)
         // H5 callInCancel L1119/1129：被叫主动拒接桶 answerTime=0
@@ -1005,6 +1023,21 @@ final class CallStore: ObservableObject {
         await endLocally(reason: .localHangUp, rateCategory: nil, rateType: .caller, answerTime: 0, abnormal: 0)
     }
 
+    /// 空房间检测倒计时到期后的系统自动挂断。
+    /// H5 使用 `CALL_OVER_REASON_NUMBER.SYSTEM_HEART_BEAT_FAIL`，不能误记为主播主动挂断。
+    private func hangupForSystemHeartbeatFailure() async {
+        guard state == .connecting || state == .connected else { return }
+        if let signaling {
+            _ = await signaling.publish(buildMessage(action: .hangup))
+        }
+        sendCallNimSignal(.hangUp)
+        await endLocally(reason: .systemHeartBeatFail,
+                         rateCategory: nil,
+                         rateType: .caller,
+                         answerTime: 0,
+                         abnormal: 1)
+    }
+
     // MARK: - C 里程碑通话中控制
 
     /// 静音/取消静音。仅 `.connecting`/`.connected` 有效，其他态 no-op（幂等保护）。
@@ -1025,6 +1058,20 @@ final class CallStore: ObservableObject {
         guard current.frontGameType != .live else { return }
         camera.switchCameraPosition()
         isUsingFrontCamera.toggle()
+    }
+
+    /// CallFaceTimeView 在相机可用后注册。Store 统一结束通话时可立即释放独立通话相机，
+    /// 不再等待 SwiftUI 的 onDisappear。
+    func bindLocalCamera(_ camera: CameraManager, ownedByCall: Bool) {
+        localCamera = camera
+        ownsLocalCamera = ownedByCall
+    }
+
+    /// 视图销毁时取消注册；若 Store 已先行收尾，此方法是幂等 no-op。
+    func unbindLocalCamera(_ camera: CameraManager) {
+        guard localCamera === camera else { return }
+        localCamera = nil
+        ownsLocalCamera = false
     }
 
     /// 弱网 report 入口（AgoraManager.callNetworkQualityHandler → 转发到这里）。
@@ -1108,6 +1155,7 @@ final class CallStore: ObservableObject {
     /// 音频 track 保留（Info.plist UIBackgroundModes:audio + AVAudioSession 组合让通话不断音）。
     /// 直播私 call（frontGameType==.live）由 LiveStore 主导 pauseForCall 链路，本 handler 短路。
     private func handleAppDidEnterBackground() {
+        AppSoundPlayer.shared.handleApplicationDidEnterBackground()
         guard state == .connecting || state == .connected else { return }
         guard current.frontGameType != .live else { return }
         agora.updateChannelPublishVideo(false)
@@ -1120,6 +1168,15 @@ final class CallStore: ObservableObject {
         guard current.frontGameType != .live else { return }
         agora.updateChannelPublishVideo(true)
         AppLogger.call.info("📱 [CallStore] app willEnterForeground → publishCustomVideoTrack=true")
+    }
+
+    /// `willEnterForeground` 时应用仍可能处于 inactive；铃声恢复必须等 `didBecomeActive`。
+    private func handleAppDidBecomeActive() {
+        AppSoundPlayer.shared.handleApplicationDidBecomeActive(
+            isIncomingCallWaiting: state == .calling
+                && current.inOrOut == .in
+                && current.frontGameType == .direct
+        )
     }
 
     // MARK: - C-4 Wave2 gap-critic-004 AudioSession 打断处理
@@ -1262,6 +1319,7 @@ final class CallStore: ObservableObject {
             return
         }
         isEndingCall = true
+        AppSoundPlayer.shared.stopIncomingCallRingtone()
         // 【归因日志】通话结束入口统一记录：谁触发 + 触发时上下文
         // 用于排查"自动结束"：搜索 🔴 [endLocally] 一眼看到 reason + 触发路径栈
         AppLogger.call.notice("🔴 [endLocally] reason=\(reason.rawValue, privacy: .public) rateCat=\(rateCategory.map { String($0.rawValue) } ?? "nil", privacy: .public) rateType=\(rateType.rawValue, privacy: .public) state=\(self.state.rawValue, privacy: .public) elapsed=\(self.callElapsed, privacy: .public)s frontGame=\(String(describing: self.current.frontGameType), privacy: .public) inOrOut=\(String(describing: self.current.inOrOut), privacy: .public) answerTime=\(answerTime, privacy: .public) abnormal=\(abnormal, privacy: .public) callWaitState=\(self.callWaitState, privacy: .public) lastError='\(self.lastError, privacy: .private)'")
@@ -1269,22 +1327,12 @@ final class CallStore: ObservableObject {
         cancelCallInTimeout()
         let info = current
         current.hangupReason = reason
+        // 本地相机/麦克风必须先收；上报失败或超时不能阻止设备释放。
+        stopOwnedLocalCamera()
         // v5.4：await 等 didLeaveChannelWith，避免后续 start/join 拿到半销毁 singleton
         if state != .idle { await agora.leave() }
         // logout/stop 可能在 leave 期间把通话重置为 idle；此时不能用旧通话继续上报或覆写状态。
         guard state != .idle, current.callId == info.callId else { return }
-        // ⚠️ 主播端**不调** `/callOver`（后端无此路由 → 404；该接口是用户端独有的，后端按
-        // 用户端 callOver 触发结算）。本端只做 RTC leave + 状态复位 + callRate（可选）。
-        if !info.channelId.isEmpty, let cat = rateCategory {
-            // answerTime 由调用方按 H5 useCallApi.js 分桶语义传入（统一取值会污染 cancel/reject 桶）：
-            //   answered = sinceStartDuration（等待时长，H5 getDuration/duraction）
-            //   timeout  = 字面 30（H5 handleCallingTimeout L540）
-            //   主动 cancel | reject = 0（H5 callOutCancel L1065/1076 + callInCancel L1119/1129）
-            //   remoteCancel | remoteReject = sinceStartDuration（H5 callDuration in calling 阶段）
-            await reportRate(category: cat, type: rateType,
-                             answerTime: answerTime,
-                             abnormal: abnormal)
-        }
         // C 里程碑 R2：reset 通话中控制状态，避免下次通话继承
         if isMicMuted {
             agora.muteLocalAudio(false)
@@ -1309,6 +1357,25 @@ final class CallStore: ObservableObject {
         lastCongratsBonus = 0
         state = .ended
         scheduleEndedToIdle()
+
+        // ⚠️ 主播端**不调** `/callOver`（后端无此路由 → 404；该接口是用户端独有的，后端按
+        // 用户端 callOver 触发结算）。通话已经在本地结束后，才尽力上报 callRate；接口问题
+        // 不得影响音视频释放或 UI 收尾。
+        if !info.channelId.isEmpty, let cat = rateCategory {
+            await reportRate(category: cat, type: rateType,
+                             answerTime: answerTime,
+                             abnormal: abnormal,
+                             allowEnded: true)
+        }
+    }
+
+    private func stopOwnedLocalCamera() {
+        guard ownsLocalCamera, let localCamera else { return }
+        BeautyPipelineSharer.shared.detach(localCamera.renderer as AnyObject & BeautyRenderer)
+        localCamera.tearDown()
+        localCamera.stop()
+        self.localCamera = nil
+        ownsLocalCamera = false
     }
 
     /// ended → idle 的延迟切换（正常挂断 500ms，失败态 1.8s 让 UI 有时间展示"结束原因"toast）。
@@ -1342,11 +1409,11 @@ final class CallStore: ObservableObject {
     /// ⚠️ state 守卫：joinRtc 失败 → endLocally → state=.ended 后，控制流回到
     /// acceptIncomingFromLive L414 / accept() L463 仍会继续执行 reportRate(.answered)，
     /// 污染后端接通率统计（虚假 abnormal=0）。守卫下沉到入口拦截抢跑。
-    /// endLocally 内的 reportRate（L573）调用时 state 仍是 .calling/.connecting/.connected
-    /// （state=.ended 在 L577，reportRate 之后），不会被本守卫误拦截。
+    /// endLocally 内先关闭媒体并切 .ended，再用 allowEnded=true 上报结束桶，避免网络上报阻塞本地收尾。
     private func reportRate(category: CallRateCategory, type: CallRateType,
-                            answerTime: Int, abnormal: Int) async {
-        guard state != .ended, state != .idle, state != .failed else {
+                            answerTime: Int, abnormal: Int,
+                            allowEnded: Bool = false) async {
+        guard allowEnded || (state != .ended && state != .idle && state != .failed) else {
             AppLogger.call.notice("⚠️ [CallStore] reportRate 抢跑拦截 state=\(self.state.rawValue, privacy: .public) cat=\(category.rawValue, privacy: .public)")
             return
         }
@@ -1508,31 +1575,36 @@ extension CallStore: CallSignalingDelegate {
                 await publishRejectBusy(msg: msg, reason: "background")
                 return
             }
-            // 守卫 2: 房间维度私 call 开关（本地二次校验）
-            guard partyStore.roomInfo?.isPartyPrivateCallEnabled == true else {
-                AppLogger.call.notice("🚫 [CallStore] 派对房私 call 已关 → busy reject from=\(msg.fromUserId, privacy: .private)")
-                await publishRejectBusy(msg: msg, reason: "party_call_closed")
-                return
-            }
-            // 守卫 3: queryCall 判 callerType==5
+            // 守卫 2: queryCall 先判 callerType。最小化 Party 房收到普通通话时，
+            // 应完整退房后落入标准来电流程；仅 PartyCall 才保留当前房内自动接听行为。
             let channelId = msg.fromRoomId ?? ""
+            let callerType: Int?
             do {
                 let resp = try await CallService.queryCall(fromUserId: msg.fromUserId, channelId: channelId)
-                guard resp.callerType == 5 else {
-                    AppLogger.call.notice("🚫 [CallStore] 派对房内非 PartyCall (callerType=\(resp.callerType ?? -1, privacy: .public)) → reject")
-                    // 对齐安卓 §1.2：非 5 一律 reject（P1-7 决策：与直播一致）
-                    await publishRejectBusy(msg: msg, reason: "party room reject non-party call")
-                    return
-                }
+                callerType = resp.callerType
             } catch {
                 AppLogger.call.notice("🚫 [CallStore] 派对房 queryCall 超时/失败 → 保守 reject err=\(error.localizedDescription, privacy: .private)")
                 await publishRejectBusy(msg: msg, reason: "queryCall_failed")
                 return
             }
-            // callerType==5 → 委托 PartyStore.pauseForCall
-            AppLogger.call.debug("📞 [CallStore] 派对房收到 PartyCall → 委托 PartyStore.pauseForCall")
-            await partyStore.pauseForCall(msg: msg)
-            return
+            if callerType == 5 {
+                // 房间维度私 call 开关只约束 PartyCall。
+                guard partyStore.roomInfo?.isPartyPrivateCallEnabled == true else {
+                    AppLogger.call.notice("🚫 [CallStore] 派对房私 call 已关 → busy reject from=\(msg.fromUserId, privacy: .private)")
+                    await publishRejectBusy(msg: msg, reason: "party_call_closed")
+                    return
+                }
+                AppLogger.call.debug("📞 [CallStore] 派对房收到 PartyCall → 委托 PartyStore.pauseForCall")
+                await partyStore.pauseForCall(msg: msg)
+                return
+            }
+            guard partyStore.isMinimized else {
+                AppLogger.call.notice("🚫 [CallStore] 派对房内非 PartyCall (callerType=\(callerType ?? -1, privacy: .public)) → reject")
+                await publishRejectBusy(msg: msg, reason: "party room reject non-party call")
+                return
+            }
+            AppLogger.call.info("[CallStore] minimized Party → leave before standard incoming call")
+            await partyStore.leaveMinimizedRoom()
         }
 
         // L Gap-5：匹配态 auto-accept 时序改造 —— 不再"匹配态无脑 auto-accept"，
@@ -1708,12 +1780,26 @@ extension CallStore: CallSignalingDelegate {
         }
     }
 
+    /// 来电铃声仅服务于前台普通被叫等待页；接通、结束、拒接和超时离开 `.calling` 时统一停止。
+    private func updateAppSoundsForStateTransition() {
+        let shouldRing = state == .calling
+            && current.inOrOut == .in
+            && current.frontGameType == .direct
+        if shouldRing {
+            AppSoundPlayer.shared.startIncomingCallRingtone()
+        } else {
+            AppSoundPlayer.shared.stopIncomingCallRingtone()
+        }
+    }
+
     private func startElapsedTask() {
         elapsedTask?.cancel()
         elapsedTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 guard !Task.isCancelled, let self else { return }
+                // H5 在充值等待期间传入 `time-stop`，通话时长不应继续增长。
+                guard !self.isCallWaitLocked else { continue }
                 self.callElapsed += 1
                 // C-3 每秒 tick 后自检异常（内部 elapsed%10 门控 + state guard + alerted 保护）
                 self.checkAbnormalIfNeeded()
@@ -1750,8 +1836,12 @@ extension CallStore {
     /// sysMsg -1：通话内远端文字消息。
     /// 对齐 H5 `message.js`：文字立即进入 `talkListInCall`，随后自动翻译并更新同一条；
     /// `chatBubble` 是发送方透传的九宫格图片 URL，不是本地样式编号。
-    func handleRemoteText(_ text: String, chatBubble: String? = nil) {
-        guard !text.isEmpty else { return }
+    func handleRemoteText(_ text: String, chatBubble: String? = nil, sender: String) {
+        guard !text.isEmpty,
+              state == .connecting || state == .connected,
+              (current.remoteYxAccid.isEmpty || sender == current.remoteYxAccid) else {
+            return
+        }
         callRecentRemoteText = text
         callChatBubble = chatBubble
         let sender = CallChatMessage.Sender(
@@ -1787,7 +1877,7 @@ extension CallStore {
             level: mine?.level,
             isVip: false,
             isSpecial: false,
-            chatBubble: mine?.chatBubble,
+            chatBubble: AnchorInfoStore.shared.currentChatBubble,
             nicknameColor: .default,
             isSelf: true
         )
@@ -1810,8 +1900,6 @@ extension CallStore {
 
     /// H5 收到 attachType=-1 后自动调 translateText；失败时保留原文，不影响通话公屏流。
     private func translateRemoteCallText(messageID: UUID, text: String) {
-        let key = AppConfigStore.shared.microsoftTranslatorKey ?? AppConfigStore.translatorKeyFallback
-        let area = AppConfigStore.shared.microsoftTranslatorArea ?? AppConfigStore.translatorAreaFallback
         let targetLanguage: String = {
             switch AppLocaleStore.shared.current {
             case .en: return "en"
@@ -1821,24 +1909,77 @@ extension CallStore {
             }
         }()
         Task { @MainActor [weak self] in
+            guard let self else { return }
+            guard let credentials = await self.translatorCredentials() else {
+                AppLogger.call.warning("[CallStore] auto translate unavailable: config missing")
+                return
+            }
             do {
                 let translated = try await MicrosoftTranslateService.shared.translate(
-                    text: text, targetLang: targetLanguage, key: key, area: area
+                    text: text, targetLang: targetLanguage, key: credentials.key, area: credentials.area
                 )
-                self?.setChatTranslation(messageId: messageID, translation: translated)
+                self.setChatTranslation(messageId: messageID, translation: translated)
             } catch {
                 AppLogger.call.warning("[CallStore] auto translate failed msgId=\(messageID.uuidString, privacy: .public) err=\(error.localizedDescription, privacy: .public)")
             }
         }
     }
 
-    /// sysMsg 4 liveCallGift payload 消费：追加礼物 cell 到公屏（Phase A4）。
-    /// payload 已被 GiftEffectSysMsgRouter 解 data 层；本方法接收 raw dict，兼容 giftSmallImg 优先 + giftImg 兜底。
+    private func translatorCredentials() async -> (key: String, area: String)? {
+        if let key = AppConfigStore.shared.microsoftTranslatorKey,
+           let area = AppConfigStore.shared.microsoftTranslatorArea,
+           !key.isEmpty, !area.isEmpty {
+            return (key, area)
+        }
+
+        await AppConfigStore.shared.activate()
+        guard let key = AppConfigStore.shared.microsoftTranslatorKey,
+              let area = AppConfigStore.shared.microsoftTranslatorArea,
+              !key.isEmpty, !area.isEmpty else {
+            return nil
+        }
+        return (key, area)
+    }
+
+    /// 已接通通话收到 P2P `SEND_GIFT` 时的唯一入口。
+    ///
+    /// 对齐 H5 `stores/modules/message.js`：只消费当前通话对端发来的礼物；
+    /// `attachType=4` 的系统消息不带发送方，已接通时不能据此展示，避免其他用户礼物误覆盖。
+    @discardableResult
+    func handleRemoteGiftFromP2P(_ data: [String: Any], senderYxAccid: String) -> Bool {
+        guard state == .connected,
+              !current.callId.isEmpty,
+              !current.remoteYxAccid.isEmpty,
+              senderYxAccid == current.remoteYxAccid,
+              let giftIcon = (data["giftIcon"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !giftIcon.isEmpty else {
+            return false
+        }
+
+        // P2P 消息的发送方在 NIM envelope，不在 attach payload；补齐给通用特效 decoder。
+        var payload = data
+        if payload["fromAccid"] == nil {
+            payload["fromAccid"] = senderYxAccid
+        }
+        appendChatGiftFromPayload(payload)
+        let accepted = GiftEffectIntake.ingest(
+            scene: .call,
+            scopeId: current.callId,
+            payload: payload,
+            mineYxAccid: SessionStore.shared.user?.yxAccid ?? ""
+        )
+        AppLogger.call.info("[CallStore] P2P SEND_GIFT accepted effect=\(accepted, privacy: .public) scope=\(self.current.callId, privacy: .private)")
+        return true
+    }
+
+    /// 通话公屏礼物 append helper。
+    /// 图片优先 giftSmallImg / smallImg，缺失时回退 giftImg / giftIcon。
     func appendChatGiftFromPayload(_ data: [String: Any]) {
         // 图片：H5 messageScroller line 11 优先 giftSmallImg，缺则 giftImg
         let img = (data["giftSmallImg"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-              ?? (data["giftImg"] as? String)
               ?? (data["smallImg"] as? String)
+              ?? (data["giftImg"] as? String)
+              ?? (data["giftIcon"] as? String)
               ?? ""
         guard !img.isEmpty else { return }
         // 数量兼容 Int / String
@@ -1888,7 +2029,6 @@ extension CallStore {
     /// 后端未配置或未拉到时用 `callWaitPrimarySeconds`=60 本地兜底（对齐 H5 topBar.vue:20 `|| 60`）。
     /// 幂等：重复 START_PAY / CALL_TIME_END cancel 旧 task 重启。
     private func startCallWaitLockTimer(reason: Int) {
-        callWaitPauseAt = Date()
         callWaitTimerTask?.cancel()
         // v26.1（2026-07-16）review 修：等价 JS `|| 60` 语义，`0 / 负数 / nil` 全部回落
         // （原 `?? 60` 只兜 nil，后端错配 0 会导致空循环 → 立即 5s auto hangup 秒挂断）
@@ -1911,19 +2051,19 @@ extension CallStore {
         }
     }
 
-    /// PAY_SUCCESS：清 timer + 补偿 callElapsed（减去暂停时长，让"通话有效时长"不含充值等待） + 2s 延迟触发 Congrats 弹窗
+    /// PAY_SUCCESS：清 timer。通话时长在锁定期间已暂停，因此不需要事后补偿。
+    /// 保持 H5 解锁动画结束后再展示 Congrats 的 2s 时序。
     private func handlePaySuccess() {
-        if let pauseAt = callWaitPauseAt {
-            let paused = Int(Date().timeIntervalSince(pauseAt))
-            callElapsed = max(0, callElapsed - paused)
-            AppLogger.call.info("[CallStore] paySuccess 补偿 -\(paused, privacy: .public)s → callElapsed=\(self.callElapsed, privacy: .public)")
-        }
         cancelCallWaitLockTimer()
         let bonus = callWaitBonus  // 快照本次奖励值供 2s 后弹窗读
         lastCongratsBonus = bonus
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(Self.congratsBonusDelaySeconds * 1_000_000_000))
             guard let self, self.state == .connecting || self.state == .connected else { return }
+            // H5 在解锁动画完成后清空 waitState；避免顶部等待状态残留到后续正常通话。
+            if self.callWaitState == 2 {
+                self.callWaitState = 0
+            }
             self.congratsBonusToken = UUID()
         }
     }
@@ -1933,7 +2073,6 @@ extension CallStore {
         callWaitTimerTask?.cancel()
         callWaitTimerTask = nil
         callWaitCountdown = 0
-        callWaitPauseAt = nil
     }
 
     /// Congrats sheet dismiss 触发（用户点 OK 或 drag dismiss）
@@ -1965,7 +2104,7 @@ extension CallStore {
     /// 主播发送公屏文字消息（Phase C：对齐 H5 g-faceTime/index.vue:122-153 sendMessage）。
     /// 双动作：
     /// 1. 立即本地 echo（`echoLocalChatText`，对齐 H5 `talkListInCall.unshift`——不等 NIM 回执）
-    /// 2. P2P NIMCustomObject attachType=-1 发送到 `current.remoteYxAccid`，携带 ext.userLevel/fromNickName/chatBubble
+    /// 2. NIM custom P2P system notification attachType=-1 发送到 `current.remoteYxAccid`，携带 ext.userLevel/fromNickName/chatBubble
     ///    （对齐 H5 sendImMsg 参数结构，供对端 msgItem 用来渲染气泡背景 + nav 徽章）
     /// 发送失败仅日志、不 rollback echo（H5 同款语义；Wave 6 补 send fail toast）。
     func sendCallText(_ text: String) {
@@ -1978,7 +2117,8 @@ extension CallStore {
         }
         // 1. 本地回显（先做，UI 即时反馈）
         echoLocalChatText(trimmed)
-        // 2. NIM P2P 自定义消息 fire-and-forget
+        // 2. H5 `homeStore.sendImMsg` 使用 customP2p system message；收端由 NIMService
+        //    的系统通知 delegate 分发给 SystemMessageRouter，不能改用普通 NIMChat 消息。
         let mine = AnchorInfoStore.shared.mine
         let encodedNickname = mine?.nickname?.addingPercentEncoding(withAllowedCharacters: .callMessageNicknameAllowed) ?? ""
         let payload: [String: Any] = [
@@ -1987,7 +2127,7 @@ extension CallStore {
             "ext": [
                 "userLevel": mine?.level ?? 0,
                 "fromNickName": encodedNickname,
-                "chatBubble": mine?.chatBubble ?? ""
+                "chatBubble": AnchorInfoStore.shared.currentChatBubble ?? ""
             ]
         ]
         guard JSONSerialization.isValidJSONObject(payload),
@@ -1996,17 +2136,16 @@ extension CallStore {
             AppLogger.call.warning("[CallStore] sendCallText JSON encode failed")
             return
         }
-        let attachment = GenericCustomAttachment(rawDict: payload, rawJSON: jsonStr)
-        let customObject = NIMCustomObject()
-        customObject.attachment = attachment
-        let msg = NIMMessage()
-        msg.messageObject = customObject
+        let notification = NIMCustomSystemNotification(content: jsonStr)
+        // H5 未限制仅在线用户，离线期间由 NIM 按系统消息语义补发。
+        notification.sendToOnlineUsersOnly = false
         let session = NIMSession(peer, type: .P2P)
-        do {
-            try NIMSDK.shared().chatManager.send(msg, to: session)
-            AppLogger.call.info("[CallStore] sendCallText OK peer=\(peer, privacy: .private) len=\(trimmed.count, privacy: .public)")
-        } catch {
-            AppLogger.call.error("[CallStore] sendCallText FAIL peer=\(peer, privacy: .private) err=\(error.localizedDescription, privacy: .public)")
+        NIMSDK.shared().systemNotificationManager.sendCustomNotification(notification, to: session) { error in
+            if let error {
+                AppLogger.call.error("[CallStore] sendCallText FAIL peer=\(peer, privacy: .private) err=\(error.localizedDescription, privacy: .private)")
+            } else {
+                AppLogger.call.info("[CallStore] sendCallText OK peer=\(peer, privacy: .private) len=\(trimmed.count, privacy: .public)")
+            }
         }
     }
 }

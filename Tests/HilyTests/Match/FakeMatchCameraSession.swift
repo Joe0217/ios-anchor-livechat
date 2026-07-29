@@ -11,6 +11,7 @@ final class FakeMatchCameraSession: MatchCameraSessionProtocol {
 
     var isRunning: Bool = false
     var interruptionUnrecoveredDuration: TimeInterval = 0
+    var evidenceJPEGData: Data? = Data([0x00])
 
     // MARK: - 调用记录
 
@@ -40,5 +41,9 @@ final class FakeMatchCameraSession: MatchCameraSessionProtocol {
     func stop() {
         stopCallCount += 1
         isRunning = false
+    }
+
+    func latestFrameJPEGData() async -> Data? {
+        evidenceJPEGData
     }
 }

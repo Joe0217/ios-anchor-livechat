@@ -73,7 +73,18 @@ struct CallView: View {
         // 头像 tap 内置分派：通话中 → 弹名片卡（对齐 LiveRoom / PartyRoom pattern）
         .userCardSheet(
             item: Binding(
-                get: { userCardUserId.map { UserCardPresentation(userId: $0) } },
+                get: {
+                    userCardUserId.map {
+                        UserCardPresentation(
+                            preview: UserCardPreview(
+                                userId: $0,
+                                nickname: store.current.remoteNickname,
+                                avatarUrl: store.current.remoteIcon,
+                                headwearUrl: store.current.remoteHeadFrame
+                            )
+                        )
+                    }
+                },
                 set: { userCardUserId = $0?.userId }
             )
         )
@@ -199,6 +210,11 @@ private struct CallWaitingView: View {
 
 // MARK: - FaceTime：通话中
 
+private struct CallAskForGiftTipData: Identifiable {
+    let id = UUID()
+    let imageURL: String
+}
+
 private struct CallFaceTimeView: View {
     @ObservedObject var store: CallStore
     /// C-4 Wave4 C 组 gap-010：独立观察 agora.isRemoteVideoOff 变化（agora 是 CallStore 内 `let` 字段，
@@ -221,8 +237,9 @@ private struct CallFaceTimeView: View {
     @State private var isChromeVisible: Bool = true
     /// C-4 Wave1 gap-018：顶部 X 按钮触发的挂断二次确认 confirmationDialog
     @State private var showHangupConfirm: Bool = false
-    /// 索要礼物请求失败时的反馈 toast。
-    @State private var showComingSoonToast: String?
+    /// 索礼成功后的居中提示，延时 500ms 出现并在 2s 时间窗结束后消失。
+    @State private var askGiftTip: CallAskForGiftTipData?
+    @State private var isAskGiftTipVisible: Bool = false
     /// v22（2026-07-10）：askForGift 被拒 toast 显隐（token 变化 → task 触发 2s 展示）
     @State private var askForGiftRejectedVisible: Bool = false
     /// PIP 拖动累计偏移（相对初始 topTrailing 锚点；用户 drag onEnded 后 commit）
@@ -244,6 +261,8 @@ private struct CallFaceTimeView: View {
     @State private var askGiftDisableCountdown: Int = 0
     /// Phase E：more 按钮打开的举报 sheet（复用 ReportUserSheet）
     @State private var showReportSheet: Bool = false
+    /// 通话接口仅稳定提供主播段位名；VIP/用户等级由已有画像接口补齐，缺失时不展示标签。
+    @State private var remoteProfile: ConversationProfile?
 
     private var camera: CameraManager { liveCamera ?? fallback.camera }
     private var beautyParams: BeautyParameters { liveBeauty ?? fallback.beauty }
@@ -254,6 +273,7 @@ private struct CallFaceTimeView: View {
             // - modifier chain 结构不变（frame/padding/offset 参数变化）→ view identity 稳定
             // - tap 分派：main 时 chrome toggle / PIP 时 swap（对齐用户 UX 直觉）
             RemoteVideoView(manager: store.agora)
+                .overlay(remotePreviewLockOverlay)
                 .modifier(VideoLayoutModifier(isMain: !isLocalMain,
                                               pipOffset: pipTotalOffset,
                                               pipTopExtra: pipTopExtraForCurrentScene,
@@ -280,6 +300,14 @@ private struct CallFaceTimeView: View {
                     .accessibilityLabel(L10n.callSubtitleCallingOut)
             }
 
+            // 输入态下点击视频空白处收起键盘。置于 chrome 之前，输入栏和其他明确按钮仍保持可操作。
+            if showChatInput {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .ignoresSafeArea()
+                    .onTapGesture(perform: dismissChatInput)
+            }
+
             // C-4 Wave1 gap-001：chrome 层挂 opacity 由 isChromeVisible 控制（点屏切显隐）
             // .allowsHitTesting(isChromeVisible) 隐时按钮不响应，root tap 直穿 → 恢复 chrome
             VStack(spacing: 0) {
@@ -290,7 +318,15 @@ private struct CallFaceTimeView: View {
                    store.liveCallCountdown > 0 {
                     liveCallBanner.padding(.top, 12).padding(.horizontal, 16)
                 }
-                topBar.padding(.top, 12).padding(.horizontal, 16)
+                if showChatInput {
+                    topBar
+                        .padding(.top, 12)
+                        .padding(.horizontal, 16)
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: dismissChatInput)
+                } else {
+                    topBar.padding(.top, 12).padding(.horizontal, 16)
+                }
                 Spacer()
                 if showChatInput {
                     callChatInputBar
@@ -307,7 +343,6 @@ private struct CallFaceTimeView: View {
             // - 锁定态 dim overlay 在 PIP 状态下才显示（main 全屏时不 dim）
             // - drag gesture 恒挂；main 状态下 offset 仍应用（视觉微移不明显），swap 到 PIP 时无缝继续
             CameraPreview(camera: camera, agora: store.agora)
-                .overlay(cameraPreviewLockOverlay)
                 .modifier(VideoLayoutModifier(isMain: isLocalMain,
                                               pipOffset: pipTotalOffset,
                                               pipTopExtra: pipTopExtraForCurrentScene,
@@ -347,18 +382,15 @@ private struct CallFaceTimeView: View {
                 .padding(.leading, 12)
                 .padding(.bottom, 128)  // 让位底部 bottomBar
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                .onTapGesture(perform: dismissChatInput)
                 .opacity(isChromeVisible ? 1 : 0)
                 .animation(.easeInOut(duration: 0.2), value: isChromeVisible)
 
-            // 索要礼物请求失败反馈。
-            if let toastText = showComingSoonToast {
-                Text(toastText)
-                    .font(.subheadline).bold()
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 16).padding(.vertical, 10)
-                    .background(.black.opacity(0.7), in: Capsule())
+            if let askGiftTip, isAskGiftTipVisible {
+                CallAskForGiftTip(imageURL: askGiftTip.imageURL)
                     .transition(.opacity)
-                    .accessibilityHint(Text(toastText))
+                    .zIndex(10)
+                    .allowsHitTesting(false)
             }
 
             // v22（2026-07-10）：主播 askForGift 被用户拒绝 toast（token 变化即触发 2s 展示）
@@ -372,11 +404,20 @@ private struct CallFaceTimeView: View {
                     .accessibilityHint(Text(L10n.callAskForGiftRejected))
             }
         }
-        .task(id: showComingSoonToast) {
-            guard showComingSoonToast != nil else { return }
-            try? await Task.sleep(nanoseconds: 2_000_000_000)
+        .task(id: askGiftTip?.id) {
+            guard let tip = askGiftTip else {
+                isAskGiftTipVisible = false
+                return
+            }
+            isAskGiftTipVisible = false
+            try? await Task.sleep(nanoseconds: 500_000_000)
             guard !Task.isCancelled else { return }
-            withAnimation(.easeInOut(duration: 0.2)) { showComingSoonToast = nil }
+            guard askGiftTip?.id == tip.id else { return }
+            withAnimation(.easeInOut(duration: 0.2)) { isAskGiftTipVisible = true }
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard !Task.isCancelled, askGiftTip?.id == tip.id else { return }
+            withAnimation(.easeInOut(duration: 0.2)) { isAskGiftTipVisible = false }
+            askGiftTip = nil
         }
         .task(id: store.askForGiftRejectedToken) {
             guard store.askForGiftRejectedToken != nil else { return }
@@ -384,6 +425,16 @@ private struct CallFaceTimeView: View {
             try? await Task.sleep(nanoseconds: 2_000_000_000)
             guard !Task.isCancelled else { return }
             withAnimation(.easeInOut(duration: 0.2)) { askForGiftRejectedVisible = false }
+        }
+        .task(id: store.current.remoteYxAccid) {
+            let yxAccid = store.current.remoteYxAccid
+            guard !yxAccid.isEmpty else {
+                remoteProfile = nil
+                return
+            }
+            let profiles = await ConversationProfileService.shared.fetch(yxAccIds: [yxAccid])
+            guard !Task.isCancelled, store.current.remoteYxAccid == yxAccid else { return }
+            remoteProfile = profiles[yxAccid]
         }
         // tap 切 chrome 显隐已挪到 RemoteVideoView 层 —— 避免与 chrome 内 Button 手势竞争。
         // 原挂 body 最外层的 `.contentShape.onTapGesture` 会抢占 CallBtn* 的 Button 手势 → 三按钮不响应
@@ -400,14 +451,22 @@ private struct CallFaceTimeView: View {
             Button(L10n.callHangupConfirmCancel, role: .cancel) {}
         }
         .onAppear {
+            if store.isCallWaitLocked {
+                isLocalMain = true
+            }
             // D 里程碑修复（v5.4）：仅在独立 1v1 通话场景启停相机；
             // 直播私 call 由 LiveRoomView 持有的 camera 连续运行，CallView 仅复用其推流。
             if liveCamera == nil {
                 camera.renderer.updateParameters(beautyParams)
                 CameraManager.requestAccess { granted in
-                    if granted { camera.start() }
+                    guard granted,
+                          store.state == .connecting || store.state == .connected else { return }
+                    camera.start()
                 }
             }
+            store.bindLocalCamera(camera, ownedByCall: liveCamera == nil)
+            // 匹配通话的无脸取证必须读取本通话的相机帧，不能从其他场景的全局帧猜测。
+            MatchCallEvidenceSource.bind(camera)
             // K 里程碑：attach `.call` token 让 K 页面调过的美颜参数广播到通话 renderer
             // 同一 CameraManager.renderer 多处 attach 时后写覆盖前写（Sharer 幂等）；
             // 直播私 call 场景下 LiveRoomView 已 attach `.live`，此处 attach `.call` 优先级更高（栈顶生效）
@@ -417,6 +476,17 @@ private struct CallFaceTimeView: View {
             // 尚未 ready（setup 首次访问从 .notStarted 变 .ready 时 attach 本身不会 apply），
             // 显式 apply 保证首帧 SDK 参数与 K store 一致，避免 SDK 默认全零 vs UI 显示值不一致。
             camera.renderer.apply(BeautyPipelineSharer.shared.store.settings)
+        }
+        .onChange(of: store.isCallWaitLocked) { isLocked in
+            // H5 进入充值等待会固定主播主窗，远端小窗只读，直至解锁流程结束。
+            guard isLocked, !isLocalMain else { return }
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isLocalMain = true
+            }
+        }
+        .onChange(of: store.callChatMessages.count) { _ in
+            // H5 每次通话公屏新增消息都会取消索礼提示，避免与真实收礼提示重叠。
+            askGiftTip = nil
         }
         .onDisappear {
             // review 202607071542 R-4 修复：SwiftUI 在 ScenePhase=.background 时也调 onDisappear（v5.3.3 已知坑）
@@ -429,6 +499,8 @@ private struct CallFaceTimeView: View {
             // 回前台的 willEnterForegroundNotification 会误重启 session（摄像头灯重亮）+ subscribers 字典残留。
             // tearDown 全清且幂等（参考 LiveRoomView.swift:368 同模式；CameraManager.swift:314 内 guard session.isRunning 无副作用）。
             if liveCamera == nil { camera.tearDown() }
+            store.unbindLocalCamera(camera)
+            MatchCallEvidenceSource.unbind(camera)
         }
         // C-3 通话异常自检 alert（H5 g-faceTime/topBar.vue tenSecondsCB + secondsToZero）
         // 一次通话同 reason 只弹一次（CallStore.alertedAbnormalReasons 保护）；
@@ -472,38 +544,25 @@ private struct CallFaceTimeView: View {
         .presentationDetents([.fraction(0.6)])
     }
 
-    /// 对齐 H5 index.vue:203-215 askForGift 完整链路：关 sheet + 起 15s 冷却 + 调后端 API + 本地回显。
-    private func handleAskForGift(_ gift: GiftListData) {
-        showGiftPicker = false
-        // 本地立即回显（H5 askGiftInfo 2s toast 语义 —— iOS 落到公屏 gift cell）
-        // v22（2026-07-11 反悔）：主播端公屏显示主播真实昵称（用户明示）
-        let sender = CallChatMessage.Sender(
-            nickname: AnchorInfoStore.shared.mine?.nickname ?? "",
-            level: nil, isVip: false, isSpecial: false,
-            chatBubble: nil, nicknameColor: .default
-        )
-        let img = gift.giftSmallImg.isEmpty ? gift.giftImg : gift.giftSmallImg
-        store.appendChatMessage(.gift(sender: sender, imageURL: img, count: 1))
-        // 起 15s 冷却
+    /// 对齐 H5 index.vue:203-215：仅 API 成功后关闭面板、展示提示并开启冷却。
+    /// 索礼不是送礼事件，不能提前插入本地通话公屏。
+    private func handleAskForGift(_ gift: GiftListData) async throws {
+        try await GiftService.askFor(beAskYxAccid: store.current.remoteYxAccid, giftId: gift.id)
+        guard !Task.isCancelled else { return }
+        let imageURL = gift.giftSmallImg.isEmpty ? gift.giftImg : gift.giftSmallImg
+        if !imageURL.isEmpty {
+            askGiftTip = CallAskForGiftTipData(imageURL: imageURL)
+        }
+        startAskGiftCooldown()
+    }
+
+    private func startAskGiftCooldown() {
         askGiftDisableCountdown = 15
         Task { @MainActor in
             for _ in 0..<15 {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 if Task.isCancelled || askGiftDisableCountdown == 0 { return }
                 askGiftDisableCountdown = max(0, askGiftDisableCountdown - 1)
-            }
-        }
-        // 调 API；失败时保留冷却，防止连续点击造成重复请求，并向主播明确反馈。
-        let peer = store.current.remoteYxAccid
-        let giftId = gift.id
-        Task {
-            do {
-                try await GiftService.askFor(beAskYxAccid: peer, giftId: giftId)
-            } catch {
-                AppLogger.call.error("[Call] askFor FAIL giftId=\(giftId, privacy: .public) err=\(error.localizedDescription, privacy: .public)")
-                await MainActor.run {
-                    showComingSoonToast = error.localizedDescription
-                }
             }
         }
     }
@@ -548,15 +607,10 @@ private struct CallFaceTimeView: View {
         // 设计稿 /Users/joe/Downloads/通话UI/主播端.png 对齐：
         // 左侧半透明黑圆角信息卡（多行）+ 右侧 X 挂断按钮（PIP 视觉上盖住其下半）。
         //
-        // 信息卡布局：
-        //   Row 1 (identity)：Avatar(40) + 昵称 → 右侧 You/User 信号条
-        //   Row 2 (badges)  ：SS 徽章 + 国旗 emoji + 国家码（可选）
-        //   Row 3 (timer)   ：大 monospaced 00:00:00
-        //   Row 4 (income)  ：call 收入胶囊 + gift 收入胶囊
-        //   Row 5 (waitTag) ：粉色 "User recharging, please wait Ns." 内联提示（waitState 生效且非锁定态时）
+        // 信息卡布局：身份 + 标签 / 计时器与双方信号 / 收益 / 可选等待提示。
         // X 关闭按钮已移到独立 topTrailing 层（closeButton）—— 避免与 PIP 视觉/交互干扰
         HStack(alignment: .top, spacing: 8) {
-            infoCard.frame(maxWidth: 260, alignment: .leading)
+            infoCard
             Spacer(minLength: 4)
         }
     }
@@ -569,6 +623,7 @@ private struct CallFaceTimeView: View {
     private var closeButton: some View {
         if !isInLiveLockout {
             Button {
+                dismissChatInput()
                 CallHaptics.impact(.medium)
                 showHangupConfirm = true
             } label: {
@@ -593,13 +648,13 @@ private struct CallFaceTimeView: View {
             && store.liveCallCountdown > 0
     }
 
-    /// 左上信息卡：identity + timer + income + waitTag（对齐设计稿主播端.png）
+    /// 左上信息卡：宽度随身份、标签和收入内容自适应。
     private var infoCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Row 1：Avatar + 昵称 + You/User 信号条
+        VStack(alignment: .leading, spacing: 6) {
+            // Row 1：Avatar + 昵称 + 等级/VIP/国家标签
             HStack(alignment: .center, spacing: 10) {
                 AvatarView(urlString: store.current.remoteIcon,
-                           size: 40,
+                           size: 38,
                            kind: .user,
                            headwearURL: store.current.remoteHeadFrame.isEmpty ? nil : store.current.remoteHeadFrame,
                            userId: store.current.remoteUserIdString)
@@ -611,14 +666,15 @@ private struct CallFaceTimeView: View {
                         .truncationMode(.tail)
                     anchorBadgesRow
                 }
-                Spacer(minLength: 4)
+            }
+            // Row 2：计时器与双方信号同行，减少卡片高度。
+            HStack(alignment: .center, spacing: 10) {
+                Text(formatDuration(store.callElapsed))
+                    .font(.system(size: 23, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(.white)
+                    .accessibilityLabel(Text(formatDuration(store.callElapsed)))
                 signalColumn
             }
-            // Row 2：大 timer
-            Text(formatDuration(store.callElapsed))
-                .font(.system(size: 26, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.white)
-                .accessibilityLabel(Text(formatDuration(store.callElapsed)))
             // Row 3：收入胶囊 × 2
             topBarIncomeChips
             // Row 4（可选）：waitState 内联粉色胶囊（H5 waitCallTip 语义 + 设计稿位置）
@@ -627,39 +683,41 @@ private struct CallFaceTimeView: View {
             }
         }
         .padding(.horizontal, 10).padding(.vertical, 10)
-        .background(.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(.black.opacity(0.15), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
-    /// SS 徽章 + 国旗 emoji + 国家码（缺字段时自动降级）。
-    /// `levelName` 由 createCall / joinCall 注入 `CurrentCallInfo`，仅 SS 主播展示徽章。
+    /// 段位、VIP 和国家标签。国家仅保留旗帜，不再展示两位国家缩写。
     @ViewBuilder
     private var anchorBadgesRow: some View {
         HStack(spacing: 4) {
-            if store.current.remoteLevelName.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == "SS" {
+            let anchorLevel = store.current.remoteLevelName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let userLevel = remoteProfile?.userLevelName
+            if anchorLevel.uppercased() == "SS" {
                 Image("CallAnchorBadgeSS")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 18, height: 18)
                     .accessibilityLabel("SS")
             }
+            UserLevelBadge(levelName: userLevel, size: .small)
+            if remoteProfile?.isVIPActive() == true {
+                VIPBadge(size: .small)
+            }
             // 严格 ISO 2 字节 code 才展示徽章行（flagEmoji 对非法输入回退 "🌐"；用 count==2 守卫避免
-            // "🌐 USA" 类退化视觉。H5 主播端契约后端总是 2 字节 ISO）
+            // 无效国家码不展示。H5 主播端契约后端总是 2 字节 ISO。
             let code = store.current.remoteCountryCode.trimmingCharacters(in: .whitespacesAndNewlines)
             if code.count == 2 {
                 Text(AnchorInfoStore.flagEmoji(from: code))
                     .font(.system(size: 12))
                     .accessibilityHidden(true)
-                Text(code.uppercased())
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.85))
             }
         }
     }
 
-    /// 右侧信号列：You / User 两行 —— 消费真实网络质量（agora.localSignalLevel / remoteSignalLevel）。
+    /// 双方信号水平并列，和计时器同行展示。
     /// 数据来源：AgoraRtcEngineDelegate.rtcEngine networkQuality 每 ~2s 上报（AgoraNetworkQuality raw 0-6）。
     private var signalColumn: some View {
-        VStack(alignment: .trailing, spacing: 3) {
+        HStack(spacing: 8) {
             signalRow(label: L10n.callSignalLabelYou, level: agora.localSignalLevel)
             signalRow(label: L10n.callSignalLabelUser, level: agora.remoteSignalLevel)
         }
@@ -751,16 +809,16 @@ private struct CallFaceTimeView: View {
         }
     }
 
-    /// 收入胶囊：切图 icon 20pt + 数字 + 💎 + tint 半透明胶囊背景（对齐设计稿主播端.png）
+    /// 收入胶囊：通话/礼物图标 16pt，数字 12pt，维持紧凑信息密度。
     private func incomeCapsule(iconAsset: String, value: Int, tint: Color) -> some View {
         HStack(spacing: 4) {
             Image(iconAsset)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
-                .frame(width: 20, height: 20)
+                .frame(width: 16, height: 16)
                 .accessibilityHidden(true)
             Text("\(value)")
-                .font(.system(size: 14, weight: .semibold)).monospacedDigit()
+                .font(.system(size: 12, weight: .semibold)).monospacedDigit()
                 .foregroundStyle(.white)
             Image("coins")
                 .resizable()
@@ -801,33 +859,59 @@ private struct CallFaceTimeView: View {
 
     /// H5 `input-bar`：原位覆盖底部工具栏，单行 200 字符，回车发送，失焦 300ms 后收起。
     private var callChatInputBar: some View {
-        TextField(L10n.callChatInputPlaceholder, text: $chatInputText)
-            .textFieldStyle(.plain)
-            .font(.system(size: 14))
-            .foregroundStyle(.black)
-            .submitLabel(.send)
-            .focused($isChatInputFocused)
-            .onSubmit(sendChatInput)
-            .onChange(of: chatInputText) { text in
-                if text.count > 200 {
-                    chatInputText = String(text.prefix(200))
+        HStack(spacing: 8) {
+            TextField(L10n.callChatInputPlaceholder, text: $chatInputText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 14))
+                .foregroundStyle(.black)
+                .submitLabel(.send)
+                .focused($isChatInputFocused)
+                .onSubmit(sendChatInput)
+                .onChange(of: chatInputText) { text in
+                    if text.count > 200 {
+                        chatInputText = String(text.prefix(200))
+                    }
                 }
+
+            Button(action: sendChatInput) {
+                Image("liveRoomSendButton")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 24, height: 24)
+                    .opacity(canSendChatInput ? 1 : 0.4)
+                    .padding(.trailing, 8)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
             }
-            .onChange(of: isChatInputFocused) { focused in
-                guard !focused else { return }
-                Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 300_000_000)
-                    guard !isChatInputFocused else { return }
-                    showChatInput = false
-                }
+            .buttonStyle(.plain)
+            .disabled(!canSendChatInput)
+            .accessibilityLabel(L10n.callChatInputSend)
+        }
+        .onChange(of: isChatInputFocused) { focused in
+            guard !focused else { return }
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                guard !isChatInputFocused else { return }
+                showChatInput = false
             }
-            .padding(.horizontal, 12)
-            .frame(height: 32)
-            .background(.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .padding(.horizontal, 10)
-            .padding(.vertical, 12)
-            .background(Color(red: 243 / 255, green: 244 / 255, blue: 250 / 255))
-            .onAppear { isChatInputFocused = true }
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 32)
+        .background(.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 12)
+        .background(Color(red: 243 / 255, green: 244 / 255, blue: 250 / 255))
+        .onAppear { isChatInputFocused = true }
+    }
+
+    private var canSendChatInput: Bool {
+        !chatInputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func dismissChatInput() {
+        guard showChatInput else { return }
+        isChatInputFocused = false
+        showChatInput = false
     }
 
     private func sendChatInput() {
@@ -835,8 +919,14 @@ private struct CallFaceTimeView: View {
         guard !text.isEmpty else { return }
         store.sendCallText(text)
         chatInputText = ""
-        isChatInputFocused = false
-        showChatInput = false
+        dismissChatInput()
+    }
+
+    /// 输入展开时，视频点击只负责收键盘；避免同一次 tap 同时切大小窗或清屏。
+    private func consumeChatInputTapIfNeeded() -> Bool {
+        guard showChatInput else { return false }
+        dismissChatInput()
+        return true
     }
 
     /// 礼物按钮：15s 冷却期间 disabled + 显示倒计时角标
@@ -931,9 +1021,11 @@ private struct CallFaceTimeView: View {
     private var pipDragGesture: some Gesture {
         DragGesture(minimumDistance: 5)
             .updating($pipDragTranslation) { value, state, _ in
+                guard !store.isCallWaitLocked else { return }
                 state = value.translation
             }
             .onEnded { value in
+                guard !store.isCallWaitLocked else { return }
                 pipDragOffset = CGSize(
                     width: pipDragOffset.width + value.translation.width,
                     height: pipDragOffset.height + value.translation.height
@@ -955,10 +1047,10 @@ private struct CallFaceTimeView: View {
         (store.current.frontGameType == .live || store.current.frontGameType == .party) ? 50 : 20
     }
 
-    /// 本地相机预览的锁定态 dim overlay（仅 PIP + isCallWaitLocked 时生效；main 全屏时不 dim）
+    /// 充值等待时锁定远端小窗，与 H5 `remotePIPShowState=LOCKED` 一致。
     @ViewBuilder
-    private var cameraPreviewLockOverlay: some View {
-        if !isLocalMain, store.isCallWaitLocked {
+    private var remotePreviewLockOverlay: some View {
+        if isLocalMain, store.isCallWaitLocked {
             ZStack {
                 RoundedRectangle(cornerRadius: 14).fill(.black.opacity(0.5))
                 Image(systemName: "lock.fill")
@@ -971,6 +1063,7 @@ private struct CallFaceTimeView: View {
 
     /// tap remote：main 时切 chrome / PIP 时切主副
     private func handleRemoteTap() {
+        guard !consumeChatInputTapIfNeeded() else { return }
         if isLocalMain {
             // remote 现在是 PIP —— tap 触发主副对换（切回 remote 全屏）
             swapMainView()
@@ -982,6 +1075,7 @@ private struct CallFaceTimeView: View {
 
     /// tap local：main 时切 chrome / PIP 时切主副（与 handleRemoteTap 对称，用户 UX 一致）
     private func handleLocalTap() {
+        guard !consumeChatInputTapIfNeeded() else { return }
         if isLocalMain {
             toggleChromeVisible()
         } else {
@@ -991,6 +1085,7 @@ private struct CallFaceTimeView: View {
 
     /// 主副视频对换（极简版：只 frame/padding/offset/zIndex 参数变化，UIViewRepresentable 不 dismantle）
     private func swapMainView() {
+        guard !store.isCallWaitLocked else { return }
         CallHaptics.impact(.light)
         withAnimation(.easeInOut(duration: 0.25)) {
             isLocalMain.toggle()
@@ -1517,6 +1612,30 @@ private struct CongratsBonusSheet: View {
     }
 }
 
+// MARK: - 索礼成功提示（对齐 H5 askForGiftTips.vue）
+
+private struct CallAskForGiftTip: View {
+    let imageURL: String
+
+    var body: some View {
+        VStack(spacing: 10) {
+            CachedAsyncImage(url: URL(string: imageURL), contentMode: .fill, cdn: (.gift, .fit)) {
+                Color.clear
+            }
+            .frame(width: 120, height: 120)
+            .clipped()
+
+            Text(L10n.callAskForGiftWaitingForReward)
+                .font(.system(size: 16))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 20)
+                .frame(height: 40)
+                .background(.black.opacity(0.5), in: Capsule())
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 // MARK: - 通话公屏（对齐 H5 g-faceTime/messageScroller.vue）
 
 /// H5 仅有三种消息呈现：默认文字、穿戴 chatBubble 的文字、礼物图片和数量。
@@ -1527,7 +1646,7 @@ private struct CallMessageScroller: View {
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
                     ForEach(store.callChatMessages) { msg in
                         messageCell(msg)
                             .id(msg.id)
@@ -1550,6 +1669,7 @@ private struct CallMessageScroller: View {
         switch msg.payload {
         case let .text(content, translation):
             textCell(sender: msg.sender, content: content, translation: translation)
+                .padding(.vertical, hasChatSkin(msg.sender) ? ChatSkinMetrics.messageVerticalSpacing : 0)
         case let .gift(imageURL, count):
             giftCell(imageURL: imageURL, count: count)
         case let .bonus(amount):
@@ -1557,45 +1677,53 @@ private struct CallMessageScroller: View {
         }
     }
 
+    private func hasChatSkin(_ sender: CallChatMessage.Sender) -> Bool {
+        sender.chatBubble?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
     @ViewBuilder
     private func textCell(sender: CallChatMessage.Sender,
                           content: String,
                           translation: String?) -> some View {
-        let displayText = (translation?.isEmpty == false ? translation : nil) ?? content
         if let bubble = sender.chatBubble, !bubble.isEmpty, let bubbleURL = URL(string: bubble) {
-            Text("\(senderLabel(sender)): \(displayText)")
-                .font(.system(size: 13))
-                .foregroundStyle(.white)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
+            translatedTextContent(sender: sender, content: content, translation: translation, color: .white)
+                .padding(.horizontal, ChatSkinMetrics.horizontalContentInset)
+                .padding(.vertical, ChatSkinMetrics.verticalContentInset)
                 .background {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .fill(.black.opacity(0.5))
-                        NinePatchImageView(url: bubbleURL)
-                    }
+                    NinePatchImageView(url: bubbleURL)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                 .frame(maxWidth: 270, alignment: .leading)
         } else {
-            VStack(alignment: .leading, spacing: 3) {
-                textLine(sender: sender, text: content, color: sender.isSelf ? .white : remoteTextColor)
-                if let translation, !translation.isEmpty {
-                    Divider().overlay(.white.opacity(0.35))
-                    textLine(sender: sender, text: translation, color: remoteTextColor)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            translatedTextContent(
+                sender: sender,
+                content: content,
+                translation: translation,
+                color: sender.isSelf ? .white : remoteTextColor
+            )
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.black.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .frame(maxWidth: 270, alignment: .leading)
+        }
+    }
+
+    /// 原文始终保留；翻译完成后在同一条消息中追加译文，不能以译文替换原消息。
+    private func translatedTextContent(sender: CallChatMessage.Sender,
+                                       content: String,
+                                       translation: String?,
+                                       color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            textLine(sender: sender, text: content, color: color)
+            if let translation, !translation.isEmpty {
+                Divider().overlay(.white.opacity(0.35))
+                textLine(sender: sender, text: translation, color: sender.isSelf ? .white : remoteTextColor)
+            }
         }
     }
 
     private func textLine(sender: CallChatMessage.Sender, text: String, color: Color) -> some View {
         Text("\(senderLabel(sender)): \(text)")
-            .font(.system(size: 14))
+            .font(.system(size: 13))
             .foregroundStyle(color)
             .fixedSize(horizontal: false, vertical: true)
             .multilineTextAlignment(.leading)
@@ -1611,20 +1739,23 @@ private struct CallMessageScroller: View {
 
     private func giftCell(imageURL: String,
                           count: Int) -> some View {
-        HStack(alignment: .center, spacing: 6) {
-            CachedAsyncImage(url: URL(string: imageURL), contentMode: .fill) {
+        HStack(alignment: .center, spacing: 4) {
+            CachedAsyncImage(url: URL(string: imageURL), contentMode: .fill, cdn: (.gift, .fit)) {
                 Image(systemName: "gift.fill")
-                    .font(.system(size: 16))
+                    .font(.system(size: 13))
                     .foregroundColor(.white.opacity(0.55))
-                    .frame(width: 46, height: 46)
+                    .frame(width: 22, height: 22)
                     .background(Color.white.opacity(0.08))
             }
-            .frame(width: 46, height: 46)
+            .frame(width: 22, height: 22)
             Text("x \(count)")
-                .font(.system(size: 14))
+                .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.white)
                 .monospacedDigit()
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(.black.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .frame(maxWidth: 270, alignment: .leading)
     }
 

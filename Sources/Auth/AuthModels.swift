@@ -20,6 +20,12 @@ struct LoginResult: Codable {
     let userType: Int?        // 2=已审核主播 9=代理，其他=未审核/审核中/被拒
     let nickname: String?
     let icon: String?
+    /// H5 `mineInfo.userLevel`；登录响应可能直接携带，供 Work 首屏即时展示。
+    let userLevel: String?
+    /// H5 `mineInfo.chatBubble`：当前穿戴的 Chat Skin URL。
+    let chatBubble: String?
+    /// 守护 Chat Skin 的等级；主播本人在自己直播间发言时不广播这类皮肤。
+    let chatBubbleGuardianLevel: Int?
 
     // MARK: - 审核态字段（受限首屏 banner 派生源；对齐 H5 newsRestricted/mineRestricted）
 
@@ -37,7 +43,8 @@ struct LoginResult: Codable {
 
     /// Memberwise init 保留供 test/preview 构造
     init(userId: Int?, token: String?, loginUuid: String?, yxAccid: String?, imToken: String?,
-         userType: Int?, nickname: String?, icon: String?,
+         userType: Int?, nickname: String?, icon: String?, userLevel: String? = nil,
+         chatBubble: String? = nil, chatBubbleGuardianLevel: Int? = nil,
          valid: Int? = nil, onReview: Bool? = nil, banAlways: Bool? = nil,
          bannedSubType: Int? = nil, type: Int? = nil) {
         self.userId = userId
@@ -48,6 +55,9 @@ struct LoginResult: Codable {
         self.userType = userType
         self.nickname = nickname
         self.icon = icon
+        self.userLevel = userLevel
+        self.chatBubble = chatBubble
+        self.chatBubbleGuardianLevel = chatBubbleGuardianLevel
         self.valid = valid
         self.onReview = onReview
         self.banAlways = banAlways
@@ -69,6 +79,9 @@ struct LoginResult: Codable {
         self.imToken = try c.decodeIfPresent(String.self, forKey: .imToken)
         self.nickname = try c.decodeIfPresent(String.self, forKey: .nickname)
         self.icon = try c.decodeIfPresent(String.self, forKey: .icon)
+        self.userLevel = c.decodeFlexibleString(forKey: .userLevel)
+        self.chatBubble = try c.decodeIfPresent(String.self, forKey: .chatBubble)
+        self.chatBubbleGuardianLevel = c.decodeFlexibleInt(forKey: .chatBubbleGuardianLevel)
 
         // userType / type 双 key 互为兜底 —— 后端可能只返一个(H5 mineInfo 两者都用,H5 App.vue 用 userType 分流,
         // H5 mineRestricted 用 type 判 kill-app-restart)。iOS RootView.isRestricted 读 userType,统一 alias。

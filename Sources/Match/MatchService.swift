@@ -7,7 +7,7 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "MatchSe
 
 /// L 里程碑：视频匹配数据层 protocol。单测注入 Fake；真集成走 `MatchService.shared`。
 ///
-/// 对齐 H5 `src/api/match/index.ts` 4 接口（MVP 排除 `matchFaceViolationReport` + robot 相关）。
+/// 对齐 H5 `src/api/match/index.ts` 的匹配与无脸合规接口（机器人相关不在本模块）。
 /// 详见 `docs/plan/L-spec-视频匹配Match-*.md` §3.1。
 protocol MatchServiceProtocol {
     /// `POST /api/match/pool/isOpen` —— 前置校验能否开启（返 1=可开 / 2=人脸失败 / 3=超次数）。
@@ -18,6 +18,10 @@ protocol MatchServiceProtocol {
     /// - parameter faceCheckStatus: 人脸检测失败时上报 1；MVP 阶段人脸抽检未做，恒 nil
     /// - returns: true=请求成功；业务码失败或网络异常会抛错
     func toggleMatch(status: Int, faceCheckStatus: Int?) async throws -> Bool
+
+    /// `POST /api/chat/matchFaceViolationReport` —— 无脸截图取证上报。
+    /// H5 的字段名虽为复数 `imgUrls`，实际单张截图传单个 URL 字符串。
+    func reportNoFace(imageURL: String) async throws
 
     /// `POST /api/anchor/getMatchPoolData` —— Match tab 首屏数据（跑马灯 + 用户列表）。
     func loadMatchPoolData() async throws -> MatchPoolData
@@ -63,6 +67,14 @@ final class MatchService: MatchServiceProtocol {
         let value = Self.decodeInt(from: data)
         logger.info("toggleMatch status=\(status) fs=\(faceCheckStatus ?? -1) result=\(value) accepted=true")
         return true
+    }
+
+    func reportNoFace(imageURL: String) async throws {
+        _ = try await APIClient.shared.post(
+            "/api/chat/matchFaceViolationReport",
+            body: ["imgUrls": imageURL, "violationFlag": 1]
+        )
+        logger.info("reportNoFace accepted")
     }
 
     func loadMatchPoolData() async throws -> MatchPoolData {

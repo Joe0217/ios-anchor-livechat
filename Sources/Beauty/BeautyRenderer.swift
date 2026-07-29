@@ -6,7 +6,7 @@ import CoreVideo
 /// 预览渲染只认 CVPixelBuffer，因此无论"直通"还是"相芯美颜"，下游路径完全一致。
 ///
 /// - 老 API `updateParameters(_ params: BeautyParameters)`：B/C/D 里程碑 4 参数遗留
-///   （现 5+ 处调用：CallView/CallPOCView/LivePrepareView/LiveRoomView/BeautyPanel）；
+///   （现由通话、直播、派对房和美颜预览等页面复用）；
 ///   Step 2 接线时逐步迁移到 `apply(_:)`
 /// - 新 API `apply(_ settings: BeautySettings)`：K 里程碑 §8.3 方案 A 全量应用
 protocol BeautyRenderer: AnyObject {

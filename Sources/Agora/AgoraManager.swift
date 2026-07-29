@@ -26,7 +26,7 @@ final class AgoraManager: NSObject, ObservableObject {
         case joined
         case failed
 
-        /// 用户可见的本地化文案；LiveRoomView / CallPOCView 显示用本字段。
+        /// 用户可见的本地化文案；直播和通话页面显示用本字段。
         var label: String {
             switch self {
             case .idle:    return L10n.liveRoomStatusIdle
@@ -232,6 +232,9 @@ final class AgoraManager: NSObject, ObservableObject {
         option.publishCustomVideoTrack = false
         option.publishMicrophoneTrack = false
         engine.updateChannel(with: option)
+        // 先关闭硬件采集，再等 leaveChannel 回调。SDK 回调漏发或网络异常时也不能继续占用麦克风/摄像头。
+        engine.disableVideo()
+        engine.disableAudio()
 
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             // 已有 leave 在等待 → 直接 resume，避免重复 leaveChannel 调用
@@ -253,8 +256,6 @@ final class AgoraManager: NSObject, ObservableObject {
             }
         }
 
-        engine.disableVideo()
-        engine.disableAudio()
         // 不再调用 AgoraRtcEngineKit.destroy()——保留 SDK 单例供后续 join 复用
         self.engine = nil
         state = .idle

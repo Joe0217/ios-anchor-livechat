@@ -56,7 +56,8 @@ enum CallStateReason: String {
 // MARK: - CallOverReason（H5 CALL_OVER_REASON_NUMBER 1-11，调 /callOver 必须传）
 //
 // 端侧主动产生的：1 本地挂断 / 2 远端挂断 / 9 用户被踢 / 11 并发取消。
-// 后端推送被动产生的：3/4/5/6/7/8（余额/心跳/扣费/弱网），iOS 端侧不主动判，由后端经 NIM 推送或 SDK 错误码反推。
+// 后端推送被动产生的：3/5/6/7/8（余额/扣费/弱网）。4 由空房间检测倒计时到期主动上报，
+// 以对齐 H5 `systemAbnormal` 自动挂断；其余仍由后端经 NIM 推送或 SDK 错误码反推。
 enum CallOverReason: Int {
     case localHangUp                       = 1
     case remoteHangUp                      = 2
