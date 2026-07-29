@@ -2,47 +2,46 @@ import SwiftUI
 
 /// 工具区：标题行 + 4 列工具图标网格。对齐 H5 work/index.vue workspaceItems。
 /// Invite 图标顶部悬浮"Earn Money"金色渐变角标（H5 style）。
-/// Newbie / BigR 由 visibility 接口控制显示（value 参数传入，非 @ObservedObject，避免 vm 死订阅）。
+/// Newbie 由 visibility 接口控制显示（value 参数传入，非 @ObservedObject，避免 vm 死订阅）。
 /// Online 开关已改为 WorkView 悬浮层，不再放本区。
 struct ToolsSection: View {
-    // Newbie / bigR 由 WorkViewModel.showNewbie / showBigR 拉取后传入。
-    // 用 value 而非 @ObservedObject vm：只在这两个 Bool 变化时 diff 重算，
+    // Newbie 由 WorkViewModel.showNewbie 拉取后传入。
+    // 用 value 而非 @ObservedObject vm：只在这个 Bool 变化时 diff 重算，
     // 不订阅 vm 的其他 @Published（避免 onlineTimeSec / callIncomes 变化时 12+ 图标网格重算 —— 审查报告-202607061550 必修-1）。
     let showNewbie: Bool
-    let showBigR: Bool
+    /// Work 根页的全部 push 都必须写入 MainTabView 持有的 path，确保任何二级页自动隐藏 TabBar。
+    @Binding var path: NavigationPath
 
     /// 由 MainTabView 注入：Match 图标 tap 切到 Home + Match top tab（对齐首页 Match 入口）
     @Environment(\.openHomeMatch) private var openHomeMatch
+    /// 与首页 QuickGoLive 共用入口协调：最小化 Party 房时先弹确认并完整退房。
+    @Environment(\.quickGoLive) private var quickGoLive
     /// v2 code-review Finding 1：观察 SelfPermissionBridge 让 canCall/canLive/canParty 变化触发 body 重算，
     /// cell 显隐同步更新（原直接读 shared.canX 无订阅，权限翻转后 cell stale）。
     @ObservedObject private var permission = SelfPermissionBridge.shared
-    @State private var showBeautySettings = false
     @State private var showBeautyPermissionAlert = false
 
-    /// 工具项（图标资源名 + 标签）。顺序与 H5 workspaceItems 一致（Hi 已移除）。
-    /// Newbie 插在 Task 之后（H5 位置）、bigR 插在 Invite 之后。
+    /// 工具项（图标资源名 + 标签）。顺序与 H5 workspaceItems 对齐；My Guardian 为主播只读列表。
+    /// Party Data 是 iOS 新增入口，放在 H5 Live Data 后、Newbie 前。
     private var tools: [(icon: String, label: String)] {
         var arr: [(icon: String, label: String)] = [
+            ("toolWorkingGuide", L10n.toolWorkingGuide),
             ("toolGoLive", L10n.toolGoLive),
             ("toolMatch", L10n.toolMatch),
             ("toolTask", L10n.toolTask),
-        ]
-        if showNewbie { arr.append(("toolNewbie", L10n.toolNewbie)) }
-        arr.append(contentsOf: [
             ("toolBeauty", L10n.toolBeauty),
             ("toolPoints", L10n.toolPoints),
             ("toolGiftMessage", L10n.toolGiftMessage),
             ("toolProfileUpdate", L10n.toolProfileUpdate),
             ("toolInvite", L10n.toolInvite),
-        ])
-        if showBigR { arr.append(("toolBigR", L10n.toolBigR)) }
-        arr.append(contentsOf: [
-            ("toolWorkingGuide", L10n.toolWorkingGuide),
             ("toolBackpack", L10n.toolProps),
             ("toolLiveData", L10n.toolLiveData),
+            // H5 Work 页使用 guardian.myGuardians（复数），与入口所展示的守护者列表一致。
+            ("toolMyGuardian", L10n.guardianMyGuardians),
             ("toolPartyData", L10n.toolPartyData),
-            ("toolMyGuardian", L10n.toolMyGuardian),
-        ])
+        ]
+        if showNewbie { arr.append(("toolNewbie", L10n.toolNewbie)) }
+        arr.append(("toolBigR", L10n.toolStarUser))
         return arr
     }
 
@@ -66,13 +65,7 @@ struct ToolsSection: View {
                     // P 项目：userType 命中 .live bit 时不渲染入口
                     if tools[i].icon == "toolGoLive" {
                         if permission.canLive {
-                            // 首次开播 → firstLiveRule 10s 规则页；已开播过 → 直接 LiveSettings
-                            // 对齐 H5 c-goLive.vue:64 `router.push(userStore.isFirstLive ? '/liveRule?type=3' : '/liveSetting')`
-                            NavigationLink(
-                                value: FirstLiveTracker.isFirstLive
-                                    ? WorkRoute.firstLiveRule
-                                    : WorkRoute.liveSettings
-                            ) { cell }
+                            Button { quickGoLive.perform() } label: { cell }
                                 .buttonStyle(.plain)
                         }
                     // Match → 切到 Home + Match top tab（对齐首页 Match 入口，与 CGoMatchButton 同一入口）
@@ -106,11 +99,11 @@ struct ToolsSection: View {
                     } else if tools[i].icon == "toolProfileUpdate" {
                         NavigationLink(value: WorkRoute.profileEdit) { cell }
                             .buttonStyle(.plain)
-                    // Invite → Phase D 占位
+                    // Work 工具入口必须单独归因，不能与 Mine/Profile 入口混为 me。
                     } else if tools[i].icon == "toolInvite" {
-                        NavigationLink(value: WorkRoute.invite) { cell }
+                        NavigationLink(value: WorkRoute.invite(source: .work)) { cell }
                             .buttonStyle(.plain)
-                    // Working Guide (Anchor Guide) → Phase F 占位
+                    // Anchor Guide → 内嵌 H5 功能页
                     } else if tools[i].icon == "toolWorkingGuide" {
                         NavigationLink(value: WorkRoute.anchorGuide) { cell }
                             .buttonStyle(.plain)
@@ -121,17 +114,18 @@ struct ToolsSection: View {
                             NavigationLink(value: WorkRoute.liveData) { cell }
                                 .buttonStyle(.plain)
                         }
-                    // Party Data / My Guardian → 占位（H5 蓝本无此入口，Downloads UI 新增；未来落地页替换 ComingSoon）
+                    // Party Data → 占位（H5 蓝本无此入口，Downloads UI 新增；未来落地页替换 ComingSoon）
                     // P 项目权限管理 v2：canParty=false 时不渲染入口
                     } else if tools[i].icon == "toolPartyData" {
                         if permission.canParty {
                             NavigationLink(value: WorkRoute.partyData) { cell }
                                 .buttonStyle(.plain)
                         }
+                    // My Guardian → 主播自己的守护者全屏榜单（只读，无购买链路）
                     } else if tools[i].icon == "toolMyGuardian" {
                         NavigationLink(value: WorkRoute.myGuardian) { cell }
                             .buttonStyle(.plain)
-                    // Newbie / bigR → 占位（页面本身留 J 里程碑落地；对齐 H5 visibility=true 时显示入口）
+                    // Newbie / Star User → 占位（页面本身留 J 里程碑落地）
                     } else if tools[i].icon == "toolNewbie" {
                         NavigationLink(value: WorkRoute.newbie) { cell }
                             .buttonStyle(.plain)
@@ -152,9 +146,6 @@ struct ToolsSection: View {
         .padding(Theme.Metric.cardPadding)
         .background(Theme.Palette.cardFill)
         .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.bigCard, style: .continuous))
-        .navigationDestination(isPresented: $showBeautySettings) {
-            BeautySettingsView()
-        }
         .overlay {
             if showBeautyPermissionAlert {
                 MediaPermissionDialog(
@@ -172,7 +163,7 @@ struct ToolsSection: View {
                 showBeautyPermissionAlert = true
                 return
             }
-            showBeautySettings = true
+            path.append(WorkRoute.beautySettings)
         }
     }
 
@@ -183,7 +174,7 @@ struct ToolsSection: View {
                 return
             }
             showBeautyPermissionAlert = false
-            showBeautySettings = true
+            path.append(WorkRoute.beautySettings)
         }
     }
 
@@ -195,12 +186,6 @@ struct ToolsSection: View {
                 .scaledToFit()
                 .frame(width: Theme.Metric.toolTile, height: Theme.Metric.toolTile)
                 .accessibilityHidden(true)
-                .overlay(alignment: .top) {
-                    if icon == "toolInvite" {
-                        earnMoneyTag
-                            .offset(y: -6)   // H5 top--6
-                    }
-                }
             Text(label)
                 .font(Theme.Typography.toolLabel)
                 .foregroundStyle(.white)
@@ -208,6 +193,13 @@ struct ToolsSection: View {
                 .minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity)
+        .overlay(alignment: .top) {
+            if icon == "toolInvite" {
+                earnMoneyTag
+                    .offset(y: -6)   // H5 top--6 relative to tool cell
+            }
+        }
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
 
@@ -217,7 +209,9 @@ struct ToolsSection: View {
             .font(.system(size: 8, weight: .semibold))
             .foregroundStyle(.white)
             .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
             .padding(.horizontal, 4)
+            .frame(minWidth: 46)
             .frame(height: 13)
             .background(
                 LinearGradient(colors: [Color(red: 248/255, green: 167/255, blue: 46/255),

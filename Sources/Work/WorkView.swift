@@ -25,8 +25,10 @@ struct WorkView: View {
                         path.append(WorkRoute.currencyExchange(tab: tab))
                     }
                     StatCardsRow(vm: vm)
-                    TodayIncomeCard(vm: vm)
-                    ToolsSection(showNewbie: vm.showNewbie, showBigR: vm.showBigR)
+                    TodayIncomeCard(vm: vm) {
+                        path.append(WorkRoute.wallet)
+                    }
+                    ToolsSection(showNewbie: vm.showNewbie, path: $path)
                     WorkSysInfoFooter(whatsapp: vm.whatsappPhone)
                 }
                 .padding(.horizontal, Theme.Metric.screenMargin)
@@ -194,17 +196,16 @@ private struct OfflineConfirmDialog: View {
 }
 
 /// Work 子页路由。
-/// - `.pocDebug`：DEBUG 期 POC 调试台（暂无入口，代码保留待未来接新入口）
 /// - `.firstLiveRule`：首次开播规则阅读页（对齐 H5 `/liveRule?type=3`，10s 倒计时）
 /// - `.liveSettings`：开播设置页（B-spec-开播设置页）
 /// - `.wishSetting`：愿望单设置页（L-spec-愿望单设置页）
 /// - `.beautySettings`：美颜设置页（K-spec-美颜设置页）
 /// - `.giftMessage`：私密媒体解锁（H-2）
 /// - `.profileEdit`：编辑个人资料（复用 EditProfileView；Work tools 入口对齐 H5 `/profile`）
-/// - `.liveData` / `.task` / `.invite` / `.pointsRank` / `.anchorGuide`：Work tools 入口，B-F 阶段替换 ComingSoon 占位
+/// - `.liveData` / `.task` / `.pointsRank`：Work tools 入口，B-F 阶段替换 ComingSoon 占位
+/// - `.wallet` / `.anchorGuide`：复用现有 H5 的 WebView 入口；`.invite` 已原生化
 /// - `.newbie` / `.bigR`：入口对齐 H5，页面 J 里程碑落地（当前占位）
 enum WorkRoute: Hashable {
-    case pocDebug
     case firstLiveRule
     case liveSettings
     case wishSetting
@@ -213,11 +214,14 @@ enum WorkRoute: Hashable {
     case profileEdit        // Phase A：接 EditProfileView（I 里程碑已实现）
     case liveData           // Phase B：Live Data 页
     case task               // Phase C：Task Center 页
-    case invite             // Phase D：Invite 页
+    case wallet             // Existing H5 Wallet
+    case invite(source: InviteEntrySource) // 原生 Invite 页；source 对齐 H5 进入来源埋点
+    case inviteUserDetails
+    case inviteAnchorDashboard
     case pointsRank         // Phase E：Points Rank 页
     case anchorGuide        // Phase F：Anchor Guide 培训中心页
     case partyData          // Downloads UI 新增（H5 蓝本无此入口），未来落地页替换 ComingSoon
-    case myGuardian         // Downloads UI 新增（H5 蓝本无此入口），未来落地页替换 ComingSoon
+    case myGuardian         // H5 My Guardians：主播自己的守护者全屏只读榜单
     case dataStatistics     // Work 顶部 Detail（对齐 H5 /dataStatistics）
     case newbie             // J 里程碑：新手任务
     case bigR               // J 里程碑：Star User 大 R 名单
@@ -227,6 +231,12 @@ enum WorkRoute: Hashable {
     /// 直播结果页（B spec v7 从 fullScreenCover 改为 push 页面；LiveRoomView state=.ended 触发切 tab + path 重建）。
     /// 关联字段：begin/endTimestamp（毫秒）+ endType（强制下播原因；nil 表示用户主动 endLive）
     case liveResult(begin: Int64, end: Int64, endType: Int?)
+}
+
+enum InviteEntrySource: String, Hashable {
+    case work
+    case me
+    case withdrawal
 }
 
 /// Work 里 J 里程碑未落地页面的占位视图（保持 H5 视觉入口对齐）。

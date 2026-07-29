@@ -16,7 +16,7 @@ final class WorkViewModel: ObservableObject {
     // MARK: - 周等级
     /// 头像 URL —— 派生自 AnchorInfoStore.$info / $mine / SessionStore.user.icon（对齐 H5 mine.icon 优先）。
     @Published var avatarURL: URL?
-    /// 周等级字面量（D/C/NEW/B/A/S/SS）—— 派生自 info.levelName / info.level（对齐 H5 mineInfo.userLevel）
+    /// 周等级字面量（D/C/NEW/B/A/S/SS）—— 优先 H5 同源的 info.userLevel。
     @Published var weeklyLevel: String = ""
 
     /// 场景文案（对齐 H5 getLevelText 分支）：
@@ -92,12 +92,14 @@ final class WorkViewModel: ObservableObject {
             .removeDuplicates()
             .assign(to: &$avatarURL)
 
-        // 周等级字面量（对齐 AnchorInfoStore.tierLabel 逻辑，H5 mineInfo.userLevel）
+        // 周等级字面量：H5 实际展示 mineInfo.userLevel，兼容旧字段 levelName / level。
         AnchorInfoStore.shared.$info
             .combineLatest(AnchorInfoStore.shared.$mine)
             .map { info, mine -> String in
+                if let n = info?.userLevel, !n.isEmpty { return n }
                 if let n = info?.levelName, !n.isEmpty { return n }
                 if let lvl = info?.level { return AnchorInfoStore.tierName(forLevel: lvl) }
+                if let n = mine?.userLevel, !n.isEmpty { return n }
                 if let n = mine?.levelName, !n.isEmpty { return n }
                 if let lvl = mine?.level { return AnchorInfoStore.tierName(forLevel: lvl) }
                 return ""
