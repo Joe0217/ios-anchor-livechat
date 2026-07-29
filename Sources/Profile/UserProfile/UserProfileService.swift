@@ -176,6 +176,7 @@ final class UserProfileService: UserProfileServiceProtocol {
         if let rawList = dict["giftList"] as? [[String: Any]] {
             giftList = rawList.compactMap(parseGift(from:))
         }
+        let guardianList = GuardianResponseAdapter.profileGuardians(from: dict["guardianList"])
 
         return UserDetail(
             userId: userId,
@@ -190,7 +191,8 @@ final class UserProfileService: UserProfileServiceProtocol {
             isBlocked: isBlocked,
             like: like,
             favorite: favorite,
-            giftList: giftList
+            giftList: giftList,
+            guardianList: guardianList
         )
     }
 

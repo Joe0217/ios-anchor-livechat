@@ -24,6 +24,8 @@ struct UserDetail: Equatable {
     let like: Int              // 解析 thumbs[0].num；缺失/非数组 → 0 (R-4)
     let favorite: Int          // 解析 thumbs[1].num
     let giftList: [Gift]       // 礼物墙（trial #3 step 3 反悔 #7 补，H5 type.ts 不完整）
+    /// H5 `getUserDetail.guardianList` 的主播前 3；空时资料页不展示守护卡。
+    let guardianList: [UserGuardianAnchor]
 }
 
 /// 礼物墙单项（H5 `views/mine/components/gifts.vue` 用法对照）。
@@ -158,9 +160,17 @@ extension View {
                 // 不套 .toolbar(.hidden) —— UserProfileView 依赖 system nav bar 承载 back/FOLLOW/menu
                 switch route {
                 case .userId(let uid):
-                    UserProfileView(userId: uid)
+                    if !uid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        UserProfileView(userId: uid)
+                    } else {
+                        EmptyView()
+                    }
                 case .userIdFromChat(let uid, let peer):
-                    UserProfileView(userId: uid, originPeerYxAccId: peer)
+                    if !uid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        UserProfileView(userId: uid, originPeerYxAccId: peer)
+                    } else {
+                        EmptyView()
+                    }
                 }
             }
             .navigationDestination(for: ChatFromProfileRoute.self) { route in

@@ -12,6 +12,14 @@ fileprivate func localize(_ key: String, comment: String = "") -> String {
         let value = sub.localizedString(forKey: key, value: "__MISSING__", table: nil)
         if value != "__MISSING__" { return value }
     }
+    // A newly added feature can reach an existing locale bundle before its final
+    // translation is available. Fall back to the English resource instead of
+    // exposing the raw localization key to a financial flow.
+    if let englishPath = Bundle.main.path(forResource: "en", ofType: "lproj"),
+       let englishBundle = Bundle(path: englishPath) {
+        let value = englishBundle.localizedString(forKey: key, value: "__MISSING__", table: nil)
+        if value != "__MISSING__" { return value }
+    }
     return NSLocalizedString(key, comment: comment)
 }
 
@@ -235,6 +243,9 @@ enum L10n {
         static var listPillLiveVoice: String { localize("party.list.pill.liveVoice", comment: "视觉占位 pill 1：Live+Voice") }
         static var listPillVoice: String { localize("party.list.pill.voice", comment: "视觉占位 pill 2：Voice") }
         static var listPillLanguageFallback: String { localize("party.list.pill.languageFallback", comment: "语言 pill fallback：English") }
+        static func listWeeklyTop(_ rank: Int) -> String {
+            String(format: localize("party.list.weeklyTop", comment: "房间卡周榜标签：Weekly Top %d"), rank)
+        }
 
         // 大厅增强（E-plan 2026-07-10 对齐 livechat-h5 用户端 /party/index.vue）
         static var tabParty: String { localize("party.tab.party", comment: "顶部 tab Party") }
@@ -243,6 +254,17 @@ enum L10n {
         static var languageAll: String { localize("party.language.all", comment: "语言 pill All 选项") }
         static var rankPartyRich: String { localize("party.rank.partyRich", comment: "PartyRich 榜卡文案") }
         static var rankRoom: String { localize("party.rank.room", comment: "Room 榜卡文案") }
+        static var rankRulesTitle: String { localize("party.rank.rules.title", comment: "Party 榜单规则标题") }
+        static var rankPartyRichRule1: String { localize("party.rank.partyRich.rule1", comment: "PartyRich 榜规则 1") }
+        static var rankPartyRichRule2: String { localize("party.rank.partyRich.rule2", comment: "PartyRich 榜规则 2") }
+        static var rankPartyRichRule3: String { localize("party.rank.partyRich.rule3", comment: "PartyRich 榜规则 3") }
+        static var rankRoomRule1: String { localize("party.rank.room.rule1", comment: "Room 榜规则 1") }
+        static var rankRoomRule2: String { localize("party.rank.room.rule2", comment: "Room 榜规则 2") }
+        static var rankRoomRule3: String { localize("party.rank.room.rule3", comment: "Room 榜规则 3") }
+        static var rankPeriodThisWeek: String { localize("party.rank.period.thisWeek", comment: "Party 榜当前周") }
+        static var rankPeriodLastWeek: String { localize("party.rank.period.lastWeek", comment: "Party 榜上一周") }
+        static var rankPeriodThisMonth: String { localize("party.rank.period.thisMonth", comment: "Party 榜当前月") }
+        static var rankPeriodLastMonth: String { localize("party.rank.period.lastMonth", comment: "Party 榜上一月") }
         static var searchPlaceholder: String { localize("party.search.placeholder", comment: "搜索输入框占位") }
         static var searchHint: String { localize("party.search.hint", comment: "空 query 提示") }
         static var searchNoResults: String { localize("party.search.noResults", comment: "无搜索结果") }
@@ -365,6 +387,9 @@ enum L10n {
         static var privateCallLoadError: String { localize("party.privateCall.loadError", comment: "礼物列表加载失败错态") }
         static var privateCallSaveSuccess: String { localize("party.privateCall.saveSuccess", comment: "设置保存成功 toast") }
         static var privateCallSaveFailed: String { localize("party.privateCall.saveFailed", comment: "设置保存失败 banner") }
+        static var privateCallSeatBubble: String { localize("party.privateCall.seatBubble", comment: "麦位 Party Call 中提示") }
+        static var moreMenuMinimize: String { localize("party.moreMenu.minimize", comment: "Party 房间最小化菜单") }
+        static var bannerScoreDouble: String { localize("party.banner.scoreDouble", comment: "Party 活动翻倍火苗文案") }
         // 派对房 Blocklist（E spec 2026-07-14；房主/管理员查看+解除房间维度黑名单）
         static var blocklistNavTitle: String { localize("party.blocklist.navTitle", comment: "Blocklist 页面标题") }
         static var blocklistEmpty: String { localize("party.blocklist.empty", comment: "无黑名单空态") }
@@ -514,10 +539,14 @@ enum L10n {
         static var videoSeatInviteOccupied: String { localize("party.videoSeat.feedbackOccupied", comment: "1045 视频位已被占用") }
         static var videoSeatInviteAlreadyOn: String { localize("party.videoSeat.feedbackAlreadyOn", comment: "1046 用户已经在麦位") }
         static var videoSeatInviteJoinFailed: String { localize("party.videoSeat.feedbackJoinFailed", comment: "1048 接受邀请后上麦失败") }
-        /// 1019 本人被设为房管公屏
+        /// 1019 本人被设为房管提示
         static var authUpdateSetAdmin: String { localize("party.authUpdate.setAdmin", comment: "1019 本人被设为房管公屏") }
-        /// 1019 本人被取消房管公屏
+        /// 1019 本人被取消房管提示
         static var authUpdateRemoveAdmin: String { localize("party.authUpdate.removeAdmin", comment: "1019 本人被取消房管公屏") }
+        /// 1019 设置房管公屏（%@ = 被操作用户昵称）
+        static var authUpdateSetAdminFormat: String { localize("party.authUpdate.setAdminFormat", comment: "1019 设置房管公屏（%@ 昵称）") }
+        /// 1019 取消房管公屏（%@ = 被操作用户昵称）
+        static var authUpdateRemoveAdminFormat: String { localize("party.authUpdate.removeAdminFormat", comment: "1019 取消房管公屏（%@ 昵称）") }
         /// 1049 房间通告公屏（%@ = 公告文本）
         static var roomAnnouncementFormat: String { localize("party.roomAnnouncement.format", comment: "1049 房间通告公屏（%@）") }
         /// 1050 幸运数字抽数公屏（%1$@ = 昵称 · %2$d = 数字）
@@ -528,6 +557,66 @@ enum L10n {
         static var luckyNumberMatched: String { localize("party.luckyNumber.matched", comment: "1051 幸运数字匹配成功") }
         /// 1052 中奖个人弹窗兜底文案（%d = 幸运数字）
         static var luckyNumberPersonalWinFormat: String { localize("party.luckyNumber.personalWinFormat", comment: "1052 幸运数字中奖个人弹窗") }
+
+        // MARK: - Battle Team（对齐 H5 party.battle）
+        enum Battle {
+            static var team: String { localize("party.battle.team", comment: "Battle Team") }
+            static var countdown: String { localize("party.battle.countdown", comment: "Countdown") }
+            static var start: String { localize("party.battle.start", comment: "START") }
+            static var none: String { localize("party.battle.none", comment: "None") }
+            static var live: String { localize("party.battle.live", comment: "Live") }
+            static var redTeam: String { localize("party.battle.redTeam", comment: "Red Team") }
+            static var blueTeam: String { localize("party.battle.blueTeam", comment: "Blue Team") }
+            static var redTeamWin: String { localize("party.battle.redTeamWin", comment: "Red Team Win") }
+            static var blueTeamWin: String { localize("party.battle.blueTeamWin", comment: "Blue Team Win") }
+            static var tie: String { localize("party.battle.tie", comment: "Tie") }
+            static var leading: String { localize("party.battle.leading", comment: "Leading") }
+            static var iKnow: String { localize("party.battle.iKnow", comment: "I Know") }
+            static var cancel: String { localize("party.battle.cancel", comment: "Cancel") }
+            static var confirm: String { localize("party.battle.confirm", comment: "Confirm") }
+            static var rulesTitle: String { localize("party.battle.rulesTitle", comment: "Battle Team Rules") }
+            static var rule1: String { localize("party.battle.rule1", comment: "Battle rule 1") }
+            static var rule2: String { localize("party.battle.rule2", comment: "Battle rule 2") }
+            static var rule3: String { localize("party.battle.rule3", comment: "Battle rule 3") }
+            static var rule4: String { localize("party.battle.rule4", comment: "Battle rule 4") }
+            static var forceEndTitle: String { localize("party.battle.forceEndTitle", comment: "Force end title") }
+            static var forceEndDesc: String { localize("party.battle.forceEndDesc", comment: "Force end description") }
+            static func forceEndWill(_ team: String) -> String { String(format: localize("party.battle.forceEndWillFormat", comment: "%@ = team"), team) }
+            static var forceEndTied: String { localize("party.battle.forceEndTied", comment: "Force end tied") }
+            static var cooldownDesc: String { localize("party.battle.cooldownDesc", comment: "Cooldown description") }
+            static var cooldownAction: String { localize("party.battle.cooldownAction", comment: "Cooldown action") }
+            static var giftTabRed: String { localize("party.battle.giftTabRed", comment: "Red") }
+            static var giftTabBlue: String { localize("party.battle.giftTabBlue", comment: "Blue") }
+            static var initiateTitle: String { localize("party.battle.initiateTitle", comment: "Initiate Battle Team") }
+            static var modeLabel: String { localize("party.battle.modeLabel", comment: "Mode") }
+            static var modeTeamBattle: String { localize("party.battle.modeTeamBattle", comment: "Team Battle (Red vs. Blue)") }
+            static var timeLabel: String { localize("party.battle.timeLabel", comment: "Time") }
+            static func minutes(_ value: Int) -> String { String(format: localize("party.battle.minutesFormat", comment: "%d = minutes"), value) }
+            static var chooseSideLabel: String { localize("party.battle.chooseSideLabel", comment: "Choosing my side") }
+            static var joinSideOn: String { localize("party.battle.joinSideOn", comment: "Join") }
+            static var joinSideOff: String { localize("party.battle.joinSideOff", comment: "Neutral") }
+            static var joinRed: String { localize("party.battle.joinRed", comment: "Join Red") }
+            static var joinBlue: String { localize("party.battle.joinBlue", comment: "Join Blue") }
+            static func initiateHint(players: Int, cooldown: Int) -> String { String(format: localize("party.battle.initiateHintFormat", comment: "%1$d = players, %2$d = cooldown"), players, cooldown) }
+            static func initiateHint2(selecting: Int) -> String { String(format: localize("party.battle.initiateHint2Format", comment: "%d = selecting seconds"), selecting) }
+            static var selectingHostTitle: String { localize("party.battle.selectingHostTitle", comment: "60s countdown or click START") }
+            static var battleTime: String { localize("party.battle.battleTime", comment: "Battle Time") }
+            static func lead(_ value: Int) -> String { String(format: localize("party.battle.leadFormat", comment: "%d = score delta"), value) }
+            static var lose: String { localize("party.battle.lose", comment: "Lose") }
+            static var giftGivingMvp: String { localize("party.battle.giftGivingMvp", comment: "Gift-Giving MVP") }
+            static var giftReceiveMvp: String { localize("party.battle.giftReceiveMvp", comment: "Gift-Receive MVP") }
+            static func totalGivenOut(_ value: String) -> String { String(format: localize("party.battle.totalGivenOutFormat", comment: "%@ = value"), value) }
+            static func personalGiftReceiving(_ value: String) -> String { String(format: localize("party.battle.personalGiftReceivingFormat", comment: "%@ = value"), value) }
+            static var roomIdInvalid: String { localize("party.battle.roomIdInvalid", comment: "Room ID invalid") }
+            static var noTemplate: String { localize("party.battle.noTemplate", comment: "No template available") }
+            static var alreadyEnded: String { localize("party.battle.alreadyEnded", comment: "PK already ended") }
+            static var startNowFailed: String { localize("party.battle.startNowFailed", comment: "Failed to start") }
+            static func chatSelectingStart(_ minutes: Int) -> String { String(format: localize("party.battle.chatSelectingStartFormat", comment: "%d = minutes"), minutes) }
+            static func chatTeamWin(_ team: String) -> String { String(format: localize("party.battle.chatTeamWinFormat", comment: "%@ = team"), team) }
+            static var chatTie: String { localize("party.battle.chatTie", comment: "This is a draw!") }
+            static var chatForceEnd: String { localize("party.battle.chatForceEnd", comment: "The room ended this PK early") }
+            static func chatMvp(name: String, team: String) -> String { String(format: localize("party.battle.chatMvpFormat", comment: "%1$@ = name, %2$@ = team"), name, team) }
+        }
     }
 
     // MARK: - PartyRoom 房间内 UI（AnchorBar / ChatTabStrip / InputBar 使用）
@@ -566,10 +655,58 @@ enum L10n {
         static var weeklyTaskRewardTitle: String { localize("partyRoom.weeklyTask.reward.title", comment: "周任务奖励弹窗标题") }
         static var weeklyTaskRewardConfirm: String { localize("partyRoom.weeklyTask.reward.confirm", comment: "周任务奖励确认按钮") }
         static var weeklyTaskRewardFallback: String { localize("partyRoom.weeklyTask.reward.fallback", comment: "周任务未知奖励名称兜底") }
+        static var weeklyTaskGiftHistory: String { localize("partyRoom.weeklyTask.giftHistory", comment: "周任务礼物流水标题") }
+        static var weeklyTaskReward: String { localize("partyRoom.weeklyTask.reward", comment: "周任务奖励标签") }
         static var a11yWeeklyTask: String { localize("partyRoom.a11y.weeklyTask", comment: "主播周任务入口 a11y") }
         static var hotTaskTitle: String { localize("partyRoom.hotTask.title", comment: "热门房任务标题") }
+        static var hotTaskMissionRules: String { localize("partyRoom.hotTask.missionRules", comment: "热门任务规则弹窗标题") }
+        static var hotTaskHowToReward: String { localize("partyRoom.hotTask.howToReward", comment: "热门任务获取奖励标题") }
+        static var hotTaskHowToRewardDetail: String { localize("partyRoom.hotTask.howToRewardDetail", comment: "热门任务获取奖励说明") }
+        static var hotTaskHowToRewardDetailFormat: String { localize("partyRoom.hotTask.howToRewardDetailFormat", comment: "热门任务获取奖励说明，含 TopX") }
+        static var hotTaskMicTime: String { localize("partyRoom.hotTask.micTime", comment: "热门任务累计麦时标题") }
+        static var hotTaskMicTimeDetail: String { localize("partyRoom.hotTask.micTimeDetail", comment: "热门任务累计麦时说明") }
+        static var hotTaskGiftsOnMic: String { localize("partyRoom.hotTask.giftsOnMic", comment: "热门任务麦上收礼标题") }
+        static var hotTaskGiftsOnMicDetail: String { localize("partyRoom.hotTask.giftsOnMicDetail", comment: "热门任务麦上收礼说明") }
+        static var hotTaskGems: String { localize("partyRoom.hotTask.gems", comment: "热门任务宝石奖励名称") }
+        static var hotTaskFrame: String { localize("partyRoom.hotTask.frame", comment: "热门任务头像框奖励名称") }
+        static var hotTaskNotes: String { localize("partyRoom.hotTask.notes", comment: "热门任务说明标题") }
+        static var hotTaskNotesDetail: String { localize("partyRoom.hotTask.notesDetail", comment: "热门任务说明") }
+        static var hotTaskOutOfTop: String { localize("partyRoom.hotTask.outOfTop", comment: "热门房掉榜提示") }
+        static var hotTaskOutOfTopFormat: String { localize("partyRoom.hotTask.outOfTopFormat", comment: "热门房掉榜提示，含 TopX") }
+        static var hotTaskRewardTitle: String { localize("partyRoom.hotTask.rewardTitle", comment: "热门任务达标奖励标题") }
+        static var hotTaskClaim: String { localize("partyRoom.hotTask.claim", comment: "热门任务领奖按钮") }
+        static var hotTaskValidHours: String { localize("partyRoom.hotTask.validHours", comment: "热门任务头像框有效时长") }
+        static var hotTaskFaceWarning: String { localize("partyRoom.hotTask.faceWarning", comment: "热门任务露脸检测失败提示") }
+        static var hotTaskFaceLimitWarning: String { localize("partyRoom.hotTask.faceLimitWarning", comment: "热门任务露脸检测达到上限提示") }
         static var hotRoomGuideTitle: String { localize("partyRoom.hotRoomGuide.title", comment: "热门房引导标题") }
         static var hotRoomGuideAction: String { localize("partyRoom.hotRoomGuide.action", comment: "热门房引导确认按钮") }
+        static var hotRoomGuideMessage: String { localize("partyRoom.hotRoomGuide.message", comment: "热门房引导说明") }
+        static var hotRoomGuideStay: String { localize("partyRoom.hotRoomGuide.stay", comment: "热门房引导留下按钮") }
+        static var hotRoomGuideJumpTop: String { localize("partyRoom.hotRoomGuide.jumpTop", comment: "热门房引导跳转按钮") }
+        static var topRoomBonusEnterTitle: String { localize("partyRoom.topRoomBonus.enter.title", comment: "热门房奖励列表引导标题") }
+        static var topRoomBonusEnterSubtitleFormat: String { localize("partyRoom.topRoomBonus.enter.subtitleFormat", comment: "热门房奖励列表引导副标题，含 TopX") }
+        static var topRoomBonusEnterFormat: String { localize("partyRoom.topRoomBonus.enter.format", comment: "热门房奖励列表进入按钮，含 TopX") }
+        static var topRoomBonusOutTitleFormat: String { localize("partyRoom.topRoomBonus.out.titleFormat", comment: "热门房掉榜弹窗标题，含 TopX") }
+        static var topRoomBonusOutMessage: String { localize("partyRoom.topRoomBonus.out.message", comment: "热门房掉榜弹窗副标题") }
+        static var topRoomBonusJumpFormat: String { localize("partyRoom.topRoomBonus.out.jumpFormat", comment: "热门房掉榜跳转按钮，含 TopX") }
+        static var superWheelTitle: String { localize("partyRoom.superWheel.title", comment: "Super Winner 标题") }
+        static var superWheelUnavailable: String { localize("partyRoom.superWheel.unavailable", comment: "Super Winner 不可用提示") }
+        static var superWheelOpen: String { localize("partyRoom.superWheel.open", comment: "Super Winner 开局按钮") }
+        static var superWheelJoin: String { localize("partyRoom.superWheel.join", comment: "Super Winner 加入按钮") }
+        static var superWheelBet: String { localize("partyRoom.superWheel.bet", comment: "Super Winner 下注按钮") }
+        static var superWheelClose: String { localize("partyRoom.superWheel.close", comment: "Super Winner 关闭按钮") }
+        static var superWheelPool: String { localize("partyRoom.superWheel.pool", comment: "Super Winner 奖池标签") }
+        static var superWheelPlayer: String { localize("partyRoom.superWheel.player", comment: "Super Winner 默认玩家名") }
+        static var superWheelWaiting: String { localize("partyRoom.superWheel.waiting", comment: "Super Winner 等待阶段") }
+        static var superWheelSignup: String { localize("partyRoom.superWheel.signup", comment: "Super Winner 报名阶段") }
+        static var superWheelPreparing: String { localize("partyRoom.superWheel.preparing", comment: "Super Winner 准备阶段") }
+        static var superWheelBetting: String { localize("partyRoom.superWheel.betting", comment: "Super Winner 下注阶段") }
+        static var superWheelSpinning: String { localize("partyRoom.superWheel.spinning", comment: "Super Winner 转盘阶段") }
+        static var superWheelRoundResult: String { localize("partyRoom.superWheel.roundResult", comment: "Super Winner 单轮结果阶段") }
+        static var superWheelFinalResult: String { localize("partyRoom.superWheel.finalResult", comment: "Super Winner 终局阶段") }
+        static var superWheelOutFormat: String { localize("partyRoom.superWheel.outFormat", comment: "Super Winner 淘汰提示，%@ = 昵称") }
+        static var superWheelWinnerFormat: String { localize("partyRoom.superWheel.winnerFormat", comment: "Super Winner 获胜提示，%@ = 昵称，%lld = 奖励") }
+        static var superWheelActionFailed: String { localize("partyRoom.superWheel.actionFailed", comment: "Super Winner 操作失败提示") }
 
         // 公屏 tab strip（PartyRoomChatTabStrip）
         static var tabAll: String { localize("partyRoom.tab.all", comment: "公屏 tab All") }
@@ -738,6 +875,7 @@ enum L10n {
     static var toolLiveData: String { localize("work.tool.liveData", comment: "直播数据") }
     static var toolPartyData: String { localize("work.tool.partyData", comment: "派对数据") }
     static var toolMyGuardian: String { localize("work.tool.myGuardian", comment: "我的守护") }
+    static var toolStarUser: String { localize("work.tool.starUser", comment: "Star User") }
 
     // MARK: - Task Center 页(Phase C · 对齐 H5 views/task/index.vue)
     static var taskCenterNavTitle: String { localize("task.center.navTitle", comment: "任务中心标题") }
@@ -747,6 +885,10 @@ enum L10n {
     static var taskCycleWeekly: String { localize("task.cycle.weekly", comment: "Weekly tab") }
     static var taskCountdownPrefix: String { localize("task.countdown.prefix", comment: "重置倒计时前缀 (Reset in)") }
     static var taskWeeklyTotalPointsLabel: String { localize("task.weekly.totalPoints", comment: "Weekly Total Points 标签") }
+    static var taskLegacyLimitedTime: String { localize("task.legacy.limitedTime", comment: "旧版日任务限时分组标题") }
+    static var taskLegacyAllDay: String { localize("task.legacy.allDay", comment: "旧版日任务全天分组标题") }
+    static var taskLegacyMatchTipTitle: String { localize("task.legacy.matchTip.title", comment: "旧版匹配任务提示标题") }
+    static var taskLegacyMatchTipMessage: String { localize("task.legacy.matchTip.message", comment: "旧版匹配任务提示内容") }
     static var taskMyIncome: String { localize("task.myIncome", comment: "我方收入") }
     static var taskMyIntegral: String { localize("task.myIntegral", comment: "我方积分") }
     static var taskViewRank: String { localize("task.viewRank", comment: "查看榜单") }
@@ -756,6 +898,7 @@ enum L10n {
     static var taskDaysFormat: String { localize("task.daysFormat", comment: "%d days") }
     static var taskGo: String { localize("task.go", comment: "Go 按钮(引导去完成)") }
     static var taskTierClaim: String { localize("task.tier.claim", comment: "领取按钮") }
+    static var taskTierClaimed: String { localize("task.tier.claimed", comment: "已领取按钮") }
     static var taskClaimAll: String { localize("task.claimAll", comment: "一键领取按钮") }
     static var taskClaimSuccess: String { localize("task.claim.success", comment: "领取成功") }
     static var taskClaimGrantPending: String { localize("task.claim.grantPending", comment: "领奖发放中") }
@@ -811,7 +954,6 @@ enum L10n {
     static var contactOfficialWhatsapp: String { localize("contact.officialWhatsapp", comment: "官方 WhatsApp: %@") }
     static var commonCopySuccess: String { localize("common.copySuccess", comment: "复制成功") }
     static var toolNewbie: String { localize("work.tool.newbie", comment: "新手") }
-    static var toolBigR: String { localize("work.tool.bigR", comment: "大R") }
 
     // Invite 角标（H5 style: 金红渐变 "Earn Money"）
     static var inviteEarnMoney: String { localize("work.invite.earnMoney", comment: "邀请赚钱角标") }
@@ -869,6 +1011,9 @@ enum L10n {
     static var homeRankMystery: String { localize("home.rank.mystery", comment: "CP 榜神秘用户") }
     static var homeRankNotOnListYet: String { localize("home.rank.notOnListYet", comment: "CP 榜未上榜提示") }
     static var homeRankKeepSendingGifts: String { localize("home.rank.keepSendingGifts", comment: "CP 榜未上榜副标题") }
+    static func homeRankCpWeeklyRewardFormat(_ rank: Int) -> String {
+        String(format: localize("home.rank.cpWeeklyRewardFormat", comment: "CP 周榜奖励标题"), rank)
+    }
 
     // MARK: - Live 广场（H5 liveList.vue 对齐）
     /// 广场空态提示（当前没有主播在直播）
@@ -879,6 +1024,10 @@ enum L10n {
     static var liveBannerA11y: String { localize("live.banner.a11y", comment: "首页 banner a11y") }
     /// 跑马灯"sends out a super rocket"文案（H5 i18n key `gift.sends out a super rocket`）
     static var giftSendSuperRocket: String { localize("gift.sendSuperRocket", comment: "跑马灯：发送超级火箭") }
+    /// 首礼浮层首行，保留 {name} / {streamer} / {gift} 标记供富样式渲染。
+    static var liveGiftFirstGiftHeadline: String { localize("liveGift.firstGiftHeadline", comment: "首礼浮层首行") }
+    static var liveGiftFirstGiftStreamer: String { localize("liveGift.firstGiftStreamer", comment: "首礼浮层主播占位") }
+    static var liveGiftFirstGiftKick: String { localize("liveGift.firstGiftKick", comment: "首礼浮层第二行") }
 
     // MARK: - List 子页（设计稿还原）
     /// 顶部 Online/Prime 分段
@@ -906,6 +1055,8 @@ enum L10n {
     static var profileFollowing: String { localize("profile.following", comment: "关注数 caption") }
     static var profileFollowers: String { localize("profile.followers", comment: "粉丝数 caption") }
     static var profileFriends: String { localize("profile.friends", comment: "朋友数 caption") }
+    /// 资料未填写简介时的 H5 完成度提示
+    static var profileCompletionHint: String { localize("profile.completionHint", comment: "资料完成度提示") }
     /// 内容 tab
     static var profileTabAlbum: String { localize("profile.tab.album", comment: "Album tab") }
     static var profileTabGifts: String { localize("profile.tab.gifts", comment: "Gifts tab") }
@@ -1025,12 +1176,32 @@ enum L10n {
     static var messageActionUnstickTop: String  { localize("message.action.unstickTop", comment: "取消置顶") }
     static var messageActionDelete: String      { localize("message.action.delete", comment: "删除会话") }
     static var messageActionFailedToast: String { localize("message.action.failedToast", comment: "操作失败通用 toast") }
+    static var massTextingTitle: String         { localize("massTexting.title", comment: "群发弹窗标题") }
+    static var massTextingContentTitle: String  { localize("massTexting.contentTitle", comment: "群发内容标题") }
+    static var massTextingSendOneTap: String    { localize("massTexting.sendOneTap", comment: "一键群发按钮") }
+    static var massTextingLoading: String       { localize("massTexting.loading", comment: "群发文案加载中") }
+    static var massTextingRetry: String         { localize("massTexting.retry", comment: "群发加载失败重试") }
+    static var massTextingSendSuccess: String   { localize("massTexting.sendSuccess", comment: "群发成功 toast") }
+    static var massTextingDailyLimitReached: String { localize("massTexting.dailyLimitReached", comment: "今日群发次数已用完") }
+    static var massTextingRefreshUnavailable: String { localize("massTexting.refreshUnavailable", comment: "群发文案库不可用") }
+    static var massTextingSendFailed: String    { localize("massTexting.sendFailed", comment: "群发发送失败") }
+    static var massTextingLoadFailed: String    { localize("massTexting.loadFailed", comment: "群发加载失败") }
+    static var massTextingNoCopywriting: String { localize("massTexting.noCopywriting", comment: "群发暂无文案") }
+    static var massTextingRefreshCopy: String   { localize("massTexting.refreshCopy", comment: "刷新群发文案") }
+    static var massTextingHint: String          { localize("massTexting.hint", comment: "群发入口引导气泡") }
+    static func massTextingRemainingFormat(_ count: Int) -> String {
+        String(format: localize("massTexting.remainingFormat", comment: "今日剩余群发次数,%d=次数"), count)
+    }
 
     // MARK: - Message 顶部系统消息 3 入口（H-1c v4）
     static var messageSystemInboxStation: String       { localize("message.systemInbox.station", comment: "Flame 顶部 Station 入口标题") }
     static var messageSystemInboxNotification: String  { localize("message.systemInbox.notification", comment: "Flame 顶部 Notification 入口标题") }
     static var messageSystemInboxAdmin: String         { localize("message.systemInbox.admin", comment: "Flame 顶部 Admin 客服入口标题") }
     static var messageSystemInboxComingSoon: String    { localize("message.systemInbox.comingSoon", comment: "3 入口详情页留 H-2 未开放 toast") }
+    static var stationPopupRead: String                { localize("stationPopup.read", comment: "启动站内信已读状态") }
+    static var stationPopupUnread: String              { localize("stationPopup.unread", comment: "启动站内信未读状态") }
+    static var stationPopupAlreadyRead: String         { localize("stationPopup.alreadyRead", comment: "重复标记启动站内信已读 toast") }
+    static var stationPopupExpirationDate: String      { localize("stationPopup.expirationDate", comment: "启动站内信到期日期标签") }
 
     // MARK: - Call Records（通话历史记录页，对齐 H5 views/communication/records/list.vue）
     static var callRecordListTitle: String     { localize("callRecord.list.title", comment: "通话历史页顶部标题") }
@@ -1060,6 +1231,11 @@ enum L10n {
 
     // 云端历史拉空后过期提示（对齐 H5 new.chat history expired）
     static var chatHistoryExpired: String  { localize("chat.historyExpired", comment: "云端历史拉空时的一次性 toast") }
+    static var chatPrivatePermissionDisabled: String { localize("chat.private.permissionDisabled", comment: "私密消息权限关闭提示") }
+    static var chatPrivateAuditing: String { localize("chat.private.auditing", comment: "私密媒体审核中提示") }
+    static var chatPrivateRejected: String { localize("chat.private.rejected", comment: "私密媒体审核拒绝提示") }
+    static var chatPrivateCreate: String { localize("chat.private.create", comment: "私密媒体创建入口") }
+    static var chatPrivateGuide: String { localize("chat.private.guide", comment: "私密媒体首次引导") }
 
     // 对方消息气泡内可见"翻译"按钮（对齐 H5 msgItem.vue CTranslate label="Translate"）
     static var chatTranslate: String       { localize("chat.translate", comment: "文字气泡内翻译按钮 label") }
@@ -1317,6 +1493,16 @@ enum L10n {
     static var wishSettingPleaseEnterTheme: String { localize("wishSetting.pleaseEnterTheme", comment: "Wish theme 为空 toast") }
     static var wishSettingThemeMaxLen: String { localize("wishSetting.themeMaxLen", comment: "Wish theme > 15 chars") }
     static var wishSettingSubmittedForReview: String { localize("wishSetting.submittedForReview", comment: "Submit 成功 Alert 标题") }
+    static var wishSettingSubmitSuccessTitle: String { localize("wishSetting.submitSuccess.title", comment: "自由承诺审核成功标题") }
+    static var wishSettingSubmitSuccessSubtitle: String { localize("wishSetting.submitSuccess.subtitle", comment: "自由承诺审核成功说明") }
+    static var wishSettingSubmitSuccessReviewStatus: String { localize("wishSetting.submitSuccess.reviewStatus", comment: "自由承诺审核状态标签") }
+    static var wishSettingSubmitSuccessPendingReview: String { localize("wishSetting.submitSuccess.pendingReview", comment: "自由承诺审核中状态") }
+    static var wishSettingSubmitSuccessReviewTime: String { localize("wishSetting.submitSuccess.reviewTime", comment: "自由承诺审核时间标签") }
+    static var wishSettingSubmitSuccessReviewTimeValue: String { localize("wishSetting.submitSuccess.reviewTimeValue", comment: "自由承诺审核时间") }
+    static var wishSettingSubmitSuccessNotify: String { localize("wishSetting.submitSuccess.notify", comment: "自由承诺结果通知标签") }
+    static var wishSettingSubmitSuccessNotifyValue: String { localize("wishSetting.submitSuccess.notifyValue", comment: "自由承诺结果通知方式") }
+    static var wishSettingSubmitSuccessTip: String { localize("wishSetting.submitSuccess.tip", comment: "自由承诺审核成功提示") }
+    static var wishSettingSubmitSuccessGoToWishlist: String { localize("wishSetting.submitSuccess.goToWishlist", comment: "自由承诺审核记录入口") }
     // P0-1 分层校验 toast + P1-2 保存成功 toast（对齐 H5 index.vue:351-397）
     static var wishSettingPleaseAgreeRule: String { localize("wishSetting.pleaseAgreeRule", comment: "未勾选合规规范") }
     static var wishSettingPleaseAddGift: String { localize("wishSetting.pleaseAddGift", comment: "未添加心愿礼物") }
@@ -1514,18 +1700,106 @@ enum L10n {
     static var publicScreenTranslating: String { localize("publicScreen.translating", comment: "翻译中提示") }
     static var publicScreenSentAction: String { localize("publicScreen.sentAction", comment: "送礼动作词") }
     static var publicScreenEnteredRoom: String { localize("publicScreen.enteredRoom", comment: "进入房间") }
+    static var guardianBroadcastBecame: String { localize("guardian.broadcast.became", comment: "守护开通广播，含 {anchor}/{level} 占位") }
+    static var guardianLevelBronze: String { localize("guardian.level.bronze", comment: "铜守护等级") }
+    static var guardianLevelSilver: String { localize("guardian.level.silver", comment: "银守护等级") }
+    static var guardianLevelGold: String { localize("guardian.level.gold", comment: "金守护等级") }
+    // MARK: - Guardian 主播只读面板（对齐 H5 guardian-detail / guardian-list）
+    static var guardianTitle: String { localize("guardian.title", comment: "守护标题") }
+    static var guardianMyGuardians: String { localize("guardian.myGuardians", comment: "我的守护者列表标题") }
+    static var guardianHisGuardiansFormat: String { localize("guardian.hisGuardians.format", comment: "用户资料守护主播标题，%d") }
+    static var guardianRulesTitle: String { localize("guardian.rules.title", comment: "守护规则标题") }
+    static var guardianTopGuardian: String { localize("guardian.topGuardian", comment: "榜一守护者") }
+    static var guardianListFormat: String { localize("guardian.list.format", comment: "守护者列表人数，%d") }
+    static var guardianBeFirst: String { localize("guardian.beFirst", comment: "首位守护者空态") }
+    static var guardianWaitForYour: String { localize("guardian.waitForYour", comment: "守护者列表空态") }
+    static var guardianNoMore: String { localize("guardian.noMore", comment: "列表无更多数据") }
+    static var guardianTabGold: String { localize("guardian.tab.gold", comment: "金守护 tab") }
+    static var guardianTabSilver: String { localize("guardian.tab.silver", comment: "银守护 tab") }
+    static var guardianTabBronze: String { localize("guardian.tab.bronze", comment: "铜守护 tab") }
+    static var guardianPrivilegeBadge: String { localize("guardian.privilege.badge", comment: "守护勋章权益") }
+    static var guardianPrivilegeFrame: String { localize("guardian.privilege.frame", comment: "守护头像框权益") }
+    static var guardianPrivilegeChat: String { localize("guardian.privilege.chat", comment: "守护聊天气泡权益") }
+    static var guardianPrivilegeHighlight: String { localize("guardian.privilege.highlight", comment: "守护房间广播权益") }
+    static var guardianPrivilegeNotice: String { localize("guardian.privilege.notice", comment: "守护进场通知权益") }
+    static var guardianPrivilegeMount: String { localize("guardian.privilege.mount", comment: "守护座驾权益") }
+    static var guardianPrivilegeGift: String { localize("guardian.privilege.gift", comment: "守护礼物权益") }
+    static var guardianDay7: String { localize("guardian.day.7", comment: "守护 7 天时长") }
+    static var guardianDay30: String { localize("guardian.day.30", comment: "守护 30 天时长") }
+    static var guardianDay365: String { localize("guardian.day.365", comment: "守护 365 天时长") }
+    static var guardianSaveFormat: String { localize("guardian.save.format", comment: "守护折扣，%d") }
+    static var guardianPrivilegePreviewSubtitleFormat: String { localize("guardian.preview.subtitle", comment: "权益预览副标题，%@") }
+    static var guardianPrivilegePreview: String { localize("guardian.preview", comment: "权益预览按钮") }
+    static var guardianDaysLeftFormat: String { localize("guardian.daysLeft.format", comment: "守护剩余天数，%d") }
+    static var guardianRulesQuestion1: String { localize("guardian.rules.q1", comment: "守护规则问题 1") }
+    static var guardianRulesAnswer1: String { localize("guardian.rules.a1", comment: "守护规则答案 1") }
+    static var guardianRulesQuestion2: String { localize("guardian.rules.q2", comment: "守护规则问题 2") }
+    static var guardianRulesAnswer2: String { localize("guardian.rules.a2", comment: "守护规则答案 2") }
+    static var guardianRulesQuestion3: String { localize("guardian.rules.q3", comment: "守护规则问题 3") }
+    static var guardianRulesAnswer3: String { localize("guardian.rules.a3", comment: "守护规则答案 3") }
+    static var guardianRulesQuestion4: String { localize("guardian.rules.q4", comment: "守护规则问题 4") }
+    static var guardianRulesAnswer4: String { localize("guardian.rules.a4", comment: "守护规则答案 4") }
+    static var guardianRulesQuestion5: String { localize("guardian.rules.q5", comment: "守护规则问题 5") }
+    static var guardianRulesAnswer5: String { localize("guardian.rules.a5", comment: "守护规则答案 5") }
+    static var guardianRulesQuestion6: String { localize("guardian.rules.q6", comment: "守护规则问题 6") }
+    static var guardianRulesAnswer6: String { localize("guardian.rules.a6", comment: "守护规则答案 6") }
+    static var guardianRulesLevelExtra: String { localize("guardian.rules.levelExtra", comment: "守护等级消耗说明") }
+    static var guardianRulesPrivilegesExtra: String { localize("guardian.rules.privilegesExtra", comment: "守护权益说明") }
+    static var guardianRulesDuration7: String { localize("guardian.rules.duration.7", comment: "守护 7 天规则") }
+    static var guardianRulesDuration30: String { localize("guardian.rules.duration.30", comment: "守护 30 天规则") }
+    static var guardianRulesDuration365: String { localize("guardian.rules.duration.365", comment: "守护 365 天规则") }
+    static var guardianRulesDurationExtra: String { localize("guardian.rules.durationExtra", comment: "守护有效期补充说明") }
+    static var guardianRulesRank1: String { localize("guardian.rules.rank.1", comment: "守护排序规则 1") }
+    static var guardianRulesRank2: String { localize("guardian.rules.rank.2", comment: "守护排序规则 2") }
+    static var guardianRulesRank3: String { localize("guardian.rules.rank.3", comment: "守护排序规则 3") }
+    static var guardianRulesRankExtra: String { localize("guardian.rules.rankExtra", comment: "守护排序补充说明") }
     /// v18 幸运礼物 / 转盘 / 猜拳 / 心愿单 / 钻石盲盒 公屏文案
     static var publicScreenLuckyWin: String { localize("publicScreen.luckyWin", comment: "幸运礼物 wins") }
     static var publicScreenLuckyBySending: String { localize("publicScreen.luckyBySending", comment: "幸运礼物 by sending lucky") }
     static var publicScreenWheelHit: String { localize("publicScreen.wheelHit", comment: "转盘 hit") }
     static var publicScreenWheelOnTheWheel: String { localize("publicScreen.wheelOnTheWheel", comment: "转盘 on the wheel") }
     static var publicScreenRpsWin: String { localize("publicScreen.rpsWin", comment: "猜拳 wins RPS") }
+    static var publicScreenLuckyDiceWin: String { localize("publicScreen.luckyDiceWin", comment: "幸运骰子获胜") }
     static var publicScreenRpsGet: String { localize("publicScreen.rpsGet", comment: "猜拳 get medal") }
     static var publicScreenWishlistTop1: String { localize("publicScreen.wishlistTop1", comment: "心愿单登顶") }
+    static var publicScreenPKTopContributors: String { localize("publicScreen.pkTopContributors", comment: "PK 贡献榜标题") }
+    static var publicScreenPKTop1: String { localize("publicScreen.pkTop1", comment: "PK 贡献榜第一名") }
+    static var publicScreenPKTop2: String { localize("publicScreen.pkTop2", comment: "PK 贡献榜第二名") }
+    static var publicScreenPKTop3: String { localize("publicScreen.pkTop3", comment: "PK 贡献榜第三名") }
     static var publicScreenDiamondBoxSend: String { localize("publicScreen.diamondBoxSend", comment: "钻石盲盒发包") }
     static var publicScreenDiamondBoxClaim: String { localize("publicScreen.diamondBoxClaim", comment: "钻石盲盒瓜分") }
     static var publicScreenDiamondBoxSettled: String { localize("publicScreen.diamondBoxSettled", comment: "钻石盲盒结算") }
     static var publicScreenDiamondBoxExpired: String { localize("publicScreen.diamondBoxExpired", comment: "钻石盲盒过期退回") }
+    static var diamondGiftGrab: String { localize("diamondGift.grab", comment: "钻石福袋开抢状态") }
+    static var diamondGiftSendAction: String { localize("diamondGift.sendAction", comment: "钻石福袋发包动作") }
+    static func diamondGiftClaim(user: String, diamonds: Int64) -> String {
+        String(format: localize("diamondGift.claimFormat", comment: "钻石福袋瓜分文案"), user, diamonds)
+    }
+    static func diamondGiftExpired(user: String) -> String {
+        String(format: localize("diamondGift.expiredFormat", comment: "钻石福袋退款文案"), user)
+    }
+    static func diamondGiftUser(_ id: String) -> String {
+        String(format: localize("diamondGift.userFormat", comment: "钻石福袋用户兜底昵称"), id)
+    }
+    static var diamondGiftSettledTitle: String { localize("diamondGift.settledTitle", comment: "钻石福袋结算卡标题") }
+    static var diamondGiftViewDetails: String { localize("diamondGift.viewDetails", comment: "钻石福袋查看详情") }
+    static var diamondGiftRulesTitle: String { localize("diamondGift.rulesTitle", comment: "钻石福袋规则标题") }
+    static var diamondGiftRulesSectionA: String { localize("diamondGift.rulesSectionA", comment: "钻石福袋规则第一节") }
+    static var diamondGiftRulesSectionB: String { localize("diamondGift.rulesSectionB", comment: "钻石福袋规则第二节") }
+    static var diamondGiftRulesSectionC: String { localize("diamondGift.rulesSectionC", comment: "钻石福袋规则第三节") }
+    static var diamondGiftRulesATitle: String { localize("diamondGift.rulesATitle", comment: "钻石福袋规则第一节标题") }
+    static var diamondGiftRulesA1: String { localize("diamondGift.rulesA1", comment: "钻石福袋规则第一节内容") }
+    static var diamondGiftRulesBTitle: String { localize("diamondGift.rulesBTitle", comment: "钻石福袋规则第二节标题") }
+    static var diamondGiftRulesB1: String { localize("diamondGift.rulesB1", comment: "钻石福袋规则第二节第一条") }
+    static var diamondGiftRulesB2: String { localize("diamondGift.rulesB2", comment: "钻石福袋规则第二节第二条") }
+    static var diamondGiftRulesCTitle: String { localize("diamondGift.rulesCTitle", comment: "钻石福袋规则第三节标题") }
+    static var diamondGiftRulesC1: String { localize("diamondGift.rulesC1", comment: "钻石福袋规则第三节第一条") }
+    static var diamondGiftRulesC2: String { localize("diamondGift.rulesC2", comment: "钻石福袋规则第三节第二条") }
+    static var diamondGiftRulesC3: String { localize("diamondGift.rulesC3", comment: "钻石福袋规则第三节第三条") }
+    static var diamondGiftRulesC4: String { localize("diamondGift.rulesC4", comment: "钻石福袋规则第三节第四条") }
+    static var diamondGiftWinnersTitle: String { localize("diamondGift.winnersTitle", comment: "钻石福袋获奖名单标题") }
+    static var diamondGiftTopShare: String { localize("diamondGift.topShare", comment: "钻石福袋最高分享标识") }
+    static var diamondGiftNoWinners: String { localize("diamondGift.noWinners", comment: "钻石福袋无获奖者") }
     /// v24 活跃大 R 进房 Toast（B1 · 对齐 H5 §9.6 handleActiveTycoonEnterToast）
     static var liveActiveTycoonEnterToast: String { localize("live.activeTycoon.enterToast", comment: "大 R 进房顶部 toast") }
     /// v24 猜拳规则浮层（B2 · 对齐 H5 §9.2.2 rpsRulesSheet.vue）
@@ -1555,6 +1829,7 @@ enum L10n {
     static var commonCancel: String { localize("common.cancel", comment: "通用取消") }
     static var virtualPropsEffectSwitchTitle: String { localize("virtualProps.effectSwitch.title", comment: "虚拟道具开关标题") }
     static var virtualPropsEffectSwitchDescription: String { localize("virtualProps.effectSwitch.description", comment: "虚拟道具开关说明") }
+    static var virtualPropsEffectSwitchTip: String { localize("virtualProps.effectSwitch.tip", comment: "虚拟道具开关入口提示") }
     static var virtualPropsEffectEnable: String { localize("virtualProps.effectEnable", comment: "启用效果") }
     static var announcementPopupTitle: String { localize("announcement.popup.title", comment: "公告标题") }
     static var announcementPlaceholder: String { localize("announcement.popup.placeholder", comment: "公告输入提示") }
@@ -1754,6 +2029,7 @@ enum L10n {
 
     // v22（2026-07-10）：主播索取礼物被用户拒绝的 toast
     static var callAskForGiftRejected: String { localize("call.askForGift.rejected", comment: "主播索取礼物被用户拒绝时的 toast 提示") }
+    static var callAskForGiftWaitingForReward: String { localize("call.askForGift.waitingForReward", comment: "主播索礼成功后的等待奖励提示") }
 
     // MARK: - J 机器人通话
     static var robotCallIncomingTitle: String { localize("robotCall.incoming.title", comment: "机器人来电标题") }
@@ -2346,5 +2622,185 @@ enum L10n {
             String(format: localize("register.error.imageTooLarge", comment: "图片超原图硬顶 %d MB"), maxMB)
         }
         static var errorServerTemporary: String { localize("register.error.serverTemporary", comment: "服务端临时错误（空 body / 非 JSON / 5xx），提示用户重试") }
+    }
+
+    // MARK: - Wallet (native income, withdrawal and active liveness)
+    enum Wallet {
+        static var title: String { localize("wallet.title", comment: "Wallet page title") }
+        static var balance: String { localize("wallet.balance", comment: "Wallet balance") }
+        static var withdrawal: String { localize("wallet.withdrawal", comment: "Withdrawal entry") }
+        static var todayIncome: String { localize("wallet.todayIncome", comment: "Wallet today income") }
+        static var incomeDetails: String { localize("wallet.incomeDetails", comment: "Income ledger title") }
+        static var filterCall: String { localize("wallet.filter.call", comment: "Ledger call filter") }
+        static var filterGift: String { localize("wallet.filter.gift", comment: "Ledger gift filter") }
+        static var filterTask: String { localize("wallet.filter.task", comment: "Ledger task filter") }
+        static var filterInvite: String { localize("wallet.filter.invite", comment: "Ledger invite filter") }
+        static var filterMessage: String { localize("wallet.filter.message", comment: "Ledger message filter") }
+        static var filterInteraction: String { localize("wallet.filter.interaction", comment: "Ledger interaction filter") }
+        static var filterOthers: String { localize("wallet.filter.others", comment: "Ledger other filter") }
+        static var time: String { localize("wallet.time", comment: "Ledger time column") }
+        static var source: String { localize("wallet.source", comment: "Ledger source column") }
+        static var user: String { localize("wallet.user", comment: "Ledger user column") }
+        static var detail: String { localize("wallet.detail", comment: "Ledger detail column") }
+        static var income: String { localize("wallet.income", comment: "Ledger income column") }
+        static var withdrawCash: String { localize("wallet.withdrawCash", comment: "Submit withdrawal") }
+        static var cashableBalance: String { localize("wallet.cashableBalance", comment: "Cashable balance") }
+        static var withdrawalBalance: String { localize("wallet.withdrawalBalance", comment: "Withdrawal-only balance") }
+        static var inviteEntry: String { localize("wallet.inviteEntry", comment: "Invite entry") }
+        static var records: String { localize("wallet.records", comment: "Withdrawal records") }
+        static var selectAccount: String { localize("wallet.selectAccount", comment: "Select withdrawal account") }
+        static var manageAccounts: String { localize("wallet.manageAccounts", comment: "Manage withdrawal accounts") }
+        static var addAccount: String { localize("wallet.addAccount", comment: "Add withdrawal account") }
+        static var collection: String { localize("wallet.collection", comment: "Collection method") }
+        static var enterAmount: String { localize("wallet.enterAmount", comment: "Enter withdrawal amount") }
+        static var availableBalance: String { localize("wallet.availableBalance", comment: "Available diamond balance") }
+        static var amountPlaceholder: String { localize("wallet.amountPlaceholder", comment: "Withdrawal amount placeholder") }
+        static var estimatedReceive: String { localize("wallet.estimatedReceive", comment: "Estimated receipt") }
+        static var withdrawalSummary: String { localize("wallet.withdrawalSummary", comment: "Withdrawal quote title") }
+        static var grossAmount: String { localize("wallet.grossAmount", comment: "Withdrawal gross amount") }
+        static var fee: String { localize("wallet.fee", comment: "Withdrawal fee") }
+        static var finalAmount: String { localize("wallet.finalAmount", comment: "Withdrawal final amount") }
+        static var remainderReturned: String { localize("wallet.remainderReturned", comment: "Diamond remainder return note") }
+        static var cancel: String { localize("wallet.cancel", comment: "Wallet cancel") }
+        static var confirm: String { localize("wallet.confirm", comment: "Wallet confirm") }
+        static var collectionType: String { localize("wallet.collectionType", comment: "Collection account type") }
+        static var collectionDetails: String { localize("wallet.collectionDetails", comment: "Collection details") }
+        static var accountName: String { localize("wallet.accountName", comment: "Epay collection name") }
+        static var accountIrreversible: String { localize("wallet.accountIrreversible", comment: "Collection warning") }
+        static var digifinexMinimum: String { localize("wallet.digifinexMinimum", comment: "Digifinex minimum") }
+        static var epayMinimum: String { localize("wallet.epayMinimum", comment: "Epay minimum") }
+        static var uidPlaceholder: String { localize("wallet.uidPlaceholder", comment: "Digifinex UID placeholder") }
+        static var addressPlaceholder: String { localize("wallet.addressPlaceholder", comment: "USDT address placeholder") }
+        static var emailPlaceholder: String { localize("wallet.emailPlaceholder", comment: "Epay email placeholder") }
+        static var removeAccount: String { localize("wallet.removeAccount", comment: "Remove account") }
+        static var remove: String { localize("wallet.remove", comment: "Destructive confirmation") }
+        static var removeAccountDetail: String { localize("wallet.removeAccountDetail", comment: "Remove account confirmation") }
+        static var orderNumber: String { localize("wallet.orderNumber", comment: "Withdrawal order number") }
+        static var applicationStatus: String { localize("wallet.applicationStatus", comment: "Withdrawal application status") }
+        static var reviewing: String { localize("wallet.reviewing", comment: "Withdrawal reviewing state") }
+        static var paid: String { localize("wallet.paid", comment: "Withdrawal paid state") }
+        static var rejected: String { localize("wallet.rejected", comment: "Withdrawal rejected state") }
+        static var loadFailed: String { localize("wallet.loadFailed", comment: "Wallet load failure") }
+        static var accountInfoRequired: String { localize("wallet.accountInfoRequired", comment: "Required account information") }
+        static var accountTypeInvalid: String { localize("wallet.accountTypeInvalid", comment: "Invalid account type") }
+        static var accountAdded: String { localize("wallet.accountAdded", comment: "Account saved") }
+        static var accountSaveFailed: String { localize("wallet.accountSaveFailed", comment: "Account save failure") }
+        static var accountRemoved: String { localize("wallet.accountRemoved", comment: "Account removed") }
+        static var accountRemoveFailed: String { localize("wallet.accountRemoveFailed", comment: "Account remove failure") }
+        static var integerAmount: String { localize("wallet.integerAmount", comment: "Whole number amount required") }
+        static var amountExceedsBalance: String { localize("wallet.amountExceedsBalance", comment: "Amount exceeds balance") }
+        static var minimumDiamond: String { localize("wallet.minimumDiamond", comment: "Minimum 200 diamonds") }
+        static var minimumRate: String { localize("wallet.minimumRate", comment: "Minimum exchange rate") }
+        static var channelMinimum: String { localize("wallet.channelMinimum", comment: "Channel minimum") }
+        static var verificationCheckFailed: String { localize("wallet.verificationCheckFailed", comment: "Face verification preflight failure") }
+        static var passwordSixDigits: String { localize("wallet.passwordSixDigits", comment: "Six digit password required") }
+        static var passwordSet: String { localize("wallet.passwordSet", comment: "Withdrawal password set") }
+        static var withdrawalSubmitted: String { localize("wallet.withdrawalSubmitted", comment: "Withdrawal submitted") }
+        static var withdrawalSubmitFailed: String { localize("wallet.withdrawalSubmitFailed", comment: "Withdrawal submit failed") }
+        static var setPassword: String { localize("wallet.setPassword", comment: "Set withdrawal password") }
+        static var setPasswordDetail: String { localize("wallet.setPasswordDetail", comment: "Set password guidance") }
+        static var enterPassword: String { localize("wallet.enterPassword", comment: "Enter withdrawal password") }
+        static var enterPasswordDetail: String { localize("wallet.enterPasswordDetail", comment: "Enter password guidance") }
+        static var passwordPlaceholder: String { localize("wallet.passwordPlaceholder", comment: "Password input placeholder") }
+        static var forgotPassword: String { localize("wallet.forgotPassword", comment: "Withdrawal password recovery") }
+        static var livenessFailedTitle: String { localize("wallet.livenessFailedTitle", comment: "Liveness failure title") }
+        static var retry: String { localize("wallet.retry", comment: "Retry active liveness") }
+        static var livenessShakeTitle: String { localize("wallet.livenessShakeTitle", comment: "Shake challenge title") }
+        static var livenessShakeDetail: String { localize("wallet.livenessShakeDetail", comment: "Shake challenge detail") }
+        static var livenessNodTitle: String { localize("wallet.livenessNodTitle", comment: "Nod challenge title") }
+        static var livenessNodDetail: String { localize("wallet.livenessNodDetail", comment: "Nod challenge detail") }
+        static var livenessFrontTitle: String { localize("wallet.livenessFrontTitle", comment: "Front challenge title") }
+        static var livenessFrontDetail: String { localize("wallet.livenessFrontDetail", comment: "Front challenge detail") }
+        static var livenessVerifying: String { localize("wallet.livenessVerifying", comment: "Face verification progress") }
+        static var livenessVerifyingDetail: String { localize("wallet.livenessVerifyingDetail", comment: "Face verification detail") }
+        static var cameraPermissionRequired: String { localize("wallet.cameraPermissionRequired", comment: "Camera permission failure") }
+        static var livenessCameraUnavailable: String { localize("wallet.livenessCameraUnavailable", comment: "Camera setup failure") }
+        static var livenessNoFace: String { localize("wallet.livenessNoFace", comment: "No face failure") }
+        static var livenessTimedOut: String { localize("wallet.livenessTimedOut", comment: "Liveness timeout") }
+        static var livenessUploadFailed: String { localize("wallet.livenessUploadFailed", comment: "Face upload failure") }
+    }
+
+    // MARK: - Invite（安卓主播端为行为基准）
+    enum Invite {
+        static var title: String { localize("invite.title", comment: "邀请页标题") }
+        static var inviteUser: String { localize("invite.user", comment: "邀请用户") }
+        static var inviteAnchor: String { localize("invite.anchor", comment: "邀请主播") }
+        static var myRewards: String { localize("invite.myRewards", comment: "我的奖励") }
+        static var totalBonus: String { localize("invite.totalBonus", comment: "总邀请奖励") }
+        static var last7Days: String { localize("invite.last7Days", comment: "最近七天邀请") }
+        static var last7DaysUser: String { localize("invite.last7DaysUser", comment: "最近 7 天邀请用户") }
+        static var last7DaysAnchor: String { localize("invite.last7DaysAnchor", comment: "最近 7 天邀请主播") }
+        static var got: String { localize("invite.got", comment: "获得") }
+        static var rules: String { localize("invite.rules", comment: "邀请规则") }
+        static var lifetimeReward: String { localize("invite.lifetimeReward", comment: "一次邀请长期收益") }
+        static func userRewardHint(_ reward: String) -> String {
+            String(format: localize("invite.userRewardHintFormat", comment: "邀请用户收益提示，%@ = 奖励比例"), reward)
+        }
+        static func anchorRewardHint(_ reward: String) -> String {
+            String(format: localize("invite.anchorRewardHintFormat", comment: "邀请主播收益提示，%@ = 收益比例"), reward)
+        }
+        static var userCommission: String { localize("invite.userCommission", comment: "用户返佣") }
+        static var anchorCommission: String { localize("invite.anchorCommission", comment: "主播返佣") }
+        static var partyCommission: String { localize("invite.partyCommission", comment: "派对房返佣") }
+        static var inviteCode: String { localize("invite.code", comment: "邀请码") }
+        static var copyCode: String { localize("invite.copyCode", comment: "复制邀请码") }
+        static var details: String { localize("invite.details", comment: "明细") }
+        static var totalUsers: String { localize("invite.totalUsers", comment: "累计邀请用户") }
+        static var totalAnchors: String { localize("invite.totalAnchors", comment: "累计邀请主播") }
+        static var cumulativeReward: String { localize("invite.cumulativeReward", comment: "累计奖励") }
+        static var inviteNow: String { localize("invite.now", comment: "立即邀请") }
+        static var bigReward: String { localize("invite.bigReward", comment: "高额奖励提示") }
+        static var copySuccess: String { localize("invite.copySuccess", comment: "邀请复制成功") }
+        static var shareUnavailable: String { localize("invite.shareUnavailable", comment: "暂无可分享内容") }
+        static var shareUser: String { localize("invite.shareUser", comment: "分享邀请用户") }
+        static var shareAnchor: String { localize("invite.shareAnchor", comment: "分享邀请主播") }
+        static var saveAndShare: String { localize("invite.saveAndShare", comment: "保存并分享") }
+        static var copyLink: String { localize("invite.copyLink", comment: "复制链接") }
+        static var share: String { localize("invite.share", comment: "分享") }
+        static var showQRCode: String { localize("invite.showQRCode", comment: "显示邀请二维码") }
+        static func userID(_ value: String) -> String {
+            String(format: localize("invite.idFormat", comment: "邀请用户 ID，%@ = 用户 ID"), value)
+        }
+        static func uid(_ value: String) -> String {
+            String(format: localize("invite.uidFormat", comment: "邀请榜单 UID，%@ = 用户 ID"), value)
+        }
+        static var ruleUnavailable: String { localize("invite.ruleUnavailable", comment: "暂无邀请规则") }
+        static var faq: String { localize("invite.faq", comment: "常见问题") }
+        static var policy: String { localize("invite.policy", comment: "政策说明") }
+        static var invitedUsers: String { localize("invite.invitedUsers", comment: "邀请用户列表") }
+        static var rewardRecords: String { localize("invite.rewardRecords", comment: "奖励明细") }
+        static var startDate: String { localize("invite.startDate", comment: "开始日期") }
+        static var endDate: String { localize("invite.endDate", comment: "结束日期") }
+        static var applyDate: String { localize("invite.applyDate", comment: "应用日期") }
+        static var invalidDateRange: String { localize("invite.invalidDateRange", comment: "日期范围无效") }
+        static var dataDetails: String { localize("invite.dataDetails", comment: "数据详情") }
+        static var period: String { localize("invite.period", comment: "统计周期") }
+        static var identifier: String { localize("invite.identifier", comment: "ID 列名") }
+        static var user: String { localize("invite.userColumn", comment: "用户列名") }
+        static var nickname: String { localize("invite.nickname", comment: "昵称列名") }
+        static var totalIncome: String { localize("invite.totalIncome", comment: "总收益列名") }
+        static var diamondIncome: String { localize("invite.diamondIncome", comment: "钻石收益列名") }
+        static var dailyOutputReward: String { localize("invite.dailyOutputReward", comment: "每日产出奖励列名") }
+        static var accumulatedRewards: String { localize("invite.accumulatedRewards", comment: "累计奖励列名") }
+        static var invitationTime: String { localize("invite.invitationTime", comment: "邀请时间列名") }
+        static var accumulatedRewardsDetail: String { localize("invite.accumulatedRewardsDetail", comment: "用户奖励详情累计奖励列名") }
+        static var invitationTimeDetail: String { localize("invite.invitationTimeDetail", comment: "用户奖励详情邀请时间列名") }
+        static var rewardQuantity: String { localize("invite.rewardQuantity", comment: "奖励数量列名") }
+        static var today: String { localize("invite.today", comment: "今天") }
+        static var thisWeek: String { localize("invite.thisWeek", comment: "本周") }
+        static var lastWeek: String { localize("invite.lastWeek", comment: "上周") }
+        static var lastMonth: String { localize("invite.lastMonth", comment: "上月") }
+        static var referralIncomeReward: String { localize("invite.referralIncomeReward", comment: "推荐收益奖励") }
+        static var myDashboard: String { localize("invite.myDashboard", comment: "我的看板") }
+        static var cumulativeOutputReward: String { localize("invite.cumulativeOutputReward", comment: "累计产出奖励") }
+        static var callIncome: String { localize("invite.callIncome", comment: "通话收益") }
+        static var giftIncome: String { localize("invite.giftIncome", comment: "礼物收益") }
+        static var connectionRate: String { localize("invite.connectionRate", comment: "接通率") }
+        static var currentRanking: String { localize("invite.currentRanking", comment: "当前排名") }
+        static var currentLevel: String { localize("invite.currentLevel", comment: "当前等级") }
+        static var onlineDuration: String { localize("invite.onlineDuration", comment: "累计在线时长") }
+        static var totalCallDuration: String { localize("invite.totalCallDuration", comment: "累计通话时长") }
+        static var averageCallDuration: String { localize("invite.averageCallDuration", comment: "平均通话时长") }
+        static var startChat: String { localize("invite.startChat", comment: "开始聊天") }
     }
 }
