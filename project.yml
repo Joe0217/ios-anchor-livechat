@@ -96,8 +96,8 @@ targets:
           - en
           - ar
           - tr
-        # 摄像头权限说明（美颜实时预览必需）；文案改走 InfoPlist.strings 本地化，此处英文兜底
-        NSCameraUsageDescription: Used for real-time beauty preview and live streaming
+        # 摄像头权限说明（美颜/直播/提现身份核验）；文案改走 InfoPlist.strings 本地化，此处英文兜底
+        NSCameraUsageDescription: Used for beauty preview, live streaming, and withdrawal identity verification
         # 麦克风权限（声网通话音频必需）
         NSMicrophoneUsageDescription: Used for real-time audio/video calls
         # 相册读取权限（A-2 注册流程：头像 + 6 张 profile photos 走 PhotosPicker）
@@ -125,6 +125,11 @@ targets:
         HilySAPIAESIV: $(HILY_SAPI_AES_IV)
         HilyWSAESKey: $(HILY_WS_AES_KEY)
         HilyAgoraAppID: $(HILY_AGORA_APP_ID)
+        # 数数 ThinkingData：仅占位，真实值只保存在本机 xcconfig。
+        HilyThinkingDataAppID: $(HILY_THINKING_DATA_APP_ID)
+        HilyThinkingDataServerURL: $(HILY_THINKING_DATA_SERVER_URL)
+        # 轻量 WebView 微应用：由本地 xcconfig 按环境注入静态入口（不含 token / API 密钥）。
+        HilyWebFeatureBaseURL: $(HILY_WEB_FEATURE_BASE_URL)
 
   # ─────────────────────────────────────────────
   # 单测 target：logic test bundle，不依赖 Hily app target、不链 FURenderKit / 声网 / 云信，
@@ -234,6 +239,9 @@ targets:
       # 直播公屏 50 条容量 + 猜拳获胜通知字段解析（零 SDK，独立单测）
       - path: Sources/Live/PublicScreen/PublicChatMessagesStore.swift
       - path: Sources/Live/PublicScreen/RpsWinNotificationPayload.swift
+      # 客态直播间模型测试（纯 Foundation，零 SDK 依赖）。
+      - path: Sources/Home/LiveTab/LiveStream/LiveStreamModels.swift
+      - path: Sources/Live/Audience/AudienceLiveRoomModels.swift
       # H 里程碑：直播付费跑马灯过滤/去重/点踩状态机（真实 sapi service 不入 tests）
       - path: Sources/Live/Marquee/PaidBulletServiceProtocol.swift
       - path: Sources/Live/Marquee/PaidBulletQueue.swift
@@ -256,6 +264,8 @@ targets:
       - path: Sources/Party/Models/PartyEvents.swift
       - path: Sources/Party/GiftEffect/PartyGiftEffectItem.swift
       - path: Sources/Party/Models/PartyRoomInfo.swift
+      # PartyRoomSeat.userCardPreview 依赖的纯数据模型。
+      - path: Sources/Live/UserCard/UserCardModels.swift
       - path: Sources/Party/Models/PartyRoomSeat.swift
       - path: Sources/Party/Models/PartySeatInviteCandidate.swift
       - path: Sources/Party/Utils/PartyValueNormalizer.swift
@@ -312,6 +322,8 @@ targets:
       - path: Sources/Profile/UserProfile/UserProfileModels.swift
       - path: Sources/Profile/UserProfile/UserProfileViewModel.swift
       - path: Sources/Profile/UserProfile/UserProfileService.swift
+      # 守护模型为 UserDetail.guardianList 的纯 Foundation 依赖，供资料页解析测试编译。
+      - path: Sources/Guardian/GuardianModels.swift
       # `.followRelationChanged` Notification 抽出独立小文件（H-0 step 1a 复用此通知做跨页同步）
       - path: Sources/Profile/FollowList/FollowRelationNotification.swift
       # Core/Upload（通用上传能力，Step 5 重构后从 J 里程碑抽出到 Core/）

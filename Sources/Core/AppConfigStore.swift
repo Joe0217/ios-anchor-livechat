@@ -17,10 +17,7 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "app-con
 /// - `pay_msg_points` — 用户付费消息单条积分
 /// - `free_msg_points` — 用户免费消息单条积分
 ///
-/// **hardcoded fallback**（对齐 H5，密钥本身在 H5 前端已明文暴露；未来收紧可改 `#if DEBUG`）：
-/// `microsoftTranslatorKey = "75966eed4f5c49de8635c4f004dbc5d9"` / `microsoftTranslatorArea = "eastus2"`
-///
-/// **失败兜底**：接口异常时仍设 `isLoaded = true`（避免 view flash 永久阻塞）+ 应用 fallback key/area。
+/// **失败处理**：接口异常时仍设 `isLoaded = true`（避免 view flash 永久阻塞），但不提供翻译凭证。
 ///
 /// **测试注入**：`init(fetch:)` 接收 fetch closure，`shared` 用真实 `AppConfigService.fetch`，
 /// 单测传 stub 覆盖成功/失败/parse 失败三种路径。
@@ -49,11 +46,6 @@ final class AppConfigStore: ObservableObject {
     @Published private(set) var callWaitTime: Int?
     @Published private(set) var anchorCallBalanceRewardOnLow: Int?
     @Published private(set) var isLoaded: Bool = false
-
-    // MARK: - 硬编 fallback（对齐 H5 前端明文，密钥非新增暴露面）
-
-    static let translatorKeyFallback = "75966eed4f5c49de8635c4f004dbc5d9"
-    static let translatorAreaFallback = "eastus2"
 
     // MARK: - 拉取的 key 列表（H5 `app.js:417` 一次逗号 join）
 
@@ -109,27 +101,32 @@ final class AppConfigStore: ObservableObject {
                 logger.info("[AppConfig] call_config missing or parse failed; will use CallStore local fallback (60/100)")
             }
 
-            // 2. microsoft_translator_config: JSON string 二次 parse（H5 `app.js:421`）
-            if let raw = dict["microsoft_translator_config"] as? String,
-               let data = raw.data(using: .utf8),
-               let cfg = try? JSONDecoder().decode(TranslatorConfig.self, from: data) {
+            // 2. microsoft_translator_config: H5 通常收到 JSON string，但网关实际可能
+            // 已解成 object，且旧配置有 `region` 字段。批量响应漏字段时单独补拉，避免
+            // 翻译入口因无关配置缺失而永久不可用。
+            var translatorConfig = Self.translatorConfig(from: dict["microsoft_translator_config"])
+            if translatorConfig == nil,
+               let fallback = try? await fetch(["microsoft_translator_config"]) {
+                translatorConfig = Self.translatorConfig(from: fallback["microsoft_translator_config"])
+            }
+            if let cfg = translatorConfig {
                 microsoftTranslatorKey = cfg.key
                 microsoftTranslatorArea = cfg.area
                 logger.info("[AppConfig] microsoft translator loaded from config")
             } else {
-                microsoftTranslatorKey = Self.translatorKeyFallback
-                microsoftTranslatorArea = Self.translatorAreaFallback
-                logger.info("[AppConfig] microsoft translator using hardcoded fallback (config missing or parse failed)")
+                microsoftTranslatorKey = nil
+                microsoftTranslatorArea = nil
+                logger.info("[AppConfig] microsoft translator unavailable: config missing or malformed")
             }
 
             isLoaded = true
             logger.info("[AppConfig] activate success: achor_hide_button=\(self.achorHideButton ?? "nil", privacy: .public) payPoints=\(self.payMsgPoints ?? -1) freePoints=\(self.freeMsgPoints ?? -1) pkMatchDur=\(self.pkMatchDuration ?? -1) pkEffective=\(self.pkEffectiveValue ?? -1) pkGiftQueue=\(self.pkGiftQueue ?? -1)")
         } catch {
-            // 网络失败 / 后端异常兜底：不阻塞 view，用 fallback + isLoaded=true
-            microsoftTranslatorKey = Self.translatorKeyFallback
-            microsoftTranslatorArea = Self.translatorAreaFallback
+            // 网络失败 / 后端异常不阻塞 view；翻译功能保持不可用直到下次成功拉取配置。
+            microsoftTranslatorKey = nil
+            microsoftTranslatorArea = nil
             isLoaded = true
-            logger.warning("[AppConfig] activate failed, applied fallbacks: \(String(describing: error), privacy: .public)")
+            logger.warning("[AppConfig] activate failed; translator unavailable: \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -157,6 +154,52 @@ final class AppConfigStore: ObservableObject {
         if let s = v as? String, let n = Int(s) { return n }
         return nil
     }
+
+    /// H5 `jsonStrTranslateJson` 的原生兼容实现。配置经过不同网关版本时可能是
+    /// JSON 字符串、已解码字典，或被 JSON 字符串再包装一次；不记录任何凭证内容。
+    private static func translatorConfig(from value: Any?, depth: Int = 0) -> TranslatorConfig? {
+        guard depth < 3, let value else { return nil }
+        if let dictionary = value as? [String: Any] {
+            guard let key = nonEmptyString(dictionary["key"]),
+                  let area = nonEmptyString(dictionary["area"]) ?? nonEmptyString(dictionary["region"])
+            else { return nil }
+            return TranslatorConfig(key: key, area: area)
+        }
+        guard let raw = value as? String,
+              let decoded = jsonObject(fromConfigString: raw)
+        else { return nil }
+        return translatorConfig(from: decoded, depth: depth + 1)
+    }
+
+    /// 对齐 H5 `jsonStrTranslateJson`：先解析标准 JSON；老配置形如
+    /// `{key:abc,area:eastus2}` 时，仅为 key 与不带引号的简单值补引号后再解析。
+    private static func jsonObject(fromConfigString raw: String) -> Any? {
+        if let data = raw.data(using: .utf8),
+           let decoded = try? JSONSerialization.jsonObject(with: data) {
+            return decoded
+        }
+
+        let keyPattern = "([\\{,])\\s*([A-Za-z0-9_]+)\\s*:"
+        let valuePattern = ":([A-Za-z0-9_]+)([,\\}])"
+        let quotedKeys = raw.replacingOccurrences(
+            of: keyPattern,
+            with: "$1\\\"$2\\\":",
+            options: .regularExpression
+        )
+        let repaired = quotedKeys.replacingOccurrences(
+            of: valuePattern,
+            with: ":\\\"$1\\\"$2",
+            options: .regularExpression
+        )
+        guard let data = repaired.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data)
+    }
+
+    private static func nonEmptyString(_ value: Any?) -> String? {
+        guard let string = value as? String else { return nil }
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
 }
 
 /// H5 `app.js:421-422` 内嵌 `{key, area}` JSON string 结构。
@@ -165,4 +208,9 @@ final class AppConfigStore: ObservableObject {
 struct TranslatorConfig: Decodable, Equatable {
     let key: String
     let area: String
+
+    init(key: String, area: String) {
+        self.key = key
+        self.area = area
+    }
 }

@@ -167,6 +167,7 @@ final class SessionStore: ObservableObject {
         user = result
         isLoggedIn = true
         save()   // 内部会 AuthToken.value = token
+        AnalyticsTracker.login(userId: result.userId)
         AppLogger.auth.info("[LOGIN OK] userId=\(result.userId ?? -1, privacy: .private) → fire AnchorInfoStore.refresh() + AppConfigStore.activate()")
         // 2026-07-16：对齐 H5 `loginSuccess → setMineInfo(res)`——用登录响应直接注入 mine，
         // 不再依赖 `/api/user/getUserInfo`（后端 404）。getAnchorInfo 结果稍后由 refresh() 覆盖 info。
@@ -190,6 +191,7 @@ final class SessionStore: ObservableObject {
         // （当前链 confirmAuditAlert 已先手清 auditDialogShowing；这里是防御式绑生命周期）
         auditAlert = nil
         auditDialogShowing = false
+        AnalyticsTracker.logout()
         // Phase C：任务中心页折叠态 per-user 清理(session-scoped rule 双入口之 logout clear)
         // 必须在 user = nil 之前调 —— 需要 userId 定位 UserDefaults key
         // 直接内联删除 UserDefaults key(避免跨 module 依赖 —— TaskCenterCollapseStore 是新 module,
@@ -199,6 +201,9 @@ final class SessionStore: ObservableObject {
             for cycle in ["DAILY", "WEEKLY"] {
                 UserDefaults.standard.removeObject(forKey: "taskCenter.collapse.\(cycle).\(uidStr)")
             }
+            for section in ["tycoon", "points"] {
+                UserDefaults.standard.removeObject(forKey: "taskCenter.weeklySection.\(section).\(uidStr)")
+            }
         }
         user = nil
         isLoggedIn = false
@@ -206,6 +211,9 @@ final class SessionStore: ObservableObject {
         KeychainStore.remove(for: storeKey)
         defaults.removeObject(forKey: legacyStoreKey)   // 清掉历史残留
         AuthToken.value = nil
+        // 轻量 WebView 与通用 H5 都使用默认 website data store。登出时清除，避免
+        // 下一账号继承前一账号的页面缓存、LocalStorage 或 cookie。
+        H5WebSession.clear()
         // sapi（vvi 派对房/背包等链路）的 auth_token 与主 token 是两套独立生命周期，需同步清
         SapiTokenStore.shared.clear()
         // 同步清空主播信息缓存,避免下个账号登录后看到上个号的残留
@@ -238,6 +246,8 @@ final class SessionStore: ObservableObject {
         // Batch 6.1.3: 全局 P2P 消息 delegate 解注册（session-scoped rule 双入口之 logout deactivate）
         // 防跨账号后 B 账号仍触发 A 账号的合成路径
         GlobalP2PMessageObserver.shared.deactivate()
+        // Invite 103/104 卡片队列与当前账号绑定，防止下一账号收到前一账号的邀请引导。
+        InviteMessageCenter.shared.clear()
         // A-2: 注册表单短态 + 短期 Keychain 密码清（session-scoped rule 应用；防止 A 账号未完成注册的表单数据泄漏到 B）
         RegisterStore.shared.reset()
         _ = KeychainStore.remove(for: KeychainKey.pendingRegisterPassword)
@@ -309,6 +319,9 @@ final class SessionStore: ObservableObject {
             userType: info.userType ?? info.type ?? current.userType,
             nickname: info.nickname ?? current.nickname,
             icon: info.icon ?? current.icon,
+            userLevel: info.userLevel ?? current.userLevel,
+            chatBubble: info.chatBubble ?? current.chatBubble,
+            chatBubbleGuardianLevel: info.chatBubbleGuardianLevel ?? current.chatBubbleGuardianLevel,
             valid: info.valid ?? current.valid,
             onReview: info.onReview ?? current.onReview,
             banAlways: info.banAlways ?? current.banAlways,
@@ -352,6 +365,7 @@ final class SessionStore: ObservableObject {
             user = u
             isLoggedIn = true
             AuthToken.value = t
+            AnalyticsTracker.login(userId: u.userId)
             // Batch 6.1.3: 冷启动已登录 → 立即 activate 全局 P2P observer（避免走 login 路径遗漏）
             GlobalP2PMessageObserver.shared.activate()
             // H-3: 冷启动 restore 时也 activate AppConfigStore(rule session-scoped-store-refresh 双入口)
@@ -372,6 +386,7 @@ final class SessionStore: ObservableObject {
             user = u
             isLoggedIn = true
             AuthToken.value = t
+            AnalyticsTracker.login(userId: u.userId)
             // Batch 6.1.3: 同步 v1 迁移路径也 activate
             GlobalP2PMessageObserver.shared.activate()
             // H-3: 同 v2 路径,冷启动 restore 后 activate AppConfigStore

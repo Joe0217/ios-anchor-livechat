@@ -16,6 +16,22 @@ PODS:
     - SVGAPlayer/ProtoFiles
   - SVGAPlayer/ProtoFiles (2.5.7):
     - Protobuf (~> 3.4)
+  - ThinkingDataCore (1.3.4):
+    - ThinkingDataCore/Main (= 1.3.4)
+  - ThinkingDataCore/iOS (1.3.4)
+  - ThinkingDataCore/Main (1.3.4):
+    - ThinkingDataCore/iOS
+    - ThinkingDataCore/OSX
+    - ThinkingDataCore/tvOS
+    - ThinkingDataCore/versionOS
+    - ThinkingDataCore/watchOS
+  - ThinkingSDK (3.4.6):
+    - ThinkingSDK/Main (= 3.4.6)
+  - ThinkingSDK/iOS (3.4.6):
+    - ThinkingDataCore (= 1.3.4)
+  - ThinkingSDK/Main (3.4.6):
+    - ThinkingSDK/iOS
+    - ThinkingSDK/OSX
   - YXArtemis_XCFramework (1.1.6)
   - YYEVA (1.1.42)
 
@@ -24,6 +40,7 @@ DEPENDENCIES:
   - AgoraVideo_Special_iOS (= 4.5.2.9.BASIC)
   - NIMSDK_LITE (~> 10.10.0)
   - SVGAPlayer (~> 2.5)
+  - ThinkingSDK (~> 3.4.6)
   - YYEVA (~> 1.1.42)
 
 SPEC REPOS:
@@ -34,6 +51,8 @@ SPEC REPOS:
     - Protobuf
     - SSZipArchive
     - SVGAPlayer
+    - ThinkingDataCore
+    - ThinkingSDK
     - YXArtemis_XCFramework
     - YYEVA
 
@@ -44,9 +63,11 @@ SPEC CHECKSUMS:
   Protobuf: 8d5596f7468be5400861a6bbfb2dfe9d0d1cde34
   SSZipArchive: 8a6ee5677c8e304bebc109e39cf0da91ccef22ea
   SVGAPlayer: 318b85a78b61292d6ae9dfcd651f3f0d1cdadd86
+  ThinkingDataCore: c0711ed6e2b141beabaeda6bc1c45460fa6718c4
+  ThinkingSDK: 3aec875b29ed0a9fe232d8fc4b85f5f390f35abc
   YXArtemis_XCFramework: d9a8b9439d7a6c757ed00ada53a6d2dd9b13f9c7
   YYEVA: d7892b3faee9a4303bb21284a0c109236e34d1ad
 
-PODFILE CHECKSUM: b902830936927295eecb1f01b06f186b7c41821d
+PODFILE CHECKSUM: 49471c5cc8380710c3cb87325e3573bca43112b4
 
 COCOAPODS: 1.16.2

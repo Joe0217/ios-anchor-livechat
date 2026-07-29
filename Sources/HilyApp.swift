@@ -7,6 +7,8 @@ struct HilyApp: App {
     @StateObject private var session = SessionStore.shared
 
     init() {
+        AnalyticsTracker.start()
+
         // 全局 URLCache：内存 50MB + 磁盘 500MB。
         // 与 ImageCache（NSCache 内存层）协同：URLCache 给 URLSession 用，远端图片切 tab / 跨启动都不重下。
         // 磁盘 500MB：iOS 内建 LRU 淘汰，跨启动持久化 —— 治用户"每次看完都要重新加载"痛点。

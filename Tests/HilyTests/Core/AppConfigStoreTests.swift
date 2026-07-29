@@ -62,8 +62,8 @@ final class AppConfigStoreTests: XCTestCase {
         XCTAssertNil(store.achorHideButton)
         XCTAssertNil(store.payMsgPoints)
         XCTAssertNil(store.freeMsgPoints)
-        XCTAssertEqual(store.microsoftTranslatorKey, AppConfigStore.translatorKeyFallback)
-        XCTAssertEqual(store.microsoftTranslatorArea, AppConfigStore.translatorAreaFallback)
+        XCTAssertNil(store.microsoftTranslatorKey)
+        XCTAssertNil(store.microsoftTranslatorArea)
         XCTAssertTrue(store.isLoaded, "isLoaded 应设 true 避免 view flash 阻塞")
     }
 
@@ -79,8 +79,8 @@ final class AppConfigStoreTests: XCTestCase {
         await store.activate()
 
         XCTAssertEqual(store.achorHideButton, "S1")
-        XCTAssertEqual(store.microsoftTranslatorKey, AppConfigStore.translatorKeyFallback)
-        XCTAssertEqual(store.microsoftTranslatorArea, AppConfigStore.translatorAreaFallback)
+        XCTAssertNil(store.microsoftTranslatorKey)
+        XCTAssertNil(store.microsoftTranslatorArea)
         XCTAssertTrue(store.isLoaded)
     }
 
@@ -92,8 +92,8 @@ final class AppConfigStoreTests: XCTestCase {
         let store = AppConfigStore(fetch: fetch)
         await store.activate()
 
-        XCTAssertEqual(store.microsoftTranslatorKey, AppConfigStore.translatorKeyFallback)
-        XCTAssertEqual(store.microsoftTranslatorArea, AppConfigStore.translatorAreaFallback)
+        XCTAssertNil(store.microsoftTranslatorKey)
+        XCTAssertNil(store.microsoftTranslatorArea)
     }
 
     // MARK: - clear（logout 挂 session-scoped rule）

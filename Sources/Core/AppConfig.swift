@@ -36,13 +36,43 @@ enum AppConfig {
     static var aesIV: String       { plistString("HilyAESIV") }
 
     // MARK: - sapi（vvi）AES-128-CBC
-    // dev 巧合与主接口同套（已在 Config-Dev.xcconfig 显式声明 HILY_SAPI_AES_KEY/IV，不再共用 HILY_AES_KEY/IV）；
-    // test/prod 是同一套 cbilx4v7vgz6jpw7 / dmnry3u8bhk5zq9f（对齐 H5 VITE_APP_ISDEV=false 分支）。
+    // Each environment supplies these independently through local xcconfig.
     static var sapiAesKey: String  { plistString("HilySAPIAESKey") }
     static var sapiAesIV: String   { plistString("HilySAPIAESIV") }
 
     // MARK: - WebSocket 握手 AES-128-ECB（与主接口 CBC 是两套）
     static var wsAesKey: String    { plistString("HilyWSAESKey") }
+
+    // MARK: - 数数 ThinkingData
+    /// 埋点为可选基础设施：配置未注入时业务可正常启动，但不会发送埋点。
+    static var thinkingDataConfiguration: (appId: String, serverURL: String)? {
+        guard let appId = optionalPlistString("HilyThinkingDataAppID"),
+              let serverURL = optionalPlistString("HilyThinkingDataServerURL"),
+              let url = URL(string: serverURL),
+              url.scheme?.lowercased() == "https",
+              url.host != nil else {
+            return nil
+        }
+        return (appId, serverURL)
+    }
+
+    /// WebView H5 的受信任部署入口。xcconfig 只保存 host，避免 `//` 被当作注释；路由以 history path 附加。
+    static var webFeatureBaseURL: URL? {
+        guard let host = optionalPlistString("HilyWebFeatureBaseURL"),
+              !host.contains(where: { $0.isWhitespace }),
+              !host.contains("/"),
+              !host.contains("?"),
+              !host.contains("#"),
+              let url = URL(string: "https://\(host)"),
+              url.scheme?.lowercased() == "https",
+              url.user == nil,
+              url.password == nil,
+              url.host == host,
+              url.port == nil else {
+            return nil
+        }
+        return url
+    }
 
     // MARK: - Settings 外链 & 静态资源（H5 config.js 蓝本一致）
     /// 主播规范图（View anchor policy 页显示的远程 png）
@@ -75,6 +105,15 @@ enum AppConfig {
         logger.fault("AppConfig: \(key, privacy: .public) missing from Info.plist (xcconfig not configured for this build)")
         fatalError("AppConfig: \(key) missing from Info.plist (xcconfig not configured for this build)")
         #endif
+    }
+
+    private static func optionalPlistString(_ key: String) -> String? {
+        guard let raw = Bundle.main.object(forInfoDictionaryKey: key) as? String else { return nil }
+        let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty,
+              !value.hasPrefix("$("),
+              !value.hasPrefix("__REQUIRED") else { return nil }
+        return value
     }
 
     #if HILY_TESTS

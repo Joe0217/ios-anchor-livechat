@@ -27,6 +27,8 @@ target 'Hily' do
   # 别按语义化推 `~> 1.4`（会命不中）；锁 `~> 1.1.42` 保守；升 2.x 前需重跑 pod search 验证。
   pod 'SVGAPlayer', '~> 2.5'
   pod 'YYEVA', '~> 1.1.42'
+  # 数数 ThinkingData：统一事件、用户身份和即时 flush，配置由本机 xcconfig 注入。
+  pod 'ThinkingSDK', '~> 3.4.6'
 end
 
 # ⚠️ SVGAPlayer 2.5.x upstream bug（截至 2026-07）：Svga.pbobjc.m 用 OSAtomicCompareAndSwapPtrBarrier
