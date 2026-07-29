@@ -206,8 +206,9 @@ struct CallRecordListView: View {
 
     /// Tap row → 跳用户详情（对齐 H5 `goToUserDetail(item)` → `router.push('/userProfile')`）
     private func handleTap(_ record: CallRecord) {
-        guard !record.userId.isEmpty else { return }
-        path.append(UserProfileRoute.userId(record.userId))
+        let userId = record.userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !userId.isEmpty else { return }
+        path.append(UserProfileRoute.userId(userId))
     }
 }
 

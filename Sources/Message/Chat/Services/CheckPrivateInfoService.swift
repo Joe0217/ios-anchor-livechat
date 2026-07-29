@@ -2,7 +2,7 @@ import Foundation
 
 /// H-3 checkPrivateInfo 服务（spec §1.1.6 / §4.2 / Critical-1）。
 ///
-/// **端点**（H5 `chat/index.vue:180-206`）：`POST /api/payPrivateMsg/checkPrivateInfo`
+/// **端点**（H5 `chat/index.vue:180-206`）：`POST /api/payPrivateMsgV2/checkPrivateInfo`
 /// **入参**：`{userId: 主播 userId, privateIds: [String]}` —— privateId 来自 `ext.data.privateId`
 /// **响应**（S3 spike 未确认）：双兼容 —— 可能是 `[{privateId, lockStatus}]` list **或** `{[privateId]: lockStatus}` dict
 ///
@@ -16,7 +16,7 @@ struct CheckPrivateInfoHTTPService: CheckPrivateInfoServiceProtocol, Sendable {
 
     func checkPrivateInfo(userId: String, privateIds: [String]) async throws -> [String: PrivateLockStatus] {
         let data = try await APIClient.shared.post(
-            "/api/payPrivateMsg/checkPrivateInfo",
+            "/api/payPrivateMsgV2/checkPrivateInfo",
             body: ["userId": userId, "privateIds": privateIds]
         )
         return try Self.parseResponse(data)
@@ -37,7 +37,7 @@ struct CheckPrivateInfoHTTPService: CheckPrivateInfoServiceProtocol, Sendable {
         if let arr = json as? [[String: Any]] {
             for item in arr {
                 guard let pid = Self.extractPrivateId(item["privateId"]) else { continue }
-                result[pid] = PrivateLockStatus(rawInt: item["lockStatus"] as? Int)
+                result[pid] = PrivateLockStatus(rawInt: Self.extractInt(item["lockStatus"]))
             }
             return result
         }
@@ -66,6 +66,13 @@ struct CheckPrivateInfoHTTPService: CheckPrivateInfoServiceProtocol, Sendable {
             let cType = String(cString: n.objCType)
             if cType != "c" && cType != "B" { return n.stringValue }
         }
+        return nil
+    }
+
+    private static func extractInt(_ value: Any?) -> Int? {
+        if let int = value as? Int { return int }
+        if let number = value as? NSNumber { return number.intValue }
+        if let string = value as? String { return Int(string) }
         return nil
     }
 }

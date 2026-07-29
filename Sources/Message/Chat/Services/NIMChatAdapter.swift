@@ -42,9 +42,7 @@ final class NIMChatAdapter: NSObject, P2PChatProviderProtocol {
                 .messages(in: session, messageIds: [anchorId])?.first
         }
 
-        // Batch 3.9：我方历史消息需补上当前穿戴的 chatBubble（MainActor 内取好，capture 到 SDK 回调闭包）
-        let selfChatBubble = Self.currentSelfChatBubble()
-        let localMessages: [ChatMessage] = await withCheckedContinuation { [selfYxAccId, selfChatBubble] cont in
+        let localMessages: [ChatMessage] = await withCheckedContinuation { [selfYxAccId] cont in
             NIMSDK.shared().conversationManager.messages(
                 in: session, message: anchorMsg, limit: limit
             ) { error, messages in
@@ -55,7 +53,7 @@ final class NIMChatAdapter: NSObject, P2PChatProviderProtocol {
                     return
                 }
                 let converted = (messages ?? []).compactMap { nimMsg in
-                    ChatMessageMapper.map(nimMsg, selfYxAccId: selfYxAccId, selfChatBubble: selfChatBubble)
+                    ChatMessageMapper.map(nimMsg, selfYxAccId: selfYxAccId)
                 }
                 cont.resume(returning: converted)
             }
@@ -65,13 +63,13 @@ final class NIMChatAdapter: NSObject, P2PChatProviderProtocol {
         // SDK 本地 db 可能因低磁盘 / 迁移 / 首次装机导致空,云端 fallback 保证老会话仍可见。
         // sync=true 让 SDK 把拉到的消息插入本地 db(下次进入直接命中,不再重复走云端)。
         if anchor == nil, localMessages.isEmpty {
-            return await fetchCloudHistory(session: session, limit: limit, selfChatBubble: selfChatBubble)
+            return await fetchCloudHistory(session: session, limit: limit)
         }
         return localMessages
     }
 
     /// 从服务器拉取会话历史消息(H5 shim)。空/失败返回 []。
-    private func fetchCloudHistory(session: NIMSession, limit: Int, selfChatBubble: URL?) async -> [ChatMessage] {
+    private func fetchCloudHistory(session: NIMSession, limit: Int) async -> [ChatMessage] {
         let option = NIMHistoryMessageSearchOption()
         option.limit = UInt(limit)
         option.startTime = 0
@@ -90,7 +88,7 @@ final class NIMChatAdapter: NSObject, P2PChatProviderProtocol {
                 // 云端返回按时间倒序,map 后按时间升序(caller 假设升序展示)
                 let sorted = (messages ?? []).sorted { $0.timestamp < $1.timestamp }
                 let converted = sorted.compactMap { nim in
-                    ChatMessageMapper.map(nim, selfYxAccId: selfYxAccId, selfChatBubble: selfChatBubble)
+                    ChatMessageMapper.map(nim, selfYxAccId: selfYxAccId)
                 }
                 cont.resume(returning: converted)
             }
@@ -105,15 +103,14 @@ final class NIMChatAdapter: NSObject, P2PChatProviderProtocol {
         return try registerAndSend(msg, clientMsgId: clientMsgId)
     }
 
-    /// 普通消息（text/image/video/audio）remoteExt 组装 —— 只透传 chatBubble + activeTycoon
+    /// 普通文字消息 remoteExt 组装 —— 只透传 chatBubble + activeTycoon。
     /// 私密消息走 buildPrivateRemoteExt(extensionType='privateMsg')
     private static func buildRegularRemoteExt() -> [String: Any]? {
-        guard let mine = AnchorInfoStore.shared.mine else { return nil }
         var ext: [String: Any] = [:]
-        if let bubble = mine.chatBubble, !bubble.isEmpty {
+        if let bubble = AnchorInfoStore.shared.currentChatBubble, !bubble.isEmpty {
             ext["chatBubble"] = bubble
         }
-        if let tycoon = mine.activeTycoon {
+        if let tycoon = AnchorInfoStore.shared.mine?.activeTycoon {
             ext["activeTycoon"] = tycoon
         }
         guard !ext.isEmpty else { return nil }
@@ -239,13 +236,11 @@ final class NIMChatAdapter: NSObject, P2PChatProviderProtocol {
         ]
 
         // Major-4：透传 chatBubble + activeTycoon（对端徽章三级 fallback 之三 / 气泡背景）
-        if let mine = AnchorInfoStore.shared.mine {
-            if let bubble = mine.chatBubble, !bubble.isEmpty {
-                remoteExt["chatBubble"] = bubble
-            }
-            if let tycoon = mine.activeTycoon {
-                remoteExt["activeTycoon"] = tycoon
-            }
+        if let bubble = AnchorInfoStore.shared.currentChatBubble, !bubble.isEmpty {
+            remoteExt["chatBubble"] = bubble
+        }
+        if let tycoon = AnchorInfoStore.shared.mine?.activeTycoon {
+            remoteExt["activeTycoon"] = tycoon
         }
 
         // Major-12: JSON isValid 守卫（NIMSDK remoteExt 塞 NSNull 会崩，同 CLAUDE.md 已知坑）
@@ -343,46 +338,22 @@ extension NIMChatAdapter: NIMChatManagerDelegate {
 
     /// 收到对端消息
     ///
-    /// 2026-07-10 code-review E-5 修复：合并两次遍历（原 compactMap + intake for-loop）为单循环，
-    /// 减少 relevant 数组遍历次数。同条消息的 JSON parse 在 mapContent 和 intake 里仍各一次
-    /// （改 Mapper 签名接收 pre-parsed dict 影响面大，暂留）。
+    /// 私聊礼物只由消息气泡消费；H5 未启用私聊 SVGA/MP4 播放，因此不再建立额外特效入队路径。
     nonisolated func onRecvMessages(_ messages: [NIMMessage]) {
         Task { @MainActor [weak self] in
             guard let self else { return }
             let relevant = messages.filter { $0.session?.sessionId == self.peerYxAccId }
             guard !relevant.isEmpty else { return }
-            let selfChatBubble = Self.currentSelfChatBubble()
-            let mineYxAccid = SessionStore.shared.user?.yxAccid ?? ""
-
             var converted: [ChatMessage] = []
             converted.reserveCapacity(relevant.count)
             for nim in relevant {
-                if let msg = ChatMessageMapper.map(nim, selfYxAccId: self.selfYxAccId, selfChatBubble: selfChatBubble) {
+                if let msg = ChatMessageMapper.map(nim, selfYxAccId: self.selfYxAccId) {
                     converted.append(msg)
-                }
-                // 同循环内做 SEND_GIFT intake，避免二次遍历 relevant
-                guard nim.messageType == .custom,
-                      let raw = nim.rawAttachContent,
-                      let data = raw.data(using: .utf8),
-                      let attach = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { continue }
-                let atStr = attach["attachType"] as? String
-                let atNum = (attach["attachType"] as? NSNumber)?.intValue
-                if atStr == "SEND_GIFT" || atNum == 1 {
-                    let peer = nim.session?.sessionId ?? self.peerYxAccId
-                    // S-3:peer 是云信 yxAccId 稳定用户标识,统一 .private 对齐 ReplyPointsStore 8 处惯例
-                    chatLogger.debug("[Chat] SEND_GIFT intake peer=\(peer, privacy: .private) keys=\(attach.keys.joined(separator: ","), privacy: .public)")
-                    GiftEffectIntake.ingest(scene: .chat, scopeId: peer, payload: attach, mineYxAccid: mineYxAccid)
                 }
             }
             guard !converted.isEmpty else { return }
             self.eventHandler?(.received(converted))
         }
-    }
-
-    /// MainActor 内取自己当前穿戴的 chatBubble URL（供 map 调用方注入 —— map 是 nonisolated）
-    private static func currentSelfChatBubble() -> URL? {
-        guard let bubble = AnchorInfoStore.shared.mine?.chatBubble, !bubble.isEmpty else { return nil }
-        return URL(string: bubble)
     }
 
     /// 对端已读回执
@@ -401,8 +372,7 @@ extension NIMChatAdapter: NIMChatManagerDelegate {
 
 enum ChatMessageMapper {
 
-    /// - Parameter selfChatBubble: 我方当前穿戴的 chatBubble URL；nonisolated 上下文调用，需由 MainActor 侧调用方预取传入（避免 AnchorInfoStore.shared @MainActor 隔离冲突）
-    static func map(_ nim: NIMMessage, selfYxAccId: String, selfChatBubble: URL? = nil) -> ChatMessage? {
+    static func map(_ nim: NIMMessage, selfYxAccId: String) -> ChatMessage? {
         guard let content = mapContent(nim) else { return nil }
 
         let isOutgoing = nim.isOutgoingMsg
@@ -421,17 +391,13 @@ enum ChatMessageMapper {
             timestamp: Int64(nim.timestamp * 1000),
             isOutgoing: isOutgoing
         )
-        // Batch 3.9：从 remoteExt 解出对端穿戴的 chatBubble（TextBubbleView 用于渲染气泡背景）
-        // 对方消息 → 用对方 chatBubble；我方消息 → 保持自己气泡由 optimistic 层写入的值（此处不覆盖）
+        // 每条消息均从自身携带的 server extension 恢复皮肤。不能以当前装备覆盖 outgoing
+        // 历史，否则主播换装后旧消息会被错误重绘成新 Chat Skin。
+        let ext = MessageAttachParser.normalizedRemoteExt(nim.remoteExt)
+        msg.chatBubble = MessageAttachParser.extractChatBubble(remoteExt: ext)
         if !isOutgoing {
-            // NIMMessage.remoteExt 是 [AnyHashable: Any]?；parser 期望 [String: Any]?，需类型强转
-            let ext = nim.remoteExt as? [String: Any]
-            msg.chatBubble = MessageAttachParser.extractChatBubble(remoteExt: ext)
             // P1-1：从 remoteExt 提取用户消息 pay/free 属性（对齐 H5 msg.ext?.msgType）
             msg.msgType = MessageAttachParser.extractMsgType(remoteExt: ext)
-        } else if let url = selfChatBubble {
-            // 我方历史消息（重新登录 / 拉历史时无 optimistic 值）用调用方传入的当前穿戴气泡
-            msg.chatBubble = url
         }
         return msg
     }
@@ -461,7 +427,11 @@ enum ChatMessageMapper {
             let raw = nim.rawAttachContent ?? "{}"
             if let data = raw.data(using: .utf8),
                let attach = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                return MessageAttachParser.parseCustom(attach, rawJSON: raw, remoteExt: nim.remoteExt as? [String: Any])
+                return MessageAttachParser.parseCustom(
+                    attach,
+                    rawJSON: raw,
+                    remoteExt: MessageAttachParser.normalizedRemoteExt(nim.remoteExt)
+                )
             }
             return .system(rawJSON: raw)
         default:

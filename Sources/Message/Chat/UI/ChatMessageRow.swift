@@ -32,7 +32,7 @@ struct ChatMessageRow: View {
     let onResend: (ChatMessage) -> Void
     /// Batch 6.3.3：翻译后文本；nil = 未翻译；非 nil = 显示译文（内存态,不持久化）
     var translatedText: String? = nil
-    /// Batch 6.3.3：长按翻译回调（对方文字消息才 non-nil）
+    /// 对方文本翻译动作（沿用既有属性名，现由气泡右侧图标触发）。
     var onLongPressTranslate: ((ChatMessage) -> Void)? = nil
     /// 系统通知会话标识（对齐 H5 systemMsg.vue 独立 view）——true 时对方头像固定 system-icon,不走 peer avatar
     var isSystemSession: Bool = false
@@ -98,7 +98,7 @@ struct ChatMessageRow: View {
                 }
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 6)
+            .padding(.vertical, rowVerticalInset)
         }
     }
 
@@ -109,7 +109,7 @@ struct ChatMessageRow: View {
     /// 4. 其他(全屏模式) → NavigationLink 走 UserProfileRoute（若知道 chatPeerYxAccId 则用 .userIdFromChat 携带来源）
     @ViewBuilder
     private var peerAvatarButton: some View {
-        if let uid = peerUserId {
+        if let uid = peerUserId, uid > 0 {
             if let onTap = onTapPeerAvatar {
                 Button { onTap(uid) } label: {
                     AvatarView(url: peerAvatarURL, size: ChatConstants.listAvatarSize, kind: .user)
@@ -139,15 +139,7 @@ struct ChatMessageRow: View {
     private var bubbleView: some View {
         switch message.content {
         case .text(let s):
-            // Batch 3.9：传 chatBubble URL 让 TextBubbleView 用 NinePatchImageView 渲染主播穿戴的气泡背景
-            // Batch 6.3.3：对方文字消息可长按翻译；我方消息不给 onLongPressTranslate 关闭该功能
-            TextBubbleView(
-                text: s,
-                isOutgoing: message.isOutgoing,
-                chatBubble: message.chatBubble,
-                translatedText: translatedText,
-                onLongPressTranslate: message.isOutgoing ? nil : { onLongPressTranslate?(message) }
-            )
+            textBubble(text: s)
         case .image(let url, _):
             ImageBubbleView(url: url)
                 .onTapGesture { onTapImage(message) }
@@ -229,14 +221,42 @@ struct ChatMessageRow: View {
             } else { EmptyView() }
         case .systemFallback(let text):
             // 兜底文本气泡:对齐 H5 v-else v-html body。iOS SwiftUI Text 不解析 HTML,展示原文
-            // 复用 TextBubbleView 已有的 translatedText + onLongPressTranslate 能力(对齐 H5 v-else CTranslate)
-            TextBubbleView(
-                text: text,
-                isOutgoing: false,
-                translatedText: translatedText,
-                onLongPressTranslate: { onLongPressTranslate?(message) }
-            )
+            // 与普通文本共用右侧翻译图标，保持所有可翻译气泡的入口一致。
+            textBubble(text: text)
         }
+    }
+
+    /// 私聊翻译与公屏统一使用 `character.book.closed.fill`，并作为气泡右侧的独立动作，
+    /// 不再在气泡正文内显示 "Translate" 文本或依赖长按。
+    @ViewBuilder
+    private func textBubble(text: String) -> some View {
+        let bubble = TextBubbleView(
+            text: text,
+            isOutgoing: message.isOutgoing,
+            chatBubble: message.chatBubble,
+            translatedText: translatedText
+        )
+        if !message.isOutgoing, translatedText == nil, let onTranslate = onLongPressTranslate {
+            HStack(alignment: .center, spacing: 6) {
+                bubble
+                Button(action: { onTranslate(message) }) {
+                    Image(systemName: "character.book.closed.fill")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color(hex: 0xC49BFF))
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(L10n.publicScreenTranslate))
+            }
+        } else {
+            bubble
+        }
+    }
+
+    private var rowVerticalInset: CGFloat {
+        guard case .text = message.content, message.chatBubble != nil else { return 6 }
+        return 6 + ChatSkinMetrics.messageVerticalSpacing
     }
 
     /// 判定是否为系统会话专属消息内容(用于 body 层选布局:系统消息用 system-icon + 只左布局,不走 outgoing 分支)

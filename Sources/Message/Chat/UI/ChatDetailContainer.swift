@@ -89,7 +89,8 @@ struct ChatDetailContainer: View {
             chatType: chatType,
             canCall: callAuthBridge.canCall && permission.canCall,
             replyPointsStore: replyPointsStore,
-            sheetDetent: sheetDetent
+            sheetDetent: sheetDetent,
+            onRefreshPrivateMedia: { await loadPrivateAlbum(force: true) }
         )
         // Batch 3.6+3.7：进入私聊页并行拉普通相册（picList）+ 私密相册（privateInfo）
         // Batch 6.1：regular 会话时触发 ReplyPointsStore.beginSession（拉 messageBoxList + auto-claim）
@@ -104,7 +105,7 @@ struct ChatDetailContainer: View {
             if chatType == .regular {
                 await replyPointsStore.beginSession(
                     peer: peerYxAccId,
-                    initialLastUserMsg: nil,   // TODO Batch 6.2:从 P2PChatStore.messagesData 找 last incoming
+                    initialLastUserMsg: nil,   // 首屏完成后用 hydrateLastUserMsgFromHistory 补全并派生 hasHistoryReply
                     tipTexts: ReplyPointsTipTexts(
                         guide: L10n.chatGuideTip,
                         stimulate: L10n.chatStimulateTip,
@@ -113,9 +114,23 @@ struct ChatDetailContainer: View {
                     )
                 )
 
-                // 校验历史私密消息 lockStatus(对齐 H5 chat/index.vue checkPrivateInfo)
-                // P2PChatStore.load 已完成拉历史(与 .task 顺序:store 是 @StateObject,其 .task 内 load 与本 .task 并发,
-                // 但 checkPrivateMessagesLockStatus 内会等 store.state == .loaded 再取 privateIds,若尚未 load 完就返 [] 短路)。
+                await store.waitForInitialLoad()
+                // `store.load()` 与本容器 task 并发。若历史先加载，原 hydrate 会因 session 尚未建立而短路；
+                // beginSession 完成后再补一次，保证历史最后一条用户消息能触发积分结算和未回复提醒。
+                if case .loaded(let messages) = store.state {
+                    replyPointsStore.hydrateLastUserMsgFromHistory(
+                        peer: peerYxAccId,
+                        msgs: messages,
+                        tipTexts: ReplyPointsTipTexts(
+                            guide: L10n.chatGuideTip,
+                            stimulate: L10n.chatStimulateTip,
+                            replyPointGuide: L10n.chatReplyFastTip,
+                            replyRemind: L10n.chatReplyRemindTip
+                        )
+                    )
+                }
+
+                // 首屏结束后再校验历史私密消息 lockStatus，避免与 `store.load()` 并发时取到空 privateIds。
                 await checkPrivateMessagesLockStatus()
             }
         }
@@ -159,8 +174,8 @@ struct ChatDetailContainer: View {
     }
 
     /// Batch 3.7：拉私密相册（对齐 H5 chat/index.vue:159 `apiGetPrivateInfo({ userId: mineInfo.userId })`）
-    private func loadPrivateAlbum() async {
-        guard privateLoadState == .idle else { return }
+    private func loadPrivateAlbum(force: Bool = false) async {
+        guard force || privateLoadState == .idle else { return }
         privateLoadState = .loading
         // userId：优先 mine，兜底 SessionStore.user（登录成功一定有值）
         guard let uid = anchorInfoStore.mine?.userId ?? sessionAuthStore.user?.userId else {
@@ -168,7 +183,7 @@ struct ChatDetailContainer: View {
             return
         }
         do {
-            let list = try await GiftMessageService.shared.fetchList(userId: uid)
+            let list = try await ChatPrivateMediaHTTPService.shared.fetchList(userId: uid)
             privateCache = list.compactMap(AnchorMediaItem.fromPrivateMedia)
             privateLoadState = .loaded
         } catch {

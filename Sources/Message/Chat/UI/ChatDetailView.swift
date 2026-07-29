@@ -57,6 +57,8 @@ struct ChatDetailView: View {
     /// 避免"medium detent + 键盘遮挡"触发系统被迫 resize，与键盘上升动画不同步造成卡顿。
     /// nil = 全屏 push 模式（无 detent 概念），或 wrapper 未传（不做主动切换）。
     let sheetDetent: Binding<PresentationDetent>?
+    /// 私密相册打开前及私密媒体管理页关闭后刷新 V2 列表（由 Container 保持缓存所有权）。
+    let onRefreshPrivateMedia: () async -> Void
 
     /// 显式 init —— Swift 对 `Optional<T>` stored property 隐含 default nil,memberwise init 不 include
     /// sheetDetent 参数(caller 传 sheetDetent 会报 Extra argument),因此手写 init 显式暴露该参数。
@@ -75,7 +77,8 @@ struct ChatDetailView: View {
         chatType: ChatType,
         canCall: Bool,
         replyPointsStore: ReplyPointsStore,
-        sheetDetent: Binding<PresentationDetent>? = nil
+        sheetDetent: Binding<PresentationDetent>? = nil,
+        onRefreshPrivateMedia: @escaping () async -> Void = {}
     ) {
         self._store = StateObject(wrappedValue: store)
         self.peerNickname = peerNickname
@@ -92,6 +95,7 @@ struct ChatDetailView: View {
         self.canCall = canCall
         self._replyPointsStore = ObservedObject(wrappedValue: replyPointsStore)
         self.sheetDetent = sheetDetent
+        self.onRefreshPrivateMedia = onRefreshPrivateMedia
     }
 
     // MARK: - view state
@@ -100,6 +104,10 @@ struct ChatDetailView: View {
     @State private var inputMode: ChatInputBar.InputMode = .text
     @State private var showMediaSheet: Bool = false
     @State private var showPrivateMediaSheet: Bool = false   // H-3 私密相册 sheet（Batch 4 补 PrivateMediaSheet 实现）
+    @State private var showPrivateMediaManager: Bool = false
+    @State private var pendingPrivateMediaManager: Bool = false
+    @State private var reopenPrivateMediaSheetAfterManager: Bool = false
+    @State private var showPrivateMediaGuide: Bool = false
     @State private var voiceState: VoiceRecordingState?
     /// Batch 3.7：图片/视频预览统一走公共 MediaGalleryView（原 FullScreenImagePreview / VideoPlayerFullScreen 已废弃）
     @State private var galleryContext: MediaGalleryContext?
@@ -110,11 +118,16 @@ struct ChatDetailView: View {
     @State private var showRewardRecords: Bool = false
     @State private var rewardRecords: [MessageBoxRecordItem] = []
     @State private var isLoadingRewardRecords: Bool = false
+    @State private var chatEnteredAt: Date?
+    @State private var chatDepthStartedAt: Date?
+    @State private var chatDepthTimeoutSeconds: TimeInterval = 30 * 60
+    @State private var chatDepthTimeoutTask: Task<Void, Never>?
     // Batch 6.1.4：通话在线状态拦截 toast（对齐 H5 c-callButton.vue:86 "is busy" / "is not online"）
     @State private var callToastShow: Bool = false
     @State private var callToastMessage: String = ""
     // Batch 6.3.3：翻译后文本内存态 map（message.id → 译文）；离开页面清 nil（对齐 H5 spec §1.3 "不持久化"）
     @State private var translatedTexts: [String: String] = [:]
+    @State private var pendingTranslationIds: Set<String> = []
     @StateObject private var voiceRecorder = VoiceRecorder()
     /// M-4:handleVoiceStart 内订阅 $currentSeconds 的 Task 句柄 —— view dismount 时 cancel,避免 Task 越过 view 生命周期持续 for-await
     @State private var voiceObserveTask: Task<Void, Never>? = nil
@@ -147,10 +160,17 @@ struct ChatDetailView: View {
     @State private var userCardUserId: String? = nil
     /// 半屏模式派生:onClose 非 nil 表示 wrapper 用 sheet 承载 ChatDetailContainer(拉起半屏)
     private var isPopupMode: Bool { onClose != nil }
+    /// 顶部奖励进度条只在全屏普通私聊中挂载；半屏私聊空间受限，进度条与其引导必须一并隐藏。
+    private var showsRewardProgress: Bool { chatType == .regular && !isPopupMode }
+    /// 引导需要实际可见的进度条作为锚点，不能只根据付费消息状态触发。
+    private var canShowRewardProgressGuide: Bool {
+        showsRewardProgress && replyPointsStore.isOpenPaidMessage(peer: store.peerYxAccId)
+    }
     /// 系统通知会话派生(对齐 H5 systemMsg.vue 独立 view):用于 nav 隐头像 + row 用固定 system-icon
     private var isSystemSession: Bool { chatType == .system }
     /// 惩罚申诉已申诉的 penaltyUserId 集合(内存态,对齐 H5 item.isAppeal 不持久化)
     @State private var appealedPenaltyUserIds: Set<String> = []
+    @State private var appealingPenaltyUserIds: Set<String> = []
     /// MainTabView 注入的 UserProfile push action —— 系统会话里 tap 充值通知 ID 数字跳详情页用
     @Environment(\.openUserProfile) private var openUserProfile
     /// 键盘管理（H-2 键盘管理精细化）：
@@ -178,7 +198,7 @@ struct ChatDetailView: View {
                 // Batch 6.1：顶部宝箱进度条（对齐 H5 `chat/index.vue:1011` `<RewardProgress v-if="!chatType">`）
                 // 仅 regular 会话 + isOpenPaidMessage 才显示；view 内部自判。
                 // **半屏 sheet 模式（直播间/派对房拉起私聊）隐藏宝箱条** —— 空间有限 + 直播中主播不需要奖励引导
-                if chatType == .regular && !isPopupMode {
+                if showsRewardProgress {
                     RewardProgressView(
                         peer: store.peerYxAccId,
                         store: replyPointsStore,
@@ -204,16 +224,21 @@ struct ChatDetailView: View {
                         onTapCall: handleTapCall,
                         // customer 时 photo 按钮走系统 PhotosPicker（客服场景发本地图片）；regular 走主播上传的相册
                         onOpenRegularAlbum: handleOpenAlbum,
-                        onOpenPrivateAlbum: { showPrivateMediaSheet = true }
+                        onOpenPrivateAlbum: handleOpenPrivateAlbum
                     )
                 }
             }
 
             VoiceRecordingOverlay(state: voiceState)
 
+            if showPrivateMediaGuide {
+                privateMediaGuide
+                    .zIndex(250)
+            }
+
             // 首次进入 2 步引导:regular chat + 宝箱条已显示 + 未看过。
             // introStep 0 = 隐藏;1/2 = 显示对应步骤。tap 推进 step,>2 时置 chatIntroSeen 隐藏。
-            if introStep > 0 {
+            if canShowRewardProgressGuide, introStep > 0 {
                 ChatIntroOverlay(step: introStep) {
                     let next = introStep + 1
                     if next > 2 {
@@ -228,10 +253,9 @@ struct ChatDetailView: View {
             }
         }
         .animation(.easeInOut(duration: 0.15), value: introStep)
-        // 引导触发:chat 页 body 内监听宝箱条是否已开(需等 beginSession fetch 完成)。
-        // 仅 chatType == .regular + isOpenPaidMessage + !chatIntroSeen 才触发。
-        .onChange(of: replyPointsStore.isOpenPaidMessage(peer: store.peerYxAccId)) { isOpen in
-            if isOpen, chatType == .regular, !chatIntroSeen, introStep == 0 {
+        // 引导触发：只在进度条实际显示后进行；半屏私聊等隐藏进度条的场景不应出现悬空引导。
+        .onChange(of: canShowRewardProgressGuide) { canShow in
+            if canShow, !chatIntroSeen, introStep == 0 {
                 introStep = 1
             }
         }
@@ -245,6 +269,17 @@ struct ChatDetailView: View {
             if existed {
                 showHistoryExpiredToast = true
             }
+        }
+        .onAppear {
+            if chatEnteredAt == nil, chatType == .regular {
+                chatEnteredAt = Date()
+                AnalyticsTracker.track("h_msg_view", properties: ["user_xy_id": store.peerYxAccId])
+                loadChatDepthTimeout()
+            }
+            presentPrivateMediaGuideIfNeeded()
+        }
+        .onChange(of: peerUserId) { _ in
+            presentPrivateMediaGuideIfNeeded()
         }
         .task {
             await store.load()
@@ -267,6 +302,7 @@ struct ChatDetailView: View {
             voiceObserveTask?.cancel()
             voiceObserveTask = nil
             store.teardown()
+            reportChatExitAnalytics()
         }
         .sheet(isPresented: $showMediaSheet) {
             MediaPickerSheet(
@@ -280,19 +316,37 @@ struct ChatDetailView: View {
             .presentationDetents([.height(280)])
             .presentationDragIndicator(.hidden)
         }
-        // Batch 3.7 私密相册 sheet：GiftMessageService.fetchList 拉真数据；send 走 P2PChatStore.sendPrivateImage/Video
-        .sheet(isPresented: $showPrivateMediaSheet) {
+        // 私密相册 sheet：V2 列表含审核态/发送开关；send 走 P2PChatStore.sendPrivateImage/Video。
+        .sheet(isPresented: $showPrivateMediaSheet, onDismiss: {
+            guard pendingPrivateMediaManager else { return }
+            pendingPrivateMediaManager = false
+            showPrivateMediaManager = true
+        }) {
             MediaPickerSheet(
                 items: privateItems,
                 isLoading: privateItemsLoading,
                 showLockIcon: true,
                 onSend: handleSendPrivateMedia,
-                onDismiss: { showPrivateMediaSheet = false }
+                onDismiss: { showPrivateMediaSheet = false },
+                onCreate: openPrivateMediaManager,
+                onUnavailable: handleUnavailablePrivateMedia
             )
             .sheetTopInset()
             .giftPanelSheetBackground()
             .presentationDetents([.height(280)])
             .presentationDragIndicator(.hidden)
+        }
+        .sheet(isPresented: $showPrivateMediaManager, onDismiss: {
+            Task {
+                await onRefreshPrivateMedia()
+                guard reopenPrivateMediaSheetAfterManager else { return }
+                reopenPrivateMediaSheetAfterManager = false
+                showPrivateMediaSheet = true
+            }
+        }) {
+            GiftMessageView(userId: SessionStore.shared.user?.userId ?? 0)
+                .presentationDetents([.fraction(0.8)])
+                .presentationDragIndicator(.visible)
         }
         // Batch 3.7：统一公共 MediaGalleryView 全屏预览（含图 + 视频；对齐朋友圈 CircleView 用法）
         .fullScreenCover(item: $galleryContext) { ctx in
@@ -403,7 +457,7 @@ struct ChatDetailView: View {
                 tipText: L10n.chatReplyRemindTip
             )
         }
-        // Task 11：声明本 view 属于 GiftEffect .chat 场景；Chat 场景 IM SEND_GIFT 有 svga/mp4 时弹中央大动画（无动画走消息气泡不启 MicroToast）
+        // 私聊场景参与全局特效场景恢复；SEND_GIFT 始终只由消息气泡渲染。
         .giftEffectScene(.chat, scopeId: store.peerYxAccId)
     }
 
@@ -445,11 +499,6 @@ struct ChatDetailView: View {
         }
         .padding(.horizontal, 12)
         .frame(height: 44)
-        .background {
-            if !isPopupMode {
-                ChatPalette.navGradient
-            }
-        }
     }
 
     // H-3 spec §1.5.5：nav callButton private var 已移除；handleTapCall 由 BottomActionBar tap 触发
@@ -614,6 +663,7 @@ struct ChatDetailView: View {
     private func handleBottomAnchorChange(_ new: BottomAnchor?, proxy: ScrollViewProxy) {
         guard let new, new.stableId != lastRealBottomId else { return }
         lastRealBottomId = new.stableId
+        registerChatDepthActivity()
         if new.isOutgoing || isAtBottom {
             proxy.scrollTo("BOTTOM", anchor: .bottom)
             // 我方发/对方消息-且-用户在底部:滚底后 badge 应清(handleReceived 已累加,现视觉已到底)
@@ -807,6 +857,64 @@ struct ChatDetailView: View {
 
     // MARK: - Handlers
 
+    /// H5 以 userId + app version 记录私密消息首次引导；iOS 使用相同粒度，升级后可再次展示。
+    private var privateMediaGuideKey: String? {
+        guard let userId = SessionStore.shared.user?.userId, userId > 0 else { return nil }
+        return "hily.chat.privateMediaGuide.\(userId).\(AppConfig.appVersion)"
+    }
+
+    private func presentPrivateMediaGuideIfNeeded() {
+        guard chatType == .regular,
+              peerUserId != nil,
+              let key = privateMediaGuideKey,
+              !UserDefaults.standard.bool(forKey: key) else {
+            return
+        }
+        withAnimation { showPrivateMediaGuide = true }
+    }
+
+    private func dismissPrivateMediaGuide() {
+        if let key = privateMediaGuideKey {
+            UserDefaults.standard.set(true, forKey: key)
+        }
+        withAnimation { showPrivateMediaGuide = false }
+    }
+
+    private var privateMediaGuide: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Color.black.opacity(0.58)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    dismissPrivateMediaGuide()
+                    handleOpenPrivateAlbum()
+                }
+
+            Button {
+                dismissPrivateMediaGuide()
+                handleOpenPrivateAlbum()
+            } label: {
+                VStack(alignment: .trailing, spacing: 8) {
+                    Text(L10n.chatPrivateGuide)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.leading)
+                        .frame(width: 220, alignment: .leading)
+                        .padding(14)
+                        .background(ChatPalette.primaryGradient, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    Image(systemName: "arrow.down")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.trailing, 18)
+                }
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 20)
+            .padding(.bottom, 54)
+        }
+        .accessibilityLabel(L10n.chatPrivateGuide)
+    }
+
     private func handleSendText() {
         let text = inputText
         inputText = ""
@@ -822,6 +930,50 @@ struct ChatDetailView: View {
         case .regular:  showMediaSheet = true
         case .system:   break   // 系统会话入口已隐藏，兜底不响应
         }
+    }
+
+    /// H5 `onPrivateAlbumClick`：先校验当前主播是否可向该用户发送私密消息，再刷新 V2 审核态列表。
+    private func handleOpenPrivateAlbum() {
+        guard let peerUserId else { return }
+        dismissPrivateMediaGuide()
+        AnalyticsTracker.track("admin_primsg_click", properties: ["user_id": peerUserId])
+        Task {
+            do {
+                try await ChatPrivateMediaHTTPService.shared.verifyCanSend(to: String(peerUserId))
+                await onRefreshPrivateMedia()
+                showPrivateMediaSheet = true
+            } catch {
+                showCallToast(privateMediaErrorMessage(error))
+            }
+        }
+    }
+
+    /// 私密相册点击 + 号：先关闭当前 sheet，再拉起管理页；关闭管理页后刷新并回到相册。
+    private func openPrivateMediaManager() {
+        reopenPrivateMediaSheetAfterManager = true
+        pendingPrivateMediaManager = true
+        showPrivateMediaSheet = false
+    }
+
+    private func handleUnavailablePrivateMedia(_ item: AnchorMediaItem) {
+        switch item.privateAuditStatus {
+        case 1:
+            showCallToast(L10n.chatPrivateAuditing)
+        case 3:
+            showCallToast(L10n.chatPrivateRejected)
+        default:
+            showCallToast(L10n.chatPrivatePermissionDisabled)
+        }
+    }
+
+    private func privateMediaErrorMessage(_ error: Error) -> String {
+        if let apiError = error as? APIError {
+            if apiError.message == "Your permission has been disabled." {
+                return L10n.chatPrivatePermissionDisabled
+            }
+            if !apiError.message.isEmpty { return apiError.message }
+        }
+        return L10n.commonNetworkError
     }
 
     /// Batch 3.8：客服会话选完系统相册的图 → 上传 CDN → send
@@ -873,7 +1025,8 @@ struct ChatDetailView: View {
             iconType: item.kind == .video ? 2 : 1,
             url: item.mediaUrl,
             coverUrl: item.coverUrl,
-            dur: item.dur
+            dur: item.dur,
+            giftPrice: item.giftPrice
         )
         Task {
             if selection.isVideo {
@@ -945,8 +1098,12 @@ struct ChatDetailView: View {
     }
 
     private func handleTapImage(_ msg: ChatMessage) {
-        guard case .image(let url, _) = msg.content else { return }
-        galleryContext = MediaGalleryContext(urls: [url.absoluteString], startIndex: 0)
+        switch msg.content {
+        case .image(let url, _), .privateImage(let url, _):
+            galleryContext = MediaGalleryContext(urls: [url.absoluteString], startIndex: 0)
+        default:
+            return
+        }
     }
 
     private func handleResend(_ msg: ChatMessage) {
@@ -954,7 +1111,7 @@ struct ChatDetailView: View {
         Task { await store.resend(clientMsgId: clientId) }
     }
 
-    /// Batch 6.3.3：长按对方文字消息 → 走 TranslateService 拉译文,存 map（离开页面清）
+    /// 对方文字消息点击翻译图标 → 走 TranslateService 拉译文,存 map（离开页面清）
     /// - 目标语言：iOS 设备当前语言（`Locale.current.language.languageCode?.identifier`）；主播端全球通用兜底 en
     /// - config: 从 AppConfigStore 派生 microsoft key/area（TranslateConfigBridge 已建）
     /// - 失败静默；重复 tap 已翻译消息 → 无操作（map hit 短路）
@@ -970,10 +1127,7 @@ struct ChatDetailView: View {
     private func handleTranslate(_ msg: ChatMessage) {
         guard let text = translatableText(for: msg.content) else { return }
         guard translatedTexts[msg.id] == nil else { return }   // 已翻译 → 短路
-        // 防御:AppConfigStore.activate() 若还在跑(冷启动竞态)或缺失,回落 hardcode fallback
-        // (AppConfigStore.translatorKeyFallback/AreaFallback 是硬编码的正确值,与后端 config 同源)
-        let key = AppConfigStore.shared.microsoftTranslatorKey ?? AppConfigStore.translatorKeyFallback
-        let area = AppConfigStore.shared.microsoftTranslatorArea ?? AppConfigStore.translatorAreaFallback
+        guard pendingTranslationIds.insert(msg.id).inserted else { return }
         // 目标语言 = AppLocaleStore 当前选择(.en/.ar/.tr),.system 时兜底系统 locale
         let targetLang: String = {
             switch AppLocaleStore.shared.current {
@@ -983,10 +1137,16 @@ struct ChatDetailView: View {
             case .system: return Locale.current.language.languageCode?.identifier ?? "en"
             }
         }()
-        Task {
+        Task { @MainActor in
+            defer { pendingTranslationIds.remove(msg.id) }
+            guard let credentials = await translatorCredentials() else {
+                callToastMessage = "Translation unavailable"
+                callToastShow = true
+                return
+            }
             do {
                 let translated = try await MicrosoftTranslateService.shared.translate(
-                    text: text, targetLang: targetLang, key: key, area: area
+                    text: text, targetLang: targetLang, key: credentials.key, area: credentials.area
                 )
                 translatedTexts[msg.id] = translated
             } catch {
@@ -994,6 +1154,23 @@ struct ChatDetailView: View {
                 callToastShow = true
             }
         }
+    }
+
+    /// 配置加载仍在飞行时，首次点击翻译要等待/补拉一次，不能把暂态当作永久不可用。
+    private func translatorCredentials() async -> (key: String, area: String)? {
+        if let key = AppConfigStore.shared.microsoftTranslatorKey,
+           let area = AppConfigStore.shared.microsoftTranslatorArea,
+           !key.isEmpty, !area.isEmpty {
+            return (key, area)
+        }
+
+        await AppConfigStore.shared.activate()
+        guard let key = AppConfigStore.shared.microsoftTranslatorKey,
+              let area = AppConfigStore.shared.microsoftTranslatorArea,
+              !key.isEmpty, !area.isEmpty else {
+            return nil
+        }
+        return (key, area)
     }
 
     /// 从 content 提取可翻译原文（对齐 H5 `systemMsg.vue` `getPlainTextContent`）。
@@ -1035,19 +1212,33 @@ struct ChatDetailView: View {
         callToastShow = true
     }
 
-    /// 惩罚申诉 "click here" tap —— getPunishmentAppeal API 未实装,弹 toast + 灰化 UI
+    /// 惩罚申诉 "click here" tap —— 对齐 H5 getPunishmentAppeal：成功后才将按钮置为已申诉。
     private func handleSystemAppeal(_ penaltyUserId: String) {
-        appealedPenaltyUserIds.insert(penaltyUserId)
-        callToastMessage = L10n.chatSystemComingSoon
-        callToastShow = true
+        guard !penaltyUserId.isEmpty,
+              !appealedPenaltyUserIds.contains(penaltyUserId),
+              !appealingPenaltyUserIds.contains(penaltyUserId) else { return }
+        appealingPenaltyUserIds.insert(penaltyUserId)
+        Task { @MainActor in
+            defer { appealingPenaltyUserIds.remove(penaltyUserId) }
+            do {
+                try await InviteService.shared.submitPunishmentAppeal(userID: penaltyUserId)
+                appealedPenaltyUserIds.insert(penaltyUserId)
+                callToastMessage = L10n.chatSystemAppealSuccess
+            } catch {
+                callToastMessage = (error as? APIError)?.message ?? L10n.commonNetworkError
+            }
+            callToastShow = true
+        }
     }
 
     /// 充值通知 ID 数字 tap —— 跳用户详情页(popup 模式走 UserCardPopup;全屏走 openUserProfile action)
     private func handleSystemTapUserId(_ userId: String) {
+        let validUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !validUserId.isEmpty else { return }
         if isPopupMode {
-            userCardUserId = userId
+            userCardUserId = validUserId
         } else {
-            openUserProfile.perform(userId)
+            openUserProfile.perform(validUserId)
         }
     }
 
@@ -1101,6 +1292,86 @@ struct ChatDetailView: View {
         // 当前先用系统 alert 兜底（用户能看到提示）
         callToastMessage = text
         callToastShow = true
+    }
+
+    private func reportChatExitAnalytics() {
+        guard chatType == .regular, let enteredAt = chatEnteredAt else { return }
+        let durationMs = max(0, Int(Date().timeIntervalSince(enteredAt) * 1_000))
+        let properties: [String: Any] = [
+            "user_xy_id": store.peerYxAccId,
+            "duration": durationMs
+        ]
+        AnalyticsTracker.track("h_msg_leave", properties: properties)
+        chatDepthTimeoutTask?.cancel()
+        chatDepthTimeoutTask = nil
+        reportChatDepth(exitReason: "user_exit")
+        chatEnteredAt = nil
+    }
+
+    /// H5 在消息增量到达后重置 chat_session_depth 计时；无消息时不产生该事件。
+    private func registerChatDepthActivity() {
+        guard chatType == .regular else { return }
+        chatDepthStartedAt = Date()
+        chatDepthTimeoutTask?.cancel()
+        let timeout = UInt64(max(1, chatDepthTimeoutSeconds) * 1_000_000_000)
+        chatDepthTimeoutTask = Task {
+            do {
+                try await Task.sleep(nanoseconds: timeout)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            reportChatDepth(exitReason: "timeout")
+        }
+    }
+
+    private func reportChatDepth(exitReason: String) {
+        guard let startedAt = chatDepthStartedAt else { return }
+        let durationMs = max(0, Int(Date().timeIntervalSince(startedAt) * 1_000))
+        AnalyticsTracker.track(
+            "chat_session_depth",
+            properties: [
+                "user_xy_id": store.peerYxAccId,
+                "duration": durationMs,
+                "exit_reason": exitReason
+            ]
+        )
+        chatDepthStartedAt = nil
+        chatDepthTimeoutTask = nil
+    }
+
+    private func loadChatDepthTimeout() {
+        Task {
+            guard let configuration = try? await AppConfigService.fetch(keys: ["anchor_private_reply"]),
+                  let minutes = Self.replyTimeoutMinutes(from: configuration["anchor_private_reply"]),
+                  minutes > 0 else {
+                return
+            }
+            chatDepthTimeoutSeconds = TimeInterval(minutes * 60)
+        }
+    }
+
+    private static func replyTimeoutMinutes(from rawValue: Any?) -> Int? {
+        if let dictionary = rawValue as? [String: Any] {
+            if let value = dictionary["no_reply_timeout"] as? Int { return value }
+            if let value = dictionary["no_reply_timeout"] as? NSNumber { return value.intValue }
+            if let value = dictionary["no_reply_timeout"] as? String { return Int(value) }
+        }
+        guard let rawString = rawValue as? String else { return nil }
+        if let data = rawString.data(using: .utf8),
+           let dictionary = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            return replyTimeoutMinutes(from: dictionary)
+        }
+        let pattern = #"no_reply_timeout[\"']?\s*:\s*[\"']?(\d+)"#
+        guard let expression = try? NSRegularExpression(pattern: pattern),
+              let match = expression.firstMatch(
+                in: rawString,
+                range: NSRange(rawString.startIndex..., in: rawString)
+              ),
+              let range = Range(match.range(at: 1), in: rawString) else {
+            return nil
+        }
+        return Int(rawString[range])
     }
 }
 
@@ -1202,4 +1473,3 @@ private struct ChatDetailPushChromeModifier: ViewModifier {
         }
     }
 }
-

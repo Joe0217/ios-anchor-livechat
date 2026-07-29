@@ -26,7 +26,7 @@ struct ConversationSheetContent: View {
     @State private var selectedChatPeer: ChatSheetPeer? = nil
     /// 半屏私聊 sheet 的 detent selection —— 键盘弹起时 ChatDetailView 通过 sheetDetent binding 主动切 `.large`
     /// 避免与键盘上升动画曲线冲突造成卡顿
-    @State private var chatSheetDetent: PresentationDetent = .medium
+    @State private var chatSheetDetent: PresentationDetent = ChatDetailSheetMetrics.defaultDetent
 
     /// flame ∪ prime ∪ stranger 并集去重 —— 覆盖所有对齐 H5 平铺显示的常规 P2P 会话。
     /// MessageSessionStore.sessions(in:) 已排除 system/notification/admin/customer 系统会话。
@@ -50,7 +50,7 @@ struct ConversationSheetContent: View {
         }
         // 半屏私聊叠加（对齐 H5 talkPopup 覆盖 messagePopup）—— 私聊 back 点击 = selectedChatPeer = nil，
         // 半屏消息列表保持可见（不关闭），符合用户"back 返回列表"预期
-        .sheet(item: $selectedChatPeer, onDismiss: { chatSheetDetent = .medium }) { peer in
+        .sheet(item: $selectedChatPeer, onDismiss: { chatSheetDetent = ChatDetailSheetMetrics.defaultDetent }) { peer in
             ChatDetailContainer(
                 peerYxAccId: peer.id,
                 selfYxAccId: selfYxAccId,
@@ -58,7 +58,7 @@ struct ConversationSheetContent: View {
                 sheetDetent: $chatSheetDetent
             )
             .giftPanelSheetBackground()
-            .presentationDetents([.medium, .large], selection: $chatSheetDetent)
+            .presentationDetents([ChatDetailSheetMetrics.defaultDetent, .large], selection: $chatSheetDetent)
             .presentationDragIndicator(.visible)
         }
     }

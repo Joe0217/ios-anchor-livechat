@@ -228,11 +228,7 @@ final class NIMSessionAdapter: NSObject, MessageSessionProviderProtocol {
     /// - image: `[Image]`
     /// - audio: `[Voice]`
     /// - video: `[Video]`
-    /// - custom + SEND_GIFT: `[Gift]`
-    /// - custom + MISSED_CALLS_RECORD / status=4: `Missed`
-    /// - custom + status=3: `Rejected`
-    /// - custom + status=2: `Cancelled`
-    /// - custom 其他: `[Unknown]`
+    /// - custom: 复用详情页的 `MessageAttachParser`，使系统消息会话与详情页展示同一份正文
     private func summarize(_ message: NIMMessage?) -> String {
         guard let m = message else { return "" }
         switch m.messageType {
@@ -246,26 +242,32 @@ final class NIMSessionAdapter: NSObject, MessageSessionProviderProtocol {
         }
     }
 
-    /// 自定义消息按 attachType / status 分类（H5 message/list.vue 逐字对齐 8 大 case）。
+    /// 自定义消息摘要与详情页共用同一解析器，避免系统通知在列表中退化为 `[Unknown]`。
     private func summarizeCustom(_ m: NIMMessage) -> String {
-        // 尝试从 NIMCustomObject 提取 attachment.encode() JSON string，或 remoteExt 提取 attachType
-        var payloadKeywords = ""
-        if let obj = m.messageObject as? NIMCustomObject, let attach = obj.attachment {
-            payloadKeywords = attach.encode()
-        }
-        if let ext = m.remoteExt {
-            payloadKeywords += String(describing: ext)
+        // `rawAttachContent` 是收取/历史消息的标准来源；本地合成的通知在刚写库时可能尚未回填，
+        // 此时从 attachment.encode() 读取同一份 JSON。
+        let rawPayload: String? = {
+            if let raw = m.rawAttachContent, !raw.isEmpty {
+                return raw
+            }
+            guard let object = m.messageObject as? NIMCustomObject,
+                  let attachment = object.attachment else {
+                return nil
+            }
+            let encoded = attachment.encode()
+            return encoded.isEmpty ? nil : encoded
+        }()
+
+        guard let rawPayload,
+              let data = rawPayload.data(using: .utf8),
+              let attach = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return L10n.messagePreviewUnknown
         }
 
-        // 通话记录（H5 attach.attachType === 'MISSED_CALLS_RECORD' or status=4）
-        if payloadKeywords.contains("MISSED_CALLS_RECORD") || payloadKeywords.contains("\"status\":4") {
-            return L10n.messagePreviewCallMissed
-        }
-        if payloadKeywords.contains("\"status\":3") { return L10n.messagePreviewCallRejected }
-        if payloadKeywords.contains("\"status\":2") { return L10n.messagePreviewCallCancelled }
-        // 礼物（H5 attach.attachType === 'SEND_GIFT'）
-        if payloadKeywords.contains("SEND_GIFT") { return L10n.messagePreviewGift }
-        return L10n.messagePreviewUnknown
+        let remoteExt = m.remoteExt as? [String: Any]
+        return MessageAttachParser
+            .parseCustom(attach, rawJSON: rawPayload, remoteExt: remoteExt)
+            .previewText
     }
 }
 

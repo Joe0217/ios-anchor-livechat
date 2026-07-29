@@ -15,6 +15,10 @@ struct MediaPickerSheet: View {
     let onSend: (AnchorMediaItem) -> Void
     /// 用户 dismiss（tap 遮罩 or 拉下）
     let onDismiss: () -> Void
+    /// 私密相册创建入口；普通相册不传。
+    var onCreate: (() -> Void)? = nil
+    /// 审核中/已拒绝的私密资源点击反馈；普通相册不传。
+    var onUnavailable: ((AnchorMediaItem) -> Void)? = nil
 
     @State private var selectedId: String?
     /// H-3 v4 (2026-07-08)：加载超时兜底 —— 8s 后仍 isLoading==true 显示 empty state 而非永久转圈
@@ -71,8 +75,21 @@ struct MediaPickerSheet: View {
     }
 
     private var emptyState: some View {
-        EmptyStateView()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        VStack(spacing: 12) {
+            EmptyStateView()
+            if let onCreate {
+                Button(action: onCreate) {
+                    Label(L10n.chatPrivateCreate, systemImage: "plus")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 9)
+                        .background(ChatPalette.primaryGradient, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var grid: some View {
@@ -81,6 +98,17 @@ struct MediaPickerSheet: View {
                 ForEach(items) { item in
                     mediaCell(item)
                 }
+                if let onCreate {
+                    Button(action: onCreate) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 24, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .frame(width: 88, height: 110)
+                            .background(ChatPalette.cardBackground, in: RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.chatPrivateCreate)
+                }
             }
             .padding(.horizontal, 16)
         }
@@ -88,6 +116,10 @@ struct MediaPickerSheet: View {
 
     private func mediaCell(_ item: AnchorMediaItem) -> some View {
         Button {
+            guard item.isSendable else {
+                onUnavailable?(item)
+                return
+            }
             selectedId = item.id
         } label: {
             // 统一固定尺寸 88x110 的 cell —— 所有 overlay 用 frame(alignment:) 自控位置,不依赖 ZStack alignment
@@ -128,11 +160,24 @@ struct MediaPickerSheet: View {
                         .shadow(color: .black.opacity(0.5), radius: 3)
                         .allowsHitTesting(false)
                 }
+
+                if showLockIcon, let auditStatus = item.privateAuditStatus,
+                   auditStatus == 1 || auditStatus == 3 {
+                    Text(auditStatus == 1 ? L10n.chatPrivateAuditing : L10n.chatPrivateRejected)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(Color.black.opacity(0.68), in: Capsule())
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                        .padding(6)
+                }
             }
             .frame(width: 88, height: 110)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .opacity(item.isSendable ? 1 : 0.55)
         // S-7:a11y 让 VoiceOver 念"图片"/"视频"而非"按钮"
         .accessibilityLabel(item.kind == .video ? L10n.chatA11yMediaVideo : L10n.chatA11yMediaImage)
     }

@@ -13,9 +13,6 @@ struct TextBubbleView: View {
     var chatBubble: URL? = nil
     /// Batch 6.3.3：翻译后文本；非 nil 时替代 `text` 显示（内存态,不持久化，对齐 H5 chatStore.translatedMap）
     var translatedText: String? = nil
-    /// Batch 6.3.3：长按翻译回调（对方消息才 non-nil；H5 chat/index.vue 仅对方消息长按可翻译）
-    var onLongPressTranslate: (() -> Void)? = nil
-
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             // 原文
@@ -23,17 +20,6 @@ struct TextBubbleView: View {
                 .font(.system(size: 14))
                 .lineSpacing(4)
                 .foregroundStyle(.white)
-
-            // 对方消息 + 未翻译 → 展示"Translate"按钮(对齐 H5 msgItem.vue CTranslate)
-            if let onTap = onLongPressTranslate, translatedText == nil {
-                Button(action: onTap) {
-                    Text(L10n.chatTranslate)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color(hex: 0xC49BFF))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
 
             // 已翻译:分隔线 + 译文(对齐 H5 border-t-1-black + mt-4 pt4)
             if let tx = translatedText {
@@ -48,30 +34,23 @@ struct TextBubbleView: View {
                     .padding(.top, 2)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, chatBubble == nil ? 12 : ChatSkinMetrics.horizontalContentInset)
+        .padding(.vertical, chatBubble == nil ? 8 : ChatSkinMetrics.verticalContentInset)
         .frame(maxWidth: ChatConstants.textBubbleMaxWidth, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
         .background {
             if let url = chatBubble {
-                // 点九图背景(NinePatchImageView 内部 URLSession 拉取 + resizableImage(withCapInsets:) 拉伸)
-                // 下载失败 → NinePatchImageView 显透明 → 默认色底叠在下层兜底
-                ZStack {
-                    defaultBubbleBackground
-                    NinePatchImageView(url: url)
-                }
+                // H5 custom class 强制 transparent / border-radius: 0，不叠默认圆角色底。
+                NinePatchImageView(url: url)
             } else {
-                defaultBubbleBackground
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(defaultBubbleColor)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        // 长按仍触发翻译作为可选备用交互(iOS 惯例)
-        .onLongPressGesture(minimumDuration: 0.5) {
-            onLongPressTranslate?()
-        }
+        // H5 自定义皮肤 `border-radius: 0`，不得裁掉点九图自身的角和挂饰。
     }
 
-    private var defaultBubbleBackground: some View {
-        (isOutgoing ? ChatPalette.myBubbleBackground : ChatPalette.peerBubbleBackground)
+    private var defaultBubbleColor: Color {
+        isOutgoing ? ChatPalette.myBubbleBackground : ChatPalette.peerBubbleBackground
     }
 }

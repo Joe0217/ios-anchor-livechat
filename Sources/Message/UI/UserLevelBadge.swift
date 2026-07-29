@@ -34,22 +34,26 @@ struct UserLevelBadge: View {
 
     let level: Int
     let size: Size
+    /// 进场条的服务端等级可能合法为 0；其他入口维持默认的隐藏行为。
+    let showsZero: Bool
 
     /// 主入口：Int 等级值
-    init(level: Int, size: Size = .medium) {
+    init(level: Int, size: Size = .medium, showsZero: Bool = false) {
         self.level = level
         self.size = size
+        self.showsZero = showsZero
     }
 
     /// 便捷入口：从接口 String? 传入；nil/空/非数字自动转 0 → body 内不渲染（调用方无需判空）
-    init(levelName: String?, size: Size = .medium) {
+    init(levelName: String?, size: Size = .medium, showsZero: Bool = false) {
         self.level = Int(levelName ?? "") ?? 0
         self.size = size
+        self.showsZero = showsZero
     }
 
     var body: some View {
         // level <= 0 时不渲染（对齐 H5 `<div v-if="level">` 语义）
-        if level > 0 {
+        if level > 0 || (showsZero && level == 0) {
             HStack(spacing: 2) {
                 Image(systemName: "crown.fill")
                     .font(.system(size: size.iconSize))

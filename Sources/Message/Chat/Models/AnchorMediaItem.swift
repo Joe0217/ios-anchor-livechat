@@ -15,6 +15,10 @@ struct AnchorMediaItem: Identifiable, Equatable, Hashable {
     let dur: Int?                     // video 秒数（image 传 nil）
     /// Batch 4：私密相册项的解锁钻石价（对齐 H5 albumPopup 显示）；普通相册 nil
     var giftPrice: Int? = nil
+    /// 私密媒体的发送资格。普通相册固定为 true；私密相册由 V2 `sendFlag/canSend` 派生。
+    var isSendable: Bool = true
+    /// 私密媒体审核状态：1 审核中 / 3 已拒绝时不可发送；普通相册为 nil。
+    var privateAuditStatus: Int? = nil
 }
 
 enum MediaKind: String, Equatable, Hashable {
@@ -87,7 +91,9 @@ extension AnchorMediaItem {
             coverUrl: nil,
             kind: p.isVideo ? .video : .image,
             dur: nil,
-            giftPrice: p.giftPrice   // Batch 4：透传解锁钻石价（H5 albumPopup 显示）
+            giftPrice: p.giftPrice,
+            isSendable: p.isSendable,
+            privateAuditStatus: p.privateAuditStatus
         )
     }
 

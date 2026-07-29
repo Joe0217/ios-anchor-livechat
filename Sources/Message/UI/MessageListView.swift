@@ -1,5 +1,6 @@
 import Combine
 import SwiftUI
+import UIKit
 
 /// P2P 会话列表主 view（H-1 MVP，v3 UI 对齐 H5）。
 ///
@@ -12,21 +13,27 @@ import SwiftUI
 struct MessageListView: View {
 
     @ObservedObject var store: MessageSessionStore
+    @StateObject private var massTextingStore = MassTextingStore()
     /// H-2 spec §4.1：短按 row 时把 peerYxAccId 追加到 path 触发 push；由 MainTabView 上抬持有
     @Binding var messagesPath: NavigationPath
     @State private var transientError: String?
     @State private var longPressedSession: MessageSession?
     /// 顶部右 icon 触发的"清空当前 tab"确认对话框
     @State private var showClearTabConfirm: Bool = false
+    @State private var isMassTextingHintVisible = false
+    @State private var massTextingHintTask: Task<Void, Never>?
+
+    private var topSafeAreaInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)?
+            .safeAreaInsets.top ?? 0
+    }
 
     var body: some View {
         ZStack {
-            // 整页深紫渐变背景切图(设计稿"背景填图-高"),平铺满屏 + 底色兜底避免超尺寸留空
-            Color(hex: 0x0A0018).ignoresSafeArea()
-            Image("messageListBackground")
-                .resizable()
-                .scaledToFill()
-                .ignoresSafeArea()
+            profileBackgroundLayer
                 .allowsHitTesting(false)
 
             VStack(spacing: 0) {
@@ -72,6 +79,36 @@ struct MessageListView: View {
                 await store.load()
             }
         }
+        // 对齐 H5 onActivated：每次返回 News 都刷新群发次数，并决定是否展示当天的入口提示。
+        .onAppear {
+            Task {
+                if await massTextingStore.refreshCount() {
+                    presentMassTextingHintIfNeeded()
+                }
+            }
+        }
+        .onDisappear {
+            massTextingHintTask?.cancel()
+            massTextingHintTask = nil
+            isMassTextingHintVisible = false
+        }
+        // H5 在浮标提示 4 秒内捕获首个页面点击后打开群发弹窗。
+        .overlay {
+            if isMassTextingHintVisible {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        dismissMassTextingHint()
+                        Task { await massTextingStore.open() }
+                    }
+                    .accessibilityHidden(true)
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            massTextingFloatingEntry
+                .padding(.trailing, 12)
+                .padding(.bottom, 114)
+        }
         .overlay(alignment: .top) {
             if let err = transientError {
                 Text(err)
@@ -82,6 +119,24 @@ struct MessageListView: View {
                     .padding(.top, 8)
                     .transition(.opacity)
             }
+        }
+        .overlay {
+            if !massTextingStore.isPresented, let status = massTextingStore.status {
+                MassTextingStatusOverlay(status: status) {
+                    massTextingStore.dismissStatus()
+                }
+                .transition(.opacity)
+            }
+        }
+        .sheet(
+            isPresented: $massTextingStore.isPresented,
+            onDismiss: {
+                Task { await massTextingStore.refreshCount() }
+            }
+        ) {
+            MassTextingSheet(store: massTextingStore)
+                .presentationDetents([.height(430), .medium])
+                .presentationDragIndicator(.visible)
         }
         // Bottom sheet：长按会话弹置顶/删除 confirmation
         .confirmationDialog(
@@ -113,6 +168,28 @@ struct MessageListView: View {
             }
             Button(L10n.messageActionCancel, role: .cancel) {}
         }
+    }
+
+    /// 与 Profile 首页共用顶部背景图、过渡高度和页面底色。
+    private var profileBackgroundLayer: some View {
+        VStack(spacing: 0) {
+            Image("profileTopBg")
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: Theme.Metric.profileHeaderHeight + topSafeAreaInset)
+                .overlay(alignment: .bottom) {
+                    LinearGradient(
+                        colors: [Color.clear, Theme.Palette.profileBackground],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(height: 60)
+                }
+                .clipped()
+            Theme.Palette.profileBackground
+        }
+        .ignoresSafeArea(edges: .top)
     }
 
     // MARK: - 顶部 tab bar（对齐设计稿 `消息列表-未读已读.png` 彩色胶囊 + 99+ badge overlay）
@@ -353,6 +430,670 @@ struct MessageListView: View {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             withAnimation { transientError = nil }
         }
+    }
+
+    /// 对齐 H5 bulkMsg：按账号、北京时间最多在连续三天各展示一次 4 秒入口提示。
+    private func presentMassTextingHintIfNeeded() {
+        guard MassTextingHintSchedule.consumeDisplay(for: SessionStore.shared.user?.userId) else { return }
+        massTextingHintTask?.cancel()
+        withAnimation { isMassTextingHintVisible = true }
+        massTextingHintTask = Task {
+            do {
+                try await Task.sleep(nanoseconds: 4_000_000_000)
+            } catch {
+                return
+            }
+            await MainActor.run {
+                withAnimation { isMassTextingHintVisible = false }
+                massTextingHintTask = nil
+            }
+        }
+    }
+
+    private func dismissMassTextingHint() {
+        massTextingHintTask?.cancel()
+        massTextingHintTask = nil
+        withAnimation { isMassTextingHintVisible = false }
+    }
+
+    private var massTextingFloatingEntry: some View {
+        ZStack(alignment: .topTrailing) {
+            if isMassTextingHintVisible {
+                Text(L10n.massTextingHint)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .frame(width: 142)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(Color(hex: 0x351B54), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .stroke(Color.white.opacity(0.18), lineWidth: 1)
+                    )
+                    .offset(x: -138, y: -24)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
+            Button {
+                dismissMassTextingHint()
+                Task { await massTextingStore.open() }
+            } label: {
+                Image("messageBadgeMassTexting")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 58, height: 58)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.massTextingTitle)
+
+            if massTextingStore.dailySendLimit > 0 {
+                Text(massTextingStore.dailySendLimit > 99 ? "99+" : "\(massTextingStore.dailySendLimit)")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Color(hex: 0xE40132), in: Capsule())
+                    .offset(x: 3, y: -2)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+}
+
+// MARK: - Mass Texting（对齐 H5 bulkMsgPopup.vue）
+
+private enum MassTextingHintSchedule {
+    private static let keyPrefix = "message.massTexting.hint"
+    private static let shanghaiTimeZone = TimeZone(identifier: "Asia/Shanghai")!
+
+    /// H5 将首次展示日和剩余次数存到 user store；iOS 改用按 userId 隔离的 UserDefaults。
+    /// 初次、次日和第三天各展示一次，第三天后不再展示。
+    static func consumeDisplay(for userId: Int?) -> Bool {
+        guard let userId, userId > 0 else { return false }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = shanghaiTimeZone
+        let today = calendar.startOfDay(for: Date()).timeIntervalSince1970
+        let key = "\(keyPrefix).\(userId)"
+        let defaults = UserDefaults.standard
+
+        guard let record = defaults.dictionary(forKey: key),
+              let firstDay = (record["firstDay"] as? NSNumber)?.doubleValue,
+              let remaining = (record["remaining"] as? NSNumber)?.intValue else {
+            defaults.set(["firstDay": today, "remaining": 2], forKey: key)
+            return true
+        }
+
+        let elapsedDays = Int((today - firstDay) / 86_400)
+        let nextRemaining: Int?
+        switch (elapsedDays, remaining) {
+        case (1, 2):
+            nextRemaining = 1
+        case (2, 2), (2, 1):
+            nextRemaining = 0
+        default:
+            nextRemaining = nil
+        }
+        guard let nextRemaining else { return false }
+        defaults.set(["firstDay": firstDay, "remaining": nextRemaining], forKey: key)
+        return true
+    }
+}
+
+private enum MassTextingStatus: Equatable {
+    case success
+    case limitReached
+    case cooldown(String)
+    case refreshUnavailable
+    case failed(String)
+
+    var title: String {
+        switch self {
+        case .success:
+            return L10n.massTextingSendSuccess
+        case .limitReached:
+            return L10n.massTextingDailyLimitReached
+        case .cooldown(let message):
+            return message
+        case .refreshUnavailable:
+            return L10n.massTextingRefreshUnavailable
+        case .failed(let message):
+            return message
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .success:
+            return "checkmark.circle.fill"
+        case .limitReached, .cooldown:
+            return "exclamationmark.triangle.fill"
+        case .refreshUnavailable, .failed:
+            return "xmark.circle.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .success:
+            return Color(hex: 0x47D18C)
+        case .limitReached, .cooldown:
+            return Color(hex: 0xFFCC00)
+        case .refreshUnavailable, .failed:
+            return Color(hex: 0xFF5A6A)
+        }
+    }
+}
+
+@MainActor
+private final class MassTextingStore: ObservableObject {
+    @Published var isPresented = false
+    @Published private(set) var isLoading = false
+    @Published private(set) var isRefreshing = false
+    @Published private(set) var isSending = false
+    @Published private(set) var dailySendLimit = 0
+    @Published private(set) var refreshCount = 0
+    @Published private(set) var copywriting = ""
+    @Published private(set) var loadError: String?
+    @Published var status: MassTextingStatus?
+
+    private let service: MassTextingServiceProtocol
+    private var copywritingId: MassTextingCopywritingID?
+    private var statusTask: Task<Void, Never>?
+
+    init(service: MassTextingServiceProtocol = MassTextingService()) {
+        self.service = service
+    }
+
+    func open() async {
+        isPresented = true
+        AnalyticsTracker.track("im_mass_entry_click")
+        await loadCopywriting(previousId: nil)
+    }
+
+    @discardableResult
+    func refreshCount() async -> Bool {
+        do {
+            let count = try await service.fetchDailySendLimit()
+            dailySendLimit = count
+            return true
+        } catch {
+            // H5 也把入口次数视为非阻塞信息；失败不影响消息列表主流程。
+            return false
+        }
+    }
+
+    func retryLoad() async {
+        await loadCopywriting(previousId: copywritingId)
+    }
+
+    @discardableResult
+    func refreshCopywriting() async -> Bool {
+        guard !isRefreshing, !isLoading else { return false }
+        guard refreshCount > 0 else {
+            AnalyticsTracker.track("im_mass_refreshcopy_click", properties: ["refresh_type": "refresh_fail"])
+            return false
+        }
+        isRefreshing = true
+        defer { isRefreshing = false }
+        do {
+            let response = try await service.fetchCopywriting(excluding: copywritingId)
+            apply(response)
+            AnalyticsTracker.track("im_mass_refreshcopy_click", properties: ["refresh_type": "refresh_success"])
+            return false
+        } catch let error as APIError {
+            AnalyticsTracker.track("im_mass_refreshcopy_click", properties: ["refresh_type": "refresh_fail"])
+            if error.message == "Sorry, message library unavailable. Please refresh later." {
+                showStatus(.refreshUnavailable)
+                return false
+            } else {
+                showStatus(.refreshUnavailable)
+                return true
+            }
+        } catch {
+            AnalyticsTracker.track("im_mass_refreshcopy_click", properties: ["refresh_type": "refresh_fail"])
+            showStatus(.refreshUnavailable)
+            return true
+        }
+    }
+
+    @discardableResult
+    func send() async -> Bool {
+        guard !isSending else { return false }
+        guard dailySendLimit > 0 else {
+            AnalyticsTracker.track("send_limit")
+            showStatus(.limitReached)
+            return true
+        }
+        guard let copywritingId else {
+            showStatus(.failed(L10n.massTextingNoCopywriting))
+            return false
+        }
+
+        isSending = true
+        defer { isSending = false }
+        do {
+            let response = try await service.send(copywritingId: copywritingId)
+            if let updatedLimit = response.dailySendLimit {
+                dailySendLimit = updatedLimit
+                copywriting = ""
+                self.copywritingId = nil
+            } else {
+                dailySendLimit = max(0, dailySendLimit - 1)
+            }
+            AnalyticsTracker.track("im_mass_send_success")
+            showStatus(.success)
+            return true
+        } catch let error as APIError {
+            AnalyticsTracker.track("send_cooldown")
+            showStatus(.cooldown(error.message))
+            return true
+        } catch {
+            showStatus(.failed(L10n.massTextingSendFailed))
+            return true
+        }
+    }
+
+    func dismissStatus() {
+        statusTask?.cancel()
+        statusTask = nil
+        withAnimation { status = nil }
+    }
+
+    private func loadCopywriting(previousId: MassTextingCopywritingID?) async {
+        isLoading = true
+        loadError = nil
+        defer { isLoading = false }
+        do {
+            let response = try await service.fetchCopywriting(excluding: previousId)
+            apply(response)
+        } catch let error as APIError {
+            loadError = error.message
+        } catch {
+            loadError = L10n.massTextingLoadFailed
+        }
+    }
+
+    private func apply(_ response: MassTextingCopywritingResponse) {
+        dailySendLimit = response.dailySendLimit
+        refreshCount = response.refreshCount
+        copywriting = response.copywriting?.content ?? ""
+        copywritingId = response.copywriting?.id
+        loadError = nil
+    }
+
+    private func showStatus(_ nextStatus: MassTextingStatus, duration: UInt64 = 3) {
+        statusTask?.cancel()
+        withAnimation { status = nextStatus }
+        statusTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: duration * 1_000_000_000)
+            } catch {
+                return
+            }
+            await MainActor.run {
+                withAnimation { self?.status = nil }
+            }
+        }
+    }
+}
+
+private protocol MassTextingServiceProtocol {
+    func fetchDailySendLimit() async throws -> Int
+    func fetchCopywriting(excluding id: MassTextingCopywritingID?) async throws -> MassTextingCopywritingResponse
+    func send(copywritingId: MassTextingCopywritingID) async throws -> MassTextingSendResponse
+}
+
+private struct MassTextingService: MassTextingServiceProtocol {
+    func fetchDailySendLimit() async throws -> Int {
+        let data = try await APIClient.shared.post("/api/massMsg/getAnchorDailySendCount", body: [:])
+        let response = try JSONDecoder().decode(MassTextingDailyLimitResponse.self, from: data)
+        return response.dailySendLimit
+    }
+
+    func fetchCopywriting(excluding id: MassTextingCopywritingID?) async throws -> MassTextingCopywritingResponse {
+        var body: [String: Any] = [:]
+        if let id {
+            body["copywritingId"] = id.jsonValue
+        }
+        let data = try await APIClient.shared.post("/api/massMsg/getCopywriting", body: body)
+        return try JSONDecoder().decode(MassTextingCopywritingResponse.self, from: data)
+    }
+
+    func send(copywritingId: MassTextingCopywritingID) async throws -> MassTextingSendResponse {
+        let data = try await APIClient.shared.post(
+            "/api/massMsg/batchSendMsgToUser",
+            body: ["copywritingId": copywritingId.jsonValue]
+        )
+        return (try? JSONDecoder().decode(MassTextingSendResponse.self, from: data)) ?? MassTextingSendResponse(dailySendLimit: nil)
+    }
+}
+
+private struct MassTextingDailyLimitResponse: Decodable {
+    let dailySendLimit: Int
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        dailySendLimit = c.decodeFlexibleInt(forKey: .dailySendLimit) ?? 0
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case dailySendLimit
+    }
+}
+
+private struct MassTextingCopywritingResponse: Decodable {
+    let dailySendLimit: Int
+    let refreshCount: Int
+    let copywriting: MassTextingCopywriting?
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        dailySendLimit = c.decodeFlexibleInt(forKey: .dailySendLimit) ?? 0
+        refreshCount = c.decodeFlexibleInt(forKey: .refreshCount) ?? 0
+        copywriting = try c.decodeIfPresent(MassTextingCopywriting.self, forKey: .copywriting)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case dailySendLimit
+        case refreshCount
+        case copywriting
+    }
+}
+
+private struct MassTextingCopywriting: Decodable {
+    let id: MassTextingCopywritingID?
+    let content: String
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try? c.decode(MassTextingCopywritingID.self, forKey: .id)
+        content = (try? c.decode(String.self, forKey: .copywritingContent))
+            ?? (try? c.decode(String.self, forKey: .content))
+            ?? ""
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case copywritingContent
+        case content
+    }
+}
+
+private struct MassTextingSendResponse: Decodable {
+    let dailySendLimit: Int?
+
+    init(dailySendLimit: Int?) {
+        self.dailySendLimit = dailySendLimit
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        dailySendLimit = c.decodeFlexibleInt(forKey: .dailySendLimit)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case dailySendLimit
+    }
+}
+
+private enum MassTextingCopywritingID: Equatable, Decodable {
+    case int(Int64)
+    case string(String)
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let int = try? c.decode(Int64.self) {
+            self = .int(int)
+        } else if let string = try? c.decode(String.self) {
+            self = .string(string)
+        } else {
+            throw DecodingError.dataCorruptedError(in: c, debugDescription: "copywriting id is neither int nor string")
+        }
+    }
+
+    var jsonValue: Any {
+        switch self {
+        case .int(let value):
+            return value
+        case .string(let value):
+            return value
+        }
+    }
+}
+
+private struct MassTextingSheet: View {
+    @ObservedObject var store: MassTextingStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(hex: 0x16002F), Color(hex: 0x32104D)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                header
+                content
+                sendButton
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 18)
+            .padding(.bottom, 28)
+
+            // 刷新文案库不可用时 H5 保持 popup 打开，状态层必须位于 sheet 内而非父页面底下。
+            if let status = store.status {
+                MassTextingStatusOverlay(status: status) {
+                    store.dismissStatus()
+                }
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            AvatarView(
+                urlString: SessionStore.shared.user?.icon,
+                size: 42,
+                kind: .anchor,
+                disablesTap: true
+            )
+            VStack(alignment: .leading, spacing: 3) {
+                Text(L10n.massTextingTitle)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text(L10n.massTextingRemainingFormat(store.dailySendLimit))
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.65))
+            }
+            Spacer()
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .frame(width: 32, height: 32)
+                    .background(Color.white.opacity(0.12), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.messageActionCancel)
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if store.isLoading {
+            VStack(spacing: 12) {
+                ProgressView()
+                    .tint(.white)
+                Text(L10n.massTextingLoading)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.75))
+            }
+            .frame(maxWidth: .infinity, minHeight: 190)
+        } else if let loadError = store.loadError {
+            VStack(spacing: 12) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 26))
+                    .foregroundStyle(Color(hex: 0xFFCC00))
+                Text(loadError)
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .multilineTextAlignment(.center)
+                Button(L10n.massTextingRetry) {
+                    Task { await store.retryLoad() }
+                }
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 9)
+                .background(Color.white.opacity(0.16), in: Capsule())
+                .buttonStyle(.plain)
+            }
+            .frame(maxWidth: .infinity, minHeight: 190)
+        } else {
+            VStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text(L10n.massTextingContentTitle)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.72))
+                        Spacer()
+                        Button {
+                            Task {
+                                if await store.refreshCopywriting() {
+                                    dismiss()
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 5) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 12, weight: .bold))
+                                Text("x \(store.refreshCount)")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            .foregroundStyle(store.refreshCount > 0 ? .white : .white.opacity(0.45))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Color.white.opacity(store.isRefreshing ? 0.22 : 0.12), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(store.isRefreshing)
+                        .accessibilityLabel(L10n.massTextingRefreshCopy)
+                    }
+
+                    Text(store.copywriting.isEmpty ? L10n.massTextingNoCopywriting : store.copywriting)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white)
+                        .lineSpacing(3)
+                        .frame(maxWidth: .infinity, minHeight: 92, alignment: .center)
+                        .multilineTextAlignment(.leading)
+                        .padding(14)
+                        .background(
+                            LinearGradient(
+                                colors: [Color(hex: 0x7E67EF), Color(hex: 0x9A61E1)],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        )
+                }
+
+                HStack(spacing: -8) {
+                    ForEach(0..<6, id: \.self) { _ in
+                        AvatarView(
+                            urlString: nil,
+                            size: 42,
+                            kind: .user,
+                            disablesTap: true
+                        )
+                        .overlay(Circle().stroke(Color.white.opacity(0.7), lineWidth: 2))
+                    }
+                }
+                .accessibilityHidden(true)
+            }
+        }
+    }
+
+    private var sendButton: some View {
+        Button {
+            Task {
+                if await store.send() {
+                    dismiss()
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                if store.isSending {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(0.85)
+                }
+                Text(L10n.massTextingSendOneTap)
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 48)
+            .background(sendButtonBackground, in: Capsule())
+            .overlay(Capsule().stroke(Color.white.opacity(0.26), lineWidth: 1))
+            .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
+        }
+        .buttonStyle(.plain)
+        .disabled(store.isLoading || store.isSending || store.loadError != nil)
+    }
+
+    private var sendButtonBackground: LinearGradient {
+        if store.dailySendLimit > 0 {
+            return LinearGradient(
+                colors: [Color(hex: 0x8515FF), Color(hex: 0xE40132)],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        }
+        return LinearGradient(
+            colors: [Color(hex: 0x5E3D89), Color(hex: 0x5E3D89)],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+}
+
+private struct MassTextingStatusOverlay: View {
+    let status: MassTextingStatus
+    let onDismiss: () -> Void
+
+    var body: some View {
+        Button(action: onDismiss) {
+            VStack(spacing: 12) {
+                Image(systemName: status.systemImage)
+                    .font(.system(size: 42, weight: .semibold))
+                    .foregroundStyle(status.tint)
+                Text(status.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(2)
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 20)
+            .frame(width: 280)
+            .background(
+                LinearGradient(
+                    colors: [Color.black.opacity(0.88), Color(hex: 0x241A02).opacity(0.88)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(status.title)
     }
 }
 

@@ -54,6 +54,9 @@ final class P2PChatStore: ObservableObject {
     private var pendingEvents: [P2PChatEvent] = []
     /// 客户端 → 服务端 messageId 映射（发送完成时用于将乐观 message 替换为真 message）
     private var clientToServerId: [String: String] = [:]
+    /// 埋点去重：SDK completion 与 async send 返回可能先后各到一次，业务成功事件只能报一次。
+    private var analyticsSentMessageIds: Set<String> = []
+    private var analyticsFirstReplyIncomingIds: Set<String> = []
 
     // MARK: - init / teardown
 
@@ -79,6 +82,18 @@ final class P2PChatStore: ObservableObject {
     /// 不放 deinit —— `provider.unsubscribe()` 是 @MainActor 方法，deinit 隔离语义不保证。
     func teardown() {
         provider.unsubscribe()
+    }
+
+    /// 供容器在依赖首屏历史的后续逻辑（回复积分 hydrate / 私密状态校验）前等待加载结束。
+    /// `ChatDetailView.task` 与 `ChatDetailContainer.task` 同时启动，不能假设二者先后顺序。
+    func waitForInitialLoad() async {
+        while case .loading = state {
+            do {
+                try await Task.sleep(nanoseconds: 50_000_000)
+            } catch {
+                return
+            }
+        }
     }
 
     // MARK: - 私密消息 lockStatus 批量应用（对齐 H5 chat/index.vue checkPrivateInfo）
@@ -226,7 +241,7 @@ final class P2PChatStore: ObservableObject {
         )
         #if !HILY_TESTS
         // AnchorInfoStore.shared 依赖 Profile 模块非 test 编译面（Codable model + 服务）；tests 隔离屏蔽
-        optimistic.chatBubble = AnchorInfoStore.shared.mine?.chatBubble.flatMap { URL(string: $0) }
+        optimistic.chatBubble = AnchorInfoStore.shared.currentChatBubble.flatMap(URL.init(string:))
         #endif
         appendOptimistic(optimistic)
 
@@ -322,6 +337,7 @@ final class P2PChatStore: ObservableObject {
                 privateId: media.privateId, signedData: signedData, clientMsgId: clientMsgId
             )
             finalizeSending(clientMsgId: clientMsgId, messageId: messageId, error: nil)
+            trackPrivateMediaSend(type: "photo", price: media.giftPrice)
         } catch let e as SendError {
             finalizeSending(clientMsgId: clientMsgId, messageId: nil, error: e)
         } catch {
@@ -356,6 +372,7 @@ final class P2PChatStore: ObservableObject {
                 privateId: media.privateId, signedData: signedData, clientMsgId: clientMsgId
             )
             finalizeSending(clientMsgId: clientMsgId, messageId: messageId, error: nil)
+            trackPrivateMediaSend(type: "video", price: media.giftPrice)
         } catch let e as SendError {
             finalizeSending(clientMsgId: clientMsgId, messageId: nil, error: e)
         } catch {
@@ -571,6 +588,7 @@ final class P2PChatStore: ObservableObject {
         // 让会话列表 lastMessage 立即联动，不依赖 SDK didUpdate 回调保底
         if let sent = sentMessageForPropagate {
             propagateSentToSessionStore(sent)
+            trackOutgoingMessage(sent, previousMessage: current.last)
             // Batch 6.2a：主播回复成功 → 触发 settleReplyPoints（累加 currentProgress + hasHistoryReply=true）
             // 对齐 H5 chat/index.vue:1080-1096 sendText/sendPicture 成功后 chatStore.replyPointSettle
             #if !HILY_TESTS
@@ -617,6 +635,60 @@ final class P2PChatStore: ObservableObject {
         #endif
     }
 
+    private func trackOutgoingMessage(_ message: ChatMessage, previousMessage: ChatMessage?) {
+        #if !HILY_TESTS
+        guard analyticsSentMessageIds.insert(message.id).inserted else { return }
+        let base: [String: Any] = [
+            "msg_id": message.id,
+            "user_xy_id": peerYxAccId,
+            "sendType": "host",
+            "content_type": analyticsContentType(for: message.content)
+        ]
+        AnalyticsTracker.track("im_user_send_msg", properties: base)
+
+        if previousMessage == nil || message.timestamp - (previousMessage?.timestamp ?? message.timestamp) >= 12 * 60 * 60 * 1_000 {
+            AnalyticsTracker.track("im_anchor_initiate", properties: base)
+        }
+
+        guard let previousMessage, !previousMessage.isOutgoing else { return }
+        let responseSeconds = max(0, (message.timestamp - previousMessage.timestamp) / 1_000)
+        var replyProperties = base
+        replyProperties["reply_to_msg_id"] = previousMessage.id
+        replyProperties["response_time_s"] = responseSeconds
+        AnalyticsTracker.track("im_anchor_reply", properties: replyProperties)
+        AnalyticsTracker.track("h_anchor_msg_reply", properties: replyProperties)
+        if analyticsFirstReplyIncomingIds.insert(previousMessage.id).inserted {
+            AnalyticsTracker.track("im_anchor_first_reply", properties: replyProperties)
+        }
+        AnalyticsTracker.track("im_reply_pair", properties: replyProperties)
+        #endif
+    }
+
+    private func trackPrivateMediaSend(type: String, price: Int?) {
+        #if !HILY_TESTS
+        let properties: [String: Any] = [
+            "type": type,
+            "dia": price ?? 0,
+            "host_id": SessionStore.shared.user?.userId ?? 0,
+            "user_xy_id": peerYxAccId
+        ]
+        AnalyticsTracker.track("primsg_send_suc", properties: properties)
+        AnalyticsTracker.track("h_primsg_send_suc", properties: properties)
+        #endif
+    }
+
+    private func analyticsContentType(for content: ChatMessageContent) -> String {
+        switch content {
+        case .text: return "text"
+        case .image: return "image"
+        case .video: return "video"
+        case .audio: return "audio"
+        case .privateImage: return "Private Image"
+        case .privateVideo: return "Private Video"
+        default: return "system"
+        }
+    }
+
     private func removeMessage(clientMsgId: String) {
         guard case .loaded(let current) = state else { return }
         let filtered = current.filter { $0.clientMsgId != clientMsgId }
@@ -639,7 +711,20 @@ final class P2PChatStore: ObservableObject {
                     case .retryable(let c): copy.status = .failed(errorCode: c)
                     }
                 } else if let messageId, !messageId.isEmpty {
-                    copy = ChatMessage(id: messageId, clientMsgId: clientMsgId, from: m.from, to: m.to, content: m.content, status: .sent, timestamp: m.timestamp, isOutgoing: m.isOutgoing)
+                    var rebuilt = ChatMessage(
+                        id: messageId,
+                        clientMsgId: clientMsgId,
+                        from: m.from,
+                        to: m.to,
+                        content: m.content,
+                        status: .sent,
+                        timestamp: m.timestamp,
+                        isOutgoing: m.isOutgoing
+                    )
+                    rebuilt.chatBubble = m.chatBubble
+                    rebuilt.privateId = m.privateId
+                    rebuilt.msgType = m.msgType
+                    copy = rebuilt
                 }
                 return copy
             }

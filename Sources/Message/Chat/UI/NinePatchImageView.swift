@@ -1,76 +1,105 @@
 import SwiftUI
 import UIKit
-import Combine
 
-/// H-3 SwiftUI 点九图气泡背景（spec §1.6 / §4.10）。
+/// H5 `chat-bubble-custom` 的统一尺寸。
 ///
-/// **对齐 H5** `msgItem.vue:220-221` + `app.less:1022-1036` `chat-bubble-custom`：
-/// ```css
-/// border-image-slice: 63 87 63 87 fill;
-/// border-image-width: 32px 44px;
-/// border-image-repeat: stretch;
-/// ```
+/// H5 通过 `border-width: 14px 24px` 预留文字内容区；所有聊天场景共用这套尺寸，
+/// 防止私聊、公屏和通话使用同一张皮肤时出现不同的边距。
+enum ChatSkinMetrics {
+    static let horizontalContentInset: CGFloat = 24
+    /// H5 `border-image-width: 32px 44px`，是皮肤四周实际可见的装饰宽度。
+    static let horizontalBorderWidth: CGFloat = 44
+    static let verticalBorderWidth: CGFloat = 32
+    /// H5 `border-width: 14px 24px` 的内容区上下边距。
+    static let verticalContentInset: CGFloat = 14
+    /// 皮肤挂饰视觉会超出普通气泡的紧凑感，行与行之间额外预留的空间。
+    static let messageVerticalSpacing: CGFloat = 4
+    /// 直播公屏的皮肤文字行采用更紧凑的外部行距；不影响气泡内容区高度。
+    static let livePublicMessageVerticalSpacing: CGFloat = 2
+    /// H5 图源以 63/87 像素切片，渲染为 32/44 CSS px，接近 2x 缩放。
+    static let sourceScale: CGFloat = 2
+}
+
+/// H5 Chat Skin 的点九图背景。
 ///
-/// **iOS 等价**：`UIImage.resizableImage(withCapInsets: .init(top:63, left:87, bottom:63, right:87), resizingMode: .stretch)`
+/// H5 CSS：`border-image-slice: 63 87 63 87 fill; border-image-width: 32px 44px`。
+/// 先以 2x 逻辑尺寸载入图源，再使用 32/44pt cap inset，等价于 H5 的切片与显示尺寸。
 ///
-/// **使用**：
-/// ```swift
-/// NinePatchImageView(url: msg.chatBubble, capInsets: .init(top: 63, left: 87, bottom: 63, right: 87))
-///     .overlay(alignment: .center) { Text(text).padding(.horizontal, 24).padding(.vertical, 14) }
-/// ```
-///
-/// **下载失败兜底**（spec §R-25）：view 层用 `.overlay` fallback；本组件加载失败时 render 透明 background，
-/// caller 需要在此之上叠 fallback（如 `RoundedRectangle` 默认圆角气泡）。
-struct NinePatchImageView: UIViewRepresentable {
+/// 不能直接使用 `CachedAsyncImage`，因为它没有暴露九宫格拉伸能力；下载与缓存仍复用
+/// `ImageCache`，避免同一气泡图片在每条消息中重复请求。
+struct NinePatchImageView: View {
     let url: URL?
     let capInsets: UIEdgeInsets
 
-    init(url: URL?, capInsets: UIEdgeInsets = .init(top: 63, left: 87, bottom: 63, right: 87)) {
-        self.url = url
+    @State private var image: UIImage?
+    @State private var loadedURL: URL?
+
+    init(
+        url: URL?,
+        capInsets: UIEdgeInsets = .init(
+            top: ChatSkinMetrics.verticalBorderWidth,
+            left: ChatSkinMetrics.horizontalBorderWidth,
+            bottom: ChatSkinMetrics.verticalBorderWidth,
+            right: ChatSkinMetrics.horizontalBorderWidth
+        )
+    ) {
+        self.url = Self.safeRemoteURL(url)
         self.capInsets = capInsets
-    }
-
-    func makeUIView(context: Context) -> UIImageView {
-        let view = UIImageView()
-        view.contentMode = .scaleToFill
-        view.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        return view
-    }
-
-    func updateUIView(_ view: UIImageView, context: Context) {
-        context.coordinator.setImage(on: view, url: url, capInsets: capInsets)
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator()
-    }
-
-    final class Coordinator {
-        private var cancellable: AnyCancellable?
-        private var currentURL: URL?
-
-        func setImage(on view: UIImageView, url: URL?, capInsets: UIEdgeInsets) {
-            guard url != currentURL else { return }
-            currentURL = url
-
-            guard let url else {
-                view.image = nil
-                return
-            }
-
-            cancellable?.cancel()
-            cancellable = URLSession.shared.dataTaskPublisher(for: url)
-                .map { UIImage(data: $0.data) }
-                .replaceError(with: nil)
-                .receive(on: DispatchQueue.main)
-                .sink { [weak view] img in
-                    guard let img else {
-                        view?.image = nil
-                        return
-                    }
-                    view?.image = img.resizableImage(withCapInsets: capInsets, resizingMode: .stretch)
-                }
+        if let url = self.url, let cached = ImageCache.shared.cached(for: url) {
+            _image = State(initialValue: Self.h5SizedImage(from: cached))
+            _loadedURL = State(initialValue: url)
         }
+    }
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(uiImage: image)
+                    .resizable(capInsets: EdgeInsets(
+                        top: capInsets.top,
+                        leading: capInsets.left,
+                        bottom: capInsets.bottom,
+                        trailing: capInsets.right
+                    ), resizingMode: .stretch)
+            } else {
+                Color.clear
+            }
+        }
+        .task(id: url) {
+            await loadImage()
+        }
+    }
+
+    private func loadImage() async {
+        guard let url else {
+            image = nil
+            loadedURL = nil
+            return
+        }
+        if loadedURL == url, image != nil { return }
+
+        if let cached = ImageCache.shared.cached(for: url) {
+            image = Self.h5SizedImage(from: cached)
+            loadedURL = url
+            return
+        }
+
+        let fetched = await ImageCache.shared.fetch(url)
+        guard !Task.isCancelled, self.url == url else { return }
+        image = fetched.map(Self.h5SizedImage(from:))
+        loadedURL = fetched == nil ? nil : url
+    }
+
+    private static func h5SizedImage(from source: UIImage) -> UIImage {
+        guard let cgImage = source.cgImage else { return source }
+        return UIImage(cgImage: cgImage, scale: ChatSkinMetrics.sourceScale, orientation: source.imageOrientation)
+    }
+
+    private static func safeRemoteURL(_ url: URL?) -> URL? {
+        guard let url,
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https"
+        else { return nil }
+        return url
     }
 }

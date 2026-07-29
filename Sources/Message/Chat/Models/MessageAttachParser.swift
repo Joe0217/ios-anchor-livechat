@@ -235,7 +235,7 @@ enum MessageAttachParser {
         guard let ext = remoteExt,
               (ext["extensionType"] as? String) == "privateMsg",
               let data = ext["data"] as? [String: Any],
-              let iconTypeRaw = data["iconType"] as? Int,
+              let iconTypeRaw = extractInt(data["iconType"]),
               (iconTypeRaw == 1 || iconTypeRaw == 2)
         else { return nil }
 
@@ -249,9 +249,31 @@ enum MessageAttachParser {
         }()
         guard let pid = privateId, !pid.isEmpty else { return nil }
 
-        let lockStatus = PrivateLockStatus(rawInt: data["lockStatus"] as? Int)
+        let lockStatus = PrivateLockStatus(rawInt: extractInt(data["lockStatus"]))
 
         return PrivateMsgInfo(privateId: pid, iconType: iconTypeRaw, lockStatus: lockStatus)
+    }
+
+    /// 将云信 server extension 规范为字典。
+    ///
+    /// NIM v1 的 `remoteExt` 在 SDK 定义中是 NSDictionary；历史落库或跨端同步时仍可能以 JSON
+    /// 字符串桥接回来。H5 会同时处理 object / string，iOS 在这里统一一次，避免各消息 mapper 漏分支。
+    static func normalizedRemoteExt(_ raw: Any?) -> [String: Any]? {
+        if let ext = raw as? [String: Any] { return ext }
+        if let ext = raw as? [AnyHashable: Any] {
+            var normalized: [String: Any] = [:]
+            for (key, value) in ext {
+                guard let key = key as? String else { continue }
+                normalized[key] = value
+            }
+            return normalized.isEmpty ? nil : normalized
+        }
+        if let rawString = raw as? String,
+           let data = rawString.data(using: .utf8),
+           let ext = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            return ext
+        }
+        return nil
     }
 
     /// 从 NIM `remoteExt` 解出主播透传的 `activeTycoon`（H-3 spec §1.5.6 / Major-4）。
@@ -261,8 +283,8 @@ enum MessageAttachParser {
         return ext["activeTycoon"] as? Bool
     }
 
-    /// 从 NIM `remoteExt` 解出对端穿戴的 `chatBubble` URL（H-3 spec §3.3 / Critical-3 单源）。
-    /// 空字符串 / 非法 URL 返 nil；view 走默认圆角气泡兜底。
+    /// 从 NIM server extension 解出发送当时穿戴的 `chatBubble` URL。
+    /// H5 私聊页会读取逐条 `ext` / `serverExtension`；NIM iOS v1 将它们统一暴露为 `remoteExt`。
     static func extractChatBubble(remoteExt: [String: Any]?) -> URL? {
         guard let ext = remoteExt,
               let s = ext["chatBubble"] as? String, !s.isEmpty

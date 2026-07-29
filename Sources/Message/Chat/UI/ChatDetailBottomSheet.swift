@@ -1,5 +1,11 @@
 import SwiftUI
 
+/// 所有以 sheet 打开的私聊详情共用的默认高度（对齐消息列表内点会话）。
+/// 输入框聚焦时，具备 detent binding 的承载方仍可临时升至 `.large`。
+enum ChatDetailSheetMetrics {
+    static let defaultDetent: PresentationDetent = .medium
+}
+
 /// 私聊页半屏拓展点（H-2 spec §0.3 拓展 · 直播间 / 派对房内嵌半屏聊天）。
 ///
 /// **用法**（1 行接入）：
@@ -17,7 +23,7 @@ import SwiftUI
 /// - `.sheet(item:)` 保证同一时刻只弹一个（`swiftui-fullscreencover-hoist.md` 规则 1
 ///   要求 modal modifier hoist 到单一容器 —— 本 modifier **必须由调用方挂到 view 顶层**，
 ///   不能挂到 ForEach / 各消息列表 row 上）
-/// - `presentationDetents([.fraction(0.4)])` —— 直播/派对房内 sheet 上限 40%（2026-07-10 政策）
+/// - `presentationDetents([ChatDetailSheetMetrics.defaultDetent])` —— 所有半屏私聊默认高度统一为 `.medium`
 /// - 半屏模式内 `ChatDetailView` 顶部左侧图标从 back(chevron.left) 切换为 close(xmark)
 ///
 /// **与全屏 push 差异**：
@@ -47,7 +53,7 @@ struct ChatDetailBottomSheet: ViewModifier {
             onClose: { peerYxAccId = nil }
         )
         .giftPanelSheetBackground()
-        .presentationDetents([.fraction(0.4)])
+        .presentationDetents([ChatDetailSheetMetrics.defaultDetent])
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled(false)
     }

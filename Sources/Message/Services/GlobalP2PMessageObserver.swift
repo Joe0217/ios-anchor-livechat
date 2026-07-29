@@ -14,7 +14,8 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "GlobalP
 /// - **主播端需要"无论主播在哪个 tab"都能收到的全局 P2P 消息处理**（充值通知、CP 榜奖励等）
 ///
 /// **职责范围**（保持最小）：
-/// - 只处理**跨会话合成**类系统通知（H5 `attachType == 35` 用户充值成功）
+/// - 处理**跨会话合成**类系统通知（H5 `attachType == 35` 用户充值成功）
+/// - 通话已接通时，把当前对端的 P2P `SEND_GIFT` 分发给 CallStore（H5 同规则）
 /// - 收到后合成一条 NIMMessage → `saveMessage(_:forSession:)` 塞进 notification 会话本地库
 /// - SDK 内部会 fire didAdd/didUpdate → `NIMSessionAdapter` 已订阅 → Flame 顶部 System 入口 unread+1 + lastMessage
 ///
@@ -55,7 +56,7 @@ final class GlobalP2PMessageObserver: NSObject {
 
 extension GlobalP2PMessageObserver: NIMChatManagerDelegate {
 
-    /// 全局 P2P 消息回调 —— 只拦"跨会话合成"类系统通知；其他原样交给 SDK
+    /// 全局 P2P 消息回调：普通前台私聊播放一次提示音；充值通知额外走本地会话合成。
     nonisolated func onRecvMessages(_ messages: [NIMMessage]) {
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -66,13 +67,13 @@ extension GlobalP2PMessageObserver: NIMChatManagerDelegate {
     }
 
     private func processIncomingMessage(_ nim: NIMMessage) {
+        playNotificationToneIfNeeded(for: nim)
+
         // 只处理自定义消息类型
         guard nim.messageType == .custom else { return }
 
-        // 解析 attach → attachType
-        guard let rawAttach = nim.rawAttachContent,
-              let data = rawAttach.data(using: .utf8),
-              let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        // 解析 attach → attachType。部分 SDK 回调只保留 messageObject，需回退 attachment.encode()。
+        guard let dict = Self.customAttachmentPayload(from: nim) else {
             return
         }
 
@@ -81,6 +82,14 @@ extension GlobalP2PMessageObserver: NIMChatManagerDelegate {
         // 用户充值成功系统通知（对齐 H5 message.js:811-815 + handleUserRechargeNotification）
         if attachType == 35 {
             synthesizeRechargeNotification(originalMessage: nim, attach: dict)
+        }
+
+        // H5 已接通通话只消费携带发送方的 P2P SEND_GIFT；attachType=4 系统消息
+        // 缺发送方身份，通话期必须跳过，避免其他用户礼物误显示在当前通话页。
+        if (dict["attachType"] as? String) == "SEND_GIFT" {
+            let sender = nim.from ?? nim.session?.sessionId ?? ""
+            let displayed = CallStore.shared.handleRemoteGiftFromP2P(dict, senderYxAccid: sender)
+            logger.info("[GlobalP2P] SEND_GIFT callDisplayed=\(displayed, privacy: .public) sender=\(sender, privacy: .private) dataKeys=\(Array(dict.keys).sorted(), privacy: .public)")
         }
     }
 
@@ -129,6 +138,43 @@ extension GlobalP2PMessageObserver: NIMChatManagerDelegate {
         if let i = dict["attachType"] as? Int { return i }
         if let s = dict["attachType"] as? String, let i = Int(s) { return i }
         return nil
+    }
+
+    private static func customAttachmentPayload(from nim: NIMMessage) -> [String: Any]? {
+        let raw: String?
+        if let rawAttach = nim.rawAttachContent, !rawAttach.isEmpty {
+            raw = rawAttach
+        } else if let object = nim.messageObject as? NIMCustomObject,
+                  let attachment = object.attachment {
+            let encoded = attachment.encode()
+            raw = encoded.isEmpty ? nil : encoded
+        } else {
+            raw = nil
+        }
+        guard let raw,
+              let data = raw.data(using: .utf8) else {
+            return nil
+        }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    /// 通话 NIM 辅助信令不是用户消息，不能产生通知提示音；活跃通话期间也不打断铃声或 RTC。
+    private func playNotificationToneIfNeeded(for nim: NIMMessage) {
+        guard !nim.isOutgoingMsg,
+              nim.session?.sessionType == .P2P,
+              !isCallSignal(nim) else {
+            return
+        }
+        logger.debug("[GlobalP2P] incoming P2P message → notification tone type=\(String(describing: nim.messageType), privacy: .public)")
+        AppSoundPlayer.shared.playNotificationTone()
+    }
+
+    private func isCallSignal(_ nim: NIMMessage) -> Bool {
+        guard nim.messageType == .custom,
+              let dict = Self.customAttachmentPayload(from: nim) else {
+            return false
+        }
+        return Self.extractAttachType(dict) == -3
     }
 }
 #endif
