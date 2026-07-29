@@ -85,8 +85,8 @@ final class PartyListStore: ObservableObject {
 
     /// 用户已有的派对房（`nil` = 无 room；有值 = 显 My Room 按钮，点击直接进）。
     @Published private(set) var myRoom: PartyMyRoom?
-    /// **已完成一次 myRoom 拉取**（成功或失败）。View 层用来 gate 浮动按钮渲染 ——
-    /// 未 load 完前不显示按钮，避免"先显 Create 后切 My Room"闪切（用户 2026-07-11 反馈）。
+    /// **已成功解析一次 myRoom 拉取**。View 层用来 gate 浮动按钮渲染 ——
+    /// 网络错误不能视为“没有房间”，否则会错误显示 Create Room；未解析前一律隐藏入口。
     @Published private(set) var didLoadMyRoom = false
     /// 拉取进行中 dedup flag（独立于 didLoadMyRoom 语义）
     private var isLoadingMyRoom = false
@@ -231,13 +231,13 @@ final class PartyListStore: ObservableObject {
 
     // MARK: - 我的派对房（E 增强 v2）
 
-    /// 首次进入 Party tab 时拉一次；失败/无 room 保持 `myRoom = nil`；后端 roomStatus=2（封禁）也视为无 room。
+    /// 首次进入 Party tab 时拉一次；成功但无 room 时 `myRoom = nil`；后端 roomStatus=2（封禁）也视为无 room。
     /// 对齐 H5 用户端 index.vue L36 `showMyRoomIcon = hasMyRoom && roomStatus !== 2`。
-    /// **完成后**才置 `didLoadMyRoom = true`，View 才显示浮动按钮（避免闪切）。
+    /// 只有接口成功返回后才置 `didLoadMyRoom = true`，View 才显示浮动按钮（避免闪切和错误兜底）。
     ///
     /// v7（2026-07-14）：用 Task.detached 隔离 URLSession 生命周期 —— 与 refreshAsync 一致；
     /// 之前 SwiftUI `.task(id: isPartyTabActive)` cancel 会传播到 URLSession → -999 cancelled
-    /// → catch 后仍置 didLoadMyRoom=true → 下次进 tab 不重试 → myRoom 永远 nil
+    /// → catch 后若置 didLoadMyRoom=true，会把网络错误误判为无房间并显示 Create Room
     func loadMyRoomIfNeeded() async {
         guard !didLoadMyRoom, !isLoadingMyRoom else { return }
         let task = Task.detached { @MainActor [weak self] in
@@ -276,9 +276,14 @@ final class PartyListStore: ObservableObject {
                 AppLogger.party.notice("[PartyListStore] loadMyRoom cancelled, keep didLoadMyRoom=false for retry")
                 return
             }
-            if clearOnFail { myRoom = nil }
-            didLoadMyRoom = true
-            // reload 场景失败：保留旧 myRoom（避免按钮从 My Room 闪成 Create）
+            if clearOnFail {
+                myRoom = nil
+                // 首次请求失败时维持“未解析”状态：不能把网络错误当作“没有房间”。
+                // Party tab 下次激活或用户下拉刷新会重新尝试，期间不显示 My Room/Create Room。
+                didLoadMyRoom = false
+                AppLogger.party.notice("[PartyListStore] loadMyRoom failed before first success; hide room entry and retry later")
+            }
+            // reload 场景失败：保留已成功确认过的 myRoom 和 didLoadMyRoom，避免入口闪变。
         }
     }
 

@@ -38,6 +38,7 @@ struct PartyTabRootView: View {
         NavigationStack(path: $path) {
             PartyListMainView(
                 listStore: listStore,
+                isLobbyVisible: path.isEmpty,
                 onTapCreate: tapCreate,
                 onTapMyRoom: { roomId in
                     // v2：已有 myRoom 时点击浮动按钮直接进自己的房（对齐 H5 index.vue L191-207）
@@ -47,7 +48,13 @@ struct PartyTabRootView: View {
                     handleTapRoom(room)
                 },
                 onTapSearch: { path.append(PartyRoute.search) },
-                onTapRanking: { path.append(HomeLeaderboardRoute.ranking) }
+                onTapRanking: { path.append(PartyRoute.lobbyRanking(.partyRich)) },
+                onTapBannerRoom: { roomId in
+                    path.append(PartyRoute.room(id: roomId, password: nil))
+                },
+                onEnterTopRoomGuide: { roomId in
+                    enterTopRoomGuide(roomId)
+                }
             )
             .navigationDestination(for: PartyRoute.self) { route in
                 switch route {
@@ -65,15 +72,23 @@ struct PartyTabRootView: View {
                             Task { await listStore.reloadMyRoom() }
                         }
                     )
-                case .room(let id, let password):
-                    PartyRoomView(roomId: id, password: password) { targetRoomId in
+                case let .room(id, password, entryPath):
+                    PartyRoomView(roomId: id, password: password, entryPath: entryPath) { targetRoomId, targetEntryPath in
                         if !path.isEmpty { path.removeLast() }
-                        path.append(PartyRoute.room(id: targetRoomId, password: nil))
+                        path.append(PartyRoute.room(
+                            id: targetRoomId,
+                            password: nil,
+                            entryPath: targetEntryPath
+                        ))
                     }
                 case .search:
                     PartySearchView(onTapRoom: { room in
                         handleTapRoom(room)
                     })
+                case .lobbyRanking(let kind):
+                    PartyLobbyRankingView(initialKind: kind) { roomId in
+                        path.append(PartyRoute.room(id: roomId, password: nil))
+                    }
                 }
             }
             // Party 大厅右上角榜单与首页复用同一目的地，避免维护两套榜单页面。
@@ -128,6 +143,16 @@ struct PartyTabRootView: View {
         } else {
             path.append(PartyRoute.room(id: rid, password: nil))
         }
+    }
+
+    private func enterTopRoomGuide(_ roomId: String) {
+        guard SelfPermissionBridge.shared.gate(.party, action: "enterTopRoomGuide") else { return }
+        if LiveStore.shared.state == .living {
+            permissionDeniedToast = L10n.Party.mutexBlockedByLive
+            return
+        }
+        guard !roomId.isEmpty else { return }
+        path.append(PartyRoute.room(id: roomId, password: nil, entryPath: .topRoomGuide))
     }
 
     private struct PasswordRoom: Identifiable {

@@ -24,6 +24,7 @@ enum PartyPublicChatAdapter {
         myIsVip: Bool,
         myChatBubble: String?,
         myRoleRaw: Int?,
+        myIsPlatformAdmin: Bool = false,
         myHeadFrame: String? = nil
     ) -> UnifiedPublicChatMessage {
         let role = myRoleRaw.flatMap(PartyRole.init(rawValue:))
@@ -37,7 +38,7 @@ enum PartyPublicChatAdapter {
             role: role,
             medals: [],
             chatBubble: myChatBubble,
-            isPlatformAdmin: false,
+            isPlatformAdmin: myIsPlatformAdmin,
             isSelf: true,
             isNewUser: false,
             nicknameColor: .default,
@@ -64,7 +65,7 @@ enum PartyPublicChatAdapter {
         )
     }
 
-    /// 1019 房管变更系统消息（仅本人被设/取消）。
+    /// 1019 房管变更系统消息。
     static func systemAuthUpdate(text: String) -> UnifiedPublicChatMessage {
         UnifiedPublicChatMessage(
             sender: nil,
@@ -122,7 +123,7 @@ enum PartyPublicChatAdapter {
 
     // MARK: - 送礼消息（2049）
 
-    /// 2049 送礼 → `.gift` variant。iconURL/name 由 caller 从后端字段派生（`giftSmallImg / giftName`）。
+    /// 2049 送礼 → `.gift` variant。iconURL/name 由 caller 从后端字段派生（H5 公屏使用 `smallImg`）。
     /// v3+（2026-07-16）:senderAvatar 透传到 SenderProfile.avatarURL；主播本人送礼时 payload 缺 avatar
     /// 可通过 `myAvatarFallback` 兜底（Store 层从 AnchorInfoStore/SessionStore 传入）
     static func gift(
@@ -133,7 +134,14 @@ enum PartyPublicChatAdapter {
     ) -> UnifiedPublicChatMessage {
         return UnifiedPublicChatMessage(
             sender: makeGiftSender(event: event, myUserId: myUserId, myAvatarFallback: myAvatarFallback),
-            variant: .gift(iconURL: iconURL, name: event.giftName ?? "", count: event.num)
+            variant: .gift(
+                iconURL: iconURL,
+                name: event.giftName ?? "",
+                count: event.num,
+                recipients: event.recipients.map {
+                    PublicChatGiftRecipient(userId: $0.userId, nickname: $0.nickname, avatarURL: $0.avatarURL)
+                }
+            )
         )
     }
 
@@ -148,6 +156,36 @@ enum PartyPublicChatAdapter {
         return UnifiedPublicChatMessage(
             sender: makeGiftSender(event: event, myUserId: myUserId, myAvatarFallback: myAvatarFallback),
             variant: .luckyGift(iconURL: iconURL, count: event.num, totalReward: totalReward)
+        )
+    }
+
+    /// 197 首礼时刻。Party 与 Live 共享 payload；`isFirstGift` 决定固定礼盒样式还是后端配置样式。
+    static func firstGiftMoment(
+        payload: [String: Any],
+        myUserId: String?
+    ) -> UnifiedPublicChatMessage? {
+        let renderedText = (payload["renderedText"] as? String) ?? ""
+        let backgroundURL = payload["bgImageUrl"] as? String
+        guard !renderedText.isEmpty || backgroundURL?.isEmpty == false else { return nil }
+
+        let userId = PartyValueNormalizer.stringify(payload["userId"] ?? payload["sendUserId"])
+        let nickname = (payload["nickname"] as? String) ?? ""
+        let isSelf = userId != nil && userId == myUserId
+        let sender = SenderProfile(
+            userId: userId,
+            nickname: nickname,
+            avatarURL: (payload["userIcon"] as? String) ?? (payload["avatar"] as? String),
+            isSelf: isSelf,
+            nicknameColor: .default
+        )
+        return UnifiedPublicChatMessage(
+            sender: sender,
+            variant: .firstGiftMoment(
+                backgroundURL: backgroundURL,
+                renderedText: renderedText,
+                giftIconURL: (payload["giftSmallImg"] as? String) ?? (payload["giftImg"] as? String),
+                isFirstGift: boolify(payload["isFirstGift"])
+            )
         )
     }
 
@@ -183,18 +221,21 @@ enum PartyPublicChatAdapter {
         // 兼容 winAmount 是 Number 或 String
         let winAmountStr: String = {
             if let s = payload["winAmount"] as? String { return s }
+            if let s = payload["amount"] as? String { return s }
             if let n = payload["winAmount"] as? NSNumber { return n.stringValue }
+            if let n = payload["amount"] as? NSNumber { return n.stringValue }
             return ""
         }()
         let nickname = (payload["nickname"] as? String) ?? ""
         let gameName = (payload["gameName"] as? String) ?? ""
         guard !nickname.isEmpty || !gameName.isEmpty else { return nil }
         let gameWin = GameWinPayload(
-            avatar: payload["avatar"] as? String,
+            userId: PartyValueNormalizer.stringify(payload["userId"] ?? payload["sendUserId"] ?? payload["winnerUserId"]),
+            avatar: (payload["avatar"] as? String) ?? (payload["picture"] as? String),
             nickname: nickname,
             winAmount: winAmountStr,
             gameName: gameName,
-            gameIcon: payload["gameIcon"] as? String
+            gameIcon: (payload["gameIcon"] as? String) ?? (payload["listPageIcon"] as? String)
         )
         return UnifiedPublicChatMessage(
             sender: nil,
@@ -203,27 +244,40 @@ enum PartyPublicChatAdapter {
     }
 
     /// 140 活动中奖公屏广播（含 worldcup 世界杯活动卡）。
-    /// **⚠️ 首次真机接入需 preflight**：期望字段 `activityName/quantity/imageURL/joinCTA/avatar`。
-    static func winnerBroadcast(payload: [String: Any]) -> UnifiedPublicChatMessage? {
+    static func winnerBroadcast(payload: [String: Any], myUserId: String?) -> UnifiedPublicChatMessage? {
+        // H5 Party 只展示派对房(userType=1 / roomType=1)的广播，避免把 Live 广播混入当前列表。
+        guard PartyValueNormalizer.intify(payload["userType"]) == 1,
+              PartyValueNormalizer.intify(payload["roomType"]) == 1 else {
+            return nil
+        }
         let activity = (payload["activityName"] as? String) ?? ""
         guard !activity.isEmpty else { return nil }
         let qty = PartyValueNormalizer.intify(payload["quantity"])
-        // imageURL 兼容 messageImage / imageURL 两种字段名
-        let imageURL = (payload["imageURL"] as? String)
-                    ?? (payload["messageImage"] as? String)
-                    ?? (payload["image"] as? String)
-        // joinCTA 兼容 messageJoin / joinCTA 两种字段名
-        let joinCTA = (payload["joinCTA"] as? String) ?? (payload["messageJoin"] as? String)
+        let userId = PartyValueNormalizer.stringify(payload["userId"] ?? payload["sendUserId"] ?? payload["winnerUserId"])
+        let nickname = (payload["nickname"] as? String) ?? ""
+        let sender = SenderProfile(
+            userId: userId,
+            nickname: nickname,
+            avatarURL: payload["avatar"] as? String,
+            isSelf: userId != nil && userId == myUserId,
+            nicknameColor: .default
+        )
         let avatar = payload["avatar"] as? String
         return UnifiedPublicChatMessage(
-            sender: nil,
+            sender: sender,
             variant: .winnerBroadcast(
                 activityName: activity,
                 quantity: qty,
-                imageURL: imageURL,
-                joinCTA: joinCTA,
-                avatar: avatar
-            )
+                messageImageURL: (payload["messageImage"] as? String) ?? (payload["imageURL"] as? String),
+                prizeImageURL: payload["image"] as? String,
+                joinCTA: (payload["messageJoin"] as? String) ?? (payload["joinCTA"] as? String),
+                avatar: avatar,
+                validDays: PartyValueNormalizer.intify(payload["validDays"]),
+                nicknameColorHex: payload["messageNicknameColor"] as? String,
+                prizeColorHex: payload["messagePrizeColor"] as? String,
+                cardType: payload["cardType"] as? String
+            ),
+            actionURL: payload["activityUrl"] as? String
         )
     }
 

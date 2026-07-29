@@ -1,5 +1,6 @@
 import SafariServices
 import SwiftUI
+import WebKit
 
 /// 派对房主舞台（设计稿视觉重排 2026-07-11）。
 ///
@@ -22,8 +23,10 @@ struct PartyRoomView: View {
     let roomId: String
     /// v8：密码房进房时传入（对齐 H5 clickRoomItem 密码框语义）；普通房传 nil
     var password: String? = nil
+    /// 仅 `topRoomGuide` 来源可触发掉出 TOPX 后的换房提醒。
+    var entryPath: PartyRoomEntryPath = .standard
     /// 热门房引导确认后由 PartyTabRoot 替换当前路由，避免子页直接持有 NavigationPath。
-    var onSwitchToHotRoom: ((String) -> Void)? = nil
+    var onSwitchToHotRoom: ((String, PartyRoomEntryPath) -> Void)? = nil
 
     @ObservedObject private var store = PartyStore.shared
     /// 观众数权威源（对齐 H5 party.js:1017 NIM notification type=0/1 ++/--）：
@@ -41,6 +44,9 @@ struct PartyRoomView: View {
     @FocusState private var isInputFocused: Bool
     /// v16.11：键盘高度（`UIResponder.keyboardWillShow/Hide` 订阅）—— inputBar 手动 padding 上移
     @State private var keyboardHeight: CGFloat = 0
+    /// H5 `footer-wrap.vue` 的房内一键发送词条；关闭仅作用于当前房间会话。
+    @State private var quickPhrases: [PartyQuickPhrase] = []
+    @State private var areQuickPhrasesDismissed = false
     @State private var showSelfActions: Bool = false
     @State private var showError: Bool = false
     /// 1040 视频位邀请倒计时；到零时主动回传 `respondInvite(action: 3)`。
@@ -50,8 +56,8 @@ struct PartyRoomView: View {
     @State private var showSettings: Bool = false
     /// v8.1 房间工具 sheet（enum-driven 单 sheet 切换，规避 iOS 16 双 sheet race）
     @State private var activeRoomTool: PartyRoomToolSheetKind? = nil
-    /// tools sheet 内 stub 项 tap 时 toast
-    @State private var stubToolToast: String? = nil
+    /// 视频位邀请/麦位限制等房内操作的即时反馈 toast。
+    @State private var roomActionToast: String? = nil
     /// E v2 §1：Room Mode 二次确认 sheet 之间共享的 pending tempId（模板 grid 选中 → 弹确认 sheet）
     @State private var pendingRoomModeTempId: Int? = nil
     /// v9：公告只读 sheet 显隐（对齐 H5 announcement-popup.vue，MVP 只读；房主/房管编辑权限 F 期补）
@@ -64,14 +70,22 @@ struct PartyRoomView: View {
     @State private var showShareInviteSheet: Bool = false
     /// 顶部活动 Banner 点击后的应用内网页承载，不触发 PartyRoomView 生命周期。
     @State private var activeCornerBannerURL: PartyCornerBannerPresentation?
+    /// 中奖公屏 Join 的活动半屏页；保持 Party 房 RTC/NIM 会话不断开。
+    @State private var winnerActivityPage: H5Page?
+    /// Party 半屏游戏承载。由右下角游戏 Banner 唯一触发，避免轮播页各自挂 sheet。
+    @State private var activePartyGame: PartyGamePresentation?
     /// v9：更多菜单 action sheet 显隐（对齐 H5 more-tool-popup.vue Minimize/Exit）
     @State private var showMoreActions: Bool = false
     // v16（2026-07-14）：关注态改从 `store.isFollowingAnchor` 读，进房时 room/enter 接口的
     // `isFollowOwner` 字段初始化；本地 @State 已删除以避免"退出重进显示未关注"的状态漂移。
     /// v12：底部工具栏 message 按钮 → 复用 Live 侧 ConversationSheetContent 半屏消息列表
     @State private var showMessageSheet: Bool = false
+    /// 名片卡 Message → 半屏私聊；挂在 PartyRoomView 顶层避免与房间内其他 sheet 竞争。
+    @State private var chatSheetPeerYxAccid: String? = nil
     /// 底部工具栏 Tools 面板（对齐 H5 party-tool-menu.vue）。
     @State private var showToolMenu: Bool = false
+    /// Tools 面板关闭后要呈现的下一个界面；由 sheet 的 onDismiss 消费，避免 dismiss/present 同帧竞争。
+    @State private var pendingToolMenuPresentation: ToolMenuPresentation?
     /// H5 music-mini-widget：房主/房管点击打开音乐管理，普通用户只切换本端收听。
     @State private var showMusicSheet: Bool = false
     /// 幸运数字配置页由 Tools 面板关闭后延迟拉起，规避 iOS 双 sheet 切换 race。
@@ -80,14 +94,13 @@ struct PartyRoomView: View {
     /// v12：消息未读徽章（对齐 [swiftui-keepalive-publisher-isolation] 复用 Live 侧 bridge pattern）
     @StateObject private var unreadBridge = MessageEntryUnreadBridge()
     /// P2-10：sortedSeats 缓存
-    /// 名片卡 Message → 半屏私聊；挂在 PartyRoomView 顶层避免与房间内其他 sheet 竞争。
-    @State private var chatSheetPeerYxAccid: String? = nil
     @State private var sortedSeatsCache: [PartyRoomSeat] = []
-    /// 聊天区 tab（视觉状态本地维护；MVP 阶段 All/Chat/Gift 共用同一消息列表，
-    /// 实际按 kind 过滤留待 F 期在 PartyMessageListView 内实现）
+    /// 聊天区当前筛选（All / Chat / Gift；过滤逻辑在 PartyMessageListView 内集中处理）。
     @State private var chatFilter: PartyRoomChatFilter = .all
     /// v15：他人麦位 tap → UserCardPopup 显示（对齐 H5 openUserCard；nil = 不显示）
     @State private var userCardForUserId: String? = nil
+    /// 麦位点击时已有的用户资料；目标切换或关闭时通过 userId 对齐，避免旧资料串到新名片卡。
+    @State private var userCardPreview: UserCardPreview? = nil
     /// v15：已在 A 麦位点 B 空位 → 切麦确认（对齐 H5 EnterSwitchPopup；nil = 不显示）
     @State private var switchSeatPendingTarget: PartyRoomSeat? = nil
     /// v15：房主/房管点空位 → 弹管理动作 dialog（Take/Lock/Unlock；对齐 H5 my-mic-tool.vue 简化版）
@@ -96,9 +109,13 @@ struct PartyRoomView: View {
     @State private var seatInvitePresentation: PartySeatInvitePresentation? = nil
     /// H-5：礼物面板 sheet 显隐（点底部礼物 icon 触发；对齐 H5 party-gift-popup.vue showPartyGiftPopup）
     @State private var showGiftPanel: Bool = false
+    /// 普通礼物与背包共用的收礼人选择；关闭完整礼物架后按 H5 的新建面板语义重置。
+    @StateObject private var giftRecipientSelection = GiftRecipientSelectionState()
+    /// 从用户名片卡进入礼物架时锁定的单个收礼人（对齐 H5 `giftPopupRecipient`）。
+    @State private var giftRecipientOverride: ReceiverItem? = nil
+    /// Party 背包从普通礼物面板内层拉起；关闭后仍保留普通礼物面板和当前收礼人选择。
+    @State private var showPartyBackpack: Bool = false
     /// H-5：送礼成功 toast（sheet 内触发；主 body overlay 显示避免被 sheet 遮挡）
-    /// 麦位点击时已有的用户资料；目标切换或关闭时通过 userId 对齐，避免旧资料串到新名片卡。
-    @State private var userCardPreview: UserCardPreview? = nil
     @State private var giftSentToast: String? = nil
     /// F 里程碑（2026-07-17）：表情面板 sheet 显隐（对齐 H5 party-expression-popup.vue showEmojiPopup）
     @State private var showExpressionPanel: Bool = false
@@ -128,13 +145,24 @@ struct PartyRoomView: View {
     @State private var battleGiftTeam: Int = 1
     /// 安卓 Party 周任务：P2P 1022/1023 进度与奖励的房内展示。
     @ObservedObject private var weeklyTaskStore = PartyWeeklyTaskStore.shared
+    /// H5 Super Winner 1150-1156 的房内转盘状态机。
+    @ObservedObject private var superWheelStore = PartySuperWheelStore.shared
     @State private var showWeeklyTaskSheet = false
     @ObservedObject private var hotTaskStore = PartyHotRoomTaskStore.shared
     @State private var showHotTaskSheet = false
+    /// 热门任务 sheet 的 dismiss 动画完成前，Super Winner 保持待展示，避免同一容器并发 present。
+    @State private var isHotTaskSheetPresentationActive = false
 
     /// 顶栏 Rank / Viewers sheet enum-driven state（对齐 H5 room-rank.vue，同一 sheet 3 mode 切换；
     /// nil = 不显示。左侧财富数 tap → .contribution、荣耀数 tap → .honor、观众数 tap → .viewers）
     @State private var activeRankSheet: PartyRoomRankMode? = nil
+
+    private enum ToolMenuPresentation {
+        case pk
+        case superWheel
+        case luckyNumberSettings
+    }
+
     // MARK: - 顶层 body
 
     var body: some View {
@@ -143,6 +171,10 @@ struct PartyRoomView: View {
             // v23（2026-07-13）派对房进场特效：与 giftEffectScene 并列驱动 EnterEffectCenter
             // scopeId 同源用 roomInfo?.id（与 PartyStore.didReceiveEnterAnimation 内 EnterEffectCenter.enqueue 的 scopeId 强对齐）
             .enterEffectScene(.party, scopeId: store.roomInfo?.id ?? roomId)
+            .chatDetailBottomSheet(
+                peer: $chatSheetPeerYxAccid,
+                selfYxAccId: SessionStore.shared.user?.yxAccid ?? ""
+            )
             // v16.14：不再挂 .ignoresSafeArea(.keyboard) —— 换新架构：
             // inputBar 从 contentColumn VStack 拆出到 stageContent ZStack 作独立 sibling（alignment: .bottom），
             // contentColumn 挂 .ignoresSafeArea(.keyboard) 阻止避让。SwiftUI 默认避让只作用于 inputBar 层，
@@ -160,16 +192,17 @@ struct PartyRoomView: View {
             // 隐藏 nav bar：Party 房是全屏视觉铺满自定义顶栏，无系统 nav bar。
             // 保留 navigationBarBackButtonHidden 副作用禁 interactive pop（对齐 [default-swipe-back-on-push-pages] 业务态防误退例外）。
             .navigationBarBackButtonHidden(true)
-            .chatDetailBottomSheet(
-                peer: $chatSheetPeerYxAccid,
-                selfYxAccId: SessionStore.shared.user?.yxAccid ?? ""
-            )
             .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showSettings) {
                 settingsSheet.giftPanelSheetBackground()
                     .presentationDetents([.fraction(0.5), .fraction(0.8)])
             }
-            .sheet(isPresented: $showAnnouncement) { announcementSheet.giftPanelSheetBackground() }
+            .sheet(isPresented: $showAnnouncement) {
+                announcementSheet
+                    .giftPanelSheetBackground()
+                    .presentationDetents([.fraction(0.5), .fraction(0.8)])
+                    .presentationDragIndicator(.visible)
+            }
             .sheet(isPresented: $showMusicSheet) {
                 PartyMusicManagementSheet(store: store)
                     .giftPanelSheetBackground()
@@ -180,12 +213,29 @@ struct PartyRoomView: View {
             .sheet(item: $activeCornerBannerURL) { presentation in
                 PartyActivitySafariView(url: presentation.url)
                     .ignoresSafeArea()
+                    .presentationDetents([.fraction(0.5), .fraction(0.8)])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $winnerActivityPage) { page in
+                H5WebSheetView(page: page, onAction: handleWinnerActivityAction)
+                    .presentationDetents([.fraction(0.5)])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(item: $activePartyGame) { presentation in
+                PartyHalfScreenGameSheet(presentation: presentation)
+                    .presentationDetents([.height(presentation.preferredHeight)])
+                    .presentationDragIndicator(.visible)
             }
             // v8.1 房间工具 sheet（单一挂点，enum 切换 tools / settings 内嵌 push）
             .sheet(item: $activeRoomTool) { kind in
-                roomToolContent(kind: kind)
-                    .giftPanelSheetBackground()
-                    .presentationDetents([.fraction(0.5), .fraction(0.8)])
+                if kind == .roomMode {
+                    roomToolContent(kind: kind)
+                        .giftPanelSheetBackground()
+                } else {
+                    roomToolContent(kind: kind)
+                        .giftPanelSheetBackground()
+                        .presentationDetents([.fraction(0.5), .fraction(0.8)])
+                }
             }
             // P1-7：sheet dismiss（用户 swipe 关 / closure 关都会走）清 pending seatIndex，
             // 避免下次打开 sheet 仍带上次 pending（可能已被别人坐了）
@@ -242,24 +292,49 @@ struct PartyRoomView: View {
             }
             .animation(.easeInOut(duration: 0.2), value: giftSentToast == nil)
             .overlay(alignment: .top) {
-                if let t = stubToolToast {
+                if let t = roomActionToast {
                     Text(t)
                         .toastStyle()
                         .transition(Toast.transition)
                         .task(id: t) {
                             try? await Task.sleep(nanoseconds: Toast.dismissDurationNanos)
-                            stubToolToast = nil
+                            roomActionToast = nil
                         }
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: stubToolToast == nil)
+            .animation(.easeInOut(duration: 0.2), value: roomActionToast == nil)
             .confirmationDialog(L10n.PartyRoom.moreMenuTitle, isPresented: $showMoreActions, titleVisibility: .visible) {
                 moreActionsButtons
             }
             .onAppear(perform: handleAppear)
             .onChange(of: store.seatList, perform: handleSeatListChange)
+            .onChange(of: store.isLocalCameraActive) { _ in
+                hotTaskStore.reevaluateFaceCheck()
+            }
+            .onChange(of: store.effectiveSelfCameraEnabled) { _ in
+                hotTaskStore.reevaluateFaceCheck()
+            }
+            .onChange(of: showGiftPanel) { isPresented in
+                guard !isPresented else { return }
+                showPartyBackpack = false
+                giftRecipientOverride = nil
+                giftRecipientSelection.reset()
+            }
             .onChange(of: store.roomState) { state in
-                if state == .ended { stopTaskTracking() }
+                switch state {
+                case .entering, .joined:
+                    startTaskTrackingIfNeeded()
+                case .ended:
+                    stopTaskTracking()
+                    // 被踢或收到 1009 关闭/限制通知后，退房已由 Store 完成；房间页也必须回到列表。
+                    // H5 同样在这两类通知后立即离开房间，而不是留在失效的房间 UI。
+                    if case .some(.kicked) = store.lastError {
+                        AppToastCenter.shared.show(L10n.Party.errorKicked)
+                        dismiss()
+                    }
+                default:
+                    break
+                }
             }
             .onDisappear(perform: handleDisappear)
     }
@@ -289,6 +364,17 @@ struct PartyRoomView: View {
                 Button(L10n.Party.ok) { store.clearLastError() }
             } message: {
                 Text(store.lastError?.errorDescription ?? "")
+            }
+            .alert(
+                L10n.Party.alertTitle,
+                isPresented: Binding(
+                    get: { store.partyAuditWarningMessage != nil },
+                    set: { if !$0 { store.clearPartyAuditWarning() } }
+                )
+            ) {
+                Button(L10n.Party.ok) { store.clearPartyAuditWarning() }
+            } message: {
+                Text(store.partyAuditWarningMessage ?? "")
             }
             .onChange(of: store.lastError?.errorDescription ?? "", perform: handleLastErrorChange)
             .onChange(of: store.lastInviteResult, perform: handleVideoSeatInviteResult)
@@ -411,24 +497,32 @@ struct PartyRoomView: View {
                 showRules: $showBattleRules
             ))
             .modifier(PartyWeeklyTaskUIModifier(
-                store: weeklyTaskStore,
-                isTaskSheetPresented: $showWeeklyTaskSheet,
+                weeklyStore: weeklyTaskStore,
+                hotStore: hotTaskStore,
+                isWeeklyTaskPresented: $showWeeklyTaskSheet,
+                isHotTaskPresented: hotTaskSheetPresented,
+                onHotTaskDismiss: { isHotTaskSheetPresentationActive = false },
                 roomId: store.roomInfo?.id ?? roomId
             ))
-            .sheet(isPresented: $showHotTaskSheet) {
-                PartyHotRoomTaskSheet(status: hotTaskStore.status)
-                    .giftPanelSheetBackground()
-                    .presentationDetents([.fraction(0.5), .fraction(0.8)])
-            }
-            .sheet(item: Binding(
-                get: { hotTaskStore.guide },
-                set: { if $0 == nil { hotTaskStore.dismissGuide() } }
-            )) { guide in
-                PartyHotRoomGuideSheet(guide: guide, onSwitch: switchToHotRoom)
-                    .giftPanelSheetBackground()
-                    .presentationDetents([.fraction(0.5), .fraction(0.8)])
+            .overlay {
+                if let guide = hotTaskStore.guide {
+                    PartyTopRoomBonusDialog(
+                        kind: .outOfTop,
+                        guide: guide,
+                        topRankLimit: hotTaskStore.topRankLimit,
+                        onDismiss: hotTaskStore.dismissGuide,
+                        onConfirm: { switchToHotRoom(guide) }
+                    )
+                }
             }
             .partyLuckyNumberWinOverlay(store: store)
+            .overlay {
+                if let notification = hotTaskStore.pendingReward {
+                    PartyHotTaskRewardOverlay(notification: notification) {
+                        hotTaskStore.dismissReward(notification.id)
+                    }
+                }
+            }
             .preferredColorScheme(.dark)
     }
 
@@ -440,8 +534,9 @@ struct PartyRoomView: View {
             contentColumn
             // H5 Party 专属静态礼物效果：中央缩放、收礼麦位缩放和最多三条送礼飘屏。
             PartyGiftEffectOverlay()
-            partyBannerCarousel
-            partyMusicWidget
+            PartyEnterFloatingOverlay(message: store.enterFloatingMessage)
+            FirstGiftFloat(queue: store.firstGiftFloatQueue)
+            partyPluginStack
             // v8：进房 loading overlay（对齐 H5 clickRoomItem 全屏 isSearchLoading 反馈）
             // 显示条件：preparing / entering 态；joined 或 ended 时消失让房内 UI 显现
             if store.roomState == .preparing || store.roomState == .entering {
@@ -451,33 +546,60 @@ struct PartyRoomView: View {
         .ignoresSafeArea(.container, edges: .horizontal)
     }
 
-    /// 右下角活动轮播位。底部留出输入栏高度，键盘出现时随输入栏一起上移。
-    @ViewBuilder
-    private var partyBannerCarousel: some View {
-        if let banners = store.roomInfo?.bannerList {
-            PartyRoomBannerCarousel(banners: banners, onTap: handlePartyBannerTap)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-                .padding(.trailing, Theme.Metric.partyRoomScreenH)
-                .padding(.bottom, 88 + keyboardHeight)
-        }
-    }
-
-    /// H5 右下角插件容器中的音乐小组件。与 Banner 分开定位，避免 Banner 缺失时音乐入口上跳。
-    private var partyMusicWidget: some View {
-        PartyMusicMiniWidget(
-            settings: store.roomMusicSettings,
-            isAudible: store.isRoomMusicAudible,
-            onTap: {
-                if store.selfRole == .owner || store.selfRole == .admin {
-                    showMusicSheet = true
-                } else {
-                    store.toggleRoomMusicAudible()
+    /// 右下角插件队列：私 call → 活动 Banner → 游戏 Banner → 音乐小组件。
+    /// 所有项目处于同一纵向容器，统一向下、向右对齐，且各项目不可见时不产生占位。
+    /// 底部随输入栏/键盘整体上移。
+    private var partyPluginStack: some View {
+        VStack(alignment: .trailing, spacing: 8) {
+            if !store.partyPrivateCallHiddenForPK {
+                PartyRoomPrivateCallButton(
+                    isOn: privateCallOn,
+                    selectedGiftIcon: store.partyCallGiftIcon,
+                    selectedGiftPrice: store.partyCallGiftPrice,
+                    isLoading: store.isTogglingPrivateCall,
+                    onToggle: handlePartyCallToggle,
+                    onTapGift: handlePartyCallGiftReselect
+                )
+                // 容器基础间距为 8pt；私 call 与 Banner 单独对齐为 10pt。
+                .padding(.bottom, hasDisplayablePartyBanner ? 2 : 0)
+            }
+            if hasDisplayablePartyBanner, let banners = store.roomInfo?.bannerList {
+                PartyRoomBannerCarousel(banners: banners, onTap: handlePartyBannerTap)
+            }
+            // 半屏游戏暂不接入，隐藏房内游戏 Banner 入口。
+            if superWheelStore.isActive {
+                PartySuperWheelFloatingButton {
+                    superWheelStore.isPanelPresented = true
                 }
             }
-        )
+            PartyMusicMiniWidget(
+                settings: store.roomMusicSettings,
+                isAudible: store.isRoomMusicAudible,
+                onTap: {
+                    if store.selfRole == .owner || store.selfRole == .admin {
+                        showMusicSheet = true
+                    } else {
+                        store.toggleRoomMusicAudible()
+                    }
+                }
+            )
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-        .padding(.trailing, 8)
-        .padding(.bottom, 118 + keyboardHeight)
+        .padding(.trailing, Theme.Metric.partyRoomScreenH)
+        .padding(.bottom, partyPluginBottomInset)
+    }
+
+    private var hasDisplayablePartyBanner: Bool {
+        store.roomInfo?.bannerList?.contains(where: \.isDisplayable) == true
+    }
+
+    private var hasVisibleQuickPhrases: Bool {
+        !areQuickPhrasesDismissed && !quickPhrases.isEmpty
+    }
+
+    /// 常规输入栏上方保留 16pt；快捷词条增加 42pt 高度后上移 36pt，保留 10pt 间距。
+    private var partyPluginBottomInset: CGFloat {
+        88 + keyboardHeight + (hasVisibleQuickPhrases ? 36 : 0)
     }
 
     /// 进房 loading：半透黑底 + ProgressView + 文案（对齐 PartySearchView loadingOverlay 模式）
@@ -536,20 +658,44 @@ struct PartyRoomView: View {
                 // v3：上内边距再 +6pt（8 → 16 → 22），与 status bar/dynamic island 更宽松呼吸位
                 .padding(.top, 22)
             if isBattleActive {
-                pkBattleHeader
-                    .padding(.horizontal, 8)
-                    .padding(.top, 4)
-                    .padding(.bottom, 4)
+                pkActiveContent
+            } else {
+                bigSeatRow
+                smallSeatGrid
+                    .padding(.top, 12)
             }
-            bigSeatRow
-            smallSeatGrid
-                .padding(.top, 12)
             chatArea
             Spacer(minLength: 0)
             inputBar
         }
         // v16.11：contentColumn 层阻止 SwiftUI 默认键盘避让
         .ignoresSafeArea(.keyboard, edges: .bottom)
+    }
+
+    /// PK 的渐变底色需连续覆盖比分、视频位、麦位与 Top3，而非只停在顶部 HUD。
+    private var pkActiveContent: some View {
+        VStack(spacing: 0) {
+            pkBattleHeader
+                .padding(.horizontal, 8)
+            bigSeatRow
+            smallSeatGrid
+                .padding(.top, 8)
+        }
+        .padding(.bottom, 8)
+        .background(pkBattleBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var pkBattleBackground: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(red: 0.66, green: 0.0, blue: 0.42),
+                Color(red: 0.46, green: 0.08, blue: 0.43),
+                Color(red: 0.0, green: 0.35, blue: 0.50),
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
     }
 
     // MARK: - 顶部主播条
@@ -588,13 +734,22 @@ struct PartyRoomView: View {
             onMoreTap: handleMoreTap,
             onRankTap: handleRankTap,
             onViewerTap: handleViewerTap,
-            // 任务接口首次失败时也必须保留入口，用户可在面板内重新拉取，不能因空列表永久失去重试路径。
-            showWeeklyTask: weeklyTaskStore.showsTopProgress,
-            weeklyTaskProgress: weeklyTaskStore.topProgress,
-            onWeeklyTaskTap: { showWeeklyTaskSheet = true },
+            // 入口直接由 room/enter.rewardQuantity 控制，避免异步 tracking 时序让入口短暂或永久缺失。
+            showWeeklyTask: (store.roomInfo?.rewardQuantity ?? 0) > 0,
+            weeklyTaskRewardQuantity: max(0, store.roomInfo?.rewardQuantity ?? weeklyTaskStore.rewardQuantity),
+            onWeeklyTaskTap: {
+                startTaskTrackingIfNeeded()
+                showWeeklyTaskSheet = true
+            },
             showHotTask: hotTaskStore.showsEntry,
             hotTaskStatus: hotTaskStore.status,
-            onHotTaskTap: { showHotTaskSheet = true },
+            hotTaskTopRankLimit: hotTaskStore.topRankLimit,
+            onHotTaskTap: {
+                if hotTaskStore.status?.isActive == true {
+                    Task { await hotTaskStore.loadMissionRules() }
+                    presentHotTaskSheet()
+                }
+            },
             // 对齐安卓 tvMicApplicationNum：queueSeatNum>0 时管理按钮显示红角标（房主/房管专属）
             managementBadge: store.queueSeatNum
         )
@@ -651,7 +806,17 @@ struct PartyRoomView: View {
     /// - `0`：整行隐藏（纯语聊模板）
     @ViewBuilder
     private var bigSeatRow: some View {
-        if bigSeats.count == 1 {
+        if battleStore.isSelecting, !bigSeats.isEmpty {
+            PkSelectingVideoTripleView(
+                bigSeats: bigSeats,
+                battleStore: battleStore,
+                isSelf: isSelf,
+                isLocalCameraActive: store.isLocalCameraActive,
+                camera: store.camera,
+                engine: store.rtc,
+                onSeatTap: handleSeatTap
+            )
+        } else if bigSeats.count == 1 {
             singleBigSeat(bigSeats[0])
         } else if bigSeats.count == 6 {
             sixBigSeatGrid
@@ -663,9 +828,8 @@ struct PartyRoomView: View {
     /// v12：1 视频位模板 —— 对齐 H5 `.video-wrap h-180` 容器 + `w-186` 内层视频 cell 居中
     /// 小屏 (<380pt) 高降为 156pt（对齐 H5 `@media (max-width: 380px)`）
     private func singleBigSeat(_ seat: PartyRoomSeat) -> some View {
-        let containerHeight: CGFloat = isBattleActive
-            ? 157
-            : (UIScreen.main.bounds.width < 380 ? 156 : 180)
+        let baseHeight: CGFloat = UIScreen.main.bounds.width < 380 ? 156 : 180
+        let containerHeight = isBattleActive ? baseHeight - 40 : baseHeight
         return HStack(spacing: 0) {
             Spacer(minLength: 0)
             PartyRoomBigSeatCell(
@@ -692,7 +856,7 @@ struct PartyRoomView: View {
     /// 显式挂 `.frame(height:)` 让 seat 脱离 flex，键盘弹起时不受影响。
     private var sixBigSeatGrid: some View {
         let total = bigSeats.count
-        return LazyVGrid(columns: sixBigSeatColumns, spacing: 4) {
+        return LazyVGrid(columns: sixBigSeatColumns, spacing: 2) {
             ForEach(Array(bigSeats.enumerated()), id: \.element.stableId) { idx, seat in
                 PartyRoomBigSeatCell(
                     seat: seat,
@@ -700,43 +864,39 @@ struct PartyRoomView: View {
                     isLocalCameraActive: store.isLocalCameraActive,
                     camera: store.camera,
                     engine: store.rtc,
-                    aspectRatio: isBattleActive ? sixBigSeatBattleAspectRatio : 6.0 / 5.0
+                    aspectRatio: 6.0 / 5.0
                 )
                 // 视频位按 index 判定色边（对齐 H5 pkVideoSlotTeamClass：首位红 / 末位蓝）
                 .partyBattleVideoSeatRing(index: idx, total: total)
+                .clipShape(RoundedRectangle(
+                    cornerRadius: isBattleActive ? 8 : 0,
+                    style: .continuous
+                ))
                 .onTapGesture { handleSeatTap(seat) }
             }
         }
-        .padding(.horizontal, isBattleActive ? 8 : 4)
+        .padding(.horizontal, 4)
         .frame(height: sixBigSeatGridHeight)
     }
 
     private var sixBigSeatColumns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 4), count: 3)
+        Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
     }
 
-    /// 6 视频位模板固定高度：cellW = (屏宽 - 2*4 hPadding - 2*4 colSpacing) / 3，cellH = cellW * 5/6，总高 = 2 行 + 1 rowSpacing
+    /// 6 视频位模板固定高度：cellW = (屏宽 - 2*4 hPadding - 2*2 colSpacing) / 3，cellH = cellW * 5/6，总高 = 2 行 + 1 rowSpacing
     private var sixBigSeatGridHeight: CGFloat {
-        if isBattleActive { return 157 }
         let screenW = UIScreen.main.bounds.width
-        let cellW = (screenW - 16) / 3   // 16 = 2*4 padding + 2*4 col spacing
+        let cellW = (screenW - 12) / 3   // 12 = 2*4 padding + 2*2 col spacing
         let cellH = cellW * 5.0 / 6.0
-        return cellH * 2 + 4   // 2 行 + 1 行 spacing
+        let baseHeight = cellH * 2 + 2   // 2 行 + 1 行 spacing
+        return isBattleActive ? max(0, baseHeight - 40) : baseHeight
     }
 
-    /// PK 时视频区域总高固定为 157pt；6 位模板按两行均分该高度。
-    private var sixBigSeatBattleAspectRatio: CGFloat {
-        // 8pt 左右边距 + 两个 4pt 列间距。
-        let cellW = (UIScreen.main.bounds.width - 24) / 3
-        let cellH: CGFloat = (157 - 4) / 2
-        return cellW / cellH
-    }
-
-    /// v11 沿用：2/3/其他 count → HStack 均分屏宽 + 每 cell 9/16 竖屏
-    /// **固定 height**：同 sixBigSeatGrid 理由 —— aspectRatio(.fit) 会被键盘 padding 挤压。
+    /// 对齐 H5 `main-wrap.vue`：2/3/其他视频位共用 `video-wrap h-180`，横向均分。
+    /// 视频内容自身使用 `.hidden`/`.aspectFill` 铺满这个固定容器并从中心裁切。
     private var multiBigSeatRow: some View {
         let total = bigSeats.count
-        return HStack(spacing: Theme.Metric.partyRoomBigSeatGap) {
+        return HStack(spacing: multiBigSeatGap) {
             ForEach(Array(bigSeats.enumerated()), id: \.element.stableId) { idx, seat in
                 PartyRoomBigSeatCell(
                     seat: seat,
@@ -748,30 +908,44 @@ struct PartyRoomView: View {
                 )
                 // 视频位按 index 判定色边（对齐 H5 pkVideoSlotTeamClass：首位红 / 末位蓝 / 中间无色）
                 .partyBattleVideoSeatRing(index: idx, total: total)
+                .clipShape(RoundedRectangle(
+                    cornerRadius: isBattleActive ? 8 : 0,
+                    style: .continuous
+                ))
                 .onTapGesture { handleSeatTap(seat) }
             }
         }
-        .padding(.horizontal, isBattleActive ? 8 : 0)
+        .padding(.horizontal, multiBigSeatHorizontalInset)
         .frame(height: multiBigSeatRowHeight)
         // v9：已按 seat.seatType 分组（video→大位，voice→小位）—— 对齐 H5 main-wrap.vue
     }
 
-    /// 2/3/其他视频位模板固定高度：cellW = (屏宽 - (n-1)*gap) / n，cellH = cellW * 16/9（竖屏 9:16）
+    /// H5 `video-wrap` uses a fixed 180pt row (156pt on narrow screens),
+    /// so the video content can crop within a stable container instead of
+    /// changing the room layout based on screen width.
     private var multiBigSeatRowHeight: CGFloat {
-        if isBattleActive { return 157 }
-        let n = CGFloat(max(bigSeats.count, 1))
-        let gap = Theme.Metric.partyRoomBigSeatGap
-        let cellW = (UIScreen.main.bounds.width - gap * (n - 1)) / n
-        return cellW * 16.0 / 9.0
+        let baseHeight: CGFloat = UIScreen.main.bounds.width < 380 ? 156 : 180
+        return isBattleActive ? baseHeight - 40 : baseHeight
     }
 
-    /// PK 时保持各视频位等宽，并以 157pt 的固定行高计算比例。
+    /// 以实际容器宽高计算 cell 比例，避免 `.aspectRatio(.fit)` 改变 H5 的固定行高。
     private var multiBigSeatAspectRatio: CGFloat {
-        guard isBattleActive else { return 9.0 / 16.0 }
         let n = CGFloat(max(bigSeats.count, 1))
-        let gap = Theme.Metric.partyRoomBigSeatGap
-        let cellW = (UIScreen.main.bounds.width - 16 - gap * (n - 1)) / n
-        return cellW / 157
+        let gap = multiBigSeatGap
+        let horizontalPadding = multiBigSeatHorizontalInset * 2
+        let cellW = (UIScreen.main.bounds.width - horizontalPadding - gap * (n - 1)) / n
+        return cellW / multiBigSeatRowHeight
+    }
+
+    /// H5 adds 16pt horizontal inset below 380pt; PK uses 12pt on regular screens.
+    private var multiBigSeatHorizontalInset: CGFloat {
+        if UIScreen.main.bounds.width < 380 { return 16 }
+        return isBattleActive ? 12 : 0
+    }
+
+    /// H5 PK RUNNING `pk-triple` 使用 4pt gap；非 PK 视频位不留间距。
+    private var multiBigSeatGap: CGFloat {
+        isBattleActive ? 4 : Theme.Metric.partyRoomBigSeatGap
     }
 
     /// v9：按 seatType 分组（对齐 H5 main-wrap.vue slice(0, videoMicNum)）
@@ -787,15 +961,13 @@ struct PartyRoomView: View {
     /// - 默认（≥10 或有视频位）→ 3/5 列 flex-wrap（对齐 H5 L332 flex-wrap w-68）
     @ViewBuilder
     private var smallSeatGrid: some View {
-        if !smallSeats.isEmpty {
+        // H5 在 SELECTING/RUNNING 时无条件挂载 PkTeamBoxes 和底部 Top3。
+        // 不能受音频麦数量或视频位数量限制，否则部分 Battle Team 房型根本不会显示贡献头像。
+        if isBattleActive {
+            pkBattleArea
+        } else if !smallSeats.isEmpty {
             Group {
-                // F-1a v3 · PK SELECTING/RUNNING 期 5+5 麦位模板 → 切到 PkTeamBoxes 红蓝盒
-                // 对齐 H5 main-wrap.vue :313 `<template v-if="inPkMode"><PkTeamBoxes /></template>`
-                // 其他模板（30 麦 / ≤8 麦 / 大 grid）沿用原布局（H5 也未强制这些模板走 PK 盒）
-                if (battleStore.isSelecting || battleStore.isRunning),
-                   smallSeats.count >= 10, bigSeats.count <= 3 {
-                    pkBattleArea
-                } else if smallSeats.count == 30 && bigSeats.isEmpty {
+                if smallSeats.count == 30 && bigSeats.isEmpty {
                     smallSeatGrid30
                 } else if smallSeats.count <= 8 && bigSeats.isEmpty {
                     smallSeatSplitLayout
@@ -833,7 +1005,7 @@ struct PartyRoomView: View {
 
             if battleStore.isSelecting {
                 PartyBattleSelectingStartStrip(store: battleStore)
-                    .padding(.top, 2)
+                    .padding(.top, 8)
             } else {
                 PartyBattleHostBottomMarquee(store: battleStore)
                     .padding(.horizontal, 12)
@@ -869,6 +1041,7 @@ struct PartyRoomView: View {
                     seat: seat,
                     isSelf: isSelf(seat),
                     isSpeaking: store.isSpeaking(seat: seat),
+                    isVoicePrintActive: store.isVoicePrintActive(seat: seat),
                     sizeVariant: variant
                 )
                 .partyBattleSeatRing(seat: seat)
@@ -888,6 +1061,7 @@ struct PartyRoomView: View {
                     seat: seat,
                     isSelf: isSelf(seat),
                     isSpeaking: store.isSpeaking(seat: seat),
+                    isVoicePrintActive: store.isVoicePrintActive(seat: seat),
                     sizeVariant: .sm
                 )
                 .partyBattleSeatRing(seat: seat)
@@ -944,6 +1118,7 @@ struct PartyRoomView: View {
             seat: seat,
             isSelf: isSelf(seat),
             isSpeaking: store.isSpeaking(seat: seat),
+            isVoicePrintActive: store.isVoicePrintActive(seat: seat),
             sizeVariant: variant
         )
         .frame(width: cellW)
@@ -977,37 +1152,16 @@ struct PartyRoomView: View {
             canDeleteTextMessages: store.selfRole == .owner || store.selfRole == .admin,
             onDeleteTextMessage: { message in
                 await store.deletePartyMessage(message)
-            }
+            },
+            onWinnerActivity: openWinnerActivity
         )
         .padding(.top, 6)
-        // F-spec 派对房私 call 浮动开关按钮（房主 only；roomInfo 已加载才判定角色，未加载时兜底显示防误隐）
-        // 位置：chatArea bottomTrailing —— 对齐设计稿"聊天区右下角靠近输入栏"（避免遮挡顶部欢迎语）
-        .overlay(alignment: .bottomTrailing) {
-            if shouldShowPrivateCallButton {
-                PartyRoomPrivateCallButton(
-                    isOn: privateCallOn,
-                    selectedGiftIcon: store.partyCallGiftIcon,
-                    selectedGiftPrice: store.partyCallGiftPrice,
-                    isLoading: store.isTogglingPrivateCall,
-                    onToggle: handlePartyCallToggle,
-                    onTapGift: handlePartyCallGiftReselect
-                )
-                .padding(.trailing, 12)
-                .padding(.bottom, 8)
-            }
-        }
-    }
-
-    /// 房主可见 + roomInfo 未加载完（selfRole 恒 .audience）时兜底显示，防止用户以为按钮被 guard 隐藏
-    private var shouldShowPrivateCallButton: Bool {
-        // 若 roomInfo 尚未加载 → 兜底显示（roomInfo 到达后 selfRole 精确判定）
-        guard store.roomInfo != nil else { return true }
-        return store.selfRole == .owner
     }
 
     // MARK: - F-spec 派对房私 call
 
-    /// 派生态：从 `store.roomInfo.partyPrivateCallOpen` 单向流动（1029 广播 / setPrivateCall API 成功后回写自动同步）
+    /// 派生态：从 `store.roomInfo.partyPrivateCallOpen` 单向流动；PK 状态由 PartyStore
+    /// 先快照并关闭，结束后恢复，避免页面重建或小窗状态造成开关漂移。
     private var privateCallOn: Bool {
         store.roomInfo?.isPartyPrivateCallEnabled == true
     }
@@ -1017,6 +1171,7 @@ struct PartyRoomView: View {
     ///           若无 → 拉起 `CommonGiftPanel.callGate` 让房主选礼物；confirm 后才 API set enable=1
     /// - 开 → 关：直接 `PartyStore.setPrivateCall(enable: false)`（视觉切换由 store 回写驱动）
     private func handlePartyCallToggle(_ next: Bool) {
+        guard !store.partyPrivateCallHiddenForPK else { return }
         if next {
             if let existingGiftId = store.roomInfo?.partyCallGiftId, !existingGiftId.isEmpty {
                 Task { await store.setPrivateCall(enable: true, giftId: existingGiftId) }
@@ -1035,6 +1190,7 @@ struct PartyRoomView: View {
     /// tap 按钮上的礼物 icon —— 无论开关状态都可以重选礼物（弹 gift panel）
     /// 复用与 `handlePartyCallToggle` 开启态相同的 sheet；confirm 后走 setPrivateCall(enable: true) 更新礼物
     private func handlePartyCallGiftReselect() {
+        guard !store.partyPrivateCallHiddenForPK else { return }
         Task { @MainActor in
             activeRoomTool = nil
             try? await Task.sleep(nanoseconds: 200_000_000)
@@ -1058,6 +1214,8 @@ struct PartyRoomView: View {
             showMicApplicationButton: (store.selfRole == .owner || store.selfRole == .admin) && store.micApplicationSwitchOn,
             // 排麦队列红角标（对齐安卓 tvMicApplicationNum）
             micApplicationBadge: store.queueSeatNum,
+            quickPhrases: quickPhrases,
+            showsQuickPhrases: hasVisibleQuickPhrases,
             // v16.10：focus 桥（focused 时收起右侧按钮，对齐 LiveRoomView pattern）
             focus: $isInputFocused,
             onSubmit: sendText,
@@ -1070,7 +1228,9 @@ struct PartyRoomView: View {
             // 排麦快捷入口 tap：直接开 Mic Application sheet（绕过 Tools sheet）
             onMicApplicationTap: {
                 activeRoomTool = .micApplicationList
-            }
+            },
+            onQuickPhraseTap: sendQuickPhrase,
+            onQuickPhrasesClose: { areQuickPhrasesDismissed = true }
         )
         // v2：下内边距 20pt 让按钮行距 home indicator 更宽松呼吸位
         .padding(.bottom, 20)
@@ -1135,17 +1295,17 @@ struct PartyRoomView: View {
         guard let result else { return }
         switch result.kind {
         case .rejected:
-            stubToolToast = L10n.Party.videoSeatInviteRejected
+            roomActionToast = L10n.Party.videoSeatInviteRejected
         case .timeout:
-            stubToolToast = L10n.Party.videoSeatInviteTimeout
+            roomActionToast = L10n.Party.videoSeatInviteTimeout
         case .leave:
-            stubToolToast = L10n.Party.videoSeatInviteLeave
+            roomActionToast = L10n.Party.videoSeatInviteLeave
         case .occupied:
-            stubToolToast = L10n.Party.videoSeatInviteOccupied
+            roomActionToast = L10n.Party.videoSeatInviteOccupied
         case .alreadyOn:
-            stubToolToast = L10n.Party.videoSeatInviteAlreadyOn
+            roomActionToast = L10n.Party.videoSeatInviteAlreadyOn
         case .joinFailed:
-            stubToolToast = L10n.Party.videoSeatInviteJoinFailed
+            roomActionToast = L10n.Party.videoSeatInviteJoinFailed
         case .accepted, .broadcast:
             break
         }
@@ -1158,8 +1318,14 @@ struct PartyRoomView: View {
         if let me = store.selfSeat {
             let micOn = (me.microphoneEnabled ?? 0) == 1 && (me.seatMicrophoneEnabled ?? 0) == 1
             if me.isVideoSeat {
-                // 视频位仅保留历史本人关麦数据的修复入口，不提供关麦。
-                if me.isUserMicrophoneMuted {
+                // 视频位不提供禁麦；历史脏数据需要走管理员解禁接口，而不是 updateMedia。
+                if me.isSeatMicrophoneProhibited,
+                   (store.selfRole == .owner || store.selfRole == .admin),
+                   let seatIndex = me.seatIndex {
+                    Button(L10n.userCardPartyUnmute) {
+                        Task { await store.requestProhibitSeat(seatIndex: seatIndex, mute: false) }
+                    }
+                } else if me.isUserMicrophoneMuted {
                     Button(L10n.Party.selfMicOn) {
                         Task { await store.toggleSelfMedia(type: 1, enable: true) }
                     }
@@ -1186,7 +1352,7 @@ struct PartyRoomView: View {
 
     private func handleAppear() {
         // 长时间无操作自动离线：派对房中暂停监测（对齐 H5 isBusy 停 timer）
-        AutoOfflineMonitor.shared.suspend()
+        store.suspendAutoOfflineMonitorIfNeeded()
         // 用户诉求 2026-07-09：进派对房 = 独占摄像头，若匹配中先静默关匹配
         if MatchStore.shared.state == .matching {
             Task { await MatchStore.shared.closeMatch(silent: true) }
@@ -1196,26 +1362,30 @@ struct PartyRoomView: View {
         // F 里程碑（spec §3.4 P0-2）：挂 CallStore observer 监听 PartyCall 通话结束触发 resumeParty
         // NSHashTable 多观察者数组，与 LiveStore attach 互不干扰
         CallStore.shared.attach(store)
+        Task { await loadQuickPhrases() }
         guard !didStartEnter else { return }
         didStartEnter = true
         Task {
             await ensureEntered()
-            guard store.roomState == .joined else { return }
-            weeklyTaskStore.beginTracking(roomId: store.roomInfo?.id ?? roomId)
-            hotTaskStore.beginTracking(roomId: store.roomInfo?.id ?? roomId)
-            await weeklyTaskStore.load()
+            // `enterRoom` 在 RTC/NIM 双就绪前就返回 .entering；任务接口不依赖该双就绪，
+            // 此处同步启动，状态观察器则覆盖后续重连和已就绪路径。
+            startTaskTrackingIfNeeded()
         }
     }
 
     /// 双守卫防误退房：scenePhase != .background + 仅活跃态才 leave
     private func handleDisappear() {
         guard scenePhase != .background else { return }
+        // H5 小窗只卸载房间页面，RTC/IM/任务追踪仍必须继续；真正退出才执行下方清理。
+        guard !store.isMinimized else { return }
         // F 里程碑：显式 detach（NSHashTable weak 会自动清，但显式调用是最佳实践）
         CallStore.shared.detach(store)
-        AutoOfflineMonitor.shared.resume()
-        stopTaskTracking()
+        store.resumeAutoOfflineMonitorIfNeeded()
         if store.roomState == .joined || store.roomState == .entering {
+            // leaveRoom 会先读取热门任务的 TopX 状态用于离房埋点，再统一停止各任务追踪。
             Task { await store.leaveRoom() }
+        } else {
+            stopTaskTracking()
         }
     }
 
@@ -1224,14 +1394,35 @@ struct PartyRoomView: View {
         hotTaskStore.stopTracking()
     }
 
+    private func startTaskTrackingIfNeeded() {
+        guard store.roomState == .entering || store.roomState == .joined else { return }
+        let trackedRoomId = store.roomInfo?.id ?? roomId
+        weeklyTaskStore.beginTracking(
+            roomId: trackedRoomId,
+            rewardQuantity: store.roomInfo?.rewardQuantity ?? 0
+        )
+        hotTaskStore.beginTracking(roomId: trackedRoomId, entryPath: entryPath)
+        AppLogger.party.info("[PartyTask] tracking started state=\(store.roomState.debugDesc, privacy: .public) roomId=\(trackedRoomId, privacy: .public)")
+        Task { await weeklyTaskStore.load() }
+    }
+
     private func switchToHotRoom(_ guide: PartyHotRoomGuide) {
         hotTaskStore.dismissGuide()
-        guard guide.roomId != roomId else { return }
-        onSwitchToHotRoom?(guide.roomId)
+        let currentRoomId = store.roomInfo?.id ?? roomId
+        // 全部热门房暂时无空麦时，服务端仍返回第一名。主播可进入房间等待，不应阻断跳转。
+        guard guide.roomId != currentRoomId else { return }
+        Task {
+            // 路由替换前先结束旧 RTC/IM 会话，避免新房 `enterRoom` 与旧房 leave 并发互相清状态。
+            if store.roomState == .joined || store.roomState == .entering {
+                await store.leaveRoom()
+            }
+            onSwitchToHotRoom?(guide.roomId, .topRoomGuide)
+        }
     }
 
     private func handleSeatListChange(_ newList: [PartyRoomSeat]) {
         sortedSeatsCache = newList.sorted { ($0.seatIndex ?? 0) < ($1.seatIndex ?? 0) }
+        hotTaskStore.reevaluateFaceCheck()
     }
 
     private func handleLastErrorChange(_ msg: String) {
@@ -1239,7 +1430,17 @@ struct PartyRoomView: View {
     }
 
     private func ensureEntered() async {
-        if store.roomState == .joined, store.roomInfo?.id == roomId { return }
+        if store.roomState == .joined, store.roomInfo?.id == roomId {
+            if store.isMinimized {
+                store.restoreMinimizedRoom()
+            }
+            return
+        }
+        // 从最小化 Party 房切入另一房时，先完成标准退房（退 RTC/NIM/心跳）再进新房，
+        // 不走 forceLeave，避免旧房后台会话干扰新房。
+        if store.isMinimized {
+            await store.leaveMinimizedRoom()
+        }
         if store.roomState != .idle, store.roomState != .ended {
             await store.forceLeaveRoom(.userRequest)
         }
@@ -1271,6 +1472,7 @@ struct PartyRoomView: View {
         }
         if seat.occupied, let uid = seat.userId, !uid.isEmpty {
             // 他人占用位一律走名片卡；管理员操作由 UserCardPopup 内嵌 admin row 承接
+            userCardPreview = seat.userCardPreview
             userCardForUserId = uid
             return
         }
@@ -1281,17 +1483,17 @@ struct PartyRoomView: View {
             return
         }
         if seat.isMCSeat {
-            stubToolToast = L10n.Party.mcSeatCannotTake
+            roomActionToast = L10n.Party.mcSeatCannotTake
             return
         }
         if (seat.lockFlag ?? 0) == 1 {
-            stubToolToast = L10n.PartyRoom.seatLockedToast
+            roomActionToast = L10n.PartyRoom.seatLockedToast
             return
         }
         // H5 `joinOrOutMic` 对普通用户的空视频位直接拦截，不能因排麦开关开启而进入申请流，
         // 也不能由已在其他麦位的状态进入切麦确认。
         if seat.seatType == PartyRoomSeatType.video.rawValue {
-            stubToolToast = L10n.PartyRoom.videoSeatNeedsInviteToast
+            roomActionToast = L10n.PartyRoom.videoSeatNeedsInviteToast
             return
         }
         // 已在麦 → 换麦（视频/语音位均可切）
@@ -1324,7 +1526,7 @@ struct PartyRoomView: View {
         if let mineUidInt = SessionStore.shared.user?.userId, uid == String(mineUidInt) { return nil }
 
         let targetSeat = store.seatList.first { $0.userId == uid }
-        let targetRole = targetSeat?.typedRole
+        let targetRole = store.partyRole(for: uid)
         // 首个空音频位(seatType == voice + isOccupied==0 + lockFlag != 1);目标不在麦时 Take 用此位
         let firstEmptyAudioSeatIndex: Int? = store.seatList
             .first { seat in
@@ -1354,8 +1556,11 @@ struct PartyRoomView: View {
                 // 不关闭 sheet:mute 后等 IM 1008 广播 → seat.seatMicrophoneEnabled 更新
             },
             onSetAdmin: { targetUserId, add in
-                Task { await store.requestSetAdmin(userId: targetUserId, add: add) }
-                userCardForUserId = nil
+                Task {
+                    guard await store.requestSetAdmin(userId: targetUserId, add: add) else { return }
+                    userCardForUserId = nil
+                    userCardPreview = nil
+                }
             },
             onKickOutRoom: { seatIndex, targetUserId, banType in
                 Task { await store.requestKickOutRoom(seatIndex: seatIndex, targetUserId: targetUserId, banType: banType) }
@@ -1442,7 +1647,6 @@ struct PartyRoomView: View {
                 Task { await store.requestLockSeat(seatIndex: idx, lock: !locked) }
             }
             // H5 `changeMC`：从空 MC 位的管理菜单打开 MC 设置页，而不是直接改当前位。
-            userCardPreview = seat.userCardPreview
             // 当前 iOS 的 MC API 权限与顶部工具入口一致，仅房主/平台超管可配置。
             if seat.isMCSeat, store.selfRole == .owner {
                 Button(L10n.Party.mcSeatChange) {
@@ -1465,6 +1669,29 @@ struct PartyRoomView: View {
         guard !txt.isEmpty, store.roomState == .joined else { return }
         store.chat.sendText(txt)
         inputText = ""
+        // 与 H5 一致：用户主动发送普通聊天后收起快捷词条栏。
+        areQuickPhrasesDismissed = true
+    }
+
+    /// 对齐 H5 `getQuickPhrases(2)`：主播端使用 audienceType=2；接口失败不打断进房。
+    private func loadQuickPhrases() async {
+        do {
+            quickPhrases = try await PartyAPI.quickPhrases(audienceType: 2)
+                .filter { !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                .sorted { $0.orderNumber < $1.orderNumber }
+            areQuickPhrasesDismissed = false
+        } catch {
+            quickPhrases = []
+            AppLogger.party.warning("[PartyRoom] load quick phrases failed error=\(String(describing: error), privacy: .private)")
+        }
+    }
+
+    /// 快捷词条不改动当前输入内容或键盘焦点；与 H5 `sendQuickPhrase(..., false)` 相同。
+    private func sendQuickPhrase(_ phrase: PartyQuickPhrase) {
+        let content = phrase.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty, store.roomState == .joined else { return }
+        store.chat.sendText(content)
+        areQuickPhrasesDismissed = true
     }
 
     // MARK: - 顶部工具栏 handler
@@ -1504,11 +1731,58 @@ struct PartyRoomView: View {
         presentActivityURL(url)
     }
 
+    private func handlePartyGameTap(_ game: PartyBannerGame) {
+        guard activePartyGame == nil, game.isLaunchable,
+              let roomId = store.roomInfo?.id, !roomId.isEmpty else { return }
+        Task { @MainActor in
+            guard let url = await PartyGameURLBuilder.makeURL(game: game, roomId: roomId) else { return }
+            activePartyGame = PartyGamePresentation(game: game, url: url)
+        }
+    }
+
     private func presentActivityURL(_ url: URL) {
         if url.scheme == "http" || url.scheme == "https" {
             activeCornerBannerURL = PartyCornerBannerPresentation(url: url)
         } else {
             UIApplication.shared.open(url)
+        }
+    }
+
+    /// H5 `winner_broadcast` 在房内打开半屏活动页；活动页关闭后仍停留在原 Party 房。
+    @MainActor
+    private func openWinnerActivity(_ rawURL: String) {
+        guard let url = sanitizedWinnerActivityURL(rawURL),
+              url.scheme?.lowercased() == "https",
+              url.host != nil else {
+            AppLogger.party.notice("[PartyWinner] ignored invalid activity URL")
+            return
+        }
+        winnerActivityPage = H5Page(
+            url: url,
+            bridgeMode: .trusted(H5TrustedOriginPolicy(origins: [url])),
+            runtimeContext: .activity()
+        )
+    }
+
+    private func sanitizedWinnerActivityURL(_ rawURL: String) -> URL? {
+        guard let url = URL(string: rawURL),
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+        components.queryItems?.removeAll { ["roomId", "roomType", "reportParams"].contains($0.name) }
+        return components.url
+    }
+
+    @MainActor
+    private func handleWinnerActivityAction(_ action: H5BridgeAction) {
+        switch action {
+        case .goLive, .goRoom, .close:
+            winnerActivityPage = nil
+        case .goProfile(let userId):
+            winnerActivityPage = nil
+            if let userId, !userId.isEmpty { userCardForUserId = userId }
+        default:
+            break
         }
     }
 
@@ -1551,7 +1825,7 @@ struct PartyRoomView: View {
     /// v8.1 房间工具 sheet（enum-driven 单 sheet 切换）：
     /// - .tools → PartyRoomToolsSheet（3 列网格）
     /// - .settings → 房主设置编辑页
-    /// - .blocklist → 黑名单页（F 期实现，MVP stub）
+    /// - .blocklist → 黑名单管理页
     @ViewBuilder
     private func roomToolContent(kind: PartyRoomToolSheetKind) -> some View {
         switch kind {
@@ -1629,14 +1903,6 @@ struct PartyRoomView: View {
                             activeRoomTool = .mcSeat
                         }
                     }
-                },
-                onTapStub: { label in
-                    // 关 sheet + 顶部 toast
-                    Task { @MainActor in
-                        activeRoomTool = nil
-                        try? await Task.sleep(nanoseconds: 200_000_000)
-                        stubToolToast = "\(label): \(L10n.Party.toolComingSoon)"
-                    }
                 }
             )
             .presentationDetents([.fraction(0.5), .fraction(0.8)])
@@ -1672,19 +1938,17 @@ struct PartyRoomView: View {
             .presentationDetents([.fraction(0.5), .fraction(0.8)])
         case .roomMode:
             // E v2 §1 + §3 Sheet Mount Hoist：Room Mode 模板 grid → onConfirmRequest 上抛 → 切 .roomModeConfirm
-            NavigationStack {
-                PartyRoomModeSheet(
-                    store: store,
-                    onConfirmRequest: { tempId in
-                        Task { @MainActor in
-                            activeRoomTool = nil
-                            try? await Task.sleep(nanoseconds: 350_000_000)
-                            pendingRoomModeTempId = tempId
-                            activeRoomTool = .roomModeConfirm
-                        }
+            PartyRoomModeSheet(
+                store: store,
+                onConfirmRequest: { tempId in
+                    Task { @MainActor in
+                        activeRoomTool = nil
+                        try? await Task.sleep(nanoseconds: 350_000_000)
+                        pendingRoomModeTempId = tempId
+                        activeRoomTool = .roomModeConfirm
                     }
-                )
-            }
+                }
+            )
             .preferredColorScheme(.dark)
         case .roomModeConfirm:
             // E v2 §1：二次确认 → onConfirm 调 store.switchRoomMode 完成切模板
@@ -1890,12 +2154,59 @@ struct PartyRoomView: View {
         showToolMenu = true
     }
 
+    private var hotTaskSheetPresented: Binding<Bool> {
+        Binding(
+            get: { showHotTaskSheet },
+            set: { isPresented in
+                showHotTaskSheet = isPresented
+                if isPresented { isHotTaskSheetPresentationActive = true }
+            }
+        )
+    }
+
+    private var superWheelPanelPresented: Binding<Bool> {
+        Binding(
+            get: { superWheelStore.isPanelPresented && !isHotTaskSheetPresentationActive },
+            set: { isPresented in
+                if !isPresented { superWheelStore.isPanelPresented = false }
+            }
+        )
+    }
+
+    private func presentHotTaskSheet() {
+        isHotTaskSheetPresentationActive = true
+        showHotTaskSheet = true
+    }
+
+    private func presentPendingToolMenuPresentation() {
+        guard let presentation = pendingToolMenuPresentation else { return }
+        pendingToolMenuPresentation = nil
+
+        switch presentation {
+        case .pk:
+            handlePkTap()
+        case .superWheel:
+            if superWheelStore.isActive {
+                superWheelStore.isPanelPresented = true
+            } else {
+                Task { await superWheelStore.prepareConfig() }
+            }
+        case .luckyNumberSettings:
+            showLuckyNumberSettings = true
+        }
+    }
+
     /// 麦按钮：若已在麦，直接切自己 mic；未上麦不响应
     private func handleMicTap() {
         guard let me = store.selfSeat else { return }
         if me.isVideoSeat {
-            guard me.isUserMicrophoneMuted else { return }
-            Task { await store.toggleSelfMedia(type: 1, enable: true) }
+            guard let seatIndex = me.seatIndex else { return }
+            if me.isSeatMicrophoneProhibited,
+               (store.selfRole == .owner || store.selfRole == .admin) {
+                Task { await store.requestProhibitSeat(seatIndex: seatIndex, mute: false) }
+            } else if me.isUserMicrophoneMuted {
+                Task { await store.toggleSelfMedia(type: 1, enable: true) }
+            }
             return
         }
         let micOn = (me.microphoneEnabled ?? 0) == 1 && (me.seatMicrophoneEnabled ?? 0) == 1
@@ -1910,6 +2221,8 @@ struct PartyRoomView: View {
     /// H-5：底部礼物 icon tap → 拉起礼物面板（对齐 H5 party-gift-popup.vue showPartyGiftPopup=true）。
     /// 面板内首次 `.onAppear` 触发 `PartyGiftDataSource.load` → sapi `getPartyRoomGift` 拉列表。
     private func handleGiftTap() {
+        giftRecipientOverride = nil
+        giftRecipientSelection.reset()
         showGiftPanel = true
     }
 
@@ -1929,14 +2242,20 @@ struct PartyRoomView: View {
         let receivers = PartyGiftPanelBridge.makeReceiversConfig(
             seatList: store.seatList,
             selfYxAccid: SessionStore.shared.user?.yxAccid,
-            battlingUids: battlingUids
+            battlingUids: battlingUids,
+            recipientOverride: giftRecipientOverride,
+            selectionState: giftRecipientSelection
         )
         // CommonGiftPanel 将 config 存入 StateObject；切换红蓝队或成员变动时必须重建，
         // 否则收礼人行会继续显示初次打开面板时的队伍。
-        let receiverConfigID = "\(battleStore.pkId)-\(battleGiftTeam)-\(battlingUids?.sorted().map { String($0) }.joined(separator: ",") ?? "all")"
+        let receiverRosterID = receivers.items
+            .map { "\($0.id):\($0.seatIndex ?? 0)" }
+            .joined(separator: ",")
+        let receiverConfigID = "\(battleStore.pkId)-\(battleGiftTeam)-\(battlingUids?.sorted().map { String($0) }.joined(separator: ",") ?? "all")-\(receiverRosterID)"
         let config = CommonGiftPanelConfig.partySend(
             roomId: store.roomInfo?.id ?? roomId,
             receivers: receivers,
+            onOpenBackpack: { showPartyBackpack = true },
             onSend: { _, _, _ in
                 giftSentToast = L10n.giftPickerSentToast
             }
@@ -1949,6 +2268,20 @@ struct PartyRoomView: View {
             CommonGiftPanel(config: config)
                 .id(receiverConfigID)
         }
+        .sheet(isPresented: $showPartyBackpack) {
+            PartyBackpackGiftSheet(
+                roomId: store.roomInfo?.id ?? roomId,
+                receivers: receivers,
+                recipientSelection: giftRecipientSelection,
+                onSent: {
+                    giftSentToast = L10n.giftPickerSentToast
+                    showPartyBackpack = false
+                    showGiftPanel = false
+                }
+            )
+            .presentationDetents([.fraction(0.55), .large])
+            .presentationDragIndicator(.visible)
+        }
         // RUNNING 期 tab +54pt → fraction 从 0.4 上调到 0.5 容纳；非 PK 期沿用 0.4
         .presentationDetents(battleStore.isRunning ? [.fraction(0.5)] : [.fraction(0.4)])
         .preferredColorScheme(.dark)
@@ -1957,12 +2290,12 @@ struct PartyRoomView: View {
     // MARK: - v9 sheets & action dialogs
 
     /// 公告 sheet（对齐 H5 announcement-popup.vue）。
-    /// F 期房主管理批（2026-07-17）：房主/平台超管可切编辑态修改 greetingMessage 并 save。
+    /// F 期房主管理批（2026-07-17）：房主/平台超管可切编辑态修改独立 announcement 字段并 save。
     /// 权限判定：`store.selfRole == .owner`（平台超管已在 selfRole 层提权，见 PartyRoomInfo.selfRoleType）。
     @ViewBuilder
     private var announcementSheet: some View {
         NavigationStack {
-            let currentText = store.roomInfo?.greetingMessage ?? ""
+            let currentText = store.roomInfo?.announcement ?? ""
             let canEdit = store.selfRole == .owner
             ScrollView {
                 if isEditingAnnouncement {
@@ -2016,6 +2349,7 @@ struct PartyRoomView: View {
                             ProgressView()
                         } else {
                             Button(L10n.PartyRoom.announcementSave) { performSaveAnnouncement() }
+                                .disabled(!canSaveAnnouncement)
                         }
                     }
                 } else if canEdit {
@@ -2050,9 +2384,9 @@ struct PartyRoomView: View {
 
     /// F 期房主管理批：Save 通告。成功 toast + 关编辑态 + 关 sheet；失败 toast 保留编辑态供重试。
     private func performSaveAnnouncement() {
-        guard !isSavingAnnouncement else { return }
+        guard !isSavingAnnouncement, canSaveAnnouncement else { return }
         isSavingAnnouncement = true
-        let draft = announcementDraft
+        let draft = announcementDraft.trimmingCharacters(in: .whitespacesAndNewlines)
         Task { @MainActor in
             let ok = await store.updateAnnouncement(text: draft)
             isSavingAnnouncement = false
@@ -2066,10 +2400,19 @@ struct PartyRoomView: View {
         }
     }
 
+    private var canSaveAnnouncement: Bool {
+        let draft = announcementDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !draft.isEmpty && draft != (store.roomInfo?.announcement ?? "")
+    }
+
     /// 更多菜单 action sheet（对齐 H5 more-tool-popup.vue：Minimize + Exit）
     /// Minimize (PiP) 留 F 期，MVP 只提供 Exit + Cancel。
     @ViewBuilder
     private var moreActionsButtons: some View {
+        Button(L10n.Party.moreMenuMinimize) {
+            guard store.minimizeRoom() else { return }
+            dismiss()
+        }
         Button(L10n.PartyRoom.moreMenuLeave, role: .destructive) {
             // 退房逻辑（HTTP + RTC + Chat）后台跑；立即 dismiss 让用户感知不到接口延迟。
             // leaveRoom 内同步转 roomState = .leaving，handleDisappear guard 会拒绝重入，无重复请求。
@@ -2086,7 +2429,7 @@ struct PartyRoomView: View {
     private var stageContentWithFooterOverlays: some View {
         stageContent
             .sheet(isPresented: $showMessageSheet) { messageSheetContent.giftPanelSheetBackground() }
-            .sheet(isPresented: $showToolMenu) {
+            .sheet(isPresented: $showToolMenu, onDismiss: presentPendingToolMenuPresentation) {
                 PartyRoomToolMenuSheet(
                     luckyNumberStore: luckyNumberStore,
                     roomId: store.roomInfo?.id ?? roomId,
@@ -2094,25 +2437,45 @@ struct PartyRoomView: View {
                     showPk: battleStore.canManage
                         && battleStore.isFunctionEnabled
                         && store.roomInfo?.roomTempIdInt == 1,
+                    showSuperWheel: store.selfRole == .owner || store.selfRole == .admin,
                     isRoomMuted: store.isRoomMuted,
                     onStartPk: {
-                        Task { @MainActor in
-                            try? await Task.sleep(nanoseconds: 350_000_000)
-                            handlePkTap()
-                        }
+                        pendingToolMenuPresentation = .pk
+                    },
+                    onOpenSuperWheel: {
+                        pendingToolMenuPresentation = .superWheel
                     },
                     onToggleRoomMute: {
                         store.toggleRoomMute()
                     },
                     onOpenLuckyNumberSettings: {
-                        Task { @MainActor in
-                            try? await Task.sleep(nanoseconds: 350_000_000)
-                            showLuckyNumberSettings = true
-                        }
+                        pendingToolMenuPresentation = .luckyNumberSettings
                     }
                 )
                 .giftPanelSheetBackground()
                 .presentationDetents([.height(330)])
+                .presentationDragIndicator(.visible)
+            }
+            .sheet(
+                isPresented: $superWheelStore.isConfigPresented,
+                onDismiss: superWheelStore.presentQueuedPanelAfterConfigDismissal
+            ) {
+                PartySuperWheelConfigSheet(
+                    wheelStore: superWheelStore,
+                    roomId: store.roomInfo?.id ?? roomId
+                )
+                .giftPanelSheetBackground()
+                .presentationDetents([.height(360)])
+                .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: superWheelPanelPresented) {
+                PartySuperWheelPanel(
+                    wheelStore: superWheelStore,
+                    // H5 仅真实房主可中途关闭并退款；平台管理员的 Party 管理提权不等同该玩法所有权。
+                    isRoomOwner: store.isSelfRoomOwner
+                )
+                .giftPanelSheetBackground()
+                .presentationDetents([.fraction(0.65), .large])
                 .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showLuckyNumberSettings) {
@@ -2141,6 +2504,122 @@ struct PartyRoomView: View {
         .presentationDragIndicator(.visible)
     }
 
+}
+
+// MARK: - PartyEnterFloatingOverlay
+
+/// H5 `high-level-user-join.vue` 的房内进场条。
+///
+/// 状态和 2 秒串行队列由 `PartyStore` 持有；此视图只负责对应的 0.8s 右入、0.8s 停留、
+/// 0.4s 左出关键帧，不会在动画完成时抢先消费下一条。
+private struct PartyEnterFloatingOverlay: View {
+    let message: PartyEnterFloatingMessage?
+
+    var body: some View {
+        GeometryReader { proxy in
+            if let message {
+                PartyEnterFloatingRow(message: message, travelDistance: proxy.size.width)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(.leading, 15)
+                    .offset(y: proxy.size.height * 0.46)
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct PartyEnterFloatingRow: View {
+    let message: PartyEnterFloatingMessage
+    let travelDistance: CGFloat
+
+    @State private var horizontalOffset: CGFloat = 0
+    @State private var opacity: Double = 0
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if let level = message.userLevel {
+                UserLevelBadge(level: max(0, level), size: .small, showsZero: true)
+            }
+            if message.isVip {
+                VIPBadge(size: .small)
+            }
+            Text(message.nickname)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(Color(hex: 0x1AFFCD))
+                .lineLimit(1)
+                .frame(maxWidth: 74, alignment: .leading)
+            Text(L10n.publicScreenEnteredRoom)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 9)
+        .frame(minWidth: 212, maxWidth: 244, minHeight: 26, alignment: .leading)
+        .background { entryBackground }
+        .clipShape(Capsule())
+        .offset(x: horizontalOffset)
+        .opacity(opacity)
+        .task(id: message.id) {
+            horizontalOffset = max(0, travelDistance - 44)
+            opacity = 0
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+
+            // H5 `high-level-user-join.vue`: 0.8s 右入、0.8s 停留、0.4s 左出。
+            withAnimation(.easeOut(duration: 0.8)) { horizontalOffset = 0 }
+            withAnimation(.easeOut(duration: 0.64)) { opacity = 1 }
+            do {
+                try await Task.sleep(nanoseconds: 1_600_000_000)
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeIn(duration: 0.4)) {
+                    horizontalOffset = -travelDistance
+                }
+            } catch {
+                return
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var entryBackground: some View {
+        if let rawURL = Self.levelBorderURL(for: message.userLevel ?? 0),
+           let url = URL(string: rawURL) {
+            CachedAsyncImage(url: url, contentMode: .fill, persistent: true) {
+                standardEntryBackground
+            }
+        } else {
+            standardEntryBackground
+        }
+    }
+
+    private var standardEntryBackground: LinearGradient {
+        let base: Color
+        switch message.userLevel ?? 0 {
+        case 2...10: base = Color(hex: 0x5E5ACF)
+        case 11...20: base = Color(hex: 0xDE8484)
+        case 21...30: base = Color(hex: 0xBF865E)
+        case 31...40: base = Color(hex: 0xDD6D9B)
+        case 41...45: base = Color(hex: 0xE8629A)
+        default: base = Color(hex: 0x5F8FBC)
+        }
+        return LinearGradient(
+            colors: [base, base.opacity(0)],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+
+    private static func levelBorderURL(for level: Int) -> String? {
+        switch level {
+        case 46...50: return "https://img.hnhily.link/mstatic/live/level_border_7.webp"
+        case 51...55: return "https://img.hnhily.link/mstatic/live/level_border_8.webp"
+        case 56...60: return "https://img.hnhily.link/mstatic/live/level_border_9.webp"
+        case 61...65: return "https://img.hnhily.link/mstatic/live/level_border_10.webp"
+        case 66...: return "https://img.hnhily.link/mstatic/live/level_border_12.webp"
+        default: return nil
+        }
+    }
 }
 
 // MARK: - PartyRoomBackgroundView
@@ -2444,4 +2923,618 @@ private struct PartyActivitySafariView: UIViewControllerRepresentable {
 private struct PartyCornerBannerPresentation: Identifiable {
     let url: URL
     var id: String { url.absoluteString }
+}
+
+/// 半屏游戏展示上下文。游戏页由一个唯一的房间级 sheet 承载，避免轮播中多页重复呈现。
+private struct PartyGamePresentation: Identifiable {
+    let game: PartyBannerGame
+    let url: URL
+
+    var id: String { "\(game.id)_\(url.absoluteString)" }
+
+    /// H5 默认半屏游戏为正方形；`lingxian` 使用 375:530 的高画布。
+    var preferredHeight: CGFloat {
+        let screen = UIScreen.main.bounds
+        let typeFromURL = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?
+            .first(where: { ["gameType", "yomiGameType"].contains($0.name) })?
+            .value?
+            .lowercased()
+        let gameHeight = (typeFromURL ?? game.gameType?.lowercased()) == "lingxian"
+            ? screen.width / 375 * 530
+            : screen.width
+        return min(screen.height * 0.82, gameHeight + 36)
+    }
+}
+
+/// H5 `homeStore.openGame(item, 'partyBanner')` 的原生 URL 组装。
+/// URL 仅在这一处构造，确保所有游戏类型携带同一份 room/path ext，并杜绝 token 写入日志。
+@MainActor
+private enum PartyGameURLBuilder {
+    private static let partyPath = "partyBanner"
+
+    static func makeURL(game: PartyBannerGame, roomId: String) async -> URL? {
+        guard !game.gameId.isEmpty,
+              let rawLink = game.gameLink, !rawLink.isEmpty else {
+            return nil
+        }
+        let normalized = rawLink
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "%26", with: "&", options: .caseInsensitive)
+        let gameType = game.gameType?.lowercased() ?? ""
+        let ext = buildExt(gameId: game.gameId, gameSize: "half", roomId: roomId)
+
+        if gameType == "yomi" {
+            return await makeYomiURL(
+                rawLink: normalized,
+                game: game,
+                roomId: roomId,
+                ext: ext
+            )
+        }
+
+        guard let session = SessionStore.shared.user,
+              let userId = session.userId,
+              let imToken = session.imToken, !imToken.isEmpty else {
+            AppLogger.party.notice("[PartyGame] launch blocked: missing game session gameId=\(game.gameId, privacy: .public)")
+            return nil
+        }
+
+        if gameType == "hg" {
+            return replacingQueryItems(
+                in: normalized,
+                values: [
+                    "uid": String(userId),
+                    "token": imToken,
+                    "lang": hotGameLanguage,
+                    "gameType": "hg",
+                    "ext": ext,
+                ]
+            )
+        }
+
+        return replacingQueryItems(
+            in: normalized,
+            values: [
+                "token": imToken,
+                "uid": String(userId),
+                "ext": ext,
+            ]
+        )
+    }
+
+    private static func makeYomiURL(
+        rawLink: String,
+        game: PartyBannerGame,
+        roomId: String,
+        ext: String
+    ) async -> URL? {
+        let tokenCode: PartyGameTokenCode?
+        do {
+            tokenCode = try await PartyAPI.gameTokenCode()
+        } catch {
+            AppLogger.party.notice("[PartyGame] getTokenCode failed gameId=\(game.gameId, privacy: .public) err=\(String(describing: error), privacy: .private)")
+            return validatedWebURL(rawLink)
+        }
+        guard let tokenCode else {
+            AppLogger.party.notice("[PartyGame] getTokenCode empty gameId=\(game.gameId, privacy: .public)")
+            return validatedWebURL(rawLink)
+        }
+
+        if rawLink.range(of: "(?:^|[?&])version=v4(?:&|$)", options: .regularExpression) != nil {
+            guard var components = URLComponents(string: rawLink) else {
+                AppLogger.party.notice("[PartyGame] invalid Yomi v4 URL gameId=\(game.gameId, privacy: .public)")
+                return nil
+            }
+            var queryItems = components.queryItems ?? []
+            let configuredSize = queryItems
+                .first(where: { $0.name.caseInsensitiveCompare("platPayload") == .orderedSame })?
+                .value
+            queryItems.removeAll {
+                $0.name.caseInsensitiveCompare("platPayload") == .orderedSame
+            }
+            components.queryItems = queryItems
+            let v4Ext = buildExt(
+                gameId: game.gameId,
+                gameSize: configuredSize?.isEmpty == false ? configuredSize! : "half",
+                roomId: roomId
+            )
+            appendQueryItems(
+                to: &components,
+                values: [
+                    "lang": language,
+                    "platUserId": tokenCode.userId,
+                    "platAuthCode": tokenCode.code,
+                    "platPayload": v4Ext,
+                ]
+            )
+            guard let finalURL = components.url else { return nil }
+            return validatedWebURL(finalURL)
+        }
+
+        let usesPlatPayload = URLComponents(string: rawLink)?.queryItems?
+            .contains(where: { $0.name.caseInsensitiveCompare("platPayload") == .orderedSame }) == true
+        var values = [
+            "gameType": game.gameId,
+            "yomiGameType": game.gameType ?? "yomi",
+            "code": tokenCode.code,
+            "userId": tokenCode.userId,
+            "lang": language,
+            "roomId": game.appIds ?? "",
+            usesPlatPayload ? "platPayload" : "merchantPayload": ext,
+        ]
+        if let merchant = tokenCode.merchant { values["merchant"] = merchant }
+        if let platform = tokenCode.platform { values["platform"] = platform }
+        return replacingQueryItems(in: rawLink, values: values)
+    }
+
+    private static func buildExt(gameId: String, gameSize: String, roomId: String) -> String {
+        "\(gameId)_\(gameSize)__path$\(partyPath)__roomid$\(roomId)"
+    }
+
+    private static var language: String {
+        AppLocaleStore.shared.effectiveLanguage.rawValue
+    }
+
+    private static var hotGameLanguage: String {
+        ["en", "ar", "tr"].contains(language) ? language : "en"
+    }
+
+    private static func replacingQueryItems(in rawLink: String, values: [String: String]) -> URL? {
+        guard var components = URLComponents(string: rawLink) else {
+            AppLogger.party.notice("[PartyGame] invalid game URL")
+            return nil
+        }
+        appendQueryItems(to: &components, values: values)
+        guard let finalURL = components.url else { return nil }
+        return validatedWebURL(finalURL)
+    }
+
+    private static func validatedWebURL(_ rawLink: String) -> URL? {
+        URL(string: rawLink).flatMap(validatedWebURL)
+    }
+
+    private static func validatedWebURL(_ url: URL) -> URL? {
+        guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+            AppLogger.party.notice("[PartyGame] rejected non-web game URL")
+            return nil
+        }
+        return url
+    }
+
+    private static func appendQueryItems(to components: inout URLComponents, values: [String: String]) {
+        var items = components.queryItems ?? []
+        for (key, value) in values {
+            items.removeAll { $0.name.caseInsensitiveCompare(key) == .orderedSame }
+            items.append(URLQueryItem(name: key, value: value))
+        }
+        components.queryItems = items
+    }
+}
+
+/// H5 的 iframe 半屏游戏原生承载。离开 sheet 时停止加载，防止已关闭游戏继续占用网络与 JS 计时器。
+private struct PartyGameWebView: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        // 游戏链接含本次会话的临时鉴权参数，关闭半屏游戏后不保留第三方 cookie/cache。
+        configuration.websiteDataStore = .nonPersistent()
+        let view = WKWebView(frame: .zero, configuration: configuration)
+        view.isOpaque = false
+        view.backgroundColor = .black
+        view.scrollView.backgroundColor = .black
+        view.load(URLRequest(url: url))
+        return view
+    }
+
+    func updateUIView(_ view: WKWebView, context: Context) {
+        guard view.url != url else { return }
+        view.load(URLRequest(url: url))
+    }
+
+    static func dismantleUIView(_ view: WKWebView, coordinator: ()) {
+        view.stopLoading()
+        view.navigationDelegate = nil
+        view.uiDelegate = nil
+    }
+}
+
+private struct PartyHalfScreenGameSheet: View {
+    let presentation: PartyGamePresentation
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            PartyGameWebView(url: presentation.url)
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            Button { dismiss() } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.9), .black.opacity(0.45))
+                    .padding(10)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.mediaPreviewClose)
+        }
+        .background(Color.black)
+    }
+}
+
+/// Party 房背包礼物。普通礼物面板与背包库存使用不同后端域，故由内层 sheet 独立承载；
+/// 普通礼物面板保持打开，以符合 H5 在背包和礼物分类间切换时不丢收礼人选择的行为。
+private struct PartyBackpackGiftSheet: View {
+    let roomId: String
+    let receivers: ReceiversConfig
+    let onSent: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var recipientSelection: GiftRecipientSelectionState
+    @State private var gifts: [PartyBackpackGift] = []
+    @State private var selectedGiftID: String?
+    @State private var count = 1
+    @State private var page = 1
+    @State private var hasMore = false
+    @State private var isLoading = true
+    @State private var isSending = false
+    @State private var loadFailed = false
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
+
+    init(
+        roomId: String,
+        receivers: ReceiversConfig,
+        recipientSelection: GiftRecipientSelectionState,
+        onSent: @escaping () -> Void
+    ) {
+        self.roomId = roomId
+        self.receivers = receivers
+        self.onSent = onSent
+        _recipientSelection = ObservedObject(wrappedValue: recipientSelection)
+    }
+
+    var body: some View {
+        ZStack {
+            Theme.Palette.partyRoomBackground.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                receiverRow
+                content
+                Divider().overlay(Color.white.opacity(0.1))
+                footer
+            }
+        }
+        .task { await reload() }
+        .onChange(of: recipientSelection.ids) { _ in clampCount() }
+        .preferredColorScheme(.dark)
+    }
+
+    private var receiverRow: some View {
+        HStack(spacing: 10) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(receivers.items) { receiver in
+                        Button { toggleReceiver(receiver.id) } label: {
+                            ZStack(alignment: .bottomTrailing) {
+                                CachedAsyncImage(url: receiver.avatarURL, contentMode: .fill, persistent: true) {
+                                    Circle().fill(Color.white.opacity(0.12))
+                                }
+                                .frame(width: 36, height: 36)
+                                .clipShape(Circle())
+
+                                Image(systemName: recipientSelection.ids.contains(receiver.id)
+                                      ? "checkmark.circle.fill"
+                                      : "circle")
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(recipientSelection.ids.contains(receiver.id) ? .pink : .white.opacity(0.65))
+                                    .background(Circle().fill(Color.black.opacity(0.5)))
+                            }
+                            .opacity(recipientSelection.ids.contains(receiver.id) ? 1 : 0.52)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 10)
+            }
+
+            if receivers.showAllButton, !receivers.items.isEmpty {
+                Button {
+                    let allIDs = Set(receivers.items.map(\.id))
+                    if recipientSelection.ids == allIDs {
+                        if receivers.items.count == 1 {
+                            recipientSelection.replace(with: [])
+                        } else {
+                            let fallback = receivers.initialSelection.intersection(allIDs)
+                            recipientSelection.replace(with: fallback.isEmpty
+                                ? Set([receivers.items.first?.id].compactMap { $0 })
+                                : fallback)
+                        }
+                    } else {
+                        recipientSelection.replace(with: allIDs)
+                    }
+                    clampCount()
+                } label: {
+                    Image(systemName: recipientSelection.ids.count == receivers.items.count
+                          ? "checkmark.circle.fill"
+                          : "person.2.circle")
+                        .font(.system(size: 24))
+                        .foregroundColor(.white)
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 16)
+        .background(Color.white.opacity(0.03))
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if isLoading && gifts.isEmpty {
+            ProgressView()
+                .tint(.white)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if loadFailed && gifts.isEmpty {
+            Button(L10n.giftPickerRetry) { Task { await reload() } }
+                .buttonStyle(.bordered)
+                .tint(.white)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if gifts.isEmpty {
+            EmptyStateView(style: .compact, textFont: .system(size: 13))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 8) {
+                    ForEach(gifts) { gift in
+                        giftCell(gift)
+                            .onAppear {
+                                guard gift.id == gifts.last?.id, hasMore, !isLoading else { return }
+                                Task { await loadNextPage() }
+                            }
+                    }
+                }
+                .padding(12)
+
+                if isLoading {
+                    ProgressView().tint(.white).padding(.bottom, 8)
+                }
+            }
+        }
+    }
+
+    private func giftCell(_ gift: PartyBackpackGift) -> some View {
+        let isSelected = selectedGiftID == gift.id
+        let isSendable = isSendableInParty(gift)
+        return Button {
+            guard isSendable else { return }
+            selectedGiftID = gift.id
+            count = 1
+        } label: {
+            VStack(spacing: 4) {
+                CachedAsyncImage(url: gift.giftIcon.flatMap(URL.init(string:)),
+                                 contentMode: .fit,
+                                 persistent: true,
+                                 cdn: (.gift, .fit)) {
+                    Color.white.opacity(0.06)
+                }
+                .frame(width: 50, height: 50)
+
+                Text(gift.giftName)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(1)
+
+                HStack(spacing: 2) {
+                    Image("partyGems")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 10, height: 10)
+                    Text("\(gift.giftPrice)")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white)
+                }
+
+                Text("x\(gift.quantity)")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Theme.Palette.brandPink))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+            .opacity(isSendable ? 1 : 0.42)
+            .background(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(isSelected ? Theme.Palette.brandPink.opacity(0.18) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(isSelected ? Theme.Palette.brandPink : Color.clear, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!isSendable || isSending)
+    }
+
+    private var footer: some View {
+        HStack(spacing: 12) {
+            Button { adjustCount(by: -1) } label: {
+                Image(systemName: "minus.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(count > 1 ? .white : .white.opacity(0.28))
+            }
+            .buttonStyle(.plain)
+            .disabled(count <= 1 || isSending)
+
+            Menu {
+                ForEach([1, 5, 10, 20, 50, 99].filter { $0 <= maximumCount }, id: \.self) { value in
+                    Button("\(value)") { count = value }
+                }
+            } label: {
+                Text("\(count)")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(minWidth: 28)
+            }
+            .disabled(isSending)
+
+            Button { adjustCount(by: 1) } label: {
+                Image(systemName: "plus.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(count < maximumCount ? .white : .white.opacity(0.28))
+            }
+            .buttonStyle(.plain)
+            .disabled(count >= maximumCount || isSending)
+
+            Spacer(minLength: 0)
+
+            Button { Task { await send() } } label: {
+                Group {
+                    if isSending {
+                        ProgressView().tint(.white)
+                    } else {
+                        Text(L10n.giftPickerSend)
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                }
+                .foregroundColor(.white)
+                .frame(minWidth: 88, minHeight: 36)
+                .padding(.horizontal, 18)
+                .background(Capsule().fill(canSend ? Theme.Palette.brandPink : Color.white.opacity(0.15)))
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSend)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    private var selectedGift: PartyBackpackGift? {
+        gifts.first { $0.id == selectedGiftID }
+    }
+
+    private var maximumCount: Int {
+        guard let selectedGift, !recipientSelection.ids.isEmpty else { return 1 }
+        return max(1, min(99, selectedGift.quantity / recipientSelection.ids.count))
+    }
+
+    private var canSend: Bool {
+        !isSending
+            && !roomId.isEmpty
+            && selectedGift != nil
+            && !recipientSelection.ids.isEmpty
+            && count <= maximumCount
+            && (selectedGift.map { count * recipientSelection.ids.count <= $0.quantity } ?? false)
+    }
+
+    private func isSendableInParty(_ gift: PartyBackpackGift) -> Bool {
+        // H5 `backpackSendable`: 贴纸和幸运礼物只允许直播；Party 对应 display-scene dictValue=4。
+        if gift.giftTypeV2 == 5 || gift.giftTypeV2 == 6 { return false }
+        guard let scenes = gift.giftDisplayScene, !scenes.isEmpty else { return true }
+        return scenes.split(separator: ",")
+            .map { String($0).trimmingCharacters(in: .whitespaces) }
+            .contains("4")
+    }
+
+    private func toggleReceiver(_ id: String) {
+        if recipientSelection.ids.contains(id) {
+            var next = recipientSelection.ids
+            next.remove(id)
+            recipientSelection.replace(with: next)
+        } else if receivers.allowMultiSelect {
+            var next = recipientSelection.ids
+            next.insert(id)
+            recipientSelection.replace(with: next)
+        } else {
+            recipientSelection.replace(with: [id])
+        }
+        clampCount()
+    }
+
+    private func adjustCount(by delta: Int) {
+        count = min(maximumCount, max(1, count + delta))
+    }
+
+    private func clampCount() {
+        count = min(maximumCount, max(1, count))
+    }
+
+    private func reload() async {
+        page = 1
+        gifts = []
+        hasMore = false
+        loadFailed = false
+        await loadPage(reset: true)
+    }
+
+    private func loadNextPage() async {
+        await loadPage(reset: false)
+    }
+
+    private func loadPage(reset: Bool) async {
+        guard !isLoading || reset else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let response = try await PartyAPI.partyBackpack(page: page)
+            let validGifts = response.list.filter { $0.giftId > 0 && $0.quantity > 0 }
+            if reset {
+                gifts = validGifts
+            } else {
+                gifts.append(contentsOf: validGifts.filter { candidate in !gifts.contains(where: { $0.id == candidate.id }) })
+            }
+            hasMore = response.hasMore
+            if response.hasMore { page += 1 }
+            if selectedGift.flatMap({ gift in gifts.contains(where: { $0.id == gift.id }) ? gift : nil }) == nil {
+                selectedGiftID = nil
+                count = 1
+            }
+        } catch {
+            loadFailed = true
+            AppLogger.party.error("[PartyBackpack] load failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    private func send() async {
+        guard let gift = selectedGift,
+              isSendableInParty(gift),
+              canSend else { return }
+        let recipients = Array(recipientSelection.ids)
+        isSending = true
+        defer { isSending = false }
+        do {
+            let remaining = try await PartyAPI.sendPartyBackpackGift(
+                roomId: roomId,
+                giftId: gift.giftId,
+                num: count,
+                yxAccidList: recipients
+            )
+            let fallbackRemaining = max(0, gift.quantity - count * recipients.count)
+            let nextQuantity = remaining ?? fallbackRemaining
+            if nextQuantity == 0 {
+                gifts.removeAll { $0.id == gift.id }
+                selectedGiftID = nil
+            } else if let index = gifts.firstIndex(where: { $0.id == gift.id }) {
+                // 保持库存的其余服务端字段不变，只同步本次接口确认后的剩余数量。
+                gifts[index] = PartyBackpackGift(
+                    backpackId: gift.backpackId,
+                    giftId: gift.giftId,
+                    quantity: nextQuantity,
+                    giftName: gift.giftName,
+                    giftPrice: gift.giftPrice,
+                    giftIcon: gift.giftIcon,
+                    giftTypeV2: gift.giftTypeV2,
+                    giftDisplayScene: gift.giftDisplayScene,
+                    sendable: gift.sendable,
+                    remainingTimeDesc: gift.remainingTimeDesc
+                )
+            }
+            count = 1
+            onSent()
+            dismiss()
+        } catch {
+            AppLogger.party.error("[PartyBackpack] send failed: \(String(describing: error), privacy: .private)")
+        }
+    }
 }

@@ -152,6 +152,7 @@ final class PartyBattleStore: ObservableObject {
         }
         s.status = target
         state = s
+        updatePrivateCallAvailability(for: target)
     }
 
     /// spec §3.3 状态迁移合法性判定
@@ -219,6 +220,15 @@ private extension PartyBattleStore {
         }
         return true
     }
+
+    func updatePrivateCallAvailability(for status: PartyBattleStatus) {
+        switch status {
+        case .selecting, .running:
+            roomEnv.pausePrivateCallForPK()
+        case .ended, .forceEnded, .cooldown:
+            roomEnv.resumePrivateCallAfterPK()
+        }
+    }
 }
 
 // MARK: - PartyRoomEnvironment abstraction (spec §12 A1 依赖注入)
@@ -236,6 +246,18 @@ protocol PartyRoomEnvironment: AnyObject {
     var lobbyMicCount: Int { get }
     /// F-1a v2 (2026-07-17)：清**所有已占麦位** giftValueCount（对齐 H5 partyBattle.ts:332-336）
     func resetAllSeatGiftValue()
+    /// PK 期间强制关闭/隐藏 Party 私 call，结束后恢复进入 PK 前的状态。
+    func pausePrivateCallForPK()
+    func resumePrivateCallAfterPK()
+    /// 退房时只清本地 PK 快照，不对已经离开的房间发送恢复请求。
+    func discardPrivateCallPKState()
+}
+
+extension PartyRoomEnvironment {
+    // 测试环境不需要接入 Party 私 call；生产 adapter 覆盖这三个入口。
+    func pausePrivateCallForPK() {}
+    func resumePrivateCallAfterPK() {}
+    func discardPrivateCallPKState() {}
 }
 
 /// 生产环境 adapter —— 直读 PartyStore.shared
@@ -264,6 +286,21 @@ final class PartyStoreEnvironmentAdapter: PartyRoomEnvironment {
     func resetAllSeatGiftValue() {
         PartyStore.shared.resetAllSeatGiftValue()
     }
+
+    @MainActor
+    func pausePrivateCallForPK() {
+        PartyStore.shared.pausePartyPrivateCallForPK()
+    }
+
+    @MainActor
+    func resumePrivateCallAfterPK() {
+        PartyStore.shared.resumePartyPrivateCallAfterPK()
+    }
+
+    @MainActor
+    func discardPrivateCallPKState() {
+        PartyStore.shared.discardPartyPrivateCallPKState()
+    }
 }
 
 // MARK: - DEBUG-only test hooks
@@ -281,13 +318,13 @@ extension PartyBattleStore {
         clearActionError()
         guard canManage, isFunctionEnabled, roomEnv.roomTempId == 1 else {
             AppLogger.party.warning("[Battle] start rejected: insufficient permission or battle disabled")
-            actionError = "PK is unavailable in this room."
+            actionError = L10n.Party.Battle.startNowFailed
             return false
         }
         let rid = effectiveRoomId
         guard rid > 0 else {
             AppLogger.party.warning("[Battle] start rejected: roomId=0")
-            actionError = "Unable to start PK. Please re-enter the room and try again."
+            actionError = L10n.Party.Battle.startNowFailed
             return false
         }
         let requestRevision = stateRevision
@@ -300,8 +337,20 @@ extension PartyBattleStore {
             )
             let resp = try await service.start(req)
             guard requestRevision == stateRevision, roomEnv.roomId == rid else {
+                // 发起成功后 1100 可能早于 HTTP 回包到达。1100 会重置 stateRevision；
+                // 此时本房已进入 SELECTING/RUNNING，不能把已成功的 PK 误报为 failed。
+                if hasActiveBattleForStart(roomId: rid) {
+                    AppLogger.party.notice("[Battle] start completed by IM before HTTP response")
+                    return true
+                }
                 AppLogger.party.notice("[Battle] start response dropped: room/session changed")
-                actionError = "Room changed. Please try again."
+                actionError = L10n.Party.Battle.startNowFailed
+                return false
+            }
+            // H5 initiatePopup 对空 result 显示 Failed to start。只有 IM 已确认本房进入 PK
+            // 时才按竞态保护视为成功，不能再把未知的空响应直接关闭 sheet。
+            guard let resp else {
+                actionError = L10n.Party.Battle.startNowFailed
                 return false
             }
             // 本地构造 SELECTING state（H5 partyBattle.ts:120-142 onInitiateSuccess 语义）
@@ -309,15 +358,15 @@ extension PartyBattleStore {
             // - selectingDurationSec：服务端 override 用户默认 60
             // - durationSec：服务端可能 override 用户选值
             // - templateName：HUD 展示用
-            if let pk = resp?.pkId, !pk.isEmpty {
+            if let pk = resp.pkId, !pk.isEmpty {
                 AppLogger.party.info("[Battle] start OK templateId=\(templateId, privacy: .public) dur=\(durationSec, privacy: .public)")
                 onInitiateSuccess(
                     pkId: pk,
-                    battleId: resp?.battleId ?? 0,
+                    battleId: resp.battleId ?? 0,
                     templateId: Int(templateId),
-                    templateName: resp?.templateName,
-                    selectingDurationSec: resp?.selectingDurationSec ?? 60,
-                    durationSec: resp?.durationSec ?? durationSec
+                    templateName: resp.templateName,
+                    selectingDurationSec: resp.selectingDurationSec ?? 60,
+                    durationSec: resp.durationSec ?? durationSec
                 )
                 return true
             }
@@ -329,10 +378,21 @@ extension PartyBattleStore {
             }
             return true
         } catch {
+            // 部分环境会先完成创建并下发 1100，再让原 HTTP 请求以超时/连接错误结束。
+            // IM 已确认本房 PK 生效时以房间状态为准，关闭发起 sheet，避免向房主展示伪失败。
+            if hasActiveBattleForStart(roomId: rid) {
+                AppLogger.party.notice("[Battle] start completed by IM after HTTP error")
+                return true
+            }
             AppLogger.party.error("[Battle] start failed: \(String(describing: error), privacy: .public)")
-            actionError = battleErrorMessage(error, fallback: "Unable to start PK. Please try again.")
+            actionError = battleErrorMessage(error, fallback: L10n.Party.Battle.startNowFailed)
             return false
         }
+    }
+
+    private func hasActiveBattleForStart(roomId: Int64) -> Bool {
+        guard roomEnv.roomId == roomId else { return false }
+        return isSelecting || isRunning
     }
 
     /// H5 partyBattle.ts:120-142 onInitiateSuccess 语义 —— 房主本地构造 SELECTING state
@@ -360,6 +420,7 @@ extension PartyBattleStore {
             neutral: BattleTeam(count: 0, members: []),
             redTop: [], blueTop: []
         )
+        updatePrivateCallAvailability(for: .selecting)
     }
 
     /// 切队（观众/主播端参战方在 SELECTING/RUNNING 期切红蓝）
@@ -378,7 +439,7 @@ extension PartyBattleStore {
     func startNow() async -> Bool {
         clearActionError()
         guard !pkId.isEmpty, canManage, isSelecting else {
-            actionError = "This PK is no longer waiting to start."
+            actionError = L10n.Party.Battle.alreadyEnded
             return false
         }
         let requestPkId = pkId
@@ -387,7 +448,7 @@ extension PartyBattleStore {
             try await service.startNow(requestPkId)
             guard requestRevision == stateRevision, pkId == requestPkId else {
                 AppLogger.party.notice("[Battle] startNow response dropped: PK/session changed")
-                actionError = "PK state changed. Please try again."
+                actionError = L10n.Party.Battle.alreadyEnded
                 return false
             }
             // 与主播端一致：不等待可能延迟或丢失的 1103，先本地切 RUNNING，随后 /state 对账。
@@ -403,7 +464,7 @@ extension PartyBattleStore {
             return true
         } catch {
             AppLogger.party.error("[Battle] startNow failed: \(String(describing: error), privacy: .public)")
-            actionError = battleErrorMessage(error, fallback: "Unable to start PK. Please try again.")
+            actionError = battleErrorMessage(error, fallback: L10n.Party.Battle.startNowFailed)
             return false
         }
     }
@@ -413,7 +474,7 @@ extension PartyBattleStore {
     func forceEnd() async -> Bool {
         clearActionError()
         guard !pkId.isEmpty, canManage, isRunning else {
-            actionError = "This PK is no longer active."
+            actionError = L10n.Party.Battle.alreadyEnded
             return false
         }
         let requestPkId = pkId
@@ -424,7 +485,7 @@ extension PartyBattleStore {
             try await service.forceEnd(requestPkId)
             guard requestRevision == stateRevision, pkId == requestPkId else {
                 AppLogger.party.notice("[Battle] forceEnd response dropped: PK/session changed")
-                actionError = "PK state changed. Please try again."
+                actionError = L10n.Party.Battle.alreadyEnded
                 return false
             }
             // 主播端在接口成功后立刻展示结算；不能只等 1109，否则 IM 延迟时仍停在 RUNNING。
@@ -456,7 +517,7 @@ extension PartyBattleStore {
             return true
         } catch {
             AppLogger.party.error("[Battle] forceEnd failed: \(String(describing: error), privacy: .public)")
-            actionError = battleErrorMessage(error, fallback: "Unable to end PK. Please try again.")
+            actionError = battleErrorMessage(error, fallback: L10n.Party.Battle.alreadyEnded)
             return false
         }
     }
@@ -637,6 +698,7 @@ extension PartyBattleStore {
     /// —— 这些是跨场配置（进房时 loadGlobalConfig + loadTemplatesIfNeeded 会更新），保留可加速下次进房
     func reset() {
         invalidateStateRequests()
+        roomEnv.discardPrivateCallPKState()
         stopCooldownTicker()
         // 200ms 聚合定时器 + pending payload 清理（H5 partyBattle.ts:676-681）
         leaderboardFlushTask?.cancel()
@@ -886,6 +948,7 @@ extension PartyBattleStore {
         }
         durationSec = dur
         leftSec = left
+        updatePrivateCallAvailability(for: .running)
 
         // 安卓端在 NIM 驱动状态变更后会 forceRefresh；1103 本身不保证携带完整 team/top3 快照。
         if createdFallback {
@@ -1036,6 +1099,7 @@ extension PartyBattleStore {
     /// （仅房主/房管拿到非空，普通观众后端返空 list，store 也按空覆盖）
     private func applyRefreshedState(_ s: PartyBattleState) {
         state = s
+        updatePrivateCallAvailability(for: s.status)
         pkId = s.pkId
         selectingDurationSec = s.selectingDurationSec
         durationSec = s.durationSec
@@ -1110,6 +1174,7 @@ extension PartyBattleStore {
             blueTop: blueTopValue
         )
         state = newState
+        updatePrivateCallAvailability(for: .selecting)
         pkId = newState.pkId
         selectingDurationSec = selectingSec
         durationSec = durSec

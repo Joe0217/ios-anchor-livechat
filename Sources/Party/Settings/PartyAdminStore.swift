@@ -17,17 +17,28 @@ final class PartyAdminStore: ObservableObject {
 
     let roomId: String
     private let service: PartyAdminService
+    private let onRoleUpdated: (_ userId: String, _ role: PartyRoomRoleType) -> Void
 
     #if HILY_TESTS
     // Test target 无 PartyAdminServiceLive（不在白名单，依赖 PartyAPI 网络栈）；test 必须显式传 service
-    init(roomId: String, service: PartyAdminService) {
+    init(
+        roomId: String,
+        service: PartyAdminService,
+        onRoleUpdated: @escaping (_ userId: String, _ role: PartyRoomRoleType) -> Void = { _, _ in }
+    ) {
         self.roomId = roomId
         self.service = service
+        self.onRoleUpdated = onRoleUpdated
     }
     #else
-    init(roomId: String, service: PartyAdminService = PartyAdminServiceLive()) {
+    init(
+        roomId: String,
+        service: PartyAdminService = PartyAdminServiceLive(),
+        onRoleUpdated: @escaping (_ userId: String, _ role: PartyRoomRoleType) -> Void = { _, _ in }
+    ) {
         self.roomId = roomId
         self.service = service
+        self.onRoleUpdated = onRoleUpdated
     }
     #endif
 
@@ -55,6 +66,7 @@ final class PartyAdminStore: ObservableObject {
         admins.append(optimistic)
         do {
             try await service.setAdmin(roomId: roomId, userId: userId)
+            onRoleUpdated(userId, .admin)
             // 服务端成功后刷新列表拿真数据（含 nickname/icon）
             if let list = try? await service.fetchAdminList(roomId: roomId) {
                 admins = list
@@ -76,6 +88,7 @@ final class PartyAdminStore: ObservableObject {
         admins.removeAll { $0.userId == admin.userId }
         do {
             try await service.removeAdmin(roomId: roomId, userId: admin.userId)
+            onRoleUpdated(admin.userId, .audience)
         } catch {
             // 回滚
             if let i = index, i <= admins.count {

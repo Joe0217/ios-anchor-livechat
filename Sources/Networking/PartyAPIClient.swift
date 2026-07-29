@@ -10,8 +10,8 @@ import os
 ///
 /// 与 `APIClient` 的差异（基于 H5 sapiIndex.ts 实际行为）：
 /// - baseURL：`AppConfig.sapiBaseURL`（`vvi.cphub.link`）而非主接口域
-/// - 鉴权：`auth_token` 头（来自 `SapiTokenStore`）+ `loginToken/anchorToken`（主 token）**两者同时注入**
-/// - 加密 key/iv：`AppConfig.sapiAesKey/IV`（dev 巧合与主接口同套；test/prod 是独立 `cbilx4v7vgz6jpw7 / dmnry3u8bhk5zq9f`）
+/// - 鉴权：`auth_token` 头（来自 `SapiTokenStore`）+ `loginToken` / `anchorToken`（主 token）
+/// - 加密 key/iv：`AppConfig.sapiAesKey/IV`（由本地环境配置注入）
 /// - envelope：`code === '200'`（**字符串**，非数字；不同于主接口的 `'0000'`）
 /// - `result` 仍是 Hex 密文（与主接口同形态，**不是**整体 body 加密）
 /// - 401 拦截 → 自动调 `SapiTokenStore.ensureValid(forceRefresh: true)` 续 + retry 一次
@@ -25,7 +25,7 @@ final class PartyAPIClient {
         self.session = session
     }
 
-    /// POST 请求。body 走 sapi AES key/iv 加密 → Base64 作为原始 body。
+    /// POST 请求。body 走 sapi AES key/iv 加密 → Base64，再按 H5 Axios 行为封为 JSON string body。
     /// 返回解密后的 result JSON（供 Codable）；非 '200' 抛 `PartyAPIError.business`。
     /// HTTP 401 自动续 token 并 retry 一次；仍 401 抛 `PartyAPIError.tokenExchangeFailed`。
     ///
@@ -96,7 +96,10 @@ final class PartyAPIClient {
             guard let encrypted = CryptoUtil.aesEncryptToBase64(jsonStr, key: AppConfig.sapiAesKey, iv: AppConfig.sapiAesIV) else {
                 throw PartyAPIError.encryptFailed
             }
-            req.httpBody = Data(encrypted.utf8)
+            // H5 `sapiIndex.ts` 先将 data 改为 Base64 string；Axios 发现 Content-Type 为
+            // application/json 后通过 stringifySafely 再执行 JSON.stringify(string)。
+            // 服务端对该 JSON string 的反序列化路径与裸 Base64 不同，必须保留外层引号。
+            req.httpBody = try SapiTokenStore.jsonWrappedEncryptedBody(encrypted)
         }
 
         #if DEBUG

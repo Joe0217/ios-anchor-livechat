@@ -28,8 +28,20 @@ enum PartyGiftPanelBridge {
     static func makeReceiversConfig(
         seatList: [PartyRoomSeat],
         selfYxAccid: String?,
-        battlingUids: Set<Int64>? = nil
+        battlingUids: Set<Int64>? = nil,
+        recipientOverride: ReceiverItem? = nil,
+        selectionState: GiftRecipientSelectionState? = nil
     ) -> ReceiversConfig {
+        // 从用户名片卡进入礼物架时必须锁定目标用户，不能退化成房主/首个麦位。
+        if let recipientOverride {
+            return ReceiversConfig(
+                items: [recipientOverride],
+                allowMultiSelect: false,
+                initialSelection: [recipientOverride.id],
+                showAllButton: false,
+                selectionState: selectionState
+            )
+        }
         // R14 · seat.yxAccid nil/空串 过滤
         // 对齐 H5 party-gift-popup.vue L149 filter 字面：
         //   `seat?.yxAccid && seat.yxAccid !== '0' && seat.yxAccid !== userStore.mineInfo?.yxAccid`
@@ -75,7 +87,8 @@ enum PartyGiftPanelBridge {
             items: items,
             allowMultiSelect: true,
             initialSelection: initialSelection,
-            showAllButton: true
+            showAllButton: true,
+            selectionState: selectionState
         )
     }
 }

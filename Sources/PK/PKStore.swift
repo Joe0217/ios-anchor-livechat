@@ -790,6 +790,11 @@ final class PKStore: ObservableObject {
             return
         }
 
+        // 对齐 H5 livePk.js：静音接口成功后立即提示，不等待聊天室广播回执。
+        AppToastCenter.shared.show(
+            PKOpponentMuteToast.message(muted: muted, nickname: ctx?.oppositeNickname)
+        )
+
         guard nim?.sendPKMuteBroadcast(muted: muted) == true else {
             logger.warning("PK mute broadcast failed; local state unchanged")
             return
@@ -1050,6 +1055,44 @@ final class PKStore: ObservableObject {
             userLevel: nil, isHost: false, isVip: false,
             messageType: .pkNotify
         ))
+        Task { [weak self] in
+            await self?.appendPKTopContributorsToPublicChat()
+        }
+    }
+
+    /// H5 sendPkEndNotice 在胜负公告后拉取本主播侧贡献榜 Top3 并追加第二条公屏消息。
+    private func appendPKTopContributorsToPublicChat() async {
+        guard let store = nim?.messagesStore,
+              let context = ctx,
+              ownAnchorId > 0 else { return }
+        do {
+            let ranking = try await PKService.getPkTop3RankList(
+                pkId: context.pkId,
+                anchorId: ownAnchorId
+            )
+            guard !ranking.isEmpty else { return }
+            let selfUserId = SessionStore.shared.user?.userId.map(String.init)
+            let users = ranking.prefix(3).map { user in
+                let userId = user.userId.map(String.init)
+                return PublicChatUserTarget(
+                    userId: userId,
+                    nickname: user.nickName?.isEmpty == false ? user.nickName! : "-",
+                    isSelf: userId != nil && userId == selfUserId
+                )
+            }
+            store.append(PublicChatMessage(
+                text: "",
+                isSystem: false,
+                senderNickname: nil,
+                senderAvatar: nil,
+                userLevel: nil,
+                isHost: false,
+                isVip: false,
+                messageType: .pkTopContributors(users: users)
+            ))
+        } catch {
+            logger.warning("PK Top3 public chat load failed: \(String(describing: error), privacy: .private)")
+        }
     }
 
     /// v22（2026-07-11）：signature 增加 resultFromBundle / opponentNickname 让公屏结果消息在所有路径下都能 append
@@ -1282,6 +1325,17 @@ final class PKStore: ObservableObject {
         } catch {
             logger.warning("updateInviteSwitch failed: \(String(describing: error), privacy: .private)")
         }
+    }
+}
+
+/// H5 主播端 PK 对手音频切换提示。
+enum PKOpponentMuteToast {
+    static func message(muted: Bool, nickname: String?) -> String {
+        let trimmedName = nickname?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let opponentName = trimmedName.isEmpty ? "opponent" : trimmedName
+        return muted
+            ? "The streamer turned off the \(opponentName)'s audio"
+            : "The streamer turned on the \(opponentName)'s audio"
     }
 }
 

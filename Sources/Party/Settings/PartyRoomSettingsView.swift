@@ -79,7 +79,18 @@ struct PartyRoomSettingsView: View {
             .presentationDetents([.fraction(0.8)])
         }
         .navigationDestination(isPresented: $showAdminManagement) {
-            PartyRoomAdminManagementView(store: PartyAdminStore(roomId: store.roomId))
+            PartyRoomAdminManagementView(
+                store: PartyAdminStore(
+                    roomId: store.roomId,
+                    onRoleUpdated: { userId, role in
+                        PartyStore.shared.applyAdminRoleUpdate(
+                            roomId: store.roomId,
+                            userId: userId,
+                            role: role
+                        )
+                    }
+                )
+            )
         }
         .onChange(of: photoPickerItem) { item in
             guard let item else { return }

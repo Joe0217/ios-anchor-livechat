@@ -1,17 +1,41 @@
 import SwiftUI
 
+private let partyLobbyRankingScrollCoordinateSpace = "PartyLobbyRankingScroll"
+
+private struct PartyLobbyRankingScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct PartyLobbyRankingScrollOffsetMarker: View {
+    var body: some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: PartyLobbyRankingScrollOffsetPreferenceKey.self,
+                value: proxy.frame(in: .named(partyLobbyRankingScrollCoordinateSpace)).minY
+            )
+        }
+        .frame(height: 0)
+    }
+}
+
 /// 派对房大厅新顶层 view（E 增强，2026-07-10）。
 ///
 /// 对齐 H5 用户端 `livechat-h5/src/views/party/index.vue`：
 /// - 顶部 3 tab（Party / Follow / Recent）+ 🔍 搜索 + `liveRankBadge` 榜单入口
 /// - 语言 pill 横滑（仅 Party tab 显示）
-/// - 双榜单卡（PartyRich / Room，仅 Party tab 显示；点击 toast Coming soon）
+/// - Party 首页 banner（仅 Party tab 显示；接口与 H5 `homeBanner.vue` 对齐）
 /// - 内容区 3-tab TabView(.page) 横滑手势切换
-/// - 浮动 Create Room 按钮（保留 iOS 主播端约定，不改用 H5 用户端的右上角小图标）
+/// - 右上角 My Room / Create Room 图标（与 H5 互斥展示）
 ///
 /// **架构**：view 只订阅 Store。副作用（拉数据/切语言/dispatch 榜单入口）全走 Store 方法。
 struct PartyListMainView: View {
     @ObservedObject var listStore: PartyListStore
+    /// NavigationStack push 后大厅仍保活；仅根页真实可见时可以触发奖励引导。
+    let isLobbyVisible: Bool
     /// Follow tab store（v2：跟 listStore 同类型，kind=.followed）
     @StateObject private var followStore = PartyListStore(
         service: PartyListServiceLive(),
@@ -29,35 +53,37 @@ struct PartyListMainView: View {
     /// v4：传完整对象让 PartyTabRootView 判密码房/其他前置逻辑
     let onTapRoom: (PartyRoomInfo) -> Void
     let onTapSearch: () -> Void
-    /// 右上角榜单与首页共用 `HomeRankingView`。
+    /// 右上角入口与 H5 `/party/rank?type=0` 一致。
     let onTapRanking: () -> Void
+    /// H5 Party 首页 banner 的 clickType=3：进入指定 Party 房。
+    let onTapBannerRoom: (String) -> Void
+    /// 热门房奖励引导确认后，以 `top_room_guide` 来源进入目标房。
+    let onEnterTopRoomGuide: (String) -> Void
 
     @State private var activeTab: Int = 0
-    @State private var toastTick: UUID?
+    @StateObject private var homeBannerStore = PartyHomeBannerStore()
+    @StateObject private var topRoomGuideStore = PartyTopRoomGuideStore()
+    @State private var activeBannerWeb: PartyBannerWebPresentation?
     @Environment(\.isPartyTabActive) private var isPartyTabActive
 
+    private struct TopRoomGuideTaskKey: Hashable {
+        let isPartyTabActive: Bool
+        let isLobbyVisible: Bool
+        let activeTab: Int
+    }
+
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack {
             Theme.Palette.partyListBackground.ignoresSafeArea()
 
             VStack(spacing: 0) {
                 topBar
                 if activeTab == 0 {
                     languagePillBar
-                    rankBanner
+                    partyHomeBanner
                 }
                 tabContent
             }
-
-            // 未 load 完 myRoom 前不显示按钮（避免"先显 Create 后切 My Room"闪切体验，用户反馈 2026-07-11）
-            // P 项目：userType 命中 .party bit 时不渲染按钮（三层防护 UI 层）
-            if listStore.didLoadMyRoom && SelfPermissionBridge.shared.canParty {
-                createRoomButton
-                    .padding(.bottom, 24)
-                    .transition(.opacity)
-            }
-
-            toast
         }
         .task(id: isPartyTabActive) {
             guard isPartyTabActive else { return }
@@ -70,12 +96,38 @@ struct PartyListMainView: View {
             }
             await listStore.loadLanguagesIfNeeded()
             await listStore.loadMyRoomIfNeeded()
+            await homeBannerStore.loadIfNeeded()
+        }
+        .task(id: TopRoomGuideTaskKey(
+            isPartyTabActive: isPartyTabActive,
+            isLobbyVisible: isLobbyVisible,
+            activeTab: activeTab
+        )) {
+            guard isPartyTabActive, isLobbyVisible, activeTab == 0 else { return }
+            await topRoomGuideStore.loadIfEligible()
         }
         .navigationBarHidden(true)
         // iOS 16 已知：`.navigationBarHidden(true)` 会截断外层 `.safeAreaInset(edge:.bottom)` 传播。
         // 参 PartyRoomListView v3 注释，补一层本地 safeAreaInset 兜底。
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Color.clear.frame(height: Theme.Metric.tabBarHeight)
+        }
+        .sheet(item: $activeBannerWeb) { presentation in
+            H5WebContainerView(page: H5Page(url: presentation.url, title: nil))
+        }
+        .overlay {
+            if isLobbyVisible, let guide = topRoomGuideStore.guide {
+                PartyTopRoomBonusDialog(
+                    kind: .enterTopRoom,
+                    guide: guide,
+                    topRankLimit: topRoomGuideStore.topRankLimit,
+                    onDismiss: topRoomGuideStore.dismiss,
+                    onConfirm: {
+                        topRoomGuideStore.confirmEnter(guide)
+                        onEnterTopRoomGuide(guide.roomId)
+                    }
+                )
+            }
         }
     }
 
@@ -89,12 +141,15 @@ struct PartyListMainView: View {
                 }
             }
             Spacer(minLength: 8)
-            searchIcon
-            rankBadge
+            HStack(spacing: 4) {
+                searchIcon
+                rankBadge
+                roomShortcut
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 8)
-        .padding(.bottom, 8)
+        .padding(.leading, 16)
+        .padding(.trailing, 12)
+        .frame(height: 44)
     }
 
     private func tabLabel(_ i: Int) -> String {
@@ -135,7 +190,7 @@ struct PartyListMainView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white.opacity(0.85))
-                .frame(width: 32, height: 32)
+                .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -147,12 +202,43 @@ struct PartyListMainView: View {
             Image("liveRankBadge")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 56, height: 28)
-                .padding(.leading, 8)
+                .frame(width: 36, height: 36)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(L10n.Party.rankPartyRich)
+    }
+
+    /// H5 右上角互斥入口：已有房间显示 My Room，否则显示 Create Room。
+    /// My Room 不受创建权限限制；首次请求未成功前不渲染，不能把网络错误错误地呈现为创建入口。
+    @ViewBuilder
+    private var roomShortcut: some View {
+        if listStore.didLoadMyRoom {
+            if let roomId = listStore.myRoom?.id, !roomId.isEmpty {
+                Button {
+                    onTapMyRoom(roomId)
+                } label: {
+                    Image(systemName: "house.fill")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(.white)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.Party.myRoom)
+            } else if SelfPermissionBridge.shared.canParty {
+                Button(action: onTapCreate) {
+                    Image("partyCreatePlus")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 22, height: 22)
+                        .frame(width: 36, height: 36)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.Party.listCreateRoom)
+            }
+        }
     }
 
     // MARK: - 语言 pill 横滑
@@ -166,7 +252,7 @@ struct PartyListMainView: View {
             }
             .padding(.horizontal, 12)
         }
-        .frame(height: 44)
+        .frame(height: 60)
     }
 
     private func languagePill(index: Int, lang: PartyLanguage) -> some View {
@@ -194,102 +280,73 @@ struct PartyListMainView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - 双榜单卡（对齐 H5 用户端 CDN 背景图 rank1.webp / rank2.webp）
+    // MARK: - Party Home Banner
 
-    private var rankBanner: some View {
-        HStack(spacing: 12) {
-            rankCard(title: L10n.Party.rankPartyRich, cdnURL: "https://img.hnhily.link/mstatic/party/rank1.webp")
-            rankCard(title: L10n.Party.rankRoom, cdnURL: "https://img.hnhily.link/mstatic/party/rank2.webp")
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 4)
-        .padding(.bottom, 8)
+    /// 与首页 Live 列表共用 `LiveBanner` 的轮播、圆角、分页指示器和自动播放行为。
+    private var partyHomeBanner: some View {
+        LiveBanner(
+            items: homeBannerStore.items.map(\.liveBannerItem),
+            onTap: handleHomeBannerTap,
+            isActive: isPartyTabActive && activeTab == 0,
+            autoplayInterval: 5,
+            autoplayResumeDelay: 5
+        )
+        .padding(.horizontal, Theme.Metric.liveScreenMargin)
+        .padding(.bottom, 4)
     }
 
-    /// 卡片视觉对齐 H5 index.vue L279-296：CDN 背景图 + 顶部标题 + 底部 top3 头像装饰。
-    ///
-    /// v17（2026-07-14）：**头像统一走默认图**（不调 top3 接口），装饰框走 H5 CDN
-    /// `party-rank1/2/3.webp` —— 榜单入口后续走 H5 webview 链接，主播端不需要 top3 真数据。
-    /// 布局对齐 H5：中(第1)32×32/装饰 44 + 左(第2)24×24/装饰 36 + 右(第3)24×24/装饰 36。
-    private func rankCard(title: String, cdnURL: String) -> some View {
-        Button {
-            fireToast()
-        } label: {
-            ZStack(alignment: .top) {
-                CachedAsyncImage(url: URL(string: cdnURL), contentMode: .fill) {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.white.opacity(0.05))
-                }
-                .frame(height: 78)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-
-                Text(title)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.white)
-                    .shadow(color: .black.opacity(0.3), radius: 1, x: 0, y: 0.5)
-                    .padding(.top, 6)
-
-                rankTop3Placeholders
-            }
-            .frame(height: 78)
-            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    private func handleHomeBannerTap(_ item: AppPictureItem) {
+        guard let banner = homeBannerStore.items.first(where: { $0.id == item.id }) else { return }
+        if banner.clickType == 3, let roomId = banner.partyRoomId, !roomId.isEmpty {
+            onTapBannerRoom(roomId)
+            return
         }
-        .buttonStyle(.plain)
-    }
-
-    /// 3 头像占位（默认头像 + H5 CDN 装饰框）
-    /// - 中间第 1 名：avatar 32 + headwear 44（headwearRatio 1.375）
-    /// - 左第 2 名 / 右第 3 名：avatar 24 + headwear 36（headwearRatio 1.5）
-    ///
-    /// v17.1（2026-07-14 微调）：三个头像位置逐一 offset 微调；SwiftUI y+ 为向下。
-    private var rankTop3Placeholders: some View {
-        // AvatarView(urlString: nil) → 显示 defaultUserAvatar 默认图（AvatarView.Kind.user）
-        let cdnRank1 = "https://img.hnhily.link/mstatic/party/party-rank1.webp"
-        let cdnRank2 = "https://img.hnhily.link/mstatic/party/party-rank2.webp"
-        let cdnRank3 = "https://img.hnhily.link/mstatic/party/party-rank3.webp"
-        return ZStack(alignment: .bottom) {
-            HStack(spacing: 0) {
-                // 第 2 名（左）：往右 22 + 往下 30
-                AvatarView(urlString: nil, size: 24, kind: .user,
-                           headwearURL: cdnRank2, headwearRatio: 1.5)
-                    .padding(.bottom, 12)
-                    .offset(x: 22, y: 30)
-                Spacer()
-                // 第 3 名（右）：往左 20 + 往下 30
-                AvatarView(urlString: nil, size: 24, kind: .user,
-                           headwearURL: cdnRank3, headwearRatio: 1.5)
-                    .padding(.bottom, 9)
-                    .offset(x: -20, y: 30)
-            }
-            .padding(.horizontal, 20)
-
-            // 第 1 名（中，居中偏下）：往右 3 + 往下 20
-            AvatarView(urlString: nil, size: 32, kind: .user,
-                       headwearURL: cdnRank1, headwearRatio: 1.375)
-                .padding(.bottom, 8)
-                .offset(x: 3, y: 20)
+        let rawURL = banner.directUrl ?? banner.gameLink
+        guard let rawURL,
+              let url = URL(string: rawURL),
+              let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme) else {
+            return
         }
+        activeBannerWeb = PartyBannerWebPresentation(url: url)
     }
 
     // MARK: - TabView 3 页
 
     private var tabContent: some View {
         TabView(selection: $activeTab) {
-            PartyRoomListContent(store: listStore, onTapRoom: onTapRoom, comingSoonOnEmpty: false)
+            PartyRoomListContent(
+                store: listStore,
+                languages: listStore.languages,
+                myRoomID: listStore.myRoom?.id,
+                onTapRoom: onTapRoom,
+                comingSoonOnEmpty: false
+            )
                 .refreshable {
                     // v6 并行：refreshAsync + reloadMyRoom 独立 API 无依赖，用 async let 并发拉，
                     // 下拉转圈时间从 (A+B) ~700-900ms 缩短到 max(A,B) ~500ms
-                    // 对齐 H5 onRefresh（getMyPartyRoomInfo + getPartyRoomList；top3 榜单不拉，
-                    // 主播端榜单入口后续走 H5 webview 链接，top3 头像用默认图占位）
+                    // 对齐 H5 onRefresh：并行刷新我的房间、房间列表和 Party 首页 banner。
                     async let a: Void = listStore.refreshAsync()
                     async let b: Void = listStore.reloadMyRoom()
-                    _ = await (a, b)
+                    async let c: Void = homeBannerStore.refresh()
+                    _ = await (a, b, c)
                 }
                 .tag(0)
-            PartyRoomListContent(store: followStore, onTapRoom: onTapRoom, comingSoonOnEmpty: false)
+            PartyRoomListContent(
+                store: followStore,
+                languages: listStore.languages,
+                myRoomID: listStore.myRoom?.id,
+                onTapRoom: onTapRoom,
+                comingSoonOnEmpty: false
+            )
                 .refreshable { await followStore.refreshAsync() }
                 .tag(1)
-            PartyRoomListContent(store: recentStore, onTapRoom: onTapRoom, comingSoonOnEmpty: false)
+            PartyRoomListContent(
+                store: recentStore,
+                languages: listStore.languages,
+                myRoomID: listStore.myRoom?.id,
+                onTapRoom: onTapRoom,
+                comingSoonOnEmpty: false
+            )
                 .refreshable { await recentStore.refreshAsync() }
                 .tag(2)
         }
@@ -312,73 +369,557 @@ struct PartyListMainView: View {
         }
     }
 
-    // MARK: - 浮动按钮（v2：Create Room / My Room 分流，对齐 H5 用户端 index.vue L191-207）
+}
 
-    /// 有 myRoom → 显 My Room；无 → 显 Create Room。
-    private var createRoomButton: some View {
-        Button {
-            if let myRoomId = listStore.myRoom?.id {
-                onTapMyRoom(myRoomId)
-            } else {
-                onTapCreate()
-            }
-        } label: {
-            HStack(spacing: 6) {
-                if listStore.myRoom != nil {
-                    Image(systemName: "house.fill")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                        .accessibilityHidden(true)
-                } else {
-                    Image("partyCreatePlus")
-                        .resizable()
-                        .frame(width: 20, height: 20)
-                        .accessibilityHidden(true)
-                }
-                Text(listStore.myRoom != nil ? L10n.Party.myRoom : L10n.Party.listCreateRoom)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(
-                Capsule().fill(
-                    LinearGradient(
-                        colors: [Theme.Palette.partyCreateBtnA, Theme.Palette.partyCreateBtnB],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-            )
-            .shadow(color: Theme.Palette.partyCreateBtnA.opacity(0.5), radius: 12, y: 4)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(listStore.myRoom != nil ? L10n.Party.myRoom : L10n.Party.listCreateRoom)
+// MARK: - Lobby ranking
+
+/// H5 `/party/rank` 两个榜单的共享状态。数据按「榜单类型 + 时间 + 当前/上一期」分桶，
+/// 离开页面时由 view-owned store 自动释放，避免跨账号复用缓存。
+@MainActor
+private final class PartyLobbyRankingStore: ObservableObject {
+    @Published private(set) var payloads: [String: PartyLobbyRankResponse] = [:]
+    @Published private(set) var loadingKeys: Set<String> = []
+
+    func payload(kind: PartyLobbyRankingKind, timeframe: PartyLobbyRankingTimeframe, period: PartyLobbyRankingPeriod) -> PartyLobbyRankResponse? {
+        payloads[key(kind: kind, timeframe: timeframe, period: period)]
     }
 
-    // MARK: - Toast（顶部胶囊 2s 自消，对齐 LiveTabView.reconnectToast 模式）
+    func isLoading(kind: PartyLobbyRankingKind, timeframe: PartyLobbyRankingTimeframe, period: PartyLobbyRankingPeriod) -> Bool {
+        loadingKeys.contains(key(kind: kind, timeframe: timeframe, period: period))
+    }
+
+    func load(kind: PartyLobbyRankingKind, timeframe: PartyLobbyRankingTimeframe, period: PartyLobbyRankingPeriod, force: Bool = false) async {
+        let requestKey = key(kind: kind, timeframe: timeframe, period: period)
+        if !force, payloads[requestKey] != nil || loadingKeys.contains(requestKey) { return }
+        loadingKeys.insert(requestKey)
+        defer { loadingKeys.remove(requestKey) }
+        do {
+            let response: PartyLobbyRankResponse
+            switch kind {
+            case .partyRich:
+                response = try await PartyAPI.partyRichRank(rankType: timeframe.rawValue, periodType: period.rawValue)
+            case .room:
+                response = try await PartyAPI.partyLobbyRoomRank(rankType: timeframe.rawValue, periodType: period.rawValue)
+            }
+            payloads[requestKey] = response
+        } catch {
+            if Task.isCancelled || GlobalErrorBannerNotify.isCancellation(error) { return }
+            AppLogger.party.error("[PartyLobbyRank] load \(requestKey, privacy: .public) failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    private func key(kind: PartyLobbyRankingKind, timeframe: PartyLobbyRankingTimeframe, period: PartyLobbyRankingPeriod) -> String {
+        "\(kind.rawValue)-\(timeframe.rawValue)-\(period.rawValue)"
+    }
+}
+
+@MainActor
+private final class PartyHomeBannerStore: ObservableObject {
+    @Published private(set) var items: [PartyHomeBanner] = []
+    private var didLoad = false
+    private var requestToken = UUID()
+
+    func loadIfNeeded() async {
+        guard !didLoad else { return }
+        await load()
+    }
+
+    func refresh() async {
+        await load(force: true)
+    }
+
+    private func load(force: Bool = false) async {
+        guard force || !didLoad else { return }
+        let token = UUID()
+        requestToken = token
+        do {
+            let result = try await PartyAPI.partyHomeBanners()
+            guard requestToken == token, !Task.isCancelled else { return }
+            items = result.filter { $0.picUrl?.isEmpty == false }
+            didLoad = true
+        } catch {
+            guard requestToken == token, !Task.isCancelled else { return }
+            AppLogger.party.error("[PartyHomeBanner] load failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+}
+
+private struct PartyBannerWebPresentation: Identifiable {
+    let url: URL
+    var id: String { url.absoluteString }
+}
+
+private enum PartyLobbyRankingTimeframe: String, CaseIterable, Identifiable {
+    case day, week, month
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .day: return L10n.PartyRoom.rankTabDaily
+        case .week: return L10n.commonWeekly
+        case .month: return L10n.commonMonthly
+        }
+    }
+}
+
+private enum PartyLobbyRankingPeriod: String {
+    case current = "CURRENT"
+    case last = "LAST"
+}
+
+/// Party Rich / Room 共用 Charm 型榜单结构。Couple 的双人名片和奖励结构不同，保持独立实现。
+struct PartyLobbyRankingView: View {
+    let initialKind: PartyLobbyRankingKind
+    let onOpenRoom: (String) -> Void
+
+    @StateObject private var store = PartyLobbyRankingStore()
+    @State private var kind: PartyLobbyRankingKind
+    @State private var timeframe: PartyLobbyRankingTimeframe = .day
+    @State private var period: PartyLobbyRankingPeriod = .current
+    @State private var showRules = false
+    @State private var rewardEntry: PartyLobbyRewardPresentation?
+    @State private var userCard: UserCardPresentation?
+    @State private var isNavigationBarScrolled = false
+    @Environment(\.dismiss) private var dismiss
+
+    init(initialKind: PartyLobbyRankingKind, onOpenRoom: @escaping (String) -> Void) {
+        self.initialKind = initialKind
+        self.onOpenRoom = onOpenRoom
+        _kind = State(initialValue: initialKind)
+    }
+
+    private var payload: PartyLobbyRankResponse? {
+        store.payload(kind: kind, timeframe: timeframe, period: period)
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .top) {
+                Color(hex: kind == .partyRich ? 0x957654 : 0x3B5D45).ignoresSafeArea()
+                if kind == .partyRich {
+                    Image("homeRankCharmBackground")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: backgroundHeight(topSafeArea: proxy.safeAreaInsets.top), alignment: .top)
+                        .clipped()
+                        .ignoresSafeArea(edges: .top)
+                        .allowsHitTesting(false)
+                } else {
+                    Image("partyLobbyRoomBackground")
+                        .resizable()
+                        .scaledToFill()
+                    .frame(maxWidth: .infinity)
+                    .frame(height: backgroundHeight(topSafeArea: proxy.safeAreaInsets.top), alignment: .top)
+                    .clipped()
+                    .ignoresSafeArea(edges: .top)
+                    .allowsHitTesting(false)
+                }
+
+                PartyStandardRankingBody(
+                    kind: kind,
+                    timeframe: $timeframe,
+                    period: $period,
+                    payload: payload,
+                    isLoading: store.isLoading(kind: kind, timeframe: timeframe, period: period),
+                    onTapEntry: tapEntry,
+                    onTapRewards: { entry in rewardEntry = PartyLobbyRewardPresentation(entry: entry, kind: kind) },
+                    onRefresh: { await store.load(kind: kind, timeframe: timeframe, period: period, force: true) }
+                )
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(true)
+        .swipeToPopEnabled()
+        .scrollingNavigationBarBlur(isVisible: isNavigationBarScrolled)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.commonBack)
+            }
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 26) {
+                    ForEach(PartyLobbyRankingKind.allCases) { item in
+                        Button { kind = item } label: {
+                            Text(item.title)
+                                .font(.system(size: 17, weight: .bold))
+                                .foregroundStyle(kind == item ? .white : .white.opacity(0.5))
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button { showRules = true } label: {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(.white)
+                }
+            }
+        }
+        .task(id: requestKey) {
+            await store.load(kind: kind, timeframe: timeframe, period: period)
+        }
+        .onChange(of: kind) { _ in
+            timeframe = .day
+            period = .current
+        }
+        .onPreferenceChange(PartyLobbyRankingScrollOffsetPreferenceKey.self, perform: updateNavigationBar)
+        .userCardSheet(item: $userCard)
+        .overlay {
+            if showRules {
+                PartyLobbyRankRules(kind: kind, timeframe: timeframe) { showRules = false }
+            }
+            if let rewardEntry {
+                PartyLobbyRankRewardSheet(presentation: rewardEntry) { self.rewardEntry = nil }
+            }
+        }
+    }
+
+    private var requestKey: String { "\(kind.rawValue)-\(timeframe.rawValue)-\(period.rawValue)" }
+
+    private func backgroundHeight(topSafeArea: CGFloat) -> CGFloat {
+        // Party 比首页普通榜多了倒计时/当前期切换行，背景需随列表起点下移。
+        let topChrome = max(topSafeArea, 44) + 44
+        let partyListTop: CGFloat = 54 + 33 + 250 - 12
+        return topChrome + partyListTop + 20
+    }
+
+    private func updateNavigationBar(_ offset: CGFloat) {
+        let shouldShowBackground = offset < -8
+        guard shouldShowBackground != isNavigationBarScrolled else { return }
+        isNavigationBarScrolled = shouldShowBackground
+    }
+
+    private func tapEntry(_ entry: PartyRankEntry) {
+        switch kind {
+        case .partyRich:
+            guard !entry.userId.isEmpty else { return }
+            userCard = UserCardPresentation(preview: entry.userCardPreview)
+        case .room:
+            if let roomId = entry.roomId, !roomId.isEmpty { onOpenRoom(roomId) }
+        }
+    }
+}
+
+/// 标准榜单主体：Top3 + 4+ 列表 + 我的排名。后续 Charm 类榜单可以只替换数据适配器继续复用。
+private struct PartyStandardRankingBody: View {
+    let kind: PartyLobbyRankingKind
+    @Binding var timeframe: PartyLobbyRankingTimeframe
+    @Binding var period: PartyLobbyRankingPeriod
+    let payload: PartyLobbyRankResponse?
+    let isLoading: Bool
+    let onTapEntry: (PartyRankEntry) -> Void
+    let onTapRewards: (PartyRankEntry) -> Void
+    let onRefresh: () async -> Void
+
+    private var entries: [PartyRankEntry] { payload?.rankList ?? [] }
+    private var charmMembers: [HomeRankingMember] { entries.map(asCharmMember) }
+    private var charmMine: HomeRankingMember? { payload?.myRank.map(asCharmMember) }
+
+    var body: some View {
+        GeometryReader { geometry in
+            ScrollView {
+                PartyLobbyRankingScrollOffsetMarker()
+                VStack(spacing: 0) {
+                    timeframeControl
+                    periodAndCountdown
+                    HomeRankingTopThree(
+                        members: charmMembers,
+                        category: .charm,
+                        onTap: openAdaptedMember
+                    )
+                    listSection(minimumHeight: max(124, geometry.size.height - 337))
+                        .padding(.top, -12)
+                }
+                .padding(.bottom, 12)
+                .frame(maxWidth: .infinity)
+            }
+            .coordinateSpace(name: partyLobbyRankingScrollCoordinateSpace)
+            .scrollIndicators(.hidden)
+            .refreshable { await onRefresh() }
+        }
+        .overlay(alignment: .bottom) {
+            HomeRankingMineRow(member: charmMine, category: .charm, onTap: openAdaptedMember)
+                .padding(.bottom, -20)
+        }
+    }
+
+    private var timeframeControl: some View {
+        HStack(spacing: 0) {
+            ForEach(PartyLobbyRankingTimeframe.allCases) { value in
+                Button { timeframe = value } label: {
+                    Text(value.title)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity, minHeight: 38)
+                        .background {
+                            if timeframe == value {
+                                Capsule().fill(
+                                    LinearGradient(
+                                        colors: [Color(hex: 0x8515FF), Color(hex: 0xE40132)],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
+                                )
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2)
+        .overlay(Capsule().stroke(.white.opacity(0.7), lineWidth: 1))
+        .padding(.horizontal, 20)
+        .padding(.top, 0)
+        .padding(.bottom, 12)
+    }
+
+    private var periodAndCountdown: some View {
+        HStack {
+            if period == .current, let duration = payload?.duration, duration > 0 {
+                PartyRankCountdown(seconds: duration)
+            }
+            Spacer()
+            Button { period = period == .current ? .last : .current } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.left.arrow.right")
+                    Text(periodLabel)
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(.black.opacity(0.3)))
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
+    }
+
+    private var periodLabel: String {
+        switch (period, timeframe) {
+        case (.current, .day): return L10n.PartyRoom.rankPeriodToday
+        case (.last, .day): return L10n.PartyRoom.rankPeriodYesterday
+        case (.current, .week): return L10n.Party.rankPeriodThisWeek
+        case (.last, .week): return L10n.Party.rankPeriodLastWeek
+        case (.current, .month): return L10n.Party.rankPeriodThisMonth
+        case (.last, .month): return L10n.Party.rankPeriodLastMonth
+        }
+    }
 
     @ViewBuilder
-    private var toast: some View {
-        if toastTick != nil {
-            VStack {
-                Text(L10n.Party.comingSoon).toastStyle()
-                Spacer()
+    private func listSection(minimumHeight: CGFloat) -> some View {
+        if entries.count <= 3 {
+            ZStack {
+                // 空态由外层占满 Top3 以下的可用区域，公共空态始终居中。
+                HomeRankingList(
+                    members: [],
+                    category: .charm,
+                    onTap: openAdaptedMember,
+                    minimumHeight: minimumHeight,
+                    bottomContentInset: 50,
+                    hasMore: false,
+                    isLoadingMore: false,
+                    pageError: nil,
+                    onLoadMore: {}
+                )
+                if isLoading {
+                    HomeRankingLoadingOverlay()
+                }
             }
-            .transition(Toast.transition)
-            .task(id: toastTick) {
-                do {
-                    try await Task.sleep(nanoseconds: Toast.dismissDurationNanos)
-                    try Task.checkCancellation()
-                } catch { return }
-                toastTick = nil
+        } else {
+            HomeRankingList(
+                members: charmMembers,
+                category: .charm,
+                onTap: openAdaptedMember,
+                minimumHeight: minimumHeight,
+                bottomContentInset: 50,
+                hasMore: false,
+                isLoadingMore: false,
+                pageError: nil,
+                onLoadMore: {}
+            )
+        }
+    }
+
+    private func asCharmMember(_ entry: PartyRankEntry) -> HomeRankingMember {
+        let identity = kind == .room ? (entry.roomId ?? entry.userId) : entry.userId
+        return HomeRankingMember(
+            userId: identity,
+            nickname: entry.nickname ?? L10n.anonymous,
+            icon: entry.avatar,
+            countryId: entry.countryId,
+            age: entry.age,
+            value: compactValue(entry.rankValue),
+            rank: entry.rankIndex,
+            isRanked: (entry.rankIndex ?? 0) > 0
+        )
+    }
+
+    private func compactValue(_ value: Int?) -> String {
+        let number = value ?? 0
+        if number >= 1_000_000 { return String(format: "%.2fM", Double(number) / 1_000_000) }
+        if number >= 1_000 { return String(format: "%.2fK", Double(number) / 1_000) }
+        return "\(number)"
+    }
+
+    private func openAdaptedMember(_ member: HomeRankingMember?) {
+        guard let identity = member?.userId, !identity.isEmpty else { return }
+        if kind == .room, let entry = entries.first(where: { ($0.roomId ?? $0.userId) == identity }) {
+            onTapEntry(entry)
+        } else if let entry = entries.first(where: { $0.userId == identity }) {
+            onTapEntry(entry)
+        }
+    }
+}
+
+private struct PartyRankCountdown: View {
+    private let endDate: Date
+
+    init(seconds: Int) {
+        endDate = Date().addingTimeInterval(TimeInterval(max(0, seconds)))
+    }
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            let remain = max(0, Int(endDate.timeIntervalSince(context.date)))
+            let days = remain / 86_400
+            let hours = (remain % 86_400) / 3_600
+            let minutes = (remain % 3_600) / 60
+            HStack(spacing: 4) {
+                Image(systemName: "clock")
+                Text(String(format: "%02dD:%02dH:%02dM", days, hours, minutes))
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(.black.opacity(0.3)))
+        }
+    }
+}
+
+private struct PartyLobbyRewardPresentation: Identifiable {
+    let entry: PartyRankEntry
+    let kind: PartyLobbyRankingKind
+    var id: String { "\(kind.rawValue)-\(entry.id)" }
+}
+
+private struct PartyLobbyRankRewardSheet: View {
+    let presentation: PartyLobbyRewardPresentation
+    let onDismiss: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.58).ignoresSafeArea().onTapGesture(perform: onDismiss)
+            VStack(spacing: 16) {
+                Text(presentation.kind.title)
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(.white)
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 14) {
+                    ForEach(presentation.entry.rewardConfig) { reward in
+                        VStack(spacing: 6) {
+                            CachedAsyncImage(url: reward.itemSmallImg.flatMap(URL.init(string:)),
+                                             contentMode: .fit,
+                                             cdn: (.gift, .fit)) {
+                                RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.1))
+                            }
+                            .frame(width: 54, height: 54)
+                            Text(reward.itemName ?? "-")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.white.opacity(0.8))
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: 320)
+            .background(Color(hex: 0x251A3A))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+}
+
+private struct PartyLobbyRankRules: View {
+    let kind: PartyLobbyRankingKind
+    let timeframe: PartyLobbyRankingTimeframe
+    let onDismiss: () -> Void
+    @State private var dynamicRuleImageURL: String?
+    @State private var isLoading = false
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.58).ignoresSafeArea().onTapGesture(perform: onDismiss)
+            VStack(spacing: 16) {
+                Text(L10n.Party.rankRulesTitle)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+                if timeframe == .day {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(ruleLines, id: \.self) { line in
+                            Text(line)
+                        }
+                    }
+                    .font(.system(size: 14))
+                    .foregroundStyle(.white.opacity(0.78))
+                    .multilineTextAlignment(.leading)
+                } else if isLoading {
+                    ProgressView().tint(.white).frame(height: 120)
+                } else if let dynamicRuleImageURL {
+                    CachedAsyncImage(url: URL(string: dynamicRuleImageURL), contentMode: .fit) {
+                        Color.clear
+                    }
+                    .frame(maxHeight: 360)
+                }
+                Button(L10n.commonOK, action: onDismiss)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, minHeight: 40)
+                    .background(Capsule().fill(Color(hex: 0x8515FF)))
+            }
+            .padding(20)
+            .frame(maxWidth: 320)
+            .background(Color(hex: 0x251A3A))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .task(id: "\(kind.rawValue)-\(timeframe.rawValue)") {
+            guard timeframe != .day else { return }
+            isLoading = true
+            defer { isLoading = false }
+            do {
+                dynamicRuleImageURL = try await PartyAPI.partyLobbyRankRuleContent(belongAct: belongAct)
+            } catch {
+                AppLogger.party.error("[PartyLobbyRank] rule image failed: \(String(describing: error), privacy: .public)")
             }
         }
     }
 
-    private func fireToast() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            toastTick = UUID()
+    private var ruleLines: [String] {
+        switch kind {
+        case .partyRich:
+            return [L10n.Party.rankPartyRichRule1, L10n.Party.rankPartyRichRule2, L10n.Party.rankPartyRichRule3]
+        case .room:
+            return [L10n.Party.rankRoomRule1, L10n.Party.rankRoomRule2, L10n.Party.rankRoomRule3]
+        }
+    }
+
+    private var belongAct: Int {
+        switch (kind, timeframe) {
+        case (.partyRich, .week): return 5
+        case (.partyRich, .month): return 6
+        case (.room, .week): return 3
+        case (.room, .month): return 4
+        case (_, .day): return 0
         }
     }
 }

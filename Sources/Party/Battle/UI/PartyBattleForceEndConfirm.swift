@@ -9,53 +9,56 @@ struct PartyBattleForceEndConfirm: View {
     @State private var actionError: String?
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Spacer()
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.footnote)
-                        .foregroundColor(.white.opacity(0.7))
-                        .frame(width: 20, height: 20)
-                        .contentShape(Rectangle())
+        ZStack {
+            bgGradient.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                HStack {
+                    Spacer()
+                    Button {
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.footnote)
+                            .foregroundColor(.white.opacity(0.7))
+                            .frame(width: 20, height: 20)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 10).padding(.top, 10)
+                .padding(.horizontal, 10).padding(.top, 10)
 
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(.orange)
-                .font(.system(size: 44))
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                    .font(.system(size: 44))
 
-            Text("Are you sure you want to end the PK early?")
-                .font(.title3).bold()
-                .foregroundColor(.white)
-                .padding(.top, 20)
+                Text(L10n.Party.Battle.forceEndTitle)
+                    .font(.title3).bold()
+                    .foregroundColor(.white)
+                    .padding(.top, 20)
 
-            Text("Early termination will determine the winner based on the current total score.")
-                .font(.subheadline)
-                .foregroundColor(.white.opacity(0.85))
-                .multilineTextAlignment(.center)
+                Text(L10n.Party.Battle.forceEndDesc)
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.85))
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 20)
+                    .padding(.horizontal, 8)
+
+                scoreRow.padding(.top, 20)
+
+                willWinText.padding(.top, 6)
+
+                HStack(spacing: 14) {
+                    cancelButton
+                    confirmButton
+                }
                 .padding(.top, 20)
                 .padding(.horizontal, 8)
-
-            scoreRow.padding(.top, 20)
-
-            willWinText.padding(.top, 6)
-
-            HStack(spacing: 14) {
-                cancelButton
-                confirmButton
             }
-            .padding(.top, 20)
-            .padding(.horizontal, 8)
         }
-        .padding(.horizontal, 24).padding(.bottom, 30)
-        .background(bgGradient)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
         .frame(maxWidth: .infinity)
+        .padding(.horizontal, 24).padding(.bottom, 30)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .top) {
             if let actionError {
                 Text(actionError)
@@ -68,13 +71,13 @@ struct PartyBattleForceEndConfirm: View {
     @ViewBuilder
     private var scoreRow: some View {
         HStack(spacing: 4) {
-            teamScoreCard(color: redColor, label: "Red Team", score: redScore)
+            teamScoreCard(color: redColor, label: L10n.Party.Battle.redTeam, score: redScore)
             Image("partyPkBattleMarker")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 32, height: 32)
                 .padding(.horizontal, 4)
-            teamScoreCard(color: blueColor, label: "Blue Team", score: blueScore)
+            teamScoreCard(color: blueColor, label: L10n.Party.Battle.blueTeam, score: blueScore)
         }
     }
 
@@ -96,17 +99,13 @@ struct PartyBattleForceEndConfirm: View {
         HStack(spacing: 3) {
             switch leadingTeam {
             case 1:
-                Text("The Red Team")
+                Text(L10n.Party.Battle.forceEndWill(L10n.Party.Battle.redTeam))
                     .font(.subheadline).bold().foregroundColor(redColor)
-                Text("will win.")
-                    .font(.subheadline).foregroundColor(.white.opacity(0.85))
             case 2:
-                Text("The Blue Team")
+                Text(L10n.Party.Battle.forceEndWill(L10n.Party.Battle.blueTeam))
                     .font(.subheadline).bold().foregroundColor(blueColor)
-                Text("will win.")
-                    .font(.subheadline).foregroundColor(.white.opacity(0.85))
             default:
-                Text("The match is currently tied.")
+                Text(L10n.Party.Battle.forceEndTied)
                     .font(.subheadline).foregroundColor(.white.opacity(0.85))
             }
         }
@@ -117,7 +116,7 @@ struct PartyBattleForceEndConfirm: View {
         Button {
             dismiss()
         } label: {
-            Text("Cancel")
+            Text(L10n.Party.Battle.cancel)
                 .font(.subheadline).bold()
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
@@ -139,7 +138,7 @@ struct PartyBattleForceEndConfirm: View {
                     await MainActor.run { dismiss() }
                 } else {
                     await MainActor.run {
-                        actionError = store.actionError ?? "Unable to end PK. Please try again."
+                        actionError = store.actionError ?? L10n.Party.Battle.alreadyEnded
                     }
                 }
             }
@@ -148,7 +147,7 @@ struct PartyBattleForceEndConfirm: View {
                 if store.forceEnding {
                     ProgressView().tint(.white)
                 }
-                Text("Confirm")
+                Text(L10n.Party.Battle.confirm)
                     .font(.subheadline).bold()
                     .foregroundColor(.white)
             }

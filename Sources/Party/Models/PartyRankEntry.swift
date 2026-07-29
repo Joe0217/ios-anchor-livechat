@@ -27,6 +27,12 @@ struct PartyRankEntry: Decodable, Identifiable, Equatable, Hashable {
     let rankValueText: String?
     /// 在线观众接口的游标。后端以分值排序，下一页请求需原样回传最后一项的 `score`。
     let score: String?
+    /// 大厅 Room 榜点击后进入的房间 ID；PartyRich 榜该字段为空。
+    let roomId: String?
+    /// 大厅榜使用：1=用户，2=主播；决定默认头像和奖励配置。
+    let userType: Int?
+    let countryId: String?
+    let rewardConfig: [PartyLobbyRankReward]
 
     var id: String { userId }
 
@@ -49,6 +55,7 @@ struct PartyRankEntry: Decodable, Identifiable, Equatable, Hashable {
         case avatarUrl
         case expectedReward
         case rank
+        case roomId, userType, countryId, rewardConfig
     }
 
     init(from decoder: Decoder) throws {
@@ -67,6 +74,9 @@ struct PartyRankEntry: Decodable, Identifiable, Equatable, Hashable {
             userId = s
         } else if let i = try? c.decode(Int64.self, forKey: .anchorId) {
             userId = String(i)
+        } else if let s = Self.decodeString(c, forKey: .roomId), !s.isEmpty {
+            // Room 榜个别后端版本只返回 roomId；仍需稳定 Identifiable 供列表渲染。
+            userId = s
         } else {
             throw DecodingError.dataCorruptedError(forKey: .userId, in: c,
                 debugDescription: "PartyRankEntry: missing userId")
@@ -92,12 +102,18 @@ struct PartyRankEntry: Decodable, Identifiable, Equatable, Hashable {
             ?? Self.decodeInt(c, forKey: .rank)
         rankValueText = Self.decodeString(c, forKey: .expectedReward)
         score = Self.decodeString(c, forKey: .score)
+        roomId = Self.decodeString(c, forKey: .roomId)
+        userType = Self.decodeInt(c, forKey: .userType)
+        countryId = Self.decodeString(c, forKey: .countryId)
+        rewardConfig = (try? c.decode([PartyLobbyRankReward].self, forKey: .rewardConfig)) ?? []
     }
 
     init(userId: String, nickname: String? = nil, avatar: String? = nil,
          rankValue: Int? = nil, roomRoleType: Int? = nil,
          headFrame: String? = nil, age: Int? = nil, gender: Int? = nil,
-         rankIndex: Int? = nil, rankValueText: String? = nil, score: String? = nil) {
+         rankIndex: Int? = nil, rankValueText: String? = nil, score: String? = nil,
+         roomId: String? = nil, userType: Int? = nil, countryId: String? = nil,
+         rewardConfig: [PartyLobbyRankReward] = []) {
         self.userId = userId
         self.nickname = nickname
         self.avatar = avatar
@@ -109,6 +125,10 @@ struct PartyRankEntry: Decodable, Identifiable, Equatable, Hashable {
         self.rankIndex = rankIndex
         self.rankValueText = rankValueText
         self.score = score
+        self.roomId = roomId
+        self.userType = userType
+        self.countryId = countryId
+        self.rewardConfig = rewardConfig
     }
 
     private static func decodeInt(
@@ -132,26 +152,6 @@ struct PartyRankEntry: Decodable, Identifiable, Equatable, Hashable {
     }
 }
 
-/// 游戏任务激励排行榜响应（安卓 `PartyRoomRankingFragment` 与主播端 H5 共用）。
-///
-/// `expectedReward` / `anchorId` 均可能是字符串化 Long；列表项复用 `PartyRankEntry` 的兼容解码，
-/// 从而不在 Swift 侧损失精度。
-struct PartyGameTaskRankingResponse: Decodable {
-    let list: [PartyRankEntry]
-    let myRanking: PartyRankEntry?
-    let total: Int
-
-    enum CodingKeys: String, CodingKey {
-        case list, myRanking, total
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        list = (try? c.decodeIfPresent([PartyRankEntry].self, forKey: .list)) ?? []
-        myRanking = try? c.decodeIfPresent(PartyRankEntry.self, forKey: .myRanking)
-        total = c.decodeFlexibleInt(forKey: .total) ?? list.count
-    }
-}
 extension PartyRankEntry {
     /// 大厅/房内榜单已有的用户资料，避免点名片卡后等待详情接口才出现身份信息。
     var userCardPreview: UserCardPreview {
@@ -240,6 +240,26 @@ struct PartyLobbyTop3Response: Decodable, Equatable {
     }
 }
 
+/// 游戏任务激励排行榜响应（安卓 `PartyRoomRankingFragment` 与主播端 H5 共用）。
+///
+/// `expectedReward` / `anchorId` 均可能是字符串化 Long；列表项复用 `PartyRankEntry` 的兼容解码，
+/// 从而不在 Swift 侧损失精度。
+struct PartyGameTaskRankingResponse: Decodable {
+    let list: [PartyRankEntry]
+    let myRanking: PartyRankEntry?
+    let total: Int
+
+    enum CodingKeys: String, CodingKey {
+        case list, myRanking, total
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        list = (try? c.decodeIfPresent([PartyRankEntry].self, forKey: .list)) ?? []
+        myRanking = try? c.decodeIfPresent(PartyRankEntry.self, forKey: .myRanking)
+        total = c.decodeFlexibleInt(forKey: .total) ?? list.count
+    }
+}
 
 /// 派对房榜单响应包装（贡献 / 荣誉榜返 `{rankList, myRank, duration}`）。
 struct PartyRankResponse: Decodable {

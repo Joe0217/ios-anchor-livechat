@@ -103,18 +103,14 @@ struct PartySeatItemView: View {
     }
 
     /// 麦克风状态指示（底 trailing，RTL 自动镜像到底 leading 视觉位）
-    @ViewBuilder
     private var micIndicator: some View {
-        if seat.isMicrophoneMuted {
-            mutedBadge
-        } else {
-            Image(systemName: "mic.fill")
-                .font(.system(size: 11))
-                .foregroundColor(.white)
-                .padding(4)
-                .background(Circle().fill(Color.green))
-                .padding(2)
-        }
+        // 调用方已先处理 `seat.isMicrophoneMuted`，这里仅渲染正常开麦状态。
+        Image(systemName: "mic.fill")
+            .font(.system(size: 11))
+            .foregroundColor(.white)
+            .padding(4)
+            .background(Circle().fill(Color.green))
+            .padding(2)
     }
 
     private var mutedBadge: some View {

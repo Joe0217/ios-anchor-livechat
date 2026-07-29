@@ -48,11 +48,12 @@ struct PartyRoomAnchorBar: View {
     let onViewerTap: () -> Void
     /// 主播周任务入口（安卓 WeekTaskDialog：上麦时长换奖励）。
     let showWeeklyTask: Bool
-    let weeklyTaskProgress: PartyWeeklyTaskTopProgress?
+    let weeklyTaskRewardQuantity: Int
     let onWeeklyTaskTap: () -> Void
     /// 热门房任务由 `checkExistHot3` 确认后才展示，避免普通房误出现入口。
     let showHotTask: Bool
     let hotTaskStatus: PartyHotRoomTaskStatus?
+    let hotTaskTopRankLimit: Int
     let onHotTaskTap: () -> Void
     /// 管理按钮 badge（对齐安卓 `tvMicApplicationNum`：queueSeatNum > 0 时房主主界面可见红角标）；
     /// 默认 0 不显示；房主/房管场景由 PartyRoomView 传 `store.queueSeatNum`
@@ -60,14 +61,22 @@ struct PartyRoomAnchorBar: View {
 
     /// v11：轮播索引（0=财富榜，1=荣耀榜）；5s 自动切换，对齐 H5 v-swiper autoplay=5000
     @State private var rankSwiperIndex: Int = 0
+    /// 顶部统计栏须为观众人数保留右侧空间。
+    private static let hotTaskEntryWidth: CGFloat = 92
+    /// 顶部栏局部规格，避免影响其他 Party 页面。
+    private static let statIconSize: CGFloat = 14
+    private static let statArrowSize: CGFloat = 10
+    private static let rankNumberFont = Font.system(size: 14, weight: .semibold)
+    private static let viewerNumberFont = Font.system(size: 13, weight: .medium)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
                 Button(action: onAnchorTap) {
                     anchorAvatarBlock
                 }
                 .buttonStyle(.plain)
+                .padding(.horizontal, 4)
                 anchorTextBlock
                 // Component 11 关注按钮紧贴房间信息（房名/ID 右侧）；自己房间不显示（isSelfRoom）
                 if !isSelfRoom {
@@ -186,7 +195,7 @@ struct PartyRoomAnchorBar: View {
     // MARK: - 工具栏 4 个白线图标
 
     private var toolbarIcons: some View {
-        HStack(spacing: Theme.Metric.partyRoomToolbarIconGap) {
+        HStack(spacing: 4) {
             iconButton(asset: "partyIconAnnouncement",
                        label: L10n.PartyRoom.a11yAnnouncement,
                        action: onAnnouncementTap)
@@ -215,7 +224,7 @@ struct PartyRoomAnchorBar: View {
                     .foregroundColor(Theme.Palette.partyRoomToolbarIcon)
                     .frame(width: Theme.Metric.partyRoomToolbarIconSize,
                            height: Theme.Metric.partyRoomToolbarIconSize)
-                    // padding 2（原 4）—— iPhone 13 mini 顶部行宽度合规化：4 图标各 26pt = 104 + 3 gap × 12 = 140
+                    // padding 2（原 4）—— iPhone 13 mini 顶部行宽度合规化：4 图标各 26pt = 104 + 3 gap × 4 = 116
                     .padding(2)
                 // 对齐安卓 tvMicApplicationNum：badge > 0 显示右上角红角标
                 if badge > 0 {
@@ -238,21 +247,30 @@ struct PartyRoomAnchorBar: View {
     // MARK: - 排名行（v11：对齐 H5 header-wrap.vue 第二行 h-24 · 财富/荣耀 5s 轮播 + 观众数）
 
     private var statRow: some View {
-        ViewThatFits(in: .horizontal) {
-            fullStatRow
-            compactStatRow
-        }
-        .padding(.vertical, Theme.Metric.partyRoomStatRowV)
+        fullStatRow
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // 外层 VStack 已保留 6pt 行距；仅保留榜单行底部留白，避免顶部间距叠加为 12pt。
+            .padding(.bottom, Theme.Metric.partyRoomStatRowV)
     }
 
     private var fullStatRow: some View {
         HStack(spacing: 4) {
+            leadingStatContent
+            Spacer(minLength: 8)
+            trailingStatContent
+        }
+    }
+
+    private var leadingStatContent: some View {
+        HStack(spacing: 4) {
             rankSwiperButton
-            Spacer()
             taskEntries
-            if (showWeeklyTask || showHotTask), showsViewerEntry {
-                Spacer()
-            }
+        }
+    }
+
+    @ViewBuilder
+    private var trailingStatContent: some View {
+        HStack(spacing: 6) {
             if let banner = cornerBanner, banner.isDisplayable {
                 cornerBannerButton(banner)
             }
@@ -260,26 +278,7 @@ struct PartyRoomAnchorBar: View {
                 viewerButton
             }
         }
-    }
-
-    /// 窄屏将统计任务与 Banner/观众分两行，避免固定宽度进度条裁切任何入口。
-    private var compactStatRow: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 4) {
-                rankSwiperButton
-                Spacer(minLength: 4)
-                taskEntries
-            }
-            HStack(spacing: 6) {
-                Spacer()
-                if let banner = cornerBanner, banner.isDisplayable {
-                    cornerBannerButton(banner)
-                }
-                if showsViewerEntry {
-                    viewerButton
-                }
-            }
-        }
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     @ViewBuilder
@@ -288,7 +287,7 @@ struct PartyRoomAnchorBar: View {
             weeklyTaskButton
         }
         if showHotTask {
-            hotTaskButton
+            hotTaskEntry
         }
     }
 
@@ -302,23 +301,28 @@ struct PartyRoomAnchorBar: View {
             HStack(spacing: 4) {
                 Image("partyTrophy")
                     .resizable().scaledToFit()
-                    .frame(width: Theme.Metric.partyRoomStatIconSize,
-                           height: Theme.Metric.partyRoomStatIconSize)
-                // 数值区固定宽度避免轮播时布局跳动
+                    .frame(width: Self.statIconSize, height: Self.statIconSize)
                 ZStack {
+                    // 两个榜单数值共同决定宽度，轮播或其中一项刷新时均不会挤动右侧内容。
+                    Text(wealthText)
+                        .font(Self.rankNumberFont)
+                        .lineLimit(1)
+                        .hidden()
+                    Text(honorText)
+                        .font(Self.rankNumberFont)
+                        .lineLimit(1)
+                        .hidden()
                     Text(rankSwiperIndex == 0 ? wealthText : honorText)
-                        .font(Theme.Typography.partyRoomHeatNumber)
+                        .font(Self.rankNumberFont)
                         .foregroundColor(Theme.Palette.partyRoomHeatGold)
                         .lineLimit(1)
                         .id(rankSwiperIndex) // 触发 transition
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
-                .frame(minWidth: 40, alignment: .leading)
                 .clipped()
                 Image("partyArrowYellow")
                     .resizable().scaledToFit()
-                    .frame(width: Theme.Metric.partyRoomStatArrowSize,
-                           height: Theme.Metric.partyRoomStatArrowSize)
+                    .frame(width: Self.statArrowSize, height: Self.statArrowSize)
             }
             .padding(.vertical, 2)
             .contentShape(Rectangle())
@@ -345,15 +349,13 @@ struct PartyRoomAnchorBar: View {
                     .resizable()
                     .renderingMode(.template)
                     .foregroundColor(Theme.Palette.partyRoomViewerCount)
-                    .frame(width: Theme.Metric.partyRoomStatIconSize,
-                           height: Theme.Metric.partyRoomStatIconSize)
+                    .frame(width: Self.statIconSize, height: Self.statIconSize)
                 Text(audienceCountText)
-                    .font(Theme.Typography.partyRoomViewerNumber)
+                    .font(Self.viewerNumberFont)
                     .foregroundColor(Theme.Palette.partyRoomViewerCount)
                 Image("partyArrowYellow")
                     .resizable().scaledToFit()
-                    .frame(width: Theme.Metric.partyRoomStatArrowSize,
-                           height: Theme.Metric.partyRoomStatArrowSize)
+                    .frame(width: Self.statArrowSize, height: Self.statArrowSize)
             }
             .padding(.vertical, 2)
             .contentShape(Rectangle())
@@ -377,37 +379,18 @@ struct PartyRoomAnchorBar: View {
     private var weeklyTaskButton: some View {
         Button(action: onWeeklyTaskTap) {
             HStack(spacing: 5) {
-                Image("partyTrophy")
+                Image("coins")
                     .resizable().scaledToFit()
-                    .frame(width: 17, height: 17)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 4) {
-                        Text(PartyWeeklyTaskSheet.durationText(weeklyTaskProgress?.currentTime ?? 0))
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(.white)
-                            .monospacedDigit()
-                        if let reward = weeklyTaskProgress?.rewardText, !reward.isEmpty {
-                            Text(reward)
-                                .font(.system(size: 9, weight: .semibold))
-                                .foregroundColor(Color(hex: 0xFFFFD35C))
-                                .lineLimit(1)
-                        }
-                    }
-                    GeometryReader { proxy in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(Color.white.opacity(0.23))
-                            Capsule()
-                                .fill(Color(hex: 0xFF4DB7FF))
-                                .frame(width: proxy.size.width * (weeklyTaskProgress?.fraction ?? 0))
-                        }
-                    }
-                    .frame(height: 4)
-                }
-                Image(systemName: "gift.fill")
-                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 15, height: 15)
+                Text("\(weeklyTaskRewardQuantity)")
+                    .font(.system(size: 10, weight: .regular))
                     .foregroundColor(Color(hex: 0xFFFFD35C))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
-            .frame(width: 132, height: 28, alignment: .leading)
+            .padding(.horizontal, 4)
+            .frame(minHeight: 22)
+            .background(Color(hex: 0x4B2A7D).opacity(0.88), in: Capsule())
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -416,21 +399,170 @@ struct PartyRoomAnchorBar: View {
 
     private var hotTaskButton: some View {
         Button(action: onHotTaskTap) {
-            ZStack(alignment: .bottomTrailing) {
-                Image(systemName: "flame.fill")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(Color(hex: 0xFFFF8B3D))
-                    .frame(width: 26, height: 26)
-                if hotTaskStatus?.fraction != nil {
-                    Circle()
-                        .fill(Color(hex: 0xFF4DB7FF))
-                        .frame(width: 7, height: 7)
+            if let progress = hotTaskStatus?.topProgress, hotTaskStatus?.isActive == true {
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color(hex: 0x263B72).opacity(0.9))
+                    GeometryReader { proxy in
+                        Capsule()
+                            .fill(Color(hex: 0xFF4DB7FF).opacity(0.82))
+                            .frame(width: proxy.size.width * progress.fraction)
+                    }
+                    HStack(spacing: 0) {
+                        Text(PartyRoomAnchorBar.durationText(progress.remaining))
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(.white)
+                            .monospacedDigit()
+                            .minimumScaleFactor(0.7)
+                        Spacer(minLength: 0)
+                        HStack(spacing: 0) {
+                            Image("partyHotTaskChest")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 26, height: 25)
+                            Text(progress.rewardText)
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(Color(hex: 0xFFFFD35C))
+                                .fixedSize(horizontal: true, vertical: false)
+                                .layoutPriority(1)
+                        }
+                    }
+                    .padding(.horizontal, 8)
                 }
+                .frame(width: Self.hotTaskEntryWidth, height: 22)
+                .clipShape(Capsule())
+                .contentShape(Rectangle())
+            } else {
+                HStack(spacing: 0) {
+                    if hotTaskStatus != nil {
+                        PartyHotTaskOutOfTopMarquee(text: hotTaskOutOfTopText)
+                            .frame(width: Self.hotTaskOutOfTopTextWidth, height: 22)
+                    }
+                }
+                .padding(.horizontal, 8)
+                .frame(width: Self.hotTaskEntryWidth, height: 22, alignment: .leading)
+                .background(Color(hex: 0x46526C).opacity(0.9), in: Capsule())
+                .clipShape(Capsule())
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(hotTaskStatus?.title.isEmpty == false ? hotTaskStatus!.title : L10n.PartyRoom.hotTaskTitle)
+        .accessibilityLabel(L10n.PartyRoom.hotTaskTitle)
+    }
+
+    @ViewBuilder
+    private var hotTaskEntry: some View {
+        if hotTaskStatus?.isTopRoom == false {
+            HStack(spacing: 0) {
+                PartyHotTaskOutOfTopMarquee(text: hotTaskOutOfTopText)
+                    .frame(width: Self.hotTaskOutOfTopTextWidth, height: 22)
+            }
+            .padding(.horizontal, 8)
+            .frame(width: Self.hotTaskEntryWidth, height: 22, alignment: .leading)
+            .background(Color(hex: 0x46526C).opacity(0.9), in: Capsule())
+            .clipShape(Capsule())
+            .accessibilityLabel(hotTaskOutOfTopText)
+        } else {
+            hotTaskButton
+        }
+    }
+
+    private static func durationText(_ seconds: Int) -> String {
+        String(format: "%02d:%02d", max(0, seconds) / 60, max(0, seconds) % 60)
+    }
+
+    /// 入口宽 92pt，扣除左右内边距后的跑马灯可视区域。
+    private static let hotTaskOutOfTopTextWidth: CGFloat = hotTaskEntryWidth - 16
+
+    private var hotTaskOutOfTopText: String {
+        String(format: L10n.PartyRoom.hotTaskOutOfTopFormat, max(1, hotTaskTopRankLimit))
+    }
+}
+
+private struct PartyHotTaskMarqueeTextWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+/// 对齐 Android `tvOutOfTopTip` 的 MarqueeTextView：仅在文字超出可用宽度时从右向左循环滚动。
+private struct PartyHotTaskOutOfTopMarquee: View {
+    let text: String
+
+    @State private var textWidth: CGFloat = 0
+    @State private var offset: CGFloat = 0
+
+    private struct AnimationKey: Hashable {
+        let text: String
+        let availableWidth: Int
+        let textWidth: Int
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Text(text)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.78))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .background {
+                        GeometryReader { textProxy in
+                            Color.clear.preference(
+                                key: PartyHotTaskMarqueeTextWidthKey.self,
+                                value: textProxy.size.width
+                            )
+                        }
+                    }
+                    .offset(x: offset)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .mask(Rectangle())
+            .onPreferenceChange(PartyHotTaskMarqueeTextWidthKey.self) { textWidth = $0 }
+            .task(id: AnimationKey(
+                text: text,
+                availableWidth: Int((proxy.size.width * 100).rounded()),
+                textWidth: Int((textWidth * 100).rounded())
+            )) {
+                let availableWidth = proxy.size.width
+                guard textWidth > availableWidth, availableWidth > 0 else {
+                    setOffsetWithoutAnimation(0)
+                    return
+                }
+
+                let travel = availableWidth + textWidth
+                let duration = max(1, Double(travel) / 35)
+                let sleepNanoseconds = UInt64((duration * 1_000_000_000).rounded())
+
+                setOffsetWithoutAnimation(availableWidth)
+                do {
+                    try await Task.sleep(nanoseconds: 200_000_000)
+                } catch {
+                    return
+                }
+
+                while !Task.isCancelled {
+                    withAnimation(.linear(duration: duration)) {
+                        offset = -textWidth
+                    }
+                    do {
+                        try await Task.sleep(nanoseconds: sleepNanoseconds)
+                    } catch {
+                        return
+                    }
+                    setOffsetWithoutAnimation(availableWidth)
+                }
+            }
+        }
+    }
+
+    private func setOffsetWithoutAnimation(_ value: CGFloat) {
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            offset = value
+        }
     }
 }
 

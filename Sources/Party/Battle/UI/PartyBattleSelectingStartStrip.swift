@@ -39,14 +39,14 @@ struct PartyBattleSelectingStartStrip: View {
                 let started = await store.startNow()
                 if !started {
                     await MainActor.run {
-                        actionError = store.actionError ?? "Unable to start PK. Please try again."
+                        actionError = store.actionError ?? L10n.Party.Battle.startNowFailed
                     }
                 }
             }
         } label: {
             VStack(spacing: 2) {
                 HStack(spacing: 8) {
-                    Text("Start")
+                    Text(L10n.Party.Battle.start)
                         .font(.system(size: 20, weight: .bold))
                         .italic()
                         .foregroundColor(.white)
@@ -55,7 +55,7 @@ struct PartyBattleSelectingStartStrip: View {
                         .italic()
                         .foregroundColor(.yellow)
                 }
-                Text("60s countdown or click START")
+                Text(L10n.Party.Battle.selectingHostTitle)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.white.opacity(0.7))
             }
@@ -78,7 +78,7 @@ struct PartyBattleSelectingStartStrip: View {
     private var audienceCountdown: some View {
         let left = max(0, store.leftSec)
         HStack(spacing: 8) {
-            Text("Countdown")
+            Text(L10n.Party.Battle.countdown)
                 .font(.headline).bold()
                 .foregroundColor(.white)
             Text("\(left)s")

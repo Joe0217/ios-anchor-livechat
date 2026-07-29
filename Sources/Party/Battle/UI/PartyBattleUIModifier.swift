@@ -25,15 +25,19 @@ struct PartyBattleUIModifier: ViewModifier {
                     // 直接回写 sheet binding，确保 PK 创建成功后立即关闭发起页。
                     showInitiate = false
                 }
-                    .presentationDetents([.fraction(0.5), .fraction(0.8)])
+                    .selfSizingSheetHeight(minHeight: 200, maxHeight: 700)
+                    .presentationDragIndicator(.visible)
+                    .partyBattleSheetBackground(.initiate)
             }
             .sheet(isPresented: $showForceEnd) {
                 PartyBattleForceEndConfirm(store: battleStore)
                     .presentationDetents([.fraction(0.5), .fraction(0.8)])
+                    .partyBattleSheetBackground(.dark)
             }
             .sheet(isPresented: $showRules) {
                 PartyBattleRulesPopup()
                     .presentationDetents([.fraction(0.5), .fraction(0.8)])
+                    .partyBattleSheetBackground(.dark)
             }
             .sheet(isPresented: $showCooldownToast) {
                 // 模态弹窗（非自清 toast）· 用户点 X 或 View Previous Settlement 关闭
@@ -50,6 +54,7 @@ struct PartyBattleUIModifier: ViewModifier {
                     }
                 )
                 .presentationDetents([.fraction(0.5), .fraction(0.8)])
+                .partyBattleSheetBackground(.dark)
             }
             // H5 `endedSettlement.vue` 使用 fixed mask 覆盖房间，而不是底部 sheet。
             .overlay {
@@ -120,5 +125,42 @@ private struct PartyBattleContentDetentModifier: ViewModifier {
 private extension View {
     func partyBattleContentDetent() -> some View {
         modifier(PartyBattleContentDetentModifier())
+    }
+}
+
+private enum PartyBattleSheetBackgroundStyle {
+    case initiate
+    case dark
+
+    var gradient: LinearGradient {
+        switch self {
+        case .initiate:
+            return LinearGradient(
+                colors: [Color(red: 0.22, green: 0.12, blue: 0.62), Color(red: 0.09, green: 0.02, blue: 0.24)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        case .dark:
+            return LinearGradient(
+                colors: [Color(red: 0.09, green: 0.09, blue: 0.35), Color(red: 0.11, green: 0.06, blue: 0.30), Color(red: 0.07, green: 0.04, blue: 0.16)],
+                startPoint: .topTrailing,
+                endPoint: .bottomLeading
+            )
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func partyBattleSheetBackground(_ style: PartyBattleSheetBackgroundStyle) -> some View {
+        if #available(iOS 16.4, *) {
+            self.presentationBackground {
+                style.gradient.ignoresSafeArea()
+            }
+        } else {
+            self.background {
+                style.gradient.ignoresSafeArea()
+            }
+        }
     }
 }

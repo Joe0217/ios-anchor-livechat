@@ -17,8 +17,8 @@ struct PartyBattleGiftPanelTabs: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            tabButton(label: "Red", value: 1, image: "partyPkGiftTabRed")
-            tabButton(label: "Blue", value: 2, image: "partyPkGiftTabBlue")
+            tabButton(label: L10n.Party.Battle.giftTabRed, value: 1, image: "partyPkGiftTabRed")
+            tabButton(label: L10n.Party.Battle.giftTabBlue, value: 2, image: "partyPkGiftTabBlue")
         }
         .padding(.horizontal, 12)
         .padding(.top, 10)

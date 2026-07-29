@@ -167,8 +167,11 @@ final class PartyMessageRouter: MessageRouter {
             // 140 活动中奖公屏广播（含 worldcup）
             AppLogger.party.info("[PartyRouter] 140 payloadKeys=\(Array(payload.keys), privacy: .public)")
             delegate?.partyRoomChat(chat, didReceiveWinnerBroadcast: payload, raw: m)
+        case .firstGiftMoment:
+            AppLogger.party.info("[PartyRouter] 197 payloadKeys=\(Array(payload.keys), privacy: .public)")
+            delegate?.partyRoomChat(chat, didReceiveFirstGiftMoment: payload, raw: m)
         case .authUpdate:
-            // 1019 房管变更（仅本人被设/取消，Store 端做 userId==self 校验）
+            // 自定义 1019 只同步房内目标角色；H5 同款权限提示由系统通知 1019 单独处理。
             AppLogger.party.info("[PartyRouter] 1019 payloadKeys=\(Array(payload.keys), privacy: .public)")
             delegate?.partyRoomChat(chat, didReceiveAuthUpdate: payload, raw: m)
         case .roomAnnouncement:
@@ -184,6 +187,15 @@ final class PartyMessageRouter: MessageRouter {
             let luckyPayload = PartyLuckyNumberPayload.publicMessagePayload(from: ext)
             AppLogger.party.info("[PartyRouter] 1051 payloadKeys=\(Array(luckyPayload.keys), privacy: .public)")
             delegate?.partyRoomChat(chat, didReceiveLuckyNumberWin: luckyPayload, raw: m)
+
+        case .superWheelStateSync, .superWheelCountdown, .superWheelSpin,
+             .superWheelReveal, .superWheelFinal, .superWheelClosed, .superWheelBroadcast:
+            // H5 将 1150-1156 归入一个房内状态机；iOS 仅转发广播，由 Store 集中归约。
+            delegate?.partyRoomChat(
+                chat,
+                didReceiveSuperWheelBroadcast: attachType.rawValue,
+                payload: payload
+            )
 
         // MARK: - 一刀切忽略（老版送礼 / H5 空占位）
 
@@ -235,8 +247,10 @@ final class PartyMessageRouter: MessageRouter {
 
         // MARK: - 占位群组（F 期功能未落 / Android 独有不实装）
 
-        case .roomCloseOrWhitelist,
-             .auditGuardWarning,
+        case .roomCloseOrWhitelist:
+            // H5 `party.js` 收到 1009 后显示提示并退房；不继续留在已被关闭/限制的聊天室。
+            delegate?.partyRoomChatDidCloseOrWhitelist(chat)
+        case .auditGuardWarning,
              .diamondGiftSend, .diamondGiftGrab, .diamondGiftSplit, .diamondGiftSettle,
              .luckyNumberPersonalDialog:
             AppLogger.party.debug("[PartyRouter] placeholder attachType=\(attachType.rawValue, privacy: .public)")
@@ -308,7 +322,7 @@ final class PartyMessageRouter: MessageRouter {
         chat.appendMessage(PartyPublicChatAdapter.systemApplication(text: text))
     }
 
-    /// 1019 房管变更系统消息（kind: .authUpdate；仅本人被设/取消）
+    /// 1019 房管变更系统消息（kind: .authUpdate）
     func postSystemAuthUpdate(_ text: String) {
         guard let chat = chatManager else {
             AppLogger.party.notice("[PartyRouter] postSystemAuthUpdate skip: chatManager nil")
@@ -367,15 +381,34 @@ final class PartyMessageRouter: MessageRouter {
     func route(_ attachType: AttachType,
                payload: [String: Any],
                context: MessageContext) -> Bool {
-        if case .partyLuckyNumberPersonalDialog = attachType {
-            switch context {
-            case .sysMsg, .syncSysMsg:
-                guard let chat = chatManager else { return false }
+        switch context {
+        case .sysMsg, .syncSysMsg:
+            guard let chat = chatManager else { return false }
+            switch attachType {
+            case .partyLuckyNumberPersonalDialog:
                 delegate?.partyRoomChat(chat, didReceiveLuckyNumberPersonalWin: payload)
                 return true
+            case .partyInviteVideoSeat(let subType):
+                handleSystemVideoSeatEvent(
+                    subType: subType,
+                    payload: payload,
+                    chat: chat
+                )
+                return true
+            case .partyAuditWarning:
+                delegate?.partyRoomChat(chat, didReceiveAuditWarning: payload)
+                return true
+            case .partyAuthUpdate:
+                delegate?.partyRoomChat(chat, didReceiveSystemAuthUpdate: payload)
+                return true
+            case .partyPlatformAdminChange:
+                delegate?.partyRoomChat(chat, didReceivePlatformAdminChange: payload)
+                return true
             default:
-                break
+                return false
             }
+        default:
+            break
         }
         guard case .partyChatroom = context else { return false }
         switch attachType {
@@ -384,6 +417,49 @@ final class PartyMessageRouter: MessageRouter {
             return true
         default:
             return false
+        }
+    }
+
+    /// H5 的 1040-1048 是 CustomSystemNotification，不是聊天室 custom message。
+    /// 统一转换为现有 `PartyVideoSeatInvite` / `PartyVideoSeatInviteResult`，避免两条通道出现不同状态机。
+    private func handleSystemVideoSeatEvent(
+        subType: Int,
+        payload: [String: Any],
+        chat: PartyRoomChatManager
+    ) {
+        switch subType {
+        case 1040:
+            let timestampMs = Int64(
+                PartyValueNormalizer.intify(payload["_nimCustomNotificationTimestamp"])
+                    ?? Int(Date().timeIntervalSince1970 * 1000)
+            )
+            guard let invite = PartyVideoSeatInvite.from(
+                payload: payload,
+                fallbackRoomId: chat.roomId,
+                timestampMs: timestampMs
+            ) else {
+                AppLogger.party.notice("[PartyRouter] system 1040 missing inviteId/seatIndex")
+                return
+            }
+            delegate?.partyRoomChat(chat, didReceiveVideoSeatInvite: invite)
+        case 1041:
+            delegate?.partyRoomChat(chat, didReceiveInviteResult: .init(kind: .accepted, payload: payload))
+        case 1042:
+            delegate?.partyRoomChat(chat, didReceiveInviteResult: .init(kind: .rejected, payload: payload))
+        case 1043:
+            delegate?.partyRoomChat(chat, didReceiveInviteResult: .init(kind: .timeout, payload: payload))
+        case 1044:
+            delegate?.partyRoomChat(chat, didReceiveInviteResult: .init(kind: .leave, payload: payload))
+        case 1045:
+            delegate?.partyRoomChat(chat, didReceiveInviteResult: .init(kind: .occupied, payload: payload))
+        case 1046:
+            delegate?.partyRoomChat(chat, didReceiveInviteResult: .init(kind: .alreadyOn, payload: payload))
+        case 1047:
+            delegate?.partyRoomChat(chat, didReceiveInviteResult: .init(kind: .broadcast, payload: payload))
+        case 1048:
+            delegate?.partyRoomChat(chat, didReceiveInviteResult: .init(kind: .joinFailed, payload: payload))
+        default:
+            AppLogger.party.notice("[PartyRouter] unexpected system video-seat event=\(subType, privacy: .public)")
         }
     }
 }

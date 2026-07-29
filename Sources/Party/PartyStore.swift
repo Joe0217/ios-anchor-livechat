@@ -4,6 +4,23 @@ import Foundation
 import NIMSDK
 import SwiftUI  // @AppStorage（E v2 §3 partySaveInfo.autoEnter{On,Off}Application 本地持久化）
 
+/// 主 Tab 壳的小窗窄观察源。避免主壳直接订阅 PartyStore 的麦位/公屏等高频状态。
+@MainActor
+final class PartyMinimizedBridge: ObservableObject {
+    @Published fileprivate(set) var isVisible = false
+    @Published fileprivate(set) var roomAvatarURL: String?
+
+    func show(roomAvatarURL: String?) {
+        self.roomAvatarURL = roomAvatarURL
+        isVisible = true
+    }
+
+    func hide() {
+        isVisible = false
+        roomAvatarURL = nil
+    }
+}
+
 /// 派对房全局房间状态（spec §1.4.2 + §1.4.5 + §1.4.6）。
 ///
 /// 对齐安卓 `PartyRoomDataManager`，但**职责仅限房间状态**——拆分三对象避免巨石（spec §1.0.2）：
@@ -21,6 +38,7 @@ import SwiftUI  // @AppStorage（E v2 §3 partySaveInfo.autoEnter{On,Off}Applica
 @MainActor
 final class PartyStore: ObservableObject {
     static let shared = PartyStore()
+    let minimizedBridge = PartyMinimizedBridge()
 
     // MARK: - 状态字段
 
@@ -30,6 +48,7 @@ final class PartyStore: ObservableObject {
     /// mOnMikeStartTime 语义 —— 上麦/下麦/被抱下/切模版/退房/被踢全靠 seatList 变更承接）。
     @Published private(set) var seatList: [PartyRoomSeat] = [] {
         didSet {
+            giftEffects.updateVisibleRecipientIds(Set(seatList.compactMap(\.userId)))
             trackMikeTimeIfNeeded(previous: oldValue)
         }
     }
@@ -37,6 +56,10 @@ final class PartyStore: ObservableObject {
     @Published private(set) var isJoinedChannel: Bool = false   // RTC joined
     @Published private(set) var imAlive: Bool = false           // NIM chatroom enterOK
     @Published private(set) var lastGiftEvent: PartyGiftEvent?
+    /// 1014 鉴黄告警。非 nil 时房间页展示提示；带时长的禁令会先强制本人下麦。
+    @Published private(set) var partyAuditWarningMessage: String?
+    /// attachType 197 首礼时刻顶部飘屏队列（与 H5 Party `firstGiftFloatList` 对齐）。
+    let firstGiftFloatQueue = FirstGiftFloatQueue()
     /// 1052 幸运数字中奖个人弹窗；只在当前 Party 房已加入且房间匹配时写入。
     @Published private(set) var luckyNumberWinPayload: PartyLuckyNumberWinPayload?
     /// Party 房静态礼物效果专用状态机；SVGA/MP4 仍由 GiftEffectCenter 跨场景播放。
@@ -56,6 +79,18 @@ final class PartyStore: ObservableObject {
             }
         }
     }
+    /// 1024 在当前 Party 会话内覆盖进房响应里的平台管理员标志。
+    /// nil 表示尚未收到变更，继续使用 `roomInfo.isPlatformAdmin`。
+    @Published private var platformAdminOverride: Bool?
+    /// 房间内角色的实时覆盖。setAdmin 成功响应与 1019 广播都会写入，
+    /// 使未上麦用户也能立刻反映管理员任免，不必等待详情接口或下一次全量座位广播。
+    @Published private var partyRoleOverrides: [String: PartyRoomRoleType] = [:]
+    private var pendingAdminUserIds: Set<String> = []
+    private var partyAuditWarningDismissTask: Task<Void, Never>?
+    /// H5 Party 小窗态：仅卸载房间页面，不离开 RTC/NIM 聊天室；主壳展示悬浮球供恢复或退出。
+    @Published private(set) var isMinimized: Bool = false
+    /// Party 会话持有一次自动离线暂停，避免小窗恢复时因视图重新出现重复 suspend。
+    private var isAutoOfflineMonitorSuspended = false
     @Published private(set) var pendingVideoSeatInvite: PartyVideoSeatInvite?
     @Published private(set) var lastInviteResult: PartyVideoSeatInviteResult?
     @Published private(set) var lastError: PartyRoomError?
@@ -63,6 +98,10 @@ final class PartyStore: ObservableObject {
     /// 密码房预校验成功后的单次 enter 响应。列表页必须在 push 前完成密码校验；
     /// PartyRoomView 随后消费此响应继续 RTC/NIM 入房，避免对 `/room/enter` 重复请求。
     private var prevalidatedRoomEntry: (roomId: String, info: PartyRoomInfo)?
+    /// 每次入房分配独立 generation。退房期间 HTTP 回包可能迟到，必须先作废旧 generation，
+    /// 否则旧回包会在已退出后重新写入 roomInfo 并启动 RTC/NIM。
+    private var roomEntryGeneration: UInt = 0
+    private var pendingRoomEntryId: String?
     /// 设备权限不足时由 PartyRoomView 弹窗；确认成功后继续用户原本的上麦/开媒体动作。
     @Published var mediaPermissionAlertRequirement: MediaPermissionGate.Requirement?
     private var pendingMediaPermissionAction: (() async -> Void)?
@@ -83,9 +122,20 @@ final class PartyStore: ObservableObject {
     private var didLoadOwnerInfo = false
 
     /// v15 声纹反馈：正在说话的 Agora uid 集合（对齐 H5 `volumeList`）。
-    /// 数据源：`PartyRTCEngine.reportAudioVolumeIndicationOfSpeakers` → 阈值 volume>5 → 500ms 全量替换。
+    /// 数据源：Agora 本地/远端音量回调先在 RTC 层合并 → 阈值 volume>5 → 500ms 更新。
     /// UI 层：`isSpeaking(seat:)` 派生,seat.userId String → UInt 转换后查集合命中。
     @Published private(set) var speakingUids: Set<UInt> = []
+
+    /// 主播端 Party 右下角半屏游戏 Banner（使用 anchor 游戏池）。
+    @Published private(set) var partyBannerGames: [PartyBannerGame] = []
+    private var partyBannerGamesEpoch = 0
+
+    /// H5 `highLevelUserEnterRoomList` 的当前进场条。由聊天室成员进入通知的
+    /// `notificationExtension` 驱动，座驾用户不进入此队列。
+    @Published private(set) var enterFloatingMessage: PartyEnterFloatingMessage?
+    private var enterFloatingQueue: [PartyEnterFloatingMessage] = []
+    private var enterFloatingTask: Task<Void, Never>?
+    private let enterFloatingQueueLimit = 20
 
     /// v16.4 房间背景（房主设置的自定义背景）。
     /// **重要**：enterRoom response 里的 bigImgUrl / bgImgUrl 通常为 null（后端不在 enter 返），
@@ -230,6 +280,11 @@ final class PartyStore: ObservableObject {
     /// 视频位本端采集是否激活。UI 通过此 @Published 触发 re-render 后再取 `camera` 实例渲染 CameraPreview。
     /// camera 字段自身非 @Published（CameraManager 不需要 Combine 链路追踪）。
     @Published private(set) var isLocalCameraActive: Bool = false
+    /// 本地主动下麦后，服务端 seatList 尚未同步（或 downSeat 失败）期间不能由旧数据重新打开媒体。
+    @Published private var isLocalSeatExitPending = false
+    /// 用户主动关闭媒体后保留本地优先级，直到服务端确认下一个麦位状态或用户明确重新开启。
+    @Published private var isLocalMicrophoneDisabled = false
+    @Published private var isLocalCameraDisabled = false
 
     // MARK: - F PartyCall 私 call 开关（spec §5.3）
 
@@ -241,6 +296,13 @@ final class PartyStore: ObservableObject {
     @Published private(set) var partyCallGiftPrice: Int?
     /// v5-需求 2：私 call 开关切换 API 在飞标志 —— UI 层按钮显示 ProgressView 并屏蔽 tap 防重复点击。
     @Published private(set) var isTogglingPrivateCall: Bool = false
+    /// PK 期间私 call 入口必须隐藏；退出 PK 后恢复进入前的开关快照。
+    @Published private(set) var partyPrivateCallHiddenForPK: Bool = false
+    private var partyPrivateCallWasEnabledBeforePK = false
+    private var partyPrivateCallGiftIdBeforePK: String?
+    /// PK 开始和结束可能紧邻发生，关闭/恢复请求必须按顺序发送，避免后端最终停在关闭态。
+    private var partyPrivateCallPKSyncTask: Task<Void, Never>?
+    private var partyPrivateCallPKSyncRevision: UInt = 0
 
     // MARK: - 衍生
 
@@ -258,13 +320,50 @@ final class PartyStore: ObservableObject {
     ///    实时反映房管任免（无需重进房）
     /// 3) fallback 到 `roomInfo.selfRoleType(...)` 覆盖未在麦上时的初始状态
     var selfRole: PartyRoomRoleType {
-        if roomInfo?.isPlatformAdmin == true { return .owner }
+        if isPlatformAdmin { return .owner }
         if let seat = selfSeat,
            let raw = seat.roomRoleType,
            let role = PartyRoomRoleType(rawValue: raw) {
             return role
         }
         return roomInfo?.selfRoleType(myUserId: myUserIdString) ?? .audience
+    }
+
+    var isPlatformAdmin: Bool {
+        platformAdminOverride ?? roomInfo?.isPlatformAdmin ?? false
+    }
+
+    /// 名片卡、榜单等非麦位入口查询目标用户在当前 Party 房的实时角色。
+    /// 覆盖值优先于 seatList，避免 setAdmin 成功到服务端座位广播抵达之间显示旧按钮。
+    func partyRole(for userId: String) -> PartyRoomRoleType? {
+        guard !userId.isEmpty else { return nil }
+        return partyRoleOverrides[userId]
+            ?? seatList.first(where: { $0.userId == userId })?.typedRole
+    }
+
+    /// 设置页的管理员管理与名片卡共用同一实时角色状态；只接受当前已加入房间的回调，
+    /// 防止退出后旧设置页的异步完成结果污染下一间房。
+    func applyAdminRoleUpdate(roomId: String, userId: String, role: PartyRoomRoleType) {
+        guard roomState == .joined, roomInfo?.id == roomId else { return }
+        applyPartyRoleUpdate(targetUserId: userId, role: role)
+    }
+
+    /// 本人麦克风的有效本地状态：服务端麦位字段 + 本地先行关闭意图。
+    /// 普通 toggle 的接口失败时，SDK 可能已按用户意图先关；UI 必须读这里，避免按钮仍显示“关麦”导致无法恢复。
+    var effectiveSelfMicrophoneEnabled: Bool {
+        guard let me = selfSeat else { return false }
+        return (me.microphoneEnabled ?? 0) == 1
+            && (me.seatMicrophoneEnabled ?? 0) == 1
+            && !isLocalMicrophoneDisabled
+            && !isLocalSeatExitPending
+    }
+
+    /// 本人摄像头的有效本地状态：服务端 cameraEnabled + 本地先行关闭意图。
+    var effectiveSelfCameraEnabled: Bool {
+        guard let me = selfSeat, me.seatType == 1 else { return false }
+        return (me.cameraEnabled ?? 0) == 1
+            && !isLocalCameraDisabled
+            && !isLocalSeatExitPending
     }
 
     /// 当前登录 userId 的字符串形式（用于 seatList.userId 比较）
@@ -303,9 +402,9 @@ final class PartyStore: ObservableObject {
     }
 
     private func mediaRequirement(forSeatType seatType: Int?) -> MediaPermissionGate.Requirement {
-        // 派对房上麦后的 RTC 路径包含本地音视频能力；统一要求相机和麦克风，
-        // 防止语音位在未授权相机时仍可绕过进入本地工作态。
-        .liveStream
+        // RTC 语音位仅发布 microphone track；只有视频位会启用相机采集和自定义视频轨。
+        // seatType 缺失时与 `PartyRoomSeat.typed ?? .voice` 的默认语义一致，按语音位处理。
+        seatType == PartyRoomSeatType.video.rawValue ? .liveStream : .microphone
     }
 
     private func requireMediaAccess(
@@ -381,6 +480,10 @@ final class PartyStore: ObservableObject {
         chatRouter.delegate = self
         chatRouter.chatManager = chat
         chat.router = chatRouter
+        chat.outgoingTextMetadataProvider = { [weak self] in
+            guard let self else { return (.audience, false) }
+            return (self.selfRole, self.isPlatformAdmin)
+        }
         // M5 备用路径：上游 NIMChatroomManager 改走 NIMService.dispatch(context: .liveChatroom) 时，
         // 本 router 在直播聊天室通道短路（避免下游意外消费派对房 attachType）；
         // 派对房通道仍由 chat.processIncoming → chatRouter.processCustom 单一路径维持。
@@ -436,6 +539,9 @@ final class PartyStore: ObservableObject {
             AppLogger.party.notice("[PartyStore] enterRoom while state=\(self.roomState.debugDesc, privacy: .public), force leave first")
             await forceLeaveRoom(.userRequest)
         }
+        roomEntryGeneration &+= 1
+        let entryGeneration = roomEntryGeneration
+        pendingRoomEntryId = roomId
         roomState = .preparing
         lastError = nil
         AppLogger.party.info("[PartyStore] enterRoom roomId=\(roomId, privacy: .public)")
@@ -450,23 +556,34 @@ final class PartyStore: ObservableObject {
             do {
                 info = try await PartyAPI.enterRoom(roomId: roomId, password: password)
             } catch let api as PartyAPIError {
+                guard isCurrentRoomEntry(entryGeneration, roomId: roomId) else { return }
+                pendingRoomEntryId = nil
                 let mapped = PartyRoomErrorMapper.map(api)
                 roomState = .ended
                 lastError = mapped
                 AppLogger.party.error("[PartyStore] enter HTTP failed: \(api.localizedDescription, privacy: .private)")
                 return
             } catch let dec as DecodingError {
+                guard isCurrentRoomEntry(entryGeneration, roomId: roomId) else { return }
+                pendingRoomEntryId = nil
                 roomState = .ended
                 let detail = "enter 解码: \(dec)"
                 lastError = .enterFailed(underlying: detail)
                 AppLogger.party.error("[PartyStore] enter decoding error: \(String(describing: dec), privacy: .public)")
                 return
             } catch {
+                guard isCurrentRoomEntry(entryGeneration, roomId: roomId) else { return }
+                pendingRoomEntryId = nil
                 roomState = .ended
                 lastError = .enterFailed(underlying: error.localizedDescription)
                 AppLogger.party.error("[PartyStore] enter unknown error: \(String(describing: error), privacy: .public)")
                 return
             }
+        }
+
+        guard isCurrentRoomEntry(entryGeneration, roomId: roomId) else {
+            await exitStaleRoomEntryIfNeeded(info, generation: entryGeneration)
+            return
         }
 
         // Step 2: 写入本地状态 + 预对账
@@ -492,6 +609,9 @@ final class PartyStore: ObservableObject {
         Task { [weak self] in await self?.loadCurrentRoomBackground() }
         // H5 也在进房后单独拉 music/settings；roomMusicSwitc 只控制入口可见性。
         Task { [weak self] in await self?.loadRoomMusicSettings() }
+        // 半屏游戏暂不接入：当前环境未部署 anchor/list，先不在进房时发起请求。
+        partyBannerGamesEpoch &+= 1
+        partyBannerGames = []
         roomState = .entering
 
         // Step 3: RTC join
@@ -512,8 +632,14 @@ final class PartyStore: ObservableObject {
             // 降级（spec §1.4.6 步骤 3）：调主接口 getAgoraRtmToken
             do {
                 let r = try await LiveService.getAgoraRtmToken()
+                guard isCurrentRoomEntry(entryGeneration, roomId: roomId) else {
+                    return
+                }
                 rtcToken = r.rtcToken ?? ""
             } catch {
+                guard isCurrentRoomEntry(entryGeneration, roomId: roomId) else {
+                    return
+                }
                 AppLogger.party.error("[PartyStore] getAgoraRtmToken fallback failed: \(String(describing: error), privacy: .private)")
                 await forceLeaveRoom(.entryFailed)
                 lastError = .enterFailed(underlying: "rtcToken missing")
@@ -550,6 +676,27 @@ final class PartyStore: ObservableObject {
         // roomState = .joined 由 RTC didJoin + Chat didEnter 双就绪后回调 markJoinedIfReady() 设置
     }
 
+    private func isCurrentRoomEntry(_ generation: UInt, roomId: String) -> Bool {
+        roomEntryGeneration == generation && pendingRoomEntryId == roomId
+    }
+
+    private func invalidateRoomEntry() {
+        roomEntryGeneration &+= 1
+        pendingRoomEntryId = nil
+    }
+
+    /// 已被本端放弃的 enter 请求仍可能在服务端成功。若没有新会话接管同一房间，
+    /// 用 enter 响应里的真实 roomId/yxRoomId 补偿退房，避免服务端留下幽灵 Party 状态。
+    private func exitStaleRoomEntryIfNeeded(_ info: PartyRoomInfo, generation: UInt) async {
+        guard roomEntryGeneration != generation,
+              let roomId = info.id, !roomId.isEmpty,
+              let yxRoomId = info.yxRoomId, !yxRoomId.isEmpty,
+              pendingRoomEntryId != roomId,
+              roomInfo?.id != roomId
+        else { return }
+        _ = try? await PartyAPI.exitRoom(roomId: roomId, seatIndex: -1, yxRoomId: yxRoomId)
+    }
+
     /// F 期：进房若 roomInfo.partyCallGiftId 非 nil，异步拉一次 party call gift list 找匹配 icon/price
     /// → 缓存到 partyCallGiftIcon/Price。已缓存则跳过（避免重拉）。
     private func loadPartyCallGiftMetaIfNeeded() async {
@@ -574,44 +721,49 @@ final class PartyStore: ObservableObject {
 
     /// 用户主动退房（HTTP + RTC + Chat 串行；spec §1.4.6）
     func leaveRoom() async {
-        guard roomState == .joined || roomState == .entering else {
+        guard roomState == .preparing || roomState == .joined || roomState == .entering else {
             AppLogger.party.notice("[PartyStore] leaveRoom skip state=\(self.roomState.debugDesc, privacy: .public)")
             return
         }
-        roomState = .leaving
-
+        invalidateRoomEntry()
         let roomIdBiz = roomInfo?.id ?? ""
         let yxRoomId = roomInfo?.yxRoomId ?? ""
-        let mySeatIndex = selfSeat?.seatIndex ?? 0
-        let roomTempId = roomInfo?.roomTempIdInt ?? 1
+        // `exitRoom` 由服务端统一完成退房及麦位释放；未上麦时与安卓/H5 一致传 -1。
+        let mySeatIndex = selfSeat?.seatIndex ?? -1
+        let wasOnVideoSeat = selfSeat?.isVideoSeat == true
+        let wasTopX = PartyHotRoomTaskStore.shared.isTopRoom
+        trackHotTaskLeaveIfNeeded(
+            roomId: roomIdBiz,
+            seatIndex: mySeatIndex,
+            wasOnVideoSeat: wasOnVideoSeat,
+            wasTopX: wasTopX
+        )
 
-        // Step 1: 在麦时先 downSeat
-        if mySeatIndex > 0 {
+        roomState = .leaving
+        endPartySessionDependencies(roomId: roomInfo?.id)
+        chat.clearDeferredMessages()
+        isMinimized = false
+        minimizedBridge.hide()
+
+        // 退房的本地媒体释放独立于 HTTP；接口失败时也必须立刻关摄像头和麦克风。
+        deactivateLocalSeatMediaForExit()
+
+        // 退出 RTC 不阻塞后续服务端退房。
+        await rtc.leave()
+
+        if !roomIdBiz.isEmpty, !yxRoomId.isEmpty {
             do {
-                try await PartyAPI.downSeat(roomId: roomIdBiz, seatIndex: mySeatIndex, yxRoomId: yxRoomId, roomTempId: roomTempId)
+                try await PartyAPI.exitRoom(roomId: roomIdBiz, seatIndex: mySeatIndex, yxRoomId: yxRoomId)
             } catch {
-                AppLogger.party.notice("[PartyStore] downSeat on leave failed: \(String(describing: error), privacy: .private)")
+                AppLogger.party.notice("[PartyStore] exitRoom HTTP failed: \(String(describing: error), privacy: .private)")
             }
         }
 
-        // Step 2: exitRoom HTTP
-        do {
-            try await PartyAPI.exitRoom(roomId: roomIdBiz, seatIndex: mySeatIndex, yxRoomId: yxRoomId)
-        } catch {
-            AppLogger.party.notice("[PartyStore] exitRoom HTTP failed: \(String(describing: error), privacy: .private)")
-        }
-
-        // Step 3: 关相机采集（视频位）+ RTC leave (async + sharedEngine 不 destroy)
-        disableLocalVideoCapture()
-        await rtc.leave()
-
-        // Step 4: Chat leave
+        // HTTP 已完成，再清 WS 上下文并退出 Party 聊天室。
+        // 即使 HTTP 失败也要清上下文，避免本端继续续期已经离开的 Party 房。
+        WSHeartbeat.shared.clearPartyContext()
         chat.leave()
 
-        // Step 5: 清 WS 心跳的派对房上下文
-        WSHeartbeat.shared.clearPartyContext()
-
-        // Step 6: reset
         resetState()
         roomState = .ended
         AppLogger.party.info("[PartyStore] leaveRoom done")
@@ -621,29 +773,56 @@ final class PartyStore: ObservableObject {
     /// 所有步骤 try? 容错；不阻塞 reset 链路。
     func forceLeaveRoom(_ reason: PartyForceLeaveReason) async {
         AppLogger.party.notice("[PartyStore] forceLeaveRoom reason=\(String(describing: reason), privacy: .public)")
-        roomState = .leaving
-
-        let roomIdBiz = roomInfo?.id ?? ""
-        let yxRoomId = roomInfo?.yxRoomId ?? ""
-        let mySeatIndex = selfSeat?.seatIndex ?? 0
-
-        if !roomIdBiz.isEmpty, !yxRoomId.isEmpty {
-            // exitRoom 容错
-            _ = try? await PartyAPI.exitRoom(roomId: roomIdBiz, seatIndex: mySeatIndex, yxRoomId: yxRoomId)
-        }
-        disableLocalVideoCapture()
-        await rtc.leave()
-        chat.leave()
-        WSHeartbeat.shared.clearPartyContext()
-        resetState()
-        roomState = .ended
-
+        invalidateRoomEntry()
+        // 在 roomState 变为 .ended 前写入，供房间页识别强制退出并返回列表。
         if reason == .kicked {
             lastError = .kicked
         }
-    }
+        let roomIdBiz = roomInfo?.id ?? ""
+        let yxRoomId = roomInfo?.yxRoomId ?? ""
+        let mySeatIndex = selfSeat?.seatIndex ?? -1
+        let wasOnVideoSeat = selfSeat?.isVideoSeat == true
+        let wasTopX = PartyHotRoomTaskStore.shared.isTopRoom
+        trackHotTaskLeaveIfNeeded(
+            roomId: roomIdBiz,
+            seatIndex: mySeatIndex,
+            wasOnVideoSeat: wasOnVideoSeat,
+            wasTopX: wasTopX
+        )
 
+        roomState = .leaving
+        endPartySessionDependencies(roomId: roomInfo?.id)
+        chat.clearDeferredMessages()
+        isMinimized = false
+        minimizedBridge.hide()
+
+        // 强制退房同样先收本地媒体，不能等待 exitRoom 的网络结果。
+        deactivateLocalSeatMediaForExit()
+
+        // 与正常退房保持同序。
+        await rtc.leave()
+
+        if !roomIdBiz.isEmpty, !yxRoomId.isEmpty {
+            _ = try? await PartyAPI.exitRoom(roomId: roomIdBiz, seatIndex: mySeatIndex, yxRoomId: yxRoomId)
+        }
+        WSHeartbeat.shared.clearPartyContext()
+        chat.leave()
+        resetState()
+        roomState = .ended
+
+    }
     private func resetState() {
+        // 小窗退出时 PartyRoomView 已卸载，不能依赖其 onDisappear 清理会话外资源。
+        // 普通退房会先由视图清理一次；以下接口均幂等，集中在 Store 兜底所有退出路径。
+        endPartySessionDependencies(roomId: roomInfo?.id)
+        chat.clearDeferredMessages()
+        if let roomId = roomInfo?.id, !roomId.isEmpty {
+            PartyStore.announcementShownRoomIds.remove(roomId)
+        }
+
+        isMinimized = false
+        minimizedBridge.hide()
+        resetLocalMediaOverrides()
         roomInfo = nil
         seatList = []
         // F 期麦时统计：seatList = [] 触发 didSet → trackMikeTimeIfNeeded 累加最后一段麦时；
@@ -660,8 +839,14 @@ final class PartyStore: ObservableObject {
         isJoinedChannel = false
         imAlive = false
         lastGiftEvent = nil
+        clearPartyAuditWarning()
+        platformAdminOverride = nil
+        partyRoleOverrides = [:]
+        pendingAdminUserIds = []
+        firstGiftFloatQueue.clear()
         luckyNumberWinPayload = nil
         giftEffects.reset()
+        PartySuperWheelStore.shared.reset()
         pendingVideoSeatInvite = nil
         lastInviteResult = nil
         videoSeatInviteCooldowns = [:]
@@ -675,6 +860,9 @@ final class PartyStore: ObservableObject {
         backgroundEpoch &+= 1
         currentRoomBackground = nil
         speakingUids = []
+        partyBannerGamesEpoch &+= 1
+        partyBannerGames = []
+        resetEnterFloatingEffects()
         // E v2：Room Mode / Mic Application 状态清 —— 退房需清残留，避免下次进房带入旧队列
         roomModeTemplates = [:]
         roomModeTemplatesState = .idle
@@ -717,6 +905,115 @@ final class PartyStore: ObservableObject {
         // F-1a v4 (2026-07-18)：退房清 Battle Team PK 残留 state（对齐 H5 usePartyHooks.js:181 + g-agora-party.vue:586）
         // 不清则下次进新房上一场 PK sheet / 冷却入口 / pending 申请脏读污染
         PartyBattleStore.shared.reset()
+    }
+
+    /// 安卓在主播位于 TOPx 房间时为退房/下视频麦埋点携带 `isTopX` 标记。
+    private func trackHotTaskLeaveIfNeeded(
+        roomId: String,
+        seatIndex: Int,
+        wasOnVideoSeat: Bool,
+        wasTopX: Bool
+    ) {
+        guard wasTopX else { return }
+        let properties: [String: Any] = [
+            "roomId": roomId,
+            "seatIndex": seatIndex,
+            "isTopX": true,
+        ]
+        AnalyticsTracker.track("partyRoomLeave", properties: properties)
+        if wasOnVideoSeat {
+            AnalyticsTracker.track("partyRoomVideoLeave", properties: properties)
+        }
+    }
+
+    /// 进入 H5 同款 Party 小窗态。会话保持 `.joined`，由 `PartyRoomView.onDisappear` 识别该状态后
+    /// 跳过 leave 流程；恢复时重新 push 同一房间路由即可复用既有 RTC/NIM 状态。
+    func minimizeRoom() -> Bool {
+        guard roomState == .joined, roomInfo?.id?.isEmpty == false else { return false }
+        isMinimized = true
+        // H5 小窗态停止当前与后续的房内动效；RTC/NIM 会话和音频保持，不下麦、不退房。
+        chat.beginDeferringMessages()
+        giftEffects.reset()
+        resetEnterFloatingEffects()
+        emojiQueueMap = [:]
+        speakingUids = []
+        disableLocalVideoCapture()
+        rtc.disableVideoSeat()
+        minimizedBridge.show(roomAvatarURL: roomInfo?.roomAvatar)
+        AppLogger.party.info("[PartyStore] room minimized")
+        return true
+    }
+
+    func restoreMinimizedRoom() {
+        guard isMinimized else { return }
+        isMinimized = false
+        minimizedBridge.hide()
+        chat.flushDeferredMessages()
+        giftEffects.updateVisibleRecipientIds(Set(seatList.compactMap(\.userId)))
+        // 复用完整麦位对账恢复本地视频采集/推流，也同步小窗期间发生的麦位变更。
+        postMikeList()
+        AppLogger.party.info("[PartyStore] room restored from minimized state")
+    }
+
+    /// 小窗浮球的退出入口。先同步撤销小窗态，关闭恢复入口后再走完整退房链路。
+    func leaveMinimizedRoom() async {
+        guard isMinimized else {
+            await leaveRoom()
+            return
+        }
+        isMinimized = false
+        minimizedBridge.hide()
+        chat.clearDeferredMessages()
+        await leaveRoom()
+    }
+
+    /// 任务轮询、通话观察和自动离线监测均由整个 Party 会话拥有，而非房间页视图拥有。
+    private func endPartySessionDependencies(roomId: String?) {
+        if let roomId, !roomId.isEmpty {
+            PartyWeeklyTaskStore.shared.stopTracking(roomId: roomId)
+        }
+        PartyHotRoomTaskStore.shared.stopTracking()
+        CallStore.shared.detach(self)
+        resumeAutoOfflineMonitorIfNeeded()
+    }
+
+    /// 自动离线暂停的会话级幂等封装。小窗恢复会重新创建 PartyRoomView，不能重复累加引用计数。
+    func suspendAutoOfflineMonitorIfNeeded() {
+        guard !isAutoOfflineMonitorSuspended else { return }
+        isAutoOfflineMonitorSuspended = true
+        AutoOfflineMonitor.shared.suspend()
+    }
+
+    /// 与 `suspendAutoOfflineMonitorIfNeeded()` 成对调用；所有退房路径均可安全重复执行。
+    func resumeAutoOfflineMonitorIfNeeded() {
+        guard isAutoOfflineMonitorSuspended else { return }
+        isAutoOfflineMonitorSuspended = false
+        AutoOfflineMonitor.shared.resume()
+    }
+
+    private func resetEnterFloatingEffects() {
+        enterFloatingTask?.cancel()
+        enterFloatingTask = nil
+        enterFloatingQueue.removeAll()
+        enterFloatingMessage = nil
+    }
+
+    private func loadPartyBannerGames() async {
+        let roomId = roomInfo?.id
+        guard let roomId, !roomId.isEmpty else { return }
+        let epoch = partyBannerGamesEpoch
+        do {
+            let games = try await PartyAPI.anchorPartyBannerGames()
+            // 进房期间切换/退出后，旧请求回包不可污染当前房间。
+            guard self.roomInfo?.id == roomId,
+                  self.partyBannerGamesEpoch == epoch,
+                  self.roomState == .entering || self.roomState == .joined else { return }
+            partyBannerGames = games.filter(\.isDisplayable)
+        } catch is CancellationError {
+            return
+        } catch {
+            AppLogger.party.notice("[PartyGame] load anchor banners failed roomId=\(roomId, privacy: .public) err=\(String(describing: error), privacy: .private)")
+        }
     }
 
     // MARK: - 房主保存设置后本地同步（v8.2）
@@ -1046,6 +1343,16 @@ final class PartyStore: ObservableObject {
         guard isJoinedChannel, imAlive else { return }
         roomState = .joined
         AppLogger.party.info("[PartyStore] markJoinedIfReady → state=joined")
+        if let roomId = roomInfo?.id, !roomId.isEmpty {
+            Task {
+                do {
+                    try await PartyAPI.openEnterEffect(roomId: roomId)
+                } catch {
+                    // 进场效果失败不能影响已经建立的 RTC/聊天室会话；与 H5 fire-and-forget 语义一致。
+                    AppLogger.party.notice("[PartyStore] open enter effect failed: \(String(describing: error), privacy: .private)")
+                }
+            }
+        }
         // 房主进入自己已开启私 call 的房间 → 自动上线（对齐直播/匹配的自动上线行为）
         // 观众进这种房间不触发（私 call 是房主专属功能，房间态与观众无关）
         if selfRole == .owner,
@@ -1062,6 +1369,8 @@ final class PartyStore: ObservableObject {
             await PartyBattleStore.shared.loadGlobalConfig()
             if !rid.isEmpty {
                 await PartyBattleStore.shared.refreshIfNeeded(roomId: rid)
+                PartySuperWheelStore.shared.beginTracking(roomId: rid)
+                await PartySuperWheelStore.shared.loadState(roomId: rid, presentWhenActive: true)
             }
             await self.loadPartyBaseConfigIfNeeded()
         }
@@ -1121,6 +1430,8 @@ final class PartyStore: ObservableObject {
 
     func requestDownSeat() async {
         guard let info = roomInfo, let me = selfSeat, let idx = me.seatIndex, roomState == .joined else { return }
+        // 先停本地采集/发布，再尽力通知服务端下麦。失败时也维持本地关闭状态。
+        deactivateLocalSeatMediaForExit()
         do {
             try await PartyAPI.downSeat(
                 roomId: info.id ?? "",
@@ -1333,25 +1644,35 @@ final class PartyStore: ObservableObject {
 
     /// 设置/移除房管(仅房主)。对齐 H5 `apiPartySetAdmin({roomId, userId, operationType})`
     /// - operationType 1 = 添加, 2 = 移除
-    /// - 服务端广播 1001 seatList 更新目标 seat.roomRoleType
-    func requestSetAdmin(userId: String, add: Bool) async {
-        guard let info = roomInfo, roomState == .joined else { return }
+    /// - API 成功后立即更新本地角色；1019/1001 广播到达后以同一状态机幂等覆盖。
+    @discardableResult
+    func requestSetAdmin(userId: String, add: Bool) async -> Bool {
+        guard !userId.isEmpty, let info = roomInfo, roomState == .joined else { return false }
         guard selfRole == .owner else {
             AppLogger.party.notice("[PartyStore] setAdmin rejected: not owner")
-            return
+            return false
         }
+        guard !pendingAdminUserIds.contains(userId) else { return false }
+        pendingAdminUserIds.insert(userId)
+        defer { pendingAdminUserIds.remove(userId) }
         do {
             try await PartyAPI.setAdmin(
                 roomId: info.id ?? "",
                 userId: userId,
                 operationType: add ? 1 : 2
             )
+            applyPartyRoleUpdate(
+                targetUserId: userId,
+                role: add ? .admin : .audience
+            )
+            return true
         } catch let api as PartyAPIError {
             lastError = PartyRoomErrorMapper.map(api)
         } catch {
             lastError = .underlying(.networkError)
             AppLogger.party.error("[PartyStore] setAdmin failed: \(String(describing: error), privacy: .private)")
         }
+        return false
     }
 
     /// 踢出房间。对齐 H5 `feachKickOutRoom({seatIndex, targetUserId, banType})`
@@ -1412,17 +1733,32 @@ final class PartyStore: ObservableObject {
     /// 切换自己麦克风（type=1）或摄像头（type=2）开关。
     /// 本地立即更新中间态（UI 立即反馈），服务端下发 1008 后由 reload 同步 seatList 持久态。
     func toggleSelfMedia(type: Int, enable: Bool) async {
+        guard type == 1 || type == 2 || type == 3 else {
+            AppLogger.party.notice("[PartyStore] updateMedia rejected: unknown type=\(type, privacy: .public)")
+            return
+        }
+        guard let currentSeat = selfSeat else {
+            AppLogger.party.notice("[PartyStore] updateMedia rejected: self is not on seat")
+            return
+        }
+        guard type != 2 || currentSeat.isVideoSeat else {
+            AppLogger.party.notice("[PartyStore] updateMedia rejected: voice seat cannot enable camera")
+            return
+        }
         // 视频位必须持续开麦。仅允许开启动作修复历史 `microphoneEnabled=0` 脏数据。
-        if type == 1, !enable, selfSeat?.isVideoSeat == true {
+        if type == 1, !enable, currentSeat.isVideoSeat {
             AppLogger.party.notice("[PartyStore] updateMedia rejected: video seat cannot mute microphone")
             return
         }
         if enable {
-            guard await requireMediaAccess(.liveStream, retry: { [weak self] in
+            let requirement = mediaRequirement(forSeatType: currentSeat.seatType)
+            guard await requireMediaAccess(requirement, retry: { [weak self] in
                 await self?.toggleSelfMedia(type: type, enable: enable)
             }) else { return }
         }
         guard let info = roomInfo, let me = selfSeat, let idx = me.seatIndex else { return }
+        applyLocalMediaIntent(type: type, enable: enable)
+        postMikeList()
         do {
             try await PartyAPI.updateMedia(
                 roomId: info.id ?? "",
@@ -1630,6 +1966,22 @@ final class PartyStore: ObservableObject {
             WSHeartbeat.shared.setPartyContext(roomId: rid, seatIndex: mySelf?.seatIndex ?? -1)
         }
 
+        // 小窗期间仍保持远端音频/麦位对账，但不能被后续的 1001 或 RTC 回调重新打开本地相机和视频推流。
+        guard !isMinimized else {
+            disableLocalVideoCapture()
+            rtc.disableVideoSeat()
+            return
+        }
+
+        // 本地主动下麦的请求还未被服务端确认（含接口失败）时，旧 seatList 不得重新启用媒体。
+        if isLocalSeatExitPending, mySelf != nil {
+            deactivateLocalSeatMediaForExit()
+            return
+        }
+        if mySelf == nil {
+            resetLocalMediaOverrides()
+        }
+
         // 2. 自己在麦 / 不在麦
         if let me = mySelf {
             // 服务端抱上麦/模板切换也会直接更新 seatList，不能只依赖点击上麦入口。
@@ -1651,17 +2003,20 @@ final class PartyStore: ObservableObject {
             }
             let seatType = me.typed ?? .voice
             rtc.upperSeat(seatType: seatType)
-            let micEnabled = (me.microphoneEnabled ?? 0) == 1 && (me.seatMicrophoneEnabled ?? 0) == 1
+            let micEnabled = (me.microphoneEnabled ?? 0) == 1
+                && (me.seatMicrophoneEnabled ?? 0) == 1
+                && !isLocalMicrophoneDisabled
             rtc.muteLocalMicrophone(!micEnabled)
             // 视频位：启 RTC 视频通道 + CameraManager 订阅推帧；
             // 摄像头开关由 microphoneEnabled 同侪字段 cameraEnabled 决定（M5 接入）
             if seatType == .video {
-                rtc.enableVideoSeat()
                 let camEnabled = (me.cameraEnabled ?? 0) == 1
-                if camEnabled {
+                if camEnabled && !isLocalCameraDisabled {
+                    rtc.enableVideoSeat()
                     enableLocalVideoCapture()
                 } else {
                     disableLocalVideoCapture()
+                    rtc.disableVideoSeat()
                 }
             } else {
                 disableLocalVideoCapture()
@@ -1675,6 +2030,46 @@ final class PartyStore: ObservableObject {
 
     private func resumeLocalMediaAfterPermissionGranted() async {
         postMikeList()
+    }
+
+    /// 下麦/退房前的本地优先收尾。该方法不发网络请求，且可安全重复调用。
+    private func deactivateLocalSeatMediaForExit() {
+        isLocalSeatExitPending = true
+        isLocalMicrophoneDisabled = true
+        isLocalCameraDisabled = true
+        disableLocalVideoCapture()
+        rtc.downSeat()
+    }
+
+    /// 媒体开关的本地意图优先于尚未同步的服务端麦位数据。
+    private func applyLocalMediaIntent(type: Int, enable: Bool) {
+        switch type {
+        case 1:
+            isLocalMicrophoneDisabled = !enable
+            rtc.muteLocalMicrophone(!enable)
+        case 2:
+            isLocalCameraDisabled = !enable
+            if !enable {
+                disableLocalVideoCapture()
+                rtc.disableVideoSeat()
+            }
+        case 3:
+            isLocalMicrophoneDisabled = !enable
+            isLocalCameraDisabled = !enable
+            rtc.muteLocalMicrophone(!enable)
+            if !enable {
+                disableLocalVideoCapture()
+                rtc.disableVideoSeat()
+            }
+        default:
+            AppLogger.party.notice("[PartyStore] applyLocalMediaIntent ignored unknown type=\(type, privacy: .public)")
+        }
+    }
+
+    private func resetLocalMediaOverrides() {
+        isLocalSeatExitPending = false
+        isLocalMicrophoneDisabled = false
+        isLocalCameraDisabled = false
     }
 
     // MARK: - 视频位本端采集（M5）
@@ -1712,6 +2107,31 @@ final class PartyStore: ObservableObject {
         camera = nil
         isLocalCameraActive = false
         AppLogger.party.info("[PartyStore] camera capture stopped")
+    }
+
+    /// 热门任务仅在本人位于视频麦且摄像头实际开启时本地递增倒计时。
+    /// Android 的任务计时门控只依赖视频麦和 `cameraEnabled`；`seatCameraEnabled`
+    /// 并非该任务接口的条件，额外判断会让正常推流中的主播无法获得本地进度刷新。
+    var isEligibleForHotTaskTiming: Bool {
+        guard roomState == .joined,
+              let seat = selfSeat,
+              seat.isVideoSeat,
+              (seat.cameraEnabled ?? 0) == 1,
+              isLocalCameraActive,
+              !isLocalCameraDisabled
+        else { return false }
+        return true
+    }
+
+    /// 取当前视频麦的美颜后帧供热门任务服务端进行露脸校验。
+    func hotTaskFaceSnapshot() async -> PartyHotTaskFaceSnapshot? {
+        guard isEligibleForHotTaskTiming,
+              let roomId = roomInfo?.id, !roomId.isEmpty,
+              let seatIndex = selfSeat?.seatIndex,
+              let camera,
+              let imageData = await camera.latestFrameJPEGData()
+        else { return nil }
+        return PartyHotTaskFaceSnapshot(roomId: roomId, seatIndex: seatIndex, imageData: imageData)
     }
 
     // MARK: - Room Mode (E v2 §1)
@@ -2667,12 +3087,11 @@ final class PartyStore: ObservableObject {
     /// "修改房间信息/公告/背景 仅房主+超管"）。
     ///
     /// - 权限：`selfRole == .owner`（平台超管已在 selfRole 层提权，不需额外 isPlatformAdmin 判定）
-    /// - API：走通用 `updateRoom(greetingMessage:)`，与 Settings 页 save 同一入口（H5 蓝本亦复用同一 apiPartyUpdateRoom）
+    /// - API：走独立 `editAnnouncement`，不能复用 Settings 的 `updateRoom(greetingMessage:)`
     /// - 幂等：`isBusyAnnouncement` 防连点
-    /// - 成功后本地乐观回写 `roomInfo.greetingMessage`；服务端会广播 1049 到公屏（既有 didReceiveRoomAnnouncement）
+    /// - 成功后本地回写 `roomInfo.announcement`；服务端会以 1049 广播到公屏
     /// - **返回 Bool**：view 层用于 toast + 关闭编辑态判定（对齐 setMCSeat 同款 verify P0 fix）
     ///
-    /// 空字符串合法（等价 H5 清空通告），前端 view 层可选做 non-empty 校验避免误清。
     @discardableResult
     func updateAnnouncement(text: String) async -> Bool {
         guard selfRole == .owner else {
@@ -2692,12 +3111,16 @@ final class PartyStore: ObservableObject {
             lastError = .underlying(.networkError)
             return false
         }
+        let announcement = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !announcement.isEmpty, announcement != info.announcement else {
+            return false
+        }
         isBusyAnnouncement = true
         defer { isBusyAnnouncement = false }
         do {
-            try await PartyAPI.updateRoom(roomId: roomId, greetingMessage: text)
-            roomInfo = info.withUpdated(greetingMessage: text)
-            AppLogger.party.info("[PartyStore] updateAnnouncement ok len=\(text.count, privacy: .public)")
+            try await PartyAPI.editAnnouncement(roomId: roomId, announcement: announcement)
+            roomInfo = info.withUpdated(announcement: announcement)
+            AppLogger.party.info("[PartyStore] updateAnnouncement ok len=\(announcement.count, privacy: .public)")
             return true
         } catch {
             AppLogger.party.error("[PartyStore] updateAnnouncement failed: \(String(describing: error), privacy: .private)")
@@ -2844,6 +3267,12 @@ final class PartyStore: ObservableObject {
     }
 }
 
+struct PartyHotTaskFaceSnapshot: Sendable {
+    let roomId: String
+    let seatIndex: Int
+    let imageData: Data
+}
+
 // MARK: - Room Mode / Mic Application supporting enums (E v2)
 
 /// `handleRoomModeChanged` 触发源：`.local` 房主 API 成功兜底 / `.remote` 观众端 IM 1017 到达
@@ -2890,9 +3319,10 @@ extension PartyStore: PartyRTCEngineDelegate {
         lastError = .enterFailed(underlying: reason)
     }
 
-    /// v15 声纹反馈：500ms 一次全量替换 speakingUids；空集合=全体静音。
+    /// v15 声纹反馈：RTC 已合并同周期本地/远端音量回调后再全量替换；空集合=全体静音。
     /// 用 Set 比较避免不必要的 objectWillChange 触发（同一集合内容不派发）。
     func partyRTCEngine(_ engine: PartyRTCEngine, didUpdateSpeakingUids uids: Set<UInt>) {
+        guard !isMinimized else { return }
         if uids != speakingUids {
             speakingUids = uids
         }
@@ -2919,21 +3349,19 @@ extension PartyStore: PartyRTCEngineDelegate {
 // MARK: - v15 声纹派生查询
 
 extension PartyStore {
-    /// 判断某个麦位当前是否正在说话（用于 SeatCell isSpeaking 参数派生）。
-    /// 对齐 H5 `isVoicePrintFrameActive` 判定（简化版，省略 vfxUrl SVGA）：
-    /// 1. seat.userId 存在且能转 UInt
-    /// 2. uid 在 speakingUids 集合内（volume>5 阈值过滤后）
-    /// 3. 用户自身麦克风开 (microphoneEnabled=1)
-    /// 4. 座位未被房管禁麦 (seatMicrophoneEnabled=1)
-    /// 缺一即不显示 pulse（H5 语义：静音/禁麦不应显声纹）
+    /// 判断某个麦位当前是否正在说话。普通声波只依赖 Agora 音量列表，对齐 H5 `PlayVolume`。
     func isSpeaking(seat: PartyRoomSeat) -> Bool {
         guard let uidStr = seat.userId,
               let uid = UInt(uidStr),
               uid > 0 else { return false }
-        guard speakingUids.contains(uid) else { return false }
-        guard (seat.microphoneEnabled ?? 0) == 1 else { return false }
-        guard (seat.seatMicrophoneEnabled ?? 0) == 1 else { return false }
-        return true
+        return speakingUids.contains(uid)
+    }
+
+    /// 声纹需要额外满足用户开麦、且未被房管禁麦，对齐 H5 `isVoicePrintFrameActive`。
+    /// 麦位媒体字段可能在部分服务端推送中缺失，缺失按开麦处理，与禁麦图标保持同一语义。
+    func isVoicePrintActive(seat: PartyRoomSeat) -> Bool {
+        guard isSpeaking(seat: seat) else { return false }
+        return !seat.isMicrophoneMuted
     }
 }
 
@@ -2945,9 +3373,8 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         imAlive = true
         markJoinedIfReady()
 
-        // v3（2026-07-15）：进房首次插入房间通告到公屏（对齐 H5 party.js:412-422 announcementShownRoomIds 内存去重）
-        // 首次插入用 greetingMessage 复用（后端未拆独立 convention 字段前）；离开重进不重复展示
-        if let text = roomInfo?.greetingMessage,
+        // 进房首次插入房间公告到公屏（对齐 H5 party.js:416-425）。
+        if let text = roomInfo?.announcement,
            !text.isEmpty,
            let rid = roomInfo?.id,
            !rid.isEmpty,
@@ -2957,8 +3384,7 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         }
     }
 
-    /// 房间通告"首次插入"跨房去重集合（session 级；退 app 清空）
-    /// 对齐 H5 party.js `announcementShownRoomIds` Set 内存态 —— 同房离开重进不再重复展示
+    /// 房间公告首次插入去重集合；离房后会清掉对应 roomId，与 H5 会话语义一致。
     private static var announcementShownRoomIds: Set<String> = []
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didFailToEnter reason: String) {
@@ -2970,11 +3396,89 @@ extension PartyStore: PartyRoomChatManagerDelegate {
     func partyRoomChatDidReconnect(_ chat: PartyRoomChatManager) {
         guard isJoinedChannel else { return }
         AppLogger.party.notice("[PartyStore] chat reconnect → reload seatList")
-        Task { [weak self] in await self?.reloadSeatListFromServer() }
+        let roomId = roomInfo?.id ?? ""
+        Task { [weak self] in
+            await self?.reloadSeatListFromServer()
+            if !roomId.isEmpty {
+                await PartySuperWheelStore.shared.loadState(roomId: roomId, presentWhenActive: false)
+            }
+        }
     }
 
     func partyRoomChatDidKickOut(_ chat: PartyRoomChatManager) {
         Task { [weak self] in await self?.forceLeaveRoom(.kicked) }
+    }
+
+    /// 1009 房间关闭/白名单限制：H5 收到后立即退出 Party 房。
+    /// 该通知由当前聊天室分发，仍守当前会话状态，避免退房后的延迟消息影响下一个房间。
+    func partyRoomChatDidCloseOrWhitelist(_ chat: PartyRoomChatManager) {
+        guard chat.roomId == roomInfo?.yxRoomId,
+              roomState == .entering || roomState == .joined else { return }
+        AppLogger.party.notice("[PartyStore] 1009 room closed or whitelist restricted; leaving room")
+        Task { [weak self] in await self?.forceLeaveRoom(.kicked) }
+    }
+
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveAuditWarning payload: [String: Any]) {
+        guard roomState == .entering || roomState == .joined else { return }
+        let content = (payload["content"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let message = (content?.isEmpty == false) ? content! : L10n.complianceWarningDefault
+        let duration = PartyValueNormalizer.intify(payload["time"]) ?? 0
+        partyAuditWarningMessage = message
+        partyAuditWarningDismissTask?.cancel()
+        if duration > 0 {
+            partyAuditWarningDismissTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(duration) * 1_000_000_000)
+                guard !Task.isCancelled else { return }
+                self?.clearPartyAuditWarning()
+            }
+        }
+        // H5 `party-ban-popup`：有实际禁令（正数倒计时或永久 -1）时立刻下麦。
+        if duration != 0, selfSeat != nil {
+            Task { [weak self] in await self?.requestDownSeat() }
+        }
+    }
+
+    func clearPartyAuditWarning() {
+        partyAuditWarningDismissTask?.cancel()
+        partyAuditWarningDismissTask = nil
+        partyAuditWarningMessage = nil
+    }
+
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveSystemAuthUpdate payload: [String: Any]) {
+        guard roomState == .entering || roomState == .joined else { return }
+        let authType = PartyValueNormalizer.intify(payload["authType"])
+            ?? PartyValueNormalizer.intify(payload["type"])
+            ?? 0
+        guard let userId = myUserIdString,
+              !userId.isEmpty,
+              authType == 1 || authType == 2 else { return }
+        let nickname = SessionStore.shared.user?.nickname?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayName = nickname.flatMap { $0.isEmpty ? nil : $0 } ?? userId
+        let text = authType == 1
+            ? String(format: L10n.Party.authUpdateSetAdminFormat, displayName)
+            : String(format: L10n.Party.authUpdateRemoveAdminFormat, displayName)
+        // 对齐 H5 user `updatePartyAdmin`：1019 系统通知只在被任免用户端插入 authUpdateTip 公屏消息。
+        chatRouter.postSystemAuthUpdate(text)
+        applyPartyRoleUpdate(
+            targetUserId: userId,
+            role: authType == 1 ? .admin : .audience
+        )
+    }
+
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceivePlatformAdminChange payload: [String: Any]) {
+        guard roomState == .entering || roomState == .joined,
+              payload["isPlatformAdmin"] != nil else { return }
+        let isPlatformAdmin: Bool
+        if let value = payload["isPlatformAdmin"] as? Bool {
+            isPlatformAdmin = value
+        } else if let value = payload["isPlatformAdmin"] as? String {
+            isPlatformAdmin = ["1", "true", "yes"].contains(value.lowercased())
+        } else {
+            isPlatformAdmin = (PartyValueNormalizer.intify(payload["isPlatformAdmin"]) ?? 0) != 0
+        }
+        platformAdminOverride = isPlatformAdmin
+        PartyBattleStore.shared.refreshPermissions()
     }
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveSeatUpdate payload: [String: Any], raw: NIMMessage) {
@@ -3100,6 +3604,14 @@ extension PartyStore: PartyRoomChatManagerDelegate {
             anchorTaskRewardExt: old.anchorTaskRewardExt
         )
         seatList[idx] = newSeat
+        // Agora 的音量回调可能在禁麦广播之后才刷新。先移除当前说话状态，
+        // 让禁麦图标和声纹效果与 1015 广播在同一轮 UI 更新中生效。
+        if isProhibit,
+           newSeat.isSeatMicrophoneProhibited,
+           let uidString = old.userId,
+           let uid = UInt(uidString) {
+            speakingUids.remove(uid)
+        }
         postMikeList()
     }
 
@@ -3112,6 +3624,32 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         )
         lastGiftEvent = event
 
+        // v3（2026-07-15）：礼物消息进公屏 feed（`.gift` variant + 可能派生 `.luckyGift`）
+        // 对齐 H5 party.js newGiftMessage：公屏固定使用 `smallImg`，不能在同时有动效 giftImg 时误取大图。
+        let giftIcon: String? = (payload["smallImg"] as? String)
+                             ?? (payload["giftSmallImg"] as? String)
+                             ?? (payload["giftImg"] as? String)
+        // H5 先写一条常规送礼公屏；若中奖，再额外派生 luckyGift 公屏。
+        // 小窗态只保留前者，中奖公屏和视觉效果均在下方非小窗分支处理。
+        // v3+（2026-07-16）：主播本人送礼时 payload.sendUser.avatar 若缺失，从 AnchorInfoStore.mine.icon
+        // 或 SessionStore.user.icon 兜底 → 保证自己送礼公屏显示自己头像
+        let myAvatarFallback = AnchorInfoStore.shared.mine?.icon ?? SessionStore.shared.user?.icon
+        let totalReward = PartyValueNormalizer.intify(payload["totalReward"]).map { Int64($0) } ?? 0
+        chat.appendMessage(PartyPublicChatAdapter.gift(
+            event: event, iconURL: giftIcon,
+            myUserId: myUserIdString, myAvatarFallback: myAvatarFallback
+        ))
+
+        // H5 小窗态仍保留礼物公屏，但不更新收礼值或播放任何礼物特效。
+        guard !isMinimized else { return }
+
+        if totalReward > 0 {
+            chat.appendMessage(PartyPublicChatAdapter.luckyGiftDerived(
+                event: event, iconURL: giftIcon, totalReward: totalReward,
+                myUserId: myUserIdString, myAvatarFallback: myAvatarFallback
+            ))
+        }
+
         // 对齐 H5 `updateRoomSeatGiftValue`：2049 的 `gems` 是单个接收人的本次收礼值，
         // 按 `receiveUserList[].userId` 累加到正在该麦位上的用户，驱动所有麦位视图实时刷新。
         if event.gems.isFinite, event.gems > 0 {
@@ -3122,43 +3660,21 @@ extension PartyStore: PartyRoomChatManagerDelegate {
             )
         }
 
-        // v3（2026-07-15）：礼物消息进公屏 feed（`.gift` variant + 可能派生 `.luckyGift`）
-        //  对齐 H5 party.js newGiftMessage：giftSmallImg 从后端字段取；单接收人 / 多接收人 UI 由 Row 组件处理
-        let giftIcon: String? = (payload["giftSmallImg"] as? String)
-                             ?? (payload["giftImg"] as? String)
-                             ?? (payload["smallImg"] as? String)
-        // 派生 luckyGift（对齐 H5 party.js:1167-1187 `data.totalReward > 0` 判定）
-        // v3+（2026-07-16）：主播本人送礼时 payload.sendUser.avatar 若缺失，从 AnchorInfoStore.mine.icon
-        // 或 SessionStore.user.icon 兜底 → 保证自己送礼公屏显示自己头像
-        let myAvatarFallback = AnchorInfoStore.shared.mine?.icon ?? SessionStore.shared.user?.icon
-        let totalReward = PartyValueNormalizer.intify(payload["totalReward"]).map { Int64($0) } ?? 0
-        if totalReward > 0 {
-            chat.appendMessage(PartyPublicChatAdapter.luckyGiftDerived(
-                event: event, iconURL: giftIcon, totalReward: totalReward,
-                myUserId: myUserIdString, myAvatarFallback: myAvatarFallback
-            ))
-        } else {
-            chat.appendMessage(PartyPublicChatAdapter.gift(
-                event: event, iconURL: giftIcon,
-                myUserId: myUserIdString, myAvatarFallback: myAvatarFallback
-            ))
-        }
-
         // Party 房特效：静态礼物走 H5 同款中央 + 收礼麦位 + 飘屏；SVGA/MP4 才交给通用全屏播放器。
         // payload 兼容 compressed 批量与真实 2049 单条两种形态。
         let scopeId = roomInfo?.id ?? ""
         let mineYxAccid = SessionStore.shared.user?.yxAccid ?? ""
         let myUserId = myUserIdString
-        let visibleRecipientIds = Set(seatList.compactMap(\.userId))
         let giftPayloads = (payload["gifts"] as? [[String: Any]]) ?? [payload]
         for giftPayload in giftPayloads {
             guard let effect = PartyGiftEffectItem.from(payload: giftPayload) else { continue }
-            giftEffects.enqueue(
+            let isLuckyGift = giftEffects.enqueue(
                 effect,
-                myUserId: myUserId,
-                visibleRecipientIds: visibleRecipientIds
+                myUserId: myUserId
             )
-            if effect.hasPlayableAnimation {
+            // H5 `newGiftPlay` 先判 Lucky Gift；命中后仅走收礼麦位动画和飘屏，
+            // 不把其原始 SVGA/MP4 再送入全局礼物队列。
+            if effect.hasPlayableAnimation, !isLuckyGift {
                 GiftEffectIntake.ingest(
                     scene: .party,
                     scopeId: scopeId,
@@ -3232,6 +3748,7 @@ extension PartyStore: PartyRoomChatManagerDelegate {
     /// - TODO: [im-payload-real-log-over-code-assumption] 真机首次收到 attachType=1004 通过下方 🚗 log
     ///   校对 payloadKeys / dataKeys 真实字段名；当前基于直播 attachType=80 同款 fallback 假设
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveEnterAnimation payload: [String: Any], raw: NIMMessage) {
+        guard !isMinimized else { return }
         // payload 已由 PartyRouter 走 unwrapDataField 解压过（gzip / JSON string 双兼容）
         // 但直播 chatroom attachType=80 的 payload 是 `{ data: {...}, attachType: 80 }` 二级 dict；
         // 派对房走 unwrapDataField 输出结构可能已经是 data 内层——先兼容两种
@@ -3311,9 +3828,63 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         EnterEffectCenter.shared.enqueue(item)
     }
 
+    /// H5 `handleNotificationMessage(type=enter)`：无座驾的聊天室成员进入时显示 2 秒进场条。
+    /// `notifyExt` 是云信官方字段，首次真机收到时记录字段形态以校验服务端 payload。
+    func partyRoomChat(
+        _ chat: PartyRoomChatManager,
+        didReceiveMemberEnter notificationExtension: String?,
+        fallbackNickname: String?
+    ) {
+        _ = chat
+        guard roomState == .joined || roomState == .entering else { return }
+        guard !isMinimized else { return }
+        guard let message = PartyEnterFloatingMessage.from(
+            notificationExtension: notificationExtension,
+            fallbackNickname: fallbackNickname
+        ) else { return }
+
+        AppLogger.party.info(
+            "[PartyStore] memberEnter floating nickname=\(message.nickname, privacy: .private) level=\(message.userLevel ?? -1, privacy: .public) vip=\(message.isVip, privacy: .public)"
+        )
+        enterFloatingQueue.append(message)
+        if enterFloatingQueue.count > enterFloatingQueueLimit {
+            enterFloatingQueue.removeFirst(enterFloatingQueue.count - enterFloatingQueueLimit)
+        }
+        playNextEnterFloatingIfIdle()
+    }
+
+    private func playNextEnterFloatingIfIdle() {
+        guard enterFloatingTask == nil,
+              !enterFloatingQueue.isEmpty else { return }
+        let next = enterFloatingQueue.removeFirst()
+        enterFloatingMessage = next
+        enterFloatingTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: 2_000_000_000)
+            } catch {
+                return
+            }
+            guard let self, !Task.isCancelled else { return }
+            if self.enterFloatingMessage?.id == next.id {
+                self.enterFloatingMessage = nil
+            }
+            self.enterFloatingTask = nil
+            self.playNextEnterFloatingIfIdle()
+        }
+    }
+
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveVideoSeatInvite invite: PartyVideoSeatInvite) {
-        // 仅当邀请对象是自己（房间匹配）才弹窗——roomId 已在 chat 双过滤；
-        // seatIndex 范围由 chat 内 handleVideoSeatInvite 校验过。
+        guard roomState == .entering || roomState == .joined else { return }
+        if let invitedRoomId = invite.roomId, !invitedRoomId.isEmpty {
+            let currentRoomIds = Set([roomInfo?.id, roomInfo?.yxRoomId]
+                .compactMap { $0 }
+                .filter { !$0.isEmpty })
+            guard currentRoomIds.contains(invitedRoomId) else {
+                AppLogger.party.notice("[PartyStore] 1040 dropped room mismatch")
+                return
+            }
+        }
+        // `PartyVideoSeatInvite.from` 已校验 inviteId / seatIndex；到达此处再写入 UI 待响应态。
         pendingVideoSeatInvite = invite
     }
 
@@ -3323,11 +3894,13 @@ extension PartyStore: PartyRoomChatManagerDelegate {
     /// - 此处只做入队；播放由麦位 SVGA player 观察 emojiQueueMap[sendUserId] 驱动
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveEmoji payload: PartyEmojiPayload, raw: NIMMessage) {
         _ = raw
+        guard !isMinimized else { return }
         enqueueEmoji(seatUserId: payload.sendUserId, payload: payload)
         AppLogger.party.info("[PartyStore] emoji enqueued sender=\(payload.sendUserId, privacy: .public) emojiId=\(payload.emojiId, privacy: .public) queueSize=\(self.emojiQueueMap[payload.sendUserId]?.count ?? 0, privacy: .public)")
     }
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveInviteResult result: PartyVideoSeatInviteResult) {
+        guard roomState == .entering || roomState == .joined else { return }
         lastInviteResult = result
         if let targetUserId = result.targetUserId {
             videoSeatInviteCooldowns.removeValue(forKey: targetUserId)
@@ -3494,40 +4067,38 @@ extension PartyStore: PartyRoomChatManagerDelegate {
 
     // MARK: - v3（2026-07-15）Step 2 通知公屏 handler 业务实装
 
-    /// 1019 房管变更（仅本人被设/取消房管时更新权限并追加公屏文案）。
+    /// 聊天室自定义 1019 仅用于实时角色同步。H5 用户端不在此通道插入权限提示，
+    /// 被任免用户的 `authUpdateTip` 由系统通知 1019 处理入口负责。
     /// payload 期望 `{ userId, authType }`；authType 1=设房管 / 2=取消（真机 preflight）
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveAuthUpdate payload: [String: Any], raw: NIMMessage) {
         _ = raw
         AppLogger.party.info("[PartyStore] 1019 authUpdate payloadKeys=\(Array(payload.keys), privacy: .public)")
-        // 仅本人被操作时才更新本地权限并落公屏。
         let targetUserId = PartyValueNormalizer.stringify(payload["userId"]) ?? ""
-        guard targetUserId == (myUserIdString ?? "") else { return }
         let authType = PartyValueNormalizer.intify(payload["authType"]) ?? 0
-        let updatedRole: PartyRoomRoleType
-        switch authType {
-        case 1:
-            updatedRole = .admin
-        case 2:
-            updatedRole = .audience
-        default:
-            AppLogger.party.notice("[PartyStore] 1019 ignored unknown authType=\(authType, privacy: .public)")
+        guard !targetUserId.isEmpty, authType == 1 || authType == 2 else {
+            AppLogger.party.notice("[PartyStore] 1019 ignored malformed payload")
             return
         }
 
-        // 未上麦时 selfRole 从 roomInfo 取；在麦时 selfSeat 优先，因此两处都要同步。
-        if let info = roomInfo {
-            roomInfo = info.withUpdated(roomRoleType: updatedRole.rawValue)
+        let role: PartyRoomRoleType = authType == 1 ? .admin : .audience
+        applyPartyRoleUpdate(targetUserId: targetUserId, role: role)
+    }
+
+    /// 统一接收本地主动设置与服务端 1019 广播的房间角色变化。
+    private func applyPartyRoleUpdate(targetUserId: String, role: PartyRoomRoleType) {
+        partyRoleOverrides[targetUserId] = role
+
+        // 本人未上麦时 selfRole 从 roomInfo 派生；他人不能改写本端 roomInfo。
+        if targetUserId == myUserIdString, let info = roomInfo {
+            roomInfo = info.withUpdated(roomRoleType: role.rawValue)
         }
         if let selfIndex = seatList.firstIndex(where: { $0.userId == targetUserId }),
-           let updatedSeat = Self.replacingRoleType(of: seatList[selfIndex], with: updatedRole.rawValue) {
+           let updatedSeat = Self.replacingRoleType(of: seatList[selfIndex], with: role.rawValue) {
             seatList[selfIndex] = updatedSeat
         }
-        PartyBattleStore.shared.refreshPermissions()
-
-        let text = authType == 1
-            ? L10n.Party.authUpdateSetAdmin
-            : L10n.Party.authUpdateRemoveAdmin
-        chatRouter.postSystemAuthUpdate(text)
+        if targetUserId == myUserIdString {
+            PartyBattleStore.shared.refreshPermissions()
+        }
     }
 
     /// PartyRoomSeat 使用不可变字段；以 Codable round-trip 定向更新 1019 广播中的角色字段。
@@ -3577,6 +4148,9 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         }
         let text = (payload["text"] as? String) ?? ""
         guard !text.isEmpty else { return }
+        if let info = roomInfo {
+            roomInfo = info.withUpdated(announcement: text)
+        }
         chatRouter.postAnnouncement(String(format: L10n.Party.roomAnnouncementFormat, text))
     }
 
@@ -3602,6 +4176,11 @@ extension PartyStore: PartyRoomChatManagerDelegate {
             return
         }
         chat.appendMessage(message)
+    }
+
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveSuperWheelBroadcast attachType: Int, payload: [String: Any]) {
+        guard roomState == .entering || roomState == .joined else { return }
+        PartySuperWheelStore.shared.applyBroadcast(attachType: attachType, payload: payload)
     }
 
     /// 1052 幸运数字中奖个人通知。系统通知可能来自离线补发，必须确认仍在当前房内。
@@ -3645,11 +4224,36 @@ extension PartyStore: PartyRoomChatManagerDelegate {
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveWinnerBroadcast payload: [String: Any], raw: NIMMessage) {
         _ = raw
         AppLogger.party.info("[PartyStore] 140 winnerBroadcast payloadKeys=\(Array(payload.keys), privacy: .public)")
-        guard let msg = PartyPublicChatAdapter.winnerBroadcast(payload: payload) else {
-            AppLogger.party.notice("[PartyStore] 140 winnerBroadcast drop (activityName empty)")
+        guard let msg = PartyPublicChatAdapter.winnerBroadcast(
+            payload: payload,
+            myUserId: SessionStore.shared.user?.userId.map(String.init)
+        ) else {
+            AppLogger.party.notice("[PartyStore] 140 winnerBroadcast drop (scene or payload rejected)")
             return
         }
         chat.appendMessage(msg)
+    }
+
+    /// 197 首礼时刻：消息流和顶部横幅从同一 payload 入队，退房由 resetState 统一清空。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveFirstGiftMoment payload: [String: Any], raw: NIMMessage) {
+        _ = raw
+        guard let message = PartyPublicChatAdapter.firstGiftMoment(
+            payload: payload,
+            myUserId: SessionStore.shared.user?.userId.map(String.init)
+        ) else {
+            AppLogger.party.notice("[PartyStore] 197 firstGiftMoment drop invalid payload")
+            return
+        }
+        chat.appendMessage(message)
+        firstGiftFloatQueue.addToQueue(FirstGiftFloatQueue.Item(
+            backgroundURL: payload["bgImageUrl"] as? String,
+            renderedText: (payload["renderedText"] as? String) ?? "",
+            nickname: (payload["nickname"] as? String) ?? "",
+            giftImageURL: payload["giftImg"] as? String,
+            giftSmallImageURL: payload["giftSmallImg"] as? String,
+            styleKey: (payload["styleKey"] as? String) ?? "",
+            isFirstGift: PartyPublicChatAdapter.boolify(payload["isFirstGift"])
+        ))
     }
 
     // MARK: - v3 Step 2 handler 辅助
@@ -3735,6 +4339,113 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         )
     }
 
+    /// PK 进入 SELECTING/RUNNING 时强制关闭并隐藏私 call。
+    ///
+    /// 不依赖房间页的显示生命周期，确保小窗、重连后补拉到进行中 PK 时仍会执行。
+    /// 非房主仅本地隐藏，避免修改他人房间的全局私 call 设置。
+    func pausePartyPrivateCallForPK() {
+        guard !partyPrivateCallHiddenForPK else { return }
+
+        let info = roomInfo
+        partyPrivateCallWasEnabledBeforePK = info?.isPartyPrivateCallEnabled == true
+        partyPrivateCallGiftIdBeforePK = info?.partyCallGiftId
+        partyPrivateCallHiddenForPK = true
+
+        guard partyPrivateCallWasEnabledBeforePK else { return }
+        applyPrivateCallUpdate(
+            partyPrivateCallOpen: 0,
+            partyCallGiftId: partyPrivateCallGiftIdBeforePK
+        )
+        enqueuePartyPrivateCallPKSync(enable: false, giftId: nil)
+        AppLogger.party.info("[PartyStore] PK paused private call")
+    }
+
+    /// PK 结束、进入冷却或补拉到非活跃状态时，恢复进入 PK 前的私 call 状态。
+    func resumePartyPrivateCallAfterPK() {
+        guard partyPrivateCallHiddenForPK else { return }
+
+        let shouldRestore = partyPrivateCallWasEnabledBeforePK
+        let giftId = partyPrivateCallGiftIdBeforePK
+        partyPrivateCallHiddenForPK = false
+        partyPrivateCallWasEnabledBeforePK = false
+        partyPrivateCallGiftIdBeforePK = nil
+
+        applyPrivateCallUpdate(
+            partyPrivateCallOpen: shouldRestore ? 1 : 0,
+            partyCallGiftId: giftId
+        )
+        guard shouldRestore else { return }
+
+        enqueuePartyPrivateCallPKSync(enable: true, giftId: giftId)
+        AppLogger.party.info("[PartyStore] PK restored private call")
+    }
+
+    /// 退房时丢弃本地 PK 快照，不对已经离开的房间发送恢复请求。
+    func discardPartyPrivateCallPKState() {
+        partyPrivateCallPKSyncRevision &+= 1
+        partyPrivateCallPKSyncTask?.cancel()
+        partyPrivateCallPKSyncTask = nil
+        partyPrivateCallHiddenForPK = false
+        partyPrivateCallWasEnabledBeforePK = false
+        partyPrivateCallGiftIdBeforePK = nil
+        isTogglingPrivateCall = false
+    }
+
+    private func enqueuePartyPrivateCallPKSync(enable: Bool, giftId: String?) {
+        // 入口在所有房间展示；但 PK 不能替非房主修改当前房间的全局私 call 设置。
+        guard selfRole == .owner,
+              let roomId = roomInfo?.id,
+              !roomId.isEmpty else {
+            return
+        }
+
+        partyPrivateCallPKSyncRevision &+= 1
+        let requestRevision = partyPrivateCallPKSyncRevision
+        let previousTask = partyPrivateCallPKSyncTask
+        isTogglingPrivateCall = true
+
+        partyPrivateCallPKSyncTask = Task { @MainActor [weak self] in
+            if let previousTask {
+                await previousTask.value
+            }
+            guard let self,
+                  !Task.isCancelled,
+                  self.partyPrivateCallPKSyncRevision == requestRevision else {
+                return
+            }
+            defer {
+                if self.partyPrivateCallPKSyncRevision == requestRevision {
+                    self.partyPrivateCallPKSyncTask = nil
+                    self.isTogglingPrivateCall = false
+                }
+            }
+            guard self.roomInfo?.id == roomId else { return }
+
+            do {
+                try await PartyAPI.updatePartyPrivateCall(
+                    roomId: roomId,
+                    enable: enable ? 1 : 0,
+                    giftId: giftId
+                )
+                guard !Task.isCancelled,
+                      self.partyPrivateCallPKSyncRevision == requestRevision,
+                      self.roomInfo?.id == roomId else {
+                    return
+                }
+                AppLogger.party.info(
+                    "[PartyStore] PK private call sync ok enable=\(enable, privacy: .public)"
+                )
+            } catch is CancellationError {
+                return
+            } catch {
+                guard self.partyPrivateCallPKSyncRevision == requestRevision else { return }
+                AppLogger.party.error(
+                    "[PartyStore] PK private call sync failed enable=\(enable, privacy: .public) err=\(String(describing: error), privacy: .private)"
+                )
+            }
+        }
+    }
+
     /// F 期：房主 tap 主 view 浮动私 call 开关按钮触发。
     ///
     /// - `enable=true`：需带 `giftId`（从 CommonGiftPanel.callGate 选中回调传入）+ 可选 giftIcon/giftPrice 供按钮 preview
@@ -3748,6 +4459,10 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         giftIcon: String? = nil,
         giftPrice: Int? = nil
     ) async {
+        guard !partyPrivateCallHiddenForPK else {
+            AppLogger.party.notice("[PartyStore] setPrivateCall rejected: PK active")
+            return
+        }
         guard selfRole == .owner else {
             AppLogger.party.notice("[PartyStore] setPrivateCall rejected: not owner/platformAdmin")
             return
@@ -3793,7 +4508,7 @@ extension PartyStore: PartyRoomChatManagerDelegate {
     /// 1. 前置守卫（roomState==.joined）
     /// 2. updateMedia(type=3, enable=false) 若在麦上（fire-and-forget，不阻塞）
     /// 3. downSeat 若在麦上（fire-and-forget，不阻塞）
-    /// 4. disableLocalVideoCapture()（内部串行 detach Sharer → unsubscribe → tearDown → camera=nil）
+    /// 4. 立即关闭本地摄像头和麦克风发布（不依赖上述 HTTP 结果）
     /// 5. Task.sleep(200ms) — 让 AVCaptureSession 硬件层完全释放前置摄像头（P1-8 · 避免 CallView fallback camera reason=3）
     /// 6. rtc.leave() — await didLeaveChannelWith 回调（sharedEngine 不 destroy · rule §5）
     /// 7. CallStore.acceptIncomingFromParty(msg) — CallView zIndex=100 overlay 自动 pop calling
@@ -3804,6 +4519,9 @@ extension PartyStore: PartyRoomChatManagerDelegate {
             return
         }
         AppLogger.party.info("[PartyStore] pauseForCall 开始 callId=\(msg.callId, privacy: .public)")
+
+        // 先关闭当前麦位的本地采集和音频发布；后续两个 HTTP 只是服务端状态同步。
+        deactivateLocalSeatMediaForExit()
 
         // 2+3) 若在麦上：updateMedia + downSeat（fire-and-forget · 不阻塞主流程）
         if let me = selfSeat, let seatIndex = me.seatIndex {
@@ -3832,16 +4550,13 @@ extension PartyStore: PartyRoomChatManagerDelegate {
             }
         }
 
-        // 4) 释放本地相机 + 美颜（内部串行）
-        disableLocalVideoCapture()
-
-        // 5) 等 AVCaptureSession 硬件层完全释放（P1-8 · 20-200ms 保守取 200ms · Step 3 真机 5 循环压测调优）
+        // 4) 等 AVCaptureSession 硬件层完全释放（P1-8 · 20-200ms 保守取 200ms · Step 3 真机 5 循环压测调优）
         try? await Task.sleep(nanoseconds: 200_000_000)
 
-        // 6) rtc.leave() 派对房 Agora 频道（sharedEngine 不 destroy · rule §5 §9）
+        // 5) rtc.leave() 派对房 Agora 频道（sharedEngine 不 destroy · rule §5 §9）
         await rtc.leave()
 
-        // 7) 委托 CallStore 接听（内部 CallView fallback camera 会 start · CallView overlay 自动显示）
+        // 6) 委托 CallStore 接听（内部 CallView fallback camera 会 start · CallView overlay 自动显示）
         await CallStore.shared.acceptIncomingFromParty(msg: msg)
         AppLogger.party.info("[PartyStore] pauseForCall 完成，已委托 CallStore")
     }
@@ -3922,7 +4637,7 @@ extension PartyStore: CallStoreObserver {
 
 // MARK: - debug helper
 
-private extension PartyRoomState {
+extension PartyRoomState {
     var debugDesc: String {
         switch self {
         case .idle: return "idle"

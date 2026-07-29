@@ -58,14 +58,14 @@ struct PartyBattleState: Codable, Equatable {
         battleId = (try? c.decode(Int.self, forKey: .battleId)) ?? 0
         roomId = (try? Self.decodeInt64OrString(from: c, key: .roomId)) ?? 0
         status = (try? c.decode(PartyBattleStatus.self, forKey: .status)) ?? .selecting
-        templateId = try c.decodeIfPresent(Int.self, forKey: .templateId)
+        templateId = Self.decodeOptionalIntOrString(from: c, key: .templateId)
         templateName = try c.decodeIfPresent(String.self, forKey: .templateName)
         selectingDurationSec = (try? c.decode(Int.self, forKey: .selectingDurationSec)) ?? 60
         durationSec = (try? c.decode(Int.self, forKey: .durationSec)) ?? 300
         leftSec = (try? c.decode(Int.self, forKey: .leftSec)) ?? 0
         hostUid = (try? Self.decodeInt64OrString(from: c, key: .hostUid)) ?? 0
         hostRole = (try? c.decode(Int.self, forKey: .hostRole)) ?? 1
-        currentUserTeam = try c.decodeIfPresent(Int.self, forKey: .currentUserTeam)
+        currentUserTeam = Self.decodeOptionalIntOrString(from: c, key: .currentUserTeam)
         // team 字段容错：后端 partial payload（如 1103 RunningStart 可能不带 team 快照）应能 decode
         // 对齐 H5 partyBattle.ts:308-319 `redTeam ?? { count: 0, members: [] }` 兜底空 team
         redTeam = (try? c.decode(BattleTeam.self, forKey: .redTeam)) ?? BattleTeam(count: 0, members: [])
@@ -79,8 +79,8 @@ struct PartyBattleState: Codable, Equatable {
         blueScore = try c.decodeIfPresent(DoubleOrString.self, forKey: .blueScore) ?? .none
         redGems = try c.decodeIfPresent(DoubleOrString.self, forKey: .redGems)
         blueGems = try c.decodeIfPresent(DoubleOrString.self, forKey: .blueGems)
-        winnerTeam = try c.decodeIfPresent(Int.self, forKey: .winnerTeam)
-        cooldownLeftSec = try c.decodeIfPresent(Int.self, forKey: .cooldownLeftSec) ?? 0
+        winnerTeam = Self.decodeOptionalIntOrString(from: c, key: .winnerTeam)
+        cooldownLeftSec = Self.decodeOptionalIntOrString(from: c, key: .cooldownLeftSec) ?? 0
     }
 
     func encode(to encoder: Encoder) throws {
@@ -129,6 +129,17 @@ struct PartyBattleState: Codable, Equatable {
     ) throws -> Int64? {
         if let i = try? c.decode(Int64.self, forKey: key) { return i }
         if let s = try? c.decode(String.self, forKey: key), !s.isEmpty, let i = Int64(s) {
+            return i
+        }
+        return nil
+    }
+
+    private static func decodeOptionalIntOrString(
+        from c: KeyedDecodingContainer<CodingKeys>,
+        key: CodingKeys
+    ) -> Int? {
+        if let i = try? c.decode(Int.self, forKey: key) { return i }
+        if let s = try? c.decode(String.self, forKey: key), !s.isEmpty, let i = Int(s) {
             return i
         }
         return nil
@@ -271,7 +282,15 @@ struct BattleTopMember: Codable, Equatable {
         // contribution: contribution > diamonds 双 alias
         contribution = try (c.decodeIfPresent(DoubleOrString.self, forKey: .contribution))
             ?? c.decodeIfPresent(DoubleOrString.self, forKey: .diamonds)
-        rank = try c.decodeIfPresent(Int.self, forKey: .rank)
+        // H5 直接消费 `rank`，不限制 JSON 数值类型；服务端灰度会把排名序列化成字符串。
+        // 不能因单个榜单项 rank="1" 让整个 Top3 数组 decode 失败并被 state 回退为空。
+        if let value = try? c.decode(Int.self, forKey: .rank) {
+            rank = value
+        } else if let value = try? c.decode(String.self, forKey: .rank), let parsed = Int(value) {
+            rank = parsed
+        } else {
+            rank = nil
+        }
     }
 
     func encode(to encoder: Encoder) throws {

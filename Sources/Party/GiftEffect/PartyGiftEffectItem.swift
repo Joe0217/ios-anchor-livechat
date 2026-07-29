@@ -99,6 +99,14 @@ struct PartyGiftEffectItem: Identifiable, Equatable {
         return hasPlayableAnimation ? nil : animationURL
     }
 
+    /// H5 `gift-animator-receiver` uses `giftImg`, which is the original 2049
+    /// `giftIcon`; the center and floating row use `smallImg` instead.
+    /// SVGA/MP4 resources belong to the global player and cannot be rendered as an image here.
+    var receiverImageURL: String? {
+        guard !hasPlayableAnimation else { return nil }
+        return animationURL ?? thumbnailURL
+    }
+
     static func from(payload: [String: Any]) -> PartyGiftEffectItem? {
         guard let giftId = int64(payload["giftId"]), giftId != 0 else { return nil }
 

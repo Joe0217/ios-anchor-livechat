@@ -37,8 +37,9 @@ struct PartyBattleInitiatePopup: View {
             confirmButton
         }
         .padding(20)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .top)
         .background(bgGradient)
+        .fixedSize(horizontal: false, vertical: true)
         .overlay(alignment: .top) {
             if let actionError {
                 Text(actionError)
@@ -53,6 +54,18 @@ struct PartyBattleInitiatePopup: View {
                 selectedTemplateId = first.id
             }
         }
+        .onChange(of: store.isSelecting) { isSelecting in
+            guard isSelecting else { return }
+            actionError = nil
+            submitting = false
+            onStarted()
+        }
+        .onChange(of: store.isRunning) { isRunning in
+            guard isRunning else { return }
+            actionError = nil
+            submitting = false
+            onStarted()
+        }
     }
 
     // MARK: - Sections
@@ -64,7 +77,7 @@ struct PartyBattleInitiatePopup: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: 24, height: 24)
-            Text("Initiate Battle Team")
+            Text(L10n.Party.Battle.initiateTitle)
                 .font(.title3).bold()
                 .foregroundColor(.white)
             Spacer()
@@ -74,11 +87,11 @@ struct PartyBattleInitiatePopup: View {
     @ViewBuilder
     private var modeSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Mode")
+            Text(L10n.Party.Battle.modeLabel)
                 .font(.subheadline)
                 .foregroundColor(.white)
             // H5 `party.battle.modeTeamBattle`。
-            Text("Team Battle (Red vs. Blue)")
+            Text(L10n.Party.Battle.modeTeamBattle)
                 .font(.subheadline).bold()
                 .foregroundColor(.white)
                 .padding(.horizontal, 15).padding(.vertical, 6)
@@ -91,7 +104,7 @@ struct PartyBattleInitiatePopup: View {
     @ViewBuilder
     private var timeSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Time")
+            Text(L10n.Party.Battle.timeLabel)
                 .font(.subheadline)
                 .foregroundColor(.white)
             HStack(spacing: 12) {
@@ -99,8 +112,8 @@ struct PartyBattleInitiatePopup: View {
                     Button {
                         selectedTemplateId = d.templateId
                     } label: {
-                        Text("\(d.min) minutes")
-                            .font(.subheadline).bold()
+                        Text(L10n.Party.Battle.minutes(d.min))
+                            .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 15).padding(.vertical, 6)
                             .background(
@@ -128,7 +141,7 @@ struct PartyBattleInitiatePopup: View {
     private var sideSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Choosing my side")
+                Text(L10n.Party.Battle.chooseSideLabel)
                     .font(.subheadline)
                     .foregroundColor(.white)
                 Spacer()
@@ -136,8 +149,8 @@ struct PartyBattleInitiatePopup: View {
             }
             if joinEnabled {
                 HStack(spacing: 8) {
-                    sideButton(title: "Join Red", team: 1, color: redBg)
-                    sideButton(title: "Join Blue", team: 2, color: blueBg)
+                    sideButton(title: L10n.Party.Battle.joinRed, team: 1, color: redBg)
+                    sideButton(title: L10n.Party.Battle.joinBlue, team: 2, color: blueBg)
                 }
             }
         }
@@ -164,10 +177,10 @@ struct PartyBattleInitiatePopup: View {
                 HStack {
                     if joinEnabled {
                         Circle().fill(Color.white).frame(width: 22, height: 22)
-                        Text("Join").font(.caption).foregroundColor(.white)
+                        Text(L10n.Party.Battle.joinSideOn).font(.caption).foregroundColor(.white)
                             .padding(.trailing, 8)
                     } else {
-                        Text("Neutral").font(.caption).foregroundColor(.white)
+                        Text(L10n.Party.Battle.joinSideOff).font(.caption).foregroundColor(.white)
                             .padding(.leading, 8)
                         Spacer()
                         Circle().fill(Color.white).frame(width: 22, height: 22)
@@ -189,7 +202,7 @@ struct PartyBattleInitiatePopup: View {
                 .font(.subheadline).bold()
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
-                .frame(height: 54)
+                .frame(height: 44)
                 .background(hostSide == team ? color : color.opacity(0.4))
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .contentShape(Rectangle())
@@ -200,8 +213,8 @@ struct PartyBattleInitiatePopup: View {
     @ViewBuilder
     private var hintCard: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("\(store.roomEnv.lobbyMicCount) players in the lobby · Ready to start ≥ \(store.cooldownDurationSec)s since the last match ended")
-            Text("After confirmation, a \(store.globalSelectingDurationSec)-second team selection phase begins. Players in the lobby select their teams, and the room owner clicks START to begin the match.")
+            Text(L10n.Party.Battle.initiateHint(players: store.roomEnv.lobbyMicCount, cooldown: store.cooldownDurationSec))
+            Text(L10n.Party.Battle.initiateHint2(selecting: store.globalSelectingDurationSec))
         }
         .font(.caption)
         .foregroundColor(.white.opacity(0.6))
@@ -219,7 +232,7 @@ struct PartyBattleInitiatePopup: View {
                 if submitting {
                     ProgressView().tint(.white)
                 }
-                Text("Confirm")
+                Text(L10n.Party.Battle.confirm)
                     .font(.headline).bold()
                     .foregroundColor(.white)
                 Spacer()
@@ -231,7 +244,7 @@ struct PartyBattleInitiatePopup: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(submitting || selectedTemplateId == nil)
+        .disabled(submitting)
     }
 
     // MARK: - Computed
@@ -281,9 +294,16 @@ struct PartyBattleInitiatePopup: View {
     // MARK: - Actions
 
     private func handleConfirm() {
+        guard store.roomEnv.roomId > 0 else {
+            actionError = L10n.Party.Battle.roomIdInvalid
+            return
+        }
         guard let tid = selectedTemplateId,
               let picked = durationItems.first(where: { $0.templateId == tid })
-        else { return }
+        else {
+            actionError = L10n.Party.Battle.noTemplate
+            return
+        }
         actionError = nil
         submitting = true
         Task {
@@ -297,7 +317,7 @@ struct PartyBattleInitiatePopup: View {
                 if started {
                     onStarted()
                 } else {
-                    actionError = store.actionError ?? "Unable to start PK. Please try again."
+                    actionError = store.actionError ?? L10n.Party.Battle.startNowFailed
                 }
             }
         }

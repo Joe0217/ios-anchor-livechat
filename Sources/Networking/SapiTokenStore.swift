@@ -109,17 +109,17 @@ final class SapiTokenStore {
         req.timeoutInterval = 30
 
         // 头：与 PartyAPIClient.sapiHeaders 保持一致，authToken=nil（exchange 接口本身不带 auth_token），
-        //     loginToken 仍带（H5 sapiIndex.ts 拦截器无条件注入主 token）
+        //     主播端仍带 loginToken / anchorToken，用于保持服务端的主播身份判定。
         let headers = Self.sapiHeaders(authToken: nil, loginToken: AuthToken.value)
         for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
 
-        // body: { token: loginUuid } → AES(sapi key/iv) → Base64
+        // body: { token: loginUuid } → AES(sapi key/iv) → Base64 → JSON string（与 H5 Axios 线协议一致）
         let bodyJson = try JSONSerialization.data(withJSONObject: ["token": loginUuid])
         let bodyStr = String(decoding: bodyJson, as: UTF8.self)
         guard let encrypted = CryptoUtil.aesEncryptToBase64(bodyStr, key: AppConfig.sapiAesKey, iv: AppConfig.sapiAesIV) else {
             throw SapiTokenError.encryptFailed
         }
-        req.httpBody = Data(encrypted.utf8)
+        req.httpBody = try Self.jsonWrappedEncryptedBody(encrypted)
 
         let exchangePath = "/sapi/auth/v1/client/auth/exchangeToken"
         let data: Data
@@ -179,8 +179,8 @@ final class SapiTokenStore {
 
     // MARK: - sapi 公共头（PartyAPIClient 共用）
 
-    /// 与 H5 `src/utils/request/sapiIndex.ts` 拦截器对齐：
-    /// - `loginToken` / `anchorToken` 始终注入主 token（即使是 exchangeToken 接口）
+    /// 主播端 SAPI 公共头：
+    /// - `loginToken` / `anchorToken` 同时注入主 token（即使是 exchangeToken 接口）
     /// - `auth_token` 仅在 nil 时省略（exchangeToken 接口本身不带）
     /// - 其他公共头与主接口 `APIClient.commonHeaders` 一致
     /// nonisolated 让 PartyAPIClient 非 @MainActor 调用不必 await
@@ -202,12 +202,19 @@ final class SapiTokenStore {
         ]
         if let t = loginToken, !t.isEmpty {
             h["loginToken"] = t
-            h["anchorToken"] = t   // 与主接口对齐
+            h["anchorToken"] = t
         }
         if let a = authToken, !a.isEmpty {
             h["auth_token"] = a
         }
         return h
+    }
+
+    /// H5 SAPI 拦截器把 AES 后的 Base64 string 放回 `config.data`；Axios 在
+    /// `application/json` 下会将这个字符串 JSON.stringify，最终线上的请求体形如 `"Base64..."`。
+    /// 不能发送裸 Base64，否则服务端会走与 H5 不同的 body 反序列化分支。
+    nonisolated static func jsonWrappedEncryptedBody(_ encrypted: String) throws -> Data {
+        try JSONSerialization.data(withJSONObject: encrypted, options: [.fragmentsAllowed])
     }
 }
 

@@ -31,8 +31,8 @@ enum PartyBattleMessageRouter {
                 let minutes = max(1, sec / 60)
                 PartyStore.shared.chatRouter.postSystemBattle(
                     kind: .selecting,
-                    text: "The room has initiated a team PK, and the battle will start in {h} minutes!",
-                    highlight: String(minutes)
+                    text: L10n.Party.Battle.chatSelectingStart(minutes),
+                    highlight: nil
                 )
             } else {
                 warnDecode(attachType, payload: payload)
@@ -123,26 +123,26 @@ enum PartyBattleMessageRouter {
         case "victory":
             // H5 chat-list.vue :355-361 · winnerTeam=1|2 有文案；否则 "This is a draw!"
             if p.winnerTeam == 1 || p.winnerTeam == 2 {
-                let teamLabel = p.winnerTeam == 2 ? "Blue Team" : "Red Team"
+                let teamLabel = p.winnerTeam == 2 ? L10n.Party.Battle.blueTeam : L10n.Party.Battle.redTeam
                 let score = winScoreText(payload: p)
                 router.postSystemBattle(
                     kind: .normalEnd,
-                    text: "\(teamLabel) wins! Total score {h}",
+                    text: "\(L10n.Party.Battle.chatTeamWin(teamLabel)) {h}",
                     highlight: score
                 )
             } else {
-                router.postSystemBattle(kind: .normalEnd, text: "This is a draw!", highlight: nil)
+                router.postSystemBattle(kind: .normalEnd, text: L10n.Party.Battle.chatTie, highlight: nil)
             }
         case "force_ended":
-            router.postSystemBattle(kind: .forceEnd, text: "The room ended this PK early", highlight: nil)
+            router.postSystemBattle(kind: .forceEnd, text: L10n.Party.Battle.chatForceEnd, highlight: nil)
         case "mvp":
             // H5 chat-list.vue :387 · "This MVP: {name} ({team}) Personal Gift {total}"
             let name = p.mvpName ?? p.mvpNickname ?? ""
-            let teamLabel = p.team == 2 ? "Blue Team" : "Red Team"
+            let teamLabel = p.team == 2 ? L10n.Party.Battle.blueTeam : L10n.Party.Battle.redTeam
             let total = totalGiftText(payload: p)
             router.postSystemBattle(
                 kind: .mvp,
-                text: "This MVP: \(name) (\(teamLabel)) Personal Gift {h}",
+                text: "\(L10n.Party.Battle.chatMvp(name: name, team: teamLabel)) {h}",
                 highlight: total
             )
         case "selecting_started":

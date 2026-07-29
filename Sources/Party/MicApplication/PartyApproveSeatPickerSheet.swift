@@ -10,7 +10,7 @@ import SwiftUI
 /// - Grid：所有**空位**，视频位按主舞台网格、语音位按对应的小麦位网格排列；
 ///   - 排除 `pendingApproveSeatIndex`（房主已挑走进行中的位，防并发冲突）
 ///   - `canOnHostSeat==false` 时排除 `isHostSeat==1` 的接待位（对齐 MicApplicationInfo.canOnHostSeat）
-/// - 视频位为禁用态，申请用户只能通过视频位邀请流程上位
+/// - 视频位及已锁麦位均为禁用态；锁麦位保留在网格中并显示锁图标，避免被误认为可分配空位
 /// - 语音位 tap 直接调 `agreeMicApplication(userId:, seatIndex: idx)`
 /// - Sheet 内 API 成功后自动 dismiss（成功感知靠列表 1018 op=2 自动 splice）
 struct PartyApproveSeatPickerSheet: View {
@@ -140,8 +140,9 @@ struct PartyApproveSeatPickerSheet: View {
 
     private func seatCell(seat: PartyRoomSeat) -> some View {
         let isVideoSeat = seat.isVideoSeat
+        let isLocked = (seat.lockFlag ?? 0) == 1
         return Button {
-            guard !isBusy, !isVideoSeat, let idx = seat.seatIndex else { return }
+            guard !isBusy, !isVideoSeat, !isLocked, let idx = seat.seatIndex else { return }
             isBusy = true
             Task {
                 await store.agreeMicApplication(userId: application.userId, seatIndex: idx)
@@ -152,7 +153,7 @@ struct PartyApproveSeatPickerSheet: View {
             }
         } label: {
             VStack(spacing: 6) {
-                seatTypeIcon(seat: seat)
+                seatTypeIcon(seat: seat, isLocked: isLocked)
                 Text(String(format: L10n.Party.approveSeatPickerSeatNumberFormat, seat.seatIndex ?? 0))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white)
@@ -164,24 +165,24 @@ struct PartyApproveSeatPickerSheet: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: isVideoSeat ? 102 : 88)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(isVideoSeat ? 0.035 : 0.08)))
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity((isVideoSeat || isLocked) ? 0.035 : 0.08)))
             .overlay {
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(Color.white.opacity(isVideoSeat ? 0.08 : 0), lineWidth: 1)
+                    .stroke(Color.white.opacity((isVideoSeat || isLocked) ? 0.08 : 0), lineWidth: 1)
             }
-            .opacity(isVideoSeat ? 0.45 : 1)
+            .opacity((isVideoSeat || isLocked) ? 0.45 : 1)
             .contentShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
-        .disabled(isBusy || isVideoSeat)
+        .disabled(isBusy || isVideoSeat || isLocked)
     }
 
-    private func seatTypeIcon(seat: PartyRoomSeat) -> some View {
+    private func seatTypeIcon(seat: PartyRoomSeat, isLocked: Bool) -> some View {
         let isVideo = seat.seatType == PartyRoomSeatType.video.rawValue
         return ZStack {
             Circle().fill(Color.white.opacity(0.12))
                 .frame(width: 36, height: 36)
-            Image(systemName: isVideo ? "video.fill" : "mic.fill")
+            Image(systemName: isLocked ? "lock.fill" : (isVideo ? "video.fill" : "mic.fill"))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white)
         }

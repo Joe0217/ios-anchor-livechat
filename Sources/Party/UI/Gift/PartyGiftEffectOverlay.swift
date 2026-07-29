@@ -13,7 +13,7 @@ struct PartyGiftEffectOverlay: View {
             ZStack {
                 if let gift = coordinator.centralGift,
                    let url = gift.staticImageURL {
-                    PartyGiftZoomImage(id: gift.id, urlString: url, size: 150)
+                    PartyGiftZoomImage(id: gift.id, urlString: url, size: 150, phase: .central)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
 
@@ -24,7 +24,8 @@ struct PartyGiftEffectOverlay: View {
                     onAnimationFinished: { coordinator.finishFloatingAnimation(id: $0) }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(.top, 300)
+                // H5 `floating-message-manager.vue` pins the 50pt container at top: 300px.
+                .offset(y: 300)
             }
         }
         .allowsHitTesting(false)
@@ -42,17 +43,40 @@ struct PartyGiftReceiverEffect: View {
         if let userId,
            let gift = coordinator.receiverGift,
            gift.receiverUserIds.contains(userId),
-           let url = gift.staticImageURL {
-            PartyGiftZoomImage(id: gift.id, urlString: url, size: size)
+           let url = gift.receiverImageURL {
+            PartyGiftZoomImage(id: gift.id, urlString: url, size: size, phase: .receiver)
                 .id(gift.id)
         }
     }
 }
 
 private struct PartyGiftZoomImage: View {
+    enum Phase {
+        /// H5 central `gift-animator-normal`: 0% → 30% → 70% → 100% (total 1.5s).
+        case central
+        /// H5 receiver `gift-animator-receiver`: 0% → 30% → 80% → 100% (total 1.5s).
+        case receiver
+
+        var appearDuration: TimeInterval { 0.45 }
+        /// 从动画启动到离场关键帧的时长（包含入场阶段）。
+        var beforeDisappearNanoseconds: UInt64 {
+            switch self {
+            case .central: return 1_050_000_000
+            case .receiver: return 1_200_000_000
+            }
+        }
+        var disappearDuration: TimeInterval {
+            switch self {
+            case .central: return 0.45
+            case .receiver: return 0.3
+            }
+        }
+    }
+
     let id: UUID
     let urlString: String
     let size: CGFloat
+    let phase: Phase
     @State private var visible = false
 
     var body: some View {
@@ -69,12 +93,16 @@ private struct PartyGiftZoomImage: View {
         .opacity(visible ? 1 : 0)
         .task(id: id) {
             visible = false
-            try? await Task.sleep(nanoseconds: 10_000_000)
+            await Task.yield()
             guard !Task.isCancelled else { return }
-            withAnimation(.easeOut(duration: 0.45)) { visible = true }
-            try? await Task.sleep(nanoseconds: 950_000_000)
-            guard !Task.isCancelled else { return }
-            withAnimation(.easeIn(duration: 0.45)) { visible = false }
+            withAnimation(.easeOut(duration: phase.appearDuration)) { visible = true }
+            do {
+                try await Task.sleep(nanoseconds: phase.beforeDisappearNanoseconds)
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeIn(duration: phase.disappearDuration)) { visible = false }
+            } catch {
+                return
+            }
         }
     }
 }
@@ -86,16 +114,20 @@ private struct PartyGiftFloatingStack: View {
     let onAnimationFinished: (UUID) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            ForEach(messages) { message in
+        ZStack(alignment: .bottomLeading) {
+            ForEach(Array(messages.enumerated()), id: \.element.id) { index, message in
                 PartyGiftFloatingRow(
                     message: message,
                     width: width,
                     travelDistance: travelDistance,
                     onAnimationFinished: onAnimationFinished
                 )
+                // H5 keeps the newest item at the baseline and pushes older items upward.
+                .offset(y: -CGFloat(messages.count - 1 - index) * 60)
+                .zIndex(Double(messages.count - index))
             }
         }
+        .frame(width: width, height: 50, alignment: .bottomLeading)
         // H5 `floating-notification` 的 bottom transition = 300ms cubic-bezier(0.4, 0, 0.2, 1)。
         .animation(.timingCurve(0.4, 0, 0.2, 1, duration: 0.3), value: messages.map(\.id))
     }
@@ -106,6 +138,7 @@ private struct PartyGiftFloatingRow: View {
     let width: CGFloat
     let travelDistance: CGFloat
     let onAnimationFinished: (UUID) -> Void
+    @Environment(\.layoutDirection) private var layoutDirection
     @State private var horizontalOffset: CGFloat
     @State private var opacity: Double
 
@@ -177,6 +210,8 @@ private struct PartyGiftFloatingRow: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .fill(Color.black.opacity(0.66))
             }
+            // H5 仅在 RTL 镜像这张不对称横幅底图；内容本身由语义布局自动反转。
+            .scaleEffect(x: layoutDirection == .rightToLeft ? -1 : 1, y: 1)
         }
         .offset(x: horizontalOffset)
         .opacity(opacity)
@@ -196,6 +231,7 @@ private struct PartyGiftFloatingRow: View {
                 opacity = 1
             }
             do {
+                // H5 keyframes: 0.75s enter + 1.5s pause, then 0.75s leave = 3s total.
                 try await Task.sleep(nanoseconds: 750_000_000)
                 guard !Task.isCancelled else { return }
                 try await Task.sleep(nanoseconds: 1_500_000_000)

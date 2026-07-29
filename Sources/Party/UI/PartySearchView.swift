@@ -126,7 +126,11 @@ struct PartySearchView: View {
                     Button {
                         onTapRoom(room)
                     } label: {
-                        PartyRoomCardView(room: room)
+                        PartyRoomCardView(
+                            room: room,
+                            languageName: room.roomLanguage ?? L10n.Party.listPillLanguageFallback,
+                            isMyRoom: false
+                        )
                     }
                     .buttonStyle(.plain)
                     .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))

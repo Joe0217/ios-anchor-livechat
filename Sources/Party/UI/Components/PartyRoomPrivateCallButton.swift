@@ -23,10 +23,10 @@ struct PartyRoomPrivateCallButton: View {
     var onTapGift: () -> Void = {}
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             // 顶部 "Pavate Call" 标题
             Text(L10n.Party.toolPrivateCall)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(Color(hex: 0xFD79C1))
 
             // 礼物 preview + 蓝钻价格 —— 只要有 gift meta 缓存就显示（不依赖 isOn，
@@ -42,7 +42,7 @@ struct PartyRoomPrivateCallButton: View {
                 }
             }
             if let price = selectedGiftPrice, price > 0 {
-                HStack(spacing: 3) {
+                HStack(spacing: 2) {
                     Image("partyGems")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -56,8 +56,8 @@ struct PartyRoomPrivateCallButton: View {
             // 底部 capsule toggle
             capsuleToggle
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 10)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color.black.opacity(0.35))
@@ -71,11 +71,11 @@ struct PartyRoomPrivateCallButton: View {
         ZStack(alignment: isOn ? .trailing : .leading) {
             Capsule()
                 .fill(capsuleFill)
-                .frame(width: 44, height: 24)
+                .frame(width: 44, height: 20)
             ZStack {
                 Circle()
                     .fill(Color.white)
-                    .frame(width: 20, height: 20)
+                    .frame(width: 16, height: 16)
                     .shadow(color: .black.opacity(0.18), radius: 1, y: 1)
                 if isLoading {
                     // v5-需求 2：切换 API 在飞时用 spinner 替代 icon（对齐视觉体量 20pt）

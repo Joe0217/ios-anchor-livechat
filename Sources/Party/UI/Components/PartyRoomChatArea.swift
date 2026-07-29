@@ -12,6 +12,7 @@ struct PartyRoomChatArea: View {
     let lastGiftEvent: PartyGiftEvent?
     let canDeleteTextMessages: Bool
     let onDeleteTextMessage: (UnifiedPublicChatMessage) async -> Bool
+    let onWinnerActivity: ((String) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -46,7 +47,8 @@ struct PartyRoomChatArea: View {
             filter: filter,
             lastGiftEvent: lastGiftEvent,
             canDeleteTextMessages: canDeleteTextMessages,
-            onDeleteTextMessage: onDeleteTextMessage
+            onDeleteTextMessage: onDeleteTextMessage,
+            onWinnerActivity: onWinnerActivity
         )
             .padding(.horizontal, Theme.Metric.partyRoomChatHPadding)
     }

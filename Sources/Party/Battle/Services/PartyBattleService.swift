@@ -53,7 +53,10 @@ final class PartyBattleService: PartyBattleServiceProtocol {
     func fetchState(_ roomId: String) async throws -> PartyBattleState? {
         let data = try await apiClient.post(
             "\(base)/state", body: Self.dict(from: PartyBattleStateRequest(roomId: roomId)))
-        return try? JSONDecoder().decode(PartyBattleState.self, from: data)
+        if String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) == "null" {
+            return nil
+        }
+        return try JSONDecoder().decode(PartyBattleState.self, from: data)
     }
 
     // MARK: - Switch / ApplyMic / StartNow / ForceEnd

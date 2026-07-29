@@ -51,6 +51,11 @@ final class PartyRTCEngine: NSObject, ObservableObject {
     /// didLeaveChannelWith 正常 resume 时 cancel，避免 Task 泄漏 + 多余日志。
     private var leaveTimeoutTask: Task<Void, Never>?
 
+    /// Agora 会在同一音量周期分别回调本地和远端说话者；先短暂合并两份结果，
+    /// 避免观众端的本地空回调覆盖掉刚收到的远端说话 UID。
+    private var pendingSpeakingUids: Set<UInt> = []
+    private var speakingUidsCoalescingTask: Task<Void, Never>?
+
     /// 视频位推帧是否已启用（默认 false，仅 `enableVideoSeat()` 后置 true）
     private(set) var videoSeatActive = false
 
@@ -94,6 +99,7 @@ final class PartyRTCEngine: NSObject, ObservableObject {
             AppLogger.party.notice("[PartyRTC] already engaged, skip join")
             return
         }
+        resetPendingSpeakingUids()
 
         let config = AgoraRtcEngineConfig()
         config.appId = AgoraConfig.appId
@@ -349,6 +355,7 @@ final class PartyRTCEngine: NSObject, ObservableObject {
     /// **不调 `destroy()`**——保留 sharedEngine 单例供后续直播/通话/再进派对房复用（D v5.4 已踩坑）。
     @MainActor
     func leave() async {
+        resetPendingSpeakingUids()
         guard let engine else { return }
 
         // 二轮复查 wfpw5v1us：本地快照 wasVideoActive
@@ -364,6 +371,9 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         option.publishMicrophoneTrack = false
         option.publishCustomVideoTrack = false
         engine.updateChannel(with: option)
+        // 不等 leaveChannel 回调：本地设备必须在退房开始时就关闭。
+        engine.disableAudio()
+        if wasVideoActive { engine.disableVideo() }
 
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             if leaveContinuation != nil {
@@ -389,8 +399,6 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         leaveTimeoutTask?.cancel()
         leaveTimeoutTask = nil
 
-        engine.disableAudio()
-        if wasVideoActive { engine.disableVideo() }  // 二轮复查：用快照避死分支（videoSeatActive 入口已置 false）
         // 二轮复查 wfpw5v1us（P2-9 加固）：delegate=nil 顺序前移到 releaseAllRemoteViews 之前
         // 防 unbindRemoteVideo → setupRemoteVideo(view:nil) 触发 SDK 回调进 Task 队列写已退场 state
         engine.delegate = nil
@@ -499,11 +507,12 @@ extension PartyRTCEngine: AgoraRtcEngineDelegate {
     ///
     /// Agora 契约：
     /// - speakers 数组每 500ms 触发一次（enableAudioVolumeIndication interval）
-    /// - volume 范围 0-255（官方标准），> 60 通用作"正在说话"阈值
+    /// - volume 范围 0-255；本房间采用 >5 的灵敏阈值
     /// - **uid=0 代表本地用户**，需转换为 localAgoraUid 才能给 UI 层用 seat.userId 匹配
     /// - speakers 为空数组时 = 全体静音，需清空 speakingUids
     func rtcEngine(_ engine: AgoraRtcEngineKit, reportAudioVolumeIndicationOfSpeakers speakers: [AgoraRtcAudioVolumeInfo], totalVolume: Int) {
-        // 阈值过滤 + uid=0 本地转换（Agora 官方阈值 ≥5，avoid 环境底噪 / 呼吸声误报）
+        // 阈值过滤 + uid=0 本地转换（Agora 官方阈值 ≥5，避免环境底噪 / 呼吸声误报）。
+        // SDK 同周期会分别回调本地和远端；不能把单次回调直接视为全量状态。
         let localUid = localAgoraUid
         var uids = Set<UInt>()
         for info in speakers where info.volume > 5 {
@@ -512,8 +521,35 @@ extension PartyRTCEngine: AgoraRtcEngineDelegate {
         }
         Task { @MainActor [weak self] in
             guard let self else { return }
-            self.delegate?.partyRTCEngine(self, didUpdateSpeakingUids: uids)
+            self.coalesceSpeakingUids(uids)
         }
+    }
+
+    /// 在 80ms 合并窗口内收齐 Agora 同周期的本地和远端音量回调后再派发。
+    /// 两边都没有说话者时，待集合保持为空，从而在窗口结束后正确清除声纹。
+    @MainActor
+    private func coalesceSpeakingUids(_ uids: Set<UInt>) {
+        pendingSpeakingUids.formUnion(uids)
+        speakingUidsCoalescingTask?.cancel()
+        speakingUidsCoalescingTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: 80_000_000)
+            } catch {
+                return
+            }
+            guard let self, !Task.isCancelled else { return }
+            let mergedUids = self.pendingSpeakingUids
+            self.pendingSpeakingUids.removeAll()
+            self.speakingUidsCoalescingTask = nil
+            self.delegate?.partyRTCEngine(self, didUpdateSpeakingUids: mergedUids)
+        }
+    }
+
+    @MainActor
+    private func resetPendingSpeakingUids() {
+        speakingUidsCoalescingTask?.cancel()
+        speakingUidsCoalescingTask = nil
+        pendingSpeakingUids.removeAll()
     }
 }
 

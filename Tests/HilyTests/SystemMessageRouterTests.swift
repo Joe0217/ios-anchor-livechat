@@ -67,28 +67,35 @@ final class SystemMessageRouterTests: XCTestCase {
     func test_minus1_callRemoteMessage_plainText() {
         let a = decide(.callRemoteMessage,
                        payload: ["content": "hello", "ext": ["chatBubble": "https://cdn.example.com/bubble.png"]])
-        XCTAssertEqual(a, .callRemoteText(text: "hello", chatBubble: "https://cdn.example.com/bubble.png"))
+        XCTAssertEqual(a, .callRemoteText(text: "hello", chatBubble: "https://cdn.example.com/bubble.png", sender: ""))
     }
 
     func test_minus1_callRemoteMessage_urlEncoded_decodes() {
         let a = decide(.callRemoteMessage, payload: ["content": "hello%20world%21"])
-        XCTAssertEqual(a, .callRemoteText(text: "hello world!", chatBubble: nil))
+        XCTAssertEqual(a, .callRemoteText(text: "hello world!", chatBubble: nil, sender: ""))
     }
 
     func test_minus1_callRemoteMessage_unicodeEscaped_decodes() {
         XCTAssertEqual(decide(.callRemoteMessage, payload: ["content": "\\u4F60\\u597D"]),
-                       .callRemoteText(text: "你好", chatBubble: nil))
+                       .callRemoteText(text: "你好", chatBubble: nil, sender: ""))
     }
 
     func test_minus1_callRemoteMessage_emptyContent_emitsEmpty() {
         // router 副作用层 guard !text.isEmpty 拦截写入；decide 仍返空串保持决策一致
         XCTAssertEqual(decide(.callRemoteMessage),
-                       .callRemoteText(text: "", chatBubble: nil))
+                       .callRemoteText(text: "", chatBubble: nil, sender: ""))
     }
 
     func test_minus1_callRemoteMessage_missingExt_chatBubbleNil() {
         XCTAssertEqual(decide(.callRemoteMessage, payload: ["content": "abc"]),
-                       .callRemoteText(text: "abc", chatBubble: nil))
+                       .callRemoteText(text: "abc", chatBubble: nil, sender: ""))
+    }
+
+    func test_minus1_callRemoteMessage_carriesSystemSender() {
+        XCTAssertEqual(
+            decide(.callRemoteMessage, payload: ["content": "abc", "_nimSender": "yx-remote"]),
+            .callRemoteText(text: "abc", chatBubble: nil, sender: "yx-remote")
+        )
     }
 
     // MARK: - 4. 通话 -6（payWaitState 4 个 type）

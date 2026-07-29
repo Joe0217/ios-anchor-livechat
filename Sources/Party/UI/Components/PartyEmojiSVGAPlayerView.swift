@@ -22,6 +22,7 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "PartyEm
 /// - `.id(head.uuid)` 强制 SwiftUI 每次 payload 切换重建 UIView · 避免 SVGAPlayer 复用状态错乱
 struct PartyEmojiSVGAOverlay: View {
     @ObservedObject private var store = PartyStore.shared
+    @ObservedObject private var giftEffects = PartyGiftEffectCoordinator.shared
 
     /// 该 overlay 挂靠的 seat 上用户 id（nil = 空位 · 不播）
     let seatUserId: String?
@@ -30,6 +31,7 @@ struct PartyEmojiSVGAOverlay: View {
         Group {
             if let userId = seatUserId,
                !userId.isEmpty,
+               !giftEffects.isShowingReceiverGift(for: userId),
                let head = store.emojiQueueMap[userId]?.first {
                 PartyEmojiSVGAPlayerView(
                     payload: head,

@@ -19,8 +19,8 @@ struct PartyRoomBigSeatCell: View {
     /// - `9.0/16.0`（默认）：3 视频位模板 125×220 竖屏
     /// - `6.0/5.0`：6 视频位模板对齐 H5 `aspect-[6/5]`
     let aspectRatio: CGFloat?
-    /// v15：是否正在说话（PartyStore.isSpeaking 派生）
-    let isSpeaking: Bool
+    /// PK 选队特殊三栏沿用本视频渲染，但 H5 不显示麦位收礼值。
+    let showsGiftValue: Bool
 
     /// PK-aware gems 显示（SELECTING 期强制 0，对齐 H5 audio-wrap.vue :93-97）
     /// cell 直接订阅 battleStore 触发 SELECTING → RUNNING 时 gems 数字自动重绘
@@ -33,7 +33,7 @@ struct PartyRoomBigSeatCell: View {
         camera: CameraManager?,
         engine: PartyRTCEngine,
         aspectRatio: CGFloat? = 9.0 / 16.0,
-        isSpeaking: Bool = false
+        showsGiftValue: Bool = true
     ) {
         self.seat = seat
         self.isSelf = isSelf
@@ -41,7 +41,7 @@ struct PartyRoomBigSeatCell: View {
         self.camera = camera
         self.engine = engine
         self.aspectRatio = aspectRatio
-        self.isSpeaking = isSpeaking
+        self.showsGiftValue = showsGiftValue
     }
 
     var body: some View {
@@ -69,11 +69,6 @@ struct PartyRoomBigSeatCell: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                     .padding(6)
             }
-            // v15：说话中呼吸边框（覆盖在视频/头像上层，clipped 里保证不越界）
-            PartyBigSeatSpeakingBorder(
-                isSpeaking: isSpeaking && seat.occupied,
-                cornerRadius: 0
-            )
             // F 里程碑（2026-07-17）emoji SVGA overlay（对齐 H5 expression-receiver.vue 挂麦位卡片内）
             // - 空位 seat.userId 为 nil/empty → PartyEmojiSVGAOverlay 内部自动隐藏，无副作用
             // - 覆盖顶层不拦截 tap（allowsHitTesting 已 false）· 单段播完停留末帧
@@ -82,6 +77,12 @@ struct PartyRoomBigSeatCell: View {
             PartyGiftReceiverEffect(userId: seat.userId, size: 50)
             // 主播周任务奖励：1023 到达后在本人当前麦位播放宝石效果，再展示奖励窗。
             PartyWeeklyTaskRewardSeatEffect(isSelf: isSelf, size: 58)
+            PartySeatCallBubble(
+                isVisible: seat.occupied && (seat.showBubble ?? false),
+                placement: .insideSeat
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.top, 2)
             // v10：overlayMicIndicator 移除，mic 图标已迁到 nameChip 名字后面（用户 2026-07-13 requirement）
         }
     }
@@ -249,9 +250,14 @@ struct PartyRoomBigSeatCell: View {
             Image("partySeatRing")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 72, height: 72)
+                .frame(width: centerSeatCircleSize, height: centerSeatCircleSize)
 
-            AvatarView(urlString: seat.avatar, size: 64, kind: .user, disablesTap: true)
+            AvatarView(
+                urlString: seat.avatar,
+                size: Theme.Metric.partyRoomSmallSeatAvatar,
+                kind: .user,
+                disablesTap: true
+            )
                 .clipShape(Circle())
                 // 大号状态图标直接覆盖头像右上区域，而非悬在头像外侧。
                 .overlay(alignment: .topTrailing) {
@@ -310,7 +316,12 @@ struct PartyRoomBigSeatCell: View {
         Image(isLockedEmptySeat ? "partySeatRing" : emptyRingAssetName)
             .resizable()
             .scaledToFit()
-            .frame(width: 72, height: 72)
+            .frame(width: centerSeatCircleSize, height: centerSeatCircleSize)
+    }
+
+    /// 大视频位的中心圆环与标准麦位外环保持同一尺寸。
+    private var centerSeatCircleSize: CGFloat {
+        Theme.Metric.partyRoomSmallSeatAvatar + 8
     }
 
     /// 锁位视觉优先级最高：空位被锁时只显示锁与编号。
@@ -330,7 +341,9 @@ struct PartyRoomBigSeatCell: View {
                 }
                 Spacer()
                 HStack {
-                    gemsChip
+                    if showsGiftValue {
+                        gemsChip
+                    }
                     Spacer()
                 }
             }

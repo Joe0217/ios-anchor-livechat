@@ -22,22 +22,25 @@ struct PartyBattleCooldownToast: View {
     var onReviewLast: (() -> Void)?
 
     var body: some View {
-        VStack(spacing: 0) {
-            headerRow
-            ringCountdown.padding(.top, 8)
-            descText.padding(.vertical, 20)
-            reviewButton
+        ZStack {
+            bgGradient.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                headerRow
+                ringCountdown.padding(.top, 8)
+                descText.padding(.vertical, 20)
+                reviewButton
+            }
+            .padding(.horizontal, 20).padding(.vertical, 30)
+            .frame(width: 320)
+            .background(bgGradient)
+            .clipShape(RoundedRectangle(cornerRadius: 22))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
         }
-        .padding(.horizontal, 20).padding(.vertical, 30)
-        .frame(width: 320)
-        .background(bgGradient)
-        .clipShape(RoundedRectangle(cornerRadius: 22))
-        .overlay(
-            RoundedRectangle(cornerRadius: 22)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-        )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black.opacity(0.7))
         .presentationDetents([.height(360)])
     }
 
@@ -93,7 +96,7 @@ struct PartyBattleCooldownToast: View {
 
     @ViewBuilder
     private var descText: some View {
-        Text("PK cooldown is in progress. Please wait a moment before starting a new PK.")
+        Text(L10n.Party.Battle.cooldownDesc)
             .font(.system(size: 15))
             .foregroundColor(.white)
             .multilineTextAlignment(.center)
@@ -105,7 +108,7 @@ struct PartyBattleCooldownToast: View {
             isPresented = false
             onReviewLast?()
         } label: {
-            Text("View Previous Settlement")
+            Text(L10n.Party.Battle.cooldownAction)
                 .font(.system(size: 15).bold())
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)

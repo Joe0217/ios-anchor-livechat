@@ -11,6 +11,7 @@ import SwiftUI
 /// 按钮顺序（未 focused 时全显）：输入框 · [micApplication] · emoji · message · mic · game · toolMenu · gift
 /// - micApplication：房主/房管 + 排麦开关开 时显示（对齐安卓 flMicApplication 输入框上方快捷入口）
 struct PartyRoomInputBar: View {
+    @Environment(\.layoutDirection) private var layoutDirection
     @Binding var text: String
     let micOn: Bool
     /// 自己是否已上麦（emoji + mic 按钮显隐门槛：H5 `inPartyRole > -1`）
@@ -23,6 +24,9 @@ struct PartyRoomInputBar: View {
     let showMicApplicationButton: Bool
     /// 排麦申请队列红角标（对齐安卓 tvMicApplicationNum；`0` 不显示 badge）
     let micApplicationBadge: Int
+    /// H5 房内底栏的一键发送词条（主播端取 audienceType=2）。
+    let quickPhrases: [PartyQuickPhrase]
+    let showsQuickPhrases: Bool
     /// v16.10：父 view FocusState 桥（focused 时收起右侧按钮，让 TextField 占满宽度）
     var focus: FocusState<Bool>.Binding
     let onSubmit: () -> Void
@@ -34,8 +38,21 @@ struct PartyRoomInputBar: View {
     let onGiftTap: () -> Void
     /// 排麦快捷入口 tap（房主/房管直达 Mic Application sheet，绕过 Tools sheet 二层）
     let onMicApplicationTap: () -> Void
+    let onQuickPhraseTap: (PartyQuickPhrase) -> Void
+    let onQuickPhrasesClose: () -> Void
 
     var body: some View {
+        VStack(spacing: 0) {
+            if showsQuickPhrases, !quickPhrases.isEmpty {
+                quickPhraseBar
+            }
+
+            toolbar
+        }
+        .animation(.easeInOut(duration: 0.2), value: focus.wrappedValue)
+    }
+
+    private var toolbar: some View {
         HStack(spacing: Theme.Metric.partyRoomToolBtnGap) {
             inputField
             // v16.10：focused 时右侧图标全隐藏，TextField 占满（对齐 LiveRoomView L423 pattern）
@@ -44,9 +61,10 @@ struct PartyRoomInputBar: View {
                 if showMicApplicationButton {
                     micApplicationButton
                 }
-                // F 里程碑（2026-07-17）：emoji 是全员基础能力（对齐 H5 `inPartyRole > -1` 即"在房内" ·
-                // 观众/上麦者/房主都能打开面板 · 静态 -10 全员可发 · 玩法 -11 门槛在 Panel/Store 层守）
-                emojiButton
+                // H5 `footer-wrap.vue` 仅在 `inPartyRole > -1`（本人在麦）时展示表情入口。
+                if isOnSeat {
+                    emojiButton
+                }
                 messageButton
                 if isOnSeat {
                     micButton
@@ -58,7 +76,82 @@ struct PartyRoomInputBar: View {
         }
         .padding(.horizontal, Theme.Metric.partyRoomScreenH)
         .padding(.vertical, 8)
-        .animation(.easeInOut(duration: 0.2), value: focus.wrappedValue)
+    }
+
+    /// H5 `quick-phrase-bar.vue`：横向滚动词条 + 独立关闭按钮，固定 42pt 高并贴在底栏上沿。
+    private var quickPhraseBar: some View {
+        HStack(spacing: 4) {
+            ZStack(alignment: .trailing) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 12) {
+                        ForEach(quickPhrases) { phrase in
+                            Button {
+                                onQuickPhraseTap(phrase)
+                            } label: {
+                                Text(phrase.content)
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.white.opacity(0.72))
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .frame(maxWidth: 180)
+                                    .background(
+                                        Capsule().fill(Color(hex: 0x241C3A))
+                                            .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
+                                    )
+                                    .contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(phrase.content)
+                        }
+                    }
+                    .padding(.leading, 5)
+                }
+
+                quickPhraseFade
+                    .frame(width: 88)
+                    .allowsHitTesting(false)
+            }
+            .frame(maxWidth: .infinity)
+
+            Button(action: onQuickPhrasesClose) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.Party.cancel)
+        }
+        .padding(.leading, 5)
+        .padding(.trailing, 8)
+        .frame(height: 42)
+        .background(
+            LinearGradient(
+                colors: [Color(hex: 0x14112B, opacity: 0), Color(hex: 0x14112B, opacity: 0.58)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        )
+    }
+
+    private var quickPhraseFade: LinearGradient {
+        let opaque = Color(hex: 0x14112B, opacity: 0.9)
+        let middle = Color(hex: 0x14112B, opacity: 0.8)
+        if layoutDirection == .rightToLeft {
+            return LinearGradient(
+                colors: [opaque, middle, .clear],
+                startPoint: .leading,
+                endPoint: .trailing
+            )
+        }
+        return LinearGradient(
+            colors: [.clear, middle, opaque],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
     }
 
     // MARK: - 输入框

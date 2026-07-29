@@ -17,6 +17,8 @@ struct PartyRoomSmallSeatCell: View {
     var isSelf: Bool = false
     /// v15：是否正在说话（PartyStore.isSpeaking 派生）；空位时恒 false
     var isSpeaking: Bool = false
+    /// 声纹框的额外激活条件（开麦且未被房管禁麦）。
+    var isVoicePrintActive: Bool = false
     /// v17：尺寸变体（对齐 H5 30 麦 sm + @media(<380) 缩小）
     var sizeVariant: SizeVariant = .default
 
@@ -52,22 +54,26 @@ struct PartyRoomSmallSeatCell: View {
                        height: avatarSize + 8)
                 .accessibilityHidden(true)
 
+            // H5 `audio-wrap.vue`：声纹 SVGA/普通声波在头像和头像框之下，作为环形光效层。
+            // 放在头像之上会遮住人物主体，导致同一 SVGA 看起来像错误的前景贴纸。
+            PartySmallSeatSpeakingEffect(
+                isSpeaking: isSpeaking && seat.occupied,
+                isVoicePrintActive: isVoicePrintActive && seat.occupied,
+                vfxURL: seat.anchorTaskRewardExt?.vfxUrl,
+                avatarDiameter: avatarSize,
+                diameter: avatarSize + (sizeVariant == .sm ? 24 : 28)
+            )
+
             avatarContent
 
             // v16：占用态头像装饰框（对齐 H5 `seat-roster-item.vue` head-frame 组件）
-            // 空位不叠（视觉焦点让给 partySeatEmpty 空位切图）
+            // 空位不叠（视觉焦点让给 partySeatEmpty 空位切图）。
             if seat.occupied, let raw = seat.headFrame, !raw.isEmpty {
                 HeadFrameView(urlString: raw,
                               size: avatarSize + 12)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
-
-            // v15：说话中 pulse ring（与头像同心，尺寸略大于 partySeatRing 装饰环）
-            PartySmallSeatSpeakingRing(
-                isSpeaking: isSpeaking && seat.occupied,
-                diameter: avatarSize + 10
-            )
 
             // v15：锁麦位视觉标识（对齐 H5 空位 lockFlag=1 显示 lock icon 阻止上麦）
             // 只在空位显示，占用位不显示（占用时 lockFlag 无实际业务约束）
@@ -87,6 +93,12 @@ struct PartyRoomSmallSeatCell: View {
             // Party 2049 静态礼物收礼效果（H5 gift-animator-receiver）。
             PartyGiftReceiverEffect(userId: seat.userId, size: 50)
             PartyWeeklyTaskRewardSeatEffect(isSelf: isSelf, size: avatarSize + 18)
+            PartySeatCallBubble(
+                isVisible: seat.occupied && (seat.showBubble ?? false),
+                placement: .aboveSeat
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .offset(y: -24)
 
             // v13：badgeCorner (partyBadgeBubble 右上角泡泡) 去掉（用户 2026-07-13 requirement）
             // v10：mic 图标移到 footer 名字后面（去掉 bottom-left corner overlay）

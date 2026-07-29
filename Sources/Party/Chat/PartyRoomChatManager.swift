@@ -28,8 +28,12 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
     @Published private(set) var connected: Bool = false
     @Published private(set) var imAlive: Bool = false
 
-    /// 公屏消息上限（对齐 H5 `_maxPlubicChatLength` = 100）
-    private let messagesLimit: Int = 200
+    /// 公屏消息上限（对齐 H5 `_maxPlubicChatLength` = 100）。
+    private let messagesLimit: Int = 100
+
+    /// 小窗期间暂存的新公屏。H5 不在小窗时更新可见公屏，恢复后才将最近 100 条合并。
+    private var defersMessages = false
+    private var deferredMessages: [UnifiedPublicChatMessage] = []
 
     weak var delegate: PartyRoomChatManagerDelegate?
 
@@ -37,8 +41,15 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
     /// + text + notification 处理。custom 分支转发到 router.processCustom(_:)。
     weak var router: PartyMessageRouter?
 
+    /// 发送文本时的当前房间身份。由 `PartyStore` 在发送瞬间提供，不能在此处缓存：
+    /// 1019/1024 和 1001 都可能在同一会话内改变房管/平台管理员身份。
+    /// 闭包使用弱引用，避免 ChatManager 与 PartyStore 形成循环持有。
+    var outgoingTextMetadataProvider: (() -> (role: PartyRoomRoleType, isPlatformAdmin: Bool))?
+
     private(set) var roomId: String = ""
     private var hasJoined: Bool = false   // 防止重复 enter
+    /// 云信进房是异步回调。每次 enter / leave 递增，使迟到的旧回调不能把已经退掉的会话复活。
+    private var chatroomOperationGeneration: UInt = 0
 
     /// 异常路径（scenePhase=.background 销毁、未走 leave()）下注销 delegate，
     /// 避免下个派对房 manager 实例共存时 NIMSDK 回调跨房分发到错的 PartyStore。
@@ -53,13 +64,16 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
     /// 进聊天室。**前置**：NIMSDK 已由直播路径完成 `loginManager.login`；本方法不再 login。
     /// 若未登录上层应在调用前确保 SessionStore.shared.user 完整或显式触发主 IM 登录。
     func enter(yxRoomId: String, nickname: String) {
-        guard !hasJoined else {
-            AppLogger.party.notice("[PartyChat] already joined room=\(self.roomId, privacy: .public), skip")
+        guard !hasJoined, roomId.isEmpty else {
+            AppLogger.party.notice("[PartyChat] enter skipped joined=\(self.hasJoined, privacy: .public) roomLength=\(self.roomId.count, privacy: .public)")
             return
         }
+        chatroomOperationGeneration &+= 1
+        let operationGeneration = chatroomOperationGeneration
         self.roomId = yxRoomId
         guard NIMSDK.shared().loginManager.isLogined() else {
             AppLogger.party.error("[PartyChat] IM not logined; cannot enter chatroom")
+            self.roomId = ""
             delegate?.partyRoomChat(self, didFailToEnter: "im_not_logined")
             return
         }
@@ -70,10 +84,44 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
         req.roomId = yxRoomId
         req.roomNickname = nickname
         req.retryCount = 3
+        req.tags = "[\"party_room\"]"
 
+        // 与 H5 Party 聊天室 enter 对齐：云信成员进出事件需要携带该成员的身份上下文。
+        let user = SessionStore.shared.user
+        var notifyExt: [String: Any] = [:]
+        if let yxAccid = user?.yxAccid, !yxAccid.isEmpty {
+            notifyExt["yxAccid"] = yxAccid
+        }
+        if let userId = user?.userId {
+            notifyExt["userId"] = userId
+        }
+        if let userLevel = user?.userLevel, !userLevel.isEmpty {
+            notifyExt["userLevel"] = userLevel
+        }
+        if let userNickname = user?.nickname, !userNickname.isEmpty {
+            notifyExt["nickname"] = userNickname
+        }
+        if JSONSerialization.isValidJSONObject(notifyExt),
+           let data = try? JSONSerialization.data(withJSONObject: notifyExt),
+           let json = String(data: data, encoding: .utf8) {
+            req.roomNotifyExt = json
+        }
         NIMSDK.shared().chatroomManager.enterChatroom(req) { [weak self] error, chatroom, _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                // 用户可能在进房回调返回前已选择退出。此时旧回调不可重新写入 joined 状态；
+                // 若云信实际已进房，补发一次 exit，避免服务端仍把主播视为 Party 成员。
+                guard self.chatroomOperationGeneration == operationGeneration,
+                      self.roomId == yxRoomId else {
+                    guard error == nil else { return }
+                    let currentRoomId = self.roomId
+                    let isNewActiveSameRoom = currentRoomId == yxRoomId && self.hasJoined
+                    guard !isNewActiveSameRoom else {
+                        return
+                    }
+                    NIMSDK.shared().chatroomManager.exitChatroom(yxRoomId, completion: nil)
+                    return
+                }
                 if let error = error {
                     let code = (error as NSError).code
                     AppLogger.party.error("[PartyChat] enter failed code=\(code, privacy: .public)")
@@ -100,17 +148,25 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
     }
 
     /// 退聊天室 + 移除 delegate（防与直播 IM 路径串）。
+    /// 即使聊天室进房回调尚未返回，也按已记录的 roomId 发起退出，防止迟到回调复活旧会话。
     func leave() {
-        guard hasJoined else { return }
+        clearDeferredMessages()
+        let exitingRoomId = roomId
+        // 必须先失效进房回调：exit 允许在 enterChatroom 仍 in-flight 时触发。
+        chatroomOperationGeneration &+= 1
         NIMSDK.shared().chatManager.remove(self)
         NIMSDK.shared().chatroomManager.remove(self)
-        NIMSDK.shared().chatroomManager.exitChatroom(roomId, completion: nil)
         hasJoined = false
         connected = false
         // imAlive 反映长连接，退房不应该置 false（IM 仍在线）
         roomId = ""
         messages = []
         onlineCount = 0
+
+        guard !exitingRoomId.isEmpty else {
+            return
+        }
+        NIMSDK.shared().chatroomManager.exitChatroom(exitingRoomId, completion: nil)
     }
 
     // MARK: - 历史拉取
@@ -154,10 +210,13 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
         let anchorMine = AnchorInfoStore.shared.mine
         let myUserId = me?.userId.map(String.init)
         let myNickname = me?.nickname ?? ""
-        // 自己角色在 PartyStore 衍生；这里默认 .audience（房主发文本时由 Store 上层覆盖 remoteExt）
-        let myRole: PartyRoomRoleType = .audience
+        // H5 `sendTextMessage` 同步把当前 room role 和平台管理员身份写进 serverExtension。
+        // 不可固定为 audience：房主/房管/超管在消息到达其他端时需要显示正确角色徽章。
+        let outgoingMetadata = outgoingTextMetadataProvider?()
+        let myRole = outgoingMetadata?.role ?? .audience
+        let isPlatformAdmin = outgoingMetadata?.isPlatformAdmin ?? false
         let myAvatar = me?.icon ?? anchorMine?.icon
-        let myChatBubble = anchorMine?.chatBubble
+        let myChatBubble = AnchorInfoStore.shared.currentChatBubble
 
         // 本地立即回显（v3：走 unified Adapter，字段富化）
         // 主播端本人无 headFrame 数据（后端 AnchorInfo 无此字段），nil
@@ -170,6 +229,7 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
             myIsVip: false,
             myChatBubble: myChatBubble,
             myRoleRaw: myRole.rawValue,
+            myIsPlatformAdmin: isPlatformAdmin,
             myHeadFrame: nil
         )
         appendMessage(local)
@@ -184,10 +244,11 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
         if let lv = anchorMine?.level { ext["userLevel"] = lv }
         ext["role"] = myRole.rawValue
         if let cb = myChatBubble, !cb.isEmpty { ext["chatBubble"] = cb }
+        ext["isPlatformAdmin"] = isPlatformAdmin
         // 主播端固定注入 userType=2（对齐 android `PartyRoomVM.kt:949`；差异文档 §1.3 明示）—
         // 与坐麦身份无关；主播以观众身份进他人 Party 房时消息仍带 2，接收端据此差异化展示（等级/VIP 徽章仅对 userType=1 用户消息渲染）
         ext["userType"] = 2
-        // isVip / headFrame / medalList / isPlatformAdmin 主播端本人无源，留给远端消息填充
+        // isVip / headFrame / medalList 主播端本人无源，留给远端消息填充
         msg.remoteExt = ext
 
         let session = NIMSession(roomId, type: .chatroom)
@@ -288,8 +349,36 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
 
     /// 通用 append + trim（供内部 + delegate append 方法调用）。
     func appendMessage(_ msg: UnifiedPublicChatMessage) {
+        guard !defersMessages else {
+            deferredMessages.append(msg)
+            if deferredMessages.count > messagesLimit {
+                deferredMessages.removeFirst(deferredMessages.count - messagesLimit)
+            }
+            return
+        }
         messages.append(msg)
         trimIfNeeded()
+    }
+
+    /// 进入 Party 小窗：后续实时公屏先入 pending，避免更新已卸载的房间页面。
+    func beginDeferringMessages() {
+        defersMessages = true
+        deferredMessages.removeAll()
+    }
+
+    /// 恢复 Party 房间页时合并 pending。只保留最近 100 条，和 H5 `setPendingMsg()` 一致。
+    func flushDeferredMessages() {
+        defersMessages = false
+        guard !deferredMessages.isEmpty else { return }
+        messages.append(contentsOf: deferredMessages.suffix(messagesLimit))
+        deferredMessages.removeAll()
+        trimIfNeeded()
+    }
+
+    /// 离开 Party 会话时丢弃尚未显示的 pending，防止带入下一房。
+    func clearDeferredMessages() {
+        defersMessages = false
+        deferredMessages.removeAll()
     }
 
     /// v3 便利方法：Store delegate 需要 append 多种公屏消息（.announcement / .partyModeSwitch / .gift / .gameWinNotify / .winnerBroadcast / .luckyGift）
@@ -329,6 +418,15 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
     /// 删除指定公屏消息的本地副本。服务端删除成功后立即调用，和 H5 的乐观移除保持一致。
     func removeMessage(id: UUID) {
         messages.removeAll { $0.id == id }
+        deferredMessages.removeAll { $0.id == id }
+    }
+
+    /// 消费云信聊天室撤回通知。`revokedMessageId` 与文本消息的 `NIMMessage.messageId` 相同；
+    /// 系统消息没有 source，因此不会被误删。
+    func removeMessage(sourceMessageId: String) {
+        guard !sourceMessageId.isEmpty else { return }
+        messages.removeAll { $0.source?.messageId == sourceMessageId }
+        deferredMessages.removeAll { $0.source?.messageId == sourceMessageId }
     }
 
     private func trimIfNeeded() {
@@ -348,6 +446,8 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
     fileprivate func processIncoming(_ batch: [NIMMessage]) {
         var textPush: [UnifiedPublicChatMessage] = []
         var memberDelta = 0
+        var memberEnterNotifications: [(extension: String?, nickname: String?)] = []
+        var recalledMessageIds = Set<String>()
 
         // 判定 isSelf：ext["userId"] == 当前登录 userId
         let myUserIdStr = SessionStore.shared.user?.userId.map(String.init)
@@ -376,6 +476,15 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
             case .notification:
                 if let obj = m.messageObject as? NIMNotificationObject,
                    let content = obj.content as? NIMChatroomNotificationContent {
+                    // H5 `handleNotificationMessage` 对聊天室事件 16（消息撤回）按 messageClientId
+                    // 移除公屏记录。V1 SDK 的对应事件是 `.recall`，被撤回消息 ID 由
+                    // `revokedMessageId` 提供。收集到本批次末尾统一删除，避免边遍历边修改 UI 数据源。
+                    if content.eventType == .recall {
+                        if let messageId = content.revokedMessageId, !messageId.isEmpty {
+                            recalledMessageIds.insert(messageId)
+                        }
+                        continue
+                    }
                     // 对齐 H5 party.js:1013 过滤自己：仅当事件 target 不是自己时才计入观众数增减
                     // （云信 chatroom member.userId 即 yxAccid，与 SessionStore.user.yxAccid 直比）
                     let mineYxAccid = SessionStore.shared.user?.yxAccid ?? ""
@@ -383,6 +492,10 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
                     let isSelf = !evtUserId.isEmpty && evtUserId == mineYxAccid
                     if content.eventType == .enter {
                         if !isSelf { memberDelta += 1 }
+                        memberEnterNotifications.append((
+                            extension: content.notifyExt,
+                            nickname: content.targets?.first?.nick ?? content.source?.nick
+                        ))
                     } else if content.eventType == .exit {
                         if !isSelf { memberDelta -= 1 }
                     }
@@ -394,8 +507,18 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
         }
 
         for m in textPush { appendMessage(m) }
+        for messageId in recalledMessageIds {
+            removeMessage(sourceMessageId: messageId)
+        }
         if memberDelta != 0 {
             onlineCount = max(0, onlineCount + memberDelta)
+        }
+        for notification in memberEnterNotifications {
+            delegate?.partyRoomChat(
+                self,
+                didReceiveMemberEnter: notification.extension,
+                fallbackNickname: notification.nickname
+            )
         }
     }
 
@@ -454,6 +577,14 @@ protocol PartyRoomChatManagerDelegate: AnyObject {
     func partyRoomChat(_ chat: PartyRoomChatManager, didFailToEnter reason: String)
     func partyRoomChatDidReconnect(_ chat: PartyRoomChatManager)
     func partyRoomChatDidKickOut(_ chat: PartyRoomChatManager)
+    /// 1009 房间关闭/白名单限制；当前用户必须离开房间。
+    func partyRoomChatDidCloseOrWhitelist(_ chat: PartyRoomChatManager)
+    /// 1014 Party 鉴黄告警。time 非 0 时当前用户会被强制下麦。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveAuditWarning payload: [String: Any])
+    /// 1019 系统通知只发给权限变更的本人，type/authType: 1=设房管、2=取消。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveSystemAuthUpdate payload: [String: Any])
+    /// 1024 平台管理员状态变更，只同步当前登录用户的房内权限。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceivePlatformAdminChange payload: [String: Any])
 
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveSeatUpdate payload: [String: Any], raw: NIMMessage)
     /// 1012 全量重拉指令；`msgTimestampMs` 用于 `lastRoomTempSwitchAt` 精确判丢旧广播（对齐 1017 pattern）
@@ -467,6 +598,8 @@ protocol PartyRoomChatManagerDelegate: AnyObject {
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveGift payload: [String: Any], raw: NIMMessage)
     /// v23（2026-07-13）用户进场动画（attachType=80）：VIP/带座驾用户进入派对房时触发座驾 SVGA/MP4 全屏特效
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveEnterAnimation payload: [String: Any], raw: NIMMessage)
+    /// 聊天室成员进入的 notificationExtension。无座驾用户在此驱动 H5 同款进场条。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveMemberEnter notificationExtension: String?, fallbackNickname: String?)
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveVideoSeatInvite invite: PartyVideoSeatInvite)
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveInviteResult result: PartyVideoSeatInviteResult)
 
@@ -499,6 +632,9 @@ protocol PartyRoomChatManagerDelegate: AnyObject {
     /// ext 期望 `{ userId, nickname, luckyNumber, winAmount, ... }` —— 真机 preflight。
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveLuckyNumberWin payload: [String: Any], raw: NIMMessage)
 
+    /// 1150-1156 Super Wheel 房内广播。attachType 与已解包 payload 分开传入。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveSuperWheelBroadcast attachType: Int, payload: [String: Any])
+
     /// 1052 幸运数字中奖个人弹窗（NIM CustomSystemNotification，仅中奖者收到）。
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveLuckyNumberPersonalWin payload: [String: Any])
 
@@ -512,6 +648,9 @@ protocol PartyRoomChatManagerDelegate: AnyObject {
     /// 140 活动中奖公屏广播（含 worldcup 世界杯活动卡）。
     /// payload 期望 `{ activityName, quantity, imageURL, joinCTA, avatar, cardType, ... }` —— 真机 preflight。
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveWinnerBroadcast payload: [String: Any], raw: NIMMessage)
+
+    /// 197 首礼时刻公屏与顶部飘屏。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveFirstGiftMoment payload: [String: Any], raw: NIMMessage)
 
     /// F 期房主管理批（2026-07-17）1025 roomBgUpdate / 1026 roomBgExpire 广播 —— 触发 PartyStore 重拉当前背景。
     /// - `expired = false`：1025 房主 setBgImages 后广播，观众端全量重拉 getRoomBgImage

@@ -26,6 +26,8 @@ enum PartyAttachType: Int {
     case pkSmallPrize = 138
     /// 140 活动中奖公屏广播（含 worldcup 世界杯活动卡）
     case winnerBroadcastGlobal = 140
+    /// 197 首礼时刻公屏与顶部飘屏（与直播房使用同一 payload）。
+    case firstGiftMoment = 197
 
     // MARK: - 核心房态信令（MVP 必接）
 
@@ -71,9 +73,9 @@ enum PartyAttachType: Int {
     /// 1018 排麦通知（op 1=申请 / 2=同意 / 3=拒绝 / 4=放弃）
     case queueSeatUpdate = 1018
 
-    // MARK: - 房管变更（Step 2 实装：仅本人被设/取消）
+    // MARK: - 房管变更（Step 2 实装）
 
-    /// 1019 房管变更（仅本人被设/取消房管时公屏文案）
+    /// 1019 聊天室自定义房管变更（仅实时角色同步；权限提示走系统通知同号事件）
     case authUpdate = 1019
 
     /// 1020 拒接上麦通知（h5-ui 空实现 `case 1020: break`；iOS 拒麦走 1018 op=3）
@@ -154,6 +156,18 @@ enum PartyAttachType: Int {
     case battleApplyPendingNotice = 1111
     /// 1112 冷却结束（无 payload）
     case battleCooldownEnd = 1112
+
+    // MARK: - Super Wheel（1150-1156）
+
+    /// 转盘全量状态同步 / 倒计时 / 转动 / 淘汰 / 终局 / 关闭 / 广播。
+    /// 具体阶段由 attachType 与 payload.state 共同决定，统一交由状态机归约。
+    case superWheelStateSync = 1150
+    case superWheelCountdown = 1151
+    case superWheelSpin = 1152
+    case superWheelReveal = 1153
+    case superWheelFinal = 1154
+    case superWheelClosed = 1155
+    case superWheelBroadcast = 1156
 
     // MARK: - 送礼压缩版（已实装）
 

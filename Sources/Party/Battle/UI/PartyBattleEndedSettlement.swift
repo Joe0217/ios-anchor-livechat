@@ -46,11 +46,11 @@ struct PartyBattleEndedSettlement: View {
             battleTimeRow
             vsRow.padding(.top, 16)
             if let mvp = giftGivingMvp {
-                mvpCard(title: "Gift-Giving MVP", mvp: mvp, isReceive: false)
+                mvpCard(title: L10n.Party.Battle.giftGivingMvp, mvp: mvp, isReceive: false)
                     .padding(.top, 20)
             }
             if let mvp = giftReceiveMvp {
-                mvpCard(title: "Gift-Receive MVP", mvp: mvp, isReceive: true)
+                mvpCard(title: L10n.Party.Battle.giftReceiveMvp, mvp: mvp, isReceive: true)
                     .padding(.top, 12)
             }
         }
@@ -79,7 +79,7 @@ struct PartyBattleEndedSettlement: View {
     @ViewBuilder
     private var battleTimeRow: some View {
         HStack(spacing: 4) {
-            Text("Battle Time:")
+            Text("\(L10n.Party.Battle.battleTime):")
                 .font(.caption).foregroundColor(.white.opacity(0.65))
             Text(battleTimeText)
                 .font(.caption).foregroundColor(.yellow)
@@ -90,12 +90,12 @@ struct PartyBattleEndedSettlement: View {
     @ViewBuilder
     private var vsRow: some View {
         HStack(spacing: 6) {
-            teamCard(color: .red, label: "Red Team", score: redScoreText, isWinner: winnerTeam == 1, isLoser: winnerTeam == 2)
+            teamCard(color: .red, label: L10n.Party.Battle.redTeam, score: redScoreText, isWinner: winnerTeam == 1, isLoser: winnerTeam == 2)
             Image("partyPkBattleMarker")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 40, height: 40)
-            teamCard(color: .blue, label: "Blue Team", score: blueScoreText, isWinner: winnerTeam == 2, isLoser: winnerTeam == 1)
+            teamCard(color: .blue, label: L10n.Party.Battle.blueTeam, score: blueScoreText, isWinner: winnerTeam == 2, isLoser: winnerTeam == 1)
         }
     }
 
@@ -117,10 +117,10 @@ struct PartyBattleEndedSettlement: View {
                 .font(.headline).bold()
                 .foregroundColor(.white)
             if isWinner {
-                Text("lead \(scoreDeltaText)")
+                Text(L10n.Party.Battle.lead(scoreDeltaText))
                     .font(.caption2).foregroundColor(Color(red: 1.0, green: 0.88, blue: 0.4))
             } else if isLoser {
-                Text("Lose")
+                Text(L10n.Party.Battle.lose)
                     .font(.caption2).foregroundColor(.white.opacity(0.75))
             }
         }
@@ -149,20 +149,22 @@ struct PartyBattleEndedSettlement: View {
                 avatarView(mvp.avatar, teamColor: mvp.teamColor)
                     .padding(.leading, 12)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(mvp.nickname ?? "User\(mvp.uid)")
+                    Text(mvp.nickname ?? L10n.Party.defaultUser)
                         .font(.subheadline).bold()
                         .foregroundColor(.white)
                         .lineLimit(1)
-                    HStack(spacing: 2) {
-                        Text(mvpMetaText(mvp: mvp, isReceive: isReceive))
-                            .font(.caption2).foregroundColor(.white.opacity(0.75))
-                        mvpValueIcon(isReceive: isReceive)
-                    }
+                    // 以同一个 Text 流排版，金额与图标在溢出时会一起换到下一行，不能被截断。
+                    (Text(mvpMetaText(mvp: mvp, isReceive: isReceive))
+                        + Text(Image(isReceive ? "partyGems" : "diamonds")))
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.75))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer()
                 mvpTipTag(title: title)
                     .padding(.trailing, 8)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             // Team tag（顶部左）
             Text(mvp.teamName)
                 .font(.caption2).bold()
@@ -170,24 +172,17 @@ struct PartyBattleEndedSettlement: View {
                 .padding(.horizontal, 8).padding(.vertical, 3)
                 .background(mvp.teamColor.opacity(0.9))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
-                .offset(y: -10)
-                .padding(.leading, 6)
+                .offset(y: 0)
+                .padding(.leading, 0)
         }
-        .frame(height: 64)
+        .frame(maxWidth: .infinity)
+        .frame(height: 84, alignment: .topLeading)
         .background(bg)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(mvp.teamColor.opacity(0.6), lineWidth: 1)
         )
-    }
-
-    @ViewBuilder
-    private func mvpValueIcon(isReceive: Bool) -> some View {
-        Image(isReceive ? "partyGems" : "diamonds")
-            .resizable()
-            .scaledToFit()
-            .frame(width: isReceive ? 12 : 14, height: 14)
     }
 
     @ViewBuilder
@@ -260,9 +255,9 @@ struct PartyBattleEndedSettlement: View {
 
     private var winnerLabel: String {
         switch winnerTeam {
-        case 1: return "Red Team Win"
-        case 2: return "Blue Team Win"
-        default: return "Tie"
+        case 1: return L10n.Party.Battle.redTeamWin
+        case 2: return L10n.Party.Battle.blueTeamWin
+        default: return L10n.Party.Battle.tie
         }
     }
 
@@ -282,7 +277,7 @@ struct PartyBattleEndedSettlement: View {
         let value: Int
         let team: Int  // 1=红 2=蓝
 
-        var teamName: String { team == 2 ? "Blue Team" : "Red Team" }
+        var teamName: String { team == 2 ? L10n.Party.Battle.blueTeam : L10n.Party.Battle.redTeam }
         var teamColor: Color { team == 2 ? Color(red: 0.05, green: 0.43, blue: 1.0) : Color(red: 1.0, green: 0.15, blue: 0.7) }
     }
 
@@ -357,8 +352,8 @@ struct PartyBattleEndedSettlement: View {
 
     private func mvpMetaText(mvp: MvpDisplay, isReceive: Bool) -> String {
         isReceive
-            ? "personal gift Receiving \(mvp.value)"
-            : "Total given out \(mvp.value)"
+            ? L10n.Party.Battle.personalGiftReceiving(String(mvp.value))
+            : L10n.Party.Battle.totalGivenOut(String(mvp.value))
     }
 
     // MARK: - Style

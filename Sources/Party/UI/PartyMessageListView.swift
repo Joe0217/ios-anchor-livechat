@@ -27,10 +27,13 @@ struct PartyMessageListView: View {
     @State private var deleteConfirmationMessage: UnifiedPublicChatMessage?
     @State private var deletingMessageId: UUID?
     @State private var deleteToast: String?
+    @Environment(\.avatarUserCardPresenter) private var userCardPresenter
 
     /// 房主/房管/平台管理员可删除文本消息；调用方在 PartyRoomView 统一按当前角色授权。
     var canDeleteTextMessages: Bool = false
     var onDeleteTextMessage: ((UnifiedPublicChatMessage) async -> Bool)? = nil
+    /// 活动中奖广播点击；PartyRoomView 以半屏活动页承载。
+    var onWinnerActivity: ((String) -> Void)? = nil
 
     /// 过滤后的消息列表（对齐 H5/Android tab 过滤语义 + unified variant discriminator）
     private var filteredMessages: [UnifiedPublicChatMessage] {
@@ -47,7 +50,7 @@ struct PartyMessageListView: View {
     /// 判定"礼物类"消息（gift + luckyGift 归 Gift tab；其他系统广播归 Chat tab）。
     private func isGiftLikeVariant(_ variant: PublicChatVariant) -> Bool {
         switch variant {
-        case .gift, .luckyGift: return true
+        case .gift, .luckyGift, .firstGiftMoment: return true
         default: return false
         }
     }
@@ -61,7 +64,9 @@ struct PartyMessageListView: View {
                             message: msg,
                             theme: .party,
                             onTapTranslate: { m in handleTapTranslate(msg: m) },
-                            isTranslating: pendingTranslateIds.contains(msg.id)
+                            isTranslating: pendingTranslateIds.contains(msg.id),
+                            onTapUserCard: userCardPresenter,
+                            onWinnerActivity: onWinnerActivity
                         )
                         .id(msg.id)
                         .onLongPressGesture(minimumDuration: 0.5) {
@@ -133,8 +138,12 @@ struct PartyMessageListView: View {
               !content.isEmpty,
               !pendingTranslateIds.contains(msg.id) else { return }
         pendingTranslateIds.insert(msg.id)
-        let key = AppConfigStore.shared.microsoftTranslatorKey ?? AppConfigStore.translatorKeyFallback
-        let area = AppConfigStore.shared.microsoftTranslatorArea ?? AppConfigStore.translatorAreaFallback
+        guard let key = AppConfigStore.shared.microsoftTranslatorKey,
+              let area = AppConfigStore.shared.microsoftTranslatorArea else {
+            pendingTranslateIds.remove(msg.id)
+            AppLogger.party.warning("[PartyChat] translate unavailable: config missing")
+            return
+        }
         let targetLang: String = {
             switch AppLocaleStore.shared.current {
             case .en: return "en"

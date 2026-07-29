@@ -69,12 +69,35 @@ final class PartyPublicChatAdapterTests: XCTestCase {
         let msg = PartyPublicChatAdapter.gift(event: event, iconURL: "https://cdn/gift.png")
         XCTAssertEqual(msg.sender?.userId, "u1")
         XCTAssertEqual(msg.sender?.nickname, "Alice")
-        guard case .gift(let icon, let name, let count) = msg.variant else {
+        guard case .gift(let icon, let name, let count, let recipients) = msg.variant else {
             XCTFail("expected .gift"); return
         }
         XCTAssertEqual(icon, "https://cdn/gift.png")
         XCTAssertEqual(name, "Rose")
         XCTAssertEqual(count, 5)
+        XCTAssertEqual(recipients, [])
+    }
+
+    func test_gift_carriesRecipientsForPartyPublicChat() {
+        let event = PartyGiftEvent(
+            giftId: 100, giftName: "Rose", num: 5,
+            senderUserId: "u1", senderNickname: "Alice",
+            receiverUserIds: ["u2", "u3"],
+            recipients: [
+                PartyGiftRecipient(userId: "u2", nickname: "Bella", avatarURL: "https://cdn/bella.png"),
+                PartyGiftRecipient(userId: "u3", nickname: "Cara", avatarURL: "https://cdn/cara.png")
+            ],
+            timestamp: 1_000
+        )
+        let msg = PartyPublicChatAdapter.gift(event: event, iconURL: nil)
+        guard case .gift(_, _, let count, let recipients) = msg.variant else {
+            XCTFail("expected .gift"); return
+        }
+        XCTAssertEqual(count * recipients.count, 10)
+        XCTAssertEqual(recipients, [
+            PublicChatGiftRecipient(userId: "u2", nickname: "Bella", avatarURL: "https://cdn/bella.png"),
+            PublicChatGiftRecipient(userId: "u3", nickname: "Cara", avatarURL: "https://cdn/cara.png")
+        ])
     }
 
     func test_luckyGiftDerived_carriesTotalReward() {

@@ -88,6 +88,31 @@ enum PartyAPI {
         return try decoder.decode(T.self, from: data)
     }
 
+    // MARK: - 半屏游戏
+
+    /// 主播端 Party 半屏游戏资源。必须使用 anchor 游戏池，不能复用用户端
+    /// `/half/geme/v2/list`，否则服务端会按用户角色返回错误的游戏集合。
+    static func anchorPartyBannerGames() async throws -> [PartyBannerGame] {
+        let data = try await APIClient.shared.post("/api/half/geme/anchor/list", body: [:])
+        #if DEBUG
+        let raw = String(data: data, encoding: .utf8) ?? "<binary>"
+        AppLogger.party.debug("[PartyGame] anchor/list raw=\(raw, privacy: .private)")
+        #endif
+        let games = try PartyBannerGame.decodeAnchorBannerGames(from: data)
+        AppLogger.party.info("[PartyGame] anchor/list decoded count=\(games.count, privacy: .public)")
+        return games
+    }
+
+    /// Yomi 游戏进入码。字段由游戏服务控制，首次真机调用会留下脱敏原始 payload 供校验。
+    static func gameTokenCode() async throws -> PartyGameTokenCode? {
+        let data = try await APIClient.shared.post("/api/half/geme/getTokenCode", body: [:])
+        #if DEBUG
+        let raw = String(data: data, encoding: .utf8) ?? "<binary>"
+        AppLogger.party.debug("[PartyGame] getTokenCode raw=\(raw, privacy: .private)")
+        #endif
+        return PartyGameTokenCode.decode(from: data)
+    }
+
     // MARK: - room
 
     /// 房间模板列表（创建房间前选模板用）。
@@ -114,6 +139,16 @@ enum PartyAPI {
             body: [:]
         )
         return try decodeArrayOrEmpty(data, as: PartyLanguage.self)
+    }
+
+    /// 房内一键发送词条。对齐 H5 `apiGetQuickPhrases`：
+    /// `audienceType` 为 1 时返回用户词条，2 时返回主播词条。
+    static func quickPhrases(audienceType: Int) async throws -> [PartyQuickPhrase] {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/getQuickPhrases",
+            body: ["audienceType": audienceType]
+        )
+        return try decodeArrayOrEmpty(data, as: PartyQuickPhrase.self)
     }
 
     /// 创房权限校验（Party 首页点"创建"时前置 gate）。
@@ -167,6 +202,15 @@ enum PartyAPI {
         if let v = greetingMessage { body["greetingMessage"] = v }
         if let v = roomLanguage { body["roomLanguage"] = v }
         _ = try await PartyAPIClient.shared.post("\(pathPrefix)/room/updateRoom", body: body)
+    }
+
+    /// 修改房间公告。公告与 `greetingMessage` 是不同字段，成功后服务端以 1049 广播到房间公屏。
+    /// 对齐 H5 `apiPartyEditAnnouncement`。
+    static func editAnnouncement(roomId: String, announcement: String) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/editAnnouncement",
+            body: ["roomId": roomId, "announcement": announcement]
+        )
     }
 
     /// 拉当前房间的背景（编辑态显示 selectedBackground 用）。
@@ -237,6 +281,51 @@ enum PartyAPI {
         return try decodeRankResponse(data)
     }
 
+    // MARK: - lobby ranking (Party Rich / Room)
+
+    /// H5 `/party/rank` PartyRich 榜，不带 roomId。
+    static func partyRichRank(rankType: String, periodType: String) async throws -> PartyLobbyRankResponse {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/rank/getPartyRichRanks",
+            body: ["rankType": rankType, "periodType": periodType]
+        )
+        return try decodeObject(data, as: PartyLobbyRankResponse.self)
+    }
+
+    /// H5 `/party/rank` Room 榜，不带 roomId。
+    static func partyLobbyRoomRank(rankType: String, periodType: String) async throws -> PartyLobbyRankResponse {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/rank/getRoomRanks",
+            body: ["rankType": rankType, "periodType": periodType]
+        )
+        return try decodeObject(data, as: PartyLobbyRankResponse.self)
+    }
+
+    /// 大厅双卡真实 Top3 头像（H5 `getTop3RanksAvatar`）。
+    static func partyLobbyTop3Ranks() async throws -> PartyLobbyTop3Response {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/rank/getTop3RanksAvatar",
+            body: [:]
+        )
+        return try decodeObject(data, as: PartyLobbyTop3Response.self)
+    }
+
+    /// Party Tab 首页 banner。H5 `apiGetPartyHomeBannerList` 使用 GET，不能复用首页的通用图片配置接口。
+    static func partyHomeBanners() async throws -> [PartyHomeBanner] {
+        let data = try await PartyAPIClient.shared.get("\(pathPrefix)/room/homeBanner/list")
+        return try decodeArrayOrEmpty(data, as: PartyHomeBanner.self)
+    }
+
+    /// Party Rich / Room 周月榜规则图。H5 按活动编号请求 `ruleContent`。
+    static func partyLobbyRankRuleContent(belongAct: Int) async throws -> String? {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/getRulePageConfigByAct",
+            body: ["belongAct": belongAct]
+        )
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return object["ruleContent"] as? String
+    }
+
     /// 派对房在线观众列表（对齐 H5 `apiGetPartyOnlineList`；顶栏观众数点击触发）。
     ///
     /// **path**：`/sapi/weidou/v1/client/party/room/getViewers`
@@ -279,12 +368,11 @@ enum PartyAPI {
         return try decoder.decode(PartyGameTaskRankingResponse.self, from: data)
     }
 
-    /// 主播派对房周任务（安卓 `WeekTaskDialog`）。任务完成奖励由 P2P 1023 自动下发，
-    /// 该接口只读取上麦时长任务与已知进度，不发起领奖。
-    static func weeklyTaskInfo(pageSize: Int = 20, offset: String? = nil) async throws -> PartyWeeklyTaskPage {
+    /// Party 房 Weekly Task：宝石目标进度和礼物流水。Android 以礼物 `createTime` 作为 Long 分页游标。
+    static func weeklyTaskInfo(pageSize: Int = 20, offset: Int64 = 0) async throws -> PartyWeeklyTaskPage {
         let data = try await PartyAPIClient.shared.post(
             "\(pathPrefix)/room/task/getTaskInfo",
-            body: ["pageSize": pageSize, "offset": offset ?? NSNull()]
+            body: ["pageSize": pageSize, "offset": offset]
         )
         #if DEBUG
         let raw = String(data: data, encoding: .utf8) ?? "<binary>"
@@ -306,6 +394,29 @@ enum PartyAPI {
         return try PartyHotRoomTaskStatus.decode(from: data)
     }
 
+    /// 安卓热门任务规则页配置。后台下发的是规则图片地址，未配置时调用方保留本地规则兜底。
+    static func hotRoomTaskRuleImageURL() async throws -> String? {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/getRulePageConfig",
+            body: [:]
+        )
+        let raw = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        if let directURL = URL(string: raw),
+           let scheme = directURL.scheme?.lowercased(),
+           scheme == "http" || scheme == "https" {
+            return raw
+        }
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        let payload = PartyWeeklyTaskPage.firstObject(
+            in: PartyWeeklyTaskPage.unwrappedPayload(from: root),
+            keys: ["rulePageConfig", "config"]
+        ) ?? PartyWeeklyTaskPage.unwrappedPayload(from: root)
+        return PartyWeeklyTaskPage.firstString(
+            in: payload,
+            keys: ["imageUrl", "imgUrl", "picUrl", "ruleImage", "rulePageImage", "ruleContent", "url"]
+        )
+    }
+
     /// 非热门房任务引导的目标房间。安卓在 `path == top_room_guide` 时调用此接口。
     static func hotRoomWithAvailableSeat() async throws -> PartyHotRoomGuide? {
         let data = try await PartyAPIClient.shared.post(
@@ -319,26 +430,21 @@ enum PartyAPI {
         return try PartyHotRoomGuide.decode(from: data)
     }
 
-    /// 露脸检测违规上报。`status` 与 `type` 的业务枚举由服务端任务配置决定，调用端必须传真实值。
-    /// 图片先经 OSS 上传，上传后的 URL 作为 `content` 传入。
+    /// 热门任务露脸检测上报。Android 调用只传房间、截图 OSS URL 与当前麦位；
+    /// 违规次数由服务端判定，随后由 `checkExistHot3` 刷新。
     static func reportHotRoomTask(
         roomId: String,
-        status: Int,
-        type: Int,
         content: String,
-        seatId: Int
-    ) async throws -> PartyHotRoomTaskStatus {
-        let data = try await PartyAPIClient.shared.post(
+        seatIndex: Int
+    ) async throws {
+        _ = try await PartyAPIClient.shared.post(
             "\(pathPrefix)/room/partyRoomReport",
             body: [
                 "roomId": roomId,
-                "status": status,
-                "type": type,
                 "content": content,
-                "seatId": seatId,
+                "seatIndex": seatIndex,
             ]
         )
-        return try PartyHotRoomTaskStatus.decode(from: data)
     }
 
     /// 分享面板的关注/粉丝联系人。对齐 H5 `apiPartyGetFollowInfoList`。
@@ -357,6 +463,16 @@ enum PartyAPI {
         _ = try await PartyAPIClient.shared.post(
             "\(pathPrefix)/room/inviteUserRoom",
             body: ["roomId": roomId, "inviteYxAccIds": yxAccidList]
+        )
+    }
+
+    /// 通知服务端播放当前用户进入 Party 房的效果。
+    /// 对齐 H5 `apiPartyOpenEffect({ type: 2, roomId })`：RTC 与聊天室均加入成功后触发，
+    /// 由服务端向同房用户广播座驾/进场效果。
+    static func openEnterEffect(roomId: String) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/room/openEffect",
+            body: ["type": 2, "roomId": roomId]
         )
     }
 
@@ -536,7 +652,7 @@ enum PartyAPI {
         let rawPreview = String(data: data, encoding: .utf8) ?? "<binary>"
         AppLogger.party.info("[PartyAPI] enterRoom raw=\(rawPreview, privacy: .private)")
         let info = try decodeObject(data, as: PartyRoomInfo.self)
-        AppLogger.party.info("[PartyAPI] enterRoom decoded partyPrivateCallOpen=\(String(describing: info.partyPrivateCallOpen), privacy: .public) partyCallGiftId=\(info.partyCallGiftId ?? "nil", privacy: .public) partyCallGiftImg=\(info.partyCallGiftImg ?? "nil", privacy: .public) partyCallGiftPrice=\(String(describing: info.partyCallGiftPrice), privacy: .public) onSeatApplySwitch=\(String(describing: info.onSeatApplySwitch), privacy: .public)")
+        AppLogger.party.info("[PartyAPI] enterRoom decoded rewardQuantity=\(String(describing: info.rewardQuantity), privacy: .public) partyPrivateCallOpen=\(String(describing: info.partyPrivateCallOpen), privacy: .public) partyCallGiftId=\(info.partyCallGiftId ?? "nil", privacy: .public) partyCallGiftImg=\(info.partyCallGiftImg ?? "nil", privacy: .public) partyCallGiftPrice=\(String(describing: info.partyCallGiftPrice), privacy: .public) onSeatApplySwitch=\(String(describing: info.onSeatApplySwitch), privacy: .public)")
         return info
     }
 
@@ -559,7 +675,51 @@ enum PartyAPI {
         )
     }
 
-    /// 退房。`seatIndex` 传当前在麦的位号；不在麦时传 0。
+    // MARK: - Backpack Gifts
+
+    /// Party 背包库存。库存属于主 API 域，但必须带 `PARTY_GIFT` 场景；否则后端返回的
+    /// `sendable` 与 Party 的显示范围不一致。
+    static func partyBackpack(page: Int, pageSize: Int = 50) async throws -> PartyBackpackPage {
+        let data = try await APIClient.shared.post(
+            "/api/gift/backpack/list",
+            body: [
+                "scene": "PARTY_GIFT",
+                "page": page,
+                "pageSize": pageSize,
+            ]
+        )
+        // H5 已兼容标准分页对象和裸数组两种实际返回；裸数组满页时继续翻页。
+        if let list = try? decoder.decode([PartyBackpackGift].self, from: data) {
+            return PartyBackpackPage(list: list, hasMore: list.count >= pageSize)
+        }
+        return try decodeObject(data, as: PartyBackpackPage.self)
+    }
+
+    /// 从背包向 Party 当前选中的麦位送礼。服务端通过 2049 广播礼物效果和公屏记录，
+    /// 因此客户端不本地伪造礼物事件。
+    @discardableResult
+    static func sendPartyBackpackGift(
+        roomId: String,
+        giftId: Int64,
+        num: Int,
+        yxAccidList: [String]
+    ) async throws -> Int? {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/gift/sendGiftFromBackpack",
+            body: [
+                "roomId": roomId,
+                "giftId": giftId,
+                "num": num,
+                "yxAccidList": yxAccidList,
+            ]
+        )
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return PartyValueNormalizer.intify(object["remainingQuantity"])
+    }
+
+    /// 退房。`seatIndex` 传当前在麦的位号；不在麦时传 -1（对齐安卓/H5）。
     static func exitRoom(roomId: String, seatIndex: Int, yxRoomId: String) async throws {
         _ = try await PartyAPIClient.shared.post(
             "\(pathPrefix)/room/exitRoom",
@@ -1292,6 +1452,282 @@ enum PartyAPI {
         )
         return try decodeArrayOrEmpty(data, as: PartyEmojiClassification.self)
     }
+
+    // MARK: - Super Wheel
+
+    /// Party Super Wheel 的后台档位和玩法开关。
+    static func superWheelConfig() async throws -> PartySuperWheelConfig {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/super-wheel/config",
+            body: [:]
+        )
+        return try PartySuperWheelConfig.decode(from: data)
+    }
+
+    /// 读取当前房间进行中的转盘；服务端返回 JSON null 时代表没有对局。
+    static func superWheelState(roomId: String) async throws -> PartySuperWheelState? {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/super-wheel/state",
+            body: ["roomId": roomId]
+        )
+        return try PartySuperWheelState.decodeOptional(from: data)
+    }
+
+    @discardableResult
+    static func openSuperWheel(roomId: String, entryFee: Int) async throws -> PartySuperWheelOpenResult {
+        let data = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/super-wheel/open",
+            body: ["roomId": roomId, "entryFee": entryFee],
+            suppressCodes: ["11503"] // 已有对局：调用方静默转拉当前状态
+        )
+        return try PartySuperWheelOpenResult.decode(from: data)
+    }
+
+    static func joinSuperWheel(roundId: String) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/super-wheel/join",
+            body: ["roundId": roundId]
+        )
+    }
+
+    static func betSuperWheel(roundId: String, amount: Int) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/super-wheel/bet",
+            body: ["roundId": roundId, "amount": amount]
+        )
+    }
+
+    static func closeSuperWheel(roundId: String) async throws {
+        _ = try await PartyAPIClient.shared.post(
+            "\(pathPrefix)/super-wheel/close",
+            body: ["roundId": roundId]
+        )
+    }
+}
+
+// MARK: - Super Wheel models
+
+/// Super Wheel 接口的数据属于正在灰度的玩法，Long/金额字段会混发 Number 与 String。
+/// 这里在边界处归一，UI 和 IM 广播只消费统一后的值。
+struct PartySuperWheelConfig: Equatable {
+    let enabled: Bool
+    let entryFees: [Int]
+
+    static func decode(from data: Data) throws -> Self {
+        let object = try PartySuperWheelJSON.object(from: data)
+        return Self(
+            enabled: PartySuperWheelJSON.bool(object["enabled"]),
+            entryFees: PartySuperWheelJSON.array(object["entryFees"])
+                .compactMap(PartySuperWheelJSON.int)
+                .filter { $0 > 0 }
+        )
+    }
+}
+
+struct PartySuperWheelOpenResult: Equatable {
+    let roundId: String
+    let entryFee: Int
+    let state: Int
+
+    static func decode(from data: Data) throws -> Self {
+        let object = try PartySuperWheelJSON.object(from: data)
+        guard let roundId = PartySuperWheelJSON.string(object["roundId"]), !roundId.isEmpty else {
+            throw PartySuperWheelJSONError.missingRequiredField("roundId")
+        }
+        return Self(
+            roundId: roundId,
+            entryFee: PartySuperWheelJSON.int(object["entryFee"]) ?? 0,
+            state: PartySuperWheelJSON.int(object["state"]) ?? 1
+        )
+    }
+}
+
+struct PartySuperWheelParticipant: Identifiable, Equatable {
+    let userId: String
+    let nickname: String?
+    let avatar: String?
+    var totalBet: Int64
+    var status: Int
+    let isHost: Bool
+
+    var id: String { userId }
+
+    static func from(_ object: [String: Any]) -> Self? {
+        guard let userId = PartySuperWheelJSON.string(object["userId"]), !userId.isEmpty else { return nil }
+        return Self(
+            userId: userId,
+            nickname: PartySuperWheelJSON.string(object["nickname"]),
+            avatar: PartySuperWheelJSON.string(object["avatar"]),
+            totalBet: Int64(PartySuperWheelJSON.int(object["totalBet"]) ?? 0),
+            status: PartySuperWheelJSON.int(object["status"]) ?? 1,
+            isHost: PartySuperWheelJSON.bool(object["host"])
+        )
+    }
+}
+
+struct PartySuperWheelUser: Equatable {
+    let userId: String
+    let nickname: String?
+    let avatar: String?
+
+    static func from(_ object: [String: Any]?) -> Self? {
+        guard let object,
+              let userId = PartySuperWheelJSON.string(object["userId"]), !userId.isEmpty else { return nil }
+        return Self(
+            userId: userId,
+            nickname: PartySuperWheelJSON.string(object["nickname"]),
+            avatar: PartySuperWheelJSON.string(object["avatar"])
+        )
+    }
+}
+
+struct PartySuperWheelState: Equatable {
+    var roundId: String
+    var roomId: String
+    var hostId: String?
+    var entryFee: Int
+    var state: Int
+    var roundNo: Int
+    var totalPool: Int64
+    var phaseDeadlineMs: Int64?
+    var participants: [PartySuperWheelParticipant]
+    var winnerId: String?
+    var winner: PartySuperWheelUser?
+    var winnerAmount: Int64?
+    var revealUser: PartySuperWheelUser?
+    var remainCount: Int?
+
+    static func decodeOptional(from data: Data) throws -> Self? {
+        let trimmed = String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != "null" else { return nil }
+        return try from(PartySuperWheelJSON.object(from: data))
+    }
+
+    static func from(_ object: [String: Any]) throws -> Self {
+        guard let roundId = PartySuperWheelJSON.string(object["roundId"]), !roundId.isEmpty else {
+            throw PartySuperWheelJSONError.missingRequiredField("roundId")
+        }
+        let participants = PartySuperWheelJSON.array(object["participants"])
+            .compactMap { $0 as? [String: Any] }
+            .compactMap(PartySuperWheelParticipant.from)
+        let winner = PartySuperWheelUser.from(object["winner"] as? [String: Any])
+        let winnerId = PartySuperWheelJSON.string(object["winnerId"]) ?? winner?.userId
+        let resolvedWinner = winner ?? participants.first(where: { $0.userId == winnerId }).map {
+            PartySuperWheelUser(userId: $0.userId, nickname: $0.nickname, avatar: $0.avatar)
+        }
+        return Self(
+            roundId: roundId,
+            roomId: PartySuperWheelJSON.string(object["roomId"]) ?? "",
+            hostId: PartySuperWheelJSON.string(object["hostId"]),
+            entryFee: PartySuperWheelJSON.int(object["entryFee"]) ?? 0,
+            state: PartySuperWheelJSON.int(object["state"]) ?? 0,
+            roundNo: PartySuperWheelJSON.int(object["roundNo"])
+                ?? PartySuperWheelJSON.int(object["currentRoundNo"]) ?? 0,
+            totalPool: Int64(PartySuperWheelJSON.int(object["totalPool"]) ?? 0),
+            phaseDeadlineMs: PartySuperWheelJSON.int64(object["phaseDeadline"]),
+            participants: participants,
+            winnerId: winnerId,
+            winner: resolvedWinner,
+            winnerAmount: PartySuperWheelJSON.int64(object["winnerAmount"]),
+            revealUser: PartySuperWheelUser.from(object["eliminatedUser"] as? [String: Any]),
+            remainCount: PartySuperWheelJSON.int(object["remainCount"])
+        )
+    }
+}
+
+private enum PartySuperWheelJSONError: Error {
+    case missingRequiredField(String)
+}
+
+private enum PartySuperWheelJSON {
+    static func object(from data: Data) throws -> [String: Any] {
+        guard let raw = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw PartySuperWheelJSONError.missingRequiredField("object")
+        }
+        for key in ["data", "result"] {
+            if let nested = raw[key] as? [String: Any] { return nested }
+        }
+        return raw
+    }
+
+    static func string(_ value: Any?) -> String? {
+        guard let value else { return nil }
+        if let string = value as? String, !string.isEmpty { return string }
+        if let number = value as? NSNumber { return number.stringValue }
+        return nil
+    }
+
+    static func int(_ value: Any?) -> Int? {
+        guard let value else { return nil }
+        if let number = value as? NSNumber { return number.intValue }
+        if let string = value as? String { return Int(string) }
+        return nil
+    }
+
+    static func int64(_ value: Any?) -> Int64? {
+        guard let value else { return nil }
+        if let number = value as? NSNumber { return number.int64Value }
+        if let string = value as? String { return Int64(string) }
+        return nil
+    }
+
+    static func bool(_ value: Any?) -> Bool {
+        if let value = value as? Bool { return value }
+        if let int = int(value) { return int != 0 }
+        if let string = value as? String { return ["true", "yes", "on"].contains(string.lowercased()) }
+        return false
+    }
+
+    static func array(_ value: Any?) -> [Any] { value as? [Any] ?? [] }
+}
+
+/// Party 大厅 banner。字段对齐 H5 `homeBanner.vue`：普通活动 URL、游戏以及指定 Party 房三种点击分支。
+struct PartyHomeBanner: Decodable, Identifiable, Equatable {
+    let id: String
+    let picUrl: String?
+    let directUrl: String?
+    let clickType: Int
+    let gameLink: String?
+    let partyRoomId: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, picUrl, directUrl, clickType, gameLink, partyRoomId
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        if let value = try? c.decode(String.self, forKey: .id), !value.isEmpty {
+            id = value
+        } else if let value = try? c.decode(Int64.self, forKey: .id) {
+            id = String(value)
+        } else {
+            id = UUID().uuidString
+        }
+        picUrl = try? c.decode(String.self, forKey: .picUrl)
+        directUrl = try? c.decode(String.self, forKey: .directUrl)
+        if let value = try? c.decode(Int.self, forKey: .clickType) {
+            clickType = value
+        } else if let value = try? c.decode(String.self, forKey: .clickType), let parsed = Int(value) {
+            clickType = parsed
+        } else {
+            clickType = 0
+        }
+        gameLink = try? c.decode(String.self, forKey: .gameLink)
+        if let value = try? c.decode(String.self, forKey: .partyRoomId) {
+            partyRoomId = value
+        } else if let value = try? c.decode(Int64.self, forKey: .partyRoomId) {
+            partyRoomId = String(value)
+        } else {
+            partyRoomId = nil
+        }
+    }
+
+    /// 复用首页 `LiveBanner` 时，房间/游戏点击没有标准 directUrl，使用非空哨兵令该页保持可点击。
+    var liveBannerItem: AppPictureItem {
+        let tapURL = directUrl ?? gameLink ?? (partyRoomId == nil ? nil : "party://room/\(partyRoomId!)")
+        return AppPictureItem(id: id, picUrl: picUrl, directUrl: tapURL)
+    }
 }
 
 /// H5 `currentMusicInfo` 的宽容解码版本。音乐状态会同时通过 HTTP 和 1011/1013 IM 下发，
@@ -1604,6 +2040,39 @@ struct PartyLuckyNumberHistoryItem: Decodable, Equatable, Identifiable {
         nickname = try? c.decode(String.self, forKey: .nickname)
         avatar = try? c.decode(String.self, forKey: .avatar)
         luckyNumber = number
+    }
+
+    private static func string(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> String? {
+        if let value = try? c.decode(String.self, forKey: key), !value.isEmpty { return value }
+        if let value = try? c.decode(Int64.self, forKey: key) { return String(value) }
+        return nil
+    }
+
+    private static func int(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> Int? {
+        if let value = try? c.decode(Int.self, forKey: key) { return value }
+        if let value = try? c.decode(Int64.self, forKey: key) { return Int(value) }
+        if let value = try? c.decode(String.self, forKey: key) { return Int(value) }
+        return nil
+    }
+}
+
+/// H5 `getQuickPhrases` 单项。接口字段来自 H5 TypeScript 定义；首次真机回包仍应复核字段名。
+struct PartyQuickPhrase: Decodable, Equatable, Identifiable {
+    let id: String
+    let content: String
+    let msgType: String?
+    let orderNumber: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case id, content, msgType, orderNum
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = Self.string(c, key: .id) ?? UUID().uuidString
+        content = (try? c.decode(String.self, forKey: .content)) ?? ""
+        msgType = Self.string(c, key: .msgType)
+        orderNumber = Self.int(c, key: .orderNum) ?? 0
     }
 
     private static func string(_ c: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> String? {

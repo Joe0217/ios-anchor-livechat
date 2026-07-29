@@ -1,5 +1,14 @@
 import Foundation
 
+/// 2049 礼物事件中的收礼人展示信息。
+///
+/// `receiverUserIds` 仍只服务麦位收礼值累计；公屏则需要保留 H5 使用的昵称和头像。
+struct PartyGiftRecipient: Equatable {
+    let userId: String?
+    let nickname: String?
+    let avatarURL: String?
+}
+
 /// 派对房送礼事件（2049 RECEIVE_PARTY_ROOM_GIFT_COMPRESSED 解压后 payload 占位）。
 /// MVP 仅识别 + 公屏一行文案 + Store 推送；动画归 H 期 `GiftAnimationQueue` 消费。
 ///
@@ -14,6 +23,8 @@ struct PartyGiftEvent: Equatable {
     /// nil = 后端 payload 缺失（旧版兼容 / 单测省略）
     let senderAvatar: String?
     let receiverUserIds: [String]    // 安卓支持批量送礼到多麦位
+    /// 按服务端 `receiveUserList` 原始顺序保留，用于 Party 公屏显示和总送礼数量。
+    let recipients: [PartyGiftRecipient]
     /// 单个接收人的本次收礼值（2049 `gems`）；麦位展示以此本地累计。
     let gems: Double
     let timestamp: Int64             // 服务端下发时间戳，用于 1007/2049 去重（iOS 不识别 1007，留字段未来扩展）
@@ -25,6 +36,7 @@ struct PartyGiftEvent: Equatable {
          senderNickname: String?,
          senderAvatar: String? = nil,
          receiverUserIds: [String],
+         recipients: [PartyGiftRecipient] = [],
          gems: Double = 0,
          timestamp: Int64) {
         self.giftId = giftId
@@ -34,8 +46,54 @@ struct PartyGiftEvent: Equatable {
         self.senderNickname = senderNickname
         self.senderAvatar = senderAvatar
         self.receiverUserIds = receiverUserIds
+        self.recipients = recipients
         self.gems = gems
         self.timestamp = timestamp
+    }
+}
+
+/// 聊天室成员进入通知中的非座驾进场条数据。
+///
+/// H5 使用 NIM notificationExtension（不是 1004 座驾自定义消息）驱动这个效果；带
+/// `itemSmallImg` 的用户交给座驾动画，因此不进入该队列。
+struct PartyEnterFloatingMessage: Identifiable, Equatable {
+    let id: UUID
+    let nickname: String
+    let userLevel: Int?
+    let isVip: Bool
+
+    static func from(notificationExtension: String?, fallbackNickname: String?) -> PartyEnterFloatingMessage? {
+        guard let notificationExtension,
+              let rawData = notificationExtension.data(using: .utf8),
+              let payload = try? JSONSerialization.jsonObject(with: rawData) as? [String: Any]
+        else { return nil }
+
+        // H5 `pushEnterFloatingMessage`：有座驾时跳过普通进场条。
+        if let vehicle = payload["itemSmallImg"] as? String,
+           !vehicle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return nil
+        }
+
+        let nickname = (payload["nickname"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? fallbackNickname?.trimmingCharacters(in: .whitespacesAndNewlines)
+            ?? ""
+        guard !nickname.isEmpty else { return nil }
+
+        return PartyEnterFloatingMessage(
+            id: UUID(),
+            nickname: nickname,
+            userLevel: PartyValueNormalizer.intify(payload["userLevel"]),
+            isVip: boolValue(payload["isVip"])
+        )
+    }
+
+    private static func boolValue(_ value: Any?) -> Bool {
+        if let bool = value as? Bool { return bool }
+        if let number = PartyValueNormalizer.intify(value) { return number != 0 }
+        if let string = value as? String {
+            return ["true", "yes", "1"].contains(string.lowercased())
+        }
+        return false
     }
 }
 
@@ -193,12 +251,21 @@ extension PartyGiftEvent {
     /// - `giftId` 缺/类型错 → 默认 0
     /// - `giftNum` 缺 → 默认 1
     /// - `sendUser` 缺 → senderUserId/senderNickname nil
-    /// - `receiveUserList` 缺/项缺 userId → 静默丢弃（compactMap）
+    /// - `receiveUserList` 缺 → 为空；`receiverUserIds` 会静默丢弃缺 userId 的项，公屏展示仍保留原数组长度
     /// `timestampMs` 由调用方注入（NIM 路径用 `raw.timestamp * 1000`，单测可注入固定值）。
     static func from(payload: [String: Any], timestampMs: Int64) -> PartyGiftEvent {
         let sendUserObj = payload["sendUser"] as? [String: Any]
         let receiveList = payload["receiveUserList"] as? [[String: Any]] ?? []
         let receiverIds = receiveList.compactMap { PartyValueNormalizer.stringify($0["userId"]) }
+        let recipients = receiveList.map { receiver in
+            PartyGiftRecipient(
+                userId: PartyValueNormalizer.stringify(receiver["userId"]),
+                nickname: PartyValueNormalizer.stringify(receiver["nickname"]),
+                avatarURL: PartyValueNormalizer.stringify(receiver["icon"])
+                    ?? PartyValueNormalizer.stringify(receiver["avatar"])
+                    ?? PartyValueNormalizer.stringify(receiver["userAvatar"])
+            )
+        }
         // v3+：avatar 字段名 fallback（对齐 H5 `data.sendUser.avatar`；兼容后端 `icon` 别名）
         let senderAvatar = (sendUserObj?["avatar"] as? String)
                         ?? (sendUserObj?["icon"] as? String)
@@ -211,6 +278,7 @@ extension PartyGiftEvent {
             senderNickname: sendUserObj?["nickname"] as? String,
             senderAvatar: senderAvatar,
             receiverUserIds: receiverIds,
+            recipients: recipients,
             gems: PartyValueNormalizer.doubleify(payload["gems"]) ?? 0,
             timestamp: timestampMs
         )

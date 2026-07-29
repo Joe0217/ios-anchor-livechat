@@ -3,6 +3,118 @@ import os
 
 private let logger = Logger(subsystem: "com.anchor.livechat", category: "Party.GiftDataSource")
 
+/// Party 房背包礼物。库存接口来自主 API，字段类型会在不同后端版本中混发 String / Number，
+/// 因此在模型层统一归一，避免一条异常库存记录导致整个背包列表不可用。
+struct PartyBackpackGift: Decodable, Identifiable, Equatable {
+    let backpackId: String?
+    let giftId: Int64
+    let quantity: Int
+    let giftName: String
+    let giftPrice: Int64
+    let giftIcon: String?
+    let giftTypeV2: Int?
+    let giftDisplayScene: String?
+    let sendable: Bool?
+    let remainingTimeDesc: String?
+
+    var id: String { "\(backpackId ?? "gift")-\(giftId)" }
+
+    private enum CodingKeys: String, CodingKey {
+        case backpackId, giftId, quantity, giftName, giftPrice, giftIcon
+        case giftTypeV2, giftDisplayScene, sendable, remainingTimeDesc
+    }
+
+    init(
+        backpackId: String?,
+        giftId: Int64,
+        quantity: Int,
+        giftName: String,
+        giftPrice: Int64,
+        giftIcon: String?,
+        giftTypeV2: Int?,
+        giftDisplayScene: String?,
+        sendable: Bool?,
+        remainingTimeDesc: String?
+    ) {
+        self.backpackId = backpackId
+        self.giftId = giftId
+        self.quantity = max(0, quantity)
+        self.giftName = giftName
+        self.giftPrice = max(0, giftPrice)
+        self.giftIcon = giftIcon
+        self.giftTypeV2 = giftTypeV2
+        self.giftDisplayScene = giftDisplayScene
+        self.sendable = sendable
+        self.remainingTimeDesc = remainingTimeDesc
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        backpackId = Self.string(container, key: .backpackId)
+        giftId = Self.int64(container, key: .giftId) ?? 0
+        quantity = max(0, Self.int(container, key: .quantity) ?? 0)
+        giftName = Self.string(container, key: .giftName) ?? ""
+        giftPrice = max(0, Self.int64(container, key: .giftPrice) ?? 0)
+        giftIcon = Self.string(container, key: .giftIcon)
+        giftTypeV2 = Self.int(container, key: .giftTypeV2)
+        giftDisplayScene = Self.string(container, key: .giftDisplayScene)
+        sendable = Self.bool(container, key: .sendable)
+        remainingTimeDesc = Self.string(container, key: .remainingTimeDesc)
+    }
+
+    private static func string(_ container: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> String? {
+        if let value = try? container.decode(String.self, forKey: key), !value.isEmpty { return value }
+        if let value = try? container.decode(Int64.self, forKey: key) { return String(value) }
+        return nil
+    }
+
+    private static func int64(_ container: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> Int64? {
+        if let value = try? container.decode(Int64.self, forKey: key) { return value }
+        if let value = try? container.decode(String.self, forKey: key) { return Int64(value) }
+        if let value = try? container.decode(Double.self, forKey: key), value.isFinite { return Int64(value) }
+        return nil
+    }
+
+    private static func int(_ container: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> Int? {
+        int64(container, key: key).flatMap(Int.init)
+    }
+
+    private static func bool(_ container: KeyedDecodingContainer<CodingKeys>, key: CodingKeys) -> Bool? {
+        if let value = try? container.decode(Bool.self, forKey: key) { return value }
+        if let value = int(container, key: key) { return value != 0 }
+        if let value = try? container.decode(String.self, forKey: key) {
+            return ["1", "true", "yes"].contains(value.lowercased())
+        }
+        return nil
+    }
+}
+
+struct PartyBackpackPage: Decodable {
+    let list: [PartyBackpackGift]
+    let hasMore: Bool
+
+    private enum CodingKeys: String, CodingKey { case list, hasMore }
+
+    init(list: [PartyBackpackGift], hasMore: Bool) {
+        self.list = list
+        self.hasMore = hasMore
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        list = (try? container.decode([PartyBackpackGift].self, forKey: .list)) ?? []
+        if let value = try? container.decode(Bool.self, forKey: .hasMore) {
+            hasMore = value
+        } else if let value = try? container.decode(Int.self, forKey: .hasMore) {
+            hasMore = value != 0
+        } else if let value = try? container.decode(String.self, forKey: .hasMore) {
+            hasMore = ["1", "true", "yes"].contains(value.lowercased())
+        } else {
+            hasMore = false
+        }
+    }
+}
+
 /// 派对房礼物列表数据源（H-5 · GiftPanelDataSource + GiftPanelBalanceSource 双 protocol）。
 ///
 /// **走 sapi 域 `PartyAPI.getPartyRoomGift`** —— 不走主接口 `/api/gift/v3/getGiftList`（后端不识别 PARTY_ROOM/PARTY_GIFT scene → parameter.error）。
@@ -13,8 +125,8 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "Party.G
 ///
 /// **v2/v1 双 fallback**（review #1）：response.tabs 优先 · 缺失 → 走 v1 giftInfoDtoList 兜底（后端灰度关闭时）。
 ///
-/// **本轮 MVP 约束**：Config.partySend factory 只挂 `[.popular]` tab，`load()` 返回全部 tabs 但
-/// Store 层按 `config.tabs` 过滤（`Store.gifts(for tab:)`），未开 tab 静默隐藏。
+/// `Config.partySend` 公开 Popular / Exclusive / Lucky Gift 三个分类；`load()` 返回全部 tabs，
+/// Store 层仍会按 `config.tabs` 过滤未知分类。
 ///
 /// **线程安全**：`loadGifts()` 与 `currentBalance()` 都在 async 上下文，`_latestBalance` 用 NSLock 保护
 /// 双 queue 竞态（DataSource 单例被 Store + BalancePolicy 双引用）。

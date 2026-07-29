@@ -120,10 +120,15 @@ struct PartyBattleHostBottomMarquee: View {
         let isPlaceholder: Bool
     }
 
-    /// H5 :28-36 buildTop3 逻辑：过滤 senderUid>0 && diamonds>0 → slice(0,3) → 不足补 placeholder
+    /// 推送和 `/state` 的 Top3 项只要带有效用户就先展示头像。
+    /// 部分实时包会晚于榜单金额字段到达；若按金额过滤，会把已有贡献者误渲染成空占位。
     private func buildTop3(_ items: [BattleTopMember]) -> [MarqueeItem] {
         var list: [MarqueeItem] = items
-            .filter { $0.uid > 0 && $0.diamondsValue > 0 }
+            .filter { $0.uid > 0 }
+            .sorted { lhs, rhs in
+                if lhs.rankIdx != rhs.rankIdx { return lhs.rankIdx < rhs.rankIdx }
+                return lhs.diamondsValue > rhs.diamondsValue
+            }
             .prefix(3)
             .map { m in
                 MarqueeItem(

@@ -7,24 +7,25 @@ struct PartyBattleRulesPopup: View {
     @Environment(\.dismiss) private var dismiss
 
     private let rules: [String] = [
-        "Battle Team is a red vs blue team competition. The winning team is determined by total gift value received.",
-        "Selecting phase lasts 60s: choose Red or Blue side or stay neutral.",
-        "Running phase: send gifts to your team to boost the score. Higher total wins.",
-        "Settlement: winning team receives MVP badges. Cooldown period follows before next round.",
+        L10n.Party.Battle.rule1,
+        L10n.Party.Battle.rule2,
+        L10n.Party.Battle.rule3,
+        L10n.Party.Battle.rule4,
     ]
 
     var body: some View {
-        VStack(spacing: 0) {
-            heroIcon
-            title
-            rulesList
-            confirmButton
+        ZStack {
+            bgGradient.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                heroIcon
+                title
+                rulesList
+                confirmButton
+            }
+            .padding(.horizontal, 20).padding(.top, 40).padding(.bottom, 30)
         }
-        .padding(.horizontal, 20).padding(.top, 40).padding(.bottom, 30)
-        .background(bgGradient)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black.opacity(0.7))
         .presentationDetents([.height(440)])
     }
 
@@ -39,7 +40,7 @@ struct PartyBattleRulesPopup: View {
 
     @ViewBuilder
     private var title: some View {
-        Text("Battle Team Rules")
+        Text(L10n.Party.Battle.rulesTitle)
             .font(.title3).bold()
             .foregroundColor(.white)
             .padding(.bottom, 10)
@@ -71,7 +72,7 @@ struct PartyBattleRulesPopup: View {
         Button {
             dismiss()
         } label: {
-            Text("I Know")
+            Text(L10n.Party.Battle.iKnow)
                 .font(.headline)
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)

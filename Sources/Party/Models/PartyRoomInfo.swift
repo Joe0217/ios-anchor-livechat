@@ -32,6 +32,8 @@ struct PartyRoomInfo: Codable, Equatable {
     let roomName: String?
     let roomAvatar: String?
     let greetingMessage: String?
+    /// 房间公告。与房间引导语 `greetingMessage` 独立，修改后服务端会广播 1049 公屏消息。
+    var announcement: String? = nil
     let roomLanguage: String?
     let heatValue: Int?              // 房间热度分（非在线人数）
     let roomStatus: Int?             // 1=开放 / 2=关闭（具体语义实测确认）
@@ -49,6 +51,11 @@ struct PartyRoomInfo: Codable, Equatable {
     let rangIndex: Int?
     let showChest: Bool?
     let gemsTotal: Int?
+    /// Party 房 Weekly Task 达标奖励宝石数；安卓仅在该值大于 0 时展示入口。
+    ///
+    /// `room/enter` 是跨端 DTO，数值字段在不同环境可能以 JSON number 或字符串返回。
+    /// 该字段只控制附加入口，不能因类型漂移导致整个进房响应解码失败。
+    @PartyFlexibleInt var rewardQuantity: Int? = nil
     let pkStatus: Int?
     let pkId: String?
     /// 房间关注态（对齐 H5 `currentPartyInfo.isFollowOwner`；仅 `room/enter` 接口返）。
@@ -172,6 +179,7 @@ struct PartyRoomInfo: Codable, Equatable {
         roomName: String? = nil,
         roomAvatar: String? = nil,
         greetingMessage: String? = nil,
+        announcement: String? = nil,
         roomLanguage: String? = nil,
         roomTempId: String? = nil,
         lockFlag: Int? = nil,
@@ -193,6 +201,7 @@ struct PartyRoomInfo: Codable, Equatable {
             roomName: roomName ?? self.roomName,
             roomAvatar: roomAvatar ?? self.roomAvatar,
             greetingMessage: greetingMessage ?? self.greetingMessage,
+            announcement: announcement ?? self.announcement,
             roomLanguage: roomLanguage ?? self.roomLanguage,
             heatValue: heatValue,
             roomStatus: roomStatus,
@@ -210,6 +219,7 @@ struct PartyRoomInfo: Codable, Equatable {
             rangIndex: rangIndex,
             showChest: showChest,
             gemsTotal: gemsTotal,
+            rewardQuantity: rewardQuantity,
             pkStatus: pkStatus,
             pkId: pkId,
             isFollowOwner: isFollowOwner,
@@ -232,21 +242,82 @@ struct PartyRoomInfo: Codable, Equatable {
     }
 }
 
+/// Party 房接口中可能为 number 或 string 的可选整数。
+@propertyWrapper
+struct PartyFlexibleInt: Codable, Equatable {
+    var wrappedValue: Int?
+
+    init(wrappedValue: Int? = nil) {
+        self.wrappedValue = wrappedValue
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        guard !container.decodeNil() else {
+            wrappedValue = nil
+            return
+        }
+        if let value = try? container.decode(Int.self) {
+            wrappedValue = value
+        } else if let value = try? container.decode(Int64.self),
+                  let intValue = Int(exactly: value) {
+            wrappedValue = intValue
+        } else if let value = try? container.decode(String.self) {
+            wrappedValue = Int(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        } else if let value = try? container.decode(Double.self),
+                  let intValue = Int(exactly: value) {
+            wrappedValue = intValue
+        } else {
+            wrappedValue = nil
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        if let wrappedValue {
+            try container.encode(wrappedValue)
+        } else {
+            try container.encodeNil()
+        }
+    }
+}
+
+private extension KeyedDecodingContainer {
+    func decode(_ type: PartyFlexibleInt.Type, forKey key: Key) throws -> PartyFlexibleInt {
+        try decodeIfPresent(type, forKey: key) ?? PartyFlexibleInt()
+    }
+}
+
 /// Party 房右下角活动轮播项。后端 `id` 在不同环境可能是 String 或 Number，需兼容解码。
 struct PartyRoomBanner: Codable, Equatable {
     let id: String?
     let picUrl: String?
     let directUrl: String?
+    let activityFlamePic: String?
+    let flameStartTime: String?
+    let flameEndTime: String?
 
     /// 图片是展示的唯一前置条件；缺跳转地址时仍保留展示，但不响应点击。
     var isDisplayable: Bool { picUrl?.isEmpty == false }
     var isNavigable: Bool { directUrl?.isEmpty == false }
-    enum CodingKeys: String, CodingKey { case id, picUrl, directUrl }
+    enum CodingKeys: String, CodingKey {
+        case id, picUrl, directUrl, activityFlamePic, flameStartTime, flameEndTime
+    }
 
-    init(id: String? = nil, picUrl: String? = nil, directUrl: String? = nil) {
+    init(
+        id: String? = nil,
+        picUrl: String? = nil,
+        directUrl: String? = nil,
+        activityFlamePic: String? = nil,
+        flameStartTime: String? = nil,
+        flameEndTime: String? = nil
+    ) {
         self.id = id
         self.picUrl = picUrl
         self.directUrl = directUrl
+        self.activityFlamePic = activityFlamePic
+        self.flameStartTime = flameStartTime
+        self.flameEndTime = flameEndTime
     }
 
     init(from decoder: Decoder) throws {
@@ -260,6 +331,118 @@ struct PartyRoomBanner: Codable, Equatable {
         }
         picUrl = try? container.decode(String.self, forKey: .picUrl)
         directUrl = try? container.decode(String.self, forKey: .directUrl)
+        activityFlamePic = try? container.decode(String.self, forKey: .activityFlamePic)
+        flameStartTime = Self.decodeStringOrNumber(container, key: .flameStartTime)
+        flameEndTime = Self.decodeStringOrNumber(container, key: .flameEndTime)
+    }
+
+    /// 时间字段后端可能返 ISO 日期或 epoch 数字，统一存成字符串交由展示层判断时间窗。
+    private static func decodeStringOrNumber(
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        key: CodingKeys
+    ) -> String? {
+        if let value = try? container.decode(String.self, forKey: key), !value.isEmpty { return value }
+        if let value = try? container.decode(Int64.self, forKey: key) { return String(value) }
+        if let value = try? container.decode(Double.self, forKey: key) { return String(Int64(value)) }
+        return nil
+    }
+}
+
+/// 主播端 Party 房右下角半屏游戏资源。
+///
+/// 数据来自 `/half/geme/anchor/list`；与用户端 `v2/list` 的游戏池不同。接口字段尚需首轮
+/// 真机日志校验，因此使用字典解析兼容 `partyIcon` / `livePopIcon` 等已知资源字段。
+struct PartyBannerGame: Identifiable, Equatable {
+    let id: String
+    let gameId: String
+    let gameName: String?
+    let partyIcon: String?
+    let gameLink: String?
+    let gameType: String?
+    let appIds: String?
+
+    var isDisplayable: Bool { partyIcon?.isEmpty == false }
+    var isLaunchable: Bool { !gameId.isEmpty && gameLink?.isEmpty == false }
+
+    static func decodeAnchorBannerGames(from data: Data) throws -> [PartyBannerGame] {
+        let object = try JSONSerialization.jsonObject(with: data)
+        let rows: [Any]
+        if let array = object as? [Any] {
+            rows = array
+        } else if let root = object as? [String: Any],
+                  let grouped = root["groupedGames"] as? [String: Any],
+                  let games = grouped["8"] as? [Any] {
+            // 用户端在 groupedGames[8] 取 Party Banner；主播端接口也优先兼容此包装。
+            rows = games
+        } else if let root = object as? [String: Any], let games = root["list"] as? [Any] {
+            rows = games
+        } else if let root = object as? [String: Any], let games = root["data"] as? [Any] {
+            rows = games
+        } else {
+            rows = []
+        }
+
+        return rows.compactMap { row in
+            guard let values = row as? [String: Any] else { return nil }
+            return PartyBannerGame(values: values)
+        }
+    }
+
+    private init?(values: [String: Any]) {
+        let gameId = Self.stringValue(values["gameId"]) ?? ""
+        let id = Self.stringValue(values["id"]) ?? gameId
+        guard !id.isEmpty else { return nil }
+
+        self.id = id
+        self.gameId = gameId
+        gameName = Self.stringValue(values["gameName"])
+        partyIcon = Self.stringValue(values["partyIcon"])
+            ?? Self.stringValue(values["livePopIcon"])
+            ?? Self.stringValue(values["icon"])
+        gameLink = Self.stringValue(values["gameLink"])
+        gameType = Self.stringValue(values["gameType"])
+        appIds = Self.stringValue(values["appIds"])
+    }
+
+    private static func stringValue(_ value: Any?) -> String? {
+        if let value = value as? String, !value.isEmpty { return value }
+        if let value = value as? NSNumber {
+            let type = String(cString: value.objCType)
+            if type != "c" && type != "B" { return value.stringValue }
+        }
+        return nil
+    }
+}
+
+/// Yomi 游戏网关临时凭证。该对象不持久化，仅用于拼接本次 Web 游戏地址。
+struct PartyGameTokenCode: Equatable {
+    let userId: String
+    let code: String
+    let merchant: String?
+    let platform: String?
+
+    static func decode(from data: Data) -> PartyGameTokenCode? {
+        guard let values = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let userId = stringValue(values["userId"]),
+              let code = stringValue(values["code"]),
+              !userId.isEmpty, !code.isEmpty else {
+            return nil
+        }
+        return PartyGameTokenCode(
+            userId: userId,
+            code: code,
+            merchant: stringValue(values["merchant"]),
+            platform: stringValue(values["platform"])
+        )
+    }
+
+    private static func stringValue(_ value: Any?) -> String? {
+        if let value = value as? String, !value.isEmpty { return value }
+        if let value = value as? NSNumber {
+            let type = String(cString: value.objCType)
+            if type != "c" && type != "B" { return value.stringValue }
+        }
+        return nil
     }
 }
 

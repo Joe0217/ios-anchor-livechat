@@ -1,11 +1,66 @@
 import Foundation
 
-/// 麦位 anchorTaskRewardExt 嵌套字段（主播任务奖励配置）。MVP 不消费，仅保留解码兼容。
+/// 麦位 anchorTaskRewardExt 嵌套字段（主播任务奖励/声纹特效配置）。
 struct PartyAnchorTaskRewardExt: Codable, Equatable {
     let vfxUrl: String?
     let icon: String?
     let itemId: String?
     let bgImgId: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case vfxUrl, vfxURL, vfx_url, vfx
+        case voicePrintUrl, voicePrintURL, voicePrint
+        case icon, itemId, bgImgId
+    }
+
+    /// 后端会混发 String/Int ID。逐字段宽容解码，避免无关 ID 类型使整个对象失败并丢掉 `vfxUrl`。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        vfxUrl = Self.decodeFirstString(
+            container,
+            keys: [.vfxUrl, .vfxURL, .vfx_url, .vfx, .voicePrintUrl, .voicePrintURL, .voicePrint]
+        )
+        icon = Self.decodeString(container, forKey: .icon)
+        itemId = Self.decodeString(container, forKey: .itemId)
+        bgImgId = Self.decodeString(container, forKey: .bgImgId)
+    }
+
+    /// 编码始终写回服务端主键；兼容别名仅用于解码。
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(vfxUrl, forKey: .vfxUrl)
+        try container.encodeIfPresent(icon, forKey: .icon)
+        try container.encodeIfPresent(itemId, forKey: .itemId)
+        try container.encodeIfPresent(bgImgId, forKey: .bgImgId)
+    }
+
+    private static func decodeString(
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) -> String? {
+        if let value = try? container.decode(String.self, forKey: key), !value.isEmpty {
+            return value
+        }
+        if let value = try? container.decode(Int64.self, forKey: key) {
+            return String(value)
+        }
+        if let value = try? container.decode(Double.self, forKey: key), value.isFinite {
+            return String(value)
+        }
+        return nil
+    }
+
+    private static func decodeFirstString(
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        keys: [CodingKeys]
+    ) -> String? {
+        for key in keys {
+            if let value = decodeString(container, forKey: key) {
+                return value
+            }
+        }
+        return nil
+    }
 }
 
 /// 派对房麦位（v3 真值版，按 dev `seat/list` 返回 schema 重构于 2026-06-24）。
@@ -17,7 +72,7 @@ struct PartyAnchorTaskRewardExt: Codable, Equatable {
 /// - `seatMicrophoneEnabled / seatCameraEnabled`：**管理员**禁麦/禁摄像头态（独立于自身开关）
 /// - `roomRoleType`：坐麦人角色（1=房主 2=房管 3=观众）
 /// - `yxAccid`：云信 accid，**送礼用**（gift/sendGift 入参 yxAccidList 用这个字段，非 userId）
-/// - `anchorTaskRewardExt`：主播任务奖励（vfxUrl/icon/itemId/bgImgId 含特效配置），MVP 不消费
+/// - `anchorTaskRewardExt`：主播任务奖励/声纹（vfxUrl/icon/itemId/bgImgId 含特效配置）
 ///
 /// 全字段 Optional 容错。
 struct PartyRoomSeat: Codable, Equatable, Identifiable {
@@ -57,7 +112,8 @@ struct PartyRoomSeat: Codable, Equatable, Identifiable {
         case giftValueCount, headFrame, yxAccid, userType
         case seatCameraEnabled, seatMicrophoneEnabled, lockFlag, roomTempId
         case isHostSeat
-        case isPlatformAdmin, showBubble, anchorTaskRewardExt
+        case isPlatformAdmin, showBubble
+        case anchorTaskRewardExt, anchorTaskRewardExtend, anchorTaskRewardExtension
     }
 
     /// Memberwise init —— Swift 规则：一旦声明自定义 `init(from decoder:)`，编译器不再合成默认 memberwise
@@ -139,7 +195,60 @@ struct PartyRoomSeat: Codable, Equatable, Identifiable {
         isHostSeat = Self.decodeIsHostSeat(c)
         isPlatformAdmin = try? c.decode(Int.self, forKey: .isPlatformAdmin)
         showBubble = try? c.decode(Bool.self, forKey: .showBubble)
-        anchorTaskRewardExt = try? c.decode(PartyAnchorTaskRewardExt.self, forKey: .anchorTaskRewardExt)
+        anchorTaskRewardExt = Self.decodeAnchorTaskRewardExt(c)
+    }
+
+    /// `PartyStore` 通过 JSON round-trip 定向更新不可变麦位字段，故需保持完整可编码。
+    /// 服务端兼容别名只参与读取，写回一律使用标准主键。
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(id, forKey: .id)
+        try container.encodeIfPresent(roomId, forKey: .roomId)
+        try container.encodeIfPresent(seatIndex, forKey: .seatIndex)
+        try container.encodeIfPresent(userId, forKey: .userId)
+        try container.encodeIfPresent(avatar, forKey: .avatar)
+        try container.encodeIfPresent(nickname, forKey: .nickname)
+        try container.encodeIfPresent(seatType, forKey: .seatType)
+        try container.encodeIfPresent(isOccupied, forKey: .isOccupied)
+        try container.encodeIfPresent(cameraEnabled, forKey: .cameraEnabled)
+        try container.encodeIfPresent(microphoneEnabled, forKey: .microphoneEnabled)
+        try container.encodeIfPresent(roomRoleType, forKey: .roomRoleType)
+        try container.encodeIfPresent(giftValueCount, forKey: .giftValueCount)
+        try container.encodeIfPresent(headFrame, forKey: .headFrame)
+        try container.encodeIfPresent(yxAccid, forKey: .yxAccid)
+        try container.encodeIfPresent(userType, forKey: .userType)
+        try container.encodeIfPresent(seatCameraEnabled, forKey: .seatCameraEnabled)
+        try container.encodeIfPresent(seatMicrophoneEnabled, forKey: .seatMicrophoneEnabled)
+        try container.encodeIfPresent(lockFlag, forKey: .lockFlag)
+        try container.encodeIfPresent(roomTempId, forKey: .roomTempId)
+        try container.encodeIfPresent(isHostSeat, forKey: .isHostSeat)
+        try container.encodeIfPresent(isPlatformAdmin, forKey: .isPlatformAdmin)
+        try container.encodeIfPresent(showBubble, forKey: .showBubble)
+        try container.encodeIfPresent(anchorTaskRewardExt, forKey: .anchorTaskRewardExt)
+    }
+
+    /// 兼容服务端将扩展对象直接下发或序列化为 JSON 字符串的两种形态；
+    /// 后者若按对象强解码会整体失败，导致已佩戴的专属声纹静默回退。
+    private static func decodeAnchorTaskRewardExt(
+        _ container: KeyedDecodingContainer<CodingKeys>
+    ) -> PartyAnchorTaskRewardExt? {
+        let keys: [CodingKeys] = [
+            .anchorTaskRewardExt,
+            .anchorTaskRewardExtend,
+            .anchorTaskRewardExtension
+        ]
+        for key in keys {
+            if let value = try? container.decode(PartyAnchorTaskRewardExt.self, forKey: key) {
+                return value
+            }
+            guard let raw = try? container.decode(String.self, forKey: key),
+                  let data = raw.data(using: .utf8),
+                  let value = try? JSONDecoder().decode(PartyAnchorTaskRewardExt.self, from: data) else {
+                continue
+            }
+            return value
+        }
+        return nil
     }
 
     /// ID 字段 String/Int64 双兼容 decode（对齐 [ios-decode-userid-compat.md] rule §Decoder 模板）

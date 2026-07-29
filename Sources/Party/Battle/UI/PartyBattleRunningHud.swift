@@ -29,28 +29,26 @@ struct PartyBattleRunningHud: View {
     }
 
     var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 0) {
             header
             progressWithScores
+                .padding(.top, -20)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        // 77pt 固定 HUD 内为标题与进度条预留 10pt 间距，不能再额外占用垂直内边距。
+        .padding(.vertical, 0)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(selectingCardGradient)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                }
         }
     }
 
     @ViewBuilder
     private var header: some View {
         HStack(spacing: 6) {
-            Text("Battle Team")
-                .font(.system(size: 18, weight: .bold))
+            Text(L10n.Party.Battle.team)
+                .font(.system(size: 14, weight: .bold))
                 .italic()
                 .foregroundColor(.white)
             if let onRuleTap = onRuleTap {
@@ -58,7 +56,7 @@ struct PartyBattleRunningHud: View {
                     Image("partyPkRule")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 22, height: 22)
+                        .frame(width: 20, height: 20)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -75,11 +73,11 @@ struct PartyBattleRunningHud: View {
         if delta > 0 {
             HStack(spacing: 3) {
                 if leadingTeam == 1 {
-                    Text("Red").font(.caption2).bold().foregroundColor(Color(red: 1.0, green: 0.15, blue: 0.7))
+                    Text(L10n.Party.Battle.giftTabRed).font(.caption2).bold().foregroundColor(Color(red: 1.0, green: 0.15, blue: 0.7))
                 } else if leadingTeam == 2 {
-                    Text("Blue").font(.caption2).bold().foregroundColor(Color(red: 0.05, green: 0.43, blue: 1.0))
+                    Text(L10n.Party.Battle.giftTabBlue).font(.caption2).bold().foregroundColor(Color(red: 0.05, green: 0.43, blue: 1.0))
                 }
-                Text("Leading").font(.caption2).foregroundColor(.white)
+                Text(L10n.Party.Battle.leading).font(.caption2).foregroundColor(.white)
                 Text(deltaText(delta)).font(.caption2).bold().foregroundColor(.yellow)
             }
             .padding(.horizontal, 8).padding(.vertical, 2)
@@ -94,20 +92,28 @@ struct PartyBattleRunningHud: View {
             // 倒计时底边与进度条顶边相接，和 H5 HUD 一致，不保留额外间距。
             countdownLabel
 
-            ZStack {
-                progressBar
-                HStack {
-                    scoreLabel(score: redInt, leadingIcon: true)
-                    Spacer()
-                    Spacer()
-                    scoreLabel(score: blueInt, leadingIcon: false)
-                }
-                .padding(.horizontal, 12)
+            GeometryReader { geo in
+                ZStack {
+                    progressBar
+                    HStack {
+                        scoreLabel(score: redInt, leadingIcon: true)
+                        Spacer()
+                        Spacer()
+                        scoreLabel(score: blueInt, leadingIcon: false)
+                    }
+                    .padding(.horizontal, 12)
 
-                Image("partyPkBattleMarker")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 20, height: 20)
+                    // 动图始终锚定红蓝进度的视觉分界线，而不是固定在进度条中心。
+                    AnimatedGIFView(
+                        name: progressAnimationName,
+                        fileExtension: "webp",
+                        fallbackImageName: "partyPkBattleMarker",
+                        remoteURL: progressAnimationURL
+                    )
+                        .frame(width: 28, height: 28)
+                        .position(x: geo.size.width * pkProgress / 100, y: geo.size.height / 2)
+                        .accessibilityHidden(true)
+                }
             }
             .frame(height: 20)
         }
@@ -202,6 +208,27 @@ struct PartyBattleRunningHud: View {
         guard total > 0 else { return 50 }
         let progress = store.redScoreDisplay / total * 100
         return min(max(progress, 20), 80)
+    }
+
+    /// 对齐 H5 audienceHud：中立用户固定展示领先动画；参战用户按自己队伍的分数关系判胜负。
+    private var progressAnimationName: String {
+        if store.redScoreDisplay == store.blueScoreDisplay { return "pk-progress-draw" }
+        guard let myTeam = currentUserTeam else { return "pk-progress-win" }
+        let redLeading = store.redScoreDisplay > store.blueScoreDisplay
+        let isLeading = myTeam == 1 ? redLeading : !redLeading
+        return isLeading ? "pk-progress-win" : "pk-progress-loss"
+    }
+
+    private var currentUserTeam: Int? {
+        guard let uid = SessionStore.shared.user?.userId, uid > 0 else { return nil }
+        let userId = Int64(uid)
+        if store.redMembers.contains(where: { $0.uid == userId }) { return 1 }
+        if store.blueMembers.contains(where: { $0.uid == userId }) { return 2 }
+        return nil
+    }
+
+    private var progressAnimationURL: URL? {
+        URL(string: "https://img.hnhily.link/appId/pk/\(progressAnimationName).webp")
     }
 
     /// K/M 差值格式化（对齐 audienceHud.vue :75-82）

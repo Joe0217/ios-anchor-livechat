@@ -22,28 +22,28 @@ struct PartyRoomModeSheet: View {
     @ObservedObject var store: PartyStore
     /// 用户 tap Confirm 上抛 selectedTempId；父层收到后关本 sheet 并打开二次确认
     let onConfirmRequest: (Int) -> Void
+    @State private var selectedType: PartyRoomModeType = .liveAndVoice
 
     var body: some View {
-        PartyRoomTemplatePickerSheet(
-            voiceTemplates: voiceTemplates,
-            liveTemplates: liveTemplates,
-            isLoading: isLoading,
-            errorMessage: errorMessage,
-            onRetry: { Task { await store.loadRoomModeTemplates() } },
-            initialType: initialType,
-            initialSelectedTempId: nil,       // Room Mode 无预选：让用户主动选后再 Confirm
-            enforceLevelGate: false,          // 用户明示：对齐 create v6 无等级门槛（2026-07-16）
-            emptyText: L10n.Party.roomModeEmptyState,
-            onTabChange: nil,                 // Room Mode 两 tab templates 一次拉全，切 tab 无副作用
-            onConfirm: { tempId, _ in
-                onConfirmRequest(tempId)
-            }
-        )
-        // 单一 detent（对齐礼物面板 0.4 fraction 交互）：不允许拖到更大高度 · 关闭一次直接 dismiss
-        //   双 detent 场景（.medium + .large）用户拖到 large 后再点关闭，SwiftUI 会先退回 medium
-        //   再关 → 需点两次；单 detent 无中间态，点关闭直接消失
-        // fraction 0.8 与创房 mode picker 一致（PartyCreateRoomView L91）· 视觉密度容纳 template grid + Confirm 按钮
-        .presentationDetents([.fraction(0.8)])
+        NavigationStack {
+            PartyRoomTemplatePickerSheet(
+                voiceTemplates: voiceTemplates,
+                liveTemplates: liveTemplates,
+                isLoading: isLoading,
+                errorMessage: errorMessage,
+                onRetry: { Task { await store.loadRoomModeTemplates() } },
+                initialType: initialType,
+                initialSelectedTempId: nil,       // Room Mode 无预选：让用户主动选后再 Confirm
+                enforceLevelGate: false,          // 用户明示：对齐 create v6 无等级门槛（2026-07-16）
+                emptyText: L10n.Party.roomModeEmptyState,
+                onTabChange: { selectedType = $0 },
+                onConfirm: { tempId, _ in
+                    onConfirmRequest(tempId)
+                }
+            )
+        }
+        // 单一自适应 detent：少量模板不保留无意义的大块空白，多行模板到达上限后由 grid 自身滚动。
+        .presentationDetents([.height(adaptiveSheetHeight)])
         .task { await store.loadRoomModeTemplates() }
     }
 
@@ -79,4 +79,32 @@ struct PartyRoomModeSheet: View {
 
     /// 默认打开 Live+Voice tab（与原 PartyRoomModeSheet 初始态一致）
     private var initialType: PartyRoomModeType { .liveAndVoice }
+
+    private var selectedTemplates: [PartyRoomTemplate] {
+        selectedType == .voiceOnly ? voiceTemplates : liveTemplates
+    }
+
+    /// Picker 固定区约 200pt；模板卡每行 156pt（card 140 + padding），行距 20pt。
+    /// 最多按三行撑高，更多内容保留在既有 ScrollView 中，避免 sheet 盖满房间舞台。
+    private var adaptiveSheetHeight: CGFloat {
+        let fixedContentHeight: CGFloat = 200
+        let maxRows = 3
+        let rowCount: Int
+        if isLoading || errorMessage != nil || selectedTemplates.isEmpty {
+            rowCount = 0
+        } else {
+            rowCount = min(maxRows, (selectedTemplates.count + 1) / 2)
+        }
+        let contentHeight: CGFloat
+        if rowCount == 0 {
+            contentHeight = 120
+        } else {
+            let cardsHeight = CGFloat(rowCount) * 156
+            let rowSpacingCount = max(0, rowCount - 1)
+            let rowSpacingHeight = CGFloat(rowSpacingCount) * 20
+            contentHeight = cardsHeight + rowSpacingHeight + 12
+        }
+        let maximumHeight = UIScreen.main.bounds.height * 0.8
+        return min(maximumHeight, max(320, fixedContentHeight + contentHeight))
+    }
 }

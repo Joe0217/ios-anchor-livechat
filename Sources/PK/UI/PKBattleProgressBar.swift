@@ -6,7 +6,7 @@ import SwiftUI
 /// 1. **两段渐变底色**：我方粉红 `#FF0090→#FF3CC4` / 对方蓝 `#2099FC→#0055FF` 胶囊，按 `myPkValue` 比例分段
 /// 2. **进度装饰切图** `pkBattleProgressDecor`（斜纹装饰，overlay 在渐变底之上）
 /// 3. **两端 PK badge**：`pkBattleBadgeLeft`（粉）/ `pkBattleBadgeRight`（蓝），30pt 圆
-/// 4. **中央 handshake** `pkBattleHandshake`（32pt，位于两段进度交界处，safePkProgress 17~83 夹）
+/// 4. **中央动图**：H5 `progress-win/loss/draw.webp`，位于两段进度交界处，safePkProgress 17~83 夹
 /// 5. **两侧数字**：黄色 PK 值（我方左 / 对方右，紧接 badge 内侧）
 struct PKBattleProgressBar: View {
     let myPkValue: Int
@@ -24,14 +24,14 @@ struct PKBattleProgressBar: View {
     }
 
     private let badgeSize: CGFloat = 16      // 2026-07-06 用户明示两端 PK 圆 16pt
-    private let handshakeSize: CGFloat = 28  // H5 中央 badge size-28（size-28 = 28pt）
+    private let progressAnimationSize: CGFloat = 28  // H5 中央动图 size-28
     private let barHeight: CGFloat = 20      // H5 `h-20` = 20pt
 
     var body: some View {
         GeometryReader { geo in
             let w = geo.size.width
             let myWidth = w * CGFloat(safePkProgress) / 100.0
-            let handshakeX = myWidth
+            let progressAnimationX = myWidth
 
             ZStack {
                 // 1) 两段渐变底色（progressBar 主体色）
@@ -74,16 +74,28 @@ struct PKBattleProgressBar: View {
                 }
                 .padding(.horizontal, 8)
 
-                // 4) 中央 handshake 悬出条顶 -4pt（对齐 H5 中央 badge `top--4`）
-                Image("pkBattleHandshake")
-                    .resizable()
-                    .frame(width: handshakeSize, height: handshakeSize)
-                    .position(x: handshakeX, y: handshakeSize / 2 - 4)
+                // 4) 中央胜/负/平动图悬出条顶 -4pt（对齐 H5 `progress-*.webp`）
+                AnimatedGIFView(
+                    name: progressAnimationName,
+                    fileExtension: "webp",
+                    fallbackImageName: "pkBattleHandshake",
+                    remoteURL: progressAnimationURL
+                )
+                    .frame(width: progressAnimationSize, height: progressAnimationSize)
+                    .position(x: progressAnimationX, y: progressAnimationSize / 2 - 4)
                     .accessibilityHidden(true)
             }
         }
-        // 2026-07-07 v3：外框由 handshakeSize(28) 改回 barHeight(20)，handshake 用 position 悬出上下各 4pt
-        // overflow 到容器边界外（SwiftUI 默认不 clip）。这样 progressBar 布局空间只占 20pt，Countdown 紧贴 bar 底沿无 gap
+        // 外框保持 20pt，动图用 position 悬出上下各 4pt；布局空间不被撑高，倒计时紧贴条底。
         .frame(height: barHeight)
+    }
+
+    private var progressAnimationName: String {
+        if myPkValue == opponentPkValue { return "pk-progress-draw" }
+        return myPkValue > opponentPkValue ? "pk-progress-win" : "pk-progress-loss"
+    }
+
+    private var progressAnimationURL: URL? {
+        URL(string: "https://img.hnhily.link/appId/pk/\(progressAnimationName).webp")
     }
 }

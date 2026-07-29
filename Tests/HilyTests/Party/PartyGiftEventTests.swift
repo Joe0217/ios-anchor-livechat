@@ -20,7 +20,10 @@ final class PartyGiftEventTests: XCTestCase {
             "giftId": 2049,
             "giftNum": 5,
             "sendUser": ["userId": 1001, "nickname": "Alice"],
-            "receiveUserList": [["userId": 2001], ["userId": 2002]]
+            "receiveUserList": [
+                ["userId": 2001, "nickname": "Bella", "icon": "https://cdn/bella.png"],
+                ["userId": 2002, "nickname": "Cara", "avatar": "https://cdn/cara.png"]
+            ]
         ]
         let e = PartyGiftEvent.from(payload: payload, timestampMs: ts)
         XCTAssertEqual(e.giftId, 2049)
@@ -28,6 +31,10 @@ final class PartyGiftEventTests: XCTestCase {
         XCTAssertEqual(e.senderUserId, "1001")
         XCTAssertEqual(e.senderNickname, "Alice")
         XCTAssertEqual(e.receiverUserIds, ["2001", "2002"])
+        XCTAssertEqual(e.recipients, [
+            PartyGiftRecipient(userId: "2001", nickname: "Bella", avatarURL: "https://cdn/bella.png"),
+            PartyGiftRecipient(userId: "2002", nickname: "Cara", avatarURL: "https://cdn/cara.png")
+        ])
         XCTAssertEqual(e.gems, 0)
         XCTAssertEqual(e.timestamp, ts)
     }

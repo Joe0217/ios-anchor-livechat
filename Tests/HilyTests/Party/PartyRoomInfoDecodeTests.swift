@@ -308,6 +308,20 @@ final class PartyRoomInfoDecodeTests: XCTestCase {
         XCTAssertFalse(info.bannerList?.first?.isNavigable == true)
     }
 
+    func test_announcement_decodesIndependentlyFromGreetingMessage() throws {
+        let json = """
+        {
+            "greetingMessage": "Welcome to the room",
+            "announcement": "Please keep the chat friendly"
+        }
+        """.data(using: .utf8)!
+
+        let info = try decoder.decode(PartyRoomInfo.self, from: json)
+
+        XCTAssertEqual(info.greetingMessage, "Welcome to the room")
+        XCTAssertEqual(info.announcement, "Please keep the chat friendly")
+    }
+
     // MARK: - helpers
 
     private func makeRoom(isPlatformAdmin: Bool? = nil,

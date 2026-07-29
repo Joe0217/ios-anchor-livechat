@@ -29,7 +29,7 @@ enum PartyRoomToolSheetKind: String, Identifiable {
 /// - 底部 sheet + 3 列网格 + 顶部居中标题 "Room Tools"
 /// - 各项按 role 显示（Owner-only 项：Lock Room / Room Mode / MC Seat / Settings；Owner + PlatformAdmin：MC Seat；全部房管：Music / Mic Application / Blocklist）
 /// - Settings 已从"全部房管"降到 Owner-only（对齐文档 A §1"修改房间信息/背景/公告 · 仅房主"）
-/// - iOS MVP：Settings/Blocklist tap 触发导航；其余项 stub log（真机可见项以定位后端 wiring 完成度）
+/// - iOS：所有可见工具项均接入实际房间操作或对应管理页。
 ///
 /// 用 enum-driven 单 sheet 切换（tools ↔ settings）避免 iOS 16 双 sheet race。
 struct PartyRoomToolsSheet: View {
@@ -54,9 +54,6 @@ struct PartyRoomToolsSheet: View {
     let onTapLockRoom: () -> Void
     /// E-spec MC Seat wire：房主/平台管理员 tap MC Seat → 关本 sheet + 350ms 后打开 activeRoomTool = .mcSeat
     let onTapMCSeat: () -> Void
-    /// 其他 stub 项 tap 通用回调（View 可 toast "Coming soon"）
-    let onTapStub: (String) -> Void
-
     private let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 20), count: 3)
 
     var body: some View {
@@ -834,8 +831,10 @@ struct PartyRoomToolMenuSheet: View {
     @ObservedObject var luckyNumberStore: PartyLuckyNumberStore
     let roomId: String
     let showPk: Bool
+    let showSuperWheel: Bool
     let isRoomMuted: Bool
     let onStartPk: () -> Void
+    let onOpenSuperWheel: () -> Void
     let onToggleRoomMute: () -> Void
     let onOpenLuckyNumberSettings: () -> Void
 
@@ -873,6 +872,27 @@ struct PartyRoomToolMenuSheet: View {
                     .buttonStyle(.plain)
                 }
 
+                if showSuperWheel {
+                    Button {
+                        dismiss()
+                        onOpenSuperWheel()
+                    } label: {
+                        VStack(spacing: 8) {
+                            Image(systemName: "circle.dotted.circle")
+                                .font(.system(size: 34, weight: .bold))
+                                .foregroundColor(Color(hex: 0xFFDD63))
+                                .frame(width: 50, height: 50)
+                            Text(L10n.PartyRoom.superWheelTitle)
+                                .font(.system(size: 13))
+                                .foregroundColor(.white)
+                                .lineLimit(1)
+                        }
+                        .frame(width: 100, height: 126)
+                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.06)))
+                    }
+                    .buttonStyle(.plain)
+                }
+
                 luckyNumberCard
                 Spacer(minLength: 0)
             }
@@ -892,23 +912,10 @@ struct PartyRoomToolMenuSheet: View {
                     VStack(spacing: 8) {
                         ZStack {
                             // 与 H5 party-tool-menu.vue 使用同一张 50px Lucky Number 图标。
-                            CachedAsyncImage(
-                                url: URL(string: "https://file.lovetravel.link/mstatic/lucky-num/lucky-num-icon.webp"),
-                                contentMode: .fit
-                            ) {
-                                Circle()
-                                    .fill(LinearGradient(
-                                        colors: [Color(red: 1.0, green: 0.72, blue: 0.12), Color(red: 1.0, green: 0.28, blue: 0.42)],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    ))
-                                    .overlay(
-                                        Text("7")
-                                            .font(.system(size: 30, weight: .black, design: .rounded))
-                                            .foregroundColor(.white)
-                                    )
-                            }
-                            .frame(width: 50, height: 50)
+                            Image("partyLuckyNumberIcon")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 50, height: 50)
                             if luckyNumberStore.isGenerating {
                                 ProgressView()
                                     .tint(.white)
@@ -1263,23 +1270,12 @@ struct PartyLuckyNumberHistorySheet: View {
                 .tint(.white)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if luckyNumberStore.history.isEmpty {
-            VStack(spacing: 0) {
-                CachedAsyncImage(
-                    url: URL(string: "https://img.hnhily.link/mstatic/party/party-color-none.webp"),
-                    contentMode: .fit,
-                    persistent: true
-                ) {
-                    Image("EmptyStatePlaceholder")
-                        .resizable()
-                        .scaledToFit()
-                }
-                .frame(width: 160, height: 160)
-                .padding(.bottom, 20)
-
-                Text(L10n.PartyRoom.toolMenuNoHistory)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
-            }
+            EmptyStateView(
+                style: .full,
+                text: L10n.PartyRoom.toolMenuNoHistory,
+                textColor: .white.opacity(0.5),
+                textFont: .system(size: 14, weight: .medium)
+            )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
             ScrollView {
@@ -1358,16 +1354,10 @@ struct PartyLuckyNumberWinPopup: View {
 
             VStack(spacing: 0) {
                 ZStack(alignment: .bottom) {
-                    CachedAsyncImage(
-                        url: URL(string: "https://file.lovetravel.link/mstatic/lucky-num/winning-img.webp"),
-                        contentMode: .fit
-                    ) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 42, weight: .bold))
-                            .foregroundColor(Color(red: 1.0, green: 0.72, blue: 0.24))
-                            .frame(width: 288, height: 130)
-                    }
-                    .frame(width: 288, height: 130)
+                    Image("partyLuckyNumberWinning")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 288, height: 130)
 
                     AvatarView(urlString: payload.avatar, size: 72, kind: .user)
                         .overlay(Circle().stroke(Color.white, lineWidth: 2))
@@ -1449,5 +1439,681 @@ private struct PartyLuckyNumberWinOverlayModifier: ViewModifier {
 extension View {
     func partyLuckyNumberWinOverlay(store: PartyStore) -> some View {
         modifier(PartyLuckyNumberWinOverlayModifier(store: store))
+    }
+}
+
+// MARK: - Super Wheel state
+
+/// Party 房 Super Wheel 的单一状态源。HTTP 全量状态用于进房/重连对账，1150-1156 IM
+/// 广播用于实时推进阶段；两条链路都归约到这里，避免 UI 直接依赖不完整的消息 payload。
+@MainActor
+final class PartySuperWheelStore: ObservableObject {
+    static let shared = PartySuperWheelStore()
+
+    @Published private(set) var wheelState: PartySuperWheelState?
+    @Published private(set) var config: PartySuperWheelConfig?
+    @Published private(set) var remainingSeconds = 0
+    @Published private(set) var isLoading = false
+    @Published private(set) var isConfigLoading = false
+    @Published private(set) var isPerformingAction = false
+    @Published var isPanelPresented = false
+    @Published var isConfigPresented = false
+
+    private var countdownTask: Task<Void, Never>?
+    private var shouldPresentPanelAfterConfigDismissal = false
+    private var trackedRoomId: String?
+    private var stateRequestSequence = 0
+    private var reconciledDeadlineMs: Int64?
+    private var deadlineReconciliationTask: Task<Void, Never>?
+
+    private init() {}
+
+    deinit { countdownTask?.cancel() }
+
+    var isActive: Bool {
+        guard let wheelState else { return false }
+        return wheelState.state != 0 && wheelState.state != 9
+    }
+
+    var isSignup: Bool { wheelState?.state == 3 }
+    var isBetting: Bool { wheelState?.state == 5 }
+    var isFinal: Bool { wheelState?.state == 8 }
+    var entryFees: [Int] { config?.entryFees ?? [] }
+    var isEnabled: Bool { config?.enabled ?? false }
+    var myParticipant: PartySuperWheelParticipant? {
+        guard let userId = SessionStore.shared.user?.userId else { return nil }
+        return wheelState?.participants.first { $0.userId == String(userId) }
+    }
+    /// H5 允许 CREATED / WAITING / SIGNUP 三个前置阶段加入，不能只等到 SIGNUP。
+    var canJoin: Bool {
+        guard myParticipant == nil else { return false }
+        return [1, 2, 3].contains(wheelState?.state ?? 0)
+    }
+    var canBet: Bool { isBetting && myParticipant?.status == 1 }
+
+    func beginTracking(roomId: String) {
+        guard !roomId.isEmpty else { return }
+        guard trackedRoomId != roomId else { return }
+        countdownTask?.cancel()
+        countdownTask = nil
+        deadlineReconciliationTask?.cancel()
+        deadlineReconciliationTask = nil
+        stateRequestSequence &+= 1
+        trackedRoomId = roomId
+        wheelState = nil
+        remainingSeconds = 0
+        reconciledDeadlineMs = nil
+        isPanelPresented = false
+    }
+
+    func prepareConfig() async {
+        isConfigPresented = true
+        guard !isConfigLoading else { return }
+        isConfigLoading = true
+        defer { isConfigLoading = false }
+        do {
+            config = try await PartyAPI.superWheelConfig()
+        } catch {
+            AppLogger.party.notice("[SuperWheel] config load failed: \(String(describing: error), privacy: .private)")
+            AppToastCenter.shared.show(L10n.PartyRoom.superWheelUnavailable)
+        }
+    }
+
+    func loadState(roomId: String, presentWhenActive: Bool) async {
+        guard !roomId.isEmpty, trackedRoomId == roomId else { return }
+        let requestSequence = { stateRequestSequence &+= 1; return stateRequestSequence }()
+        isLoading = true
+        defer {
+            if requestSequence == stateRequestSequence {
+                isLoading = false
+            }
+        }
+        do {
+            guard let response = try await PartyAPI.superWheelState(roomId: roomId) else {
+                guard requestSequence == stateRequestSequence, trackedRoomId == roomId else { return }
+                wheelState = nil
+                isPanelPresented = false
+                refreshCountdown()
+                return
+            }
+            guard requestSequence == stateRequestSequence,
+                  trackedRoomId == roomId,
+                  response.roomId.isEmpty || response.roomId == roomId else { return }
+            wheelState = response
+            if presentWhenActive { isPanelPresented = true }
+            refreshCountdown()
+        } catch {
+            AppLogger.party.notice("[SuperWheel] state load failed: \(String(describing: error), privacy: .private)")
+        }
+    }
+
+    func open(roomId: String, entryFee: Int) async {
+        guard trackedRoomId == roomId,
+              entryFees.contains(entryFee),
+              !isPerformingAction else { return }
+        isPerformingAction = true
+        defer { isPerformingAction = false }
+        do {
+            let opened = try await PartyAPI.openSuperWheel(roomId: roomId, entryFee: entryFee)
+            wheelState = PartySuperWheelState(
+                roundId: opened.roundId,
+                roomId: roomId,
+                hostId: nil,
+                entryFee: opened.entryFee,
+                state: opened.state,
+                roundNo: 0,
+                totalPool: 0,
+                phaseDeadlineMs: nil,
+                participants: [],
+                winnerId: nil,
+                winner: nil,
+                winnerAmount: nil,
+                revealUser: nil,
+                remainCount: nil
+            )
+            queuePanelAfterConfigDismissal()
+            await loadState(roomId: roomId, presentWhenActive: false)
+        } catch let apiError as PartyAPIError {
+            if case .business(let code, _) = apiError, code == "11503" {
+                // H5：房间已有进行中对局时不报错，直接进入当前对局。
+                queuePanelAfterConfigDismissal()
+                await loadState(roomId: roomId, presentWhenActive: false)
+                return
+            }
+            AppLogger.party.notice("[SuperWheel] open failed: \(String(describing: apiError), privacy: .private)")
+            AppToastCenter.shared.show(L10n.PartyRoom.superWheelActionFailed)
+        } catch {
+            AppLogger.party.notice("[SuperWheel] open failed: \(String(describing: error), privacy: .private)")
+            AppToastCenter.shared.show(L10n.PartyRoom.superWheelActionFailed)
+        }
+    }
+
+    func join() async {
+        guard let wheelState, !isPerformingAction else { return }
+        isPerformingAction = true
+        defer { isPerformingAction = false }
+        do {
+            try await PartyAPI.joinSuperWheel(roundId: wheelState.roundId)
+            await loadState(roomId: wheelState.roomId, presentWhenActive: false)
+        } catch {
+            AppLogger.party.notice("[SuperWheel] join failed: \(String(describing: error), privacy: .private)")
+            AppToastCenter.shared.show(L10n.PartyRoom.superWheelActionFailed)
+        }
+    }
+
+    /// iOS 同一展示容器不能在同一更新周期内切换两个 `.sheet`。
+    /// 配置 sheet 的 onDismiss 会调用 `presentQueuedPanelAfterConfigDismissal()`。
+    private func queuePanelAfterConfigDismissal() {
+        isConfigPresented = false
+        shouldPresentPanelAfterConfigDismissal = true
+    }
+
+    func presentQueuedPanelAfterConfigDismissal() {
+        guard shouldPresentPanelAfterConfigDismissal, !isConfigPresented else { return }
+        shouldPresentPanelAfterConfigDismissal = false
+        isPanelPresented = true
+    }
+
+    func bet(amount: Int) async {
+        guard let wheelState, amount > 0, !isPerformingAction else { return }
+        isPerformingAction = true
+        defer { isPerformingAction = false }
+        do {
+            try await PartyAPI.betSuperWheel(roundId: wheelState.roundId, amount: amount)
+            await loadState(roomId: wheelState.roomId, presentWhenActive: false)
+        } catch {
+            AppLogger.party.notice("[SuperWheel] bet failed: \(String(describing: error), privacy: .private)")
+            AppToastCenter.shared.show(L10n.PartyRoom.superWheelActionFailed)
+        }
+    }
+
+    func close() async {
+        guard let wheelState, !isPerformingAction else { return }
+        isPerformingAction = true
+        defer { isPerformingAction = false }
+        do {
+            try await PartyAPI.closeSuperWheel(roundId: wheelState.roundId)
+            await loadState(roomId: wheelState.roomId, presentWhenActive: false)
+        } catch {
+            AppLogger.party.notice("[SuperWheel] close failed: \(String(describing: error), privacy: .private)")
+            AppToastCenter.shared.show(L10n.PartyRoom.superWheelActionFailed)
+        }
+    }
+
+    func applyBroadcast(attachType: Int, payload: [String: Any]) {
+        guard let trackedRoomId else { return }
+        guard let incomingRoundId = PartySuperWheelBroadcast.string(payload["roundId"]), !incomingRoundId.isEmpty else {
+            return
+        }
+        let incomingRoomId = PartySuperWheelBroadcast.string(payload["roomId"])
+        guard incomingRoomId == nil || incomingRoomId == trackedRoomId else { return }
+        guard wheelState == nil || wheelState?.roundId == incomingRoundId else {
+            Task { await loadState(roomId: trackedRoomId, presentWhenActive: false) }
+            return
+        }
+
+        if attachType == PartyAttachType.superWheelStateSync.rawValue,
+           let fullState = try? PartySuperWheelState.from(payload),
+           fullState.roomId.isEmpty || fullState.roomId == trackedRoomId {
+            wheelState = fullState
+            isPanelPresented = true
+            refreshCountdown()
+            return
+        }
+
+        guard var state = wheelState else { return }
+        state.state = PartySuperWheelBroadcast.int(payload["state"]) ?? state.state
+        state.roundNo = PartySuperWheelBroadcast.int(payload["roundNo"]) ?? state.roundNo
+        state.totalPool = PartySuperWheelBroadcast.int64(payload["totalPool"]) ?? state.totalPool
+        state.phaseDeadlineMs = PartySuperWheelBroadcast.int64(payload["phaseDeadline"]) ?? state.phaseDeadlineMs
+
+        switch attachType {
+        case PartyAttachType.superWheelSpin.rawValue:
+            if let rawAliveIDs = PartySuperWheelBroadcast.array(payload["aliveUserIds"]) {
+                let aliveIDs = rawAliveIDs.compactMap(PartySuperWheelBroadcast.string)
+                state.participants = state.participants.map { participant in
+                    var updated = participant
+                    if !aliveIDs.contains(participant.userId) { updated.status = 2 }
+                    return updated
+                }
+            }
+        case PartyAttachType.superWheelReveal.rawValue:
+            state.revealUser = PartySuperWheelUser.from(payload["eliminatedUser"] as? [String: Any])
+            state.remainCount = PartySuperWheelBroadcast.int(payload["remainCount"])
+            if let userId = state.revealUser?.userId,
+               let index = state.participants.firstIndex(where: { $0.userId == userId }) {
+                state.participants[index].status = 2
+            }
+        case PartyAttachType.superWheelFinal.rawValue:
+            state.winner = PartySuperWheelUser.from(payload["winner"] as? [String: Any])
+            state.winnerId = PartySuperWheelBroadcast.string(payload["winnerId"]) ?? state.winner?.userId
+            if state.winner == nil,
+               let winnerId = state.winnerId,
+               let participant = state.participants.first(where: { $0.userId == winnerId }) {
+                state.winner = PartySuperWheelUser(
+                    userId: participant.userId,
+                    nickname: participant.nickname,
+                    avatar: participant.avatar
+                )
+            }
+            state.winnerAmount = PartySuperWheelBroadcast.int64(payload["winnerAmount"])
+        case PartyAttachType.superWheelClosed.rawValue:
+            state.state = 9
+            isPanelPresented = false
+        default:
+            break
+        }
+        wheelState = state
+        refreshCountdown()
+    }
+
+    func reset() {
+        countdownTask?.cancel()
+        countdownTask = nil
+        deadlineReconciliationTask?.cancel()
+        deadlineReconciliationTask = nil
+        wheelState = nil
+        config = nil
+        remainingSeconds = 0
+        isLoading = false
+        isConfigLoading = false
+        isPerformingAction = false
+        shouldPresentPanelAfterConfigDismissal = false
+        isPanelPresented = false
+        isConfigPresented = false
+        trackedRoomId = nil
+        stateRequestSequence &+= 1
+        reconciledDeadlineMs = nil
+    }
+
+    private func refreshCountdown() {
+        countdownTask?.cancel()
+        countdownTask = nil
+        updateRemainingSeconds()
+        guard wheelState?.phaseDeadlineMs != nil, isActive else { return }
+        countdownTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                guard !Task.isCancelled else { return }
+                self?.updateRemainingSeconds()
+            }
+        }
+    }
+
+    private func updateRemainingSeconds() {
+        guard let deadline = wheelState?.phaseDeadlineMs else {
+            remainingSeconds = 0
+            return
+        }
+        let newRemainingSeconds = max(0, Int(ceil(Double(deadline - Int64(Date().timeIntervalSince1970 * 1_000)) / 1_000)))
+        if remainingSeconds != newRemainingSeconds {
+            remainingSeconds = newRemainingSeconds
+        }
+        guard remainingSeconds == 0,
+              isActive,
+              reconciledDeadlineMs != deadline,
+              let roomId = trackedRoomId else { return }
+        reconciledDeadlineMs = deadline
+        deadlineReconciliationTask?.cancel()
+        deadlineReconciliationTask = Task { [weak self, deadline, roomId] in
+            guard let self else { return }
+            await self.loadState(roomId: roomId, presentWhenActive: false)
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            guard !Task.isCancelled,
+                  self.trackedRoomId == roomId,
+                  self.wheelState?.phaseDeadlineMs == deadline,
+                  self.isActive else { return }
+            await self.loadState(roomId: roomId, presentWhenActive: false)
+        }
+    }
+}
+
+private enum PartySuperWheelBroadcast {
+    static func string(_ value: Any?) -> String? {
+        guard let value else { return nil }
+        if let string = value as? String, !string.isEmpty { return string }
+        if let number = value as? NSNumber { return number.stringValue }
+        return nil
+    }
+
+    static func int(_ value: Any?) -> Int? {
+        if let number = value as? NSNumber { return number.intValue }
+        if let string = value as? String { return Int(string) }
+        return nil
+    }
+
+    static func int64(_ value: Any?) -> Int64? {
+        if let number = value as? NSNumber { return number.int64Value }
+        if let string = value as? String { return Int64(string) }
+        return nil
+    }
+
+    static func array(_ value: Any?) -> [Any]? { value as? [Any] }
+}
+
+// MARK: - Super Wheel UI
+
+/// 房主/房管从工具栏打开的开局面板。档位和玩法开关均由服务端配置决定。
+struct PartySuperWheelConfigSheet: View {
+    @ObservedObject var wheelStore: PartySuperWheelStore
+    let roomId: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedFee: Int?
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Text(L10n.PartyRoom.superWheelTitle)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(.white)
+
+            if wheelStore.isConfigLoading && wheelStore.config == nil {
+                ProgressView().tint(.white)
+            } else if !wheelStore.isEnabled {
+                Text(L10n.PartyRoom.superWheelUnavailable)
+                    .font(.system(size: 14))
+                    .foregroundColor(.white.opacity(0.7))
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(wheelStore.entryFees, id: \.self) { fee in
+                        Button { selectedFee = fee } label: {
+                            HStack {
+                                Image("partyGems")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 18, height: 18)
+                                Text("\(fee)")
+                                    .font(.system(size: 16, weight: .semibold))
+                                Spacer()
+                                Image(systemName: selectedFee == fee ? "checkmark.circle.fill" : "circle")
+                                    .foregroundColor(selectedFee == fee ? Theme.Palette.brandPink : .white.opacity(0.45))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 16)
+                            .frame(height: 48)
+                            .background(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .fill(selectedFee == fee ? Theme.Palette.brandPink.opacity(0.2) : Color.white.opacity(0.08))
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            Button {
+                guard let selectedFee else { return }
+                Task { await wheelStore.open(roomId: roomId, entryFee: selectedFee) }
+            } label: {
+                Group {
+                    if wheelStore.isPerformingAction {
+                        ProgressView().tint(.white)
+                    } else {
+                        Text(L10n.PartyRoom.superWheelOpen).font(.system(size: 16, weight: .bold))
+                    }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity, minHeight: 48)
+                .background(Capsule().fill(selectedFee == nil || !wheelStore.isEnabled
+                    ? Color.white.opacity(0.16)
+                    : Theme.Palette.brandPink))
+            }
+            .buttonStyle(.plain)
+            .disabled(selectedFee == nil || !wheelStore.isEnabled || wheelStore.isPerformingAction)
+        }
+        .padding(24)
+        .task {
+            await wheelStore.prepareConfig()
+            if selectedFee == nil { selectedFee = wheelStore.entryFees.first }
+        }
+        .onChange(of: wheelStore.entryFees) { fees in
+            if selectedFee == nil || !fees.contains(selectedFee ?? 0) {
+                selectedFee = fees.first
+            }
+        }
+        .onChange(of: wheelStore.isConfigPresented) { visible in
+            if !visible { dismiss() }
+        }
+    }
+}
+
+/// 所有人可查看的转盘状态与操作面板。动画由服务端阶段广播推进；客户端不自行抽取结果。
+struct PartySuperWheelPanel: View {
+    @ObservedObject var wheelStore: PartySuperWheelStore
+    let isRoomOwner: Bool
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(L10n.PartyRoom.superWheelTitle)
+                        .font(.system(size: 20, weight: .bold))
+                    Text(statusText)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white.opacity(0.68))
+                }
+                Spacer()
+                if wheelStore.remainingSeconds > 0 {
+                    Text("\(wheelStore.remainingSeconds)s")
+                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .foregroundColor(Color(hex: 0xFFDD63))
+                }
+                Button {
+                    wheelStore.isPanelPresented = false
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(.white.opacity(0.75))
+                }
+                .buttonStyle(.plain)
+            }
+
+            if let state = wheelStore.wheelState {
+                HStack(spacing: 5) {
+                    Image("partyGems")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 18, height: 18)
+                    Text("\(state.totalPool)")
+                        .font(.system(size: 19, weight: .bold))
+                    Text(L10n.PartyRoom.superWheelPool)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white.opacity(0.62))
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.08)))
+
+                PartySuperWheelDial(state: state)
+
+                ScrollView {
+                    participantGrid(state.participants)
+                }
+                .frame(maxHeight: 126)
+
+                if let reveal = state.revealUser, state.state == 7 {
+                    Text(String(format: L10n.PartyRoom.superWheelOutFormat, reveal.nickname ?? L10n.PartyRoom.superWheelPlayer))
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.88))
+                }
+                if let winner = state.winner, state.state == 8 {
+                    Text(String(
+                        format: L10n.PartyRoom.superWheelWinnerFormat,
+                        winner.nickname ?? L10n.PartyRoom.superWheelPlayer,
+                        state.winnerAmount ?? 0
+                    ))
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(Color(hex: 0xFFDD63))
+                }
+            } else {
+                ProgressView().tint(.white).frame(maxHeight: .infinity)
+            }
+
+            actionBar
+        }
+        .padding(20)
+        .preferredColorScheme(.dark)
+    }
+
+    private func participantGrid(_ participants: [PartySuperWheelParticipant]) -> some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 12) {
+            ForEach(participants) { participant in
+                VStack(spacing: 4) {
+                    CachedAsyncImage(url: participant.avatar.flatMap(URL.init(string:)), contentMode: .fill, persistent: true) {
+                        Circle().fill(Color.white.opacity(0.14))
+                    }
+                    .frame(width: 42, height: 42)
+                    .clipShape(Circle())
+                    .opacity(participant.status == 2 ? 0.35 : 1)
+                    Text(participant.nickname ?? L10n.PartyRoom.superWheelPlayer)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(participant.status == 2 ? 0.4 : 0.85))
+                        .lineLimit(1)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder
+    private var actionBar: some View {
+        if wheelStore.canJoin {
+            actionButton(title: L10n.PartyRoom.superWheelJoin) { Task { await wheelStore.join() } }
+        } else if wheelStore.canBet {
+            Menu {
+                ForEach(wheelStore.entryFees, id: \.self) { amount in
+                    Button("\(L10n.PartyRoom.superWheelBet) +\(amount)") { Task { await wheelStore.bet(amount: amount) } }
+                }
+            } label: {
+                actionButtonLabel(title: L10n.PartyRoom.superWheelBet)
+            }
+            .disabled(wheelStore.isPerformingAction)
+        } else if isRoomOwner && wheelStore.isActive {
+            actionButton(title: L10n.PartyRoom.superWheelClose, destructive: true) { Task { await wheelStore.close() } }
+        }
+    }
+
+    private func actionButton(title: String, destructive: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) { actionButtonLabel(title: title, destructive: destructive) }
+            .buttonStyle(.plain)
+            .disabled(wheelStore.isPerformingAction)
+    }
+
+    private func actionButtonLabel(title: String, destructive: Bool = false) -> some View {
+        Group {
+            if wheelStore.isPerformingAction {
+                ProgressView().tint(.white)
+            } else {
+                Text(title).font(.system(size: 16, weight: .bold))
+            }
+        }
+        .foregroundColor(.white)
+        .frame(maxWidth: .infinity, minHeight: 46)
+        .background(Capsule().fill(destructive ? Color.red.opacity(0.86) : Theme.Palette.brandPink))
+    }
+
+    private var statusText: String {
+        switch wheelStore.wheelState?.state {
+        case 1, 2: return L10n.PartyRoom.superWheelWaiting
+        case 3: return L10n.PartyRoom.superWheelSignup
+        case 4: return L10n.PartyRoom.superWheelPreparing
+        case 5: return L10n.PartyRoom.superWheelBetting
+        case 6: return L10n.PartyRoom.superWheelSpinning
+        case 7: return L10n.PartyRoom.superWheelRoundResult
+        case 8: return L10n.PartyRoom.superWheelFinalResult
+        default: return ""
+        }
+    }
+}
+
+/// 转盘只依据服务端已同步的轮次和阶段播放视觉过渡，绝不在客户端推导淘汰或获胜结果。
+private struct PartySuperWheelDial: View {
+    let state: PartySuperWheelState
+    @State private var rotation = 0.0
+
+    private var visibleParticipants: [PartySuperWheelParticipant] {
+        Array(state.participants.prefix(8))
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    AngularGradient(
+                        colors: [Color(hex: 0xFD3F86), Color(hex: 0x714CFF), Color(hex: 0xFFB84D), Color(hex: 0xFD3F86)],
+                        center: .center
+                    )
+                )
+                .overlay(Circle().stroke(Color.white.opacity(0.42), lineWidth: 2))
+                .rotationEffect(.degrees(rotation))
+
+            ForEach(Array(visibleParticipants.enumerated()), id: \.element.id) { index, participant in
+                participantAvatar(participant)
+                    .offset(y: -55)
+                    .rotationEffect(.degrees(Double(index) * 360 / Double(max(visibleParticipants.count, 1))))
+                    .rotationEffect(.degrees(rotation))
+            }
+
+            Circle()
+                .fill(Color(hex: 0x301151))
+                .frame(width: 70, height: 70)
+                .overlay(Circle().stroke(Color.white.opacity(0.5), lineWidth: 1))
+            VStack(spacing: 2) {
+                Text("#\(max(1, state.roundNo))")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                Text(L10n.PartyRoom.superWheelTitle)
+                    .font(.system(size: 9, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundColor(.white)
+
+            Image(systemName: "triangle.fill")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(Color(hex: 0xFFEE82))
+                .rotationEffect(.degrees(180))
+                .offset(y: -91)
+        }
+        .frame(width: 184, height: 184)
+        .frame(maxWidth: .infinity)
+        .onAppear(perform: spinForCurrentState)
+        .onChange(of: state.roundNo) { _ in spinForCurrentState() }
+        .onChange(of: state.state) { _ in spinForCurrentState() }
+        .accessibilityLabel(L10n.PartyRoom.superWheelTitle)
+    }
+
+    private func participantAvatar(_ participant: PartySuperWheelParticipant) -> some View {
+        CachedAsyncImage(url: participant.avatar.flatMap(URL.init(string:)), contentMode: .fill, persistent: true) {
+            Circle().fill(Color.white.opacity(0.22))
+        }
+        .frame(width: 30, height: 30)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(.white.opacity(0.8), lineWidth: 1))
+        .opacity(participant.status == 2 ? 0.32 : 1)
+    }
+
+    private func spinForCurrentState() {
+        let turns = state.state == 6 ? 3.0 : 0.5
+        withAnimation(.easeOut(duration: state.state == 6 ? 1.15 : 0.4)) {
+            rotation += 360 * turns
+        }
+    }
+}
+
+struct PartySuperWheelFloatingButton: View {
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            Image(systemName: "circle.dotted.circle")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(Color(hex: 0xFFDD63))
+                .frame(width: 46, height: 46)
+                .background(Circle().fill(Color(hex: 0x4C286E).opacity(0.94)))
+                .overlay(Circle().stroke(Color(hex: 0xFFDD63).opacity(0.55), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.PartyRoom.superWheelTitle)
     }
 }

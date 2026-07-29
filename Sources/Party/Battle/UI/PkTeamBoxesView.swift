@@ -39,7 +39,6 @@ struct PkTeamBoxesView: View {
                 .frame(maxWidth: .infinity)
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 4)
     }
 
     // MARK: - Team box
@@ -52,8 +51,8 @@ struct PkTeamBoxesView: View {
             row(Array(slots.suffix(from: min(3, slots.count))), color: color, side: side)
         }
         .padding(.horizontal, 6)
-        .padding(.vertical, 12)
-        .frame(minHeight: 160)
+        .padding(.vertical, 4)
+        .frame(minHeight: 150)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(teamBoxBackground(color: color))
@@ -142,7 +141,7 @@ struct PkTeamBoxesView: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)
         } else {
-            Text("None")
+            Text(L10n.Party.Battle.none)
                 .font(.system(size: 9, weight: .medium))
                 .foregroundColor(.white.opacity(0.6))
         }
