@@ -471,15 +471,12 @@ final class PropsInventoryStore: ObservableObject {
     }
 }
 
-// MARK: - AnchorInfoConsumerBridge（M1 内嵌 stub · M3 替换真实现）
+// MARK: - AnchorInfoConsumerBridge
 
-/// L3 消费点桥接（M1 内嵌 · 真实现在 M3 拉起 `PropsWearBridge` + `AnchorInfoStore.applyWearChange`）。
+/// 道具消费点桥接。
 ///
-/// M1 阶段：仅提供内存态 stub，让 Store 单测可跑 + 后续 M3 平滑替换。
-///
-/// M3 会：
-/// - `write` 转发到 `AnchorInfoStore.shared.applyWearChange` + `saveToDisk`
-/// - `currentURL(for:)` 读 `AnchorInfoStore.shared.mine.headFrame/chatBubble/cardFrame`
+/// Chat Skin 已接入真实 `AnchorInfoStore.mine.chatBubble`，使装备结果可以立即进入所有消息发送路径；
+/// 其余道具类型仍保留原有内存桥接，等待各自的资料字段完成对齐。
 @MainActor
 final class AnchorInfoConsumerBridge {
     static let shared = AnchorInfoConsumerBridge()
@@ -488,7 +485,14 @@ final class AnchorInfoConsumerBridge {
     private var mineURLs: [PropItemType: String] = [:]
 
     func currentURL(for itemType: PropItemType) -> String? {
-        mineURLs[itemType]
+        #if !HILY_TESTS
+        if itemType == .chatSkin,
+           let chatBubble = AnchorInfoStore.shared.currentChatBubble,
+           !chatBubble.isEmpty {
+            return chatBubble
+        }
+        #endif
+        return mineURLs[itemType]
     }
 
     func write(itemType: PropItemType, url: String?) {
@@ -497,6 +501,11 @@ final class AnchorInfoConsumerBridge {
         } else {
             mineURLs.removeValue(forKey: itemType)
         }
+        #if !HILY_TESTS
+        if itemType == .chatSkin {
+            AnchorInfoStore.shared.applyChatBubble(url)
+        }
+        #endif
     }
 
     /// SessionStore.logout 挂钩

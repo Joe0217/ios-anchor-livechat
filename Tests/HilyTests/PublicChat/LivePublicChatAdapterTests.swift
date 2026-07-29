@@ -25,10 +25,11 @@ final class LivePublicChatAdapterTests: XCTestCase {
         let m = PublicChatMessage(text: "", isSystem: false, senderNickname: "u1",
                                   messageType: .gift(giftIconUrl: "http://x", giftName: "Rose", count: 3))
         let u = LivePublicChatAdapter.adapt(m)
-        if case .gift(let url, let name, let count) = u.variant {
+        if case .gift(let url, let name, let count, let recipients) = u.variant {
             XCTAssertEqual(url, "http://x")
             XCTAssertEqual(name, "Rose")
             XCTAssertEqual(count, 3)
+            XCTAssertEqual(recipients, [])
         } else { XCTFail() }
     }
 

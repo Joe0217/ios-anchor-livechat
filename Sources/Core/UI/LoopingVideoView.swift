@@ -30,6 +30,8 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "Looping
 /// **生命周期**：`dismantleUIView` 由 SwiftUI 精确清理（对齐 `.claude/rules/swiftui-camera-preview.md` §3）。
 struct LoopingVideoView: UIViewRepresentable {
     let url: URL?
+    /// 背景视频默认静音；权益全屏预览可显式打开原始音轨。
+    var isMuted: Bool = true
     var onReady: (() -> Void)? = nil
 
     /// URLDiskCache namespace（与 YYEVACache 隔离）
@@ -37,12 +39,12 @@ struct LoopingVideoView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> PlayerContainerView {
         let v = PlayerContainerView()
-        context.coordinator.attach(view: v, url: url, onReady: onReady)
+        context.coordinator.attach(view: v, url: url, isMuted: isMuted, onReady: onReady)
         return v
     }
 
     func updateUIView(_ uiView: PlayerContainerView, context: Context) {
-        context.coordinator.update(url: url, onReady: onReady)
+        context.coordinator.update(url: url, isMuted: isMuted, onReady: onReady)
     }
 
     static func dismantleUIView(_ uiView: PlayerContainerView, coordinator: Coordinator) {
@@ -78,9 +80,9 @@ struct LoopingVideoView: UIViewRepresentable {
         /// AVPlayer 在 app 切后台被系统 pause，回前台需显式 play() 恢复
         private var foregroundObserver: NSObjectProtocol?
 
-        func attach(view: PlayerContainerView, url: URL?, onReady: (() -> Void)?) {
+        func attach(view: PlayerContainerView, url: URL?, isMuted: Bool, onReady: (() -> Void)?) {
             let player = AVQueuePlayer()
-            player.isMuted = true
+            player.isMuted = isMuted
             // Looper 推入 duplicate item 无缝循环；.advance 避免 item 结束时 SDK 暂停
             player.actionAtItemEnd = .advance
             view.playerLayer.player = player
@@ -92,8 +94,9 @@ struct LoopingVideoView: UIViewRepresentable {
             load(url: url)
         }
 
-        func update(url: URL?, onReady: (() -> Void)?) {
+        func update(url: URL?, isMuted: Bool, onReady: (() -> Void)?) {
             self.onReady = onReady
+            player?.isMuted = isMuted
             let newStr = url?.absoluteString ?? ""
             guard newStr != currentURLStr else { return }
             load(url: url)

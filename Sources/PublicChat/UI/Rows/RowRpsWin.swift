@@ -8,21 +8,20 @@ struct RowRpsWin: View {
     let sender: SenderProfile?
     let medalUrl: String?
     let medalHours: Double?
+    let gameType: LiveSmallGameType
     let theme: PublicChatTheme
+    let onTapNickname: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
-            Image(systemName: "hand.raised.fill")
+            Image(systemName: gameIconName)
                 .font(.system(size: 20))
                 .foregroundColor(.yellow)
                 .frame(width: 28, height: 28)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
-                    Text(sender?.nickname ?? "")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(Color(red: 1.0, green: 224/255, blue: 0))   // #FFE000
-                        .lineLimit(1)
-                    Text("wins RPS")
+                    nickname
+                    Text(gameWinText)
                         .font(.system(size: 13))
                         .foregroundColor(.white)
                 }
@@ -63,10 +62,43 @@ struct RowRpsWin: View {
         )
     }
 
+    @ViewBuilder
+    private var nickname: some View {
+        let label = Text(sender?.nickname ?? "")
+            .font(.system(size: 13, weight: .bold))
+            .foregroundColor(Color(red: 1.0, green: 224/255, blue: 0))   // #FFE000
+            .lineLimit(1)
+        if let onTapNickname {
+            Button(action: onTapNickname) { label }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(sender?.nickname ?? ""))
+        } else {
+            label
+        }
+    }
+
     private func formattedHours(_ value: Double) -> String {
         if value.rounded() == value, value >= Double(Int.min), value <= Double(Int.max) {
             return String(Int(value))
         }
         return String(value)
+    }
+
+    private var gameIconName: String {
+        switch gameType {
+        case .rockPaperScissors:
+            return "hand.raised.fill"
+        case .luckyDice:
+            return "die.face.5.fill"
+        }
+    }
+
+    private var gameWinText: String {
+        switch gameType {
+        case .rockPaperScissors:
+            return L10n.publicScreenRpsWin
+        case .luckyDice:
+            return L10n.publicScreenLuckyDiceWin
+        }
     }
 }

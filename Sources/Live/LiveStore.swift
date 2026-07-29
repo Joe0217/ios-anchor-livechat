@@ -133,6 +133,9 @@ final class LiveStore: ObservableObject {
     /// 用途：pauseForCall 内调 agora?.leave() 离开直播频道；resumeCall 内调 agora?.join() 回直播。
     /// weak：LiveStore 不强持有，LiveRoomView 销毁时自动清理。
     private weak var agora: AgoraManager?
+    /// 与 RTC 同生命周期的本地采集实例。下播必须由 Store 主动关闭，不能依赖 View 卸载；
+    /// 否则下播接口慢/失败时 LiveRoomView 仍在，摄像头会继续占用。
+    private weak var camera: CameraManager?
 
     private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveStore")
 
@@ -142,16 +145,9 @@ final class LiveStore: ObservableObject {
 // MARK: - 生命周期入口（spec §2.4）
 
 extension LiveStore {
-    /// idle → preparing。LivePrepareView 启动 onAppear 调用。
-    func prepare() {
-        guard state == .idle else { return }
-        state = .preparing
-    }
-
-    /// M1 临时入口：LiveRoomView 接力 LivePrepareView 已建立的房间，启动心跳 + 网络监控。
-    /// M4 重构：startLive 内部完整三接口串行后删除本入口。
+    /// LiveRoomView 建房成功后接力进入 living，启动心跳和网络监控。
     func attachLiving(roomInfo: LiveRoomInfo) {
-        guard state == .idle || state == .preparing else {
+        guard state == .idle else {
             logger.warning("attachLiving ignored in state=\(String(describing: self.state))")
             return
         }
@@ -167,6 +163,7 @@ extension LiveStore {
         monitor.start()
         backgroundMonitor.start()
         elapsedTimerStore.start()
+        LiveSessionRegistry.shared.activate(self)
         logger.info("attachLiving roomId=\(roomInfo.id ?? -1)")
     }
 
@@ -178,16 +175,13 @@ extension LiveStore {
     ///   主动 leave/join 直播 RTC 频道（不强持有，LiveRoomView 销毁时自动清理）
     func wire(_ agora: AgoraManager, camera: CameraManager? = nil) {
         self.agora = agora
+        self.camera = camera
+        // 在启动本地采集前注册，覆盖建房进入页尚未转为 living 时的登出/资格撤销。
+        LiveSessionRegistry.shared.activate(self)
         agora.liveStore = self
         agora.networkMonitor = monitor
         monitor.agora = agora
         monitor.camera = camera
-    }
-
-    /// preparing → starting → living。M4 完整实现。
-    func startLive(title: String) async {
-        // TODO(M4): spec §8.2 + §14 任务 11；M1 用 attachLiving 替代
-        logger.warning("LiveStore.startLive not implemented yet (M4); use attachLiving")
     }
 
     // MARK: - B3 禁言状态机 入口方法
@@ -241,12 +235,13 @@ extension LiveStore {
     /// living → ending → ended(endType=1)。LiveRoomView 点结束直播调用。
     func endLive() async {
         guard tryEnterEnding() else { return }
+        // 本地媒体与下播 HTTP 解耦：请求失败、超时都不得保留摄像头或麦克风。
+        await teardown()
         do {
             try await LiveService.endLiveRoom(endType: 1)
         } catch {
             logger.error("endLiveRoom failed during endLive: \(String(describing: error))")
         }
-        await teardown()
         state = .ended
         endType = 1
         endTimestamp = Int64(Date().timeIntervalSince1970 * 1000)   // 结果页 spec §2.4
@@ -256,7 +251,7 @@ extension LiveStore {
     /// 重置状态（LiveResultView back 时调用，切 Home Tab 前清干净）。
     /// - 状态机：`.ended` → `.idle`
     /// - 字段：begin/endTimestamp、endType、roomId 等房间上下文清空
-    /// - **不**主动 leave RTC / NIM / 停心跳：LiveRoomView.onDisappear 已负责
+    /// - 本地 RTC / 相机 / 心跳已在 endLive / forceEnd 的 teardown 中关闭；NIM 仍由 LiveRoomView.onDisappear 负责
     func reset() {
         guard state == .ended else {
             logger.warning("reset ignored in state=\(String(describing: self.state))")
@@ -285,12 +280,13 @@ extension LiveStore {
         // callState=1 时命中 = 通话中被下播（异常）；isWaitingReturnLive=true 时命中 = 通话结束返回直播路径中
         logger.notice("🛑 [forceEnd] reason=\(String(describing: reason)) sub=\(sub) state=\(String(describing: self.state)) callState=\(self.callState) isWaitingReturnLive=\(self.isWaitingReturnLive)")
         guard tryEnterForceEnding(reason) else { return }
+        // 强制下播同样先断开本地媒体，不能被服务端 endLiveRoom 的结果阻塞。
+        await teardown()
         do {
             try await LiveService.endLiveRoom(endType: reason.code)
         } catch {
             logger.error("endLiveRoom failed during forceEnd: \(String(describing: error))")
         }
-        await teardown()
         state = .ended
         endType = reason.code
         endTimestamp = Int64(Date().timeIntervalSince1970 * 1000)   // 结果页 spec §2.4
@@ -328,6 +324,7 @@ extension LiveStore {
     }
 
     private func teardown() async {
+        await deactivateLocalMedia()
         heartbeat.stop()
         monitor.stop()
         backgroundMonitor.stop()
@@ -347,6 +344,60 @@ extension LiveStore {
         // 若不重置，B 场 attachLiving 直接进 .living 时输入框恒 disabled+"muted"，主播死锁无法发言
         isBlockUser = false
         whoBlock = .none
+        LiveSessionRegistry.shared.deactivate(self)
+    }
+
+    /// 停止本地采集和 RTC 发布。此处只处理本地设备/SDK，不依赖也不等待业务接口结果。
+    private func deactivateLocalMedia() async {
+        if let camera {
+            BeautyPipelineSharer.shared.detach(camera.renderer as AnyObject & BeautyRenderer)
+            camera.tearDown()
+            camera.stop()
+            self.camera = nil
+            monitor.camera = nil
+        }
+        if let agora {
+            await agora.leave()
+            self.agora = nil
+            monitor.agora = nil
+        }
+    }
+}
+
+/// RootView 无法直接持有 LiveRoomView 私有的 LiveStore；该注册表只保存弱引用，
+/// 使登出/资格撤销能在 View 卸载前同步收掉本地媒体。
+@MainActor
+final class LiveSessionRegistry {
+    static let shared = LiveSessionRegistry()
+
+    private weak var activeStore: LiveStore?
+
+    private init() {}
+
+    func activate(_ store: LiveStore) {
+        activeStore = store
+    }
+
+    func deactivate(_ store: LiveStore) {
+        if activeStore === store {
+            activeStore = nil
+        }
+    }
+
+    func stopForSessionEnd() async {
+        await activeStore?.stopForSessionEnd()
+    }
+}
+
+extension LiveStore {
+    /// 登出/资格撤销仅做本地收尾，不能再依赖 endLiveRoom HTTP。
+    func stopForSessionEnd() async {
+        await teardown()
+        // 会话已失效，不应触发 LiveRoomView 的 `.ended` → 直播结果页跳转。
+        // RootView 随后会切到登录/受限页面，保持 idle 避免下次登录带入旧直播导航状态。
+        state = .idle
+        inFlightEnd = false
+        logger.info("stopForSessionEnd: local live media stopped")
     }
 }
 

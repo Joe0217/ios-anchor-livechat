@@ -50,7 +50,7 @@ struct PaidBulletFloat: View {
         await Task.yield()
         guard !Task.isCancelled else { return }
 
-        withAnimation(.easeOut(duration: Metrics.enterDuration)) {
+        withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: Metrics.enterDuration)) {
             phase = .entering
         }
         guard await sleep(Metrics.enterDuration) else { return }
@@ -58,7 +58,7 @@ struct PaidBulletFloat: View {
         phase = .staying
         guard await sleep(stayDuration(for: item)) else { return }
 
-        withAnimation(.easeIn(duration: Metrics.leaveDuration)) {
+        withAnimation(.timingCurve(0.4, 0, 0.2, 1, duration: Metrics.leaveDuration)) {
             phase = .leaving
         }
         guard await sleep(Metrics.leaveDuration), !Task.isCancelled else { return }

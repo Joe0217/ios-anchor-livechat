@@ -22,6 +22,8 @@ struct RowRegularText: View {
     /// v24（B4 · 对齐 H5 §9.12.4 hi 气泡）：tap hi 图标回调；nil 时不显示图标
     /// （PublicChatRow 门控：仅 `.text` variant + `sender?.isSelf == false` + `theme.scene == .live` 时传入非 nil）
     let onTapHi: (() -> Void)?
+    /// 发送者昵称点击名片卡；自己或缺少 userId 时由上层传 nil。
+    let onTapNickname: (() -> Void)?
 
     init(sender: SenderProfile?,
          content: String,
@@ -31,7 +33,8 @@ struct RowRegularText: View {
          theme: PublicChatTheme,
          onTapTranslate: (() -> Void)? = nil,
          isTranslating: Bool = false,
-         onTapHi: (() -> Void)? = nil) {
+         onTapHi: (() -> Void)? = nil,
+         onTapNickname: (() -> Void)? = nil) {
         self.sender = sender
         self.content = content
         self.mentions = mentions
@@ -41,15 +44,29 @@ struct RowRegularText: View {
         self.onTapTranslate = onTapTranslate
         self.isTranslating = isTranslating
         self.onTapHi = onTapHi
+        self.onTapNickname = onTapNickname
     }
 
     var body: some View {
         let showTranslateInline = translation == nil && onTapTranslate != nil
+        let hasChatSkin = sender?.chatBubble?.isEmpty == false
         let bubble = VStack(alignment: .leading, spacing: 3) {
-            HStack(alignment: .top, spacing: 4) {
-                badgesCluster
-                inlineText(showTranslate: showTranslateInline)
+            if hasChatSkin {
+                // 皮肤边框的内容宽度比默认气泡窄。身份/昵称独占第一行，正文放第二行，
+                // 避免等级标签与长正文相互挤压。
+                HStack(alignment: .center, spacing: 4) {
+                    badgesCluster
+                    nicknameAndReply
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                messageText(showTranslate: showTranslateInline)
                     .fixedSize(horizontal: false, vertical: true)
+            } else {
+                HStack(alignment: .center, spacing: 4) {
+                    badgesCluster
+                    inlineText(showTranslate: showTranslateInline)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
             if let t = translation, !t.isEmpty {
                 Divider().overlay(Color.white.opacity(0.16))
@@ -59,15 +76,15 @@ struct RowRegularText: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        // H5 `.chat-bubble-custom` 有 `padding: 0 !important`，仅保留它的 24/14
+        // border 内容区，不能叠加直播行默认的 `px8 py4`。
+        .padding(.horizontal, hasChatSkin ? ChatSkinMetrics.horizontalContentInset : 8)
+        .padding(.vertical, hasChatSkin ? ChatSkinMetrics.verticalContentInset : 4)
+        .frame(minHeight: 22)
         .frame(maxWidth: 249, alignment: .leading)
-        .background(Color.black.opacity(0.16), in: RoundedRectangle(cornerRadius: 12))
+        .background(bubbleBackground)
+        .padding(.vertical, hasChatSkin ? ChatSkinMetrics.livePublicMessageVerticalSpacing : 0)
         .contentShape(Rectangle())
-        .onTapGesture {
-            if showTranslateInline && !isTranslating { onTapTranslate?() }
-        }
-        .accessibilityAddTraits(showTranslateInline ? .isButton : [])
         .accessibilityLabel(showTranslateInline
             ? Text("\(sender?.nickname ?? ""): \(content) \(L10n.publicScreenTranslate)")
             : Text("\(sender?.nickname ?? ""): \(content)"))
@@ -99,16 +116,38 @@ struct RowRegularText: View {
     @ViewBuilder private var badgesCluster: some View {
         if let s = sender {
             HStack(spacing: 4) {
+                if s.guardianLevel > 0, theme.scene == .live {
+                    Image(GuardianArtwork.tabIcon(for: GuardianLevel.decoded(s.guardianLevel)))
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 14, height: 14)
+                        .accessibilityLabel(Text(L10n.guardianTitle))
+                }
                 // v24（B1 · H5 §9.6 messageScroller.vue L373）：大 R 徽章前置于 Level/VIP；
                 // 仅 Live 场景 rendering（H5 铁律"仅主态"—— sender.isActiveTycoon 由 LivePublicChatAdapter 门控透传）
                 if s.isActiveTycoon && theme.scene == .live { ActiveTycoonBadge(style: .bigRText, size: .small) }
                 if let lv = s.userLevel, lv > 0 { UserLevelBadge(level: lv, size: .small) }
-                if s.isVip { VIPBadge(size: .small) }
+                if s.isVip {
+                    VIPBadge(size: .small)
+                } else if s.isNewUser {
+                    LiveNewUserBadge()
+                }
             }
         }
     }
 
-    /// 昵称 + 正文 + (可选)inline 翻译图标 —— 全用 Text concat；SwiftUI 自动 wrap 到多行
+    @ViewBuilder
+    private var bubbleBackground: some View {
+        if let raw = sender?.chatBubble, let url = URL(string: raw), !raw.isEmpty {
+            NinePatchImageView(url: url)
+        } else if theme.scene == .live, let guardianLevel = sender?.guardianLevel, guardianLevel > 0 {
+            GuardianChatBubbleBackground(level: guardianLevel)
+        } else {
+            RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.16))
+        }
+    }
+
+    /// 默认气泡中的昵称 + 正文 + (可选)inline 翻译图标。
     /// 翻译图标随文字末尾 wrap 到最后一行末（对齐 iOS 用户"跟在文字后面"预期）
     ///
     /// v24（B4 M6+M7 finding · 对齐 H5 messageScroller.vue L352-354）：
@@ -118,42 +157,129 @@ struct RowRegularText: View {
     /// - **有 replyToNick**：主播 `@` 用户格式 `{anchorNick} @ {replyNick}: {text}`
     ///   - anchorNick 主播粉，`@` 白 + 空格，replyNick 青绿 + 尾冒号空格，text 白
     ///   - **iOS anchor 自发消息** 恒进此分支（只有主播能发带 replyNick 的公屏），因此 anchorNick 上主播粉
-    private func inlineText(showTranslate: Bool) -> Text {
+    private func inlineText(showTranslate: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            nicknameAndReply
+            messageText(showTranslate: showTranslate)
+        }
+    }
+
+    /// 皮肤气泡首行：昵称及 @ 回复目标。正文不在此行，避免长文压缩等级标签。
+    private var nicknameAndReply: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 0) {
+            nicknameLabel
+            replyPrefix
+        }
+    }
+
+    @ViewBuilder
+    private var nicknameLabel: some View {
+        if let onTapNickname {
+            Button(action: onTapNickname) {
+                nicknameText
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(sender?.nickname ?? ""))
+        } else {
+            nicknameText
+        }
+    }
+
+    private var nicknameText: Text {
         let anchorPink = Color(red: 254/255, green: 0, blue: 222/255)   // #FE00DE
         let userTeal   = Color(red: 26/255, green: 1.0, blue: 205/255)  // #1AFFCD
         let nickColor: Color = (sender?.isHost == true) ? anchorPink : userTeal
         let hasReply = (replyToNick?.isEmpty == false)
         // 有 reply 时 nick 后无冒号；无 reply 保留冒号
         let nickSuffix = hasReply ? " " : ": "
-        let nickText = Text("\(sender?.nickname ?? "")\(nickSuffix)")
+        return Text("\(sender?.nickname ?? "")\(nickSuffix)")
             .font(theme.nicknameFont)
             .foregroundColor(nickColor)
-        let replyPrefix: Text = {
-            guard let nick = replyToNick, !nick.isEmpty else { return Text("") }
-            // 「@ 青绿 replyNick: 」白 @ + 空格 + 青绿 nick + 白冒号 + 空格
-            return Text("@ ")
-                .font(theme.textFont).foregroundColor(.white)
-                + Text(nick)
-                .font(theme.textFont).foregroundColor(userTeal)
-                + Text(": ")
-                .font(theme.textFont).foregroundColor(.white)
-        }()
+    }
+
+    private var replyPrefix: Text {
+        let userTeal = Color(red: 26/255, green: 1.0, blue: 205/255)
+        guard let nick = replyToNick, !nick.isEmpty else { return Text("") }
+        // 「@ 青绿 replyNick: 」白 @ + 空格 + 青绿 nick + 白冒号 + 空格
+        return Text("@ ")
+            .font(theme.textFont).foregroundColor(.white)
+            + Text(nick)
+            .font(theme.textFont).foregroundColor(userTeal)
+            + Text(": ")
+            .font(theme.textFont).foregroundColor(.white)
+    }
+
+    private func messageText(showTranslate: Bool) -> some View {
         let bodyText = Text(content)
             .font(theme.textFont)
             .foregroundColor(.white)
-        var result = nickText + replyPrefix + bodyText
-        if showTranslate {
-            // SF Symbol Image 作为 Text attachment concat；空格分隔避免紧贴末字
-            // v25:loading 时用 hourglass(iOS 16 静态兼容);tap 期间视觉反馈
-            let iconName = isTranslating ? "hourglass" : "character.book.closed.fill"
-            let iconColor: Color = isTranslating
-                ? Color.white.opacity(0.5)
-                : Color(red: 196/255, green: 155/255, blue: 1.0) // #C49BFF
-            let iconText = Text(" ") + Text(Image(systemName: iconName))
-                .font(theme.textFont)
-                .foregroundColor(iconColor)
-            result = result + iconText
+        let messageText: Text = {
+            var result = bodyText
+            if showTranslate {
+                // SF Symbol Image 作为 Text attachment concat；空格分隔避免紧贴末字
+                // v25:loading 时用 hourglass(iOS 16 静态兼容);tap 期间视觉反馈
+                let iconName = isTranslating ? "hourglass" : "character.book.closed.fill"
+                let iconColor: Color = isTranslating
+                    ? Color.white.opacity(0.5)
+                    : Color(red: 196/255, green: 155/255, blue: 1.0) // #C49BFF
+                let iconText = Text(" ") + Text(Image(systemName: iconName))
+                    .font(theme.textFont)
+                    .foregroundColor(iconColor)
+                result = result + iconText
+            }
+            return result
+        }()
+        let tappableMessageText = messageText
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if showTranslate && !isTranslating { onTapTranslate?() }
+            }
+            .accessibilityAddTraits(showTranslate ? .isButton : [])
+
+        return tappableMessageText
+    }
+}
+
+/// H5 `messageScroller.vue` 的守护气泡降级样式。
+/// 自定义 chatBubble URL 始终优先；缺失时才按铜/银/金等级绘制此本地背景。
+private struct GuardianChatBubbleBackground: View {
+    let level: Int
+    @State private var goldGlow = false
+
+    var body: some View {
+        switch level {
+        case 3...:
+            RoundedRectangle(cornerRadius: 12)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(red: 1, green: 195 / 255, blue: 58 / 255).opacity(0.30),
+                                 Color(red: 1, green: 235 / 255, blue: 150 / 255).opacity(0.12)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(red: 1, green: 210 / 255, blue: 80 / 255).opacity(0.85), lineWidth: 1))
+                .shadow(color: Color(red: 1, green: 200 / 255, blue: 60 / 255).opacity(goldGlow ? 0.58 : 0.25), radius: goldGlow ? 7 : 3)
+                .onAppear {
+                    withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+                        goldGlow = true
+                    }
+                }
+        case 2:
+            RoundedRectangle(cornerRadius: 12)
+                .fill(
+                    LinearGradient(
+                        colors: [Color(red: 192 / 255, green: 204 / 255, blue: 218 / 255).opacity(0.28),
+                                 Color(red: 192 / 255, green: 204 / 255, blue: 218 / 255).opacity(0.10)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(red: 220 / 255, green: 230 / 255, blue: 245 / 255).opacity(0.70), lineWidth: 1))
+        default:
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(red: 1, green: 106 / 255, blue: 61 / 255).opacity(0.18))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(red: 1, green: 106 / 255, blue: 61 / 255).opacity(0.45), lineWidth: 1))
         }
-        return result
     }
 }

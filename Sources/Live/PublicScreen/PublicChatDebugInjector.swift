@@ -1,7 +1,7 @@
 #if DEBUG
 import Foundation
 
-/// v19 DEBUG 公屏消息注入器 —— 一键注入所有 13 类 row 的 mock 消息
+/// DEBUG 公屏消息注入器 —— 一键注入所有直播公屏 row 的 mock 消息。
 ///
 /// **用法**（LiveRoomView 加隐藏 tap）：
 /// ```swift
@@ -12,7 +12,7 @@ import Foundation
 /// #endif
 /// ```
 ///
-/// **触发**：真机进直播间 → 顶部空白区**三连击**注入全套 mock 消息，验证 13 类 row 视觉
+/// **触发**：真机进直播间 → 顶部信息区**三连击**注入全套 mock 消息。
 enum PublicChatDebugInjector {
     // @MainActor：store.append(_:) 是 @MainActor 隔离方法；Xcode 16.1 严格并发下 nonisolated context 调用会报错
     @MainActor
@@ -106,7 +106,22 @@ enum PublicChatDebugInjector {
                 isVip: false,
                 messageType: .pkNotify
             ),
-            // 9. 猜拳获胜（P0 用户明示）
+            // 9. PK 结束贡献榜 TOP3
+            PublicChatMessage(
+                text: "",
+                isSystem: false,
+                senderNickname: nil,
+                senderAvatar: nil,
+                userLevel: nil,
+                isHost: false,
+                isVip: false,
+                messageType: .pkTopContributors(users: [
+                    PublicChatUserTarget(userId: "9001", nickname: "Alice", isSelf: false),
+                    PublicChatUserTarget(userId: "9002", nickname: "Bob", isSelf: false),
+                    PublicChatUserTarget(userId: "9003", nickname: "Cathy", isSelf: false),
+                ])
+            ),
+            // 10. 猜拳获胜（P0 用户明示）
             PublicChatMessage(
                 text: "",
                 isSystem: false,
@@ -115,9 +130,9 @@ enum PublicChatDebugInjector {
                 userLevel: 25,
                 isHost: false,
                 isVip: false,
-                messageType: .rpsWin(medalUrl: nil, medalHours: 24)
+                messageType: .rpsWin(medalUrl: nil, medalHours: 24, gameType: .rockPaperScissors)
             ),
-            // 10. 转盘中奖
+            // 11. 转盘中奖
             PublicChatMessage(
                 text: "10000 Coins",
                 isSystem: false,
@@ -128,7 +143,7 @@ enum PublicChatDebugInjector {
                 isVip: false,
                 messageType: .wheelRes
             ),
-            // 11. 直播公告（P1 用户明示）
+            // 12. 直播公告（P1 用户明示）
             PublicChatMessage(
                 text: "Welcome, this is a special promotion event!",
                 isSystem: false,
@@ -139,7 +154,23 @@ enum PublicChatDebugInjector {
                 isVip: false,
                 messageType: .announcement
             ),
-            // 12. 活动中奖广播
+            // 13. 首礼时刻
+            PublicChatMessage(
+                text: "",
+                isSystem: false,
+                senderNickname: "FirstGiftUser",
+                senderAvatar: nil,
+                userLevel: nil,
+                isHost: false,
+                isVip: false,
+                messageType: .firstGiftMoment(
+                    backgroundURL: nil,
+                    renderedText: "FirstGiftUser sent the first gift to Streamer",
+                    giftIconURL: nil,
+                    isFirstGift: true
+                )
+            ),
+            // 14. 活动中奖广播
             PublicChatMessage(
                 text: "",
                 isSystem: false,
@@ -150,7 +181,7 @@ enum PublicChatDebugInjector {
                 isVip: false,
                 messageType: .winnerBroadcast(activityName: "Summer Fest 2026", quantity: 5)
             ),
-            // 13. 心愿单登顶
+            // 15. 心愿单登顶
             PublicChatMessage(
                 text: "",
                 isSystem: false,
@@ -161,7 +192,7 @@ enum PublicChatDebugInjector {
                 isVip: false,
                 messageType: .wishlistEffect
             ),
-            // 14. 钻石盲盒 - 发包
+            // 16. 钻石盲盒 - 发包
             PublicChatMessage(
                 text: "",
                 isSystem: false,
@@ -170,11 +201,11 @@ enum PublicChatDebugInjector {
                 userLevel: nil,
                 isHost: false,
                 isVip: false,
-                messageType: .diamondGift(subType: .send(senderName: "SenderJack",
+                messageType: .diamondGift(subType: .send(giftId: 9001, senderId: "9001", senderName: "SenderJack",
                                                           tierName: "GOLD",
                                                           totalDiamonds: 5000))
             ),
-            // 15. 钻石盲盒 - 瓜分
+            // 17. 钻石盲盒 - 瓜分
             PublicChatMessage(
                 text: "",
                 isSystem: false,
@@ -183,7 +214,7 @@ enum PublicChatDebugInjector {
                 userLevel: nil,
                 isHost: false,
                 isVip: false,
-                messageType: .diamondGift(subType: .claim(userName: "ClaimerKim",
+                messageType: .diamondGift(subType: .claim(giftId: 9001, userId: "9002", userName: "ClaimerKim",
                                                            diamonds: 250))
             ),
         ]

@@ -24,8 +24,8 @@ struct PublicChatTheme: Equatable {
         defaultRowBackground: Color.black.opacity(0.16),
         defaultTextColor: .white,
         defaultNicknameColor: Color(red: 26/255, green: 1.0, blue: 205/255),  // #1AFFCD
-        textFont: .system(size: 13),
-        nicknameFont: .system(size: 13, weight: .medium),
+        textFont: .system(size: 12, weight: .medium),
+        nicknameFont: .system(size: 12, weight: .medium),
         rowSpacing: 4,
         horizontalInset: 8,
         bottomInset: 8,

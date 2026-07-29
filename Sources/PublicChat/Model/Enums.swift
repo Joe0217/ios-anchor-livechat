@@ -28,14 +28,16 @@ struct Mention: Equatable, Hashable {
 }
 
 enum PublicChatDiamondGiftSubType: Equatable {
-    case send(senderName: String, tierName: String?, totalDiamonds: Int64)
-    case claim(userName: String, diamonds: Int64)
-    case settled(topUserName: String, topDiamonds: Int64)
-    case expired(senderName: String, refundDiamonds: Int64)
+    case send(giftId: Int64, senderId: String, senderName: String, tierName: String?, totalDiamonds: Int64)
+    case claim(giftId: Int64, userId: String, userName: String, diamonds: Int64)
+    case settled(giftId: Int64, topUserId: String, topUserName: String,
+                 topUserAvatarURL: String?, topDiamonds: Int64)
+    case expired(giftId: Int64, senderId: String, senderName: String, refundDiamonds: Int64)
 }
 
 /// H5 源：`livechat-h5/src/components/common/game-win-public-msg.vue` L56-63
 struct GameWinPayload: Equatable {
+    let userId: String?
     let avatar: String?
     let nickname: String        // 青绿 #1AFFCD
     let winAmount: String       // 粉 #FE00DE

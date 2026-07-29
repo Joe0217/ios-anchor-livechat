@@ -30,6 +30,8 @@ final class GiftAnimationQueue: ObservableObject {
     /// 内部队列（非 @Published 避免频繁 body 重算）
     private var pending: [Item] = []
     private var isPlaying: Bool = false
+    /// 离房 clear 后，旧播放器的完成回调不能接管后续房间的队列。
+    private var generation = 0
 
     /// PK 中标记（外部由 PKStore 状态变化调 setIsInPK）
     private var isInPK: Bool = false
@@ -60,6 +62,7 @@ final class GiftAnimationQueue: ObservableObject {
 
     /// 清空（例如离开直播间）
     func clear() {
+        generation &+= 1
         pending.removeAll()
         current = nil
         isPlaying = false
@@ -83,9 +86,11 @@ final class GiftAnimationQueue: ObservableObject {
         let next = pending.removeFirst()
         current = next
         isPlaying = true
+        let expectedGeneration = generation
         player.play(url: next.giftIconUrl) { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                guard self.generation == expectedGeneration, self.current?.id == next.id else { return }
                 self.current = nil
                 self.isPlaying = false
                 self.playNextIfIdle()

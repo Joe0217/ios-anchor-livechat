@@ -30,8 +30,39 @@ struct LiveRoomInfo: Codable {
     let giftId: Int?
 }
 
+/// H5 全服通知聊天室配置。原生使用已登录的 IM 通道进入，不需要浏览器端的独立模式地址。
+struct IMNoticeChatroomInfo: Equatable {
+    let roomId: String
+}
+
 /// 直播开播相关接口（对应 H5 src/api/live）。请求头里的 loginToken 由 APIClient 自动附带。
 enum LiveService {
+    /// 对齐 H5 `/api/index/getImNoticeRoomIdAndAddress`（`searchValue: 2` 主播通知房）。
+    static func getIMNoticeChatroom() async throws -> IMNoticeChatroomInfo? {
+        let data = try await APIClient.shared.post(
+            "/api/index/getImNoticeRoomIdAndAddress",
+            body: ["searchValue": 2]
+        )
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        let roomId: String?
+        if let value = object["roomId"] as? String {
+            roomId = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        } else if let value = object["roomId"] as? NSNumber,
+                  String(cString: value.objCType) != "c",
+                  String(cString: value.objCType) != "B" {
+            roomId = value.stringValue
+        } else {
+            roomId = nil
+        }
+        guard let roomId,
+              !roomId.isEmpty else {
+            return nil
+        }
+        return IMNoticeChatroomInfo(roomId: roomId)
+    }
+
     /// 获取我的直播间配置（含已存封面/简介）。返回原始字段，便于原样回传 beginLiveRoom。
     static func getMyLiveRoomRaw() async throws -> [String: Any] {
         let data = try await APIClient.shared.post("/api/agora/live/getMyLiveRoomV2")

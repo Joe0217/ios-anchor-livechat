@@ -75,7 +75,7 @@ final class LiveSettingsStore: ObservableObject {
 
     /// View onAppear 首调：userType 守卫 → getMyLiveRoomRaw 预拉封面/简介。
     ///
-    /// userType 守卫（对齐 `LivePrepareView.startLive():89-97`）：只有 `userType == 2`（已审核主播）放行。
+    /// userType 守卫：只有 `userType == 2`（已审核主播）放行。
     /// 无权限 / API 报错（含 code=1111 request.failed）走 `showErrorAndDismiss` → toast + 自动 pop 返回。
     ///
     /// F 期 Live↔Party 互斥守卫（对齐安卓 isLiveing||isPartying toast，2026-07-17）：

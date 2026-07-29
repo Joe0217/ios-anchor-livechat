@@ -17,6 +17,7 @@ struct WishSettingView: View {
     @State private var showTemplateDropdown = false
     @State private var showGiftPicker = false
     @State private var showAuditRecords = false
+    @State private var shouldShowAuditRecordsAfterSuccess = false
     @State private var ruleGuidelinesPresentation: WishCommitmentGuidelinesPresentation?
     @State private var isOpeningRuleGuidelines = false
 
@@ -80,8 +81,19 @@ struct WishSettingView: View {
                 .presentationDetents([.fraction(0.7)])
                 .presentationDragIndicator(.visible)
         }
-        .alert(L10n.wishSettingSubmittedForReview, isPresented: $store.showSubmitSuccessAlert) {
-            Button(L10n.giftPickerConfirm, role: .cancel) { }
+        .sheet(isPresented: $store.showSubmitSuccessAlert, onDismiss: {
+            guard shouldShowAuditRecordsAfterSuccess else { return }
+            shouldShowAuditRecordsAfterSuccess = false
+            showAuditRecords = true
+        }) {
+            WishSettingSubmitSuccessSheet(
+                onGoToAuditRecords: {
+                    shouldShowAuditRecordsAfterSuccess = true
+                }
+            )
+            .presentationDetents([.height(460)])
+            .presentationDragIndicator(.hidden)
+            .interactiveDismissDisabled()
         }
         .task { await store.load() }
         .preferredColorScheme(.dark)
@@ -364,10 +376,11 @@ struct WishSettingView: View {
                             ZStack {
                                 RoundedRectangle(cornerRadius: 8)
                                     .stroke(Color.white.opacity(0.15), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                                    .frame(height: 44)
                                 Image(systemName: "plus")
                                     .font(.title3).foregroundStyle(.pink)
                             }
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
@@ -559,6 +572,121 @@ struct WishSettingView: View {
 private struct WishCommitmentGuidelinesPresentation: Identifiable {
     let url: URL
     var id: String { url.absoluteString }
+}
+
+/// 自由承诺送审成功反馈，对齐 H5 `wishlist-submit-success-modal.vue`。
+private struct WishSettingSubmitSuccessSheet: View {
+    let onGoToAuditRecords: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Button(action: dismiss.callAsFunction) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .frame(width: 32, height: 32)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(L10n.commonClose))
+            }
+
+            Image(systemName: "checkmark")
+                .font(.system(size: 28, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 62, height: 62)
+                .background(Color(hex: 0x6F3BD6), in: Circle())
+                .padding(.top, 2)
+
+            Text(L10n.wishSettingSubmitSuccessTitle)
+                .font(.system(size: 19, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.top, 14)
+            Text(L10n.wishSettingSubmitSuccessSubtitle)
+                .font(.system(size: 13))
+                .foregroundStyle(.white.opacity(0.7))
+                .multilineTextAlignment(.center)
+                .padding(.top, 8)
+                .padding(.horizontal, 20)
+
+            VStack(spacing: 12) {
+                infoRow(icon: "checklist", label: L10n.wishSettingSubmitSuccessReviewStatus,
+                        value: L10n.wishSettingSubmitSuccessPendingReview, highlighted: true)
+                Divider().overlay(Color.white.opacity(0.12))
+                infoRow(icon: "clock", label: L10n.wishSettingSubmitSuccessReviewTime,
+                        value: L10n.wishSettingSubmitSuccessReviewTimeValue)
+                Divider().overlay(Color.white.opacity(0.12))
+                infoRow(icon: "bell", label: L10n.wishSettingSubmitSuccessNotify,
+                        value: L10n.wishSettingSubmitSuccessNotifyValue)
+            }
+            .padding(.top, 20)
+            .padding(.horizontal, 28)
+
+            Text(L10n.wishSettingSubmitSuccessTip)
+                .font(.system(size: 11))
+                .foregroundStyle(.white.opacity(0.55))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
+                .padding(.top, 16)
+
+            Button(action: dismiss.callAsFunction) {
+                Text(L10n.giftPickerConfirm)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(
+                        LinearGradient(
+                            colors: [Color(hex: 0x8515FF), Color(hex: 0xE40132)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        in: RoundedRectangle(cornerRadius: 8)
+                    )
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 28)
+            .padding(.top, 18)
+
+            Button {
+                onGoToAuditRecords()
+                dismiss()
+            } label: {
+                HStack(spacing: 4) {
+                    Text(L10n.wishSettingSubmitSuccessGoToWishlist)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .bold))
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color(hex: 0xE88BFF))
+                .frame(minHeight: 36)
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color(hex: 0x2A1248).ignoresSafeArea())
+        .preferredColorScheme(.dark)
+    }
+
+    private func infoRow(icon: String, label: String, value: String, highlighted: Bool = false) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.7))
+                .frame(width: 16)
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.75))
+            Spacer(minLength: 8)
+            Text(value)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(highlighted ? Color(hex: 0xFF9F3E) : .white)
+                .multilineTextAlignment(.trailing)
+        }
+    }
 }
 
 /// iOS 没有 H5 的 iframe 路由时，以应用内 Safari 承载后台配置的规范页。

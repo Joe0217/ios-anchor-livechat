@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import os
 
@@ -46,19 +47,39 @@ final class CommonGiftPanelStore: ObservableObject {
 
     let config: CommonGiftPanelConfig
     private var groups: [GiftPanelTab: [GiftListData]] = [:]
+    private let receiverSelectionState: GiftRecipientSelectionState?
+    private var receiverSelectionObservation: AnyCancellable?
 
     // MARK: - Init
 
     init(config: CommonGiftPanelConfig) {
         self.config = config
         self.currentTab = config.resolvedInitialTab
-        self.receiversSelection = config.receivers?.initialSelection ?? []
+        self.receiverSelectionState = config.receivers?.selectionState
+        if let selectionState = config.receivers?.selectionState {
+            let validIDs = Set(config.receivers?.items.map(\.id) ?? [])
+            selectionState.initializeIfNeeded(defaultSelection: config.receivers?.initialSelection ?? [])
+            selectionState.retainValidIDs(validIDs)
+            self.receiversSelection = selectionState.ids
+        } else {
+            self.receiversSelection = config.receivers?.initialSelection ?? []
+        }
         if let init0 = config.initialSelection {
             self.selectedId = init0.id
         }
         // count 初始化按 stepper range 下界（stepper.hidden 时恒 1）
         if let r = config.countStepper.range {
             self.count = r.lowerBound
+        }
+        if let selectionState = receiverSelectionState {
+            receiverSelectionObservation = selectionState.$ids
+                .removeDuplicates()
+                .sink { [weak self] ids in
+                    Task { @MainActor [weak self] in
+                        guard let self, self.receiversSelection != ids else { return }
+                        self.receiversSelection = ids
+                    }
+                }
         }
     }
 
@@ -137,6 +158,12 @@ final class CommonGiftPanelStore: ObservableObject {
             selectedId = nil
         } else {
             selectedId = id
+            // Party Lucky Gift 服务端只接受一个收礼人；H5 选择此类礼物时也会收敛多选。
+            if case .send = config.footer,
+               currentSelectedGift?.isLuckyGift == true,
+               receiversSelection.count > 1 {
+                setReceiversSelection(Set([preferredSelectedReceiverID].compactMap { $0 }))
+            }
         }
     }
 
@@ -181,16 +208,23 @@ final class CommonGiftPanelStore: ObservableObject {
         guard let cfg = config.receivers else { return }
         if cfg.allowMultiSelect {
             if receiversSelection.contains(id) {
-                receiversSelection.remove(id)
+                var next = receiversSelection
+                next.remove(id)
+                setReceiversSelection(next)
+            } else if currentSelectedGift?.isLuckyGift == true {
+                // Lucky Gift 下切换收礼人是替换而非追加（对齐 H5）。
+                setReceiversSelection([id])
             } else {
-                receiversSelection.insert(id)
+                var next = receiversSelection
+                next.insert(id)
+                setReceiversSelection(next)
             }
         } else {
             // 单选：tap 已选 → 清空；否则唯一选中
             if receiversSelection.contains(id) {
-                receiversSelection.removeAll()
+                setReceiversSelection([])
             } else {
-                receiversSelection = [id]
+                setReceiversSelection([id])
             }
         }
     }
@@ -200,10 +234,32 @@ final class CommonGiftPanelStore: ObservableObject {
         guard let cfg = config.receivers, cfg.allowMultiSelect, cfg.showAllButton else { return }
         let allIds = Set(cfg.items.map(\.id))
         if receiversSelection == allIds {
-            receiversSelection.removeAll()
+            // H5：多收礼人从全选切回默认房主/首位；只有一人时才清空。
+            if cfg.items.count == 1 {
+                setReceiversSelection([])
+            } else {
+                let fallback = cfg.initialSelection.intersection(allIds)
+                setReceiversSelection(fallback.isEmpty
+                    ? Set([cfg.items.first?.id].compactMap { $0 })
+                    : fallback)
+            }
         } else {
-            receiversSelection = allIds
+            if currentSelectedGift?.isLuckyGift == true {
+                setReceiversSelection(Set([preferredSelectedReceiverID ?? cfg.items.first?.id].compactMap { $0 }))
+            } else {
+                setReceiversSelection(allIds)
+            }
         }
+    }
+
+    private var preferredSelectedReceiverID: String? {
+        config.receivers?.items.first(where: { receiversSelection.contains($0.id) })?.id
+    }
+
+    private func setReceiversSelection(_ ids: Set<String>) {
+        guard receiversSelection != ids else { return }
+        receiversSelection = ids
+        receiverSelectionState?.replace(with: ids)
     }
 
     // MARK: - Trigger action / backpack
@@ -249,9 +305,18 @@ final class CommonGiftPanelStore: ObservableObject {
             }
         case .askFor(let onAsk):
             guard let g = currentSelectedGift else { return }
-            didCompleteAction = true
-            phase = .sent
-            onAsk(g)
+            phase = .sending
+            Task { [weak self] in
+                do {
+                    try await onAsk(g)
+                    guard let self else { return }
+                    self.didCompleteAction = true
+                    self.phase = .sent
+                } catch {
+                    guard let self else { return }
+                    self.phase = .sendFailed(error.localizedDescription)
+                }
+            }
         }
     }
 

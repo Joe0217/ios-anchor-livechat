@@ -1,11 +1,23 @@
 import Foundation
 
+/// `LIVE_SMALL_GAME_WIN_NOTICE` 的游戏种类。缺失或未知值沿用历史猜拳展示，保证旧消息兼容。
+enum LiveSmallGameType: Equatable {
+    case rockPaperScissors
+    case luckyDice
+
+    init(rawValue: Any?) {
+        let value = (rawValue as? String)?.uppercased()
+        self = value == "LUCKY_DICE" ? .luckyDice : .rockPaperScissors
+    }
+}
+
 /// 猜拳获胜通知（attachType 144）的展示字段。
 /// H5 按 `grantedHours ?? medalHours` 取值，并兼容后端混发的数值类型。
 struct RpsWinNotificationPayload: Equatable {
     let nickname: String?
     let medalURL: String?
     let medalHours: Double?
+    let gameType: LiveSmallGameType
 
     init(data: [String: Any], fallbackNickname: String?) {
         nickname = Self.nonEmptyString(data["nickname"]) ?? fallbackNickname
@@ -14,6 +26,7 @@ struct RpsWinNotificationPayload: Equatable {
         // 与 JS 的 nullish coalescing 保持一致：只在 grantedHours 缺失/null 时读取 medalHours。
         let rawHours = Self.nonNullValue(data["grantedHours"]) ?? Self.nonNullValue(data["medalHours"])
         medalHours = Self.numberValue(rawHours)
+        gameType = LiveSmallGameType(rawValue: data["gameType"])
     }
 
     private static func nonEmptyString(_ value: Any?) -> String? {

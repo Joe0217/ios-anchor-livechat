@@ -34,12 +34,14 @@ public enum GiftEffectIntake {
             // 有动画资源 → 中央大动画
             center.enqueue(item)
         } else if scene != .chat {
-            // 无动画资源 + 非 Chat → 底部 MicroToast
+            // 无动画资源 + 非 Chat → MicroToast。通话场景按 H5 延时 0.5s 后展示，
+            // 因此实际可见时长取 2.5s，使收到消息起的总时长保持 3s。
             let toast = MicroToastItem(
                 sceneKey: key,
                 imgUrl: item.staticImgUrl,
                 giftName: item.giftName,
-                count: item.giftCount
+                count: item.giftCount,
+                duration: scene == .call ? 2.5 : 3.0
             )
             center.showMicroToast(toast)
         }

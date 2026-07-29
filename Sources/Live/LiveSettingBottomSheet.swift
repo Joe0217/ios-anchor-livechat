@@ -8,10 +8,10 @@ import SwiftUI
 /// - 已启用：虚拟道具特效开关 / 公告管理
 /// - 未启用（H5 注释掉）：音频开关 / 贴纸设置
 ///
-/// **iOS 4 项**（合并了 H5 已启用 + iOS 原有 confirmationDialog 2 项）：
+/// **iOS 4 项**（合并 H5 已启用守护入口与原生直播控制项）：
 /// - 虚拟道具特效
 /// - 公告管理
-/// - 美颜
+/// - 我的守护（只读）
 /// - 结束直播（destructive）
 struct LiveSettingBottomSheet: View {
     @Binding var isPresented: Bool
@@ -19,6 +19,7 @@ struct LiveSettingBottomSheet: View {
     let onOpenBeauty: () -> Void
     let onOpenEffects: () -> Void
     let onOpenAnnouncement: () -> Void
+    let onOpenGuardian: () -> Void
     let onEndLive: () -> Void
 
     var body: some View {
@@ -44,6 +45,10 @@ struct LiveSettingBottomSheet: View {
                 isPresented = false
                 onOpenAnnouncement()
             }
+            settingAssetCell(assetName: "guardianShield", label: L10n.toolMyGuardian) {
+                isPresented = false
+                onOpenGuardian()
+            }
             settingCell(icon: "xmark.circle.fill", label: L10n.liveRoomSettingEndLive, tint: Color(hex: 0xFF4040)) {
                 isPresented = false
                 onEndLive()
@@ -59,6 +64,25 @@ struct LiveSettingBottomSheet: View {
                 Image(systemName: icon)
                     .font(.system(size: 26))
                     .foregroundColor(tint)
+                    .frame(width: 32, height: 32)
+                Text(label)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func settingAssetCell(assetName: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(assetName)
+                    .resizable()
+                    .scaledToFit()
                     .frame(width: 32, height: 32)
                 Text(label)
                     .font(.system(size: 12, weight: .medium))

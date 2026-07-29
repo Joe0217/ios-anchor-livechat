@@ -9,7 +9,7 @@ import SwiftUI
 /// - 选中已拥有卡 → 底部 Equip/Unequip 条弹出（PropsBottomBar）
 /// - Ops：前置校验拒绝 → toast；成功 → 视觉即时更新；API 失败 → toast + 回滚
 /// - Preview：tap play icon → sheet 展开 SVGA/MP4/静图三分支（PropsPreviewSheet）
-/// - 佩戴态：写 AnchorInfoConsumerBridge → M3 阶段挂真 AnchorInfoStore.mine.headFrame/chatBubble/cardFrame
+/// - Chat Skin 佩戴态：写 AnchorInfoStore.mine.chatBubble，消息场景立即应用；其余道具字段仍由各消费模块接入
 struct PropsMainView: View {
 
     @StateObject private var store: PropsInventoryStore

@@ -17,16 +17,20 @@ struct UnifiedPublicChatMessage: Identifiable, Equatable {
     let variant: PublicChatVariant
     /// 远端消息的服务端定位信息；本地系统消息和未获云信 ID 的乐观回显为 nil。
     let source: PublicChatMessageSource?
+    /// 活动类消息的可选点击地址；避免将业务 URL 混入基础 variant。
+    let actionURL: String?
 
     init(id: UUID = UUID(),
          timestamp: Date = Date(),
          sender: SenderProfile? = nil,
          variant: PublicChatVariant,
-         source: PublicChatMessageSource? = nil) {
+         source: PublicChatMessageSource? = nil,
+         actionURL: String? = nil) {
         self.id = id
         self.timestamp = timestamp
         self.sender = sender
         self.variant = variant
         self.source = source
+        self.actionURL = actionURL
     }
 }

@@ -71,7 +71,9 @@ enum AttachType: Equatable {
     // MARK: - 直播态扩展（H 礼物会话 / J 期补 UI）
 
     case privateCallSwitchChange  // 52 私 call 开关状态变更
+    case guardianBroadcast        // 146 守护开通/续费顶部广播
     case liveAnnouncement         // 195 直播间公告
+    case firstGiftMoment          // 197 首礼时刻公屏 / 顶部飘屏
 
     // MARK: - 心愿单（H 礼物会话实现）
 
@@ -97,9 +99,12 @@ enum AttachType: Equatable {
     case partyKickedOut            // 1003 被踢出派对房
     case partyUpdateMedia          // 1008 麦克风/摄像头状态
     case partySeatUpdateList       // 1012 全量重拉麦位列表
+    case partyAuditWarning         // 1014 Party 鉴黄告警/禁麦
     case partyProhibitMic          // 1015 禁麦 / 解禁
+    case partyAuthUpdate           // 1019 本人房管权限变更（CustomSystemNotification）
     case partyTaskProgress         // 1022 主播周任务上麦时长
     case partyTaskReward           // 1023 主播周任务自动发奖
+    case partyPlatformAdminChange  // 1024 本人平台管理员权限变更（CustomSystemNotification）
     case partyPrivateCallNotify    // 1029 派对房私 call 状态通知（F · calling/ended · 聊天室通道 · 安卓 PARTY_PRIVATE_CALL_NOTIFY；同值 GIFT_DOUBLED 靠 payload.status 字段辨识见 Sources/Party/Models/PartyPrivateCallNotify）
     case partyLuckyNumberPersonalDialog // 1052 幸运数字中奖个人弹窗（CustomSystemNotification）
     case partyGiftCompressed       // 2049 派对房礼物（gzip）
@@ -175,7 +180,9 @@ enum AttachType: Equatable {
         case .robotCallIncoming:          return "133"
         // 直播态扩展
         case .privateCallSwitchChange:    return "52"
+        case .guardianBroadcast:          return "146"
         case .liveAnnouncement:           return "195"
+        case .firstGiftMoment:            return "197"
         // 心愿单
         case .wishlistFirst:         return "250"
         case .wishlistTop1:          return "251"
@@ -191,9 +198,12 @@ enum AttachType: Equatable {
         case .partyKickedOut:        return "1003"
         case .partyUpdateMedia:      return "1008"
         case .partySeatUpdateList:   return "1012"
+        case .partyAuditWarning:     return "1014"
         case .partyProhibitMic:      return "1015"
+        case .partyAuthUpdate:       return "1019"
         case .partyTaskProgress:     return "1022"
         case .partyTaskReward:       return "1023"
+        case .partyPlatformAdminChange: return "1024"
         case .partyPrivateCallNotify: return "1029"
         case .partyLuckyNumberPersonalDialog: return "1052"
         case .partyGiftCompressed:   return "2049"
@@ -226,7 +236,7 @@ enum AttachType: Equatable {
         // 派对房 legacy gift
         1007,
         // 派对房 F 期扩展（1018-1027 + 1100-1112 由 range 兜底）
-        1004, 1014, 1017, 1049, 1050, 1051,
+        1004, 1017, 1049, 1050, 1051,
     ]
 
     init(raw: Any?) {
@@ -299,7 +309,9 @@ enum AttachType: Equatable {
         case 133: return .robotCallIncoming
         // 直播态扩展
         case 52:  return .privateCallSwitchChange
+        case 146: return .guardianBroadcast
         case 195: return .liveAnnouncement
+        case 197: return .firstGiftMoment
         // 心愿单
         case 250: return .wishlistFirst
         case 251: return .wishlistTop1
@@ -315,9 +327,12 @@ enum AttachType: Equatable {
         case 1003: return .partyKickedOut
         case 1008: return .partyUpdateMedia
         case 1012: return .partySeatUpdateList
+        case 1014: return .partyAuditWarning
         case 1015: return .partyProhibitMic
+        case 1019: return .partyAuthUpdate
         case 1022: return .partyTaskProgress
         case 1023: return .partyTaskReward
+        case 1024: return .partyPlatformAdminChange
         case 1029: return .partyPrivateCallNotify
         case 1052: return .partyLuckyNumberPersonalDialog
         case 2049: return .partyGiftCompressed

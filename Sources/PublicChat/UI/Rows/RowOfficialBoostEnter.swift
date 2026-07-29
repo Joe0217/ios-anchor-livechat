@@ -8,6 +8,7 @@ import SwiftUI
 struct RowOfficialBoostEnter: View {
     let sender: SenderProfile?
     let theme: PublicChatTheme
+    let onTapNickname: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -20,11 +21,17 @@ struct RowOfficialBoostEnter: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Color(red: 1.0, green: 230/255, blue: 0))   // #FFE600
             }
-            Text("Welcome \(sender?.nickname ?? "") to the Platform Featured Newcomer's Room!")
-                .font(theme.textFont)
-                .foregroundColor(.white)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text("Welcome ")
+                    .font(theme.textFont)
+                    .foregroundColor(.white)
+                nickname
+                Text(" to the Platform Featured Newcomer's Room!")
+                    .font(theme.textFont)
+                    .foregroundColor(.white)
+            }
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
         }
         .padding(8)
         .frame(width: 212, alignment: .leading)
@@ -35,5 +42,19 @@ struct RowOfficialBoostEnter: View {
             ),
             in: RoundedRectangle(cornerRadius: 20)
         )
+    }
+
+    @ViewBuilder
+    private var nickname: some View {
+        let label = Text(sender?.nickname ?? "")
+            .font(theme.textFont)
+            .foregroundColor(.white)
+        if let onTapNickname {
+            Button(action: onTapNickname) { label }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(sender?.nickname ?? ""))
+        } else {
+            label
+        }
     }
 }

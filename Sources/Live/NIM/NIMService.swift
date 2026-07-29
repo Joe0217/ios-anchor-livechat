@@ -89,8 +89,9 @@ final class NIMService: NSObject, ObservableObject {
             sysRouter.sessionStore = SessionStore.shared
             sysRouter.robotCallStore = RobotCallStore.shared
             NIMService.shared.registerRouter(sysRouter)
-            // GiftEffect Call 场景 sysMsg 通道礼物 attachType=4 router（return false 不独占，
-            // 保证 SystemMessageRouter 等下游仍能处理别的 sysMsg 副作用）
+            // Invite 103/104 是观察型 router，返回 false，不能吞掉原有会话系统提示。
+            NIMService.shared.registerRouter(InviteMessageRouter.shared)
+            // 通话索礼拒绝提示 router（return false 不独占，保证其他系统消息继续分发）。
             NIMService.shared.registerRouter(GiftEffectSysMsgRouter.shared)
         }
 

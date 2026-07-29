@@ -186,7 +186,7 @@ final class BackgroundMonitor {
 
     private func schedulePendingNotification() {
         let center = UNUserNotificationCenter.current()
-        // 权限已在 LivePrepareView.onAppear 前置请求；这里静默检查授权状态
+        // 权限已在开播流程前置请求；这里静默检查授权状态
         // 未授权直接跳过，不弹权限对话框（避免直播中打断）
         center.getNotificationSettings { settings in
             guard settings.authorizationStatus == .authorized ||

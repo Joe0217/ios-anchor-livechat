@@ -105,8 +105,8 @@ final class SystemMessageRouter: MessageRouter {
             liveStore?.warn(message: text.isEmpty ? L10n.complianceWarningDefault : text)
         case .markBoostingExposure(let on):
             liveStore?.markBoostingExposure(on)
-        case .callRemoteText(let text, let chatBubble):
-            callStore?.handleRemoteText(text, chatBubble: chatBubble)
+        case .callRemoteText(let text, let chatBubble, let sender):
+            callStore?.handleRemoteText(text, chatBubble: chatBubble, sender: sender)
         case .callWaitState(let type):
             callStore?.updateWaitState(type: type)
         case .callIncome(let delta):

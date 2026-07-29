@@ -1,10 +1,9 @@
 import Foundation
 
 /// 直播状态机（B 里程碑 spec §2.1）。
-/// 七态：idle → preparing → starting → living → (forceEnding|ending) → ended
+/// 六态：idle → starting → living → (forceEnding|ending) → ended
 enum LiveState: Equatable {
     case idle
-    case preparing
     case starting
     case living
     case forceEnding(reason: ForceEndReason)

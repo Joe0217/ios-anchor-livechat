@@ -15,11 +15,23 @@ struct LiveOverlayHost: ViewModifier {
     @ObservedObject var diamondQueue: DiamondGiftFloatQueue
     /// v10 心愿达成飘屏
     @ObservedObject var wishAchievedQueue: WishAchievedQueue
+    /// attachType 197 首礼时刻飘屏
+    @ObservedObject var firstGiftQueue: FirstGiftFloatQueue
+    /// attachType 146 守护开通/续费广播
+    @ObservedObject var guardianBroadcastQueue: GuardianBroadcastQueue
+    /// 幸运礼物中奖全服公告
+    @ObservedObject var luckyGiftNoticeQueue: LuckyGiftNoticeQueue
+    /// 每次直播收礼浮窗
+    @ObservedObject var liveGiftFloatQueue: LiveGiftFloatQueue
     func body(content: Content) -> some View {
         content
             .overlay { GiftAnimationOverlay(queue: giftQueue) }
             .overlay { EnterRoomFloat(queue: enterRoomQueue) }
             .overlay { DiamondGiftFloatScreen(queue: diamondQueue) }
             .overlay { WishAchievedFloat(queue: wishAchievedQueue) }
+            .overlay { FirstGiftFloat(queue: firstGiftQueue) }
+            .overlay { GuardianBroadcastFloat(queue: guardianBroadcastQueue) }
+            .overlay { LuckyGiftNoticeFloat(queue: luckyGiftNoticeQueue) }
+            .overlay { LiveGiftFloat(queue: liveGiftFloatQueue) }
     }
 }

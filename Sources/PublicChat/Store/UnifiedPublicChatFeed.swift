@@ -22,7 +22,28 @@ final class UnifiedPublicChatFeed: ObservableObject {
 
     /// 全量替换语义（供 upstream 全量 map 后灌入用；Live 场景 T10 使用）
     func replace(_ msgs: [UnifiedPublicChatMessage]) {
-        messages = msgs
+        let currentByID = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
+        messages = msgs.map { incoming in
+            guard let current = currentByID[incoming.id],
+                  case .text(let content, let mentions, let translation, let replyToNick) = incoming.variant,
+                  translation == nil,
+                  case .text(_, _, let currentTranslation?, _) = current.variant else {
+                return incoming
+            }
+            return UnifiedPublicChatMessage(
+                id: incoming.id,
+                timestamp: incoming.timestamp,
+                sender: incoming.sender,
+                variant: .text(
+                    content: content,
+                    mentions: mentions,
+                    translation: currentTranslation,
+                    replyToNick: replyToNick
+                ),
+                source: incoming.source,
+                actionURL: incoming.actionURL
+            )
+        }
         trimIfNeeded()
     }
 
@@ -47,7 +68,8 @@ final class UnifiedPublicChatFeed: ObservableObject {
             timestamp: old.timestamp,
             sender: old.sender,
             variant: newVariant,
-            source: old.source
+            source: old.source,
+            actionURL: old.actionURL
         )
     }
 

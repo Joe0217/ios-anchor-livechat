@@ -1,82 +1,88 @@
 import SwiftUI
 
-/// 客态 PK 覆盖层：分数、倒计时、双方资料和 Top3。视频 canvas 由宿主负责，避免 UIKit 渲染层
-/// 因 SwiftUI overlay 重建而丢帧。
+/// 客态 PK Arena。视频 canvas 由宿主负责；此处严格复用主态的布局常量和进度/倒计时/Top3 组件。
 struct AudiencePKOverlay: View {
     @ObservedObject var store: AudiencePKStore
     let onOpponentTap: (Int) -> Void
     let onRankTap: (PKRankSide) -> Void
 
     var body: some View {
-        ZStack {
-            VStack(spacing: 8) {
-                scoreBar
-                if let left = store.left, let right = store.right {
-                    HStack(alignment: .top) {
-                        anchorSummary(left, alignment: .leading)
-                        Spacer(minLength: 16)
-                        VStack(spacing: 2) {
-                            Text(timeText)
-                                .font(.system(size: 13, weight: .bold))
-                                .monospacedDigit()
-                                .foregroundStyle(.white)
-                            if case .punishing = store.phase {
-                                Image(systemName: "flag.checkered")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .foregroundStyle(Color(hex: 0xFFBB02))
-                            }
-                        }
-                        Spacer(minLength: 16)
+        GeometryReader { geo in
+            if let left = store.left, let right = store.right {
+                ZStack(alignment: .top) {
+                    opponentMuteIndicator
+                        .padding(.trailing, 12)
+                        .padding(.top, PKArenaLayout.topOffset + 32)
+                        .frame(width: geo.size.width, height: geo.size.height, alignment: .topTrailing)
+
+                    VStack(spacing: 0) {
+                        PKBattleProgressBar(myPkValue: left.score, opponentPkValue: right.score)
+                            .padding(.horizontal, 16)
+                        PKBattleCountdown(remainingSeconds: store.remainingSeconds,
+                                          isPunishment: isPunishing)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.top, PKArenaLayout.topOffset)
+                    .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+
+                    HStack {
+                        Spacer(minLength: 0)
                         Button { onOpponentTap(right.userId) } label: {
-                            anchorSummary(right, alignment: .trailing)
+                            opponentNicknameChip(nickname: right.nickname, avatarURL: right.avatarURL)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(Text(right.nickname))
                     }
-                    PKBattleTop3Contributors(myTop3: left.top3,
-                                             opponentTop3: right.top3,
-                                             onTapSide: onRankTap)
+                    .padding(.top, PKArenaLayout.topOffset + PKArenaLayout.videoHeight - 32)
+                    .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+
+                    VStack(spacing: 0) {
+                        Spacer().frame(height: PKArenaLayout.topOffset + PKArenaLayout.videoHeight + 4)
+                        PKBattleTop3Contributors(myTop3: left.top3,
+                                                 opponentTop3: right.top3,
+                                                 onTapSide: onRankTap)
+                            .frame(height: 32)
+                        Spacer(minLength: 0)
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+
+                    AudiencePKEffects(store: store)
+                        .frame(width: 220, height: 220)
+                        .padding(.top, PKArenaLayout.topOffset + 40)
+                        .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
                 }
             }
-            .padding(8)
-            .background(Color.black.opacity(0.38), in: RoundedRectangle(cornerRadius: 8))
-
-            AudiencePKEffects(store: store)
         }
     }
 
-    private var scoreBar: some View {
-        GeometryReader { proxy in
-            let leftScore = max(0, store.left?.score ?? 0)
-            let rightScore = max(0, store.right?.score ?? 0)
-            let total = leftScore + rightScore
-            let ratio = total == 0 ? 0.5 : CGFloat(leftScore) / CGFloat(total)
-            HStack(spacing: 0) {
-                Color(hex: 0xF35B93).frame(width: proxy.size.width * ratio)
-                Color(hex: 0x6A8DFF).frame(width: proxy.size.width * (1 - ratio))
-            }
-            .clipShape(Capsule())
-        }
-        .frame(height: 6)
+    private var isPunishing: Bool {
+        if case .punishing = store.phase { return true }
+        return false
     }
 
-    private func anchorSummary(_ anchor: AudiencePKStore.Anchor,
-                               alignment: HorizontalAlignment) -> some View {
-        VStack(alignment: alignment, spacing: 2) {
-            Text(anchor.nickname)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white)
+    private var opponentMuteIndicator: some View {
+        Image(systemName: store.isOpponentMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+            .font(.system(size: 12))
+            .foregroundColor(.white)
+            .frame(width: 28, height: 28)
+            .background(Color.black.opacity(0.4), in: Circle())
+            .accessibilityLabel(Text(store.isOpponentMuted ? L10n.PK.opponentUnmute : L10n.PK.opponentMute))
+    }
+
+    private func opponentNicknameChip(nickname: String, avatarURL: String?) -> some View {
+        HStack(spacing: 6) {
+            AvatarView(urlString: avatarURL, size: 24, kind: .user, disablesTap: true)
+            Text(nickname)
+                .font(.system(size: 13))
+                .foregroundColor(.white)
                 .lineLimit(1)
-            Text("\(anchor.score)")
-                .font(.system(size: 16, weight: .bold))
-                .foregroundStyle(.white)
         }
-        .frame(maxWidth: 110, alignment: alignment == .leading ? .leading : .trailing)
-    }
-
-    private var timeText: String {
-        let seconds = max(0, store.remainingSeconds)
-        return String(format: "%d:%02d", seconds / 60, seconds % 60)
+        .padding(.horizontal, 4).padding(.vertical, 4)
+        .frame(width: 118, alignment: .leading)
+        .background(
+            UnevenRoundedRectangle(cornerRadii: .init(topLeading: 20, bottomLeading: 20))
+                .fill(Color.black.opacity(0.4))
+        )
     }
 }
 

@@ -29,6 +29,23 @@ struct PublicChatMessage: Identifiable {
     let replyToNick: String?
     /// v24（B4 hi 气泡）：`fromAccid == self yxAccid`，主播自发消息不弹 hi 气泡
     let isSelf: Bool
+    /// H5 新人标识：普通文本和礼物行展示新人标。
+    let isNewUser: Bool
+    /// 守护等级。0 表示无守护，正数显示守护徽章。
+    let guardianLevel: Int
+    /// 发送方穿戴的点九图气泡背景。
+    let chatBubble: String?
+    /// 中奖广播点击目标活动地址；只由对应 Row 消费。
+    let actionURL: String?
+    /// 中奖广播的大图背景与 Join 图。
+    let winnerMessageImageURL: String?
+    let winnerJoinImageURL: String?
+    /// 中奖广播内嵌奖品图标、有效天数与颜色配置。
+    let winnerPrizeImageURL: String?
+    let winnerValidDays: Int?
+    let winnerNicknameColorHex: String?
+    let winnerPrizeColorHex: String?
+    let winnerCardType: String?
 
     init(text: String,
          isSystem: Bool,
@@ -43,7 +60,18 @@ struct PublicChatMessage: Identifiable {
          senderYxAccId: String? = nil,
          senderUserId: String? = nil,
          replyToNick: String? = nil,
-         isSelf: Bool = false) {
+         isSelf: Bool = false,
+         isNewUser: Bool = false,
+         guardianLevel: Int = 0,
+         chatBubble: String? = nil,
+         actionURL: String? = nil,
+         winnerMessageImageURL: String? = nil,
+         winnerJoinImageURL: String? = nil,
+         winnerPrizeImageURL: String? = nil,
+         winnerValidDays: Int? = nil,
+         winnerNicknameColorHex: String? = nil,
+         winnerPrizeColorHex: String? = nil,
+         winnerCardType: String? = nil) {
         self.text = text
         self.isSystem = isSystem
         self.senderNickname = senderNickname
@@ -58,5 +86,16 @@ struct PublicChatMessage: Identifiable {
         self.senderUserId = senderUserId
         self.replyToNick = replyToNick
         self.isSelf = isSelf
+        self.isNewUser = isNewUser
+        self.guardianLevel = guardianLevel
+        self.chatBubble = chatBubble
+        self.actionURL = actionURL
+        self.winnerMessageImageURL = winnerMessageImageURL
+        self.winnerJoinImageURL = winnerJoinImageURL
+        self.winnerPrizeImageURL = winnerPrizeImageURL
+        self.winnerValidDays = winnerValidDays
+        self.winnerNicknameColorHex = winnerNicknameColorHex
+        self.winnerPrizeColorHex = winnerPrizeColorHex
+        self.winnerCardType = winnerCardType
     }
 }

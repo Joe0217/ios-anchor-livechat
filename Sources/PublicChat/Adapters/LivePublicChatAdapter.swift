@@ -10,6 +10,7 @@ enum LivePublicChatAdapter {
     static func adapt(_ m: PublicChatMessage) -> UnifiedPublicChatMessage {
         if m.isSystem {
             return UnifiedPublicChatMessage(
+                id: m.id,
                 sender: nil,
                 variant: .system(text: m.text)
             )
@@ -23,17 +24,20 @@ enum LivePublicChatAdapter {
             isHost: m.isHost,
             role: nil,
             medals: [],
-            chatBubble: nil,
+            chatBubble: m.chatBubble,
             isPlatformAdmin: false,
             isSelf: m.isSelf,          // v24 B4：主播自发消息不弹 hi 气泡
-            isNewUser: false,
+            isNewUser: m.isNewUser,
             nicknameColor: m.isHost ? .anchor : .default,
             headFrame: nil,
-            isActiveTycoon: m.isActiveTycoon   // v24 B1：大 R 徽章门禁
+            isActiveTycoon: m.isActiveTycoon,   // v24 B1：大 R 徽章门禁
+            guardianLevel: m.guardianLevel
         )
         return UnifiedPublicChatMessage(
+            id: m.id,
             sender: sender,
-            variant: mapVariant(m)
+            variant: mapVariant(m),
+            actionURL: m.actionURL
         )
     }
 
@@ -53,15 +57,31 @@ enum LivePublicChatAdapter {
             return .officialBoostEnter
         case .pkNotify:
             return .pkNotify(richText: [.text(m.text, color: .white)])
-        case .rpsWin(let url, let hours):
-            return .rpsWin(medalUrl: url, medalHours: hours)
+        case .pkTopContributors(let users):
+            return .pkTopContributors(users: users)
+        case .rpsWin(let url, let hours, let gameType):
+            return .rpsWin(medalUrl: url, medalHours: hours, gameType: gameType)
         case .wheelRes:
             return .wheelRes(resultText: m.text, resultHighlight: nil)
         case .announcement:
             return .announcement(text: m.text, kind: .liveOfficial)
+        case .firstGiftMoment(let backgroundURL, let renderedText, let giftIconURL, let isFirstGift):
+            return .firstGiftMoment(
+                backgroundURL: backgroundURL,
+                renderedText: renderedText,
+                giftIconURL: giftIconURL,
+                isFirstGift: isFirstGift
+            )
         case .winnerBroadcast(let activity, let qty):
             return .winnerBroadcast(activityName: activity, quantity: qty,
-                                    imageURL: nil, joinCTA: nil, avatar: nil)
+                                    messageImageURL: m.winnerMessageImageURL,
+                                    prizeImageURL: m.winnerPrizeImageURL,
+                                    joinCTA: m.winnerJoinImageURL,
+                                    avatar: m.senderAvatar,
+                                    validDays: m.winnerValidDays,
+                                    nicknameColorHex: m.winnerNicknameColorHex,
+                                    prizeColorHex: m.winnerPrizeColorHex,
+                                    cardType: m.winnerCardType)
         case .wishlistEffect:
             return .wishlistEffect
         case .diamondGift(let oldSubType):
@@ -72,14 +92,16 @@ enum LivePublicChatAdapter {
     /// 旧 `DiamondGiftSubType`（PublicChatMessageType.swift）→ 新 `PublicChatDiamondGiftSubType`
     private static func convertDiamondSubType(_ old: DiamondGiftSubType) -> PublicChatDiamondGiftSubType {
         switch old {
-        case .send(let senderName, let tierName, let totalDiamonds):
-            return .send(senderName: senderName, tierName: tierName, totalDiamonds: totalDiamonds)
-        case .claim(let userName, let diamonds):
-            return .claim(userName: userName, diamonds: diamonds)
-        case .settled(let topUserName, let topDiamonds):
-            return .settled(topUserName: topUserName, topDiamonds: topDiamonds)
-        case .expired(let senderName, let refundDiamonds):
-            return .expired(senderName: senderName, refundDiamonds: refundDiamonds)
+        case .send(let giftId, let senderId, let senderName, let tierName, let totalDiamonds):
+            return .send(giftId: giftId, senderId: senderId, senderName: senderName,
+                         tierName: tierName, totalDiamonds: totalDiamonds)
+        case .claim(let giftId, let userId, let userName, let diamonds):
+            return .claim(giftId: giftId, userId: userId, userName: userName, diamonds: diamonds)
+        case .settled(let giftId, let topUserId, let topUserName, let topUserAvatarURL, let topDiamonds):
+            return .settled(giftId: giftId, topUserId: topUserId, topUserName: topUserName,
+                            topUserAvatarURL: topUserAvatarURL, topDiamonds: topDiamonds)
+        case .expired(let giftId, let senderId, let senderName, let refundDiamonds):
+            return .expired(giftId: giftId, senderId: senderId, senderName: senderName, refundDiamonds: refundDiamonds)
         }
     }
 }

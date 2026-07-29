@@ -110,6 +110,29 @@ public final class EnterEffectCenter: ObservableObject {
         logger.info("setActiveScene → \(key.scene.rawValue, privacy: .public):\(key.scopeId, privacy: .public) stackDepth=\(self.sceneStack.count, privacy: .public)")
     }
 
+    /// 同一 SwiftUI View 的 scopeId 变更（例如 Live A → Live B）。
+    ///
+    /// 这不是场景覆盖，旧 scope 不能压入 sceneStack；否则新房离开时会错误恢复旧房。
+    public func replaceActiveScene(_ key: GiftEffectSceneKey) {
+        guard activeKey != key else { return }
+        if activeKey?.scene == key.scene {
+            stopCurrentImmediately()
+            pending.removeAll()
+            activeKey = key
+            logger.info("replaceActiveScene → \(key.scene.rawValue, privacy: .public):\(key.scopeId, privacy: .public) stackDepth=\(self.sceneStack.count, privacy: .public)")
+            return
+        }
+        if let index = sceneStack.lastIndex(where: { $0.scene == key.scene }) {
+            // 底层 View 在通话等覆盖场景期间更新 scope：只更新待恢复的 key，不能中断前台动画。
+            sceneStack[index] = key
+            logger.info("replaceActiveScene stacked → \(key.scene.rawValue, privacy: .public):\(key.scopeId, privacy: .public)")
+            return
+        }
+        guard activeKey == nil else { return }
+        activeKey = key
+        logger.info("replaceActiveScene from nil → \(key.scene.rawValue, privacy: .public):\(key.scopeId, privacy: .public)")
+    }
+
     public func leaveScene(_ key: GiftEffectSceneKey) {
         // 正常 leave 路径
         if activeKey == key {

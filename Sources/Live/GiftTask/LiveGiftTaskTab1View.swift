@@ -219,9 +219,7 @@ struct LiveGiftHistoryRow: View {
 
     private var giftDisplay: some View {
         HStack(spacing: 2) {
-            AsyncImage(url: URL(string: item.giftIcon)) { img in
-                img.resizable().aspectRatio(contentMode: .fit)
-            } placeholder: {
+            CachedAsyncImage(url: URL(string: item.giftIcon), contentMode: .fit, cdn: (.gift, .fit)) {
                 Color.clear
             }
             .frame(width: 28, height: 28)

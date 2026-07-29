@@ -11,15 +11,37 @@ import SwiftUI
 /// - `reachedLast` sticky：滑到末尾一次后即使循环回到第 0 张，再点 Next 立即 finish
 ///   （对齐 H5 L34-36, 60-64 —— 治 loop 模式循环卡死）
 /// - onDisappear / scenePhase !=.active 时停 autoplay Task 防后台 tick 耗电
+/// - 遵循 `.claude/rules/banner-carousel-looping.md`：手动和自动分页均可连续跨首尾循环
 struct RouletteIntroPopup: View {
     @Binding var isPresented: Bool
     let onFinish: () -> Void
 
+    /// 逻辑卡片下标，用于圆点和完成状态；与 Pager 的哨兵页下标分离。
     @State private var currentCard: Int = 0
+    /// 0=末卡副本，1...n=真实卡，n+1=首卡副本。
+    @State private var selectedPage: Int = 1
     @State private var reachedLast: Bool = false     // v24 B2：sticky 到过末尾即退出
-    @State private var autoplayTask: Task<Void, Never>? = nil
+    @State private var autoplayEnabled = true
+    @State private var pageChangeOrigin: PageChangeOrigin?
+    @State private var manualInteractionGeneration = 0
+    @State private var isManualDragInProgress = false
     @Environment(\.scenePhase) private var scenePhase
     private let totalCards = 2
+
+    private enum PageChangeOrigin {
+        case automatic
+        case loopCorrection
+    }
+
+    private struct AutoplayKey: Hashable {
+        let enabled: Bool
+        let isSceneActive: Bool
+    }
+
+    private struct ResumeKey: Hashable {
+        let interactionGeneration: Int
+        let isSceneActive: Bool
+    }
 
     private var titles: [String] {
         [L10n.liveRoomRouletteIntroCard1Title,
@@ -30,7 +52,7 @@ struct RouletteIntroPopup: View {
          L10n.liveRoomRouletteIntroRpsBody]
     }
     private var icons: [String] {
-        ["gift.fill", "hand.raised.fill"]
+        ["rouletteIntroWheel", "rouletteIntroRps"]
     }
 
     var body: some View {
@@ -39,50 +61,61 @@ struct RouletteIntroPopup: View {
                 Color.black.opacity(0.5).ignoresSafeArea()
                     .contentShape(Rectangle())
 
-                VStack(spacing: 16) {
-                    // 顶部标题
+                VStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                        .frame(height: 60)
+
                     Text(L10n.liveRoomRouletteIntroHeader)
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(.white)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 16)
+                        .frame(maxWidth: .infinity)
 
-                    // 卡片区（横滑，H5 van-swipe autoplay=3500 loop=true；iOS 用 TabView 页 + 自动 Timer）
-                    TabView(selection: $currentCard) {
-                        ForEach(0..<totalCards, id: \.self) { idx in
-                            card(idx: idx).tag(idx)
+                    Spacer(minLength: 0)
+                        .frame(height: 20)
+
+                    TabView(selection: $selectedPage) {
+                        // 首尾镜像页保证用户可从任一方向连续滑动；到达后无动画归位。
+                        ForEach(0..<(totalCards + 2), id: \.self) { page in
+                            let cardIndex = (page - 1 + totalCards) % totalCards
+                            card(idx: cardIndex).tag(page)
                         }
                     }
                     .tabViewStyle(.page(indexDisplayMode: .never))
                     .frame(height: 250)
-                    .onChange(of: currentCard) { newValue in
-                        // 用户手动滑或 autoplay 到最后一张时 sticky reachedLast
-                        if newValue == totalCards - 1 { reachedLast = true }
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 10)
+                    .frame(height: 270)
+                    .background(Color.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal, 20)
+                    .simultaneousGesture(manualPagingGesture)
+                    .onChange(of: selectedPage) { page in
+                        handlePageChange(page)
                     }
 
-                    // 进度点（对齐 H5 rpsIntroPopup.vue L118-123：可点击直接跳卡 + 活跃 dot 用白色）
-                    HStack(spacing: 8) {
+                    HStack(spacing: 5) {
                         ForEach(0..<totalCards, id: \.self) { idx in
                             Circle()
                                 .fill(idx == currentCard ? Color.white : Color.white.opacity(0.3))
-                                .frame(width: 8, height: 8)
-                                .contentShape(Circle().inset(by: -8))    // 热区扩到 24×24 便于点击
+                                .frame(width: 4, height: 4)
+                                .frame(width: 24, height: 24)
+                                .contentShape(Circle())
                                 .onTapGesture {
-                                    withAnimation { currentCard = idx }
+                                    withAnimation { selectedPage = idx + 1 }
                                     if idx == totalCards - 1 { reachedLast = true }
                                 }
                                 .accessibilityAddTraits(.isButton)
                                 .accessibilityLabel(Text("Card \(idx + 1) of \(totalCards)"))
                         }
                     }
+                    .padding(.top, 1)
+                    .padding(.bottom, 7)
 
-                    // Next 按钮
                     Button(action: handleNext) {
                         Text(L10n.liveRoomRouletteIntroNext)
-                            .font(.system(size: 15, weight: .bold))
+                            .font(.system(size: 16, weight: .bold))
                             .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
+                            .frame(width: 263, height: 44)
                             .background(
                                 LinearGradient(colors: [Color(hex: 0x8515FF), Color(hex: 0xE40132)],
                                                startPoint: .leading, endPoint: .trailing),
@@ -93,65 +126,142 @@ struct RouletteIntroPopup: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .padding(.horizontal, 40)
                 }
-                .padding(.vertical, 24)
-                .frame(maxWidth: 320)
+                .frame(maxWidth: 323)
+                .frame(height: 473, alignment: .top)
                 .background(
-                    LinearGradient(colors: [Color(hex: 0x5300A1), Color(hex: 0x3800A0)],
-                                   startPoint: .top, endPoint: .bottom),
-                    in: RoundedRectangle(cornerRadius: 20)
+                    Image("rouletteIntroBackground")
+                        .resizable()
+                        .scaledToFill()
                 )
-                .padding(.horizontal, 24)
+                .overlay(alignment: .top) {
+                    Image("rouletteIntroGame")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 93, height: 93)
+                        .offset(y: -40)
+                }
+                .padding(.horizontal, 16)
             }
             .transition(.opacity)
             .onAppear {
                 // v24（B2 M4 finding）：overlay 常驻 + isPresented gate 下 @State 不会随开合重置；
                 // 显式 reset 首屏卡 + reachedLast sticky，避免"再次触发引导"直接跳过 loop 卡片
                 currentCard = 0
+                selectedPage = 1
                 reachedLast = false
-                if scenePhase == .active { startAutoplay() }
+                autoplayEnabled = true
+                manualInteractionGeneration = 0
             }
-            .onDisappear { stopAutoplay() }
-            .onChange(of: scenePhase) { phase in
-                // 后台 / 非活跃时暂停 autoplay，回前台再启（对齐能耗友好模式）
-                if phase == .active { startAutoplay() } else { stopAutoplay() }
+            .task(id: AutoplayKey(
+                enabled: autoplayEnabled,
+                isSceneActive: scenePhase == .active
+            )) {
+                guard autoplayEnabled, scenePhase == .active else { return }
+                while !Task.isCancelled {
+                    do {
+                        try await Task.sleep(nanoseconds: 3_500_000_000)
+                    } catch {
+                        return
+                    }
+                    guard !Task.isCancelled else { return }
+                    advanceCard()
+                }
+            }
+            .task(id: ResumeKey(
+                interactionGeneration: manualInteractionGeneration,
+                isSceneActive: scenePhase == .active
+            )) {
+                guard manualInteractionGeneration > 0, scenePhase == .active else { return }
+                do {
+                    try await Task.sleep(nanoseconds: 3_500_000_000)
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled, scenePhase == .active else { return }
+                autoplayEnabled = true
             }
         }
     }
 
-    private func startAutoplay() {
-        stopAutoplay()
-        autoplayTask = Task { @MainActor in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(3500))
-                guard !Task.isCancelled else { break }
-                withAnimation { currentCard = (currentCard + 1) % totalCards }
+    private func handlePageChange(_ page: Int) {
+        let origin = pageChangeOrigin
+        pageChangeOrigin = nil
+        if origin == nil {
+            pauseAutoplayForManualInteraction()
+        }
+
+        if page == 0 {
+            currentCard = totalCards - 1
+            reachedLast = true
+            resetLoopPage(from: page, to: totalCards)
+        } else if page == totalCards + 1 {
+            currentCard = 0
+            resetLoopPage(from: page, to: 1)
+        } else {
+            currentCard = page - 1
+            if currentCard == totalCards - 1 { reachedLast = true }
+        }
+    }
+
+    private func resetLoopPage(from sentinel: Int, to page: Int) {
+        DispatchQueue.main.async {
+            guard selectedPage == sentinel else { return }
+            pageChangeOrigin = .loopCorrection
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                selectedPage = page
             }
         }
     }
 
-    private func stopAutoplay() {
-        autoplayTask?.cancel()
-        autoplayTask = nil
+    private func advanceCard() {
+        let nextPage = currentCard == totalCards - 1
+            ? totalCards + 1
+            : currentCard + 2
+        pageChangeOrigin = .automatic
+        withAnimation {
+            selectedPage = nextPage
+        }
+    }
+
+    private var manualPagingGesture: some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { _ in
+                guard !isManualDragInProgress else { return }
+                isManualDragInProgress = true
+                pauseAutoplayForManualInteraction()
+            }
+            .onEnded { _ in
+                isManualDragInProgress = false
+            }
+    }
+
+    private func pauseAutoplayForManualInteraction() {
+        autoplayEnabled = false
+        manualInteractionGeneration += 1
     }
 
     @ViewBuilder
     private func card(idx: Int) -> some View {
-        VStack(spacing: 12) {
-            Image(systemName: icons[idx])
-                .font(.system(size: 48))
-                .foregroundColor(Color(hex: 0xFFBB02))
-                .frame(height: 60)
+        VStack(spacing: 0) {
+            Image(icons[idx])
+                .resizable()
+                .scaledToFit()
+                .frame(width: 72, height: 72)
             Text(titles[idx])
-                .font(.system(size: 16, weight: .bold))
+                .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(.white)
                 .multilineTextAlignment(.center)
+                .padding(.vertical, 20)
             Text(bodies[idx])
-                .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.85))
+                .font(.system(size: 12))
+                .foregroundColor(.white)
+                .lineSpacing(3)
                 .multilineTextAlignment(.leading)
-                .padding(.horizontal, 20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 0)
         }
     }
 
@@ -160,11 +270,10 @@ struct RouletteIntroPopup: View {
         // 对齐 H5 L60-64（loop=true 时防止循环卡死无法退出）
         if reachedLast || currentCard >= totalCards - 1 {
             reachedLast = true
-            stopAutoplay()
             onFinish()
             withAnimation { isPresented = false }
         } else {
-            withAnimation { currentCard += 1 }
+            withAnimation { selectedPage = currentCard + 2 }
         }
     }
 }

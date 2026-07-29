@@ -17,7 +17,7 @@ enum SystemMessageAction: Equatable {
     case markBoostingExposure(on: Bool)
 
     // MARK: - CallStore 动作
-    case callRemoteText(text: String, chatBubble: String?)
+    case callRemoteText(text: String, chatBubble: String?, sender: String)
     case callWaitState(type: Int)
     case callIncome(delta: Int)
     case callGiftIncome(delta: Int)
@@ -84,7 +84,9 @@ enum SystemMessageRouteDecision {
             let ext = payload["ext"] as? [String: Any]
             let chatBubble = Self.optionalString(ext?["chatBubble"])
                 ?? Self.optionalString(payload["chatBubble"])
-            return .callRemoteText(text: decoded, chatBubble: chatBubble)
+            return .callRemoteText(text: decoded,
+                                   chatBubble: chatBubble,
+                                   sender: Self.stringValue(payload["_nimSender"]))
         case .callPayWaitState:
             return .callWaitState(type: (payload["type"] as? Int) ?? 0)
         case .callIncomePerMinute:
@@ -128,8 +130,10 @@ enum SystemMessageRouteDecision {
              .pkMuteBroadcast, .pkChatNotice:
             return .passThrough
         case .partySeatUpdate, .partyKickedOut, .partyUpdateMedia,
-             .partySeatUpdateList, .partyProhibitMic, .partyGiftCompressed,
+             .partySeatUpdateList, .partyAuditWarning, .partyProhibitMic,
+             .partyAuthUpdate, .partyGiftCompressed,
              .partyTaskProgress, .partyTaskReward,
+             .partyPlatformAdminChange,
              .partyPrivateCallNotify,  // 1029 派对房私 call 状态通知（聊天室通道，非 sysMsg）
              .partyLuckyNumberPersonalDialog, // 1052 交给 PartyMessageRouter（sysMsg）
              .partyInviteVideoSeat:
@@ -139,6 +143,7 @@ enum SystemMessageRouteDecision {
 
         case .sendGift, .liveCallGift, .liveGiftRankUpdate, .rankUpdateOnly,
              .hotScoreUpdate, .enterRoomAnimation, .privateCallEnterAnimation,
+             .firstGiftMoment, .guardianBroadcast,
              .wishlistFirst, .wishlistTop1, .wishlistPoolDone, .wishlistGiftDone,
              .diamondBoxWarm, .diamondBoxOpen, .diamondBoxClaim, .diamondBoxSettle:
             return .passThrough

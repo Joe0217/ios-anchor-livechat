@@ -1,11 +1,13 @@
 import Foundation
 
-/// 顶部心愿单轮播的页码推进规则。独立出来保证自动轮播与手动分页后的下一轮一致。
+/// 心愿单通用逻辑索引工具。
 enum WishlistCarouselIndex {
+    /// 逻辑上的下一项：末项回到首项，供不需要视觉连续性的调用使用。
     static func next(after currentIndex: Int, count: Int) -> Int {
         guard count > 0 else { return 0 }
         return (max(0, currentIndex) + 1) % count
     }
+
 }
 
 /// 心愿单单条 item（对齐 H5 `currentLiveInfo.wishlist[]` 字段）

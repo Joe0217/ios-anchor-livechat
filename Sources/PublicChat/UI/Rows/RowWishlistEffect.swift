@@ -4,15 +4,12 @@ import SwiftUI
 /// 仅 251 TOP1 变更进入公屏；昵称为金色且可点开资料卡，251 之外的心愿节点不写公屏。
 struct RowWishlistEffect: View {
     let sender: SenderProfile?
-
-    @Environment(\.avatarUserCardPresenter) private var userCardPresenter
+    let onTapNickname: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 4) {
-            if let userId = sender?.userId, !userId.isEmpty {
-                Button {
-                    userCardPresenter?(userId)
-                } label: {
+            if let onTapNickname {
+                Button(action: onTapNickname) {
                     nickname
                 }
                 .buttonStyle(.plain)

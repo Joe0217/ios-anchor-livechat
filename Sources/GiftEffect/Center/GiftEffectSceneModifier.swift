@@ -26,6 +26,13 @@ private struct GiftEffectSceneModifier: ViewModifier {
                     GiftEffectSceneKey(scene: scene, scopeId: scopeId)
                 )
             }
+            // 同一 View 实例切到另一房间/通话时不一定会重新触发 onAppear；
+            // scope 改变必须立即硬中断旧场景并清空其队列。
+            .onChange(of: scopeId) { newScopeId in
+                GiftEffectCenter.shared.replaceActiveScene(
+                    GiftEffectSceneKey(scene: scene, scopeId: newScopeId)
+                )
+            }
             .onDisappear {
                 // 对齐 .claude/rules/swiftui-camera-preview.md §6：
                 // iOS 14+ SwiftUI 在 scenePhase=.background 时也触发 onDisappear，

@@ -26,6 +26,8 @@ final class PaidBulletQueue: ObservableObject {
     }
 
     struct Item: Identifiable, Equatable {
+        /// 同一 billId 在不同房间会话可能重复；用播放实例 ID 防止旧 View task 清掉新会话。
+        let playbackID = UUID()
         let billId: String
         let scope: Scope
         let content: String
@@ -38,7 +40,7 @@ final class PaidBulletQueue: ObservableObject {
         let hostUserId: Int?
         let targetCountryCodes: [String]
 
-        var id: String { billId }
+        var id: UUID { playbackID }
     }
 
     enum ReceiveResult: Equatable {
@@ -81,8 +83,7 @@ final class PaidBulletQueue: ObservableObject {
         seenBillIds.insert(item.billId)
         pending.append(item)
         if pending.count > queueLimit {
-            let dropped = pending.removeFirst()
-            seenBillIds.remove(dropped.billId)
+            pending.removeFirst()
         }
         playNextIfIdle()
 
@@ -114,7 +115,17 @@ final class PaidBulletQueue: ObservableObject {
         defer { dislikingBillIds.remove(item.billId) }
 
         do {
-            _ = try await service.dislike(billId: item.billId)
+            let response = try await service.dislike(billId: item.billId)
+            AnalyticsTracker.track(
+                "h_bullet_dislike",
+                properties: [
+                    "dm_id": item.billId,
+                    "sender_user_id": String(item.senderUserId),
+                    "tier": analyticsTier(for: item.scope),
+                    "sender_dislike_cnt": response.dislikeCount ?? 0,
+                    "hit_mute_threshold": response.muted ?? false,
+                ]
+            )
         } catch {
             dislikedBillIds.remove(item.billId)
             throw error
@@ -135,7 +146,7 @@ final class PaidBulletQueue: ObservableObject {
     ///
     /// 停留时间会按正文跑马灯周期动态延长，不能由队列按广播里的原始时长抢先切换。
     func completePlayback(of item: Item) {
-        guard current?.billId == item.billId else { return }
+        guard current?.playbackID == item.playbackID else { return }
         current = nil
         isPlaying = false
         playNextIfIdle()
@@ -150,6 +161,14 @@ final class PaidBulletQueue: ObservableObject {
             return !country.isEmpty && item.targetCountryCodes.contains(country)
         case .global:
             return true
+        }
+    }
+
+    private func analyticsTier(for scope: Scope) -> String {
+        switch scope {
+        case .room: return "Public"
+        case .country: return "country"
+        case .global: return "global"
         }
     }
 
@@ -233,7 +252,7 @@ final class PaidBulletQueue: ObservableObject {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = .current
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: Date())
     }

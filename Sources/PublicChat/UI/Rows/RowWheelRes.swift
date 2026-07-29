@@ -9,6 +9,7 @@ struct RowWheelRes: View {
     let resultText: String
     let resultHighlight: String?
     let theme: PublicChatTheme
+    let onTapNickname: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
@@ -20,7 +21,8 @@ struct RowWheelRes: View {
 
             HStack(alignment: .center, spacing: 4) {
                 badgesCluster
-                inlineText
+                nickname
+                resultTextView
                     .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -46,12 +48,23 @@ struct RowWheelRes: View {
         }
     }
 
-    /// 昵称 + hit + "result" + on the wheel — inline text run wrap（H5 `w-full flex flex-wrap`）
-    /// line-height 16pt 对齐 H5 line-height-16
-    private var inlineText: Text {
-        let nick = Text(sender?.nickname ?? "")
+    @ViewBuilder
+    private var nickname: some View {
+        let label = Text(sender?.nickname ?? "")
             .font(.system(size: 13, weight: .bold))
-            .foregroundColor(Color(red: 26/255, green: 1.0, blue: 205/255))   // #1AFFCD
+            .foregroundColor(Color(red: 26/255, green: 1.0, blue: 205/255))
+        if let onTapNickname {
+            Button(action: onTapNickname) { label }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(sender?.nickname ?? ""))
+        } else {
+            label
+        }
+    }
+
+    /// hit + "result" + on the wheel — inline text run wrap（H5 `w-full flex flex-wrap`）
+    /// line-height 16pt 对齐 H5 line-height-16
+    private var resultTextView: Text {
         let hit = Text(" hit ")
             .font(.system(size: 13, weight: .bold))
             .foregroundColor(.white)
@@ -61,6 +74,6 @@ struct RowWheelRes: View {
         let suffix = Text(" on the wheel")
             .font(.system(size: 13, weight: .bold))
             .foregroundColor(.white)
-        return nick + hit + result + suffix
+        return hit + result + suffix
     }
 }

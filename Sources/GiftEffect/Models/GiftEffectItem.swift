@@ -109,9 +109,9 @@ public enum GiftEffectPayloadDecoder {
         let rawIconUrl = decodeString(payload["giftIcon"] ?? payload["giftImg"])?.nilIfEmpty
         let animationUrl = normalizeAnimationUrl(rawIconUrl)
 
-        // staticImgUrl：优先小图（兼容后端字段 giftSmallImg / smallImg / giftImg）
+        // staticImgUrl：优先小图，缺失时回退 giftImg / giftIcon（P2P SEND_GIFT 仅带 giftIcon 时与 H5 一致）。
         let staticImg = decodeString(
-            payload["giftSmallImg"] ?? payload["smallImg"] ?? payload["giftImg"]
+            payload["giftSmallImg"] ?? payload["smallImg"] ?? payload["giftImg"] ?? payload["giftIcon"]
         )?.nilIfEmpty
 
         return GiftEffectItem(

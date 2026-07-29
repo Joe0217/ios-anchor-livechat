@@ -22,12 +22,15 @@ struct AudienceLiveRoomView: View {
     @State private var audienceRankInitialTopTab: RankSheetTopTab = .viewers
     @State private var showTask = false
     @State private var showWishlist = false
+    /// 客态中奖公屏点击后的受限活动半屏页。
+    @State private var winnerActivityPage: H5Page?
     @State private var userCardUserId: String?
     @State private var chatSheetPeerYxAccId: String?
     @State private var pkRankSide: PKRankSide?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openUserProfile) private var openUserProfile
+    @Environment(\.audienceGoLive) private var audienceGoLive
 
     init(anchor: LiveStreamAnchor,
          service: AudienceLiveRoomServiceProtocol = AudienceLiveRoomService()) {
@@ -40,7 +43,7 @@ struct AudienceLiveRoomView: View {
             .navigationBarBackButtonHidden(true)
             .toolbar(.hidden, for: .navigationBar)
             .preferredColorScheme(.dark)
-            .task { await store.join(anchor: anchor) }
+            .task { await prepareAndJoinRoom() }
             .onChange(of: store.state, perform: handleRoomStateChange)
             .onChange(of: agora.state, perform: handleAgoraStateChange)
             .onChange(of: audiencePKStore.phase, perform: handlePKPhaseChange)
@@ -61,8 +64,13 @@ struct AudienceLiveRoomView: View {
                 giftQueue: nim.giftAnimationQueue,
                 enterRoomQueue: nim.enterRoomQueue,
                 diamondQueue: nim.diamondGiftQueue,
-                wishAchievedQueue: nim.wishAchievedQueue
+                wishAchievedQueue: nim.wishAchievedQueue,
+                firstGiftQueue: nim.firstGiftFloatQueue,
+                guardianBroadcastQueue: nim.guardianBroadcastQueue,
+                luckyGiftNoticeQueue: nim.luckyGiftNoticeQueue,
+                liveGiftFloatQueue: nim.liveGiftFloatQueue
             ))
+            .overlay { DiamondGiftHost(store: nim.diamondGiftStore) }
             .userCardSheet(
                 item: Binding(
                     get: { userCardUserId.map { UserCardPresentation(userId: $0) } },
@@ -85,6 +93,11 @@ struct AudienceLiveRoomView: View {
             .sheet(isPresented: $showAudienceRank) { audienceRankSheet }
             .sheet(isPresented: $showTask) { taskSheet }
             .sheet(isPresented: $showWishlist) { wishlistSheet }
+            .sheet(item: $winnerActivityPage) { page in
+                H5WebSheetView(page: page, onAction: handleWinnerActivityAction)
+                    .presentationDetents([.fraction(0.5)])
+                    .presentationDragIndicator(.visible)
+            }
             .sheet(item: $pkRankSide) { side in pkRankSheet(side: side) }
             .giftEffectScene(.live, scopeId: sceneScopeId)
             .enterEffectScene(.live, scopeId: sceneScopeId)
@@ -110,16 +123,45 @@ struct AudienceLiveRoomView: View {
             case .failed(let message):
                 statusOverlay(icon: "exclamationmark.triangle.fill", message: message, allowsRetry: true)
             }
+
+            if case .live = store.state, audiencePKStore.isShowing {
+                AudiencePKOverlay(store: audiencePKStore,
+                                  onOpponentTap: { userCardUserId = String($0) },
+                                  onRankTap: { pkRankSide = $0 })
+                    .ignoresSafeArea()
+                    .zIndex(1)
+            }
         }
+    }
+
+    /// 最小化 Party 房仍占用独立 RTC/NIM 会话；客态进直播前必须先完整退出，
+    /// 否则两个实时场景并存会导致进房接口或底层音频会话失败。
+    private func prepareAndJoinRoom() async {
+        if PartyStore.shared.isMinimized {
+            await PartyStore.shared.leaveMinimizedRoom()
+        }
+        await store.join(anchor: anchor)
     }
 
     @ViewBuilder
     private var remoteVideoLayer: some View {
         if case .live = store.state {
             if audiencePKStore.isShowing {
-                HStack(spacing: 0) {
-                    RemoteVideoView(manager: agora)
-                    PKOppositeContainer(view: agora.oppositeRemoteView)
+                GeometryReader { geo in
+                    VStack(spacing: 0) {
+                        Spacer().frame(height: PKArenaLayout.topOffset)
+                        HStack(spacing: 0) {
+                            RemoteVideoView(manager: agora)
+                                .frame(width: geo.size.width / 2,
+                                       height: PKArenaLayout.videoHeight)
+                                .clipped()
+                            PKOppositeContainer(view: agora.oppositeRemoteView)
+                                .frame(width: geo.size.width / 2,
+                                       height: PKArenaLayout.videoHeight)
+                                .clipped()
+                        }
+                        Spacer(minLength: 0)
+                    }
                 }
                 .ignoresSafeArea()
                 .background(Theme.Palette.liveBottomDark)
@@ -179,25 +221,31 @@ struct AudienceLiveRoomView: View {
                     .padding(.top, 8)
             }
 
-            if audiencePKStore.isShowing {
-                AudiencePKOverlay(store: audiencePKStore,
-                                  onOpponentTap: { userCardUserId = String($0) },
-                                  onRankTap: { pkRankSide = $0 })
-                    .padding(.horizontal, Theme.Metric.liveRoomScreenHPadding)
-                    .padding(.top, 12)
-            }
-
             Spacer(minLength: 0)
 
             HStack(alignment: .bottom, spacing: 10) {
                 VStack(spacing: 0) {
                     PaidBulletFloat(queue: nim.paidBulletQueue)
-                    PublicChatListView(feed: publicChatFeed, theme: .live)
+                    PublicChatListView(
+                        feed: publicChatFeed,
+                        theme: .live,
+                        onWinnerActivity: openWinnerActivity,
+                        onTapDiamondGiftSettled: { giftId in
+                            Task { await nim.diamondGiftStore.loadWinners(giftId: giftId) }
+                        }
+                    )
                         .frame(maxHeight: 260)
                 }
                 Spacer(minLength: 0)
-                QuickGoLiveButton()
-                    .padding(.bottom, 8)
+                Button(action: goLiveAfterLeavingRoom) {
+                    Image("homeFloatGoLive")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 50, height: 50)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.toolGoLive)
+                .padding(.bottom, 8)
             }
             .padding(.horizontal, Theme.Metric.liveRoomScreenHPadding)
             .padding(.bottom, 12)
@@ -374,6 +422,8 @@ struct AudienceLiveRoomView: View {
             Task { @MainActor in audienceStore?.markEnded() }
         }
         nim.configureAudience(ownerYxAccount: info.anchorYxAccid)
+        nim.configureGuardianBroadcast(anchorUserId: info.anchorUserId)
+        nim.configureLiveGiftFloat(receiverNickname: info.anchorNickname)
         nim.configurePaidBullet(
             roomId: info.liveRecordId,
             viewerUserId: currentUser?.userId ?? 0,
@@ -382,6 +432,7 @@ struct AudienceLiveRoomView: View {
                 ?? AnchorInfoStore.shared.mine?.countryCode
                 ?? ""
         )
+        nim.configureDiamondGift(roomId: info.liveRecordId, refreshCurrent: true)
         nim.contributionStore.configure(anchorUserId: info.anchorUserIdString)
         nim.anchorRankStore.configure(anchorUserId: info.anchorUserIdString)
         nim.topRankStore.setRoomId(info.liveRecordId)
@@ -459,10 +510,25 @@ struct AudienceLiveRoomView: View {
         dismiss()
     }
 
+    /// 客态 CGoLive：先完成房间资源退出，再把 Home 路径替换为直播设置页。
+    /// 不能用通用 quickGoLive append，否则设置页 back 会回到已退出的客态房间。
+    private func goLiveAfterLeavingRoom() {
+        guard releaseRoomResources() else {
+            audienceGoLive.perform()
+            return
+        }
+        Task { @MainActor in
+            await agora.leave()
+            audienceGoLive.perform()
+        }
+    }
+
     /// H5 客态名片跳详情走 `leaveLiveRoom → router.replace('/userProfile')`；
     /// iOS 先 pop 客态房，再由 Home 的路由总线 push 详情，避免返回到已断开的 RTC 页面。
     private func openUserProfileFromCard() {
-        guard let userId = userCardUserId, !userId.isEmpty else { return }
+        guard let rawUserId = userCardUserId else { return }
+        let userId = rawUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !userId.isEmpty else { return }
         userCardUserId = nil
         leaveRoomResources()
         dismiss()
@@ -471,10 +537,54 @@ struct AudienceLiveRoomView: View {
         }
     }
 
+    /// 与主播态一致：活动留在当前直播页的半屏容器内，只有 HTTPS 页面能获得受限 Bridge 上下文。
+    @MainActor
+    private func openWinnerActivity(_ rawURL: String) {
+        guard let url = sanitizedWinnerActivityURL(rawURL),
+              url.scheme?.lowercased() == "https",
+              url.host != nil else {
+            AppLogger.net.notice("[AudienceLiveWinner] ignored invalid activity URL")
+            return
+        }
+        winnerActivityPage = H5Page(
+            url: url,
+            bridgeMode: .trusted(H5TrustedOriginPolicy(origins: [url])),
+            runtimeContext: .activity()
+        )
+    }
+
+    private func sanitizedWinnerActivityURL(_ rawURL: String) -> URL? {
+        guard let url = URL(string: rawURL),
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+        components.queryItems?.removeAll { ["roomId", "roomType", "reportParams"].contains($0.name) }
+        return components.url
+    }
+
+    @MainActor
+    private func handleWinnerActivityAction(_ action: H5BridgeAction) {
+        switch action {
+        case .goLive, .goRoom, .close:
+            winnerActivityPage = nil
+        case .goProfile(let userId):
+            winnerActivityPage = nil
+            if let userId, !userId.isEmpty { userCardUserId = userId }
+        default:
+            break
+        }
+    }
+
     private func leaveRoomResources() {
+        guard releaseRoomResources() else { return }
+        Task { await agora.leave() }
+    }
+
+    /// 返回是否有 Agora 会话需要异步离开。所有调用方共用同一套清理，避免重复的 IM/PK router 残留。
+    private func releaseRoomResources() -> Bool {
         guard didConnect else {
             store.cancel()
-            return
+            return false
         }
         didConnect = false
         store.cancel()
@@ -487,7 +597,7 @@ struct AudienceLiveRoomView: View {
         nim.topRankStore.clear()
         nim.wishlistStore.reset()
         nim.liveGiftTaskStore.reset()
-        Task { await agora.leave() }
+        return true
     }
 }
 

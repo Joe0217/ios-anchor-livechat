@@ -97,7 +97,9 @@ enum IMSceneFilter {
         case .complianceWarning,            // 61 合规警告 toast
              .boostingExposure,             // 63 进折扣池
              .boostingExposureExit,         // 64 退折扣池
+             .guardianBroadcast,            // 146 守护开通/续费顶部广播
              .liveAnnouncement,             // 195 直播间公告
+             .firstGiftMoment,               // 197 首礼时刻公屏 / 顶部飘屏
              .privateCallSwitchChange,      // 52 私 call 开关
              .liveGiftRankUpdate,           // 50 直播间排行 + 热度
              .rankUpdateOnly,               // 56 排行（不含热度）
@@ -135,11 +137,14 @@ enum IMSceneFilter {
              .pkMuteBroadcast, .pkChatNotice,
              .partySeatUpdate, .partyKickedOut, .partyUpdateMedia,
              .partySeatUpdateList, .partyProhibitMic, .partyGiftCompressed,
-             .partyPrivateCallNotify,  // 1029 派对房私 call 状态通知（聊天室通道，非 sysMsg）
-             .partyInviteVideoSeat:
+             .partyPrivateCallNotify:  // 1029 派对房私 call 状态通知（聊天室通道，非 sysMsg）
             return false
 
-        case .partyTaskProgress, .partyTaskReward:
+        // 1014/1019/1024、1022/1023 与 1040-1048 都会通过 CustomSystemNotification 送达。
+        // 视频位邀请若在这里丢弃，被邀请人永远不会看到接受/拒绝弹窗。
+        case .partyAuditWarning, .partyAuthUpdate,
+             .partyTaskProgress, .partyTaskReward,
+             .partyPlatformAdminChange, .partyInviteVideoSeat:
             return active.contains(.party)
 
         // 1052 是仅中奖者收到的 CustomSystemNotification；只在当前 Party 房活跃时消费。

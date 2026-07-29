@@ -41,6 +41,10 @@ public final class GiftEffectCenter: ObservableObject {
     private var pending: [GiftEffectItem] = []
     private var activeKey: GiftEffectSceneKey?
 
+    /// H5 仅在直播 PK 正式对战期间重排礼物队列；准备和惩罚阶段保持普通 FIFO。
+    private var isLivePKActive = false
+    private var livePKQueueLimit = 15
+
     /// 场景栈（2026-07-10 code-review P0-3 修复）：
     /// setActiveScene push 旧 activeKey，leaveScene pop restore；支持
     /// Live→Call→回 Live / Chat→Call→回 Chat / Party→Call→回 Party 自动恢复。
@@ -115,6 +119,30 @@ public final class GiftEffectCenter: ObservableObject {
         logger.info("setActiveScene → \(key.scene.rawValue, privacy: .public):\(key.scopeId, privacy: .public) stackDepth=\(self.sceneStack.count, privacy: .public)")
     }
 
+    /// 同一 SwiftUI View 的 scopeId 变更（例如 Live A → Live B）。
+    ///
+    /// 这不是场景覆盖，旧 scope 不能压入 sceneStack；否则新房离开时会错误恢复旧房。
+    public func replaceActiveScene(_ key: GiftEffectSceneKey) {
+        guard activeKey != key else { return }
+        if activeKey?.scene == key.scene {
+            stopCurrentImmediately()
+            pending.removeAll()
+            microToasts.removeAll()
+            activeKey = key
+            logger.info("replaceActiveScene → \(key.scene.rawValue, privacy: .public):\(key.scopeId, privacy: .public) stackDepth=\(self.sceneStack.count, privacy: .public)")
+            return
+        }
+        if let index = sceneStack.lastIndex(where: { $0.scene == key.scene }) {
+            // 底层 View 在通话等覆盖场景期间更新 scope：只更新待恢复的 key，不能中断前台动画。
+            sceneStack[index] = key
+            logger.info("replaceActiveScene stacked → \(key.scene.rawValue, privacy: .public):\(key.scopeId, privacy: .public)")
+            return
+        }
+        guard activeKey == nil else { return }
+        activeKey = key
+        logger.info("replaceActiveScene from nil → \(key.scene.rawValue, privacy: .public):\(key.scopeId, privacy: .public)")
+    }
+
     /// 离开场景。若 sceneStack 有栈顶则 pop restore；否则 activeKey=nil。
     /// 硬中断当前播放 + 清 pending/microToasts。
     ///
@@ -173,17 +201,37 @@ public final class GiftEffectCenter: ObservableObject {
             logger.info("party me-sent gift head-inserted: \(item.giftName, privacy: .public)")
         } else {
             pending.append(item)
-            while pending.count > Self.queueLimit {
-                let dropped = pending.removeFirst()
-                logger.info("queue overflow dropped: \(dropped.giftName, privacy: .public)")
-            }
+            normalizePendingQueue()
         }
         playNextIfIdle()
+    }
+
+    /// 同步直播 PK 对战状态。H5 在 PK 期间按价格降序、时间升序重排待播礼物，
+    /// 并由 `pk_gift_queue` 限制总队列长度；正在播放的礼物始终保留在队首。
+    public func setLivePKActive(_ active: Bool, queueLimit: Int?) {
+        isLivePKActive = active
+        let configuredLimit = queueLimit ?? 15
+        // H5 `pkGiftsQueueLengthMax || 15`：0 或负数均视为后端未配置。
+        livePKQueueLimit = configuredLimit > 0 ? configuredLimit : 15
+        normalizePendingQueue()
     }
 
     public func showMicroToast(_ toast: MicroToastItem) {
         guard let active = activeKey, active == toast.sceneKey else { return }
         guard active.scene != .chat else { return }
+        // H5 g-faceTime/giftFloatTips.vue 在收到静态礼物后延时 500ms 再显示。
+        if active.scene == .call {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                guard let self, !Task.isCancelled, self.activeKey == toast.sceneKey else { return }
+                self.presentMicroToast(toast)
+            }
+            return
+        }
+        presentMicroToast(toast)
+    }
+
+    private func presentMicroToast(_ toast: MicroToastItem) {
         // 2026-07-10 code-review E-3 修复：MicroToast cap 3（View 只渲染 .last，多的都是浪费）；
         // 突发时替换旧的而非无限 append，避免 O(n) removeAll + 大量 Task sleep 并发
         let cap = 3
@@ -252,6 +300,26 @@ public final class GiftEffectCenter: ObservableObject {
     private func onPlayerFinished() {
         current = nil
         playNextIfIdle()
+    }
+
+    private func normalizePendingQueue() {
+        if isLivePKActive, activeKey?.scene == .live {
+            pending.sort { lhs, rhs in
+                if lhs.giftPrice != rhs.giftPrice { return lhs.giftPrice > rhs.giftPrice }
+                return lhs.timestamp < rhs.timestamp
+            }
+            // `current` 已从 pending 取出，等价于 H5 保留队首播放项后只截断待播部分。
+            let pendingLimit = max(0, livePKQueueLimit - (current == nil ? 0 : 1))
+            if pending.count > pendingLimit {
+                pending.removeLast(pending.count - pendingLimit)
+            }
+            return
+        }
+
+        while pending.count > Self.queueLimit {
+            let dropped = pending.removeFirst()
+            logger.info("queue overflow dropped: \(dropped.giftName, privacy: .public)")
+        }
     }
 }
 

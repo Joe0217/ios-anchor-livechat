@@ -2,6 +2,15 @@ import SwiftUI
 import os
 
 private let translateLogger = Logger(subsystem: "com.anchor.livechat", category: "public-chat-translate")
+private let publicChatScrollCoordinateSpace = "PublicChatScroll"
+
+private struct PublicChatBottomOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
 
 /// 跨场景公屏消息列表容器。使用方：
 /// ```
@@ -22,32 +31,78 @@ struct PublicChatListView: View {
     var onScreenReply: ((UnifiedPublicChatMessage) -> Void)? = nil
     /// v24（B4）：MSG 半屏私聊回调；nil = 关闭 hi 气泡的 MSG 分支（Screen 仍可 wired）
     var onMsgOpen: ((UnifiedPublicChatMessage) -> Void)? = nil
+    /// 活动中奖广播的点击入口；LiveRoom 传入受限活动 WebView 承载。
+    var onWinnerActivity: ((String) -> Void)? = nil
+    /// 钻石福袋结算卡的点击入口。
+    var onTapDiamondGiftSettled: ((Int64) -> Void)? = nil
 
     /// 防重入 map：正在翻译中的 msgId（避免用户狂点重复请求）
     @State private var pendingTranslateIds: Set<UUID> = []
     /// v24 B4：当前弹 hi 动作 confirmationDialog 的目标消息（同一时刻至多 1 个）
     @State private var hiActionMsg: UnifiedPublicChatMessage? = nil
+    /// H5 主播端手动上翻时不强制回底；下一条消息以浮动入口提示。
+    @State private var isNearBottom = true
+    @State private var showsNewMessageButton = false
+    @State private var scrollViewportHeight: CGFloat = 0
+    /// 复用直播页已有的名片卡承载；未挂载 presenter 的独立场景保持无操作。
+    @Environment(\.avatarUserCardPresenter) private var userCardPresenter
 
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: theme.rowSpacing) {
-                    ForEach(feed.messages.suffix(theme.suffixCount)) { msg in
+                    ForEach(visibleMessages) { msg in
                         PublicChatRow(
                             message: msg,
                             theme: theme,
                             onTapTranslate: translationEnabled ? handleTapTranslate : nil,
                             isTranslating: pendingTranslateIds.contains(msg.id),
-                            onTapHi: hiEnabled ? handleTapHi : nil
+                            onTapHi: hiEnabled ? handleTapHi : nil,
+                            onTapUserCard: userCardPresenter,
+                            onWinnerActivity: onWinnerActivity,
+                            onTapDiamondGiftSettled: onTapDiamondGiftSettled
                         ).id(msg.id)
                     }
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: PublicChatBottomOffsetPreferenceKey.self,
+                            value: proxy.frame(in: .named(publicChatScrollCoordinateSpace)).maxY
+                        )
+                    }
+                    .frame(height: 0)
                 }
                 .padding(.horizontal, theme.horizontalInset)
                 .padding(.bottom, theme.bottomInset)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .coordinateSpace(name: publicChatScrollCoordinateSpace)
+            .background {
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { scrollViewportHeight = proxy.size.height }
+                        .onChange(of: proxy.size.height) { scrollViewportHeight = $0 }
+                }
+            }
+            .onPreferenceChange(PublicChatBottomOffsetPreferenceKey.self, perform: updateScrollPosition)
             .background(theme.containerBackground)
-            .onChange(of: feed.messages.count, perform: handleMessagesCountChange(proxy: proxy))
+            .onAppear { scrollToBottom(proxy: proxy) }
+            .onChange(of: lastVisibleMessageID, perform: handleNewMessage(proxy: proxy))
+            .overlay(alignment: .bottom) {
+                if showsNewMessageButton {
+                    Button {
+                        scrollToBottom(proxy: proxy)
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(width: 30, height: 30)
+                            .background(Color.black.opacity(0.64), in: RoundedRectangle(cornerRadius: 4))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("New messages"))
+                    .padding(.bottom, 6)
+                }
+            }
             .confirmationDialog(
                 nicknameForHiDialog,
                 isPresented: Binding(
@@ -93,11 +148,37 @@ struct PublicChatListView: View {
         hiActionMsg = msg
     }
 
-    private func handleMessagesCountChange(proxy: ScrollViewProxy) -> (Int) -> Void {
+    private var visibleMessages: ArraySlice<UnifiedPublicChatMessage> {
+        feed.messages.suffix(theme.suffixCount)
+    }
+
+    private var lastVisibleMessageID: UUID? {
+        visibleMessages.last?.id
+    }
+
+    private func updateScrollPosition(bottomOffset: CGFloat) {
+        guard scrollViewportHeight > 0 else { return }
+        let nearBottom = bottomOffset <= scrollViewportHeight + theme.autoScrollThreshold
+        isNearBottom = nearBottom
+        if nearBottom { showsNewMessageButton = false }
+    }
+
+    private func handleNewMessage(proxy: ScrollViewProxy) -> (UUID?) -> Void {
         { _ in
-            guard let last = feed.messages.last else { return }
-            withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(last.id, anchor: .bottom) }
+            guard let last = lastVisibleMessageID else { return }
+            if isNearBottom {
+                withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(last, anchor: .bottom) }
+                showsNewMessageButton = false
+            } else if theme.scene == .live {
+                showsNewMessageButton = true
+            }
         }
+    }
+
+    private func scrollToBottom(proxy: ScrollViewProxy) {
+        guard let last = lastVisibleMessageID else { return }
+        withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(last, anchor: .bottom) }
+        showsNewMessageButton = false
     }
 
     private func handleTapTranslate(_ msg: UnifiedPublicChatMessage) {
@@ -108,9 +189,6 @@ struct PublicChatListView: View {
               !content.isEmpty else { return }
         pendingTranslateIds.insert(msg.id)
 
-        // 防御：AppConfigStore 冷启动竞态时回落 hardcode fallback（对齐 ChatDetailView.handleTranslate）
-        let key = AppConfigStore.shared.microsoftTranslatorKey ?? AppConfigStore.translatorKeyFallback
-        let area = AppConfigStore.shared.microsoftTranslatorArea ?? AppConfigStore.translatorAreaFallback
         let targetLang: String = {
             switch AppLocaleStore.shared.current {
             case .en: return "en"
@@ -122,9 +200,13 @@ struct PublicChatListView: View {
 
         Task { @MainActor in
             defer { pendingTranslateIds.remove(msg.id) }
+            guard let credentials = await translatorCredentials() else {
+                translateLogger.warning("[PublicChat] translate unavailable: config missing")
+                return
+            }
             do {
                 let translated = try await MicrosoftTranslateService.shared.translate(
-                    text: content, targetLang: targetLang, key: key, area: area
+                    text: content, targetLang: targetLang, key: credentials.key, area: credentials.area
                 )
                 feed.setTranslation(messageId: msg.id, translation: translated)
             } catch {
@@ -132,5 +214,21 @@ struct PublicChatListView: View {
                 // 公屏 UX 无 toast（对齐 H5 messageScroller 静默失败）
             }
         }
+    }
+
+    private func translatorCredentials() async -> (key: String, area: String)? {
+        if let key = AppConfigStore.shared.microsoftTranslatorKey,
+           let area = AppConfigStore.shared.microsoftTranslatorArea,
+           !key.isEmpty, !area.isEmpty {
+            return (key, area)
+        }
+
+        await AppConfigStore.shared.activate()
+        guard let key = AppConfigStore.shared.microsoftTranslatorKey,
+              let area = AppConfigStore.shared.microsoftTranslatorArea,
+              !key.isEmpty, !area.isEmpty else {
+            return nil
+        }
+        return (key, area)
     }
 }

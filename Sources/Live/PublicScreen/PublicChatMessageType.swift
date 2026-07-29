@@ -27,10 +27,14 @@ enum PublicChatMessageType: Equatable {
     /// v18 官方推荐进房（inLiveChannel===1，对齐 H5 L595）
     case officialBoostEnter
     case pkNotify
-    /// v18 猜拳获胜（attachType 144）—— medalUrl + medalHours（H5 `Number` 语义，允许小数）
-    case rpsWin(medalUrl: String?, medalHours: Double?)
+    /// PK 结束后主播侧贡献榜前三（由 PKStore 拉取 getPkTop3RankList）。
+    case pkTopContributors(users: [PublicChatUserTarget])
+    /// 小游戏获胜（attachType 144）—— 猜拳与幸运骰子共用消息协议。
+    case rpsWin(medalUrl: String?, medalHours: Double?, gameType: LiveSmallGameType)
     case wheelRes
     case announcement
+    /// 首礼时刻（attachType 197）：服务端给定背景图、文案及礼物图。
+    case firstGiftMoment(backgroundURL: String?, renderedText: String, giftIconURL: String?, isFirstGift: Bool)
     /// v18 活动中奖广播（attachType 140）
     case winnerBroadcast(activityName: String, quantity: Int?)
     /// v18 心愿单 TOP1 登顶（attachType 251）
@@ -48,9 +52,11 @@ enum PublicChatMessageType: Equatable {
         case .enterRoom: return .enterRoom
         case .officialBoostEnter: return .officialBoostEnter
         case .pkNotify: return .pkNotify
+        case .pkTopContributors: return .pkTopContributors
         case .rpsWin: return .rpsWin
         case .wheelRes: return .wheelRes
         case .announcement: return .announcement
+        case .firstGiftMoment: return .firstGiftMoment
         case .winnerBroadcast: return .winnerBroadcast
         case .wishlistEffect: return .wishlistEffect
         case .diamondGift: return .diamondGift
@@ -59,19 +65,20 @@ enum PublicChatMessageType: Equatable {
 
     enum Discriminator {
         case anchor, regular, gift, luckyGift, enterRoom, officialBoostEnter,
-             pkNotify, rpsWin, wheelRes, announcement,
-             winnerBroadcast, wishlistEffect, diamondGift
+             pkNotify, pkTopContributors, rpsWin, wheelRes, announcement,
+             firstGiftMoment, winnerBroadcast, wishlistEffect, diamondGift
     }
 }
 
 /// v18 钻石盲盒 4 子类型（对齐 H5 attachType 1030/1032/1033）
 enum DiamondGiftSubType: Equatable {
     /// 1030 发包
-    case send(senderName: String, tierName: String?, totalDiamonds: Int64)
+    case send(giftId: Int64, senderId: String, senderName: String, tierName: String?, totalDiamonds: Int64)
     /// 1032 瓜分
-    case claim(userName: String, diamonds: Int64)
+    case claim(giftId: Int64, userId: String, userName: String, diamonds: Int64)
     /// 1033 结算（TOP 分享）
-    case settled(topUserName: String, topDiamonds: Int64)
+    case settled(giftId: Int64, topUserId: String, topUserName: String,
+                 topUserAvatarURL: String?, topDiamonds: Int64)
     /// 1033 过期退回
-    case expired(senderName: String, refundDiamonds: Int64)
+    case expired(giftId: Int64, senderId: String, senderName: String, refundDiamonds: Int64)
 }

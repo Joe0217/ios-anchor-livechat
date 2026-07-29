@@ -13,6 +13,7 @@ struct RowLuckyGift: View {
     let count: Int
     let totalReward: Int64
     let theme: PublicChatTheme
+    let onTapNickname: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
@@ -41,23 +42,42 @@ struct RowLuckyGift: View {
         )
     }
 
-    /// 富文本：nickname #1AFFCD · " won " · "<totalReward> 💎" #F2FF00 · " by sending lucky " · " xN"
-    private var content: Text {
-        let nick = Text(sender?.nickname ?? "")
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundColor(Color(red: 26/255, green: 1.0, blue: 205/255))   // #1AFFCD
-        let won = Text(" won ")
-            .font(.system(size: 13))
-            .foregroundColor(.white)
-        let reward = Text("\(totalReward) 💎")
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundColor(Color(red: 242/255, green: 1.0, blue: 0))   // #F2FF00
-        let sending = Text(" by sending lucky ")
-            .font(.system(size: 13))
-            .foregroundColor(.white)
-        let giftCount = Text("x\(count)")
-            .font(.system(size: 13, weight: .medium))
-            .foregroundColor(.white)
-        return nick + won + reward + sending + giftCount
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 3) {
+                nickname
+                Text(L10n.publicScreenLuckyWin)
+                    .foregroundColor(.white)
+                Text("\(totalReward) 💎")
+                    .fontWeight(.semibold)
+                    .foregroundColor(Color(red: 242/255, green: 1.0, blue: 0))
+            }
+            HStack(spacing: 3) {
+                Text(L10n.publicScreenLuckyBySending)
+                    .foregroundColor(.white)
+                if let raw = iconURL, let url = URL(string: raw), !raw.isEmpty {
+                    CachedAsyncImage(url: url, contentMode: .fit, cdn: (.gift, .fit)) { Color.clear }
+                        .frame(width: 20, height: 20)
+                }
+                Text("x\(count)")
+                    .foregroundColor(.white)
+                    .fontWeight(.medium)
+            }
+        }
+        .font(.system(size: 13))
+    }
+
+    @ViewBuilder
+    private var nickname: some View {
+        let label = Text(sender?.nickname ?? "")
+            .fontWeight(.semibold)
+            .foregroundColor(Color(red: 26/255, green: 1.0, blue: 205/255))
+        if let onTapNickname {
+            Button(action: onTapNickname) { label }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(sender?.nickname ?? ""))
+        } else {
+            label
+        }
     }
 }

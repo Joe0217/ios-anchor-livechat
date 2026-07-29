@@ -1,17 +1,26 @@
 import Foundation
 
+/// Party 礼物公屏所需的收礼人信息。Live 礼物不传该字段，保持原有展示。
+struct PublicChatGiftRecipient: Equatable {
+    let userId: String?
+    let nickname: String?
+    let avatarURL: String?
+}
+
 enum PublicChatVariant: Equatable {
     case text(content: String, mentions: [Mention] = [], translation: String? = nil, replyToNick: String? = nil)
     case anchor(content: String, translation: String? = nil)
-    case gift(iconURL: String?, name: String, count: Int)
+    case gift(iconURL: String?, name: String, count: Int, recipients: [PublicChatGiftRecipient] = [])
     case luckyGift(iconURL: String?, count: Int, totalReward: Int64)
     case enterRoom(vehicleImg: String?, itemSmallImg: String?)
     case officialBoostEnter
     case pkNotify(richText: [RichSegment])
-    case rpsWin(medalUrl: String?, medalHours: Double?)
+    case pkTopContributors(users: [PublicChatUserTarget])
+    case rpsWin(medalUrl: String?, medalHours: Double?, gameType: LiveSmallGameType)
     case wheelRes(resultText: String, resultHighlight: String?)
     case announcement(text: String, kind: AnnouncementKind)
-    case winnerBroadcast(activityName: String, quantity: Int?, imageURL: String?, joinCTA: String?, avatar: String?)
+    case firstGiftMoment(backgroundURL: String?, renderedText: String, giftIconURL: String?, isFirstGift: Bool)
+    case winnerBroadcast(activityName: String, quantity: Int?, messageImageURL: String?, prizeImageURL: String?, joinCTA: String?, avatar: String?, validDays: Int?, nicknameColorHex: String?, prizeColorHex: String?, cardType: String?)
     /// 心愿单 TOP1 变更。昵称和 userId 由消息 sender 承载，便于点击打开资料卡。
     case wishlistEffect
     case diamondGift(subType: PublicChatDiamondGiftSubType)
@@ -28,8 +37,8 @@ enum PublicChatVariant: Equatable {
 
     enum Discriminator: String, CaseIterable {
         case text, anchor, gift, luckyGift, enterRoom, officialBoostEnter,
-             pkNotify, rpsWin, wheelRes, announcement, winnerBroadcast,
-             wishlistEffect, diamondGift, gameWinNotify, partyModeSwitch,
+             pkNotify, pkTopContributors, rpsWin, wheelRes, announcement, winnerBroadcast,
+             firstGiftMoment, wishlistEffect, diamondGift, gameWinNotify, partyModeSwitch,
              partyLuckyNumber, partyBattle, bonus, system
     }
 
@@ -42,9 +51,11 @@ enum PublicChatVariant: Equatable {
         case .enterRoom: return .enterRoom
         case .officialBoostEnter: return .officialBoostEnter
         case .pkNotify: return .pkNotify
+        case .pkTopContributors: return .pkTopContributors
         case .rpsWin: return .rpsWin
         case .wheelRes: return .wheelRes
         case .announcement: return .announcement
+        case .firstGiftMoment: return .firstGiftMoment
         case .winnerBroadcast: return .winnerBroadcast
         case .wishlistEffect: return .wishlistEffect
         case .diamondGift: return .diamondGift

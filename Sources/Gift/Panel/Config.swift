@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 // MARK: - Config
@@ -85,8 +86,8 @@ enum FooterMode {
     /// 派对房送礼（H-5 接入 `PartyGiftSendService`）；service=nil 时回退 300ms mock（历史 pattern 保底）。
     /// Store 内部：真 service → 真调用 + phase 分流（sent/sendFailed/insufficientBalance）；mock → 直接 sent
     case send(onSend: (GiftListData, Int, [String]) -> Void, service: PartyGiftSendService?)
-    /// H+ 1v1 索要礼物占位
-    case askFor(onAsk: (GiftListData) -> Void)
+    /// 1v1 索要礼物。请求成功后才关闭面板；失败时保留选择并允许重试。
+    case askFor(onAsk: (GiftListData) async throws -> Void)
 }
 
 /// grid tap 交互模式（spec §2.4 不变量）。
@@ -138,15 +139,47 @@ struct ReceiversConfig {
     var allowMultiSelect: Bool
     var initialSelection: Set<String>
     var showAllButton: Bool
+    /// Party 普通礼物和背包共用同一收礼人选择，与 H5 的父级 selectedRecipients 一致。
+    var selectionState: GiftRecipientSelectionState?
 
     init(items: [ReceiverItem],
                 allowMultiSelect: Bool = false,
                 initialSelection: Set<String> = [],
-                showAllButton: Bool = false) {
+                showAllButton: Bool = false,
+                selectionState: GiftRecipientSelectionState? = nil) {
         self.items = items
         self.allowMultiSelect = allowMultiSelect
         self.initialSelection = initialSelection
         self.showAllButton = showAllButton
+        self.selectionState = selectionState
+    }
+}
+
+/// Party 礼物架跨普通礼物/背包共用的收礼人选择。
+/// `isInitialized` 区分“首次打开”与“用户主动取消全部”，防止重建子面板时覆盖选择。
+final class GiftRecipientSelectionState: ObservableObject {
+    @Published private(set) var ids: Set<String> = []
+    private(set) var isInitialized = false
+
+    func initializeIfNeeded(defaultSelection: Set<String>) {
+        guard !isInitialized else { return }
+        ids = defaultSelection
+        isInitialized = true
+    }
+
+    func replace(with ids: Set<String>) {
+        self.ids = ids
+        isInitialized = true
+    }
+
+    func retainValidIDs(_ validIDs: Set<String>) {
+        guard isInitialized else { return }
+        ids.formIntersection(validIDs)
+    }
+
+    func reset() {
+        ids = []
+        isInitialized = false
     }
 }
 
@@ -254,15 +287,18 @@ extension CommonGiftPanelConfig {
     /// - Parameter sendService: 送礼 service（默认 `DefaultPartyGiftSendService(roomId:)`）
     /// - Parameter balance: 余额 source（默认 `PartyBalanceSource(service:)`）
     /// - Parameter onRecharge: tap "Recharge" 按钮触发；本轮建议挂 toast "充值功能开发中"
+    /// - Parameter onOpenBackpack: Party 背包入口。库存和普通礼物分属不同协议，面板只负责暴露入口；
+    ///   由 Party 房容器承载背包选择与发送流程。
     /// - Parameter onSend: sendGift 成功回调（Store 内部已处理 phase.sent + 余额更新，此处仅供 caller 通知 UI 关面板等）
     ///
-    /// MVP 收敛（spec §0.3）：仅 popular tab · 无背包（backpack .hidden）· 无 exclusive/lucky tab；
-    /// H5 用户端 party-gift-popup.vue 3+ tab 待未来里程碑扩展
+    /// 对齐 H5 Party 礼物架：Popular / Exclusive / Lucky Gift 三个后端标准分类。
+    /// Backpack 是独立库存与发送协议，尚未接入时保持隐藏，不能把普通 Party 送礼服务误复用过去。
     static func partySend(roomId: String,
                           receivers: ReceiversConfig,
                           sendService: PartyGiftSendService? = nil,
                           balance: GiftPanelBalanceSource? = nil,
                           onRechargeRequested: @escaping () -> Void = {},
+                          onOpenBackpack: (() -> Void)? = nil,
                           onSend: @escaping (_ gift: GiftListData, _ count: Int, _ yxAccidList: [String]) -> Void) -> Self {
         let effectiveSendService = sendService ?? DefaultPartyGiftSendService(roomId: roomId)
         // review #2 · balance 一体化：单一 PartyGiftDataSource 实例同时作 dataSource + balance source
@@ -271,11 +307,11 @@ extension CommonGiftPanelConfig {
         let sharedDataSource = PartyGiftDataSource()
         let effectiveBalance: GiftPanelBalanceSource = balance ?? sharedDataSource
         return Self(
-            tabs: [.popular],  // MVP: 仅 popular（spec §0.3）
+            tabs: [.popular, .exclusiveGift, .luckyGift],
             footer: .send(onSend: onSend, service: effectiveSendService),
             countStepper: .visible(range: 1...99),
             balance: .visible(source: effectiveBalance),
-            backpack: .hidden,  // MVP 无背包（spec §0.3）
+            backpack: onOpenBackpack.map { .visible(onTap: $0) } ?? .hidden,
             receivers: receivers,
             interaction: .selectable,
             title: nil,
@@ -285,7 +321,7 @@ extension CommonGiftPanelConfig {
     }
 
     /// 1v1 通话索要礼物（H+ 1v1 场景接入；对齐 H5 `askForGift`）
-    static func callAskFor(onAsk: @escaping (GiftListData) -> Void) -> Self {
+    static func callAskFor(onAsk: @escaping (GiftListData) async throws -> Void) -> Self {
         Self(
             tabs: [.popular],
             footer: .askFor(onAsk: onAsk),

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 底部 3s 小飘窗层（1v1 通话 / 直播 / 派对房 无动画资源礼物的兜底提示）
+/// 无动画资源礼物飘窗层。通话场景居中呈现，直播和派对保留底部轻提示。
 ///
 /// H5 蓝本 `giftFloatTips.vue`：图 + x数量，3s 自动消失。
 /// 私聊场景不启用（Center.showMicroToast 已按 scene=.chat 过滤）。
@@ -11,19 +11,35 @@ struct MicroToastLayer: View {
     @ObservedObject var bridge: GiftEffectMicroToastBridge
 
     var body: some View {
-        VStack {
-            Spacer()
+        Group {
             if let latest = bridge.toasts.last {
-                HStack(spacing: 10) {
-                    MicroToastIcon(urlString: latest.imgUrl)
-                        .frame(width: 60, height: 60)
-                    Text("×\(latest.count)")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(Color(red: 0.58, green: 0.20, blue: 0.92))
+                if latest.sceneKey.scene == .call {
+                    // H5 g-faceTime/giftFloatTips.vue：居中 120pt 礼物图 + 38pt 紫色数量。
+                    HStack(spacing: 10) {
+                        MicroToastIcon(urlString: latest.imgUrl)
+                            .frame(width: 120, height: 120)
+                        Text("× \(latest.count)")
+                            .font(.system(size: 38, weight: .bold))
+                            .foregroundColor(Color(red: 0.58, green: 0.20, blue: 0.92))
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .transition(.opacity)
+                    .id(latest.id)
+                } else {
+                    VStack {
+                        Spacer()
+                        HStack(spacing: 10) {
+                            MicroToastIcon(urlString: latest.imgUrl)
+                                .frame(width: 60, height: 60)
+                            Text("×\(latest.count)")
+                                .font(.system(size: 24, weight: .bold))
+                                .foregroundColor(Color(red: 0.58, green: 0.20, blue: 0.92))
+                        }
+                        .padding(.bottom, 200)
+                        .transition(.opacity)
+                        .id(latest.id)
+                    }
                 }
-                .padding(.bottom, 200)
-                .transition(.opacity)
-                .id(latest.id)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

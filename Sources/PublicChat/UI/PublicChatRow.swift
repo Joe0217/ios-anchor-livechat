@@ -19,13 +19,19 @@ struct PublicChatRow: View {
     /// 门控：仅 `.text` variant + `sender?.isSelf == false` + `theme.scene == .live` 时传给 Row
     /// （PublicChatListView 层收敛 popover state）
     var onTapHi: ((UnifiedPublicChatMessage) -> Void)? = nil
+    /// 公屏发送者昵称点击。所有可解析 userId（包括当前登录主播）均可拉起名片卡。
+    var onTapUserCard: ((String) -> Void)? = nil
+    /// 活动中奖广播点击。
+    var onWinnerActivity: ((String) -> Void)? = nil
+    /// 钻石福袋结算卡点击，主播端据此打开获奖名单。
+    var onTapDiamondGiftSettled: ((Int64) -> Void)? = nil
 
     var body: some View {
         Group {
             switch message.variant.discriminator {
-            case .text, .anchor, .gift, .luckyGift, .partyLuckyNumber, .system:
+            case .text, .anchor, .gift, .luckyGift, .firstGiftMoment, .partyLuckyNumber, .system:
                 textGiftGroup
-            case .enterRoom, .officialBoostEnter, .announcement, .pkNotify, .partyModeSwitch, .partyBattle:
+            case .enterRoom, .officialBoostEnter, .announcement, .pkNotify, .pkTopContributors, .partyModeSwitch, .partyBattle:
                 notifyGroup
             case .rpsWin, .wheelRes, .winnerBroadcast, .wishlistEffect, .diamondGift, .gameWinNotify:
                 activityGroup
@@ -46,7 +52,8 @@ struct PublicChatRow: View {
                     sender: message.sender, content: c, mentions: mentions,
                     translation: translation, replyToNick: replyToNick,
                     onTapTranslate: showTranslate ? { onTapTranslate?(message) } : nil,
-                    isTranslating: isTranslating
+                    isTranslating: isTranslating,
+                    onTapNickname: senderCardAction
                 )
             } else {
                 RowRegularText(
@@ -54,21 +61,36 @@ struct PublicChatRow: View {
                     translation: translation, replyToNick: replyToNick, theme: theme,
                     onTapTranslate: showTranslate ? { onTapTranslate?(message) } : nil,
                     isTranslating: isTranslating,
-                    onTapHi: showHi ? { onTapHi?(message) } : nil
+                    onTapHi: showHi ? { onTapHi?(message) } : nil,
+                    onTapNickname: senderCardAction
                 )
             }
         case .anchor(let c, let translation):
-            RowAnchor(sender: message.sender, content: c, translation: translation, theme: theme)
-        case .gift(let url, let name, let count):
+            RowAnchor(sender: message.sender, content: c, translation: translation, theme: theme,
+                      onTapNickname: senderCardAction)
+        case .gift(let url, let name, let count, let recipients):
             if theme.scene == .party {
-                RowPartyGift(sender: message.sender, iconURL: url, name: name, count: count)
+                RowPartyGift(sender: message.sender, iconURL: url, name: name, count: count, recipients: recipients,
+                             onTapNickname: senderCardAction, onTapUserCard: onTapUserCard)
             } else {
-                RowGift(sender: message.sender, iconURL: url, name: name, count: count, theme: theme)
+                RowGift(sender: message.sender, iconURL: url, name: name, count: count, theme: theme,
+                        onTapNickname: senderCardAction)
             }
         case .luckyGift(let url, let count, let total):
-            RowLuckyGift(sender: message.sender, iconURL: url, count: count, totalReward: total, theme: theme)
+            RowLuckyGift(sender: message.sender, iconURL: url, count: count, totalReward: total, theme: theme,
+                         onTapNickname: senderCardAction)
+        case .firstGiftMoment(let backgroundURL, let renderedText, let giftIconURL, let isFirstGift):
+            RowFirstGiftMoment(
+                sender: message.sender,
+                backgroundURL: backgroundURL,
+                renderedText: renderedText,
+                giftIconURL: giftIconURL,
+                isFirstGift: isFirstGift,
+                onTapNickname: senderCardAction
+            )
         case .partyLuckyNumber(let number, let didWin):
-            RowPartyLuckyNumber(sender: message.sender, number: number, didWin: didWin)
+            RowPartyLuckyNumber(sender: message.sender, number: number, didWin: didWin,
+                                onTapNickname: senderCardAction)
         case .system(let text):
             RowAnnouncement(text: text, kind: theme.scene == .party ? .partyRoom : .liveOfficial, theme: theme)
         default:
@@ -79,13 +101,19 @@ struct PublicChatRow: View {
     @ViewBuilder private var notifyGroup: some View {
         switch message.variant {
         case .enterRoom(let vehicle, let item):
-            RowEnterRoom(sender: message.sender, vehicleImg: vehicle, itemSmallImg: item, theme: theme)
+            RowEnterRoom(sender: message.sender, vehicleImg: vehicle, itemSmallImg: item, theme: theme,
+                         onTapNickname: senderCardAction)
         case .officialBoostEnter:
-            RowOfficialBoostEnter(sender: message.sender, theme: theme)
+            RowOfficialBoostEnter(sender: message.sender, theme: theme, onTapNickname: senderCardAction)
         case .announcement(let text, let kind):
             RowAnnouncement(text: text, kind: kind, theme: theme)
         case .pkNotify(let rt):
             RowPKNotify(richText: rt, theme: theme)
+        case .pkTopContributors(let users):
+            RowPKTopContributors(
+                users: users,
+                onTapNickname: theme.scene == .live || theme.scene == .party ? onTapUserCard : nil
+            )
         case .partyModeSwitch(let text, _):
             // v3：Party 房系统消息（切模板 / 排麦开关 / 房管变更 / 视频位邀请接受）居中卡片，无头像
             RowPartyModeSwitch(text: text)
@@ -99,23 +127,64 @@ struct PublicChatRow: View {
 
     @ViewBuilder private var activityGroup: some View {
         switch message.variant {
-        case .rpsWin(let url, let hours):
-            RowRpsWin(sender: message.sender, medalUrl: url, medalHours: hours, theme: theme)
+        case .rpsWin(let url, let hours, let gameType):
+            RowRpsWin(sender: message.sender, medalUrl: url, medalHours: hours,
+                      gameType: gameType, theme: theme, onTapNickname: senderCardAction)
         case .wheelRes(let text, let hl):
-            RowWheelRes(sender: message.sender, resultText: text, resultHighlight: hl, theme: theme)
-        case .winnerBroadcast(let name, let qty, let img, let cta, let avatar):
-            RowWinnerBroadcast(activityName: name, quantity: qty, imageURL: img,
-                               joinCTA: cta, avatar: avatar, theme: theme)
+            RowWheelRes(sender: message.sender, resultText: text, resultHighlight: hl, theme: theme,
+                        onTapNickname: senderCardAction)
+        case .winnerBroadcast(let name, let qty, let messageImageURL, let prizeImageURL, let cta,
+                              let avatar, let validDays, let nicknameColorHex, let prizeColorHex, let cardType):
+            RowWinnerBroadcast(
+                sender: message.sender,
+                activityName: name,
+                quantity: qty,
+                messageImageURL: messageImageURL,
+                prizeImageURL: prizeImageURL,
+                joinCTA: cta,
+                avatar: avatar,
+                validDays: validDays,
+                nicknameColorHex: nicknameColorHex,
+                prizeColorHex: prizeColorHex,
+                cardType: cardType,
+                theme: theme,
+                onTapNickname: senderCardAction,
+                onTap: message.actionURL.flatMap { url in
+                    onWinnerActivity.map { callback in { callback(url) } }
+                }
+            )
         case .wishlistEffect:
-            RowWishlistEffect(sender: message.sender)
+            RowWishlistEffect(sender: message.sender, onTapNickname: senderCardAction)
         case .diamondGift(let sub):
-            RowDiamondGift(subType: sub, theme: theme)
+            RowDiamondGift(
+                subType: sub,
+                theme: theme,
+                onTapNickname: senderCardAction,
+                onTapSettled: onTapDiamondGiftSettled
+            )
         case .gameWinNotify(let payload):
             // v3：全服/本房游戏中奖公屏（对齐 H5 game-win-public-msg.vue）
-            RowGameWinNotify(payload: payload)
+            RowGameWinNotify(
+                payload: payload,
+                theme: theme,
+                onTapNickname: userCardAction(userId: payload.userId)
+            )
         default:
             EmptyView()
         }
+    }
+
+    private var senderCardAction: (() -> Void)? {
+        guard let sender = message.sender else { return nil }
+        return userCardAction(userId: sender.userId)
+    }
+
+    private func userCardAction(userId: String?) -> (() -> Void)? {
+        guard theme.scene == .live || theme.scene == .party,
+              let userId,
+              !userId.isEmpty,
+              let onTapUserCard else { return nil }
+        return { onTapUserCard(userId) }
     }
 }
 
@@ -130,6 +199,7 @@ private struct RowPartyRegularText: View {
     let replyToNick: String?
     let onTapTranslate: (() -> Void)?
     let isTranslating: Bool
+    let onTapNickname: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -140,32 +210,25 @@ private struct RowPartyRegularText: View {
                 userId: sender?.userId
             )
             VStack(alignment: .leading, spacing: 6) {
-                PartyNicknameRow(sender: sender)
+                PartyNicknameRow(sender: sender, onTapNickname: onTapNickname)
                 bubbleBody
-                if let t = translation, !t.isEmpty {
-                    Text(t)
-                        .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.85))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .frame(maxWidth: 213, alignment: .leading)
-                        .background(Color.black.opacity(0.20), in: RoundedRectangle(cornerRadius: 12))
-                }
             }
         }
     }
 
     private var bubbleBody: some View {
         let showTranslate = translation == nil && onTapTranslate != nil
+        let hasChatSkin = sender?.chatBubble?.isEmpty == false
         return HStack(alignment: .top, spacing: 4) {
             bodyText(showTranslate: showTranslate)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
+        .padding(.horizontal, hasChatSkin ? ChatSkinMetrics.horizontalContentInset : 8)
+        .padding(.vertical, hasChatSkin ? ChatSkinMetrics.verticalContentInset : 4)
+        .frame(minHeight: 22)
         .frame(maxWidth: 213, alignment: .leading)
-        .background(Color.black.opacity(0.30), in: RoundedRectangle(cornerRadius: 12))
+        .background(bubbleBackground)
+        .padding(.vertical, hasChatSkin ? ChatSkinMetrics.messageVerticalSpacing : 0)
         .contentShape(Rectangle())
         .onTapGesture {
             if showTranslate && !isTranslating { onTapTranslate?() }
@@ -180,7 +243,7 @@ private struct RowPartyRegularText: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(Color(red: 231/255, green: 84/255, blue: 2/255))  // #E75402
         }
-        result = result + Text(content)
+        result = result + Text(translation?.isEmpty == false ? translation! : content)
             .font(.system(size: 13))
             .foregroundColor(.white)
         if showTranslate {
@@ -195,6 +258,15 @@ private struct RowPartyRegularText: View {
         }
         return result
     }
+
+    @ViewBuilder
+    private var bubbleBackground: some View {
+        if let raw = sender?.chatBubble, let url = URL(string: raw), !raw.isEmpty {
+            NinePatchImageView(url: url)
+        } else {
+            RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.30))
+        }
+    }
 }
 
 /// Party 送礼消息（对齐 H5 chat-list.vue L183-204：头像 + 昵称行 + Sends to 气泡）
@@ -203,6 +275,9 @@ private struct RowPartyGift: View {
     let iconURL: String?
     let name: String
     let count: Int
+    let recipients: [PublicChatGiftRecipient]
+    let onTapNickname: (() -> Void)?
+    let onTapUserCard: ((String) -> Void)?
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -212,23 +287,64 @@ private struct RowPartyGift: View {
                 userId: sender?.userId
             )
             VStack(alignment: .leading, spacing: 6) {
-                PartyNicknameRow(sender: sender)
+                PartyNicknameRow(sender: sender, onTapNickname: onTapNickname)
                 giftBubble
             }
         }
     }
 
     private var giftBubble: some View {
-        HStack(alignment: .center, spacing: 6) {
+        PartyGiftFlowLayout(spacing: 4, lineSpacing: 4) {
             Text("Sends to")
                 .font(.system(size: 13))
                 .foregroundColor(.white)
-            // MVP：单接收人昵称/多接收人 UI 简化为通用 "Room" — H5 完整版含 receivers/receiversIcons 分支，
-            // PartyGiftEvent.receiverUserIds 现只有 userId 数组无昵称，未来接入 receiverNicknames 时扩
-            Text("Room")
+            recipientDisplay
+            giftDisplay
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .frame(maxWidth: 256, minHeight: 44, alignment: .leading)
+        .background(Color.black.opacity(0.30), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder
+    private var recipientDisplay: some View {
+        if recipients.count == 1 {
+            let recipient = recipients[0]
+            let label = Text(recipient.nickname ?? "")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(Color(red: 26/255, green: 1.0, blue: 205/255))  // #1AFFCD
-            CachedAsyncImage(url: URL(string: iconURL ?? ""), contentMode: .fill) {
+                .foregroundColor(Color(red: 26/255, green: 1.0, blue: 205/255))
+            if let userId = recipient.userId, !userId.isEmpty, let onTapUserCard {
+                Button(action: { onTapUserCard(userId) }) { label }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text(recipient.nickname ?? ""))
+            } else {
+                label
+            }
+        } else {
+            HStack(spacing: 4) {
+                HStack(spacing: -4) {
+                    ForEach(Array(recipients.prefix(3).enumerated()), id: \.offset) { _, recipient in
+                        AvatarView(
+                            urlString: recipient.avatarURL,
+                            size: 20,
+                            kind: .user,
+                            persistent: true,
+                            disablesTap: true
+                        )
+                        .overlay(Circle().stroke(Color.black.opacity(0.30), lineWidth: 1))
+                    }
+                }
+                Text("\(recipients.count) persons")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(Color(red: 26/255, green: 1.0, blue: 205/255))
+            }
+        }
+    }
+
+    private var giftDisplay: some View {
+        HStack(spacing: 4) {
+            CachedAsyncImage(url: URL(string: iconURL ?? ""), contentMode: .fill, cdn: (.gift, .fit)) {
                 Image(systemName: "gift.fill")
                     .font(.system(size: 16))
                     .foregroundColor(.white.opacity(0.55))
@@ -237,15 +353,73 @@ private struct RowPartyGift: View {
             }
             .frame(width: 24, height: 24)
             .clipShape(RoundedRectangle(cornerRadius: 4))
-            Text("x\(count)")
+            Text("x\(count * recipients.count)")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white)
                 .monospacedDigit()
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .frame(maxWidth: 240, alignment: .leading)
-        .background(Color.black.opacity(0.30), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+/// H5 礼物气泡使用 flex-wrap；iOS 这里按相同规则让收礼人和礼物组在宽度不足时换行。
+private struct PartyGiftFlowLayout: Layout {
+    let spacing: CGFloat
+    let lineSpacing: CGFloat
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        let maximumWidth = proposal.width ?? .greatestFiniteMagnitude
+        let rows = rows(for: subviews, maximumWidth: maximumWidth)
+        let width = rows.map(\.width).max() ?? 0
+        let height = rows.reduce(CGFloat.zero) { $0 + $1.height } + CGFloat(max(rows.count - 1, 0)) * lineSpacing
+        return CGSize(width: min(width, maximumWidth), height: height)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        let rows = rows(for: subviews, maximumWidth: bounds.width)
+        var y = bounds.minY
+        for row in rows {
+            var x = bounds.minX
+            for index in row.indices {
+                let view = subviews[index]
+                let size = view.sizeThatFits(.unspecified)
+                view.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += row.height + lineSpacing
+        }
+    }
+
+    private func rows(for subviews: Subviews, maximumWidth: CGFloat) -> [Row] {
+        var result: [Row] = []
+        var current = Row()
+        for index in subviews.indices {
+            let size = subviews[index].sizeThatFits(.unspecified)
+            let proposedWidth = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            if !current.indices.isEmpty, proposedWidth > maximumWidth {
+                result.append(current)
+                current = Row()
+            }
+            current.indices.append(index)
+            current.width = current.indices.count == 1 ? size.width : current.width + spacing + size.width
+            current.height = max(current.height, size.height)
+        }
+        if !current.indices.isEmpty { result.append(current) }
+        return result
+    }
+
+    private struct Row {
+        var indices: [Int] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
     }
 }
 
@@ -274,6 +448,7 @@ private struct RowPartyLuckyNumber: View {
     let sender: SenderProfile?
     let number: Int
     let didWin: Bool
+    let onTapNickname: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -283,7 +458,7 @@ private struct RowPartyLuckyNumber: View {
                 userId: sender?.userId
             )
             VStack(alignment: .leading, spacing: 6) {
-                PartyNicknameRow(sender: sender)
+                PartyNicknameRow(sender: sender, onTapNickname: onTapNickname)
                 VStack(alignment: .leading, spacing: didWin ? 6 : 0) {
                     HStack(alignment: .center, spacing: 6) {
                         CachedAsyncImage(
@@ -407,19 +582,33 @@ private struct RowPartyBattle: View {
 /// 游戏中奖公屏（136/138 全服中奖 · 对齐 H5 `game-win-public-msg.vue` L56-63）
 private struct RowGameWinNotify: View {
     let payload: GameWinPayload
+    let theme: PublicChatTheme
+    let onTapNickname: (() -> Void)?
 
     var body: some View {
+        content
+            .padding(.horizontal, 8)
+            .padding(.vertical, theme.scene == .party ? 8 : 6)
+            .frame(maxWidth: theme.scene == .party ? 240 : 280, minHeight: theme.scene == .party ? 40 : nil, alignment: .leading)
+            .background(background)
+    }
+
+    private var content: some View {
         HStack(alignment: .center, spacing: 6) {
             AvatarView(urlString: payload.avatar, size: 24, kind: .user)
                 .frame(width: 24, height: 24)
-            (Text(payload.nickname)
-                .foregroundColor(Color(red: 26/255, green: 1.0, blue: 205/255))   // #1AFFCD
-             + Text(" won ").foregroundColor(.white)
-             + Text(payload.winAmount).foregroundColor(Color(red: 254/255, green: 0, blue: 222/255))  // #FE00DE
-             + Text(" in [\(payload.gameName)]").foregroundColor(.white))
-                .font(.system(size: 13, weight: .semibold))
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 0) {
+                nickname
+                Text(" won ")
+                    .foregroundColor(.white)
+                Text(payload.winAmount)
+                    .foregroundColor(theme.scene == .party ? Color(red: 1, green: 230/255, blue: 0) : Color(red: 254/255, green: 0, blue: 222/255))
+                Text(" in [\(payload.gameName)]")
+                    .foregroundColor(.white)
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
             if let icon = payload.gameIcon {
                 CachedAsyncImage(url: URL(string: icon), contentMode: .fill) {
                     Color.white.opacity(0.15)
@@ -428,10 +617,36 @@ private struct RowGameWinNotify: View {
                 .clipShape(RoundedRectangle(cornerRadius: 4))
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .frame(maxWidth: 280, alignment: .leading)
-        .background(Color.black.opacity(0.30), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    @ViewBuilder
+    private var nickname: some View {
+        let label = Text(payload.nickname)
+            .foregroundColor(Color(red: 26/255, green: 1.0, blue: 205/255))
+        if let onTapNickname {
+            Button(action: onTapNickname) { label }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(payload.nickname))
+        } else {
+            label
+        }
+    }
+
+    @ViewBuilder
+    private var background: some View {
+        if theme.scene == .party {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12).fill(Color.black.opacity(0.30))
+                CachedAsyncImage(
+                    url: URL(string: "https://img.hnhily.link/mstatic/party/room-game-notice-bg.webp"),
+                    contentMode: .fill,
+                    persistent: true
+                ) { Color.clear }
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            }
+        } else {
+            RoundedRectangle(cornerRadius: 8).fill(Color.black.opacity(0.30))
+        }
     }
 }
 
@@ -439,20 +654,22 @@ private struct RowGameWinNotify: View {
 /// 对齐 H5 chat-list.vue L146-164：昵称 + Lv + VIP + role + platformAdmin
 private struct PartyNicknameRow: View {
     let sender: SenderProfile?
+    let onTapNickname: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .center, spacing: 4) {
-            Text(sender?.nickname ?? "")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(.white)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: 106, alignment: .leading)
+            nickname
             if let lv = sender?.userLevel, lv > 0 {
                 UserLevelBadge(level: lv, size: .small)
             }
             if sender?.isVip == true {
                 VIPBadge(size: .small)
+            }
+            if let medals = sender?.medals {
+                ForEach(Array(medals.enumerated()), id: \.offset) { _, medalURL in
+                    CachedAsyncImage(url: URL(string: medalURL), contentMode: .fit) { Color.clear }
+                        .frame(width: 16, height: 16)
+                }
             }
             // 房管图标（对齐 H5 chat-list.vue L161 `h16 w16` · icon_lv_${role}.png）
             // v4:owner (role=1) → partyOwnerCrown / manager (role=2) → partyManagerBadge
@@ -471,6 +688,22 @@ private struct PartyNicknameRow: View {
                     .frame(width: 16, height: 16)
                     .accessibilityLabel("Platform Admin")
             }
+        }
+    }
+
+    @ViewBuilder
+    private var nickname: some View {
+        let label = Text(sender?.nickname ?? "")
+            .font(.system(size: 14, weight: .medium))
+            .foregroundColor(.white)
+            .lineLimit(1)
+            .truncationMode(.tail)
+        if let onTapNickname {
+            Button(action: onTapNickname) { label }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(sender?.nickname ?? ""))
+        } else {
+            label
         }
     }
 }

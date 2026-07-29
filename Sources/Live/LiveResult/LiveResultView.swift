@@ -274,7 +274,8 @@ struct LiveResultView: View {
                             item: item,
                             isFollowing: store.followInFlight.contains(item.userId),
                             onFollow: { Task { await store.follow(userId: item.userId) } },
-                            onMessage: { if let yx = item.yxAccid { hostPath.append(yx) } }
+                            onMessage: { if let yx = item.yxAccid { hostPath.append(yx) } },
+                            onUserCardTap: presentUserCard
                         )
                         .frame(maxWidth: .infinity)
                     }
@@ -302,7 +303,8 @@ struct LiveResultView: View {
                             item: item,
                             isFollowing: store.followInFlight.contains(item.userId),
                             onFollow: { Task { await store.follow(userId: item.userId) } },
-                            onMessage: { if let yx = item.yxAccid { hostPath.append(yx) } }
+                            onMessage: { if let yx = item.yxAccid { hostPath.append(yx) } },
+                            onUserCardTap: presentUserCard
                         )
                         .padding(.vertical, 6)
                     }
@@ -333,7 +335,8 @@ struct LiveResultView: View {
                                 item: item,
                                 isFollowing: store.followInFlight.contains(item.userId),
                                 onFollow: { Task { await store.follow(userId: item.userId) } },
-                                onMessage: { if let yx = item.yxAccid { sheetChatPath.append(yx) } }
+                                onMessage: { if let yx = item.yxAccid { sheetChatPath.append(yx) } },
+                                onUserCardTap: presentUserCard
                             )
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
@@ -391,6 +394,10 @@ struct LiveResultView: View {
                 if !Task.isCancelled { comingSoonToast = nil }
             }
     }
+
+    private func presentUserCard(_ preview: UserCardPreview) {
+        userCardPresentation = UserCardPresentation(preview: preview)
+    }
 }
 
 // MARK: - Row cells
@@ -401,6 +408,7 @@ private struct TopGifterCell: View {
     let isFollowing: Bool
     let onFollow: () -> Void
     let onMessage: () -> Void
+    let onUserCardTap: (UserCardPreview) -> Void
 
     var body: some View {
         // 外层 ZStack .topTrailing：Follow 按钮相对**整卡**定位到右上角
@@ -408,10 +416,13 @@ private struct TopGifterCell: View {
         ZStack(alignment: .topTrailing) {
             VStack(spacing: 6) {
                 // 头像 tap 走内置分派（结束页显式保留直播场景 → 弹名片卡）。
-                AvatarView(urlString: item.icon, size: 50, kind: .user, persistent: false,
-                           userId: String(item.userId))
-                    .padding(.top, 14)
-                    .accessibilityLabel(item.nickname ?? "")
+                Button { onUserCardTap(item.userCardPreview) } label: {
+                    AvatarView(urlString: item.icon, size: 50, kind: .user, persistent: false,
+                               disablesTap: true)
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 14)
+                .accessibilityLabel(item.nickname ?? "")
 
                 Text(item.nickname ?? "")
                     .font(.system(size: 14))
@@ -454,13 +465,17 @@ private struct PrivateCallRow: View {
     let isFollowing: Bool
     let onFollow: () -> Void
     let onMessage: () -> Void
+    let onUserCardTap: (UserCardPreview) -> Void
 
     var body: some View {
         HStack(spacing: 8) {
             // 头像 tap 走内置分派（结束页显式保留直播场景 → 弹名片卡）。
-            AvatarView(urlString: item.icon, size: 50, kind: .user, persistent: false,
-                       userId: String(item.userId))
-                .accessibilityLabel(item.nickname ?? "")
+            Button { onUserCardTap(item.userCardPreview) } label: {
+                AvatarView(urlString: item.icon, size: 50, kind: .user, persistent: false,
+                           disablesTap: true)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(item.nickname ?? "")
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.nickname ?? "")
@@ -508,13 +523,17 @@ private struct GifterFullRow: View {
     let isFollowing: Bool
     let onFollow: () -> Void
     let onMessage: () -> Void
+    let onUserCardTap: (UserCardPreview) -> Void
 
     var body: some View {
         HStack(spacing: 8) {
             // 头像 tap 走内置分派（结束页显式保留直播场景 → 弹名片卡）。
-            AvatarView(urlString: item.icon, size: 50, kind: .user, persistent: false,
-                       userId: String(item.userId))
-                .accessibilityLabel(item.nickname ?? "")
+            Button { onUserCardTap(item.userCardPreview) } label: {
+                AvatarView(urlString: item.icon, size: 50, kind: .user, persistent: false,
+                           disablesTap: true)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(item.nickname ?? "")
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(item.nickname ?? "")
@@ -552,6 +571,18 @@ private struct GifterFullRow: View {
             }
             messageButton(enabled: item.yxAccid != nil, onTap: onMessage)
         }
+    }
+}
+
+private extension GiftRankItem {
+    var userCardPreview: UserCardPreview {
+        UserCardPreview(userId: userId, nickname: nickname, avatarUrl: icon)
+    }
+}
+
+private extension PrivateCallItem {
+    var userCardPreview: UserCardPreview {
+        UserCardPreview(userId: userId, nickname: nickname, avatarUrl: icon)
     }
 }
 
