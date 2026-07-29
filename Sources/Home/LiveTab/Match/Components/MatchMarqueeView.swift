@@ -8,7 +8,6 @@ import SwiftUI
 /// - `.id(currentIndex)` 单调递增触发 transition（避免 record 内容重复时 SwiftUI 不切）
 /// - 外层 `clipShape` 兜住 slide 不溢出边界
 ///
-/// 空 callList 时用 demo fallback（对齐 H5 主播端语义：跑马灯一直显示）。
 struct MatchMarqueeView: View {
     let records: [MatchCallRecord]
     /// keep-alive 架构下感知 Match tab 是否真可见，不可见时 task 立即 return，能耗归零。
@@ -22,31 +21,32 @@ struct MatchMarqueeView: View {
     }
 
     var body: some View {
-        // 真数据优先；空 records 时用 demo 序列（3 条循环，让切换效果可见）
-        let list = effectiveRecords
-        ZStack {
-            RoundedRectangle(cornerRadius: Theme.Radius.matchMarquee, style: .continuous)
-                .fill(Theme.Gradients.matchMarqueeBg)
+        if !records.isEmpty {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Theme.Gradients.matchMarqueeBg)
 
-            singleRow(list[safeIndex(in: list)])
-                .padding(.horizontal, Theme.Metric.matchMarqueeHPadding)
-        }
-        .frame(height: Theme.Metric.matchMarqueeHeight)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.matchMarquee, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.matchMarquee, style: .continuous)
-                .strokeBorder(Theme.Gradients.matchMarqueeBorder, lineWidth: 1)
-        )
-        .padding(.horizontal, Theme.Metric.matchMarqueeHMargin)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(a11yText(list[safeIndex(in: list)]))
-        .task(id: LoopKey(count: list.count, active: isActive)) {
-            guard isActive, list.count > 1 else { return }
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                if Task.isCancelled { break }
-                withAnimation(.easeInOut(duration: 0.4)) {
-                    currentIndex = (currentIndex + 1) % max(list.count, 1)
+                singleRow(records[safeIndex(in: records)])
+                    .padding(.horizontal, Theme.Metric.matchMarqueeHPadding)
+            }
+            .frame(height: Theme.Metric.matchMarqueeHeight)
+            .frame(maxWidth: 351)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Theme.Gradients.matchMarqueeBorder, lineWidth: 1)
+            )
+            .padding(.horizontal, 12)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(a11yText(records[safeIndex(in: records)]))
+            .task(id: LoopKey(count: records.count, active: isActive)) {
+                guard isActive, records.count > 1 else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 3_000_000_000)
+                    if Task.isCancelled { break }
+                    withAnimation(.easeInOut(duration: 0.4)) {
+                        currentIndex = (currentIndex + 1) % records.count
+                    }
                 }
             }
         }
@@ -56,7 +56,7 @@ struct MatchMarqueeView: View {
 
     private func singleRow(_ record: MatchCallRecord) -> some View {
         HStack(spacing: 6) {
-            AvatarView(urlString: record.callerIcon,
+            AvatarView(urlString: record.receiverIcon,
                        size: Theme.Metric.matchMarqueeAvatarSize,
                        kind: .user)
             Image("matchMarqueeCallIcon")
@@ -65,13 +65,13 @@ struct MatchMarqueeView: View {
                 .frame(width: Theme.Metric.matchMarqueeCallIconWidth,
                        height: Theme.Metric.matchMarqueeCallIconHeight)
                 .accessibilityHidden(true)
-            AvatarView(urlString: record.receiverIcon,
+            AvatarView(urlString: record.callerIcon,
                        size: Theme.Metric.matchMarqueeAvatarSize,
                        kind: .user)
 
-            // caller（黄）→ receiver（绿）: Video Call Started.
+            // H5 order: receiver（绿）→ caller（黄）: Video Call Started.
             // iOS 16 兼容：禁 Text `+` 拼接，用 `\(...)` 插值 + Text helper
-            Text("\(caller(record))\(arrow)\(receiver(record))\(colon)\(callStarted)")
+            Text("\(receiver(record))\(arrow)\(caller(record))\(colon)\(callStarted)")
                 .font(.system(size: 12, weight: .bold))
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -113,21 +113,6 @@ struct MatchMarqueeView: View {
     }
 
     // MARK: - 数据 / index
-
-    /// 真数据优先，空 records 时用 demo 序列（3 条循环切换）
-    private var effectiveRecords: [MatchCallRecord] {
-        records.isEmpty ? Self.demoRecords : records
-    }
-
-    /// 真接口尚未返回 / dev 环境后端无数据时的兜底 demo（3 条循环，让切换效果可见）
-    private static let demoRecords: [MatchCallRecord] = [
-        MatchCallRecord(callerIcon: "", callerNickname: "James",
-                        receiverIcon: "", receiverNickname: "Emma"),
-        MatchCallRecord(callerIcon: "", callerNickname: "Alice",
-                        receiverIcon: "", receiverNickname: "Bob"),
-        MatchCallRecord(callerIcon: "", callerNickname: "Oliver",
-                        receiverIcon: "", receiverNickname: "Sophia"),
-    ]
 
     /// 归一化索引——list 变更时 currentIndex 可能瞬时越界
     private func safeIndex(in list: [MatchCallRecord]) -> Int {

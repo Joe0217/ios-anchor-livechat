@@ -1,5 +1,27 @@
 import SwiftUI
 
+private let homeRankingScrollCoordinateSpace = "HomeRankingScroll"
+
+private struct HomeRankingScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct HomeRankingScrollOffsetMarker: View {
+    var body: some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: HomeRankingScrollOffsetPreferenceKey.self,
+                value: proxy.frame(in: .named(homeRankingScrollCoordinateSpace)).minY
+            )
+        }
+        .frame(height: 0)
+    }
+}
+
 /// 首页右上角全站榜。对齐 H5 `/rank?path=list`：
 /// - Charm / Wealth：日、周、月榜 + Top3 + 我的排名
 /// - Couple：日、周 CP 榜 + 主播/用户双侧名片入口 + 我的排名
@@ -11,16 +33,18 @@ struct HomeRankingView: View {
     @State private var userCard: UserCardPresentation?
     @State private var coupleReward: HomeCoupleRewardPresentation?
     @State private var enteredAt = Date()
+    @State private var isNavigationBarScrolled = false
+    @Environment(\.dismiss) private var dismiss
 
     private var availablePeriods: [HomeRankingPeriod] {
         category == .couple ? [.day, .week] : HomeRankingPeriod.allCases
     }
 
     private var normalPayload: HomeRankingPayload? {
-        store.normalRequestKey == requestKey ? store.normalState.payload : nil
+        store.payload(category: category, period: period)
     }
     private var couplePayload: HomeCoupleRankingPayload? {
-        store.coupleRequestKey == requestKey ? store.coupleState.payload : nil
+        store.couplePayload(period: period)
     }
 
     var body: some View {
@@ -34,11 +58,22 @@ struct HomeRankingView: View {
         .background(background.ignoresSafeArea())
         .navigationTitle(L10n.homeRankTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
+        .swipeToPopEnabled()
+        .scrollingNavigationBarBlur(isVisible: isNavigationBarScrolled)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.commonBack)
+            }
             ToolbarItem(placement: .principal) {
-                HStack(spacing: 0) {
+                HStack(spacing: 10) {
                     ForEach(HomeRankingCategory.allCases) { item in
                         Button { category = item } label: {
                             Text(item.title)
@@ -64,13 +99,14 @@ struct HomeRankingView: View {
                 category == .couple ? "h_cprank_view" : "h_rank_view",
                 properties: ["tab": period.rawValue, "page": category.rawValue, "path": "list"]
             )
-            await store.load(category: category, period: period)
+            store.load(category: category, period: period)
         }
         .onChange(of: category) { newCategory in
             if newCategory == .couple, period == .month {
                 period = .day
             }
         }
+        .onPreferenceChange(HomeRankingScrollOffsetPreferenceKey.self, perform: updateNavigationBar)
         .userCardSheet(item: $userCard)
         .overlay {
             if showRules {
@@ -94,34 +130,46 @@ struct HomeRankingView: View {
         .onDisappear {
             let duration = Int(Date().timeIntervalSince(enteredAt) * 1_000)
             HomeRankingAnalytics.report("h_rank_leave", properties: ["type": "diamond", "duration": "\(duration)"])
+            store.clearCache()
         }
     }
 
     private var requestKey: String { "\(category.rawValue)-\(period.rawValue)" }
 
     private var background: some View {
-        ZStack {
-            Color(hex: category == .wealth ? 0xD761A9 : category == .charm ? 0x957654 : 0xA6107A)
-            if category == .wealth {
-                Image("homeRankWealthBackground")
-                    .resizable()
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 400, alignment: .top)
-                    .clipped()
-            } else if category == .charm {
-                Image("homeRankCharmBackground")
-                    .resizable()
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 400, alignment: .top)
-                    .clipped()
-            } else {
-                Image("homeCpBackground")
-                    .resizable()
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 400, alignment: .top)
-                    .clipped()
+        GeometryReader { proxy in
+            ZStack(alignment: .top) {
+                Color(hex: category == .wealth ? 0xD761A9 : category == .charm ? 0x957654 : 0xA6107A)
+                if category == .wealth {
+                    Image("homeRankWealthBackground")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: backgroundHeight(topSafeArea: proxy.safeAreaInsets.top), alignment: .top)
+                        .clipped()
+                } else if category == .charm {
+                    Image("homeRankCharmBackground")
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: backgroundHeight(topSafeArea: proxy.safeAreaInsets.top), alignment: .top)
+                        .clipped()
+                } else {
+                    Image("homeCpBackground")
+                        .resizable()
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 400, alignment: .top)
+                        .clipped()
+                }
             }
         }
+    }
+
+    private func backgroundHeight(topSafeArea: CGFloat) -> CGFloat {
+        // 背景从物理屏幕顶部开始，结束在列表起点以下 20pt，避免底色在列表前露出。
+        let topChrome = max(topSafeArea, 44) + 44
+        let listTop: CGFloat = 46 + 250 - 12
+        return topChrome + listTop + 20
     }
 
     private var normalPeriodTabs: some View {
@@ -154,37 +202,48 @@ struct HomeRankingView: View {
     }
 
     private var normalContent: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                normalPeriodTabs
-                    .padding(.top, 10)
-                    .padding(.bottom, 4)
+        GeometryReader { geometry in
+            ScrollView {
+                HomeRankingScrollOffsetMarker()
+                VStack(spacing: 0) {
+                    normalPeriodTabs
+                        .padding(.top, 0)
+                        .padding(.bottom, 4)
 
-                HomeRankingTopThree(
-                    members: normalPayload?.members ?? [],
-                    category: category,
-                    onTap: openUserCard
-                )
+                    HomeRankingTopThree(
+                        members: normalPayload?.members ?? [],
+                        category: category,
+                        onTap: openUserCard
+                    )
 
-                HomeRankingList(
-                    members: normalPayload?.members ?? [],
-                    category: category,
-                    onTap: openUserCard
-                )
-                .padding(.top, 8)
+                    HomeRankingList(
+                        members: normalPayload?.members ?? [],
+                        category: category,
+                        onTap: openUserCard,
+                        minimumHeight: max(124, geometry.size.height - 296),
+                        bottomContentInset: 50,
+                        hasMore: store.hasMore(category: category, period: period),
+                        isLoadingMore: store.isLoadingMore(category: category, period: period),
+                        pageError: store.pageError(category: category, period: period),
+                        onLoadMore: { store.loadMore(category: category, period: period) }
+                    )
+                    .padding(.top, -12)
+                }
+                .padding(.bottom, 12)
             }
-            .padding(.bottom, 12)
+            .coordinateSpace(name: homeRankingScrollCoordinateSpace)
+            .scrollIndicators(.hidden)
+            .refreshable {
+                await store.refresh(category: category, period: period)
+            }
         }
-        .scrollIndicators(.hidden)
-        .refreshable {
-            await store.refresh(category: category, period: period)
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .overlay(alignment: .bottom) {
             HomeRankingMineRow(member: normalPayload?.mine, category: category, onTap: openUserCard)
+                .padding(.bottom, -20)
         }
         .overlay {
-            if store.normalState.isLoading, normalPayload == nil {
-                ProgressView().tint(.white)
+            if store.isLoading(category: category, period: period) {
+                HomeRankingLoadingOverlay()
             }
         }
     }
@@ -197,28 +256,61 @@ struct HomeRankingView: View {
             onTap: openUserCard,
             onRewards: { member in
                 coupleReward = HomeCoupleRewardPresentation(member: member)
-            }
+            },
+            hasMore: store.hasMore(category: category, period: period),
+            isLoadingMore: store.isLoadingMore(category: category, period: period),
+            pageError: store.pageError(category: category, period: period),
+            onLoadMore: { store.loadMore(category: category, period: period) }
         )
         .refreshable {
             await store.refresh(category: category, period: period)
         }
         .overlay {
-            if store.coupleState.isLoading, couplePayload == nil {
-                ProgressView().tint(.white)
+            if store.isLoading(category: category, period: period) {
+                HomeRankingLoadingOverlay()
             }
         }
+    }
+
+    private func openUserCard(_ member: HomeRankingMember?) {
+        guard let member, !member.userId.isEmpty else { return }
+        userCard = UserCardPresentation(preview: member.userCardPreview)
     }
 
     private func openUserCard(_ id: String?) {
         guard let id, !id.isEmpty else { return }
         userCard = UserCardPresentation(userId: id)
     }
+
+    private func updateNavigationBar(_ offset: CGFloat) {
+        let shouldShowBackground = offset < -8
+        guard shouldShowBackground != isNavigationBarScrolled else { return }
+        isNavigationBarScrolled = shouldShowBackground
+    }
 }
 
-private struct HomeRankingTopThree: View {
+struct HomeRankingLoadingOverlay: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.large)
+                .tint(.white)
+            Text(L10n.profileLoading)
+                .font(.system(size: 15, weight: .semibold))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 22)
+        .padding(.vertical, 16)
+        .background(Color.black.opacity(0.68), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(.white.opacity(0.18), lineWidth: 1))
+        .allowsHitTesting(false)
+    }
+}
+
+struct HomeRankingTopThree: View {
     let members: [HomeRankingMember]
     let category: HomeRankingCategory
-    let onTap: (String?) -> Void
+    let onTap: (HomeRankingMember?) -> Void
 
     private var podiumMembers: [(member: HomeRankingMember?, rank: Int)] {
         [
@@ -245,7 +337,7 @@ private struct HomeRankingPodiumCell: View {
     let member: HomeRankingMember?
     let rank: Int
     let category: HomeRankingCategory
-    let onTap: (String?) -> Void
+    let onTap: (HomeRankingMember?) -> Void
 
     private var assetName: String {
         switch rank {
@@ -260,6 +352,7 @@ private struct HomeRankingPodiumCell: View {
     private var topOffset: CGFloat { rank == 1 ? 20 : rank == 2 ? 40 : 60 }
     private var avatarY: CGFloat { rank == 1 ? 0 : rank == 2 ? -5 : -12 }
     private var textY: CGFloat { rank == 1 ? 112 : rank == 2 ? 92 : 77 }
+    private var infoY: CGFloat { textY - (category == .charm ? 10 : 0) }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -269,7 +362,7 @@ private struct HomeRankingPodiumCell: View {
                 .frame(width: 112, height: rank == 2 ? 192 : height)
                 .offset(y: -20)
 
-            Button { onTap(member?.userId) } label: {
+            Button { onTap(member) } label: {
                 AvatarView(urlString: member?.icon, size: avatarSize, kind: .user, disablesTap: true)
                     .overlay(Circle().stroke(.white, lineWidth: 2))
             }
@@ -302,7 +395,7 @@ private struct HomeRankingPodiumCell: View {
                     .background(.black.opacity(0.38), in: Capsule())
                 }
             }
-            .offset(y: textY)
+            .offset(y: infoY)
         }
         .frame(width: 112, height: height)
         .padding(.top, topOffset)
@@ -334,13 +427,20 @@ private struct HomeRankingPodiumCell: View {
     }
 }
 
-private struct HomeRankingList: View {
+struct HomeRankingList: View {
     let members: [HomeRankingMember]
     let category: HomeRankingCategory
-    let onTap: (String?) -> Void
+    let onTap: (HomeRankingMember?) -> Void
+    var minimumHeight: CGFloat = 0
+    /// 固定“我的排名”栏覆盖列表时，预留末行可滚动到栏位上沿的空间。
+    var bottomContentInset: CGFloat = 0
+    let hasMore: Bool
+    let isLoadingMore: Bool
+    let pageError: String?
+    let onLoadMore: () -> Void
 
     var body: some View {
-        Group {
+        VStack(spacing: 0) {
             if members.count > 3 {
                 LazyVStack(spacing: 0) {
                     ForEach(Array(members.dropFirst(3).enumerated()), id: \.element.id) { index, member in
@@ -350,11 +450,26 @@ private struct HomeRankingList: View {
                         }
                     }
                 }
+                .padding(.bottom, bottomContentInset)
+                .frame(maxWidth: .infinity, minHeight: minimumHeight, alignment: .top)
             } else if members.isEmpty {
-                Text(L10n.homeRankNoData)
-                    .font(.system(size: 14))
-                    .foregroundStyle(.white.opacity(0.75))
-                    .frame(maxWidth: .infinity, minHeight: 124)
+                EmptyStateView(
+                    style: .compact,
+                    text: L10n.homeRankNoData,
+                    textColor: .white.opacity(0.75)
+                )
+                .frame(maxWidth: .infinity, minHeight: max(124, minimumHeight))
+            } else {
+                Color.clear
+                    .frame(maxWidth: .infinity, minHeight: minimumHeight)
+            }
+
+            if hasMore {
+                HomeRankingLoadMoreFooter(
+                    isLoading: isLoadingMore,
+                    errorMessage: pageError,
+                    onLoadMore: onLoadMore
+                )
             }
         }
         .background(Color(hex: 0x2B213E))
@@ -362,14 +477,45 @@ private struct HomeRankingList: View {
     }
 }
 
+private struct HomeRankingLoadMoreFooter: View {
+    let isLoading: Bool
+    let errorMessage: String?
+    let onLoadMore: () -> Void
+
+    var body: some View {
+        Group {
+            if isLoading {
+                HomeRankingLoadingOverlay()
+            } else if let errorMessage {
+                HStack(spacing: 8) {
+                    Text(errorMessage)
+                        .lineLimit(1)
+                    Button(action: onLoadMore) {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.Wallet.retry)
+                }
+                .foregroundStyle(.white.opacity(0.75))
+            } else {
+                Color.clear
+                    .onAppear(perform: onLoadMore)
+            }
+        }
+        .font(.system(size: 12))
+        .frame(maxWidth: .infinity, minHeight: isLoading ? 76 : 36)
+        .padding(.bottom, 8)
+    }
+}
+
 private struct HomeRankingMemberRow: View {
     let member: HomeRankingMember
     let rank: Int
     let category: HomeRankingCategory
-    let onTap: (String?) -> Void
+    let onTap: (HomeRankingMember?) -> Void
 
     var body: some View {
-        Button { onTap(member.userId) } label: {
+        Button { onTap(member) } label: {
             HStack(spacing: 12) {
                 rankBadge
 
@@ -411,15 +557,23 @@ private struct HomeRankingMemberRow: View {
                 VStack(alignment: .trailing, spacing: 4) {
                     HomeRankingValue(value: member.value, fontSize: 15, imageName: "homeRankDiamondPurple")
                     if let reward = member.reward, !reward.isEmpty {
-                        Text("+ \(reward)")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(
-                                LinearGradient(colors: [Color(hex: 0x8515FF).opacity(0.4), Color(hex: 0xE40132).opacity(0.4)], startPoint: .leading, endPoint: .trailing),
-                                in: Capsule()
-                            )
+                        HStack(spacing: 3) {
+                            if category == .charm {
+                                Image("coins")
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(width: 12, height: 12)
+                            }
+                            Text("+ \(reward)")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(
+                            LinearGradient(colors: [Color(hex: 0x8515FF).opacity(0.4), Color(hex: 0xE40132).opacity(0.4)], startPoint: .leading, endPoint: .trailing),
+                            in: Capsule()
+                        )
                     }
                 }
             }
@@ -446,10 +600,10 @@ private struct HomeRankingMemberRow: View {
     }
 }
 
-private struct HomeRankingMineRow: View {
+struct HomeRankingMineRow: View {
     let member: HomeRankingMember?
     let category: HomeRankingCategory
-    let onTap: (String?) -> Void
+    let onTap: (HomeRankingMember?) -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -457,7 +611,7 @@ private struct HomeRankingMineRow: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 42)
-            Button { onTap(member?.userId) } label: {
+            Button { onTap(member) } label: {
                 AvatarView(urlString: member?.icon, size: 42, kind: .anchor, disablesTap: true)
             }
             .buttonStyle(.plain)
@@ -581,7 +735,7 @@ private struct HomeCoupleRewardSheet: View {
                     .frame(height: 65)
             }
 
-            Text("TOP \(presentation.member.rank ?? 1) Reward")
+            Text(L10n.homeRankCpWeeklyRewardFormat(presentation.member.rank ?? 1))
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(.white)
                 .padding(.top, 52)
@@ -592,7 +746,7 @@ private struct HomeCoupleRewardSheet: View {
     }
 
     private func rewardLabel(_ reward: HomeCoupleRankingReward) -> String {
-        let days = reward.durationDays > 0 ? " x \(reward.durationDays)d" : ""
+        let days = reward.durationDays > 0 ? " \u{00D7} \(reward.durationDays)d" : ""
         return "\(reward.itemName ?? "")\(days)"
     }
 }
@@ -648,23 +802,35 @@ private struct H5CoupleRankingBody: View {
     @Binding var period: HomeRankingPeriod
     let onTap: (String?) -> Void
     let onRewards: (HomeCoupleRankingMember) -> Void
+    let hasMore: Bool
+    let isLoadingMore: Bool
+    let pageError: String?
+    let onLoadMore: () -> Void
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                HomeRankingScrollOffsetMarker()
                 Color.clear.frame(height: 147)
                 Section {
                     H5CoupleTopCard(members: members, onTap: onTap, onRewards: onRewards)
-                    H5CoupleList(members: members, onTap: onTap)
+                    H5CoupleList(
+                        members: members,
+                        onTap: onTap,
+                        hasMore: hasMore,
+                        isLoadingMore: isLoadingMore,
+                        pageError: pageError,
+                        onLoadMore: onLoadMore
+                    )
                         .padding(.top, 6)
                 } header: {
                     H5CouplePeriodTabs(period: $period)
                         .padding(.bottom, 10)
-                        .background(Color(hex: 0xA6107A))
                 }
             }
             .padding(.bottom, 8)
         }
+        .coordinateSpace(name: homeRankingScrollCoordinateSpace)
         .scrollIndicators(.hidden)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             H5CoupleMineRow(member: mine, onTap: onTap)
@@ -928,6 +1094,10 @@ private struct H5CoupleRewardStrip: View {
 private struct H5CoupleList: View {
     let members: [HomeCoupleRankingMember]
     let onTap: (String?) -> Void
+    let hasMore: Bool
+    let isLoadingMore: Bool
+    let pageError: String?
+    let onLoadMore: () -> Void
 
     var body: some View {
         VStack(spacing: 8) {
@@ -935,7 +1105,7 @@ private struct H5CoupleList: View {
                 ForEach(Array(members.dropFirst(3).enumerated()), id: \.element.id) { index, member in
                     H5CoupleListRow(member: member, rank: index + 4, onTap: onTap)
                 }
-            } else {
+            } else if members.isEmpty {
                 VStack(spacing: 8) {
                     Image("homeCpDefaultUser")
                         .resizable()
@@ -946,6 +1116,14 @@ private struct H5CoupleList: View {
                         .foregroundStyle(.white.opacity(0.6))
                 }
                 .frame(maxWidth: .infinity, minHeight: 200)
+            }
+
+            if hasMore {
+                HomeRankingLoadMoreFooter(
+                    isLoading: isLoadingMore,
+                    errorMessage: pageError,
+                    onLoadMore: onLoadMore
+                )
             }
         }
         .padding(.horizontal, 8)

@@ -11,17 +11,19 @@ import SwiftUI
 /// 3. Card-box:审核提示长文案(banner variant=.news) + Admin WhatsApp 联系卡片(后端 config 拉取 WhatsApp 号)
 struct NewsRestrictedView: View {
     @EnvironmentObject private var session: SessionStore
+    @Binding var isOnSubpage: Bool
     @ObservedObject private var customerStore = CustomerServiceIdStore.shared
     @ObservedObject private var msgStore = MessageSessionStore.shared
 
     @State private var messagesPath: [String] = []
     @State private var transientError: String?
     @State private var isRefreshingCustomer = false
-    /// 2026-07-17:WhatsApp 号后端 config 拉取,首次 fallback 硬编码
+    /// H5 newsRestricted 通过 config 拉取的 WhatsApp 号，首次显示前使用固定兜底。
     @State private var whatsappPhone: String = "+86 185 0202 7264"
     /// 2026-07-17 G5:审核提示 banner 的翻译文案(对齐 H5 newsRestricted CTranslate)
     @State private var translatedText: String?
     @State private var isTranslating: Bool = false
+    @State private var showHomeRanking = false
 
     /// 2026-07-17 R7:audit 相关 4 字段合成 signature,用于 onChange 监听变化触发 translatedText 清除。
     /// SwiftUI onChange 对 String 是 Equatable + 高效,比 4 个独立 onChange 更简洁。
@@ -32,35 +34,11 @@ struct NewsRestrictedView: View {
 
     var body: some View {
         NavigationStack(path: $messagesPath) {
-            content
-                .navigationTitle("News")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbarBackground(Theme.Palette.profileBackground, for: .navigationBar)
-                .toolbarBackground(.visible, for: .navigationBar)
-                .toolbarColorScheme(.dark, for: .navigationBar)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        NavigationLink {
-                            ReviewRankingView()
-                        } label: {
-                            VStack(spacing: 0) {
-                                Image(systemName: "trophy.fill")
-                                    .font(.system(size: 17))
-                                HStack(spacing: 2) {
-                                    Image("coins")
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 10, height: 10)
-                                    Text("+100K")
-                                        .font(.system(size: 10, weight: .semibold))
-                                }
-                            }
-                            .foregroundStyle(.yellow)
-                            .frame(width: 44, height: 40)
-                        }
-                        .accessibilityLabel("Ranking")
-                    }
-                }
+            VStack(spacing: 0) {
+                pageHeader
+                content
+            }
+                .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(for: String.self) { peerYxAccId in
                     if let selfId = session.user?.yxAccid, !selfId.isEmpty {
                         ChatDetailContainer(
@@ -80,6 +58,50 @@ struct NewsRestrictedView: View {
         // 深色主题:与 MineRestrictedView 一致(profileBackground=#0B0010);SystemInboxRow 用 .primary/.secondary
         // 系统颜色必须在 dark colorScheme 下才能显示为白色系,否则 light mode 用户看到黑字黑底。
         .preferredColorScheme(.dark)
+        .onAppear(perform: syncTabBarVisibility)
+        .onChange(of: messagesPath.isEmpty) { _ in syncTabBarVisibility() }
+        .onChange(of: showHomeRanking) { _ in syncTabBarVisibility() }
+    }
+
+    /// H5 `newsRestricted` 顶栏：透明背景、居中标题、首页同款金冠榜单入口。
+    private var pageHeader: some View {
+        ZStack {
+            Text(L10n.tabMessages)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+
+            HStack {
+                Spacer()
+                NavigationLink(isActive: $showHomeRanking) {
+                    HomeRankingView()
+                } label: {
+                    Image("liveRankBadge")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 56, height: 28)
+                        .frame(width: 56, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.liveRankBadge)
+                .padding(.trailing, 8)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 44)
+        .background(alignment: .top) {
+            Image("restrictedNewsHeader")
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: 88)
+                .clipped()
+                .ignoresSafeArea(edges: .top)
+        }
+    }
+
+    private func syncTabBarVisibility() {
+        isOnSubpage = !messagesPath.isEmpty || showHomeRanking
     }
 
     @ViewBuilder
@@ -166,10 +188,11 @@ struct NewsRestrictedView: View {
             translateRow
             adminWhatsappCard
         }
-        .padding(12)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 20)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(0.05))
+                .fill(Theme.Palette.cardFill)
         )
         .padding(.horizontal, 16)
         .padding(.top, 20)
@@ -288,15 +311,17 @@ struct NewsRestrictedView: View {
     }
 
     /// 2026-07-17 G5:Translate 按钮 tap → 调 MicrosoftTranslateService(与 ChatDetailView/PublicChat 同款)。
-    /// - key/area 优先 AppConfigStore(登录后 activate 拉),fallback 硬编码;targetLang 从 AppLocaleStore 派生
+    /// - H5 使用应用启动时的微软翻译配置；iOS 若首次点击早于配置完成，会补一次应用级加载
     /// - 失败静默 log(对齐 H5 messageScroller 静默失败,不弹 toast)
     private func handleTranslate(text: String) async {
         guard !isTranslating, translatedText == nil, !text.isEmpty else { return }
         isTranslating = true
         defer { isTranslating = false }
 
-        let key = AppConfigStore.shared.microsoftTranslatorKey ?? AppConfigStore.translatorKeyFallback
-        let area = AppConfigStore.shared.microsoftTranslatorArea ?? AppConfigStore.translatorAreaFallback
+        guard let credentials = await translatorCredentials() else {
+            AppLogger.auth.warning("[NewsRestricted] translate unavailable: config missing")
+            return
+        }
         let targetLang: String = {
             switch AppLocaleStore.shared.current {
             case .en: return "en"
@@ -308,12 +333,30 @@ struct NewsRestrictedView: View {
 
         do {
             let translated = try await MicrosoftTranslateService.shared.translate(
-                text: text, targetLang: targetLang, key: key, area: area
+                text: text, targetLang: targetLang, key: credentials.key, area: credentials.area
             )
             translatedText = translated
         } catch {
             AppLogger.auth.warning("[NewsRestricted] translate failed: \(String(describing: error), privacy: .public)")
         }
+    }
+
+    /// `applyLogin` 会异步 activate，受限首页可能比该任务先可点击。
+    /// 仅在凭证尚未就绪时补一次，后续点击直接复用会话级缓存，与 H5 App 初始化语义一致。
+    private func translatorCredentials() async -> (key: String, area: String)? {
+        if let key = AppConfigStore.shared.microsoftTranslatorKey,
+           let area = AppConfigStore.shared.microsoftTranslatorArea,
+           !key.isEmpty, !area.isEmpty {
+            return (key, area)
+        }
+
+        await AppConfigStore.shared.activate()
+        guard let key = AppConfigStore.shared.microsoftTranslatorKey,
+              let area = AppConfigStore.shared.microsoftTranslatorArea,
+              !key.isEmpty, !area.isEmpty else {
+            return nil
+        }
+        return (key, area)
     }
 
     /// Administrator tap:客服 imId 已拉到 → 直接 push;未拉到 → 主动触发一次 refresh 后再判断。

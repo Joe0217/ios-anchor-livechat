@@ -142,20 +142,26 @@ struct AvatarView: View {
 
     /// 是否启用内置 tap 分派：非 disable + 有 userId + 非自己
     private var enablesInlineTap: Bool {
-        guard !disablesTap, let uid = userId, !uid.isEmpty else { return false }
+        guard !disablesTap, let uid = validUserId else { return false }
         if let mine = SessionStore.shared.user?.userId, String(mine) == uid { return false }
         return true
     }
 
     @MainActor
     private func handleTap() {
-        guard let uid = userId, !uid.isEmpty else { return }
+        guard let uid = validUserId else { return }
         switch tapEnvironmentOverride ?? AvatarTapEnvironmentDetector.detect() {
         case .liveRoom, .partyRoom, .call:
             userCardPresenter?(uid)
         case .list:
             profilePusher?(uid)
         }
+    }
+
+    private var validUserId: String? {
+        guard let userId else { return nil }
+        let trimmed = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     @ViewBuilder
@@ -261,7 +267,11 @@ extension View {
     }
     /// 声明当前作用域内头像 tap 跳详情的 pusher（各 NavigationStack 根节点挂）
     func avatarProfilePusher(_ push: @escaping (String) -> Void) -> some View {
-        environment(\.avatarProfilePusher, push)
+        environment(\.avatarProfilePusher, { rawUserId in
+            let userId = rawUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !userId.isEmpty else { return }
+            push(userId)
+        })
     }
     /// 显式声明头像点击场景，避免容器使用非单例 store 时被全局状态误判。
     func avatarTapEnvironmentOverride(_ scene: AvatarTapEnvironment) -> some View {

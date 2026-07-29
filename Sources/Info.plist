@@ -52,8 +52,14 @@
 	<string>$(HILY_SAPI_HOST)</string>
 	<key>HilySocketHost</key>
 	<string>$(HILY_SOCKET_HOST)</string>
+	<key>HilyThinkingDataAppID</key>
+	<string>$(HILY_THINKING_DATA_APP_ID)</string>
+	<key>HilyThinkingDataServerURL</key>
+	<string>$(HILY_THINKING_DATA_SERVER_URL)</string>
 	<key>HilyWSAESKey</key>
 	<string>$(HILY_WS_AES_KEY)</string>
+	<key>HilyWebFeatureBaseURL</key>
+	<string>$(HILY_WEB_FEATURE_BASE_URL)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSAppTransportSecurity</key>
@@ -64,7 +70,7 @@
 		<false/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Used for real-time beauty preview and live streaming</string>
+	<string>Used for beauty preview, live streaming, and withdrawal identity verification</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Used for real-time audio/video calls</string>
 	<key>NSPhotoLibraryUsageDescription</key>

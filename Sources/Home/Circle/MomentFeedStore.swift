@@ -217,8 +217,12 @@ final class MomentFeedStore: ObservableObject {
               translations[postId] == nil,
               !pendingTranslateIds.contains(postId) else { return }
         pendingTranslateIds.insert(postId)
-        let key = AppConfigStore.shared.microsoftTranslatorKey ?? AppConfigStore.translatorKeyFallback
-        let area = AppConfigStore.shared.microsoftTranslatorArea ?? AppConfigStore.translatorAreaFallback
+        guard let key = AppConfigStore.shared.microsoftTranslatorKey,
+              let area = AppConfigStore.shared.microsoftTranslatorArea else {
+            pendingTranslateIds.remove(postId)
+            logger.warning("translate unavailable: config missing")
+            return
+        }
         let targetLang: String = {
             switch AppLocaleStore.shared.current {
             case .en: return "en"

@@ -14,6 +14,7 @@ import SwiftUI
 /// NavigationStack 承载 Register 4 步流程(与 LoginView 同 pattern,复用 RegisterPathHolder.shared)。
 struct MineRestrictedView: View {
     @EnvironmentObject private var session: SessionStore
+    @Binding var isOnSubpage: Bool
     @StateObject private var pathHolder = RegisterPathHolder.shared
     @StateObject private var registerStore = RegisterStore.shared
     @ObservedObject private var anchorStore = AnchorInfoStore.shared
@@ -21,9 +22,8 @@ struct MineRestrictedView: View {
     @State private var isResubmitLoading = false
     @State private var resubmitError: String?
     @State private var previewContext: MediaGalleryContext?
-    /// 2026-07-17:WhatsApp 号后端 config 拉取(对齐 H5 `getConfigByKey({searchValue:'WhatsApp'})`)
-    /// nil 时用硬编码 fallback,避免 view 首次渲染时空白
-    @State private var whatsappPhone: String = "+86 185 0202 7264"
+    /// H5 mineRestricted 使用固定客服电话，不在返回该页面时重复拉取全局配置。
+    private let whatsappPhone = "+86 185 0202 7264"
 
     var body: some View {
         let _ = AppLogger.auth.info("[MineRestrictedView] body eval")
@@ -50,7 +50,12 @@ struct MineRestrictedView: View {
                     case .language:     LanguageView()
                     case .feedback:     FeedbackView(path: $pathHolder.path)
                     case .levelDetail:  LevelDetailView()
+                    case .dataStatistics: DataStatisticsView()
                     case .editProfile:  EditProfileView(service: EditProfileService.shared)
+                    case .userAgreement:
+                        H5WebContainerView(page: H5Page(url: URL(string: AppConfig.termsOfServiceURL)!, title: L10n.settingsTermsOfService))
+                    case .privacyPolicy:
+                        H5WebContainerView(page: H5Page(url: URL(string: AppConfig.privacyPolicyURL)!, title: L10n.settingsPrivacyPolicy))
                     }
                 }
         }
@@ -58,6 +63,8 @@ struct MineRestrictedView: View {
         // 系统颜色必须在 dark colorScheme 下渲染成白色系,否则 light mode 用户看到黑字黑底(ProfileMediaGrid
         // 标题用 Theme.Palette.profileSection=Color.white,但 SwiftUI 系统颜色需靠 colorScheme 触发)。
         .preferredColorScheme(.dark)
+        .onAppear(perform: syncTabBarVisibility)
+        .onChange(of: pathHolder.path.isEmpty) { _ in syncTabBarVisibility() }
     }
 
     @ViewBuilder
@@ -76,23 +83,25 @@ struct MineRestrictedView: View {
                 // 直接复用主界面 ProfileMediaGrid(与 ProfileView.contentForSelectedTab.album 同款)
                 // 优点:Color.clear.aspectRatio(1) 骨架 + overlay CachedAsyncImage 避免图片错位;
                 //      审核态蒙层(vaild=2 审核中 / 3 已拒)自动展示;视频角标 profileVideoPlay 已就位
-                ProfileMediaGrid(
+                restrictedMediaCard(
                     title: "Profile photos",
                     items: anchorStore.photos,
-                    isVideoGrid: false,
-                    onTap: { asset in openGallery(with: anchorStore.photos, target: asset) }
-                )
-                ProfileMediaGrid(
+                    isVideoGrid: false
+                ) { asset in
+                    openGallery(with: anchorStore.photos, target: asset)
+                }
+                restrictedMediaCard(
                     title: "Review video",
                     items: anchorStore.videos,
-                    isVideoGrid: true,
-                    onTap: { asset in openGallery(with: anchorStore.videos, target: asset) }
-                )
+                    isVideoGrid: true
+                ) { asset in
+                    openGallery(with: anchorStore.videos, target: asset)
+                }
             }
             .padding(.top, 8)
             .padding(.bottom, 16)   // 与 bottomBar 视觉呼吸
         }
-        .background(Theme.Palette.profileBackground.ignoresSafeArea())
+        .background { restrictedBackground }
         // 2026-07-17 G1:下拉刷新(对齐 H5 CPullRefresh)——手动刷新审核态 + 资料
         // 对齐 list-refresh-preserve-items rule:refresh 期 UI 保留已展示 items(ProfileMediaGrid 内 items 不清空)
         .refreshable {
@@ -105,13 +114,45 @@ struct MineRestrictedView: View {
         .fullScreenCover(item: $previewContext) { ctx in
             MediaGalleryView(urls: ctx.urls, startIndex: ctx.startIndex)
         }
-        // 冷启动进入 mine tab 时拉一次 WhatsApp 号(懒加载,后端配置变化时下次进入自动刷)
-        .task {
-            await fetchWhatsappPhone()
-        }
     }
 
     // MARK: - 顶部设置与用户信息(对齐 H5)
+
+    private var restrictedBackground: some View {
+        VStack(spacing: 0) {
+            Image("profileTopBg")
+                .resizable()
+                .scaledToFill()
+                .frame(maxWidth: .infinity)
+                .frame(height: 240)
+                .clipped()
+            Theme.Palette.profileBackground
+        }
+        .ignoresSafeArea(edges: .top)
+    }
+
+    private func syncTabBarVisibility() {
+        isOnSubpage = !pathHolder.path.isEmpty
+    }
+
+    /// H5 `mineRestricted` 的 CCard：外侧 16pt，内部标题与网格 12pt。
+    private func restrictedMediaCard(
+        title: String,
+        items: [MediaAsset],
+        isVideoGrid: Bool,
+        onTap: @escaping (MediaAsset) -> Void
+    ) -> some View {
+        ProfileMediaGrid(
+            title: title,
+            items: items,
+            isVideoGrid: isVideoGrid,
+            horizontalInset: 12,
+            onTap: onTap
+        )
+        .padding(.vertical, 12)
+        .background(Theme.Palette.cardFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal, 16)
+    }
 
     private var settingsRow: some View {
         HStack {
@@ -138,9 +179,7 @@ struct MineRestrictedView: View {
             // 2026-07-17 tap-fix:头像 tap 用 Button + .plain 包装,label 加 contentShape(Circle) 明确热区。
             // 原 `.onTapGesture` 挂在 AvatarView 上,AvatarView 内部 avatarStack 已 clipShape(Circle) → 外部
             // gesture 与内部 clip 交互不稳定,SwiftUI arbitration 可能吞掉 tap。Button + contentShape 是显式且稳定的做法。
-            Button {
-                Task { await handleResubmit() }
-            } label: {
+            Button(action: handleResubmit) {
                 AvatarView(
                     urlString: session.user?.icon,
                     size: 80,
@@ -160,8 +199,8 @@ struct MineRestrictedView: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)   // 防超长昵称挤压布局 push Edit 按钮出视图
                     .truncationMode(.tail)
-                if let uid = session.user?.userId {
-                    Text("ID:\(uid)")
+                if !profileUserId.isEmpty {
+                    Text("ID:\(profileUserId)")
                         .font(.system(size: 14))
                         .foregroundStyle(.white)
                         .lineLimit(1)
@@ -171,9 +210,7 @@ struct MineRestrictedView: View {
 
             Spacer()
 
-            Button {
-                Task { await handleResubmit() }
-            } label: {
+            Button(action: handleResubmit) {
                 Image(systemName: "square.and.pencil")
                     .font(.system(size: 20))
                     .foregroundStyle(.white)
@@ -193,9 +230,7 @@ struct MineRestrictedView: View {
     private var bottomBar: some View {
         VStack(spacing: 8) {
             if showResubmitButton {
-                Button {
-                    Task { await handleResubmit() }
-                } label: {
+                Button(action: handleResubmit) {
                     HStack(spacing: 8) {
                         if isResubmitLoading {
                             ProgressView().scaleEffect(0.85).tint(.white)
@@ -273,25 +308,22 @@ struct MineRestrictedView: View {
             && u.type != 9
     }
 
+    /// 使用资料 store 的原始字符串，避免 UI 对数字 ID 应用本地化分组格式。
+    private var profileUserId: String {
+        let storedId = anchorStore.userId
+        if !storedId.isEmpty { return storedId }
+        return session.user?.userId.map(String.init) ?? ""
+    }
+
     // MARK: - 交互
 
-    /// 2026-07-17 G1:受限首屏下拉刷新 = 审核态刷新(内含相册 refresh) + WhatsApp 号刷新
-    /// 对齐 H5 mineRestricted CPullRefresh 语义:用户主动手动同步最新服务端状态
+    /// 受限“我的”下拉刷新仅同步审核态与资料，不重复请求固定客服电话配置。
     ///
     /// **注意**:`SessionStore.refreshAuditStatus` 内部已 `await AnchorInfoStore.shared.refresh()`
     /// (line 295),不再冗余并发调 `anchorStore.refresh()`(即使 refresh 内 inflightTask 短路合并,语义
     /// 不清晰易误导后续维护者)。
     private func refreshRestricted() async {
-        async let auditRefresh: Void = session.refreshAuditStatus()
-        async let whatsappRefresh: Void = fetchWhatsappPhone()
-        _ = await (auditRefresh, whatsappRefresh)
-    }
-
-    /// 拉后端 WhatsApp 号(nil 保持既有值,fallback 硬编码 +86 185 0202 7264 不覆盖)
-    private func fetchWhatsappPhone() async {
-        if let phone = await AppConfigService.fetchWhatsAppPhone(), !phone.isEmpty {
-            whatsappPhone = phone
-        }
+        await session.refreshAuditStatus()
     }
 
     /// 打开图库预览(与 ProfileView.openGallery 同款语义):
@@ -313,8 +345,8 @@ struct MineRestrictedView: View {
         previewContext = MediaGalleryContext(urls: urls, startIndex: idx)
     }
 
-    private func handleResubmit() async {
-        AppLogger.auth.info("[MineRestricted] TAP handleResubmit fired (isResubmitLoading=\(self.isResubmitLoading, privacy: .public))")
+    private func handleResubmit() {
+        AppLogger.auth.info("[MineRestricted] open register from cached user info")
         guard !isResubmitLoading else {
             AppLogger.auth.notice("[MineRestricted] handleResubmit guarded: already loading")
             return
@@ -323,10 +355,9 @@ struct MineRestrictedView: View {
         resubmitError = nil
         defer { isResubmitLoading = false }
 
-        // 2026-07-17 H3/R2:3 级 fallback 链解析 mineInfo,任一成功都能进 register 页手填。
-        // 对齐 H5 mineRestricted 语义 —— H5 直接 `router.push('register')` 用 mineInfo 快照,不主动拉;
-        // iOS 更精细:优先拉最新,失败退 store,再退 LoginResult minimal。
-        guard let mineInfo = await resolveMineInfoForResubmit() else {
+        // H5 直接用已加载的 mineInfo 进入 register；这里同样不再额外请求资料接口。
+        // 当前 info 是下拉/入页审核刷新后的最新快照，mine 与 LoginResult 是无网络回退。
+        guard let mineInfo = cachedMineInfoForResubmit else {
             resubmitError = String(format: L10n.authErrorNetworkFormat, "user session invalid")
             return
         }
@@ -335,23 +366,8 @@ struct MineRestrictedView: View {
         pathHolder.path.append(RegisterRoute.basicInfo)
     }
 
-    /// 3 级 fallback 链:主拉 → store 已有 → LoginResult minimal → nil(session 失效)。
-    /// 抽出减少 handleResubmit 内 `pathHolder.append` 重复 3 次。
-    private func resolveMineInfoForResubmit() async -> AnchorInfo? {
-        // 主 flow:拉最新
-        if let fresh = try? await ProfileService.getAnchorInfo() {
-            return fresh
-        }
-        AppLogger.auth.warning("[MineRestricted] getAnchorInfo failed, fallback to store/LoginResult")
-        // Fallback A:store 已有数据(前次 refresh 拉的 info 或 登录时 hydrateFromLogin 存的 mine)
-        if let existing = anchorStore.info ?? anchorStore.mine {
-            return existing
-        }
-        // Fallback B:LoginResult 构造最小 mineInfo(仅 icon/nickname/审核字段)
-        if let user = session.user {
-            return AnchorInfo.fromLoginResult(user)
-        }
-        // session.user 也 nil → session 已失效,调用方显 error 兜底
-        return nil
+    private var cachedMineInfoForResubmit: AnchorInfo? {
+        if let info = anchorStore.info ?? anchorStore.mine { return info }
+        return session.user.map(AnchorInfo.fromLoginResult)
     }
 }

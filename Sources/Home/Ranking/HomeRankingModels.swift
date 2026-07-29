@@ -56,6 +56,33 @@ struct HomeRankingMember: Decodable, Identifiable, Equatable {
 
     var id: String { userId }
 
+    /// 供同为单人榜结构的 Party Rich / Room 榜适配复用 Charm 榜 UI。
+    init(
+        userId: String,
+        nickname: String,
+        icon: String?,
+        countryId: String? = nil,
+        age: Int? = nil,
+        levelName: String? = nil,
+        isVip: Bool = false,
+        value: String,
+        reward: String? = nil,
+        rank: Int? = nil,
+        isRanked: Bool = false
+    ) {
+        self.userId = userId
+        self.nickname = nickname
+        self.icon = icon
+        self.countryId = countryId
+        self.age = age
+        self.levelName = levelName
+        self.isVip = isVip
+        self.value = value
+        self.reward = reward
+        self.rank = rank
+        self.isRanked = isRanked
+    }
+
     private enum CodingKeys: String, CodingKey {
         case userId, anchorUid, nickname, nickName, icon, avatar, countryId, age
         case userlevelName, userLevelName, levelName, vip, vipFlag, num, costNum
@@ -83,6 +110,24 @@ struct HomeRankingMember: Decodable, Identifiable, Equatable {
         reward = c.decodeFlexibleString(forKey: .rankingReward) ?? c.decodeFlexibleString(forKey: .reward)
         rank = c.decodeFlexibleInt(forKey: .rank)
         isRanked = c.decodeFlexibleBool(forKey: .onRank) ?? (rank.map { $0 > 0 } ?? false)
+    }
+}
+
+extension HomeRankingMember {
+    /// 榜单已返回的用户基础资料，供名片卡在详情接口完成前立即展示。
+    var userCardPreview: UserCardPreview {
+        UserCardPreview(
+            userId: userId,
+            nickname: nickname,
+            avatarUrl: icon,
+            countryEmoji: countryId.flatMap { code in
+                let flag = AnchorInfoStore.flagEmoji(from: code)
+                return flag == "🌐" ? nil : flag
+            },
+            level: levelName.flatMap(Int.init),
+            levelName: levelName,
+            isVip: isVip
+        )
     }
 }
 

@@ -13,28 +13,38 @@ struct LiveListUserCard: View {
     var body: some View {
         // H-0：整 cell 包 NavigationLink 推入 UserProfileView。actionButton 用 .buttonStyle(.borderless)
         // 嵌套使其独立响应 tap 不冒泡到外层 NavigationLink（spec §5.3 + R-F9）。
-        NavigationLink(value: UserProfileRoute.userId(anchor.userId)) {
-            HStack(spacing: 12) {
-                avatar
-                infoColumn
-                Spacer(minLength: 4)
-                actionButtonGroup
+        Group {
+            if !anchor.userId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                NavigationLink(value: UserProfileRoute.userId(anchor.userId)) {
+                    cardContent
+                }
+            } else {
+                cardContent
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .frame(height: Theme.Metric.liveListCardHeight)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.Radius.liveListCard, style: .continuous)
-                    .fill(Theme.Palette.liveListCardFill)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.Radius.liveListCard, style: .continuous)
-                    .strokeBorder(Theme.Palette.liveListCardBorder, lineWidth: 0.5)
-            )
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityText)
+    }
+
+    private var cardContent: some View {
+        HStack(spacing: 12) {
+            avatar
+            infoColumn
+            Spacer(minLength: 4)
+            actionButtonGroup
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(height: Theme.Metric.liveListCardHeight)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.liveListCard, style: .continuous)
+                .fill(Theme.Palette.liveListCardFill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.liveListCard, style: .continuous)
+                .strokeBorder(Theme.Palette.liveListCardBorder, lineWidth: 0.5)
+        )
     }
 
     /// 按钮组：videoCall 条件显示 + chat 常显（对齐 H5 flex gap-10 并排）

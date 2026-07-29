@@ -35,6 +35,8 @@ struct LiveTabView: View {
     @Environment(\.isHomeTabActive) private var isHomeTabActive
     /// 首页右上角榜单入口。由 MainTabView 的 home NavigationStack 承接 push。
     @Environment(\.openHomeLeaderboard) private var openHomeLeaderboard
+    /// 首页 banner H5 跳转入口。由 MainTabView 的 home NavigationStack 承接 push。
+    @Environment(\.openHomeBanner) private var openHomeBanner
 
     /// reconnect toast 展示态（对齐 H5 `refreshIMOnline` 后 1s 弹的 toast）。
     /// LiveTopBar 点刷新 → OnlineStatusStore.refreshToastTick 变化 → 本 view onChange 抬起。
@@ -252,7 +254,7 @@ struct LiveTabView: View {
                     .padding(.horizontal, Theme.Metric.liveScreenMargin)
                     .padding(.top, giftMarqueeStore.items.isEmpty ? 0 : 10)
 
-                LiveBanner(items: homeBannerItems, isActive: isActive)
+                LiveBanner(items: homeBannerItems, onTap: openBanner, isActive: isActive)
                     .padding(.horizontal, Theme.Metric.liveScreenMargin)
 
                 LiveStreamGrid(viewModel: streamViewModel)
@@ -269,6 +271,17 @@ struct LiveTabView: View {
     /// H5 `bannerList` 派生：type=2 且 `bannerPosition includes '首页'`。
     private var homeBannerItems: [AppPictureItem] {
         appPictureStore.items(of: .banner, position: "首页")
+    }
+
+    private func openBanner(_ item: AppPictureItem) {
+        guard let route = HomeBannerH5Route(item: item) else { return }
+        if !route.isInternalH5Route {
+            if route.originalURLString.contains("isPkActive") {
+                AnalyticsTracker.track("hostPK_activity")
+            }
+            AnalyticsTracker.track("h_home_banner_click", properties: ["bannerid": item.id])
+        }
+        openHomeBanner.perform(route)
     }
 
     /// reconnect toast（对齐 H5 `refreshIMOnline` 后 1s showToast(call.reconnect)）。

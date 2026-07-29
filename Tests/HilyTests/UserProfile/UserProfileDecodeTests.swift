@@ -329,6 +329,27 @@ final class UserProfileDecodeTests: XCTestCase {
         XCTAssertEqual(gifts.first?.giftId, 100, "giftId String 转 Int")
     }
 
+    // MARK: - guardianList 解析（H5 getUserDetail 内嵌字段）
+
+    func test_decodeDetail_guardianList_decodesEmbeddedAnchorsWithFlexibleId() {
+        let json = """
+        {
+          "userId": 100,
+          "guardianList": [
+            { "anchorId": 200, "anchorNickname": "Gold Host", "anchorIcon": "https://example.com/gold.png", "levelCode": 3 },
+            { "anchorId": "201", "anchorNickname": "Silver Host", "anchorIcon": "https://example.com/silver.png", "levelCode": 2 },
+            { "anchorId": null, "anchorNickname": "Invalid" }
+          ]
+        }
+        """
+
+        let guardians = UserProfileService.decodeDetail(from: Data(json.utf8))?.guardianList
+
+        XCTAssertEqual(guardians?.map(\.anchorId), ["200", "201"])
+        XCTAssertEqual(guardians?.first?.nickname, "Gold Host")
+        XCTAssertEqual(guardians?.last?.iconURL, "https://example.com/silver.png")
+    }
+
     // MARK: - connRate 类型宽松收 String
 
     func test_decodeDetail_connRateAsString() {

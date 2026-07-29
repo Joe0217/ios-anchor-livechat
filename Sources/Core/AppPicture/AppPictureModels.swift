@@ -24,6 +24,14 @@ struct AppPictureItem: Identifiable, Equatable {
     /// H5 用逗号分隔的多值字符串（如 "首页,榜单"），iOS 拆成数组。
     let bannerPosition: [String]
 
+    /// 非全局图片配置接口也可适配到统一的 `LiveBanner` 外观与轮播行为。
+    init(id: String, picUrl: String?, directUrl: String?, bannerPosition: [String] = []) {
+        self.id = id
+        self.picUrl = picUrl
+        self.directUrl = directUrl
+        self.bannerPosition = bannerPosition
+    }
+
     var picURL: URL? {
         guard let s = picUrl, !s.isEmpty else { return nil }
         return URL(string: s)

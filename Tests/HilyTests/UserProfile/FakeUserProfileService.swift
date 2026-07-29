@@ -77,7 +77,8 @@ extension UserDetail {
                        isBlocked: Int? = nil,
                        like: Int = 100,
                        favorite: Int = 50,
-                       giftList: [Gift] = []) -> UserDetail {
+                       giftList: [Gift] = [],
+                       guardianList: [UserGuardianAnchor] = []) -> UserDetail {
         UserDetail(
             userId: userId,
             nickname: nickname,
@@ -91,7 +92,8 @@ extension UserDetail {
             isBlocked: isBlocked,
             like: like,
             favorite: favorite,
-            giftList: giftList
+            giftList: giftList,
+            guardianList: guardianList
         )
     }
 }

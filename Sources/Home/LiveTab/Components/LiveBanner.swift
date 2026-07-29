@@ -6,48 +6,167 @@ import SwiftUI
 /// - 空态直接 `EmptyView`（H5 `v-if="bannerList.length"`）
 /// - 多张时轮播（H5 `:loop="bannerList?.length > 1"` + Autoplay）
 ///
-/// 卡片点击**本次不做**（客态直播间独立里程碑；banner 跳转 iframe 也需要 J 里程碑内嵌浏览器基建）——
-/// 目前仅作视觉展示，点击无响应，与 Live 卡片保持一致的处理原则。
 struct LiveBanner: View {
     let items: [AppPictureItem]
+    var onTap: (AppPictureItem) -> Void = { _ in }
     /// 是否处于可见/活跃状态。keep-alive 架构下 view 永远不 dismount，autoplay `.task`
     /// 也不会随切走 tab 而 cancel——此参数让父容器（LiveTabView）传"真可见"信号：
     /// `isHomeTabActive && current == .live`；不 active 时 task 立即 return，能耗归零。
     var isActive: Bool = true
+    /// 默认沿用首页的 3 秒节奏；Party 首页按 H5 `homeBanner.vue` 传 5 秒。
+    var autoplayInterval: TimeInterval = 3
+    /// 用户滑动后暂停自动播放，并在该时长后恢复。默认与首页 3 秒轮播周期一致。
+    var autoplayResumeDelay: TimeInterval = 3
 
-    @State private var currentIndex: Int = 0
+    /// 多图时在首尾各添加一个哨兵页：滑到哨兵后无动画回填到真页，实现手势和自动播放的连续循环。
+    @State private var pageIndex: Int = 1
+    @State private var autoplayEnabled = true
+    @State private var pageChangeOrigin: PageChangeOrigin?
+    @State private var manualInteractionGeneration = 0
+    @State private var isManualDragInProgress = false
 
-    /// task id 组合 items.count + isActive——任一变化 SwiftUI 都会 cancel 旧 task 起新 task。
-    /// active 切换时 currentIndex **不重置**（@State 独立于 task 生命周期），切走再回来
-    /// 从当前位置继续；items.count 变化时同理，靠 modulo 兜底越界（不再重置为 0）。
+    private enum PageChangeOrigin {
+        case automatic
+        case loopCorrection
+    }
+
+    /// task id 组合 banner 标识与活跃状态。Banner 数据变更会重启轮播，切换 Home 子 tab 则暂停/恢复当前位置。
     private struct LoopKey: Hashable {
-        let count: Int
+        let itemIDs: [String]
         let active: Bool
+        let autoplayEnabled: Bool
+        let intervalNanoseconds: UInt64
+    }
+
+    private struct ResumeKey: Hashable {
+        let interactionGeneration: Int
+        let active: Bool
+        let resumeDelayNanoseconds: UInt64
+    }
+
+    private var loopItems: [AppPictureItem] {
+        guard let first = items.first, let last = items.last, items.count > 1 else { return items }
+        return [last] + items + [first]
     }
 
     var body: some View {
         if items.isEmpty {
             EmptyView()
         } else if items.count == 1 {
-            singleImage(items[0])
+            bannerCard(items[0])
         } else {
-            TabView(selection: $currentIndex) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    singleImage(item).tag(index)
+            TabView(selection: $pageIndex) {
+                ForEach(Array(loopItems.enumerated()), id: \.offset) { index, item in
+                    bannerCard(item).tag(index)
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .automatic))
             .frame(height: Theme.Metric.liveBannerHeight)
-            .task(id: LoopKey(count: items.count, active: isActive)) {
-                guard isActive, items.count > 1 else { return }
+            .simultaneousGesture(manualPagingGesture)
+            .onChange(of: pageIndex, perform: handlePageChange)
+            .onChange(of: items.map(\.id)) { _ in
+                pageChangeOrigin = .loopCorrection
+                pageIndex = 1
+                autoplayEnabled = true
+            }
+            .task(id: LoopKey(
+                itemIDs: items.map(\.id),
+                active: isActive,
+                autoplayEnabled: autoplayEnabled,
+                intervalNanoseconds: autoplayIntervalNanoseconds
+            )) {
+                guard isActive, autoplayEnabled, items.count > 1 else { return }
                 while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 3_000_000_000)
-                    if Task.isCancelled { break }
+                    do {
+                        try await Task.sleep(nanoseconds: autoplayIntervalNanoseconds)
+                    } catch {
+                        return
+                    }
+                    pageChangeOrigin = .automatic
                     withAnimation(.easeInOut(duration: 0.4)) {
-                        currentIndex = (currentIndex + 1) % max(items.count, 1)
+                        pageIndex += 1
                     }
                 }
             }
+            .task(id: ResumeKey(
+                interactionGeneration: manualInteractionGeneration,
+                active: isActive,
+                resumeDelayNanoseconds: autoplayResumeDelayNanoseconds
+            )) {
+                guard manualInteractionGeneration > 0, isActive else {
+                    return
+                }
+                do {
+                    try await Task.sleep(nanoseconds: autoplayResumeDelayNanoseconds)
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                autoplayEnabled = true
+            }
+        }
+    }
+
+    private func handlePageChange(_ index: Int) {
+        let origin = pageChangeOrigin
+        pageChangeOrigin = nil
+        if origin == nil {
+            pauseAutoplayForManualInteraction()
+        }
+
+        let lastSentinelIndex = items.count + 1
+        guard index == 0 || index == lastSentinelIndex else { return }
+        let destination = index == 0 ? items.count : 1
+        DispatchQueue.main.async {
+            pageChangeOrigin = .loopCorrection
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                pageIndex = destination
+            }
+        }
+    }
+
+    private var autoplayIntervalNanoseconds: UInt64 {
+        nanoseconds(for: autoplayInterval)
+    }
+
+    private var autoplayResumeDelayNanoseconds: UInt64 {
+        nanoseconds(for: autoplayResumeDelay)
+    }
+
+    private func nanoseconds(for seconds: TimeInterval) -> UInt64 {
+        UInt64(max(0.1, seconds) * 1_000_000_000)
+    }
+
+    private var manualPagingGesture: some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { _ in
+                guard !isManualDragInProgress else { return }
+                isManualDragInProgress = true
+                pauseAutoplayForManualInteraction()
+            }
+            .onEnded { _ in
+                isManualDragInProgress = false
+            }
+    }
+
+    private func pauseAutoplayForManualInteraction() {
+        // 每次手势递增 generation，会取消上一次尚未完成的恢复计时。
+        autoplayEnabled = false
+        manualInteractionGeneration += 1
+    }
+
+    @ViewBuilder
+    private func bannerCard(_ item: AppPictureItem) -> some View {
+        if let directUrl = item.directUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !directUrl.isEmpty {
+            Button { onTap(item) } label: {
+                singleImage(item)
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+        } else {
+            singleImage(item)
         }
     }
 

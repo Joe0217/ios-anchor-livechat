@@ -14,6 +14,8 @@ struct RestrictedTabView: View {
     /// 默认落地 news tab —— 对齐 H5 `App.vue:isLogin()` `router.replace('/newsRestricted')`(未审核账号
     /// 登录后先看审核提示 + Administrator 联系入口,而不是自己已提交的资料)
     @State private var selection: Tab = .news
+    @State private var isNewsOnSubpage = false
+    @State private var isMineOnSubpage = false
 
     enum Tab: Hashable {
         case news
@@ -21,20 +23,21 @@ struct RestrictedTabView: View {
     }
 
     var body: some View {
-        let _ = AppLogger.auth.info("[RestrictedTabView] body eval: selection=\(String(describing: selection), privacy: .public)")
-        return TabView(selection: $selection) {
-            NewsRestrictedView()
-                .tabItem {
-                    Label("Messages", systemImage: "message.fill")
-                }
-                .tag(Tab.news)
+        ZStack {
+            NewsRestrictedView(isOnSubpage: $isNewsOnSubpage)
+                .opacity(selection == .news ? 1 : 0)
+                .allowsHitTesting(selection == .news)
 
-            MineRestrictedView()
-                .tabItem {
-                    Label("Profile", systemImage: "person.crop.circle.fill")
-                }
-                .tag(Tab.mine)
+            MineRestrictedView(isOnSubpage: $isMineOnSubpage)
+                .opacity(selection == .mine ? 1 : 0)
+                .allowsHitTesting(selection == .mine)
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if !isOnSubpage {
+                tabBar
+            }
+        }
+        .background(Theme.Palette.profileBackground)
         .appLocaleEnvironment()
         .task {
             // 对齐 H5 App.vue.isLogin() 每次冷启动拉 getAnchorInfo 刷新审核态 —— iOS 首次进入受限首屏时同步一次,
@@ -42,5 +45,49 @@ struct RestrictedTabView: View {
             // sysMsg 58 push 只覆盖在线时的实时变化;进入 view 主动拉一次是**冷启动/长离线**的兜底路径。
             await session.refreshAuditStatus()
         }
+    }
+
+    /// 对齐 H5 `showTabbar = tabPathArray.includes(route.path)`：仅两个根页面显示底栏。
+    private var isOnSubpage: Bool {
+        switch selection {
+        case .news: return isNewsOnSubpage
+        case .mine: return isMineOnSubpage
+        }
+    }
+
+    private var tabBar: some View {
+        HStack(spacing: 0) {
+            tabButton(.news, icon: "tabMessages", activeIcon: "tabMessagesActive", title: L10n.tabMessages)
+            tabButton(.mine, icon: "tabProfile", activeIcon: "tabProfileActive", title: L10n.tabProfile)
+        }
+        .padding(.top, 8)
+        .frame(maxWidth: .infinity)
+        .frame(height: Theme.Metric.tabBarHeight)
+        .background(Theme.Palette.screenBackground)
+        .background {
+            Theme.Palette.screenBackground.ignoresSafeArea(edges: .bottom)
+        }
+    }
+
+    private func tabButton(_ tab: Tab, icon: String, activeIcon: String, title: String) -> some View {
+        let isSelected = selection == tab
+        return Button {
+            selection = tab
+        } label: {
+            VStack(spacing: 4) {
+                Image(isSelected ? activeIcon : icon)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 26, height: 26)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(Theme.Typography.tabLabel)
+                    .foregroundStyle(isSelected ? Theme.Palette.tabActive : Theme.Palette.tabInactiveLabel)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

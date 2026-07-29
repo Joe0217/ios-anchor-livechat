@@ -6,7 +6,7 @@ import SwiftUI
 /// - 多条：3s 一条自动循环切换（H5 autoplay 3000ms + loop）
 /// - 空态：完全不渲染（H5 `v-if="marqueeList.length"`）
 ///
-/// 紫粉横向渐变胶囊底 + 玫红描边——沿用旧 mock 版本的视觉。
+/// H5 固定规格：351×40、12pt 圆角、20pt 头像、红→紫底图和粉红描边。
 struct LiveNoticeBar: View {
     let items: [GiftMarqueeItem]
     /// 是否处于可见/活跃状态。keep-alive 架构下 view 不 dismount，autoplay `.task`
@@ -28,20 +28,30 @@ struct LiveNoticeBar: View {
         if items.isEmpty {
             EmptyView()
         } else {
-            // 垂直 slide 转场对齐 H5 `c-marquee`（Swiper vertical + autoplay 3000）：
-            // 新条从下方滑入 / 旧条向上滑出，避免淡入淡出的"呼吸"感。
-            // 外层 clipShape(Capsule) 让 slide 期间新旧条在胶囊内完成，不溢出边界。
+            // 垂直 slide 转场对齐 H5 `c-marquee`（Swiper vertical + autoplay 3000）。
             ZStack {
-                Capsule().fill(Theme.Gradients.liveNoticeBar)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(LinearGradient(
+                        colors: [Color(hex: 0xE40132), Color(hex: 0x6021BD)],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    ))
                 singleRow(items[safeIndex])
-                    .padding(.leading, 4)
-                    .padding(.trailing, 12)
+                    .padding(.horizontal, 12)
             }
-            .frame(height: Theme.Metric.liveNoticeBarHeight)
-            .clipShape(Capsule())
+            .frame(height: 40)
+            .frame(maxWidth: 351)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
-                Capsule()
-                    .strokeBorder(Theme.Palette.liveNoticeBarBorder.opacity(0.6), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [Color(hex: 0xFF0026), Color(hex: 0xFF0088)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        ),
+                        lineWidth: 1
+                    )
             )
             .accessibilityElement(children: .combine)
             .accessibilityLabel(accessibilityText(items[safeIndex]))
@@ -77,7 +87,7 @@ struct LiveNoticeBar: View {
                 Text(L10n.giftSendSuperRocket)
                     .foregroundStyle(.white)
             }
-            .font(Theme.Typography.liveNotice)
+            .font(.system(size: 12))
             .lineLimit(1)
             .minimumScaleFactor(0.85)
             Spacer(minLength: 6)
@@ -99,7 +109,7 @@ struct LiveNoticeBar: View {
     private func avatar(_ item: GiftMarqueeItem) -> some View {
         AvatarView(
             urlString: item.icon,
-            size: 32,
+            size: 20,
             kind: .user,
             showsOnlineDot: false
         )
@@ -113,8 +123,8 @@ struct LiveNoticeBar: View {
                 .frame(width: 16, height: 16)
                 .accessibilityHidden(true)
             Text(amount)
-                .font(Theme.Typography.liveNoticeNum)
-                .foregroundStyle(Theme.Palette.liveNoticeNumber)
+                .font(.system(size: 12))
+                .foregroundStyle(Color(hex: 0xFFE600))
         }
     }
 

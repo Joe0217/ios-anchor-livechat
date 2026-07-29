@@ -178,6 +178,7 @@ private final class PreviewMatchService: MatchServiceProtocol {
 
     func isMatchOpen() async throws -> MatchCanOpenResult { .allowed }
     func toggleMatch(status: Int, faceCheckStatus: Int?) async throws -> Bool { true }
+    func reportNoFace(imageURL: String) async throws {}
     func loadMatchPoolData() async throws -> MatchPoolData {
         MatchPoolData(callList: calls, userList: users)
     }

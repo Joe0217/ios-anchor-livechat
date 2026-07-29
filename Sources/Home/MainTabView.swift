@@ -1,11 +1,13 @@
+import ImageIO
 import SwiftUI
+import UIKit
 
 /// 底部 4 tab 主壳。设计稿无原生 tab 栏样式（深色、无分隔线、激活态仅靠颜色区分），
 /// 故用自定义 tab 栏 + safeAreaInset，使内容自动避让，不被遮挡。
 ///
 /// 通用规则：tabbar 仅在 4 个 tab 根页显示；任何 push 入栈的子页（含未来新增）一律隐藏 tabbar。
-/// 实现：Work / Profile 的 NavigationStack path 均上抬到本视图持有，由派生 Equatable
-/// `SubpageSignal` 统一驱动 `isOnSubpage`，单 `onChange` 触发 250ms easeInOut 几何坍缩 + 淡出。
+/// 实现：所有一级 Tab 的 NavigationStack path 均上抬到本视图持有，由派生 Equatable
+/// `SubpageSignal` 直接驱动 TabBar 的显示。只有当前 Tab 的 path 为空时才显示 TabBar。
 /// 容器永驻视图层级（frame(height: 0) + clipped + opacity 0 + allowsHitTesting false），
 /// 不做 if/EmptyView 增删——iOS 16 上几何坍缩比 view 增删的过渡动画更稳。
 ///
@@ -21,6 +23,11 @@ import SwiftUI
 /// scenePhase 守卫：CLAUDE.md v5.3.3 真根因坑——SwiftUI 在 `.background` 时仍触发 onChange，
 /// 切后台时不要触发 withAnimation（回前台 backlog 会一次性闪烁），仅在 active/inactive 才动画。
 struct MainTabView: View {
+    private enum LiveEntryTarget {
+        case home
+        case work
+    }
+
     @State private var selection: MainTab = .home
     /// P 项目权限管理：Party tab 按 userType 黑名单动态显隐（bit `.party` 命中 → 隐藏）。
     /// 本项目底 tab bar 是 ForEach + 自定义 Button（非 SwiftUI TabView），tab 数量变化不触发 tag 消失坑。
@@ -32,7 +39,8 @@ struct MainTabView: View {
     /// E-spec §0.2：Party tab 独立 NavigationPath（消除 v1 借宿 workPath 技术债）
     @State private var partyPath: NavigationPath = NavigationPath()
     @State private var profilePath: NavigationPath = NavigationPath()
-    @State private var isOnSubpage: Bool = false
+    /// 最小化 Party 房点击开播时的二次确认目标；完整 Party 房仍维持原 toast 互斥。
+    @State private var pendingLiveEntryTarget: LiveEntryTarget?
     @Environment(\.scenePhase) private var scenePhase
 
     /// `.starting` 期间锁 tabbar 拦截触摸，防止 push 到 LiveRoomView 前 tab 切换导致
@@ -55,6 +63,8 @@ struct MainTabView: View {
 
     /// L 里程碑 #3c：10 分钟提示弹窗调度器（跨 tab 全局）
     @ObservedObject private var matchPopupCoordinator = MatchPopupCoordinator.shared
+    /// Party 小窗的窄观察源，避免主壳订阅 PartyStore 的高频麦位/公屏更新。
+    @ObservedObject private var minimizedParty = PartyStore.shared.minimizedBridge
 
     /// 直播结束页 back 时切 Work Tab + 清 Home/Work path。
     /// 两 path 都清：Home QuickGoLive 与 Work Go Live 两个入口都可能把 LiveSettings/LiveRoomView
@@ -101,7 +111,6 @@ struct MainTabView: View {
     /// 已注册的各 tab navigationDestination(for: UserProfileRoute.self) 会自动接单。
     private var openUserProfileAction: OpenUserProfileAction {
         OpenUserProfileAction { userId in
-            guard !userId.isEmpty else { return }
             let route = UserProfileRoute.userId(userId)
             switch selection {
             case .home:     homePath.append(route)
@@ -159,21 +168,31 @@ struct MainTabView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             tabBarHostContainer
         }
+        .alert(
+            L10n.Party.alertTitle,
+            isPresented: Binding(
+                get: { pendingLiveEntryTarget != nil },
+                set: { if !$0 { pendingLiveEntryTarget = nil } }
+            )
+        ) {
+            Button(L10n.Party.cancel, role: .cancel) {
+                pendingLiveEntryTarget = nil
+            }
+            Button(L10n.Party.ok) {
+                confirmLiveEntryAfterLeavingMinimizedParty()
+            }
+        } message: {
+            Text(L10n.Party.mutexBlockedByParty)
+        }
         .onChange(of: isOnSubpageSignal) { newValue in
+            InviteMessageCenter.shared.updateDisplayContext(isAtRootPage: !newValue)
             RobotCallRouteGate.shared.update(isAtRootPage: !newValue)
-            // 后台时 SwiftUI 仍可能调度 onChange（v5.3.3 已知坑），避免动画 backlog
-            guard scenePhase != .background else {
-                isOnSubpage = newValue
-                return
-            }
-            withAnimation(.easeInOut(duration: 0.25)) {
-                isOnSubpage = newValue
-            }
             // L 里程碑：子页拦截 tip 弹窗（对齐 H5 c-goMatch 仅挂 home 页面语义 —— 直播间/详情页/开播设置等均不弹）
             // 通话态由 RootView.CallView zIndex 100 全屏覆盖，tip zIndex 50 视觉上已被盖，无需额外 gate
             matchPopupCoordinator.updateBlockedByOtherPage(newValue)
         }
         .onChange(of: selection) { newValue in
+            InviteMessageCenter.shared.updateDisplayContext(isAtRootPage: !isOnSubpageSignal)
             // 程序驱动切换（如 liveResultTransition 结束直播切 Work + 重建 workPath 为 [.liveResult]）
             // 必须跳过清 path，避免覆盖 action 内同帧刚设置的路径（review 202607091438 P1）
             guard !suppressPathClearOnTabChange else { return }
@@ -186,6 +205,11 @@ struct MainTabView: View {
             // E-spec §0.2 F-16：Party 主 tab gate（大厅根页 + 子页都抑制 match tip 弹窗）
             matchPopupCoordinator.updatePartyTabBlocked(newValue == .party)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .inviteChatRequested)) { notification in
+            guard let yxAccid = notification.userInfo?["yxAccid"] as? String,
+                  !yxAccid.isEmpty else { return }
+            openChatAction.perform(yxAccid)
+        }
         .task {
             // 全局图片配置预热（对齐 H5 app.js `getBannerList([2])`）：
             // 首页 banner 位靠此接口喂数据；J 里程碑接入启动图/挂件/榜单/分类贴图时按需扩 types
@@ -197,6 +221,7 @@ struct MainTabView: View {
             await GiftMarqueeStore.shared.loadIfNeeded()
         }
         .onAppear {
+            InviteMessageCenter.shared.updateDisplayContext(isAtRootPage: !isOnSubpageSignal)
             RobotCallRouteGate.shared.update(isAtRootPage: !isOnSubpageSignal)
             // L 里程碑：一次性 attach 全局匹配摄像头会话到 MatchStore.shared
             MatchStore.shared.attachCameraSession(matchCameraSession)
@@ -217,12 +242,14 @@ struct MainTabView: View {
         .onDisappear {
             RobotCallRouteGate.shared.update(isAtRootPage: false)
         }
-        // P 项目权限管理：Party tab 权限变化 → selection == .party 时 fallback .home + 清 partyPath
-        // 覆盖场景：切账号 party bit 变化 / 运行时 revoke。冷启动持久化 selection 由 .onAppear 兜底。
+        // Party 权限撤销时，无论用户当前停在哪个 tab，都必须结束可能最小化在后台的 Party 会话。
         .onChange(of: permission.canParty) { newValue in
-            if !newValue && selection == .party {
+            if !newValue {
                 partyPath = NavigationPath()
-                selection = .home
+                if selection == .party {
+                    selection = .home
+                }
+                Task { await PartyStore.shared.forceLeaveRoom(.userRequest) }
             }
         }
         // L 里程碑：全局匹配预览浮窗（跨 tab 展示）
@@ -242,6 +269,19 @@ struct MainTabView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: matchStore.state == .matching)
+        // Party 小窗：仅房间页面被最小化，RTC/NIM 仍由 PartyStore 持有。主壳负责跨 tab 的恢复与退出入口。
+        .overlay {
+            if minimizedParty.isVisible {
+                PartyRoomFloatingBubble(
+                    avatarURL: minimizedParty.roomAvatarURL,
+                    onRestore: restoreMinimizedPartyRoom,
+                    onLeave: leaveMinimizedPartyRoom
+                )
+                .transition(.opacity)
+                .zIndex(70)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: minimizedParty.isVisible)
         // L 里程碑 #3c：10 分钟提示弹窗（全局跨 tab）
         .overlay {
             if matchPopupCoordinator.isShowing {
@@ -352,6 +392,13 @@ struct MainTabView: View {
                         case .points: PointsRankView()
                         }
                     }
+                    .navigationDestination(for: HomeBannerH5Route.self) { route in
+                        if let page = route.page {
+                            H5WebContainerView(page: page)
+                        } else {
+                            EmptyView()
+                        }
+                    }
                     // Home 也持有 WorkRoute destination——QuickGoLive 从 Home 内 push LiveSettings 后,
                     // LiveSettings 内嵌 NavigationLink(WorkRoute.wishSetting/.beautySettings) 也要能
                     // 在同一 stack 内 push。**必须与 Work stack 保持 case 一致**，否则从 Home 入口进入
@@ -370,18 +417,40 @@ struct MainTabView: View {
                             .environment(\.moneyBagAction, { homePath.append(WorkRoute.task) })
                         case .task:
                             TaskCenterView()
-                                // rank 头卡 tap → 跳 pointsRank(Phase E 未做,ComingSoon 占位;
-                                // H5 income/integral 分别跳独立榜单页,iOS 首版统一到 pointsRank)
-                                .environment(\.rankProgressAction, { _ in homePath.append(WorkRoute.pointsRank) })
-                        case .invite:         WorkComingSoonView(title: L10n.toolInvite)
+                                .environment(\.rankProgressAction, { target in
+                                    switch target {
+                                    case .income: homePath.append(HomeLeaderboardRoute.ranking)
+                                    case .integral: homePath.append(WorkRoute.pointsRank)
+                                    }
+                                })
+                        case .wallet:
+                            WalletView()
+                        case .invite(let source):
+                            // 历史 H5 Invite 入口，原生实现上线后不再执行：
+                            // H5EmbeddedFeatureContainerView(feature: .invite, title: L10n.toolInvite)
+                            InviteView(entrySource: source.rawValue) { audience in
+                                let destination: WorkRoute = audience == .user
+                                    ? .inviteUserDetails
+                                    : .inviteAnchorDashboard
+                                AppLogger.net.notice("[Invite] details route append host=home audience=\(audience.rawValue, privacy: .public)")
+                                homePath.append(destination)
+                            }
+                        case .inviteUserDetails:
+                            InviteDetailsView()
+                        case .inviteAnchorDashboard:
+                            InviteAnchorDashboardView()
                         case .pointsRank:     PointsRankView()
-                        case .anchorGuide:    WorkComingSoonView(title: L10n.toolWorkingGuide)
+                        case .anchorGuide:
+                            H5EmbeddedFeatureContainerView(feature: .anchorGuide, title: L10n.toolWorkingGuide)
                         case .partyData:      PartyDataView()
-                        case .myGuardian:     WorkComingSoonView(title: L10n.toolMyGuardian)
+                        case .myGuardian:
+                            GuardianListView(anchorId: Int64(SessionStore.shared.user?.userId ?? 0)) { uid in
+                                guard (Int64(uid.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0) > 0 else { return }
+                                homePath.append(UserProfileRoute.userId(uid))
+                            }
                         case .dataStatistics:  DataStatisticsView()
-                        case .pocDebug:       POCDebugView()
                         case .newbie:         WorkComingSoonView(title: L10n.toolNewbie)
-                        case .bigR:           WorkComingSoonView(title: L10n.toolBigR)
+                        case .bigR:           WorkComingSoonView(title: L10n.toolStarUser)
                         case .props:          PropsMainView()
                         case .propsRules:     PropsRulesView()
                         case .currencyExchange(let tab):
@@ -400,20 +469,16 @@ struct MainTabView: View {
             .environment(\.openHomeLeaderboard, OpenHomeLeaderboardAction { route in
                 homePath.append(route)
             })
+            .environment(\.openHomeBanner, OpenHomeBannerAction { route in
+                homePath.append(route)
+            })
             .environment(\.liveResultTransition, liveResultTransitionAction)
             .environment(\.quickGoLive, QuickGoLiveAction {
-                // F 期 Live↔Party 互斥（对齐安卓 isLiveing||isPartying toast，2026-07-17）：
-                // 派对房活跃态禁止开播，用全局 AppToastCenter 呈现（跨 tab 可见）
-                if PartyStore.shared.roomState == .joined {
-                    AppToastCenter.shared.show(L10n.Party.mutexBlockedByParty)
-                    return
-                }
-                // 在当前 Home NavigationStack 内 push LiveSettings（对齐用户偏好：
-                // 不切 tab、保持上下文;比 H5 CGoLive 切 tab 更内聚）。
-                // 首次开播 → 先 push firstLiveRule 10s 规则页（对齐 H5 c-goLive.vue:64 isFirstLive 判断）
-                homePath.append(FirstLiveTracker.isFirstLive
-                                ? WorkRoute.firstLiveRule
-                                : WorkRoute.liveSettings)
+                requestLiveEntry(.home)
+            })
+            .environment(\.audienceGoLive, AudienceGoLiveAction {
+                // 客态房间已在调用侧完成 RTC/IM 退出；路径只保留设置页，返回即回首页根页。
+                homePath = NavigationPath([WorkRoute.liveSettings])
             })
             .environment(\.liveTermination, liveTerminationAction)
             .environment(\.openChat, openChatAction)
@@ -467,10 +532,11 @@ struct MainTabView: View {
             if selection == .work {
                 NavigationStack(path: $workPath) {
                     WorkView(path: $workPath)
+                        .environment(\.quickGoLive, QuickGoLiveAction {
+                            requestLiveEntry(.work)
+                        })
                         .navigationDestination(for: WorkRoute.self) { route in
                             switch route {
-                            case .pocDebug:
-                                POCDebugView()
                             case .firstLiveRule:
                                 FirstLiveRuleView(path: $workPath)
                             case .liveSettings:
@@ -488,23 +554,47 @@ struct MainTabView: View {
                                     .environment(\.moneyBagAction, { workPath.append(WorkRoute.task) })
                             case .task:
                                 TaskCenterView()
-                                    .environment(\.rankProgressAction, { _ in workPath.append(WorkRoute.pointsRank) })
-                            case .invite:
-                                WorkComingSoonView(title: L10n.toolInvite)
+                                    .environment(\.rankProgressAction, { target in
+                                        switch target {
+                                        case .income: workPath.append(HomeLeaderboardRoute.ranking)
+                                        case .integral: workPath.append(WorkRoute.pointsRank)
+                                        }
+                                    })
+                            case .wallet:
+                                WalletView()
+                            case .invite(let source):
+                                // 旧实现：完整复用 H5 Invite。保留注释作为紧急回退参考；
+                                // 新实现直接走原生 API，避免把主会话 token 暴露给 WebView。
+                                // H5EmbeddedFeatureContainerView(feature: .invite, title: L10n.toolInvite)
+                                InviteView(entrySource: source.rawValue) { audience in
+                                    let destination: WorkRoute = audience == .user
+                                        ? .inviteUserDetails
+                                        : .inviteAnchorDashboard
+                                    AppLogger.net.notice("[Invite] details route append host=work audience=\(audience.rawValue, privacy: .public)")
+                                    workPath.append(destination)
+                                }
+                            case .inviteUserDetails:
+                                InviteDetailsView()
+                            case .inviteAnchorDashboard:
+                                InviteAnchorDashboardView()
                             case .pointsRank:
                                 PointsRankView()
                             case .anchorGuide:
-                                WorkComingSoonView(title: L10n.toolWorkingGuide)
+                                H5EmbeddedFeatureContainerView(feature: .anchorGuide, title: L10n.toolWorkingGuide)
                             case .partyData:
                                 PartyDataView()
                             case .myGuardian:
-                                WorkComingSoonView(title: L10n.toolMyGuardian)
+                                GuardianListView(anchorId: Int64(SessionStore.shared.user?.userId ?? 0)) { uid in
+                                    // H5 `onClickUser` 对 0 不跳转；列表接口的 userId 是数值，iOS 适配为 String 后保留同一约束。
+                                    guard (Int64(uid.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0) > 0 else { return }
+                                    workPath.append(UserProfileRoute.userId(uid))
+                                }
                             case .dataStatistics:
                                 DataStatisticsView()
                             case .newbie:
                                 WorkComingSoonView(title: L10n.toolNewbie)
                             case .bigR:
-                                WorkComingSoonView(title: L10n.toolBigR)
+                                WorkComingSoonView(title: L10n.toolStarUser)
                             case .props:
                                 PropsMainView()
                             case .propsRules:
@@ -513,6 +603,12 @@ struct MainTabView: View {
                                 PartyCurrencyExchangeView(initialTab: tab)
                             case .liveResult(let begin, let end, let endType):
                                 LiveResultView(range: (begin, end), endType: endType, hostPath: $workPath)
+                            }
+                        }
+                        .navigationDestination(for: HomeLeaderboardRoute.self) { route in
+                            switch route {
+                            case .ranking: HomeRankingView()
+                            case .points: PointsRankView()
                             }
                         }
                         // 结果页 push 私聊：Work stack String destination（LiveResultView Message 按钮触发）
@@ -540,11 +636,16 @@ struct MainTabView: View {
                             switch route {
                             case .settings:     SettingsView(path: $profilePath)
                             case .levelDetail:  LevelDetailView()
+                            case .dataStatistics: DataStatisticsView()
                             case .blocklist:    BlocklistView()
                             case .editProfile:  EditProfileView(service: EditProfileService.shared)
                             case .anchorPolicy: AnchorPolicyView()
                             case .language:     LanguageView()
                             case .feedback:     FeedbackView(path: $profilePath)
+                            case .userAgreement:
+                                H5WebContainerView(page: H5Page(url: URL(string: AppConfig.termsOfServiceURL)!, title: L10n.settingsTermsOfService))
+                            case .privacyPolicy:
+                                H5WebContainerView(page: H5Page(url: URL(string: AppConfig.privacyPolicyURL)!, title: L10n.settingsPrivacyPolicy))
                             }
                         }
                         // 详情↔聊天互跳所有 destination + 头像 tap 详情 pusher
@@ -559,8 +660,8 @@ struct MainTabView: View {
     /// allowsHitTesting / accessibilityHidden 同步切，避免坍缩后误命中或被 VoiceOver 聚焦。
     ///
     /// `liveSettingsLock.isLocked` 拦截触摸（B-spec-开播设置页 §1.4）：
-    /// 即使 tabbar 视觉上因子页坍缩为 0 高度，isOnSubpage=true 时它已不响应；`.starting`
-    /// 状态下 LiveSettingsView 仍在栈内(isOnSubpage=true)，tabbar 已经拦截，本 lock 兜底
+    /// 即使 tabbar 视觉上因子页坍缩为 0 高度，path 非空时它已不响应；`.starting`
+    /// 状态下 LiveSettingsView 仍在栈内（path 非空），tabbar 已经拦截，本 lock 兜底
     /// 覆盖"子页突然消失"边界（B 档保守）。
     ///
     /// **背景延伸到 home indicator 安全区**（2026-07-09 修）：
@@ -570,15 +671,16 @@ struct MainTabView: View {
     /// `ignoresSafeArea(.bottom)` 的同色底，随 opacity 一起隐显，不影响子页坍缩动画。
     private var tabBarHostContainer: some View {
         ZStack { tabBar }
-            .frame(height: isOnSubpage ? 0 : Theme.Metric.tabBarHeight)
+            .frame(height: isOnSubpageSignal ? 0 : Theme.Metric.tabBarHeight)
             .clipped()
             .background {
                 Theme.Palette.screenBackground
                     .ignoresSafeArea(edges: .bottom)
             }
-            .opacity(isOnSubpage ? 0 : 1)
-            .allowsHitTesting(!isOnSubpage && !liveSettingsLock.isLocked)
-            .accessibilityHidden(isOnSubpage)
+            .opacity(isOnSubpageSignal ? 0 : 1)
+            .allowsHitTesting(!isOnSubpageSignal && !liveSettingsLock.isLocked)
+            .accessibilityHidden(isOnSubpageSignal)
+            .animation(.easeInOut(duration: 0.25), value: isOnSubpageSignal)
     }
 
     private var tabBar: some View {
@@ -625,6 +727,212 @@ struct MainTabView: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private func restoreMinimizedPartyRoom() {
+        let partyStore = PartyStore.shared
+        guard let roomId = partyStore.roomInfo?.id, !roomId.isEmpty else { return }
+        suppressPathClearOnTabChange = true
+        partyStore.restoreMinimizedRoom()
+        selection = .party
+        partyPath = NavigationPath([PartyRoute.room(id: roomId, password: nil)])
+        DispatchQueue.main.async { suppressPathClearOnTabChange = false }
+    }
+
+    private func leaveMinimizedPartyRoom() {
+        let partyStore = PartyStore.shared
+        Task { await partyStore.leaveMinimizedRoom() }
+    }
+
+    private func requestLiveEntry(_ target: LiveEntryTarget) {
+        let partyStore = PartyStore.shared
+        guard partyStore.roomState == .joined else {
+            openLiveEntry(target)
+            return
+        }
+        guard partyStore.isMinimized else {
+            AppToastCenter.shared.show(L10n.Party.mutexBlockedByParty)
+            return
+        }
+        pendingLiveEntryTarget = target
+    }
+
+    private func confirmLiveEntryAfterLeavingMinimizedParty() {
+        guard let target = pendingLiveEntryTarget else { return }
+        pendingLiveEntryTarget = nil
+        Task { @MainActor in
+            await PartyStore.shared.leaveMinimizedRoom()
+            openLiveEntry(target)
+        }
+    }
+
+    private func openLiveEntry(_ target: LiveEntryTarget) {
+        let route: WorkRoute = FirstLiveTracker.isFirstLive ? .firstLiveRule : .liveSettings
+        switch target {
+        case .home:
+            homePath.append(route)
+        case .work:
+            workPath.append(route)
+        }
+    }
+}
+
+/// H5 `party-floating.vue` 的应用内小窗。保持在主壳，因而用户切换任意 tab 后仍可恢复 Party 房。
+private struct PartyRoomFloatingBubble: View {
+    let avatarURL: String?
+    let onRestore: () -> Void
+    let onLeave: () -> Void
+
+    /// H5 `van-floating-bubble` 的 `gap=12`：拖动中和结束后都不能越过此边距。
+    private let edgeGap: CGFloat = 12
+    private let containerSize = CGSize(width: 72, height: 64)
+
+    /// H5 的 `offset` 是浮窗左上角坐标；nil 表示使用首次出现的位置。
+    @State private var origin: CGPoint?
+    @GestureState private var dragTranslation: CGSize = .zero
+
+    var body: some View {
+        GeometryReader { proxy in
+            let currentOrigin = currentOrigin(in: proxy.size)
+            let displayedOrigin = dragTranslation == .zero
+                ? currentOrigin
+                : clampedOrigin(
+                    CGPoint(
+                        x: currentOrigin.x + dragTranslation.width,
+                        y: currentOrigin.y + dragTranslation.height
+                    ),
+                    in: proxy.size
+                )
+            ZStack(alignment: .topLeading) {
+                Button(action: onRestore) {
+                    bubbleAvatar
+                        .frame(width: containerSize.width, height: containerSize.height, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+
+                Button(action: onLeave) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(.white)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                // H5 `inset-inline-end:-4 top:-6`。
+                .frame(width: containerSize.width, height: containerSize.height, alignment: .topTrailing)
+                .offset(x: 4, y: -6)
+                .accessibilityLabel(L10n.PartyRoom.moreMenuLeave)
+            }
+            .frame(width: containerSize.width, height: containerSize.height)
+            .position(
+                x: displayedOrigin.x + containerSize.width / 2,
+                y: displayedOrigin.y + containerSize.height / 2
+            )
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 10)
+                    .updating($dragTranslation) { value, state, _ in
+                        state = value.translation
+                    }
+                    .onEnded { value in
+                        origin = clampedOrigin(
+                            CGPoint(
+                                x: currentOrigin.x + value.translation.width,
+                                y: currentOrigin.y + value.translation.height
+                            ),
+                            in: proxy.size
+                        )
+                    }
+            )
+        }
+        .allowsHitTesting(true)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var bubbleAvatar: some View {
+        // H5 三层容器均为 `flex-center`；圆环、渐变底和头像必须共用同一个中心点。
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(hex: 0xFF9438).opacity(0.251),
+                            Color(hex: 0xFF0091).opacity(0.5),
+                            Color(hex: 0xFE00DE).opacity(0.5)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: 64, height: 64)
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color(hex: 0xFF9438).opacity(0.251),
+                            Color(hex: 0xFF0091).opacity(0.5),
+                            Color(hex: 0xFE00DE).opacity(0.5)
+                        ],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .frame(width: 58, height: 58)
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: 0xFF9438), Color(hex: 0xFF0091), Color(hex: 0xFE00DE)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 52, height: 52)
+                AvatarView(urlString: avatarURL, size: 50, kind: .user, disablesTap: true)
+                    .clipShape(Circle())
+            }
+            .frame(width: 52, height: 52)
+            .overlay(alignment: .bottom) {
+                // 动图保持在头像框内底部，避免参与 ZStack 布局把头像和背景顶偏。
+                PartyFloatingGIFView()
+                    .frame(width: 34, height: 15.57)
+                    .padding(.bottom, 6)
+            }
+        }
+        .frame(width: 64, height: 64)
+        .accessibilityLabel(L10n.tabParty)
+    }
+
+    private func currentOrigin(in container: CGSize) -> CGPoint {
+        origin ?? initialOrigin(in: container)
+    }
+
+    /// 对齐 H5 `offset = { x: viewWidth - (78 * (viewWidth / 375)), y: 100 }`。
+    private func initialOrigin(in container: CGSize) -> CGPoint {
+        CGPoint(
+            x: container.width - 78 * (container.width / 375),
+            y: 100
+        )
+    }
+
+    private func clampedOrigin(_ origin: CGPoint, in container: CGSize) -> CGPoint {
+        let minX = edgeGap
+        let maxX = max(minX, container.width - containerSize.width - edgeGap)
+        let minY = edgeGap
+        let maxY = max(minY, container.height - containerSize.height - edgeGap)
+        return CGPoint(
+            x: min(max(origin.x, minX), maxX),
+            y: min(max(origin.y, minY), maxY)
+        )
+    }
+}
+
+/// Party 最小化球底部的循环 GIF。资源随 App 打包，避免每次展示请求 CDN。
+private struct PartyFloatingGIFView: View {
+    var body: some View {
+        AnimatedGIFView(name: "party-list-animation")
+            .scaledToFill()
+            .clipped()
     }
 }
 
@@ -719,6 +1027,96 @@ extension EnvironmentValues {
     }
 }
 
+/// 首页 banner WebView route。对齐 H5 `banner.vue` + `CGoToIframe`：
+/// - 空 URL 不跳转
+/// - `lottery` URL 的 `reportParams={path:banner}` 进入 Bridge runtime，而不留在 URL
+/// - `isHuanNiuOwnH5` 折成当前 iOS H5 站点内部页面
+struct HomeBannerH5Route: Hashable {
+    let originalURLString: String
+    let resolvedURLString: String
+    let reportPath: String?
+    let trustedOriginURLString: String?
+    let isInternalH5Route: Bool
+
+    init?(item: AppPictureItem) {
+        guard let raw = item.directUrl?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty,
+              let resolved = Self.resolve(raw) else {
+            return nil
+        }
+        self.originalURLString = raw
+        self.resolvedURLString = resolved.url.absoluteString
+        self.reportPath = resolved.reportPath
+        self.trustedOriginURLString = resolved.url.scheme?.lowercased() == "https" ? resolved.url.absoluteString : nil
+        self.isInternalH5Route = resolved.isInternalH5Route
+    }
+
+    @MainActor
+    var page: H5Page? {
+        guard let url = URL(string: resolvedURLString) else { return nil }
+        let bridgeMode: H5Page.BridgeMode
+        if let trustedOriginURLString, let trustedOriginURL = URL(string: trustedOriginURLString) {
+            bridgeMode = .trusted(H5TrustedOriginPolicy(origins: [trustedOriginURL]))
+        } else {
+            bridgeMode = .disabled
+        }
+        return H5Page(
+            url: url,
+            title: nil,
+            bridgeMode: bridgeMode,
+            runtimeContext: .current(reportParams: reportPath.map { ["path": $0] } ?? [:])
+        )
+    }
+
+    private static func resolve(_ raw: String) -> (url: URL, reportPath: String?, isInternalH5Route: Bool)? {
+        if raw.contains("isHuanNiuOwnH5") {
+            let innerPath = internalPath(from: raw)
+            guard !innerPath.isEmpty,
+                  let url = URL(string: "https://ios-web.netlify.app/#\(innerPath)") else { return nil }
+            return (url, nil, true)
+        }
+
+        guard let url = URL(string: raw) else { return nil }
+        if raw.contains("lottery"), let strippedURL = strippedLotteryRuntimeURL(url) {
+            return (strippedURL, "banner", false)
+        }
+        return (url, nil, false)
+    }
+
+    private static func internalPath(from raw: String) -> String {
+        if raw.contains("http"), let url = URL(string: raw) {
+            var path = url.path.isEmpty ? "/" : url.path
+            if let query = url.query, !query.isEmpty { path += "?\(query)" }
+            if let fragment = url.fragment, !fragment.isEmpty { path += "#\(fragment)" }
+            return path
+        }
+        return raw.hasPrefix("/") ? raw : "/\(raw)"
+    }
+
+    private static func strippedLotteryRuntimeURL(_ url: URL) -> URL? {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return url }
+        var queryItems = components.queryItems ?? []
+        queryItems.removeAll { ["roomId", "roomType", "reportParams"].contains($0.name) }
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
+        return components.url
+    }
+}
+
+struct OpenHomeBannerAction {
+    let perform: (_ route: HomeBannerH5Route) -> Void
+    static let noop = OpenHomeBannerAction(perform: { _ in })
+}
+
+private struct OpenHomeBannerKey: EnvironmentKey {
+    static let defaultValue: OpenHomeBannerAction = .noop
+}
+
+extension EnvironmentValues {
+    var openHomeBanner: OpenHomeBannerAction {
+        get { self[OpenHomeBannerKey.self] }
+        set { self[OpenHomeBannerKey.self] = newValue }
+    }
+}
+
 /// 跨 tab 导航 action：Home Live tab 的 QuickGoLiveButton 触发时切到 Work tab + push LiveSettings。
 ///
 /// **设计动机**：`LiveSettingsView` 挂在 Work NavigationStack 的 `WorkRoute.liveSettings`，
@@ -726,6 +1124,23 @@ extension EnvironmentValues {
 struct QuickGoLiveAction {
     let perform: () -> Void
     static let noop = QuickGoLiveAction(perform: {})
+}
+
+/// 客态房间的开播动作。与首页浮动开播不同，它替换当前 home path，不能把已退出的客态房间留在返回栈中。
+struct AudienceGoLiveAction {
+    let perform: () -> Void
+    static let noop = AudienceGoLiveAction(perform: {})
+}
+
+private struct AudienceGoLiveKey: EnvironmentKey {
+    static let defaultValue: AudienceGoLiveAction = .noop
+}
+
+extension EnvironmentValues {
+    var audienceGoLive: AudienceGoLiveAction {
+        get { self[AudienceGoLiveKey.self] }
+        set { self[AudienceGoLiveKey.self] = newValue }
+    }
 }
 
 private struct QuickGoLiveKey: EnvironmentKey {
@@ -766,8 +1181,19 @@ extension EnvironmentValues {
 /// 用于 ChatDetailView 内系统消息 tap "ID 12345" 跳详情等无法用 NavigationLink 声明式承载的场景。
 /// 实现:append UserProfileRoute 到当前 tab path,让已注册的 navigationDestination 承接。
 struct OpenUserProfileAction {
-    let perform: (_ userId: String) -> Void
-    static let noop = OpenUserProfileAction(perform: { _ in })
+    private let handler: (_ userId: String) -> Void
+
+    init(_ handler: @escaping (_ userId: String) -> Void) {
+        self.handler = handler
+    }
+
+    func perform(_ rawUserId: String) {
+        let userId = rawUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !userId.isEmpty else { return }
+        handler(userId)
+    }
+
+    static let noop = OpenUserProfileAction { _ in }
 }
 
 private struct OpenUserProfileKey: EnvironmentKey {

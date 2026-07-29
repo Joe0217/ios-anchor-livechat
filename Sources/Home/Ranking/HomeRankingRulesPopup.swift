@@ -9,16 +9,13 @@ struct HomeRankingRulesPopup: View {
         ZStack {
             Color.black.opacity(0.58).ignoresSafeArea()
             VStack(spacing: 20) {
-                Text(L10n.homeRankRules)
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundStyle(.white)
                 Text(text)
                     .font(.system(size: 16))
                     .foregroundStyle(.white.opacity(0.76))
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 Button(action: onDismiss) {
-                    Text(L10n.commonOK)
+                    Text(L10n.commonConfirm)
                         .font(.system(size: 15, weight: .bold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity, minHeight: 44)

@@ -1,30 +1,36 @@
 import Foundation
 
 protocol HomeRankingServiceProtocol {
-    func fetchRanking(category: HomeRankingCategory, period: HomeRankingPeriod) async throws -> HomeRankingPayload
-    func fetchCoupleRanking(period: HomeRankingPeriod) async throws -> HomeCoupleRankingPayload
+    /// `limit` is a cumulative window size. The API only exposes page number + page size,
+    /// so requesting a wider first page keeps mixed 20/30 UI pages contiguous.
+    func fetchRanking(category: HomeRankingCategory, period: HomeRankingPeriod, limit: Int) async throws -> HomeRankingPayload
+    func fetchCoupleRanking(period: HomeRankingPeriod, limit: Int) async throws -> HomeCoupleRankingPayload
 }
 
 struct HomeRankingService: HomeRankingServiceProtocol {
     static let shared = HomeRankingService()
 
-    func fetchRanking(category: HomeRankingCategory, period: HomeRankingPeriod) async throws -> HomeRankingPayload {
+    func fetchRanking(
+        category: HomeRankingCategory,
+        period: HomeRankingPeriod,
+        limit: Int
+    ) async throws -> HomeRankingPayload {
         let rankType = rankType(for: category, period: period)
         let data = try await APIClient.shared.post(
             "/api/ranking/getRankingList",
-            body: ["rankType": rankType, "pageSize": 30, "currentPage": 1, "key": ""]
+            body: ["rankType": rankType, "pageSize": limit, "currentPage": 1, "key": ""]
         )
         return try JSONDecoder().decode(HomeRankingResponse.self, from: data).payload
     }
 
-    func fetchCoupleRanking(period: HomeRankingPeriod) async throws -> HomeCoupleRankingPayload {
+    func fetchCoupleRanking(period: HomeRankingPeriod, limit: Int) async throws -> HomeCoupleRankingPayload {
         let dailyType = period == .week ? "weekly" : "daily"
         let data = try await APIClient.shared.post(
             "/api/ranking/v2/userRank",
             body: [
                 "rankType": "ANCHOR_USER_COUPLE",
                 "dailyType": dailyType,
-                "pageSize": 50,
+                "pageSize": limit,
                 "currentPage": 1
             ]
         )

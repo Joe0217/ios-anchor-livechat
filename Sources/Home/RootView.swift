@@ -8,6 +8,9 @@ struct RootView: View {
     @StateObject private var robotCallStore = RobotCallStore.shared
     @StateObject private var autoOffline = AutoOfflineMonitor.shared
     @StateObject private var mediaPermissionAlert = MediaPermissionAlertCenter.shared
+    @StateObject private var startupStationMail = StartupStationMailStore()
+    @StateObject private var inviteMessage = InviteMessageCenter.shared
+    @ObservedObject private var matchStore = MatchStore.shared
     @Environment(\.scenePhase) private var scenePhase
     /// v23（2026-07-13）code-review 修复：warmup Task 需要 cancel 入口
     /// 场景：快速 login→logout→login（token 失效重刷）→ 旧 Task 迟到对新 router 冗余 warmup + 与新 Task 双打
@@ -28,8 +31,12 @@ struct RootView: View {
                 MainTabView()
             }
 
+            // 直播私 call 由 LiveRoomView 持有的 CallView 展示，并注入直播相机。
+            // 根层若再创建一个未注入相机的 CallView，会竞争相机、抢占 Agora remoteView，导致双方画面黑屏。
             // 角色被服务端降级时，即使 RTM 尚在异步停机，也不能覆盖受限页。
-            if isApprovedHost, callStore.state != .idle {
+            if isApprovedHost,
+               callStore.state != .idle,
+               callStore.current.frontGameType != .live {
                 CallView(store: callStore)
                     .transition(.opacity)
                     .zIndex(100)
@@ -49,6 +56,32 @@ struct RootView: View {
                 )
                 .transition(.opacity)
                 .zIndex(200)
+            }
+
+            // 启动站内信（对齐 H5 GLoadList）：独立于消息页入口，登录后全局展示最新未读公告。
+            if let mail = startupStationMail.mail {
+                StartupStationMailPopup(
+                    mail: mail,
+                    isRead: startupStationMail.isRead,
+                    onMarkRead: { startupStationMail.markRead() },
+                    onDismiss: { startupStationMail.dismiss() }
+                )
+                .transition(.opacity)
+                .zIndex(350)
+            }
+
+            // 裂变邀请 103/104：通话/机器人通话不展示，避免覆盖核心实时链路。
+            if isApprovedHost,
+               scenePhase == .active,
+               inviteMessage.isAtRootPage,
+               callStore.state == .idle,
+               robotCallStore.state == .idle,
+               (matchStore.state == .ended || matchStore.state == .blocked),
+               let prompt = inviteMessage.current {
+                InviteMessageCard(center: inviteMessage, prompt: prompt)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(250)
             }
 
             // 全局顶部错误通知（envelope 解析失败等）—— 最高层级，
@@ -118,6 +151,11 @@ struct RootView: View {
             }
         }
         .task(id: sessionCapabilityKey) {
+            if session.isLoggedIn, let userId = session.user?.userId {
+                Task { await startupStationMail.loadIfNeeded(for: userId) }
+            } else {
+                startupStationMail.clear()
+            }
             await syncSessionDependent()
         }
         // App 级语言环境注入（Settings → Language 切换后立即生效）
@@ -224,16 +262,280 @@ struct RootView: View {
     /// 角色降级和登出共用的主播能力清理。NIM 由调用方控制，受限页仍需要它。
     private func stopHostCapabilities() async {
         WSHeartbeat.shared.stop()
+        // 先结束所有活跃媒体。CallStore.stop() 会销毁共享 Agora 引擎，必须最后执行，
+        // 否则直播/机器人播报/派对房来不及正常 leave。
+        MatchStore.shared.stopForSessionEnd()
+        await LiveSessionRegistry.shared.stopForSessionEnd()
+        await robotCallStore.resetForSessionEnd()
+        await PartyStore.shared.forceLeaveRoom(.userRequest)
+        PartyStore.shared.detachChatRouter()
         await callStore.stop()
-        robotCallStore.resetForSessionEnd()
         AutoOfflineMonitor.shared.stop()
         warmupTask?.cancel()
         warmupTask = nil
         GiftEffectCenter.shared.reset()
         EnterEffectCenter.shared.reset()
         GiftEffectOverlayWindow.shared.hide()
-        await PartyStore.shared.forceLeaveRoom(.userRequest)
-        PartyStore.shared.detachChatRouter()
+    }
+}
+
+// MARK: - 启动站内信（H5 App.vue + g-loadList.vue）
+
+/// H5 将启动弹窗的已读 id 存在 localStorage.loadList，与消息页 Station 未读态分开。
+/// iOS 用单独的 UserDefaults key 保留相同语义，避免点击消息列表后错误吞掉启动弹窗。
+@MainActor
+private final class StartupStationMailStore: ObservableObject {
+    @Published private(set) var mail: StationMail?
+    @Published private(set) var isRead = false
+
+    private static let readMailIdKey = "hily.station.launchPopup.readId"
+    private let service: StationListProviderProtocol
+    private var requestedUserId: Int?
+
+    init(service: StationListProviderProtocol = StationListService.shared) {
+        self.service = service
+    }
+
+    func loadIfNeeded(for userId: Int) async {
+        guard requestedUserId != userId else { return }
+        requestedUserId = userId
+
+        // H5 在登录主流程完成 5 秒后请求，避免和启动/鉴权请求争抢。
+        do {
+            try await Task.sleep(for: .seconds(5))
+        } catch {
+            return
+        }
+        guard !Task.isCancelled,
+              requestedUserId == userId,
+              SessionStore.shared.isLoggedIn,
+              SessionStore.shared.user?.userId == userId,
+              let latest = await service.fetchLatest(),
+              latest.id != UserDefaults.standard.string(forKey: Self.readMailIdKey) else {
+            return
+        }
+        mail = latest
+        isRead = false
+    }
+
+    func markRead() {
+        guard let mail else { return }
+        guard !isRead else {
+            AppToastCenter.shared.show(L10n.stationPopupAlreadyRead)
+            return
+        }
+        isRead = true
+        UserDefaults.standard.set(mail.id, forKey: Self.readMailIdKey)
+    }
+
+    func dismiss() {
+        // H5 点击遮罩只关闭，不写 loadList，下一次启动仍会再次提醒。
+        mail = nil
+    }
+
+    func clear() {
+        requestedUserId = nil
+        mail = nil
+        isRead = false
+    }
+}
+
+private struct StartupStationMailPopup: View {
+    let mail: StationMail
+    let isRead: Bool
+    let onMarkRead: () -> Void
+    let onDismiss: () -> Void
+    @State private var galleryContext: MediaGalleryContext?
+    @State private var naturalHeight: CGFloat = 0
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.62)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onDismiss)
+
+            GeometryReader { proxy in
+                let modalWidth = min(360, max(0, proxy.size.width - 40))
+                let maxModalHeight = max(200, proxy.size.height * 0.7)
+                let modalHeight = min(max(naturalHeight, 200), maxModalHeight)
+
+                VStack(spacing: 0) {
+                    header
+                    Divider().overlay(Color.white.opacity(0.22))
+                    ScrollView {
+                        mailBody
+                    }
+                    Divider().overlay(Color.white.opacity(0.22))
+                    footer
+                }
+                .frame(width: modalWidth)
+                .frame(height: modalHeight, alignment: .top)
+                .background(Color(hex: 0x2B213E), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .contentShape(Rectangle())
+                .background {
+                    naturalPopup(width: modalWidth)
+                        .hidden()
+                        .allowsHitTesting(false)
+                }
+                .onPreferenceChange(StartupStationMailNaturalHeightKey.self) { naturalHeight = $0 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        // 统一使用 MediaGalleryView，避免单图预览绕开公共 20MB LRU 和手势/a11y 语义。
+        .fullScreenCover(item: $galleryContext) { ctx in
+            MediaGalleryView(urls: ctx.urls, startIndex: ctx.startIndex)
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            Button(action: onMarkRead) {
+                HStack(spacing: 7) {
+                    Image("messageInboxStation")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 24, height: 24)
+                    Text(mail.mailTitle)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            .buttonStyle(.plain)
+
+            Spacer(minLength: 8)
+
+            Button(action: onMarkRead) {
+                HStack(spacing: 5) {
+                    Image(systemName: isRead ? "envelope.open.fill" : "envelope.badge.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text(isRead ? L10n.stationPopupRead : L10n.stationPopupUnread)
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundStyle(isRead ? .gray : .white)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+    }
+
+    private func naturalPopup(width: CGFloat) -> some View {
+        VStack(spacing: 0) {
+            header
+            Divider().overlay(Color.white.opacity(0.22))
+            mailBody
+            Divider().overlay(Color.white.opacity(0.22))
+            footer
+        }
+        .frame(width: width)
+        .fixedSize(horizontal: false, vertical: true)
+        .background {
+            GeometryReader { geometry in
+                Color.clear.preference(
+                    key: StartupStationMailNaturalHeightKey.self,
+                    value: geometry.size.height
+                )
+            }
+        }
+    }
+
+    private var mailBody: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(Self.plainText(from: mail.mailContent))
+                .font(.system(size: 15))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onMarkRead)
+
+            ForEach(Array(imageURLs.enumerated()), id: \.offset) { index, url in
+                Button {
+                    onMarkRead()
+                    galleryContext = MediaGalleryContext(
+                        urls: imageURLs.map(\.absoluteString),
+                        startIndex: index
+                    )
+                } label: {
+                    CachedAsyncImage(url: url, contentMode: .fit, persistent: true) {
+                        ProgressView().tint(.white)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: 120, maxHeight: 260)
+                    .background(Color.black.opacity(0.18), in: RoundedRectangle(cornerRadius: 6))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(16)
+    }
+
+    private var footer: some View {
+        Button(action: onMarkRead) {
+            HStack {
+                Spacer()
+                Text("\(L10n.stationPopupExpirationDate): \(mail.expiryDate)")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.9))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private static func plainText(from html: String) -> String {
+        // H5 用 v-html 渲染正文；原生文本视图不承载样式，但需要保留段落和换行语义。
+        let withLineBreaks = html
+            .replacingOccurrences(
+                of: #"<br\s*/?>"#,
+                with: "\n",
+                options: [.regularExpression, .caseInsensitive]
+            )
+            .replacingOccurrences(
+                of: #"</(?:p|div|li|h[1-6])\s*>"#,
+                with: "\n",
+                options: [.regularExpression, .caseInsensitive]
+            )
+        let noTags = withLineBreaks.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+        return noTags
+            .replacingOccurrences(of: "&nbsp;", with: " ")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func imageURLs(from html: String) -> [URL] {
+        let pattern = #"<img[^>]+src=[\"']([^\"'>]+)[\"']"#
+        guard let expression = try? NSRegularExpression(pattern: pattern) else {
+            return []
+        }
+        return expression.matches(in: html, range: NSRange(html.startIndex..., in: html)).compactMap { match in
+            guard let urlRange = Range(match.range(at: 1), in: html),
+                  let url = URL(string: String(html[urlRange])),
+                  let scheme = url.scheme?.lowercased(),
+                  scheme == "https" || scheme == "http" else {
+                return nil
+            }
+            return url
+        }
+    }
+
+    private var imageURLs: [URL] {
+        Self.imageURLs(from: mail.mailContent)
+    }
+}
+
+private struct StartupStationMailNaturalHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 

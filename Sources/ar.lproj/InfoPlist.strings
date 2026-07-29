@@ -1,6 +1,6 @@
 /* Info.plist 权限弹窗文案本地化（ar）
  * iOS 弹相机/麦克风权限时显示这里的文案，覆盖 project.yml 里的 Info.plist 兜底值
  */
-"NSCameraUsageDescription"     = "تُستخدم لمعاينة الفلتر بشكل لحظي وللبث المباشر";
+"NSCameraUsageDescription"     = "تُستخدم لمعاينة الفلتر والبث المباشر والتحقق من الهوية للسحب";
 "NSMicrophoneUsageDescription" = "تُستخدم للمكالمات الصوتية/المرئية اللحظية";
 "NSPhotoLibraryUsageDescription" = "يتطلب الوصول إلى مكتبة الصور لتحميل صورتك الرمزية وصور ملفك الشخصي أثناء التسجيل.";
