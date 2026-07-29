@@ -6,15 +6,26 @@ struct VideoSlotView: View {
     @ObservedObject var store: RegisterStore
     let onTap: () -> Void       // 未录时点击 → 弹 VideoGuideSheet
 
+    @State private var previewURL: URL?
+    @State private var isShowingPreview = false
+
+    private let cardSize = CGSize(width: 150, height: 200)
+
     var body: some View {
         ZStack(alignment: .topTrailing) {
             RoundedRectangle(cornerRadius: 10)
                 .fill(Color(red: 0.17, green: 0.13, blue: 0.24))
-                .frame(width: 150, height: 200)
-                .overlay(content)
+                .frame(width: cardSize.width, height: cardSize.height)
+                .overlay {
+                    content
+                        .frame(width: cardSize.width, height: cardSize.height)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 10))
                 .onTapGesture {
-                    // Finding #12 修：用 store.hasVideo 派生态，避免 view 内多处判定不一致
-                    if !store.hasVideo {
+                    if store.hasVideo {
+                        presentPreview()
+                    } else {
                         onTap()
                     }
                 }
@@ -31,7 +42,14 @@ struct VideoSlotView: View {
                         .foregroundStyle(.white)
                         .background(Circle().fill(.black.opacity(0.4)))
                 }
+                .buttonStyle(.plain)
                 .padding(6)
+                .zIndex(1)
+            }
+        }
+        .fullScreenCover(isPresented: $isShowingPreview, onDismiss: { previewURL = nil }) {
+            if let previewURL {
+                VideoPlayerFullScreen(url: previewURL)
             }
         }
     }
@@ -40,9 +58,17 @@ struct VideoSlotView: View {
     private var content: some View {
         // Finding #12 修：用 store.hasVideo 派生态，与 outer .onTapGesture 判定一致
         if store.hasVideo {
-            // 已上传或已压缩 → 显示首帧 + 播放图标
+            // 已上传的远端视频提取首帧；本地待上传视频保持黑底占位，避免读取尚未完成写入的文件。
             ZStack {
-                Color.black
+                if let url = store.videoUrl.flatMap(URL.init(string:)) {
+                    VideoThumbnailImage(url: url) {
+                        Color.black
+                    }
+                    .frame(width: cardSize.width, height: cardSize.height)
+                    .clipped()
+                } else {
+                    Color.black
+                }
                 Image(systemName: "play.circle.fill")
                     .font(.system(size: 40))
                     .foregroundStyle(.white.opacity(0.85))
@@ -65,5 +91,12 @@ struct VideoSlotView: View {
                     .multilineTextAlignment(.center)
             }.padding(20)
         }
+    }
+
+    private func presentPreview() {
+        let remoteURL = store.videoUrl.flatMap(URL.init(string:))
+        guard let url = remoteURL ?? store.localVideoCompressedUrl ?? store.localVideoOriginalUrl else { return }
+        previewURL = url
+        isShowingPreview = true
     }
 }

@@ -74,7 +74,7 @@ final class RegisterStore: ObservableObject {
         logger.info("[RegisterStore] begin firstTime email=\(email, privacy: .private)")
     }
 
-    /// 被拒重录进入前：MineRestrictedView.handleResubmit 拉一次 getAnchorInfo → 携 mineInfo + Keychain cached password
+    /// 被拒重录进入前：MineRestrictedView 直接携当前已加载的 mineInfo + Keychain cached password。
     /// (2026-07-16 前挂 LoginView 监听 session.needsResubmit,重构后迁到受限首屏 Resubmit 按钮)
     ///
     /// v3 NEW-5：cachedPassword nil 时从 Keychain 兜底读（KeychainKey.pendingRegisterPassword）
@@ -93,9 +93,46 @@ final class RegisterStore: ObservableObject {
             .split(separator: ",")
             .map { String($0).trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
-        // 注意：picList / videos **不** hydrate 到本 store（spec §0.14 一期简化——iOS 视频独立字段，picList 尾部作视频的 hack 不移植；用户重录时重新上传）
-        self.picUrls = []
-        self.videoUrl = nil
+        // 与 H5 userStore.setMinePicList 同样按 mediaType 分流。picList 是当前接口的
+        // 权威媒体字段；pictures/videos 仅为旧响应的兼容回退。
+        let typedPhotos = (mineInfo.picList ?? []).compactMap { item -> String? in
+            guard item.mediaType == 1,
+                  let url = item.mediaUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !url.isEmpty else { return nil }
+            return url
+        }
+        let typedVideos = (mineInfo.picList ?? []).compactMap { item -> String? in
+            guard item.mediaType == 2,
+                  let url = item.mediaUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !url.isEmpty else { return nil }
+            return url
+        }
+        let legacyPhotos = (mineInfo.pictures ?? []).compactMap { asset -> String? in
+            guard let url = asset.url?.trimmingCharacters(in: .whitespacesAndNewlines), !url.isEmpty else {
+                return nil
+            }
+            return url
+        }
+        let legacyVideos = (mineInfo.videos ?? []).compactMap { asset -> String? in
+            guard let url = asset.url?.trimmingCharacters(in: .whitespacesAndNewlines), !url.isEmpty else {
+                return nil
+            }
+            return url
+        }
+        let photoURLs = Array((typedPhotos.isEmpty ? legacyPhotos : typedPhotos).prefix(6))
+        self.picUrls = photoURLs
+        self.videoUrl = (typedVideos.isEmpty ? legacyVideos : typedVideos).first
+
+        // 照片网格以上传任务为渲染数据源。把服务端 URL 还原为成功态任务，后续删除、
+        // 新增和提交都会同步更新 picUrls，不会在重提时遗漏原有图片。
+        self.picUploadTasks = photoURLs.map {
+            PhotoUploadTask(id: UUID(), localData: Data(), state: .succeeded(url: $0))
+        }
+        self.localVideoOriginalUrl = nil
+        self.localVideoCompressedUrl = nil
+        self.videoCompressProgress = nil
+        self.isVideoUploading = false
+        self.submitError = nil
         self.gender = mineInfo.sex ?? 2
         self.deviceId = DeviceInfo.deviceId
         self.phone = mineInfo.phone ?? ""

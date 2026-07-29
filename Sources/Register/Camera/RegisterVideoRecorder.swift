@@ -34,7 +34,7 @@ final class RegisterVideoRecorder: NSObject, ObservableObject {
 
     /// Bug fix 2026-07-11：@StateObject 释放时（NavigationStack pop 整个 register 栈，view identity 结束）
     /// 触发 camera.tearDown() 做最终清理。camera.tearDown() 是 nonisolated 方法，可在 deinit 安全调。
-    /// audio I/O / writer / timer 交给 ARC dealloc；正常路径 push preview 时已经完成录制、writer 已 finalize、audio 保留待重录复用
+    /// audio I/O / writer / timer 交给 ARC dealloc；预览页前会主动移除 audio I/O，重录时按需重新挂载。
     deinit {
         camera.tearDown()
     }
@@ -285,18 +285,23 @@ final class RegisterVideoRecorder: NSObject, ObservableObject {
 
     /// Bug fix 2026-07-11：push preview 场景用（RegisterVideoRecordView.onDisappear）
     ///
-    /// 只停 session 让摄像头灯熄灭，**保留 subscribers 字典**（含 CameraPreview Coordinator 的 sink）。
+    /// 停止 session 并移除 audio I/O，让摄像头和麦克风均释放；**保留 subscribers 字典**
+    /// （含 CameraPreview Coordinator 的 sink）以支持返回录制页后的重录。
     ///
     /// **不能**调 `teardown()` / `camera.tearDown()`——那会 `subscribers.removeAll()` 清掉 CameraPreview 的 sink，
     /// pop 回来时 SwiftUI 不保证触发 `CameraPreview.updateUIView` 重新 subscribe（`.claude/rules/swiftui-camera-preview.md §3` 明确坑），
     /// 导致 Re-record 画面卡最后一帧（recorder 自己的 subscribe 在 startRecording 里显式重加，所以录出的 mp4 正常）。
     ///
+    /// `CameraManager.stop()` 同时禁止前台自动恢复；重新录制时由 `restartForRecording()` 显式 `start()`。
     /// 真正 flow 退出（NavigationStack pop 整个注册栈 → view identity 结束 → @StateObject deinit）由 `deinit` 触发 `camera.tearDown()`。
     func suspend() {
         timer?.invalidate()
         timer = nil
-        camera.stop()   // 只 stopRunning session；不清 subscribers、不移 audio I/O、不 tearDown observer
-        logger.info("[Recorder] suspend: session stopped, subscribers preserved for Re-record")
+        camera.removeAudioIO(input: micInput, output: audioOutput)
+        micInput = nil
+        audioOutput = nil
+        camera.stop()
+        logger.info("[Recorder] suspend: camera/microphone stopped, subscribers preserved for Re-record")
     }
 
     /// Page dismiss 时（对齐 spec §4.1 v3 MAJOR-3：onDisappear 需守卫 scenePhase != .background）

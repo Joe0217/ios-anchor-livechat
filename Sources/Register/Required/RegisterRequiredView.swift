@@ -113,8 +113,39 @@ struct RegisterRequiredView: View {
 
     private var submitButton: some View {
         Button {
-            let result = validator.validatePage2(languages: store.languages, picUrls: store.picUrls, videoUrl: store.videoUrl)
-            switch result {
+            // Required Fields 页也作为最终提交入口，必须重新校验前一页基础资料；
+            // 防止返回编辑、状态恢复等路径绕过 Page 1 的 Sign Up 校验后直接提交。
+            let basicResult = validator.validatePage1(
+                iconUrl: store.iconUrl,
+                nickname: store.nickname,
+                birthday: store.birthday,
+                countryCode: store.countryCode
+            )
+            switch basicResult {
+            case .ok:
+                break
+            case .missingAvatar:
+                showToast(L10n.Register.errorAvatarRequired)
+                return
+            case .missingNickname:
+                showToast(L10n.Register.errorNicknameRequired)
+                return
+            case .missingBirthday:
+                showToast(L10n.Register.errorBirthdayRequired)
+                return
+            case .missingCountry:
+                showToast(L10n.Register.errorCountryRequired)
+                return
+            default:
+                return
+            }
+
+            let requiredResult = validator.validatePage2(
+                languages: store.languages,
+                picUrls: store.picUrls,
+                videoUrl: store.videoUrl
+            )
+            switch requiredResult {
             case .ok:
                 Task {
                     RegisterAnalytics.report(.reviewInf)
