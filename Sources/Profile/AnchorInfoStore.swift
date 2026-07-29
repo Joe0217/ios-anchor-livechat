@@ -58,7 +58,9 @@ final class AnchorInfoStore: ObservableObject {
     /// v2（2026-07-07 I-spec-用户资料编辑页 §2.2）：`AnchorInfo.greetMsgs` schema 从 `[String]?`
     /// 升级为 `[GreetMsg]?` 含 id 支持编辑页删除 diff。老 v1 缓存 decode 到新 schema 会整个
     /// CachedSnapshot decode 失败 → 升 key 让老快照自然废弃，冷启动闪一次 loading 后 refresh。
-    private let cacheKey = "anchorInfoStore.v3"
+    /// v4：加入 H5 mine 右侧价格字段 videoPrice。旧 v3 快照不含该字段，必须强制刷新。
+    private let cacheKey = "anchorInfoStore.v4"
+    private static let obsoleteCacheKeys = ["anchorInfoStore.v3"]
     private var inflightTask: Task<Void, Never>?
     private var followObserver: NSObjectProtocol?
 
@@ -69,6 +71,11 @@ final class AnchorInfoStore: ObservableObject {
     private var reloadEpoch: Int = 0
 
     private init() {
+        // 不读取 v3：它会让缺少 videoPrice 的快照被误判为已加载，Profile 持续显示 0/min。
+        for key in Self.obsoleteCacheKeys {
+            KeychainStore.remove(for: key)
+            UserDefaults.standard.removeObject(forKey: key)
+        }
         loadFromDisk()
         followObserver = NotificationCenter.default.addObserver(
             forName: .followRelationChanged, object: nil, queue: .main
@@ -118,6 +125,22 @@ final class AnchorInfoStore: ObservableObject {
     /// 后端不存在 `/api/user/getUserInfo`，登录响应本身是 mine 权威来源。
     func hydrateFromLogin(_ result: LoginResult) {
         mine = AnchorInfo.fromLoginResult(result)
+        saveToDisk()
+    }
+
+    /// 虚拟道具页的 Chat Skin 乐观更新入口。
+    ///
+    /// 对齐 H5 `virtualProps/index.vue`：装备结果立即写入 `mineInfo.chatBubble`，使后续私聊、
+    /// 直播公屏、派对房和通话消息使用同一份当前皮肤；服务端失败时由 PropsInventoryStore 回滚。
+    func applyChatBubble(_ rawURL: String?) {
+        // 登录态先于 Profile 缓存 hydrate 的短暂窗口内，仍需让装备立即生效。
+        guard var updatedMine = mine ?? SessionStore.shared.user.map(AnchorInfo.fromLoginResult) else {
+            logger.warning("applyChatBubble skipped: no authenticated anchor")
+            return
+        }
+        let trimmed = rawURL?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        updatedMine.chatBubble = trimmed.isEmpty ? nil : trimmed
+        mine = updatedMine
         saveToDisk()
     }
 
@@ -244,6 +267,21 @@ final class AnchorInfoStore: ObservableObject {
         Self.firstNonEmpty(info?.nickname, mine?.nickname, SessionStore.shared.user?.nickname) ?? ""
     }
 
+    /// 当前主播穿戴的 Chat Skin。`mine` 与 H5 `mineInfo` 同源；仅在 mine 整体尚未 hydrate 时，
+    /// 才用资料接口回退。这样卸下皮肤写入 nil 后不会被旧的 info 快照重新覆盖。
+    var currentChatBubble: String? {
+        if let mine {
+            let bubble = mine.chatBubble?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return bubble.isEmpty ? nil : bubble
+        }
+        return Self.firstNonEmpty(info?.chatBubble)
+    }
+
+    /// 守护气泡的来源等级。主播在自己的直播房不是自己的守护者，公屏消息需据此隐藏 Chat Skin。
+    var currentChatBubbleGuardianLevel: Int {
+        mine?.chatBubbleGuardianLevel ?? info?.chatBubbleGuardianLevel ?? 0
+    }
+
     var userId: String {
         if let uid = info?.userId ?? mine?.userId { return String(uid) }
         if let uid = SessionStore.shared.user?.userId { return String(uid) }
@@ -260,15 +298,30 @@ final class AnchorInfoStore: ObservableObject {
         return code.isEmpty ? "" : Self.flagEmoji(from: code)
     }
 
+    /// H5 mine 顶部直接展示 countryId；接口未返回时再回退 ISO countryCode。
+    var countryText: String {
+        Self.firstNonEmpty(
+            info?.countryId,
+            info?.countryCode,
+            mine?.countryId,
+            mine?.countryCode
+        ) ?? ""
+    }
+
     var tierLabel: String {
+        if let n = info?.userLevel, !n.isEmpty { return n }
         if let n = info?.levelName, !n.isEmpty { return n }
         if let lvl = info?.level { return Self.tierName(forLevel: lvl) }
+        if let n = mine?.userLevel, !n.isEmpty { return n }
         if let n = mine?.levelName, !n.isEmpty { return n }
         if let lvl = mine?.level { return Self.tierName(forLevel: lvl) }
         return ""
     }
 
-    var ratePerMin: Int { info?.callPrice ?? mine?.callPrice ?? 0 }
+    // H5 mine 顶部用 videoPrice；兼容 iOS 旧模型中的 callPrice。
+    var ratePerMin: Int {
+        info?.videoPrice ?? info?.callPrice ?? mine?.videoPrice ?? mine?.callPrice ?? 0
+    }
 
     var iconURL: URL? {
         let s = info?.icon ?? mine?.icon ?? SessionStore.shared.user?.icon ?? ""

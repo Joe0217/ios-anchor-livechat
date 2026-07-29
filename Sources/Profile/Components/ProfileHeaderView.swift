@@ -28,6 +28,10 @@ struct ProfileHeaderView: View {
             statsRow
                 .padding(.horizontal, 24)
                 .padding(.bottom, 18)
+
+            profileCompletionHint
+                .padding(.horizontal, 20)
+                .padding(.bottom, 4)
         }
     }
 
@@ -93,8 +97,8 @@ struct ProfileHeaderView: View {
                     .foregroundColor(Theme.Palette.profileIdText)
             }
 
-            // 年龄 / 国旗任一为空时整行收缩，全空时整行不渲染
-            if !vm.ageText.isEmpty || !vm.countryFlag.isEmpty {
+            // 年龄 / 国家任一为空时整行收缩，全空时整行不渲染
+            if !vm.ageText.isEmpty || !vm.countryText.isEmpty {
                 HStack(spacing: 6) {
                     if !vm.ageText.isEmpty {
                         Image("profileGenderIcon")
@@ -107,7 +111,7 @@ struct ProfileHeaderView: View {
                             .foregroundColor(Theme.Palette.profileMetaText)
                     }
 
-                    if !vm.ageText.isEmpty, !vm.countryFlag.isEmpty {
+                    if !vm.ageText.isEmpty, !vm.countryText.isEmpty {
                         // 仅在两侧都有内容时画分隔条
                         Rectangle()
                             .fill(Color.white.opacity(0.25))
@@ -116,13 +120,13 @@ struct ProfileHeaderView: View {
                             .accessibilityHidden(true)
                     }
 
-                    if !vm.countryFlag.isEmpty {
+                    if !vm.countryText.isEmpty {
                         Image("profileLocationIcon")
                             .resizable()
                             .scaledToFit()
                             .frame(width: 14, height: 14)
                             .accessibilityHidden(true)
-                        Text(vm.countryFlag)
+                        Text(vm.countryText)
                             .font(Theme.Typography.profileMeta)
                     }
                 }
@@ -134,7 +138,7 @@ struct ProfileHeaderView: View {
     private var tierBlock: some View {
         // tierLabel 与 ratePerMin 全空时整块不渲染（避免空白胶囊）
         if !vm.tierLabel.isEmpty || vm.ratePerMin > 0 {
-            NavigationLink(value: ProfileRoute.levelDetail) {
+            NavigationLink(value: ProfileRoute.dataStatistics) {
                 VStack(alignment: .trailing, spacing: 0) {
                     if !vm.tierLabel.isEmpty {
                         HStack(spacing: 4) {
@@ -148,16 +152,14 @@ struct ProfileHeaderView: View {
                                 .accessibilityHidden(true)
                         }
                     }
-                    if vm.ratePerMin > 0 {
-                        Text(String(format: L10n.profileRatePerMinFormat, vm.ratePerMin))
-                            .font(Theme.Typography.profileRate)
-                            .foregroundColor(Theme.Palette.profileRate)
-                    }
+                    Text(String(format: L10n.profileRatePerMinFormat, vm.ratePerMin))
+                        .font(Theme.Typography.profileRate)
+                        .foregroundColor(Theme.Palette.profileRate)
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(L10n.levelDetailTitle)
+            .accessibilityLabel(L10n.dataStatisticsNavTitle)
         }
     }
 
@@ -168,6 +170,16 @@ struct ProfileHeaderView: View {
             statItem(value: vm.followersCount, caption: L10n.profileFollowers, segment: .followers)
             statDivider
             statItem(value: vm.friendsCount,   caption: L10n.profileFriends,   segment: .friends)
+        }
+    }
+
+    @ViewBuilder
+    private var profileCompletionHint: some View {
+        if vm.bio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            Text(L10n.profileCompletionHint)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundColor(Color(hex: 0x6BFF85))
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

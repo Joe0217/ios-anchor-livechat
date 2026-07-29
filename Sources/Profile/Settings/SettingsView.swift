@@ -6,7 +6,7 @@ import UIKit
 /// **对齐 H5 蓝本**（`anchor-livechat-h5/src/views/settings/config.js`）9 项内容，保留 iOS 4 section 分组：
 /// - Account: View Anchor Policy + Blocklist
 /// - General: Language + Feedback（占位 toast）+ Clear Cache
-/// - About: Version（rightText）+ Terms of Service（外链）+ Privacy Policy（外链）
+/// - About: Version（rightText）+ Terms of Service + Privacy Policy（应用内安全 H5）
 /// - Logout: Sign Out
 ///
 /// **交互统一**：iOS 16 List 内 `NavigationLink(value:)` 与祖先 destination 交互失效，
@@ -103,10 +103,10 @@ struct SettingsView: View {
                     .font(.system(size: 13))
             }
             settingsRow(icon: "doc.text", title: L10n.settingsTermsOfService) {
-                openExternal(AppConfig.termsOfServiceURL)
+                path.append(ProfileRoute.userAgreement)
             }
             settingsRow(icon: "lock.shield", title: L10n.settingsPrivacyPolicy) {
-                openExternal(AppConfig.privacyPolicyURL)
+                path.append(ProfileRoute.privacyPolicy)
             }
         }
         .listRowBackground(Theme.Palette.cardFill.opacity(0.6))
@@ -156,12 +156,6 @@ struct SettingsView: View {
     }
 
     // MARK: - Actions
-
-    /// 打开外部链接（对齐 H5 `window.open`）；用系统 Safari 打开，跳出 App。
-    private func openExternal(_ urlString: String) {
-        guard let url = URL(string: urlString) else { return }
-        UIApplication.shared.open(url)
-    }
 
     /// 清缓存：内存 NSCache + URLCache 磁盘（H5 场景 iOS 天然不存在的 cacheVersion 语义已替换为清网络图缓存）。
     private func clearCache() {

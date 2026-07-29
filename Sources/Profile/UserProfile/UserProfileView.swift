@@ -217,6 +217,13 @@ struct UserProfileView: View {
                 statsRow(detail: detail)
                     .padding(.horizontal, Theme.Metric.userProfileScreenHPadding)
 
+                // H5 guardian-card：直接消费 getUserDetail.guardianList 前三项，空态整卡隐藏。
+                if !detail.guardianList.isEmpty {
+                    UserGuardianCard(guardians: detail.guardianList)
+                        .padding(.horizontal, Theme.Metric.userProfileScreenHPadding)
+                        .padding(.top, Theme.Metric.userProfileSectionVTop)
+                }
+
                 // 礼物墙（H5 gifts.vue：list 非空横向 grid 渲染；空 → 不显示整个区块）
                 if !detail.giftList.isEmpty {
                     giftWallSection(gifts: detail.giftList)
@@ -302,7 +309,7 @@ struct UserProfileView: View {
         .frame(width: 40, height: 40)
     }
 
-    // MARK: - 拨打通话（接入 CallStore，参 POCDebugView.dial 同款）
+    // MARK: - 拨打通话（接入 CallStore）
 
     /// code-review Finding 5：preflight (isSignalingReady + state==.idle) 已内部化到 CallStore.callOut，
     /// 失败会 set CallStore.lastError；此处只需调 callOut + observe lastError → vm.transientError。
@@ -673,7 +680,8 @@ extension UserDetail {
                 Gift(giftId: 1, iconUrl: nil, name: "Rose", count: 12),
                 Gift(giftId: 2, iconUrl: nil, name: "Heart", count: 5),
                 Gift(giftId: 3, iconUrl: nil, name: "Diamond", count: 1)
-            ]
+            ],
+            guardianList: []
         )
     }
 }

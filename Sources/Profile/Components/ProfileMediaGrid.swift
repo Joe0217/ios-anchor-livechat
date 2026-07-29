@@ -9,6 +9,8 @@ struct ProfileMediaGrid: View {
     let title: String
     let items: [MediaAsset]
     let isVideoGrid: Bool
+    /// 受限资料页的 H5 卡片内容边距为 12pt；普通 Profile 保持既有 16pt。
+    var horizontalInset: CGFloat = Theme.Metric.profileDescPadding
     var onTap: ((MediaAsset) -> Void)? = nil
 
     private var columns: [GridItem] {
@@ -23,7 +25,7 @@ struct ProfileMediaGrid: View {
             Text(title)
                 .font(Theme.Typography.profileSection)
                 .foregroundColor(Theme.Palette.profileSection)
-                .padding(.horizontal, Theme.Metric.profileDescPadding)
+                .padding(.horizontal, horizontalInset)
 
             if items.isEmpty {
                 emptyState
@@ -39,7 +41,7 @@ struct ProfileMediaGrid: View {
                         .disabled(onTap == nil || item.vaild == 3) // 已拒禁用点击
                     }
                 }
-                .padding(.horizontal, Theme.Metric.profileDescPadding)
+                .padding(.horizontal, horizontalInset)
             }
         }
     }
@@ -49,7 +51,7 @@ struct ProfileMediaGrid: View {
         EmptyStateView(style: .compact, textColor: Theme.Palette.profileTabInactive, textFont: .system(size: 12))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 28)
-            .padding(.horizontal, Theme.Metric.profileDescPadding)
+            .padding(.horizontal, horizontalInset)
     }
 
     /// 单个 cell：`Color.clear.aspectRatio(1, .fit).overlay { ... }` 严格骨架。

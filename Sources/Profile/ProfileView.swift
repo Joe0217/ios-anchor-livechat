@@ -22,11 +22,14 @@ import UIKit
 enum ProfileRoute: Hashable {
     case settings
     case levelDetail
+    case dataStatistics
     case blocklist
     case editProfile
     case anchorPolicy
     case language
     case feedback
+    case userAgreement
+    case privacyPolicy
 }
 
 struct ProfileView: View {

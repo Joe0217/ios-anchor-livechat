@@ -36,6 +36,7 @@ final class ProfileViewModel: ObservableObject {
     var userId: String { store.userId }
     var ageText: String { store.ageText }
     var countryFlag: String { store.countryFlag }
+    var countryText: String { store.countryText }
     var tierLabel: String { store.tierLabel }
     var ratePerMin: Int { store.ratePerMin }
     var iconURL: URL? { store.iconURL }

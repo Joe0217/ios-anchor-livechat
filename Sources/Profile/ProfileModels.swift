@@ -24,7 +24,10 @@ struct AnchorInfo: Codable {
     // 段位与单价
     let level: Int?            // 主播段位（D/C/NEW/B/A/S/SS 的数字编码，待真机校验编码方式）
     let levelName: String?     // 如 "SS" 字面量；若后端只发数字，此字段为 nil
-    let callPrice: Int?        // 单价（/min）
+    /// H5 Work 页实际展示字段 `mineInfo.userLevel`；服务端可能以字符串或数字返回。
+    let userLevel: String?
+    let callPrice: Int?        // 旧字段：单价（/min）
+    let videoPrice: Int?       // H5 mine 右侧实际展示字段（/min）
 
     // 社交数
     let upsNum: Int?           // 关注数 Following
@@ -48,7 +51,10 @@ struct AnchorInfo: Codable {
     let giftList: [GiftItem]?      // 礼物墙（userProfile 也用此字段）
 
     // H-3 新增（对齐 H5 私聊页深化）
-    let chatBubble: String?        // 主播穿戴的气泡装扮 URL（H5 `mineInfo.chatBubble`，来自虚拟道具 itemType=4)
+    /// 主播穿戴的气泡装扮 URL。虚拟道具页装备后会乐观更新并持久化该字段。
+    var chatBubble: String?
+    /// 守护气泡所属等级。主播在自己的直播房并非自己的守护者，公屏发送时须隐藏这类气泡。
+    let chatBubbleGuardianLevel: Int?
     let activeTycoon: Bool?        // 主播自己是否大R（发送消息时 remoteExt 透传给对端，让对端 nav 显徽章）
 
     // 工作台数据（H5 mineInfo.dataStatistics + anchorIncomeMap；H5 type.ts 声明 anchorIncomeMap?: null 是撒谎，真接口返 dict）
@@ -93,7 +99,9 @@ struct AnchorInfo: Codable {
         self.signatureVaild = try c.decodeIfPresent(Int.self, forKey: .signatureVaild)
         self.level = try c.decodeIfPresent(Int.self, forKey: .level)
         self.levelName = try c.decodeIfPresent(String.self, forKey: .levelName)
+        self.userLevel = c.decodeFlexibleString(forKey: .userLevel)
         self.callPrice = try c.decodeIfPresent(Int.self, forKey: .callPrice)
+        self.videoPrice = c.decodeFlexibleInt(forKey: .videoPrice)
         self.upsNum = try c.decodeIfPresent(Int.self, forKey: .upsNum)
         self.fansNum = try c.decodeIfPresent(Int.self, forKey: .fansNum)
         self.friendsNum = try c.decodeIfPresent(Int.self, forKey: .friendsNum)
@@ -104,6 +112,7 @@ struct AnchorInfo: Codable {
         self.callVideoUrl = try c.decodeIfPresent(String.self, forKey: .callVideoUrl)
         self.giftList = try c.decodeIfPresent([GiftItem].self, forKey: .giftList)
         self.chatBubble = try c.decodeIfPresent(String.self, forKey: .chatBubble)
+        self.chatBubbleGuardianLevel = c.decodeFlexibleInt(forKey: .chatBubbleGuardianLevel)
         self.activeTycoon = try c.decodeIfPresent(Bool.self, forKey: .activeTycoon)
         self.dataStatistics = try c.decodeIfPresent(AnchorDataStatistics.self, forKey: .dataStatistics)
         self.anchorIncomeMap = try c.decodeIfPresent(AnchorIncomeMap.self, forKey: .anchorIncomeMap)
@@ -127,12 +136,13 @@ struct AnchorInfo: Codable {
     /// 2026-07-16 加审核态 5 字段(valid/onReview/banAlways/bannedSubType/type),全 default nil 避免 Preview 代码大规模改动。
     init(userId: Int?, nickname: String?, icon: String?, sex: Int?, age: Int?,
          countryCode: String?, signature: String?, signatureVaild: Int?,
-         level: Int?, levelName: String?, callPrice: Int?,
+         level: Int?, levelName: String?, userLevel: String? = nil, callPrice: Int?,
+         videoPrice: Int? = nil,
          upsNum: Int?, fansNum: Int?, friendsNum: Int?,
          pictures: [MediaAsset]?, videos: [MediaAsset]?, picList: [AnchorPicItem]? = nil,
          greetMsgs: [GreetMsg]?,
          callVideoUrl: String?, giftList: [GiftItem]?,
-         chatBubble: String?, activeTycoon: Bool?,
+         chatBubble: String?, chatBubbleGuardianLevel: Int? = nil, activeTycoon: Bool?,
          dataStatistics: AnchorDataStatistics? = nil, anchorIncomeMap: AnchorIncomeMap? = nil,
          email: String?, birthday: String?, phone: String?, inviteCode: String?,
          language: String?, countryId: String?,
@@ -140,12 +150,14 @@ struct AnchorInfo: Codable {
          bannedSubType: Int? = nil, type: Int? = nil, userType: Int? = nil) {
         self.userId = userId; self.nickname = nickname; self.icon = icon; self.sex = sex; self.age = age
         self.countryCode = countryCode; self.signature = signature; self.signatureVaild = signatureVaild
-        self.level = level; self.levelName = levelName; self.callPrice = callPrice
+        self.level = level; self.levelName = levelName; self.userLevel = userLevel
+        self.callPrice = callPrice; self.videoPrice = videoPrice
         self.upsNum = upsNum; self.fansNum = fansNum; self.friendsNum = friendsNum
         self.pictures = pictures; self.videos = videos; self.picList = picList
         self.greetMsgs = greetMsgs
         self.callVideoUrl = callVideoUrl; self.giftList = giftList
-        self.chatBubble = chatBubble; self.activeTycoon = activeTycoon
+        self.chatBubble = chatBubble; self.chatBubbleGuardianLevel = chatBubbleGuardianLevel
+        self.activeTycoon = activeTycoon
         self.dataStatistics = dataStatistics; self.anchorIncomeMap = anchorIncomeMap
         self.email = email; self.birthday = birthday; self.phone = phone; self.inviteCode = inviteCode
         self.language = language; self.countryId = countryId
@@ -162,12 +174,14 @@ struct AnchorInfo: Codable {
             userId: r.userId, nickname: r.nickname, icon: r.icon,
             sex: nil, age: nil, countryCode: nil,
             signature: nil, signatureVaild: nil,
-            level: nil, levelName: nil, callPrice: nil,
+            level: nil, levelName: nil, userLevel: r.userLevel, callPrice: nil,
             upsNum: nil, fansNum: nil, friendsNum: nil,
             pictures: nil, videos: nil, picList: nil,
             greetMsgs: nil,
             callVideoUrl: nil, giftList: nil,
-            chatBubble: nil, activeTycoon: nil,
+            chatBubble: r.chatBubble,
+            chatBubbleGuardianLevel: r.chatBubbleGuardianLevel,
+            activeTycoon: nil,
             dataStatistics: nil, anchorIncomeMap: nil,
             email: nil, birthday: nil, phone: nil, inviteCode: nil,
             language: nil, countryId: nil,
