@@ -6,7 +6,6 @@ Read `README.md` first. `CLAUDE.md` and `.claude/rules/` contain the detailed ar
 
 - The repository is frequently used by parallel development sessions. Preserve unrelated changes and do not revert or reformat them.
 - `project.yml` is the source of truth for the generated Xcode project. Do not edit `Hily.xcodeproj` directly.
-- Do not run unit tests automatically. The unit-test target may be incomplete during parallel work. Run tests only when explicitly requested.
 - New source files or `project.yml`/Pod changes require the user-approved `./bin/regen.sh`; it closes Xcode before regenerating the workspace.
 
 ## Configuration And Secrets
