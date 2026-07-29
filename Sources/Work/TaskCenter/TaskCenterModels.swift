@@ -67,14 +67,20 @@ struct TaskItemVO: Codable, Identifiable, Hashable {
 
     var id: Int { taskId }
 
-    /// 前端派生:是否有可领档(H5 用 hasClaimable 后端字段,但也可 tiers 计算)
+    /// 前端派生:是否有可领档。与 H5 同样以各档 `tierStatus` 为准，避免后端汇总字段滞后。
     var derivedHasClaimable: Bool {
-        hasClaimable || tiers.contains { $0.isClaimable }
+        tiers.contains { $0.isClaimable }
+    }
+
+    /// H5 红点规则：存在任一未领取档位（未达或可领）即显示，全部领取后才消失。
+    var derivedHasRedDot: Bool {
+        tiers.contains { !$0.isClaimed }
     }
 
     /// 前端派生:任务当前档进度(最大 threshold 与 progress 比较);nil 表示无档
     var currentTier: TaskTierVO? {
-        tiers.first { !$0.isClaimed } ?? tiers.last
+        let sorted = tiers.sorted { $0.tier < $1.tier }
+        return sorted.first { !$0.isClaimed } ?? sorted.last
     }
 
     init(from decoder: Decoder) throws {
@@ -115,9 +121,9 @@ struct TaskModuleGroupVO: Codable, Identifiable, Hashable {
 
     var id: String { moduleCode }
 
-    /// 前端派生红点:组内任一任务 tier 可领(H5 utils/format.ts:moduleHasRedDot 逻辑)
+    /// 前端派生红点:组内任一任务存在未领取档位(H5 utils/format.ts:moduleHasRedDot 逻辑)
     var derivedHasRedDot: Bool {
-        moduleHasClaimable || tasks.contains { $0.derivedHasClaimable }
+        tasks.contains { $0.derivedHasRedDot }
     }
 
     init(from decoder: Decoder) throws {
@@ -200,6 +206,63 @@ struct TaskRankInfoVO: Codable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case myIncome, myIntegral
+    }
+}
+
+// MARK: - Daily legacy fallback (/api/task/v2/get)
+
+/// 新任务中心灰度不可用时的日任务数据。H5 在 `taskCenter/list` 无可展示分组时仍使用
+/// `/api/task/v2/get` 的 `isLimitTask` 和 `allDayTask`，原生端保持相同的可用兜底。
+struct LegacyDailyTasksVO: Decodable, Hashable {
+    let allDayTasks: [LegacyTaskVO]
+    let limitedTimeTasks: [LegacyTaskVO]
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.allDayTasks = (try? c.decodeIfPresent([LegacyTaskVO].self, forKey: .allDayTask)) ?? []
+        self.limitedTimeTasks = (try? c.decodeIfPresent([LegacyTaskVO].self, forKey: .isLimitTask)) ?? []
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case allDayTask, isLimitTask
+    }
+}
+
+/// 旧版日任务行。字段与 H5 `taskItem.vue` 保持一致，数值继续兼容 Int/String/Double 混发。
+struct LegacyTaskVO: Decodable, Identifiable, Hashable {
+    let taskId: Int
+    let taskName: String
+    let taskType: String?
+    let curScore: Int
+    let targetScore: Int
+    let effectiveTime: String?
+    let rewardType: Int?
+    let taskReward: Int?
+    let taskScore: Int?
+    let rewardStatus: Int
+
+    var id: Int { taskId }
+    var rewardValue: Int { taskReward ?? taskScore ?? 0 }
+    var isClaimable: Bool { rewardStatus == 1 }
+    var isClaimed: Bool { rewardStatus == 3 }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.taskId = c.decodeFlexibleInt(forKey: .taskId) ?? 0
+        self.taskName = c.decodeFlexibleString(forKey: .taskName) ?? ""
+        self.taskType = c.decodeFlexibleString(forKey: .taskType)
+        self.curScore = c.decodeFlexibleInt(forKey: .curScore) ?? 0
+        self.targetScore = c.decodeFlexibleInt(forKey: .targetScore) ?? 0
+        self.effectiveTime = c.decodeFlexibleString(forKey: .effectiveTime)
+        self.rewardType = c.decodeFlexibleInt(forKey: .rewardType)
+        self.taskReward = c.decodeFlexibleInt(forKey: .taskReward)
+        self.taskScore = c.decodeFlexibleInt(forKey: .taskScore)
+        self.rewardStatus = c.decodeFlexibleInt(forKey: .rewardStatus) ?? 0
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case taskId, taskName, taskType, curScore, targetScore, effectiveTime
+        case rewardType, taskReward, taskScore, rewardStatus
     }
 }
 

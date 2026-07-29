@@ -5,6 +5,7 @@ import SwiftUI
 /// giftIncomes / totalIncomes 保留不受权限影响（用户明示）。
 struct TodayIncomeCard: View {
     @ObservedObject var vm: WorkViewModel
+    let onWithdrawal: () -> Void
     /// P 项目权限管理：观察 canCall 决定是否显示 callIncomes 单元格
     @ObservedObject private var permission = SelfPermissionBridge.shared
 
@@ -31,7 +32,11 @@ struct TodayIncomeCard: View {
                     .font(Theme.Typography.sectionTitle)
                     .foregroundStyle(.white)
                 Spacer()
-                OutlineChevronPill(title: L10n.workWithdrawal)
+                Button(action: onWithdrawal) {
+                    OutlineChevronPill(title: L10n.workWithdrawal)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.workWithdrawal)
             }
 
             Rectangle()

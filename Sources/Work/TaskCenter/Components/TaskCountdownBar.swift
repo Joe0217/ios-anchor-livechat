@@ -8,24 +8,47 @@ import Combine
 struct TaskCountdownBar: View {
     let cycle: TaskCycle
     let weeklyServerRemainSeconds: Int
+    let weeklyTotalPoints: Int?
+    let onWeeklyReset: () -> Void
 
     @State private var remaining: Int = 0
     @State private var timerCancellable: AnyCancellable?
 
     var body: some View {
-        HStack(spacing: 8) {
-            HStack(spacing: 4) {
-                Image(systemName: "bolt.fill")
-                    .font(.system(size: 14))
-                    .foregroundStyle(.white)
-                Text(L10n.taskResetPrefix)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(.white)
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                HStack(spacing: 4) {
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.white)
+                    Text(L10n.taskResetPrefix)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+
+                Spacer(minLength: 8)
+
+                countdownBlocks
             }
 
-            Spacer(minLength: 8)
-
-            countdownBlocks
+            if cycle == .weekly {
+                Divider()
+                    .overlay(Color.black.opacity(0.4))
+                    .padding(.vertical, 8)
+                HStack(spacing: 6) {
+                    Image("homeRankIntegral")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 18, height: 18)
+                    Text(L10n.taskWeeklyTotalPointsLabel)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Spacer(minLength: 8)
+                    Text("\(weeklyTotalPoints ?? 0)")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
@@ -94,6 +117,9 @@ struct TaskCountdownBar: View {
                     remaining = 0
                     timerCancellable?.cancel()
                     timerCancellable = nil
+                    if cycle == .weekly {
+                        onWeeklyReset()
+                    }
                 }
             }
     }

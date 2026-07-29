@@ -3,7 +3,7 @@ import SwiftUI
 /// 任务模块分组卡。对齐设计稿:
 /// - Title bar:左侧**紫方块图标**(切图,按 moduleCode 派生)+ 模块名(白)+ 右侧黄圆展开箭头
 /// - 分割线(白 10% 透明)
-/// - Body:collapsed=true 时隐藏;expanded 显示 tasks[];**多档 tier(≥3)** 走 [TaskWeeklyTierBar];其余走 [TaskTierRow]
+/// - Body:collapsed=true 时隐藏;expanded 显示 tasks[];**多档 tier(≥2)** 走 [TaskWeeklyTierBar];其余走 [TaskTierRow]
 struct TaskModuleGroup: View {
     let group: TaskModuleGroupVO
     let isCollapsed: Bool
@@ -13,7 +13,7 @@ struct TaskModuleGroup: View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
-                    store.toggleCollapse(group.moduleCode)
+                    store.toggleCollapse(group.moduleCode, moduleName: group.moduleName)
                 }
             } label: {
                 headerRow
@@ -36,7 +36,7 @@ struct TaskModuleGroup: View {
                             .padding(.vertical, 16)
                     } else {
                         ForEach(group.tasks) { task in
-                            if task.tiers.count >= 3 {
+                            if task.tiers.count >= 2 {
                                 weeklyRevenueRow(task)
                             } else {
                                 TaskTierRow(
@@ -125,9 +125,14 @@ struct TaskModuleGroup: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(task.taskName)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.white)
+                    HStack(spacing: 6) {
+                        Text(task.taskName)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.white)
+                        if task.derivedHasRedDot {
+                            Circle().fill(Color(hex: 0xFF3B30)).frame(width: 7, height: 7)
+                        }
+                    }
                     if let desc = task.taskDesc, !desc.isEmpty {
                         Text(desc)
                             .font(.system(size: 11))

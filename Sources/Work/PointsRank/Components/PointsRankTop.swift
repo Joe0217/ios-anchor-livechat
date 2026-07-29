@@ -70,5 +70,6 @@ struct PointsRankTop: View {
         }
         .frame(width: 112, height: cellHeight, alignment: .top)
         .padding(.top, topOffset)
+        .offset(x: index == 0 ? 20 : index == 2 ? -20 : 0)
     }
 }

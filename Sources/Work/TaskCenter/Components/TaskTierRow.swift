@@ -32,14 +32,12 @@ struct TaskTierRow: View {
         let target = tier?.threshold ?? 0
         let reward = tier?.rewardValue ?? 0
         return VStack(alignment: .leading, spacing: 4) {
-            Text(task.taskName)
-                .font(.system(size: 14))
-                .foregroundStyle(.white)
+            taskTitle
             Text("(\(task.progress)/\(target))")
                 .font(.system(size: 12))
                 .foregroundStyle(.white.opacity(0.55))
             HStack(spacing: 4) {
-                diamondIcon
+                rewardIcon(for: tier)
                 Text("+\(reward)")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color(hex: 0xFFCC00))
@@ -56,9 +54,7 @@ struct TaskTierRow: View {
         let target = task.currentTier?.threshold ?? 0
         let ratio: CGFloat = target > 0 ? min(1, CGFloat(task.progress) / CGFloat(target)) : 0
         return VStack(alignment: .leading, spacing: 8) {
-            Text(task.taskName)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.white)
+            taskTitle
             if let desc = task.taskDesc, !desc.isEmpty {
                 Text(desc)
                     .font(.system(size: 12))
@@ -77,7 +73,7 @@ struct TaskTierRow: View {
                 }
                 .frame(height: 8)
                 HStack(spacing: 4) {
-                    diamondIcon
+                    rewardIcon(for: task.currentTier)
                     Text("\(task.progress)/\(target)")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.white)
@@ -98,11 +94,8 @@ struct TaskTierRow: View {
     private var actionableRow: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
-                taskIconView
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(task.taskName)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.white)
+                    taskTitle
                     if let desc = task.taskDesc, !desc.isEmpty {
                         Text(desc)
                             .font(.system(size: 12))
@@ -122,7 +115,7 @@ struct TaskTierRow: View {
             let reward = task.currentTier?.rewardValue ?? 0
             HStack(spacing: 6) {
                 Spacer()
-                diamondIcon
+                rewardIcon(for: task.currentTier)
                 Text("+\(reward)")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color(hex: 0xFFCC00))
@@ -143,11 +136,7 @@ struct TaskTierRow: View {
     private var claimOrGoButton: some View {
         if let tier = task.tiers.first(where: { $0.isClaimable }) {
             Button {
-                if task.tiers.filter({ $0.isClaimable }).count >= 2 {
-                    onClaimAll()
-                } else {
-                    onClaim(tier.tier)
-                }
+                onClaimAll()
             } label: {
                 HStack(spacing: 4) {
                     if isClaimingTier(tier.tier) || isClaimingAll {
@@ -168,9 +157,8 @@ struct TaskTierRow: View {
             .buttonStyle(.plain)
             .disabled(isClaimingTier(tier.tier) || isClaimingAll)
         } else {
-            // 无可领档 → 仍显示 Claim(与 H5 一致 —— 未达档显示灰态 Claim,非"Go")
-            // 灰色胶囊按钮,不可点击(用户反馈:全部按钮统一用 Claim 文案)
-            Text(L10n.taskTierClaim)
+            // H5：全部已领与未达标都不可点击，但仅全部已领时显示 Claimed。
+            Text(!task.tiers.isEmpty && task.tiers.allSatisfy(\.isClaimed) ? L10n.taskTierClaimed : L10n.taskTierClaim)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white.opacity(0.6))
                 .padding(.horizontal, 18)
@@ -182,37 +170,28 @@ struct TaskTierRow: View {
 
     // MARK: - 通用钻石 icon(对齐 H5 主播端金橙钻切图)
 
-    private var diamondIcon: some View {
-        Image("coins")
+    private func rewardIcon(for tier: TaskTierVO?) -> some View {
+        let iconName: String
+        switch tier?.rewardType {
+        case 2: iconName = "homeRankDiamondPurple"
+        case 6: iconName = "homeRankIntegral"
+        default: iconName = "diamondYellow"
+        }
+        return Image(iconName)
             .resizable()
             .aspectRatio(contentMode: .fit)
             .frame(width: 16, height: 16)
     }
 
-    // MARK: - 任务图标(消费 task.taskIcon URL,对齐 H5 TierProgressBar taskIcon 用法)
-
-    @ViewBuilder
-    private var taskIconView: some View {
-        let url = task.taskIcon.flatMap { URL(string: $0) }
-        RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(Color.white.opacity(0.08))
-            .frame(width: 32, height: 32)
-            .overlay(
-                Group {
-                    if url != nil {
-                        CachedAsyncImage(url: url, contentMode: .fit) {
-                            Image(systemName: "target")
-                                .font(.system(size: 16))
-                                .foregroundStyle(.white.opacity(0.5))
-                        }
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        .padding(2)
-                    } else {
-                        Image(systemName: "target")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.white.opacity(0.85))
-                    }
-                }
-            )
+    private var taskTitle: some View {
+        HStack(spacing: 6) {
+            Text(task.taskName)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.white)
+            if task.derivedHasRedDot {
+                Circle().fill(Color(hex: 0xFF3B30)).frame(width: 7, height: 7)
+            }
+        }
     }
+
 }

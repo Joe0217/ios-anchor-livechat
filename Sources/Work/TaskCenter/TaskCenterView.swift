@@ -11,14 +11,10 @@ import SwiftUI
 ///
 /// **Weekly 独有**:module 列表下方追加 tycoonTask 折叠块 + integralTask 折叠块。
 ///
-/// **rank tap**:H5 跳独立榜单页(iOS 无对应);首版 tap → WorkComingSoonView 占位。
-/// 用 `@Environment(\.rankProgressAction)` 由父层注入 push closure(与 [LiveDataView moneyBagAction](Sources/Work/LiveData/LiveDataView.swift) 同 pattern)。
+/// **rank tap**:由 `rankProgressAction` 注入首页榜单路由。
 struct TaskCenterView: View {
     @StateObject private var store = TaskCenterStore()
-
-    /// Weekly 独有折叠块 —— UI 层态,不进 store(重进页面归位默认收起)
-    @State private var tycoonExpanded: Bool = false
-    @State private var integralExpanded: Bool = false
+    @State private var legacyMatchTipPresented = false
 
     @Environment(\.rankProgressAction) private var rankProgressAction
 
@@ -57,7 +53,9 @@ struct TaskCenterView: View {
 
                     TaskCountdownBar(
                         cycle: store.activeCycle,
-                        weeklyServerRemainSeconds: store.weeklyResetRemainSeconds
+                        weeklyServerRemainSeconds: store.weeklyResetRemainSeconds,
+                        weeklyTotalPoints: store.pointsInfo?.myIntegral,
+                        onWeeklyReset: store.refreshWeeklyAfterReset
                     )
                     .padding(.top, 4)
 
@@ -88,6 +86,11 @@ struct TaskCenterView: View {
             }
         }
         .animation(.easeInOut(duration: 0.15), value: store.pendingReward != nil)
+        .alert(L10n.taskLegacyMatchTipTitle, isPresented: $legacyMatchTipPresented) {
+            Button(L10n.commonConfirm, role: .cancel) {}
+        } message: {
+            Text(L10n.taskLegacyMatchTipMessage)
+        }
         .task { store.onAppear() }
     }
 
@@ -95,13 +98,125 @@ struct TaskCenterView: View {
 
     @ViewBuilder
     private var mainContent: some View {
+        if store.activeCycle == .daily, store.shouldUseLegacyDailyTasks {
+            legacyDailyContent
+        } else {
+            currentCycleContent
+        }
+    }
+
+    @ViewBuilder
+    private var currentCycleContent: some View {
         switch store.state {
         case .idle, .loading(previous: nil), .error(_, previous: nil):
-            // 对齐 H5 静默错误:失败保留旧数据;首次失败 = 保持骨架屏(H5 走 legacy 列表,iOS 不做 legacy)。
-            // 用户下拉刷新触发 retry。
             skeletonPlaceholder
         case .loading(let groups?), .loaded(let groups), .error(_, let groups?):
             groupsList(groups)
+        }
+    }
+
+    private var legacyDailyContent: some View {
+        LazyVStack(alignment: .leading, spacing: 10) {
+            legacyTaskSection(
+                title: L10n.taskLegacyLimitedTime,
+                tasks: store.legacyDailyTasks?.limitedTimeTasks ?? []
+            )
+            legacyTaskSection(
+                title: L10n.taskLegacyAllDay,
+                tasks: store.legacyDailyTasks?.allDayTasks ?? []
+            )
+        }
+    }
+
+    private func legacyTaskSection(title: String, tasks: [LegacyTaskVO]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.bottom, 12)
+            Divider().overlay(Color.white.opacity(0.08))
+                .padding(.bottom, 12)
+
+            if tasks.isEmpty {
+                Text(L10n.taskModuleNoTasks)
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+            } else {
+                ForEach(Array(tasks.enumerated()), id: \.offset) { index, task in
+                    legacyTaskRow(task)
+                    if index < tasks.count - 1 {
+                        Divider().overlay(Color.white.opacity(0.08))
+                            .padding(.vertical, 12)
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(hex: 0x251A3A))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private func legacyTaskRow(_ task: LegacyTaskVO) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 4) {
+                    Text(task.taskName)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
+                    if task.taskType == "matchNum" {
+                        Button {
+                            legacyMatchTipPresented = true
+                        } label: {
+                            Image(systemName: "questionmark.circle")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                HStack(spacing: 6) {
+                    Text("(\(task.curScore)/\(task.targetScore))")
+                    if let effectiveTime = task.effectiveTime, !effectiveTime.isEmpty {
+                        Image("pinkClock")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 12, height: 12)
+                        Text(effectiveTime)
+                    }
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(.white.opacity(0.5))
+                HStack(spacing: 4) {
+                    Image(task.rewardType == 2 ? "homeRankIntegral" : "diamondYellow")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 16, height: 16)
+                    Text("+\(task.rewardValue)")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color(hex: 0xFFE600))
+                }
+            }
+            Spacer(minLength: 4)
+            Button {
+                Task { await store.claimLegacyTask(taskId: task.taskId) }
+            } label: {
+                if store.isClaimingLegacyTask(taskId: task.taskId) {
+                    ProgressView().tint(.white)
+                } else {
+                    Text(task.isClaimed ? L10n.taskTierClaimed : L10n.taskTierClaim)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .frame(width: 72, height: 28)
+            .background(task.isClaimed ? Color(hex: 0x140000) : Color(hex: 0x8515FF))
+            .clipShape(Capsule())
+            .buttonStyle(.plain)
+            .disabled(!task.isClaimable || store.isClaimingLegacyTask(taskId: task.taskId))
         }
     }
 
@@ -121,7 +236,10 @@ struct TaskCenterView: View {
                     TaskCollapsibleSection(
                         title: L10n.taskActiveTycoonTask,
                         iconAsset: "taskModuleIconTycoon",
-                        isExpanded: $tycoonExpanded
+                        isExpanded: Binding(
+                            get: { store.tycoonExpanded },
+                            set: { store.setWeeklySection(.tycoon, isExpanded: $0) }
+                        )
                     ) {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(store.tycoonTasks) { t in
@@ -135,7 +253,10 @@ struct TaskCenterView: View {
                     TaskCollapsibleSection(
                         title: L10n.taskIntegralTask,
                         iconAsset: "taskModuleIconPoints",
-                        isExpanded: $integralExpanded
+                        isExpanded: Binding(
+                            get: { store.pointsExpanded },
+                            set: { store.setWeeklySection(.points, isExpanded: $0) }
+                        )
                     ) {
                         VStack(alignment: .leading, spacing: 8) {
                             ForEach(pInfo.taskVos) { pt in

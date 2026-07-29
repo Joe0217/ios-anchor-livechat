@@ -43,6 +43,10 @@ final class TaskCenterStore: ObservableObject {
     @Published private(set) var dailyState: LoadState = .idle
     @Published private(set) var weeklyState: LoadState = .idle
 
+    /// H5 灰度期的日任务兜底。只有新版 Daily 无可展示分组时才由 View 使用。
+    @Published private(set) var legacyDailyTasks: LegacyDailyTasksVO?
+    @Published private(set) var legacyDailyResolved = false
+
     /// Weekly 独有(仅在 weeklyOverview 拉取后填充)
     @Published private(set) var tycoonTasks: [ActiveTycoonTaskVO] = []
     @Published private(set) var pointsInfo: WeeklyPointsInfoVO?
@@ -56,10 +60,13 @@ final class TaskCenterStore: ObservableObject {
 
     @Published private(set) var collapsedDaily: Set<String> = []
     @Published private(set) var collapsedWeekly: Set<String> = []
+    @Published private(set) var tycoonExpanded = false
+    @Published private(set) var pointsExpanded = false
 
     // MARK: - 领奖 loading + popup
 
     @Published private(set) var claimingKey: String?   // "taskId-tier" or "taskId-all"
+    @Published private(set) var claimingLegacyTaskId: Int?
     @Published var pendingReward: PendingReward?
 
     // MARK: - internals
@@ -83,6 +90,8 @@ final class TaskCenterStore: ObservableObject {
         self.userId = uid
         self.collapsedDaily = TaskCenterCollapseStore.load(cycle: .daily, userId: uid)
         self.collapsedWeekly = TaskCenterCollapseStore.load(cycle: .weekly, userId: uid)
+        self.tycoonExpanded = TaskCenterCollapseStore.loadWeeklySectionExpanded(.tycoon, userId: uid)
+        self.pointsExpanded = TaskCenterCollapseStore.loadWeeklySectionExpanded(.points, userId: uid)
     }
 
     /// Test/Preview 用:显式注入 userId(避开 SessionStore.shared 依赖)。
@@ -91,6 +100,8 @@ final class TaskCenterStore: ObservableObject {
         self.userId = userId
         self.collapsedDaily = TaskCenterCollapseStore.load(cycle: .daily, userId: userId)
         self.collapsedWeekly = TaskCenterCollapseStore.load(cycle: .weekly, userId: userId)
+        self.tycoonExpanded = TaskCenterCollapseStore.loadWeeklySectionExpanded(.tycoon, userId: userId)
+        self.pointsExpanded = TaskCenterCollapseStore.loadWeeklySectionExpanded(.points, userId: userId)
     }
 
     /// 当前 cycle 的 state(供 View 派生)
@@ -103,6 +114,16 @@ final class TaskCenterStore: ObservableObject {
         activeCycle == .daily ? collapsedDaily : collapsedWeekly
     }
 
+    /// 新版 Daily 失败或返回空分组时，H5 会展示旧版限时/全天任务。
+    var shouldUseLegacyDailyTasks: Bool {
+        guard legacyDailyResolved else { return false }
+        switch dailyState {
+        case .loaded(let groups): return groups.isEmpty
+        case .error(_, previous: nil): return true
+        default: return false
+        }
+    }
+
     // MARK: - 生命周期
 
     /// 页面首次出现:并行拉取 rank + 当前 cycle;避免重复
@@ -110,6 +131,7 @@ final class TaskCenterStore: ObservableObject {
         guard !didAppear else { return }
         didAppear = true
         fetchRank()
+        track("h_task_center_view", properties: ["hostid": userId])
         Task { await self.loadCycle(.daily) }
     }
 
@@ -127,11 +149,14 @@ final class TaskCenterStore: ObservableObject {
             Task { await loadCycle(cycle) }
             return
         }
+        let previousCycle = activeCycle
         activeCycle = cycle
-        // 若目标 cycle 从未加载,触发拉取;已加载则复用旧数据
-        if case .idle = (cycle == .daily ? dailyState : weeklyState) {
-            Task { await loadCycle(cycle) }
-        }
+        track("h_task_tab_switch", properties: [
+            "fromTab": previousCycle == .daily ? "Daily" : "Weekly",
+            "hostid": userId,
+        ])
+        // H5 每次切换 tab 都刷新目标周期；已有列表仍会通过 previous 保留在屏幕上。
+        Task { await loadCycle(cycle) }
     }
 
     // MARK: - Cycle 拉取
@@ -156,11 +181,35 @@ final class TaskCenterStore: ObservableObject {
             guard let self else { return }
             do {
                 if cycle == .daily {
-                    // 首次调用触发 init;失败静默(H5 useTaskCenter false 时 fallback,iOS 首版不做 fallback,失败直接 error 态)
-                    _ = try? await self.service.initTaskCenter()
-                    let groups = try await self.service.list(cycle: .daily)
-                    if Task.isCancelled { return }
-                    self.setState(.daily, .loaded(groups))
+                    // H5 在新版 taskCenter 请求的同时始终加载旧版日任务，供灰度或空分组时降级。
+                    async let legacyRequest = self.service.legacyDailyTasks()
+                    do {
+                        _ = try await self.service.initTaskCenter()
+                        let groups = try await self.service.list(cycle: .daily)
+                        if !Task.isCancelled {
+                            self.setState(.daily, .loaded(groups))
+                        }
+                    } catch {
+                        if !Task.isCancelled {
+                            let msg = (error as? APIError)?.message ?? L10n.commonNetworkError
+                            AppLogger.net.error("[TaskCenter] loadCycle DAILY failed: \(String(describing: error), privacy: .public)")
+                            self.setState(.daily, .error(msg, previous: previous))
+                        }
+                    }
+
+                    do {
+                        let legacyTasks = try await legacyRequest
+                        if !Task.isCancelled {
+                            self.legacyDailyTasks = legacyTasks
+                        }
+                    } catch {
+                        if !Task.isCancelled {
+                            AppLogger.net.error("[TaskCenter] legacy daily fallback failed: \(String(describing: error), privacy: .public)")
+                        }
+                    }
+                    if !Task.isCancelled {
+                        self.legacyDailyResolved = true
+                    }
                 } else {
                     let overview = try await self.service.weeklyOverview()
                     if Task.isCancelled { return }
@@ -180,6 +229,12 @@ final class TaskCenterStore: ObservableObject {
         await t.value
     }
 
+    /// Weekly 倒计时归零后按 H5 `@weekly-reset="loadWeeklyOverview"` 重新读取新周期状态。
+    func refreshWeeklyAfterReset() {
+        guard activeCycle == .weekly else { return }
+        Task { await loadCycle(.weekly) }
+    }
+
     private func setState(_ cycle: TaskCycle, _ state: LoadState) {
         if cycle == .daily {
             dailyState = state
@@ -193,8 +248,6 @@ final class TaskCenterStore: ObservableObject {
     private func fetchRank() {
         Task { [weak self] in
             guard let self else { return }
-            // 对齐 H5 index.vue L211-213:V1 + V2 并行调用
-            async let _ : Void = self.service.anchorRankingV2()   // 失败静默,返回 iOS 不消费(对齐 H5 行为)
             do {
                 self.rankInfo = try await self.service.anchorRanking()
             } catch {
@@ -206,7 +259,7 @@ final class TaskCenterStore: ObservableObject {
 
     // MARK: - Collapse 切换
 
-    func toggleCollapse(_ moduleCode: String) {
+    func toggleCollapse(_ moduleCode: String, moduleName: String) {
         var set = collapsed
         if set.contains(moduleCode) {
             set.remove(moduleCode)
@@ -219,6 +272,23 @@ final class TaskCenterStore: ObservableObject {
             collapsedWeekly = set
         }
         TaskCenterCollapseStore.save(cycle: activeCycle, userId: userId, collapsed: set)
+        track("h_task_module_click", properties: [
+            "tab_module": moduleName,
+            "fromTab": activeCycle == .weekly ? "Weekly" : "Daily",
+        ])
+    }
+
+    func setWeeklySection(_ section: TaskCenterCollapseStore.WeeklySection, isExpanded: Bool) {
+        switch section {
+        case .tycoon: tycoonExpanded = isExpanded
+        case .points: pointsExpanded = isExpanded
+        }
+        TaskCenterCollapseStore.saveWeeklySectionExpanded(section, userId: userId, isExpanded: isExpanded)
+        let moduleName = section == .tycoon ? "Active Tycoon Task" : "Integral Task"
+        track("h_task_module_click", properties: [
+            "tab_module": moduleName,
+            "fromTab": "Weekly",
+        ])
     }
 
     // MARK: - 领奖
@@ -231,6 +301,11 @@ final class TaskCenterStore: ObservableObject {
         defer { claimingKey = nil }
         do {
             let result = try await service.claim(taskId: taskId, tier: tier)
+            track("h_task_tier_claim", properties: [
+                "taskId": taskId,
+                "taskdia": result.rewardValue,
+                "hostid": userId,
+            ])
             if result.isGrantPending {
                 AppToastCenter.shared.show(L10n.taskClaimGrantPending)
             } else {
@@ -259,6 +334,13 @@ final class TaskCenterStore: ObservableObject {
         do {
             let result = try await service.claimAll(taskId: taskId)
             let claimed = result.claimed
+            for item in claimed {
+                track("h_task_tier_claim", properties: [
+                    "taskId": taskId,
+                    "taskdia": item.rewardValue,
+                    "hostid": userId,
+                ])
+            }
             if claimed.isEmpty {
                 AppToastCenter.shared.show(L10n.taskClaimSuccess)
             } else {
@@ -288,6 +370,30 @@ final class TaskCenterStore: ObservableObject {
 
     func isClaimingAll(taskId: Int) -> Bool {
         claimingKey == "\(taskId)-all"
+    }
+
+    func claimLegacyTask(taskId: Int) async {
+        guard claimingLegacyTaskId == nil else { return }
+        claimingLegacyTaskId = taskId
+        defer { claimingLegacyTaskId = nil }
+        do {
+            try await service.claimLegacyTask(taskId: taskId)
+            AppToastCenter.shared.show(L10n.taskClaimSuccess)
+            await loadCycle(.daily)
+            fetchRank()
+        } catch {
+            AppLogger.net.error("[TaskCenter.legacyClaim] failed taskId=\(taskId, privacy: .public): \(String(describing: error), privacy: .public)")
+            let msg = (error as? APIError)?.message ?? L10n.commonNetworkError
+            AppToastCenter.shared.show(msg)
+        }
+    }
+
+    func isClaimingLegacyTask(taskId: Int) -> Bool {
+        claimingLegacyTaskId == taskId
+    }
+
+    private func track(_ event: String, properties: [String: Any]) {
+        AnalyticsTracker.track(event, properties: properties)
     }
 
 }

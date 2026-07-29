@@ -17,10 +17,19 @@ struct PrivateMedia: Identifiable, Equatable {
     var giftId: String
     var giftName: String?
     var giftPrice: Int?
+    /// V2 私密消息列表返回的发送开关。`false` 表示审核中、已拒绝或达到当日限制，聊天页不可选发。
+    var sendFlag: Bool = true
+    /// V2 审核状态：0 无需审核 / 1 审核中 / 2 已通过 / 3 已拒绝。
+    var privateAuditStatus: Int? = nil
+    /// 审核拒绝原因（服务端可能不返回，保留供后续详情页展示）。
+    var auditReason: String? = nil
 
     var isNew: Bool { id.hasPrefix("local_") }
     var isImage: Bool { iconType == 1 }
     var isVideo: Bool { iconType == 2 }
+    var isSendable: Bool {
+        sendFlag && privateAuditStatus != 1 && privateAuditStatus != 3
+    }
 }
 
 /// 提交 diff 单项（H-2 spec §1.4）。
@@ -166,7 +175,7 @@ protocol PrivateMediaUploadServiceProtocol {
 enum PrivateMediaDecoder {
     static func decode(from dict: [String: Any]) -> PrivateMedia? {
         // iconType 严格 1/2
-        guard let iconType = dict["iconType"] as? Int, iconType == 1 || iconType == 2 else {
+        guard let iconType = Self.decodeInt(dict["iconType"]), iconType == 1 || iconType == 2 else {
             return nil
         }
 
@@ -184,15 +193,23 @@ enum PrivateMediaDecoder {
 
         // giftId：响应字段名 gift，支持 String / Int（rule ios-decode-userid-compat）
         var giftIdStr: String?
-        if let s = dict["gift"] as? String, !s.isEmpty {
+        if let s = (dict["gift"] as? String) ?? (dict["giftId"] as? String), !s.isEmpty {
             giftIdStr = s
-        } else if let n = dict["gift"] as? NSNumber {
+        } else if let n = (dict["gift"] as? NSNumber) ?? (dict["giftId"] as? NSNumber) {
             let cType = String(cString: n.objCType)
             if cType != "c" && cType != "B" {
                 giftIdStr = n.stringValue
             }
         }
         guard let giftId = giftIdStr, !giftId.isEmpty else { return nil }
+
+        let giftPrice = Self.decodeInt(dict["giftPrice"])
+            ?? Self.decodeInt(dict["giftPriceSnapshot"])
+        let sendFlag = Self.decodeBool(dict["sendFlag"])
+            ?? Self.decodeBool(dict["canSend"])
+            ?? true
+        let auditStatus = Self.decodeInt(dict["privateAuditStatus"])
+            ?? Self.decodeInt(dict["auditStatus"])
 
         return PrivateMedia(
             id: id,
@@ -202,8 +219,32 @@ enum PrivateMediaDecoder {
             signedAt: nil,
             giftId: giftId,
             giftName: dict["giftName"] as? String,
-            giftPrice: dict["giftPrice"] as? Int
+            giftPrice: giftPrice,
+            sendFlag: sendFlag,
+            privateAuditStatus: auditStatus,
+            auditReason: dict["auditReason"] as? String
         )
+    }
+
+    private static func decodeInt(_ value: Any?) -> Int? {
+        if let int = value as? Int { return int }
+        if let number = value as? NSNumber { return number.intValue }
+        if let string = value as? String { return Int(string) }
+        return nil
+    }
+
+    private static func decodeBool(_ value: Any?) -> Bool? {
+        if let bool = value as? Bool { return bool }
+        if let number = value as? NSNumber { return number.boolValue }
+        if let int = value as? Int { return int != 0 }
+        if let string = value as? String {
+            switch string.lowercased() {
+            case "true", "1": return true
+            case "false", "0": return false
+            default: return nil
+            }
+        }
+        return nil
     }
 
     /// 批量解析：跳过非法项，保留合法项。

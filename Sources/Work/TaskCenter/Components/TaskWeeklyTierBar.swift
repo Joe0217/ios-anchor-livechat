@@ -7,7 +7,7 @@ import SwiftUI
 ///
 /// **节点定位策略**:档位位置**平均分配**进度条宽度(x = index / (count - 1)),
 /// 不按 threshold 数值比例(1.2k 到 59k 差 50 倍,按比例前 4 档会挤在最左侧)。
-/// 进度条填充长度按"已达到的最大 tier 索引"派生,与档位位置一致。
+/// 进度条在当前已达档与下一档之间按进度线性插值，节点位置保持等距。
 struct TaskWeeklyTierBar: View {
     let task: TaskItemVO
     let isClaimingTier: (Int) -> Bool
@@ -20,19 +20,19 @@ struct TaskWeeklyTierBar: View {
 
     private var tierCount: Int { sortedTiers.count }
 
-    /// 已达到的最大 tier 索引(progress ≥ threshold);-1 表示未达任何档。
-    private var reachedIndex: Int {
-        var idx = -1
-        for (i, t) in sortedTiers.enumerated() where task.progress >= t.threshold {
-            idx = i
-        }
-        return idx
-    }
-
-    /// 进度条填充比:填到 reachedIndex 对应档位的 x 位置(与档位对齐,视觉一致)
+    /// 进度条填充比：H5 在已达档位和下一档位之间按当前进度线性插值。
     private var progressRatio: CGFloat {
-        guard tierCount > 1, reachedIndex >= 0 else { return 0 }
-        return CGFloat(reachedIndex) / CGFloat(tierCount - 1)
+        guard tierCount > 1 else { return 0 }
+        let reachedCount = sortedTiers.filter { task.progress >= $0.threshold }.count
+        guard reachedCount > 0 else { return 0 }
+        guard reachedCount < tierCount else { return 1 }
+        let baseIndex = reachedCount - 1
+        let previous = sortedTiers[baseIndex].threshold
+        let next = sortedTiers[baseIndex + 1].threshold
+        let partial = next > previous
+            ? min(1, max(0, CGFloat(task.progress - previous) / CGFloat(next - previous)))
+            : 0
+        return (CGFloat(baseIndex) + partial) / CGFloat(tierCount - 1)
     }
 
     /// 单档 x 位置:平均分配进度条宽度
@@ -90,7 +90,7 @@ struct TaskWeeklyTierBar: View {
                 ZStack(alignment: .leading) {
                     ForEach(Array(sortedTiers.enumerated()), id: \.element.tier) { i, t in
                         HStack(spacing: 3) {
-                            Image("coins")
+                            Image(rewardIconName(for: t))
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
                                 .frame(width: 12, height: 12)
@@ -131,6 +131,14 @@ struct TaskWeeklyTierBar: View {
         }
         .buttonStyle(.plain)
         .disabled(!t.isClaimable || isClaimingTier(t.tier))
+    }
+
+    private func rewardIconName(for tier: TaskTierVO) -> String {
+        switch tier.rewardType {
+        case 2: return "homeRankDiamondPurple"
+        case 6: return "homeRankIntegral"
+        default: return "diamondYellow"
+        }
     }
 
     /// 数字缩略:1200 → "1.2k",7500 → "7.5k",59000 → "59k"

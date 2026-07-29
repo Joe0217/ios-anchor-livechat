@@ -1,5 +1,27 @@
 import SwiftUI
 
+private let pointsRankScrollCoordinateSpace = "PointsRankScroll"
+
+private struct PointsRankScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct PointsRankScrollOffsetMarker: View {
+    var body: some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: PointsRankScrollOffsetPreferenceKey.self,
+                value: proxy.frame(in: .named(pointsRankScrollCoordinateSpace)).minY
+            )
+        }
+        .frame(height: 0)
+    }
+}
+
 /// Phase E —— 积分排行榜主页。对齐 H5 [`views/pointsRank/index.vue`](../../../../Desktop/HN/anchor-livechat-h5/src/views/pointsRank/index.vue)。
 ///
 /// **布局**:
@@ -12,9 +34,11 @@ struct PointsRankView: View {
     @StateObject private var store = PointsRankStore()
     @State private var showRulesSheet = false
     @State private var enteredAt = Date()
+    @State private var isNavigationBarScrolled = false
 
     var body: some View {
         ScrollView {
+            PointsRankScrollOffsetMarker()
             VStack(spacing: 0) {
                 headerArea
 
@@ -28,6 +52,7 @@ struct PointsRankView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .coordinateSpace(name: pointsRankScrollCoordinateSpace)
         .scrollIndicators(.hidden)
         .background(
             Image("homePointsBackground")
@@ -37,8 +62,8 @@ struct PointsRankView: View {
         .refreshable { await store.refresh() }
         .navigationTitle(L10n.pointsRankNavTitle)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color(hex: 0x613AF4), for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(.ultraThinMaterial.opacity(0.30), for: .navigationBar)
+        .toolbarBackground(isNavigationBarScrolled ? .visible : .hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -59,6 +84,7 @@ struct PointsRankView: View {
             HomeRankingAnalytics.report("h_rank_view", properties: ["type": "point", "page": "", "path": "mine"])
             store.onAppear()
         }
+        .onPreferenceChange(PointsRankScrollOffsetPreferenceKey.self, perform: updateNavigationBar)
         .onDisappear {
             let duration = Int(Date().timeIntervalSince(enteredAt) * 1_000)
             HomeRankingAnalytics.report("h_rank_leave", properties: ["type": "point", "duration": "\(duration)"])
@@ -106,6 +132,12 @@ struct PointsRankView: View {
         .background(Color(hex: 0x2B213E))
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .padding(.horizontal, 0)
+    }
+
+    private func updateNavigationBar(_ offset: CGFloat) {
+        let shouldShowBackground = offset < -8
+        guard shouldShowBackground != isNavigationBarScrolled else { return }
+        isNavigationBarScrolled = shouldShowBackground
     }
 
 }

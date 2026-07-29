@@ -7,7 +7,6 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "TaskCen
 /// `/api/ranking/anchorRanking` 的 method + path 字面
 /// (对齐 [api-http-method-strict](.claude/rules/api-http-method-strict.md))。
 ///
-/// 首版**不做 legacy fallback** —— 生产 taskCenter/* 应稳定;失败走 Store.State.error(msg, previous:) + Retry。
 protocol TaskCenterServiceProtocol {
     func initTaskCenter() async throws
     func list(cycle: TaskCycle) async throws -> [TaskModuleGroupVO]
@@ -15,8 +14,10 @@ protocol TaskCenterServiceProtocol {
     func claimAll(taskId: Int) async throws -> TaskClaimAllVO
     func weeklyOverview() async throws -> WeeklyOverviewVO
     func anchorRanking() async throws -> TaskRankInfoVO
-    /// H5 并行调用的 V2 —— iOS 不消费返回,仅保留请求以对齐 H5 行为(埋点/流量统计一致)
-    func anchorRankingV2() async
+    /// H5 灰度期日任务降级数据。
+    func legacyDailyTasks() async throws -> LegacyDailyTasksVO
+    /// 旧版日任务领奖；仅在降级列表中使用。
+    func claimLegacyTask(taskId: Int) async throws
 }
 
 final class TaskCenterService: TaskCenterServiceProtocol {
@@ -105,23 +106,22 @@ final class TaskCenterService: TaskCenterServiceProtocol {
         return try JSONDecoder().decode(TaskRankInfoVO.self, from: data)
     }
 
-    /// H5 index.vue L48-56 `getAnchorRankingV2List` —— 与 V1 并行调用。
-    /// V2 返回体仅在 legacy fallback(useTaskCenter=false)时被消费(allDayTask/isLimitTask)。
-    /// iOS 决策不做 legacy fallback,但仍**保留调用**与 H5 行为对齐(便于后端流量统计一致)。
-    /// 失败静默,返回值 iOS 不消费。
-    func anchorRankingV2() async {
-        do {
-            _ = try await APIClient.shared.post(
-                "/api/ranking/anchorRankingV2",
-                body: [:]
-            )
-            #if DEBUG
-            logger.debug("anchorRankingV2 OK (returned but not consumed)")
-            #endif
-        } catch {
-            #if DEBUG
-            logger.debug("anchorRankingV2 failed (silent): \(String(describing: error), privacy: .private)")
-            #endif
-        }
+    func legacyDailyTasks() async throws -> LegacyDailyTasksVO {
+        let data = try await APIClient.shared.post(
+            "/api/task/v2/get",
+            body: [:]
+        )
+        #if DEBUG
+        let raw = String(data: data, encoding: .utf8) ?? "<binary>"
+        logger.debug("legacyDailyTasks raw=\(raw, privacy: .private)")
+        #endif
+        return try JSONDecoder().decode(LegacyDailyTasksVO.self, from: data)
+    }
+
+    func claimLegacyTask(taskId: Int) async throws {
+        _ = try await APIClient.shared.post(
+            "/api/task/getReward",
+            body: ["taskId": taskId]
+        )
     }
 }
