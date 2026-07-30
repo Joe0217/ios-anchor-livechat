@@ -707,6 +707,12 @@ enum L10n {
         static var superWheelOutFormat: String { localize("partyRoom.superWheel.outFormat", comment: "Super Winner 淘汰提示，%@ = 昵称") }
         static var superWheelWinnerFormat: String { localize("partyRoom.superWheel.winnerFormat", comment: "Super Winner 获胜提示，%@ = 昵称，%lld = 奖励") }
         static var superWheelActionFailed: String { localize("partyRoom.superWheel.actionFailed", comment: "Super Winner 操作失败提示") }
+        static var superWheelGetReady: String { localize("partyRoom.superWheel.getReady", comment: "Super Winner 准备阶段提示") }
+        static var superWheelJoined: String { localize("partyRoom.superWheel.joined", comment: "Super Winner 已报名") }
+        static var superWheelSpectating: String { localize("partyRoom.superWheel.spectating", comment: "Super Winner 观战提示") }
+        static var superWheelWinningRatio: String { localize("partyRoom.superWheel.winningRatio", comment: "Super Winner 胜率标签") }
+        static var superWheelNextRound: String { localize("partyRoom.superWheel.nextRound", comment: "Super Winner 淘汰后下一轮提示") }
+        static var superWheelRewardHint: String { localize("partyRoom.superWheel.rewardHint", comment: "Super Winner 开局奖励说明") }
 
         // 公屏 tab strip（PartyRoomChatTabStrip）
         static var tabAll: String { localize("partyRoom.tab.all", comment: "公屏 tab All") }
@@ -2720,6 +2726,47 @@ enum L10n {
         static var livenessUploadFailed: String { localize("wallet.livenessUploadFailed", comment: "Face upload failure") }
     }
 
+    // MARK: - Lottery (native activity chance draw)
+    enum Lottery {
+        static var title: String { localize("lottery.title", comment: "Activity lottery title fallback") }
+        static var loadFailed: String { localize("lottery.loadFailed", comment: "Lottery activity load failure") }
+        static var unsupportedPrizeLayout: String { localize("lottery.unsupportedPrizeLayout", comment: "Unsupported prize grid count") }
+        static var noPrizeReturned: String { localize("lottery.noPrizeReturned", comment: "Draw response missing prize list") }
+        static var pleaseWait: String { localize("lottery.pleaseWait", comment: "Lottery action is in progress") }
+        static var notStarted: String { localize("lottery.notStarted", comment: "Lottery activity not started") }
+        static var ended: String { localize("lottery.ended", comment: "Lottery activity ended") }
+        static var insufficientChances: String { localize("lottery.insufficientChances", comment: "Lottery chance balance insufficient") }
+        static var drawFailed: String { localize("lottery.drawFailed", comment: "Lottery draw failed") }
+        static var drawReconciled: String { localize("lottery.drawReconciled", comment: "Lottery draw result uncertain and refreshed") }
+        static var records: String { localize("lottery.records", comment: "Lottery reward records") }
+        static var recordsLoadFailed: String { localize("lottery.recordsLoadFailed", comment: "Lottery record load failure") }
+        static var recordsEmpty: String { localize("lottery.recordsEmpty", comment: "Lottery records empty") }
+        static var recordsEnd: String { localize("lottery.recordsEnd", comment: "Lottery records pagination end") }
+        static var oneTime: String { localize("lottery.oneTime", comment: "Draw once") }
+        static var fiveTimes: String { localize("lottery.fiveTimes", comment: "Draw five times") }
+        static var draw: String { localize("lottery.draw", comment: "Center draw action") }
+        static var congratulations: String { localize("lottery.congratulations", comment: "Lottery result title") }
+        static var earnChancesHint: String { localize("lottery.earnChancesHint", comment: "How to earn lottery chances") }
+        static var earnChancesPartyHint: String { localize("lottery.earnChancesPartyHint", comment: "How to earn lottery chances in Party only activity") }
+        static var go: String { localize("lottery.go", comment: "Lottery persistent room guidance action") }
+        static var insufficientTitle: String { localize("lottery.insufficientTitle", comment: "Insufficient lottery chances popup title") }
+        static var insufficientMessage: String { localize("lottery.insufficientMessage", comment: "Insufficient lottery chances popup message") }
+        static var goPartyRoom: String { localize("lottery.goPartyRoom", comment: "Lottery insufficient popup Party destination") }
+        static var goLiveRoom: String { localize("lottery.goLiveRoom", comment: "Lottery insufficient popup Live destination") }
+        static var noPartyRoomsAvailable: String { localize("lottery.noPartyRoomsAvailable", comment: "Lottery Party destination has no room") }
+        static var noLiveAvailable: String { localize("lottery.noLiveAvailable", comment: "Lottery Live destination has no room") }
+        static var roomNavigationFailed: String { localize("lottery.roomNavigationFailed", comment: "Lottery destination request failed") }
+        static var startsIn: String { localize("lottery.startsIn", comment: "Lottery countdown before start") }
+        static var endsIn: String { localize("lottery.endsIn", comment: "Lottery countdown before end") }
+        static var remainingChancesFormat: String { localize("lottery.remainingChancesFormat", comment: "Remaining lottery chances %d") }
+        static var pointsNeededFormat: String { localize("lottery.pointsNeededFormat", comment: "Points still needed for a chance %d") }
+        static var dailyLimitFormat: String { localize("lottery.dailyLimitFormat", comment: "Daily chance limit %d/%d") }
+        static var dailyLimitReached: String { localize("lottery.dailyLimitReached", comment: "Daily chance limit reached without configured quota") }
+        static var winnerFormat: String { localize("lottery.winnerFormat", comment: "Lottery winner marquee %@ %@") }
+        static var validDaysFormat: String { localize("lottery.validDaysFormat", comment: "Prize valid days %d") }
+        static var quantityFormat: String { localize("lottery.quantityFormat", comment: "Prize quantity %d") }
+    }
+
     // MARK: - Invite（安卓主播端为行为基准）
     enum Invite {
         static var title: String { localize("invite.title", comment: "邀请页标题") }
@@ -2804,9 +2851,3 @@ enum L10n {
         static var startChat: String { localize("invite.startChat", comment: "开始聊天") }
     }
 }
-        static var superWheelGetReady: String { localize("partyRoom.superWheel.getReady", comment: "Super Winner 准备阶段提示") }
-        static var superWheelJoined: String { localize("partyRoom.superWheel.joined", comment: "Super Winner 已报名") }
-        static var superWheelSpectating: String { localize("partyRoom.superWheel.spectating", comment: "Super Winner 观战提示") }
-        static var superWheelWinningRatio: String { localize("partyRoom.superWheel.winningRatio", comment: "Super Winner 胜率标签") }
-        static var superWheelNextRound: String { localize("partyRoom.superWheel.nextRound", comment: "Super Winner 淘汰后下一轮提示") }
-        static var superWheelRewardHint: String { localize("partyRoom.superWheel.rewardHint", comment: "Super Winner 开局奖励说明") }

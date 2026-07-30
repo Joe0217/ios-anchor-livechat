@@ -26,6 +26,7 @@ enum PartyRoomEntryPath: String, Hashable {
     case partyRecent = "partyroom_recent"
     case myRoom = "float_btn"
     case partyHomeBanner = "partyHome_banner"
+    case activityLottery = "activity_lottery"
     case search = "partyroom_search"
     case rankRoom = "rank_room"
     case topRoomGuide = "top_room_guide"

@@ -128,6 +128,9 @@ targets:
         # 数数 ThinkingData：仅占位，真实值只保存在本机 xcconfig。
         HilyThinkingDataAppID: $(HILY_THINKING_DATA_APP_ID)
         HilyThinkingDataServerURL: $(HILY_THINKING_DATA_SERVER_URL)
+        # Sentry：仅占位，真实 DSN 只保存在本机 xcconfig。
+        HilySentryDSN: $(HILY_SENTRY_DSN)
+        HilySentryEnvironment: $(HILY_SENTRY_ENVIRONMENT)
         # 轻量 WebView 微应用：由本地 xcconfig 按环境注入静态入口（不含 token / API 密钥）。
         HilyWebFeatureBaseURL: $(HILY_WEB_FEATURE_BASE_URL)
 
@@ -407,6 +410,15 @@ targets:
       # H 里程碑 · 直播间任务面板(LiveGiftTask)Step 1a：Model + Service protocol + 4 Store 全部零 SDK 依赖
       # 依赖：CodableExtensions (decodeFlexibleInt) + TaskCenterModels (ActiveTycoonTaskVO 复用)
       - path: Sources/Core/Extensions/CodableExtensions.swift
+      # J 里程碑：独立活动抽奖的纯数据/状态层。真实 Service 依赖 APIClient，但可通过协议注入 Fake 验证。
+      - path: Sources/L10n.swift
+      - path: Sources/DesignSystem/Theme.swift
+      - path: Sources/Core/UI/ToastStyle.swift
+      - path: Sources/Core/UI/AppToastCenter.swift
+      - path: Sources/Core/Web/H5WebModels.swift
+      - path: Sources/Lottery/LotteryModels.swift
+      - path: Sources/Lottery/LotteryService.swift
+      - path: Sources/Lottery/LotteryStore.swift
       - path: Sources/Work/TaskCenter/TaskCenterModels.swift
       - path: Sources/Live/GiftTask/LiveGiftTaskModels.swift
       - path: Sources/Live/GiftTask/LiveGiftTaskService.swift

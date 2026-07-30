@@ -408,6 +408,17 @@ struct MainTabView: View {
                             EmptyView()
                         }
                     }
+                    .navigationDestination(for: LotteryRoute.self) { route in
+                        LotteryView(
+                            route: route,
+                            onOpenPartyRoom: { roomID in
+                                openLotteryPartyRoom(roomID)
+                            },
+                            onOpenLiveSettings: {
+                                openLotteryLiveSettings()
+                            }
+                        )
+                    }
                     // Home 也持有 WorkRoute destination——QuickGoLive 从 Home 内 push LiveSettings 后,
                     // LiveSettings 内嵌 NavigationLink(WorkRoute.wishSetting/.beautySettings) 也要能
                     // 在同一 stack 内 push。**必须与 Work stack 保持 case 一致**，否则从 Home 入口进入
@@ -479,7 +490,15 @@ struct MainTabView: View {
                 homePath.append(route)
             })
             .environment(\.openHomeBanner, OpenHomeBannerAction { route in
-                homePath.append(route)
+                // 只接管受信任活动域的纯 lotteryId 链接。带排行榜/任务参数或任一解析失败时
+                // 继续使用 H5 容器，避免原生页遗漏同页的活动能力。
+                if !route.isInternalH5Route,
+                   let url = URL(string: route.resolvedURLString),
+                   let lotteryRoute = LotteryRoute(url: url) {
+                    homePath.append(lotteryRoute)
+                } else {
+                    homePath.append(route)
+                }
             })
             .environment(\.liveResultTransition, liveResultTransitionAction)
             .environment(\.quickGoLive, QuickGoLiveAction {
@@ -782,6 +801,56 @@ struct MainTabView: View {
             homePath.append(route)
         case .work:
             workPath.append(route)
+        }
+    }
+
+    /// 次数不足引导的 Party 目标。抽奖不依赖进入 Party 房；仅当用户主动点击引导后，
+    /// 才由服务端给出的热门房 ID 进入对应房间。
+    private func openLotteryPartyRoom(_ roomID: String) -> Bool {
+        let trimmedRoomID = roomID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedRoomID.isEmpty, permission.canParty else {
+            AppToastCenter.shared.show(L10n.commonNoContent)
+            return false
+        }
+        guard LiveStore.shared.state != .living else {
+            AppToastCenter.shared.show(L10n.Party.mutexBlockedByLive)
+            return false
+        }
+
+        let partyStore = PartyStore.shared
+        guard partyStore.roomState == .idle || partyStore.roomState == .ended else {
+            // 与 H5 原生宿主一致：已经在房间内时不跨房，避免中断已有 RTC/IM 会话。
+            AppToastCenter.shared.show(L10n.Party.mutexBlockedByParty)
+            return false
+        }
+
+        suppressPathClearOnTabChange = true
+        selection = .party
+        partyPath = NavigationPath([
+            PartyRoute.room(id: trimmedRoomID, password: nil, entryPath: .activityLottery)
+        ])
+        DispatchQueue.main.async { suppressPathClearOnTabChange = false }
+        return true
+    }
+
+    /// Live 引导继续复用主播开播设置流。`getRoomId(roomType: 0)` 只证明服务端当前存在可用直播，
+    /// 不能将它误解为主播端可直接构造的 AudienceLiveRoomRoute。
+    private func openLotteryLiveSettings() -> Bool {
+        let partyStore = PartyStore.shared
+        switch partyStore.roomState {
+        case .idle, .ended:
+            openLiveEntry(.home)
+            return true
+        case .joined:
+            guard partyStore.isMinimized else {
+                AppToastCenter.shared.show(L10n.Party.mutexBlockedByParty)
+                return false
+            }
+            pendingLiveEntryTarget = .home
+            return true
+        case .preparing, .entering, .leaving:
+            AppToastCenter.shared.show(L10n.Party.mutexBlockedByParty)
+            return false
         }
     }
 
