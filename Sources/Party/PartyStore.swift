@@ -751,7 +751,7 @@ final class PartyStore: ObservableObject {
         // 30s 无心跳 → 强制下麦。iOS 现有 5s 心跳保活，理论上足够。
         WSHeartbeat.shared.setPartyContext(roomId: roomId, seatIndex: selfSeat?.seatIndex ?? -1)
 
-        // Step 7 (F-spec)：进房若后端返回上次记忆的私 call 礼物 giftId，异步拉一次 gift list 匹配 icon/price
+        // Step 7 (F-spec)：进房若后端返回上次记忆的私 call 礼物 giftId，异步拉 CALL 礼物面板匹配 icon/price
         // 让浮动开关按钮开启态能立即显示"上次选的礼物"预览（用户诉求 · 减少重选负担）
         Task { @MainActor in await loadPartyCallGiftMetaIfNeeded() }
 
@@ -779,23 +779,53 @@ final class PartyStore: ObservableObject {
         _ = try? await PartyAPI.exitRoom(roomId: roomId, seatIndex: -1, yxRoomId: yxRoomId)
     }
 
-    /// F 期：进房若 roomInfo.partyCallGiftId 非 nil，异步拉一次 party call gift list 找匹配 icon/price
-    /// → 缓存到 partyCallGiftIcon/Price。已缓存则跳过（避免重拉）。
+    /// 进房时，私 call 礼物价格必须以私 call 选择器（CALL 场景）的礼物面板价格为准。
+    /// `room/enter` 的同名字段是用户付款价格，不能写入浮动卡片；面板加载期间保持价格为空。
     private func loadPartyCallGiftMetaIfNeeded() async {
-        guard let giftId = roomInfo?.partyCallGiftId, !giftId.isEmpty else { return }
-        if partyCallGiftIcon != nil && partyCallGiftPrice != nil { return }
+        guard let info = roomInfo,
+              let roomId = info.id, !roomId.isEmpty,
+              let giftId = info.partyCallGiftId, !giftId.isEmpty else {
+            return
+        }
+        let entryGeneration = roomEntryGeneration
+
+        // 进房响应的价格是付款价格。无论之前的缓存状态如何，先隐藏，直到面板收益价格匹配成功。
+        partyCallGiftPrice = nil
+        if let image = info.partyCallGiftImg, !image.isEmpty {
+            partyCallGiftIcon = image
+        }
+
         do {
-            let items = try await PartyAPI.getPartyCallGiftList(scene: 2)
-            // GiftListData.id 是 Int64；roomInfo.partyCallGiftId 是 String（后端返 "62"）—— 转 String 比较
-            if let match = items.first(where: { String($0.id) == giftId }) {
-                partyCallGiftIcon = match.giftSmallImg.isEmpty ? match.giftImg : match.giftSmallImg
-                partyCallGiftPrice = Int(match.giftPrice)
+            // 私 call 的设置入口是 CommonGiftPanel.callGate，使用同一 CALL 数据源；
+            // Party 房送礼面板的目录不同，不能用它反查私 call 礼物。
+            let groups = try await DefaultGiftDataSource(scene: .call).loadGifts()
+            let match = groups.lazy
+                .flatMap(\.gifts)
+                .first { String($0.id) == giftId }
+
+            // 请求可能在切房或重新设置私 call 礼物后才返回，不能覆盖当前房间的展示状态。
+            guard roomEntryGeneration == entryGeneration,
+                  roomInfo?.id == roomId,
+                  roomInfo?.partyCallGiftId == giftId else {
+                return
+            }
+
+            if let match {
+                if partyCallGiftIcon?.isEmpty != false {
+                    partyCallGiftIcon = match.giftSmallImg.isEmpty ? match.giftImg : match.giftSmallImg
+                }
+                partyCallGiftPrice = match.giftPrice > 0 ? Int(exactly: match.giftPrice) : nil
                 AppLogger.party.info("[PartyStore] loadPartyCallGiftMeta matched giftId=\(giftId, privacy: .public) price=\(match.giftPrice, privacy: .public)")
             } else {
-                AppLogger.party.notice("[PartyStore] loadPartyCallGiftMeta giftId=\(giftId, privacy: .public) NOT FOUND in list of \(items.count, privacy: .public) items")
+                AppLogger.party.notice("[PartyStore] loadPartyCallGiftMeta giftId=\(giftId, privacy: .public) NOT FOUND in CALL gift panel")
             }
         } catch {
-            AppLogger.party.notice("[PartyStore] loadPartyCallGiftMeta failed err=\(error.localizedDescription, privacy: .private)")
+            guard roomEntryGeneration == entryGeneration,
+                  roomInfo?.id == roomId,
+                  roomInfo?.partyCallGiftId == giftId else {
+                return
+            }
+            AppLogger.party.notice("[PartyStore] loadPartyCallGiftMeta CALL gift panel failed err=\(error.localizedDescription, privacy: .private)")
         }
     }
 
