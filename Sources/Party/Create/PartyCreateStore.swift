@@ -259,9 +259,24 @@ final class PartyCreateStore: ObservableObject {
             )
             guard let id = info.id, !id.isEmpty else {
                 submitError = "createErrorNoRoomId"
+                PartyAnalytics.track(
+                    "create_partyRoom_click",
+                    properties: [
+                        "result": "fail",
+                        "modeNum": temp.id,
+                    ]
+                )
                 return
             }
             createdRoomId = id
+            PartyAnalytics.track(
+                "create_partyRoom_click",
+                properties: [
+                    "roomId": id,
+                    "result": "success",
+                    "modeNum": temp.id,
+                ]
+            )
         } catch is CancellationError {
             return
         } catch let fake as PartyCreateFakeError {
@@ -269,8 +284,16 @@ final class PartyCreateStore: ObservableObject {
             case .networkError: submitError = "network"
             case .businessError(let code, let msg): submitError = "\(code):\(msg)"
             }
+            PartyAnalytics.track(
+                "create_partyRoom_click",
+                properties: ["result": "fail", "modeNum": temp.id]
+            )
         } catch {
             submitError = error.localizedDescription
+            PartyAnalytics.track(
+                "create_partyRoom_click",
+                properties: ["result": "fail", "modeNum": temp.id]
+            )
         }
     }
 

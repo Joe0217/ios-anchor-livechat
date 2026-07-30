@@ -914,6 +914,9 @@ extension PartyBattleStore {
             return
         }
 
+        // 同一场 PK 的 1103、倒计时兜底和 state refresh 都可能重复抵达；仅首次进入 RUNNING 上报。
+        let shouldReportRunning = state?.status != .running || state?.pkId != pkId
+
         let dur = max(0, payload.durationSec ?? durationSec)
         let left = max(0, payload.leftSec ?? dur)
         var createdFallback = false
@@ -949,6 +952,19 @@ extension PartyBattleStore {
         durationSec = dur
         leftSec = left
         updatePrivateCallAvailability(for: .running)
+
+        if shouldReportRunning {
+            let info = PartyStore.shared.roomInfo
+            let fallbackRoomId = effectiveRoomId > 0 ? String(effectiveRoomId) : nil
+            var properties = PartyAnalytics.roomProperties(
+                roomId: info?.id ?? fallbackRoomId,
+                ownerId: info?.ownerId,
+                roomTempId: info?.roomTempId
+            )
+            properties["hostid"] = info?.ownerId ?? ""
+            properties["pk_id"] = pkId
+            PartyAnalytics.track("b_battle_team_start", properties: properties)
+        }
 
         // 安卓端在 NIM 驱动状态变更后会 forceRefresh；1103 本身不保证携带完整 team/top3 快照。
         if createdFallback {

@@ -9,6 +9,8 @@ import SwiftUI
 struct LiveBanner: View {
     let items: [AppPictureItem]
     var onTap: (AppPictureItem) -> Void = { _ in }
+    /// 当前页实际展示时回调。默认 no-op，供 Party 等需要按轮播页做曝光统计的场景使用。
+    var onPageDisplayed: (AppPictureItem) -> Void = { _ in }
     /// 是否处于可见/活跃状态。keep-alive 架构下 view 永远不 dismount，autoplay `.task`
     /// 也不会随切走 tab 而 cancel——此参数让父容器（LiveTabView）传"真可见"信号：
     /// `isHomeTabActive && current == .live`；不 active 时 task 立即 return，能耗归零。
@@ -54,6 +56,7 @@ struct LiveBanner: View {
             EmptyView()
         } else if items.count == 1 {
             bannerCard(items[0])
+                .onAppear { onPageDisplayed(items[0]) }
         } else {
             TabView(selection: $pageIndex) {
                 ForEach(Array(loopItems.enumerated()), id: \.offset) { index, item in
@@ -110,6 +113,15 @@ struct LiveBanner: View {
     private func handlePageChange(_ index: Int) {
         let origin = pageChangeOrigin
         pageChangeOrigin = nil
+        let isLoopCorrection: Bool
+        if case .loopCorrection? = origin {
+            isLoopCorrection = true
+        } else {
+            isLoopCorrection = false
+        }
+        if !isLoopCorrection, let displayed = item(atPageIndex: index) {
+            onPageDisplayed(displayed)
+        }
         if origin == nil {
             pauseAutoplayForManualInteraction()
         }
@@ -125,6 +137,15 @@ struct LiveBanner: View {
                 pageIndex = destination
             }
         }
+    }
+
+    private func item(atPageIndex index: Int) -> AppPictureItem? {
+        guard !items.isEmpty else { return nil }
+        if index == 0 { return items.last }
+        if index == items.count + 1 { return items.first }
+        let itemIndex = index - 1
+        guard items.indices.contains(itemIndex) else { return nil }
+        return items[itemIndex]
     }
 
     private var autoplayIntervalNanoseconds: UInt64 {

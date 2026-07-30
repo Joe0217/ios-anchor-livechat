@@ -37,6 +37,8 @@ struct PartyRoomToolsSheet: View {
     let isOwner: Bool
     /// 平台管理员（非房主）判定（MC Seat 也允许）
     let isPlatformAdmin: Bool
+    /// 工具点击仅用于埋点；由父层 fire-and-forget 处理，绝不参与工具的业务分支。
+    let onTrackToolTap: (String) -> Void
     let onTapSettings: () -> Void
     let onTapBlocklist: () -> Void
     /// spec §3 wire：Room Mode item tap → 关本 sheet + 350ms 后打开 activeRoomTool = .roomMode
@@ -71,6 +73,7 @@ struct PartyRoomToolsSheet: View {
                             label: L10n.Party.toolLockRoom,
                             isOn: isRoomLocked
                         ) {
+                            onTrackToolTap("lockRoom")
                             onTapLockRoom()
                         }
                     }
@@ -80,6 +83,7 @@ struct PartyRoomToolsSheet: View {
                             label: L10n.Party.toolMusic,
                             isOn: isMusicEnabled
                         ) {
+                            onTrackToolTap("music")
                             onTapMusic()
                         }
                     }
@@ -87,6 +91,7 @@ struct PartyRoomToolsSheet: View {
                     // android 亦通过入口 gate（PartyRoomSettingActivity.kt），非在 view 内自持角色
                     if isOwner {
                         toolItem(icon: "gearshape.fill", label: L10n.Party.toolSettings, isPrimary: true) {
+                            onTrackToolTap("settings")
                             onTapSettings()
                         }
                     }
@@ -96,14 +101,17 @@ struct PartyRoomToolsSheet: View {
                         label: L10n.Party.toolMicApplication,
                         isOn: isMicApplicationOn
                     ) {
+                        onTrackToolTap("micApplication")
                         onTapMicApplication()
                     }
                     if isOwner {
                         toolItem(icon: "square.grid.2x2.fill", label: L10n.Party.toolRoomMode) {
+                            onTrackToolTap("roomMode")
                             onTapRoomMode()
                         }
                     }
                     toolItem(icon: "person.crop.circle.badge.minus", label: L10n.Party.toolBlocklist) {
+                        onTrackToolTap("blocklist")
                         onTapBlocklist()
                     }
                     if isOwner || isPlatformAdmin {
@@ -112,6 +120,7 @@ struct PartyRoomToolsSheet: View {
                             label: L10n.Party.toolMCSeat,
                             isOn: isMCSeatEnabled
                         ) {
+                            onTrackToolTap("mcSeat")
                             onTapMCSeat()
                         }
                     }
@@ -738,12 +747,18 @@ final class PartyLuckyNumberStore: ObservableObject {
         }
     }
 
-    func generate(roomId: String) async -> Bool {
+    func generate(roomId: String, hostId: String?) async -> Bool {
         guard !roomId.isEmpty, !isGenerating else { return false }
         isGenerating = true
         defer { isGenerating = false }
+        // 对齐 H5：用户有效点击即入队，不等待生成接口成功，且不阻塞请求。
+        PartyAnalytics.track(
+            "b_lucky_number_click",
+            properties: trackingProperties(roomId: roomId, hostId: hostId)
+        )
         do {
-            return try await PartyAPI.generateLuckyNumber(roomId: roomId)
+            let generated = try await PartyAPI.generateLuckyNumber(roomId: roomId)
+            return generated
         } catch is CancellationError {
             return false
         } catch {
@@ -779,6 +794,14 @@ final class PartyLuckyNumberStore: ObservableObject {
             AppLogger.party.error("[PartyLuckyNumber] save config failed: \(String(describing: error), privacy: .private)")
             return false
         }
+    }
+
+    private func trackingProperties(roomId: String, hostId: String?) -> [String: Any] {
+        [
+            "roomid": roomId,
+            "room_id": roomId,
+            "host_id": hostId ?? "",
+        ]
     }
 
     func loadHistory(roomId: String, reset: Bool = false) async {
@@ -830,6 +853,7 @@ final class PartyLuckyNumberStore: ObservableObject {
 struct PartyRoomToolMenuSheet: View {
     @ObservedObject var luckyNumberStore: PartyLuckyNumberStore
     let roomId: String
+    let hostId: String?
     let showPk: Bool
     let showSuperWheel: Bool
     let isRoomMuted: Bool
@@ -904,7 +928,7 @@ struct PartyRoomToolMenuSheet: View {
             ZStack(alignment: .topTrailing) {
                 Button {
                     Task {
-                        guard await luckyNumberStore.generate(roomId: roomId) else { return }
+                        guard await luckyNumberStore.generate(roomId: roomId, hostId: hostId) else { return }
                         dismiss()
                         AppToastCenter.shared.show(L10n.PartyRoom.toolMenuLuckyNumberSent)
                     }
@@ -1572,6 +1596,10 @@ final class PartySuperWheelStore: ObservableObject {
                 remainCount: nil
             )
             queuePanelAfterConfigDismissal()
+            PartyAnalytics.track(
+                "h_superwheel_start",
+                properties: ["roomid": roomId, "dia": entryFee]
+            )
             await loadState(roomId: roomId, presentWhenActive: false)
         } catch let apiError as PartyAPIError {
             if case .business(let code, _) = apiError, code == "11503" {
@@ -1590,15 +1618,41 @@ final class PartySuperWheelStore: ObservableObject {
 
     func join() async {
         guard let wheelState, !isPerformingAction else { return }
+        let trackingProperties = wheelTrackingProperties(for: wheelState)
         isPerformingAction = true
         defer { isPerformingAction = false }
         do {
             try await PartyAPI.joinSuperWheel(roundId: wheelState.roundId)
+            PartyAnalytics.track("b_wheel_fill_click", properties: trackingProperties)
             await loadState(roomId: wheelState.roomId, presentWhenActive: false)
+            var resultProperties = trackingProperties
+            resultProperties["state"] = "success"
+            PartyAnalytics.track("b_wheel_join_click", properties: resultProperties)
         } catch {
+            var resultProperties = trackingProperties
+            resultProperties["state"] = "fail"
+            resultProperties["reason"] = superWheelJoinFailureReason(error)
+            PartyAnalytics.track("b_wheel_join_click", properties: resultProperties)
             AppLogger.party.notice("[SuperWheel] join failed: \(String(describing: error), privacy: .private)")
             AppToastCenter.shared.show(L10n.PartyRoom.superWheelActionFailed)
         }
+    }
+
+    private func wheelTrackingProperties(for state: PartySuperWheelState) -> [String: Any] {
+        var properties = PartyAnalytics.roomProperties(
+            roomId: state.roomId,
+            ownerId: state.hostId
+        )
+        properties["hostid"] = state.hostId ?? ""
+        properties["dia"] = state.entryFee
+        return properties
+    }
+
+    private func superWheelJoinFailureReason(_ error: Error) -> String {
+        guard case let PartyAPIError.business(code, _) = error, code == "1019" else {
+            return "error"
+        }
+        return "insufficient"
     }
 
     /// iOS 同一展示容器不能在同一更新周期内切换两个 `.sheet`。
@@ -1633,6 +1687,10 @@ final class PartySuperWheelStore: ObservableObject {
         defer { isPerformingAction = false }
         do {
             try await PartyAPI.closeSuperWheel(roundId: wheelState.roundId)
+            PartyAnalytics.track(
+                "h_superwheel_close_success",
+                properties: ["roomid": wheelState.roomId]
+            )
             await loadState(roomId: wheelState.roomId, presentWhenActive: false)
         } catch {
             AppLogger.party.notice("[SuperWheel] close failed: \(String(describing: error), privacy: .private)")
@@ -1881,6 +1939,7 @@ struct PartySuperWheelPanel: View {
     @ObservedObject var wheelStore: PartySuperWheelStore
     let isRoomOwner: Bool
     @Environment(\.dismiss) private var dismiss
+    @State private var reportedFinalRoundID: String?
 
     var body: some View {
         VStack(spacing: 16) {
@@ -1955,6 +2014,9 @@ struct PartySuperWheelPanel: View {
         }
         .padding(20)
         .preferredColorScheme(.dark)
+        .task(id: finalResultTrackingKey) {
+            reportFinalResultIfNeeded()
+        }
     }
 
     private func participantGrid(_ participants: [PartySuperWheelParticipant]) -> some View {
@@ -2025,6 +2087,21 @@ struct PartySuperWheelPanel: View {
         case 8: return L10n.PartyRoom.superWheelFinalResult
         default: return ""
         }
+    }
+
+    private var finalResultTrackingKey: String {
+        let state = wheelStore.wheelState
+        return "\(state?.roundId ?? "")-\(state?.state ?? 0)"
+    }
+
+    private func reportFinalResultIfNeeded() {
+        guard let state = wheelStore.wheelState,
+              state.state == 8,
+              reportedFinalRoundID != state.roundId else { return }
+        reportedFinalRoundID = state.roundId
+        var properties = PartyAnalytics.roomProperties(roomId: state.roomId, ownerId: state.hostId)
+        properties["dia"] = state.entryFee
+        PartyAnalytics.track("b_wheel_result_view", properties: properties)
     }
 }
 
@@ -2103,6 +2180,7 @@ private struct PartySuperWheelDial: View {
 
 struct PartySuperWheelFloatingButton: View {
     let onTap: () -> Void
+    let onVisible: () -> Void
 
     var body: some View {
         Button(action: onTap) {
@@ -2114,6 +2192,7 @@ struct PartySuperWheelFloatingButton: View {
                 .overlay(Circle().stroke(Color(hex: 0xFFDD63).opacity(0.55), lineWidth: 1))
         }
         .buttonStyle(.plain)
+        .onAppear(perform: onVisible)
         .accessibilityLabel(L10n.PartyRoom.superWheelTitle)
     }
 }

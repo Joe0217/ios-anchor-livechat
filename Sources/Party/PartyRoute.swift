@@ -21,7 +21,13 @@ enum PartyRoute: Hashable {
 
 /// 进入 Party 房的业务来源。热门房掉榜引导只允许由 `topRoomGuide` 链路继续触发。
 enum PartyRoomEntryPath: String, Hashable {
-    case standard
+    case standard = "partyroom_feed"
+    case partyFollow = "partyroom_follow"
+    case partyRecent = "partyroom_recent"
+    case myRoom = "float_btn"
+    case partyHomeBanner = "partyHome_banner"
+    case search = "partyroom_search"
+    case rankRoom = "rank_room"
     case topRoomGuide = "top_room_guide"
 }
 

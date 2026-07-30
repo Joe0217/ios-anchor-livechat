@@ -49,21 +49,25 @@ struct PartyListMainView: View {
 
     let onTapCreate: () -> Void
     /// 已有 myRoom 时点击浮动按钮的路径（v2：跳到自己的房间）
-    let onTapMyRoom: (String) -> Void
+    let onTapMyRoom: (String, PartyRoomEntryPath) -> Void
     /// v4：传完整对象让 PartyTabRootView 判密码房/其他前置逻辑
-    let onTapRoom: (PartyRoomInfo) -> Void
+    let onTapRoom: (PartyRoomInfo, PartyRoomEntryPath) -> Void
     let onTapSearch: () -> Void
     /// 右上角入口与 H5 `/party/rank?type=0` 一致。
     let onTapRanking: () -> Void
     /// H5 Party 首页 banner 的 clickType=3：进入指定 Party 房。
-    let onTapBannerRoom: (String) -> Void
+    let onTapBannerRoom: (String, PartyRoomEntryPath) -> Void
     /// 热门房奖励引导确认后，以 `top_room_guide` 来源进入目标房。
     let onEnterTopRoomGuide: (String) -> Void
 
     @State private var activeTab: Int = 0
     @StateObject private var homeBannerStore = PartyHomeBannerStore()
     @StateObject private var topRoomGuideStore = PartyTopRoomGuideStore()
-    @State private var activeBannerWeb: PartyBannerWebPresentation?
+    @State private var activeBannerPage: H5Page?
+    @State private var exposedBannerIDs: Set<String> = []
+    /// 每次切换大厅 Tab 或重新激活 Party 页都开启一次新的曝光会话。
+    @State private var lobbyExposureSessionID = UUID()
+    @State private var reportedLobbyExposureSessionID: UUID?
     @Environment(\.isPartyTabActive) private var isPartyTabActive
 
     private struct TopRoomGuideTaskKey: Hashable {
@@ -86,17 +90,26 @@ struct PartyListMainView: View {
             }
         }
         .task(id: isPartyTabActive) {
-            guard isPartyTabActive else { return }
+            guard isPartyTabActive else {
+                // 重新回到 Party 页时应产生一个新的大厅曝光，但同一次可见期间只报一次。
+                lobbyExposureSessionID = UUID()
+                reportedLobbyExposureSessionID = nil
+                return
+            }
+            // 首屏独立资源没有依赖，保持与列表并发；仅 Tab 曝光必须等待列表完成以判断 PK 标识。
+            async let loadLanguages: Void = listStore.loadLanguagesIfNeeded()
+            async let loadMyRoom: Void = listStore.loadMyRoomIfNeeded()
+            async let loadBanners: Void = homeBannerStore.loadIfNeeded()
             // v7（2026-07-14）：.idle **和** .error 都触发拉取 —— 首次失败后 tab 切走再回可自愈
             switch listStore.state {
-            case .idle, .error:
-                listStore.startInitial()
+            case .idle, .loading, .error:
+                await listStore.refreshAsync()
             default:
                 break
             }
-            await listStore.loadLanguagesIfNeeded()
-            await listStore.loadMyRoomIfNeeded()
-            await homeBannerStore.loadIfNeeded()
+            reportLobbyTabExposure(for: activeTab, sessionID: lobbyExposureSessionID)
+            _ = await (loadLanguages, loadMyRoom, loadBanners)
+            reportFirstBannerExposureIfNeeded()
         }
         .task(id: TopRoomGuideTaskKey(
             isPartyTabActive: isPartyTabActive,
@@ -112,8 +125,11 @@ struct PartyListMainView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Color.clear.frame(height: Theme.Metric.tabBarHeight)
         }
-        .sheet(item: $activeBannerWeb) { presentation in
-            H5WebContainerView(page: H5Page(url: presentation.url, title: nil))
+        .sheet(item: $activeBannerPage) { page in
+            H5WebSheetView(page: page) { action in
+                guard H5NativeActionRouter.shared.dispatch(action) else { return }
+                activeBannerPage = nil
+            }
         }
         .overlay {
             if isLobbyVisible, let guide = topRoomGuideStore.guide {
@@ -216,7 +232,7 @@ struct PartyListMainView: View {
         if listStore.didLoadMyRoom {
             if let roomId = listStore.myRoom?.id, !roomId.isEmpty {
                 Button {
-                    onTapMyRoom(roomId)
+                    onTapMyRoom(roomId, .myRoom)
                 } label: {
                     Image(systemName: "house.fill")
                         .font(.system(size: 20, weight: .medium))
@@ -258,6 +274,11 @@ struct PartyListMainView: View {
     private func languagePill(index: Int, lang: PartyLanguage) -> some View {
         let isActive = listStore.activeLanguageIndex == index
         return Button {
+            guard !isActive else { return }
+            PartyAnalytics.track(
+                "partyRoom_language_click",
+                properties: ["language_type": lang.languageName]
+            )
             listStore.setLanguage(index: index)
         } label: {
             Text(lang.languageName)
@@ -287,18 +308,24 @@ struct PartyListMainView: View {
         LiveBanner(
             items: homeBannerStore.items.map(\.liveBannerItem),
             onTap: handleHomeBannerTap,
+            onPageDisplayed: handleHomeBannerDisplayed,
             isActive: isPartyTabActive && activeTab == 0,
             autoplayInterval: 5,
             autoplayResumeDelay: 5
         )
         .padding(.horizontal, Theme.Metric.liveScreenMargin)
         .padding(.bottom, 4)
+        .onChange(of: homeBannerStore.items) { _ in
+            exposedBannerIDs.removeAll()
+            reportFirstBannerExposureIfNeeded()
+        }
     }
 
     private func handleHomeBannerTap(_ item: AppPictureItem) {
         guard let banner = homeBannerStore.items.first(where: { $0.id == item.id }) else { return }
+        reportBannerClick(banner)
         if banner.clickType == 3, let roomId = banner.partyRoomId, !roomId.isEmpty {
-            onTapBannerRoom(roomId)
+            onTapBannerRoom(roomId, .partyHomeBanner)
             return
         }
         let rawURL = banner.directUrl ?? banner.gameLink
@@ -307,7 +334,12 @@ struct PartyListMainView: View {
               let scheme = url.scheme?.lowercased(), ["http", "https"].contains(scheme) else {
             return
         }
-        activeBannerWeb = PartyBannerWebPresentation(url: url)
+        activeBannerPage = H5Page.banner(url: url)
+    }
+
+    private func handleHomeBannerDisplayed(_ item: AppPictureItem) {
+        guard let banner = homeBannerStore.items.first(where: { $0.id == item.id }) else { return }
+        reportBannerExposureIfNeeded(banner)
     }
 
     // MARK: - TabView 3 页
@@ -318,7 +350,7 @@ struct PartyListMainView: View {
                 store: listStore,
                 languages: listStore.languages,
                 myRoomID: listStore.myRoom?.id,
-                onTapRoom: onTapRoom,
+                onTapRoom: { onTapRoom($0, .standard) },
                 comingSoonOnEmpty: false
             )
                 .refreshable {
@@ -335,7 +367,7 @@ struct PartyListMainView: View {
                 store: followStore,
                 languages: listStore.languages,
                 myRoomID: listStore.myRoom?.id,
-                onTapRoom: onTapRoom,
+                onTapRoom: { onTapRoom($0, .partyFollow) },
                 comingSoonOnEmpty: false
             )
                 .refreshable { await followStore.refreshAsync() }
@@ -344,7 +376,7 @@ struct PartyListMainView: View {
                 store: recentStore,
                 languages: listStore.languages,
                 myRoomID: listStore.myRoom?.id,
-                onTapRoom: onTapRoom,
+                onTapRoom: { onTapRoom($0, .partyRecent) },
                 comingSoonOnEmpty: false
             )
                 .refreshable { await recentStore.refreshAsync() }
@@ -354,18 +386,119 @@ struct PartyListMainView: View {
         // 横滑手势/按钮点击切 tab 时首次触发对应 store 拉数据（真接口，替换 v1 占位空态）
         // v7：.idle **和** .error 都触发拉取 —— 首次失败后切走再回可自愈（对齐 Party tab .task 逻辑）
         .onChange(of: activeTab) { newValue in
-            if newValue == 1 {
-                switch followStore.state {
-                case .idle, .error: followStore.startInitial()
-                default: break
+            lobbyExposureSessionID = UUID()
+            let sessionID = lobbyExposureSessionID
+            Task { @MainActor in
+                switch newValue {
+                case 1:
+                    switch followStore.state {
+                    case .idle, .loading, .error: await followStore.refreshAsync()
+                    default: break
+                    }
+                case 2:
+                    switch recentStore.state {
+                    case .idle, .loading, .error: await recentStore.refreshAsync()
+                    default: break
+                    }
+                default:
+                    switch listStore.state {
+                    case .idle, .loading, .error: await listStore.refreshAsync()
+                    default: break
+                    }
                 }
+                reportLobbyTabExposure(for: newValue, sessionID: sessionID)
             }
-            if newValue == 2 {
-                switch recentStore.state {
-                case .idle, .error: recentStore.startInitial()
-                default: break
-                }
-            }
+        }
+    }
+
+    private var activeTabName: String {
+        switch activeTab {
+        case 1: return "Follow"
+        case 2: return "Recent"
+        default: return "Party"
+        }
+    }
+
+    private func reportLobbyTabExposure(for tab: Int, sessionID: UUID) {
+        guard isPartyTabActive,
+              isLobbyVisible,
+              activeTab == tab,
+              lobbyExposureSessionID == sessionID,
+              reportedLobbyExposureSessionID != sessionID else {
+            return
+        }
+        let rooms: [PartyRoomInfo]
+        let listState: PartyListStore.State
+        switch tab {
+        case 1:
+            rooms = followStore.displayedRooms
+            listState = followStore.state
+        case 2:
+            rooms = recentStore.displayedRooms
+            listState = recentStore.state
+        default:
+            rooms = listStore.displayedRooms
+            listState = listStore.state
+        }
+        // 初始请求未完成时 displayedRooms 为空，无法判断 PK 标识；等到首次列表状态完成后再上报。
+        switch listState {
+        case .idle, .loading, .error:
+            return
+        case .loaded, .loadingMore, .refreshing, .pageError:
+            break
+        }
+        var properties: [String: Any] = ["tab_type": activeTabName]
+        if rooms.contains(where: { ($0.pkStatus ?? 0) > 0 }) {
+            properties["logotype"] = "pk"
+        }
+        PartyAnalytics.track("partyRoom_tab_view", properties: properties)
+        reportedLobbyExposureSessionID = sessionID
+    }
+
+    private func reportFirstBannerExposureIfNeeded() {
+        guard isPartyTabActive, activeTab == 0,
+              let banner = homeBannerStore.items.first else { return }
+        reportBannerExposureIfNeeded(banner)
+    }
+
+    private func reportBannerExposureIfNeeded(_ banner: PartyHomeBanner) {
+        guard isPartyTabActive, activeTab == 0,
+              exposedBannerIDs.insert(banner.id).inserted else { return }
+        PartyAnalytics.track("b_banner_party_view", properties: bannerTrackingProperties(banner))
+        PartyAnalytics.track("b_activity_view", properties: activityTrackingProperties(banner))
+    }
+
+    private func reportBannerClick(_ banner: PartyHomeBanner) {
+        PartyAnalytics.track("b_banner_party_click", properties: bannerTrackingProperties(banner))
+        PartyAnalytics.track("b_activity_click", properties: activityTrackingProperties(banner))
+    }
+
+    private func bannerTrackingProperties(_ banner: PartyHomeBanner) -> [String: Any] {
+        [
+            "bannerid": banner.id,
+            "type": bannerAnalyticsType(banner.clickType),
+        ]
+    }
+
+    private func activityTrackingProperties(_ banner: PartyHomeBanner) -> [String: Any] {
+        let queryItems = banner.directUrl.flatMap(URLComponents.init(string:))?.queryItems ?? []
+        func queryValue(_ name: String) -> String {
+            queryItems.first(where: { $0.name == name })?.value ?? ""
+        }
+        return [
+            "name": banner.activityName ?? banner.name ?? "",
+            "type": "roomlist",
+            "taskid": queryValue("taskId"),
+            "activity_id": queryValue("activityId"),
+            "lotteryId": queryValue("lotteryId"),
+        ]
+    }
+
+    private func bannerAnalyticsType(_ clickType: Int) -> String {
+        switch clickType {
+        case 1: return "game"
+        case 2: return "rechargeservice"
+        default: return "internal"
         }
     }
 
@@ -444,10 +577,6 @@ private final class PartyHomeBannerStore: ObservableObject {
     }
 }
 
-private struct PartyBannerWebPresentation: Identifiable {
-    let url: URL
-    var id: String { url.absoluteString }
-}
 
 private enum PartyLobbyRankingTimeframe: String, CaseIterable, Identifiable {
     case day, week, month
@@ -480,6 +609,7 @@ struct PartyLobbyRankingView: View {
     @State private var rewardEntry: PartyLobbyRewardPresentation?
     @State private var userCard: UserCardPresentation?
     @State private var isNavigationBarScrolled = false
+    @State private var openedAt: Date?
     @Environment(\.dismiss) private var dismiss
 
     init(initialKind: PartyLobbyRankingKind, onOpenRoom: @escaping (String) -> Void) {
@@ -566,6 +696,29 @@ struct PartyLobbyRankingView: View {
         }
         .task(id: requestKey) {
             await store.load(kind: kind, timeframe: timeframe, period: period)
+        }
+        // H5 在首次进入、榜单类型或统计周期切换时上报浏览；周期切换不影响该事件。
+        .task(id: "\(kind.rawValue)-\(timeframe.rawValue)") {
+            PartyAnalytics.track(
+                "partyRich_Rank_view",
+                properties: [
+                    "rank_type": kind == .partyRich ? "PartyRich" : "Room",
+                    "cycle": timeframe.rawValue,
+                ]
+            )
+        }
+        .onAppear {
+            if openedAt == nil {
+                openedAt = Date()
+            }
+        }
+        .onDisappear {
+            guard let openedAt else { return }
+            PartyAnalytics.track(
+                "partyRich_leave",
+                properties: ["duration": max(0, Int(Date().timeIntervalSince(openedAt)))]
+            )
+            self.openedAt = nil
         }
         .onChange(of: kind) { _ in
             timeframe = .day

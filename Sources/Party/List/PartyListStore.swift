@@ -71,6 +71,16 @@ final class PartyListStore: ObservableObject {
 
     @Published private(set) var state: State = .idle
 
+    /// 当前视觉上保留的房间快照；仅供曝光等只读逻辑消费，不能作为分页或业务决策来源。
+    var displayedRooms: [PartyRoomInfo] {
+        switch state {
+        case .loaded(let rooms, _), .loadingMore(let rooms), .refreshing(let rooms), .pageError(let rooms, _):
+            return rooms
+        case .idle, .loading, .error:
+            return []
+        }
+    }
+
     // MARK: - 语言状态（E 增强：语言 pill 横滑）
 
     /// 首个占位为 "All"（languageCode=""）；后续 append PartyAPI.languageList 结果。

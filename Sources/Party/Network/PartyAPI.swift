@@ -1686,13 +1686,15 @@ private enum PartySuperWheelJSON {
 struct PartyHomeBanner: Decodable, Identifiable, Equatable {
     let id: String
     let picUrl: String?
+    let activityName: String?
+    let name: String?
     let directUrl: String?
     let clickType: Int
     let gameLink: String?
     let partyRoomId: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, picUrl, directUrl, clickType, gameLink, partyRoomId
+        case id, picUrl, activityName, name, directUrl, clickType, gameLink, partyRoomId
     }
 
     init(from decoder: Decoder) throws {
@@ -1705,6 +1707,8 @@ struct PartyHomeBanner: Decodable, Identifiable, Equatable {
             id = UUID().uuidString
         }
         picUrl = try? c.decode(String.self, forKey: .picUrl)
+        activityName = try? c.decode(String.self, forKey: .activityName)
+        name = try? c.decode(String.self, forKey: .name)
         directUrl = try? c.decode(String.self, forKey: .directUrl)
         if let value = try? c.decode(Int.self, forKey: .clickType) {
             clickType = value

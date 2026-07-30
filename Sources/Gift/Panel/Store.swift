@@ -180,9 +180,11 @@ final class CommonGiftPanelStore: ObservableObject {
     func switchTab(_ tab: GiftPanelTab) {
         guard config.tabs.contains(tab), tab != currentTab else { return }
         guard !isBusy else { return }
+        let previousTab = currentTab
         currentTab = tab
         // selectedId 若不在新 tab → clear（spec §2.4 不变量 + R4）
         enforceSelectionInvariant()
+        config.onTabChange?(previousTab, tab)
     }
 
     // MARK: - Count stepper
@@ -378,7 +380,7 @@ final class CommonGiftPanelStore: ObservableObject {
 
     /// Backpack icon tap（config.backpack=.visible 时才渲染 icon）
     func triggerBackpack() {
-        config.backpack.onTap?()
+        config.backpack.onTap?(currentTab)
     }
 
     // MARK: - Computed

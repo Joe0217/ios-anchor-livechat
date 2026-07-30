@@ -40,6 +40,7 @@ struct PartyRoomInputBar: View {
     let onMicApplicationTap: () -> Void
     let onQuickPhraseTap: (PartyQuickPhrase) -> Void
     let onQuickPhrasesClose: () -> Void
+    let onQuickPhraseSlide: (String) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -108,6 +109,13 @@ struct PartyRoomInputBar: View {
                     }
                     .padding(.leading, 5)
                 }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 8)
+                        .onEnded { value in
+                            guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                            onQuickPhraseSlide(value.translation.width < 0 ? "left" : "right")
+                        }
+                )
 
                 quickPhraseFade
                     .frame(width: 88)

@@ -1,4 +1,3 @@
-import SafariServices
 import SwiftUI
 import WebKit
 
@@ -47,15 +46,26 @@ struct PartyRoomView: View {
     /// H5 `footer-wrap.vue` 的房内一键发送词条；关闭仅作用于当前房间会话。
     @State private var quickPhrases: [PartyQuickPhrase] = []
     @State private var areQuickPhrasesDismissed = false
+    /// 快捷词条曝光按房间会话去重，避免重进前台或重拉列表重复计数。
+    @State private var quickPhraseImpressionRoomID: String?
+    /// H5 `b_video_seat_blocked` 的会话级计数。
+    @State private var videoSeatBlockedCount = 0
+    /// 顶部活动角标按资源唯一标识去重曝光。
+    @State private var reportedCornerBannerKey: String?
     @State private var showSelfActions: Bool = false
     @State private var showError: Bool = false
     /// 1040 视频位邀请倒计时；到零时主动回传 `respondInvite(action: 3)`。
     @State private var videoInviteRemainingSeconds: Int = 0
+    /// 视频邀请埋点仅用于记录弹窗实际展示后的用户决策，不参与接受/拒绝请求。
+    @State private var videoInviteShownAt: Date?
+    @State private var trackedVideoInviteActionId: String?
     @State private var didStartEnter: Bool = false
     /// v8 房主设置页 sheet（保留供其他路径直接触发；v8.1 主入口改走 activeRoomTool = .settings）
     @State private var showSettings: Bool = false
     /// v8.1 房间工具 sheet（enum-driven 单 sheet 切换，规避 iOS 16 双 sheet race）
     @State private var activeRoomTool: PartyRoomToolSheetKind? = nil
+    /// 当前房间工具 sheet 关闭后待打开的下一层页面；统一在 onDismiss 消费。
+    @State private var pendingRoomToolPresentation: RoomToolPresentation?
     /// 视频位邀请/麦位限制等房内操作的即时反馈 toast。
     @State private var roomActionToast: String? = nil
     /// E v2 §1：Room Mode 二次确认 sheet 之间共享的 pending tempId（模板 grid 选中 → 弹确认 sheet）
@@ -69,7 +79,7 @@ struct PartyRoomView: View {
     /// H5 用户端同款站内邀请面板。
     @State private var showShareInviteSheet: Bool = false
     /// 顶部活动 Banner 点击后的应用内网页承载，不触发 PartyRoomView 生命周期。
-    @State private var activeCornerBannerURL: PartyCornerBannerPresentation?
+    @State private var activeCornerBannerPage: PartyCornerBannerPresentation?
     /// 中奖公屏 Join 的活动半屏页；保持 Party 房 RTC/NIM 会话不断开。
     @State private var winnerActivityPage: H5Page?
     /// Party 半屏游戏承载。由右下角游戏 Banner 唯一触发，避免轮播页各自挂 sheet。
@@ -125,8 +135,7 @@ struct PartyRoomView: View {
     /// 对齐安卓 SeatRosterDialog(isAgreeOnSeatMode=true)：房主 tap Approve 时暂存申请人上下文，
     /// PartyApproveSeatPickerSheet 消费该字段列空位供房主挑选 seatIndex（避免自动挑首空位）
     @State private var approveSeatPickerCandidate: PartyMicApplication? = nil
-    /// Sheet 过渡中标志：Approve 走"关列表 sheet → 350ms → 开选座 sheet"过渡（规避 iOS 16 双 sheet race），
-    /// 中间的 activeRoomTool=nil 不应触发 onChange 清 candidate；过渡完成后立即置回 false 让手动 swipe dismiss 能正常清
+    /// Sheet 过渡中标志：当前 sheet 关闭完成前保留临时上下文，避免被 onChange 提前清除。
     @State private var isSheetTransitioning: Bool = false
 
     // MARK: - F-1a PartyBattle 状态（Task 21-22, 2026-07-17）
@@ -156,11 +165,18 @@ struct PartyRoomView: View {
     /// 顶栏 Rank / Viewers sheet enum-driven state（对齐 H5 room-rank.vue，同一 sheet 3 mode 切换；
     /// nil = 不显示。左侧财富数 tap → .contribution、荣耀数 tap → .honor、观众数 tap → .viewers）
     @State private var activeRankSheet: PartyRoomRankMode? = nil
+    /// 榜单 sheet 内点用户后的名片卡。仅在榜单完成关闭后由根容器展示，避免被 UIKit sheet 遮挡。
+    @State private var pendingUserCardPresentation: UserCardPresentation? = nil
 
     private enum ToolMenuPresentation {
         case pk
         case superWheel
         case luckyNumberSettings
+    }
+
+    private enum RoomToolPresentation {
+        case sheet(PartyRoomToolSheetKind)
+        case unlockRoom
     }
 
     // MARK: - 顶层 body
@@ -175,6 +191,10 @@ struct PartyRoomView: View {
                 peer: $chatSheetPeerYxAccid,
                 selfYxAccId: SessionStore.shared.user?.yxAccid ?? ""
             )
+            .onChange(of: userCardForUserId, perform: trackPartyUserCardPresentation)
+            .onChange(of: cornerBannerTrackingKey) { _ in
+                reportCornerBannerViewIfNeeded()
+            }
             // v16.14：不再挂 .ignoresSafeArea(.keyboard) —— 换新架构：
             // inputBar 从 contentColumn VStack 拆出到 stageContent ZStack 作独立 sibling（alignment: .bottom），
             // contentColumn 挂 .ignoresSafeArea(.keyboard) 阻止避让。SwiftUI 默认避让只作用于 inputBar 层，
@@ -210,24 +230,28 @@ struct PartyRoomView: View {
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showShareInviteSheet) { shareInviteSheet.giftPanelSheetBackground() }
-            .sheet(item: $activeCornerBannerURL) { presentation in
-                PartyActivitySafariView(url: presentation.url)
-                    .ignoresSafeArea()
+            .sheet(item: $activeCornerBannerPage) { presentation in
+                H5WebSheetView(page: presentation.page) { action in
+                    guard H5NativeActionRouter.shared.dispatch(action) else { return }
+                    activeCornerBannerPage = nil
+                }
                     .presentationDetents([.fraction(0.5), .fraction(0.8)])
                     .presentationDragIndicator(.visible)
             }
-            .sheet(item: $winnerActivityPage) { page in
+            .sheet(item: $winnerActivityPage, onDismiss: presentPendingUserCardAfterWinnerActivityDismissal) { page in
                 H5WebSheetView(page: page, onAction: handleWinnerActivityAction)
                     .presentationDetents([.fraction(0.5)])
                     .presentationDragIndicator(.visible)
             }
-            .sheet(item: $activePartyGame) { presentation in
+            .sheet(item: $activePartyGame, onDismiss: {
+                H5ActivityBridge.refreshTask()
+            }) { presentation in
                 PartyHalfScreenGameSheet(presentation: presentation)
                     .presentationDetents([.height(presentation.preferredHeight)])
                     .presentationDragIndicator(.visible)
             }
             // v8.1 房间工具 sheet（单一挂点，enum 切换 tools / settings 内嵌 push）
-            .sheet(item: $activeRoomTool) { kind in
+            .sheet(item: $activeRoomTool, onDismiss: presentPendingRoomToolPresentation) { kind in
                 if kind == .roomMode {
                     roomToolContent(kind: kind)
                         .giftPanelSheetBackground()
@@ -235,15 +259,6 @@ struct PartyRoomView: View {
                     roomToolContent(kind: kind)
                         .giftPanelSheetBackground()
                         .presentationDetents([.fraction(0.5), .fraction(0.8)])
-                }
-            }
-            // P1-7：sheet dismiss（用户 swipe 关 / closure 关都会走）清 pending seatIndex，
-            // 避免下次打开 sheet 仍带上次 pending（可能已被别人坐了）
-            // ⚠️ Approve 走"nil → 350ms → .approveSeatPicker"过渡，中间的 nil 不应清 candidate（否则 picker 打开时 candidate=nil 自动关）
-            .onChange(of: activeRoomTool) { newValue in
-                if newValue == nil, !isSheetTransitioning {
-                    pendingApplySeatIndex = nil
-                    approveSeatPickerCandidate = nil
                 }
             }
             // P1-6：开关关闭时若 sheet 仍开着 → 关 sheet + 清 pending（观众不应用旧 pending 触发新 applyMic）
@@ -258,13 +273,12 @@ struct PartyRoomView: View {
             // H-5：底部礼物 icon → CommonGiftPanel sheet（对齐 H5 party-gift-popup.vue）
             .sheet(isPresented: $showGiftPanel) { giftPanelSheet }
             // 顶栏 Rank / Viewers sheet（对齐 H5 room-rank.vue 单 sheet 3 mode 切换）
-            .sheet(item: $activeRankSheet) { mode in
+            .sheet(item: $activeRankSheet, onDismiss: presentPendingUserCardAfterRankSheetDismissal) { mode in
                 PartyRoomRankSheet(
                     initialMode: mode,
                     roomId: store.roomInfo?.id ?? roomId,
-                    onUserTap: { userId in
-                        // 先由榜单 sheet dismiss，再打开名片卡，避免 iOS 16 同时呈现两个 sheet。
-                        userCardForUserId = userId
+                    onUserTap: { preview in
+                        queueUserCardAfterRankSheetDismissal(preview)
                     }
                 )
                 .presentationDetents([.fraction(0.5), .fraction(0.8)])
@@ -358,6 +372,8 @@ struct PartyRoomView: View {
                 inviteAlertMessage
             }
             .task(id: store.pendingVideoSeatInvite?.inviteId) {
+                guard let invite = store.pendingVideoSeatInvite else { return }
+                trackVideoInviteShow(invite)
                 await runVideoSeatInviteCountdown()
             }
             .alert(L10n.Party.alertTitle, isPresented: $showError) {
@@ -404,8 +420,9 @@ struct PartyRoomView: View {
                         if $0 == nil { userCardPreview = nil }
                     }
                 ),
-                onMessageTap: { _, yxAccid in
+                onMessageTap: { userId, yxAccid in
                     guard let yxAccid, !yxAccid.isEmpty else { return }
+                    trackPartyUserCardChat(userId: userId)
                     // 对齐 H5 直播名片的 openTalkPopup：关闭名片，再由顶层挂载半屏私聊。
                     userCardForUserId = nil
                     userCardPreview = nil
@@ -426,14 +443,14 @@ struct PartyRoomView: View {
                     giftRecipientOverride = ReceiverItem(
                         id: yxAccid,
                         avatarURL: (info.avatarUrl ?? seatMatch?.avatar).flatMap(URL.init(string:)),
-                        seatIndex: seatMatch?.seatIndex
+                        seatIndex: seatMatch?.seatIndex,
+                        userId: info.userId,
+                        userType: info.userType
                     )
                     giftRecipientSelection.replace(with: [yxAccid])
-                    // 先关名片卡再拉礼物面板;延迟 0.3s 避免同帧 dismiss+present 冲突(系统 sheet)
+                    // 礼物面板由房间根容器呈现，系统 sheet 天然位于自定义名片卡 overlay 之上。
                     userCardForUserId = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        showGiftPanel = true
-                    }
+                    showGiftPanel = true
                 },
                 partyAdminContext: partyAdminContextForCard
             )
@@ -564,12 +581,19 @@ struct PartyRoomView: View {
                 .padding(.bottom, hasDisplayablePartyBanner ? 2 : 0)
             }
             if hasDisplayablePartyBanner, let banners = store.roomInfo?.bannerList {
-                PartyRoomBannerCarousel(banners: banners, onTap: handlePartyBannerTap)
+                PartyRoomBannerCarousel(
+                    banners: banners,
+                    onTap: handlePartyBannerTap,
+                    onPageDisplayed: reportPartyBannerView
+                )
             }
             // 半屏游戏暂不接入，隐藏房内游戏 Banner 入口。
             if superWheelStore.isActive {
                 PartySuperWheelFloatingButton {
+                    trackSuperWheelIcon("b_wheel_icon_click")
                     superWheelStore.isPanelPresented = true
+                } onVisible: {
+                    trackSuperWheelIcon("b_wheel_icon_view")
                 }
             }
             PartyMusicMiniWidget(
@@ -794,6 +818,75 @@ struct PartyRoomView: View {
         switch kind {
         case .wealth: activeRankSheet = .contribution
         case .honor: activeRankSheet = .honor
+        }
+    }
+
+    /// 子 sheet 只上报目标用户；由房间根容器关闭当前 sheet 后再展示名片卡。
+    /// 这样自定义名片卡 overlay 位于已关闭 sheet 的上层，不会被 UIKit presentation 遮挡。
+    private func queueUserCardAfterRankSheetDismissal(_ preview: UserCardPreview) {
+        guard !preview.userId.isEmpty,
+              preview.userId != String(SessionStore.shared.user?.userId ?? 0) else {
+            return
+        }
+        pendingUserCardPresentation = UserCardPresentation(preview: preview)
+        activeRankSheet = nil
+    }
+
+    /// `.sheet` 的 onDismiss 表示 UIKit 已完成关闭动画；这是后续 modal 的唯一呈现点。
+    private func presentPendingUserCardAfterRankSheetDismissal() {
+        guard let presentation = pendingUserCardPresentation else { return }
+        pendingUserCardPresentation = nil
+        userCardPreview = presentation.preview
+        userCardForUserId = presentation.userId
+    }
+
+    private func presentPendingUserCardAfterWinnerActivityDismissal() {
+        guard let presentation = pendingUserCardPresentation else { return }
+        pendingUserCardPresentation = nil
+        userCardPreview = presentation.preview
+        userCardForUserId = presentation.userId
+    }
+
+    /// 任何 `activeRoomTool` 内的二级页面统一在前一个 sheet 完成 dismiss 后拉起。
+    private func transitionRoomTool(to target: PartyRoomToolSheetKind) {
+        guard activeRoomTool != nil else {
+            activeRoomTool = target
+            return
+        }
+        isSheetTransitioning = true
+        pendingRoomToolPresentation = .sheet(target)
+        activeRoomTool = nil
+    }
+
+    /// 关闭工具 sheet 后再执行操作，避免操作触发的 UI 反馈被当前 sheet 遮挡。
+    private func transitionRoomToolThenUnlockRoom() {
+        guard activeRoomTool != nil else {
+            Task { await store.unlockRoom() }
+            return
+        }
+        isSheetTransitioning = true
+        pendingRoomToolPresentation = .unlockRoom
+        activeRoomTool = nil
+    }
+
+    /// UIKit 已完全移除前一个工具 sheet 后，才允许展示下一个 sheet 或执行后续操作。
+    private func presentPendingRoomToolPresentation() {
+        let pending = pendingRoomToolPresentation
+        pendingRoomToolPresentation = nil
+        isSheetTransitioning = false
+
+        guard let pending else {
+            pendingApplySeatIndex = nil
+            approveSeatPickerCandidate = nil
+            pendingRoomModeTempId = nil
+            return
+        }
+
+        switch pending {
+        case .sheet(let target):
+            activeRoomTool = target
+        case .unlockRoom:
+            Task { await store.unlockRoom() }
         }
     }
 
@@ -1176,11 +1269,7 @@ struct PartyRoomView: View {
             if let existingGiftId = store.roomInfo?.partyCallGiftId, !existingGiftId.isEmpty {
                 Task { await store.setPrivateCall(enable: true, giftId: existingGiftId) }
             } else {
-                Task { @MainActor in
-                    activeRoomTool = nil
-                    try? await Task.sleep(nanoseconds: 200_000_000)
-                    activeRoomTool = .privateCall
-                }
+                transitionRoomTool(to: .privateCall)
             }
         } else {
             Task { await store.setPrivateCall(enable: false, giftId: nil) }
@@ -1191,11 +1280,7 @@ struct PartyRoomView: View {
     /// 复用与 `handlePartyCallToggle` 开启态相同的 sheet；confirm 后走 setPrivateCall(enable: true) 更新礼物
     private func handlePartyCallGiftReselect() {
         guard !store.partyPrivateCallHiddenForPK else { return }
-        Task { @MainActor in
-            activeRoomTool = nil
-            try? await Task.sleep(nanoseconds: 200_000_000)
-            activeRoomTool = .privateCall
-        }
+        transitionRoomTool(to: .privateCall)
     }
 
     // MARK: - 底部输入 + 工具栏
@@ -1230,7 +1315,16 @@ struct PartyRoomView: View {
                 activeRoomTool = .micApplicationList
             },
             onQuickPhraseTap: sendQuickPhrase,
-            onQuickPhrasesClose: { areQuickPhrasesDismissed = true }
+            onQuickPhrasesClose: {
+                quickPhrases.forEach { trackQuickPhrase("b_quick_msg_item_close", phrase: $0) }
+                areQuickPhrasesDismissed = true
+            },
+            onQuickPhraseSlide: { direction in
+                PartyAnalytics.track(
+                    "b_quick_msg_list_slide",
+                    properties: quickPhraseTrackingProperties(["slide_direction": direction])
+                )
+            }
         )
         // v2：下内边距 20pt 让按钮行距 home indicator 更宽松呼吸位
         .padding(.bottom, 20)
@@ -1258,8 +1352,14 @@ struct PartyRoomView: View {
     }
 
     @ViewBuilder private var inviteAlertButtons: some View {
-        Button(L10n.Party.inviteAccept) { Task { await store.acceptVideoSeatInvite() } }
-        Button(L10n.Party.inviteReject, role: .cancel) { Task { await store.rejectVideoSeatInvite() } }
+        Button(L10n.Party.inviteAccept) {
+            trackVideoInviteAction("Accept")
+            Task { await store.acceptVideoSeatInvite() }
+        }
+        Button(L10n.Party.inviteReject, role: .cancel) {
+            trackVideoInviteAction("Reject")
+            Task { await store.rejectVideoSeatInvite() }
+        }
     }
 
     @ViewBuilder private var inviteAlertMessage: some View {
@@ -1288,7 +1388,40 @@ struct PartyRoomView: View {
         }
         guard !Task.isCancelled,
               store.pendingVideoSeatInvite?.inviteId == invite.inviteId else { return }
+        trackVideoInviteAction("Timeout")
         await store.timeoutVideoSeatInvite()
+    }
+
+    private func trackVideoInviteShow(_ invite: PartyVideoSeatInvite) {
+        videoInviteShownAt = Date()
+        trackedVideoInviteActionId = nil
+        var properties = PartyAnalytics.roomProperties(
+            roomId: invite.roomId ?? store.roomInfo?.id ?? roomId,
+            ownerId: invite.fromUserId ?? store.roomInfo?.ownerId,
+            roomTempId: store.roomInfo?.roomTempId
+        )
+        properties["user_id"] = SessionStore.shared.user?.userId.map(String.init) ?? ""
+        properties["host_id"] = invite.fromUserId ?? ""
+        properties["seat_index"] = invite.seatIndex
+        properties["user_identity"] = SessionStore.shared.user?.userType == 2 ? "Anchor" : "User"
+        PartyAnalytics.track("b_video_invite_show", properties: properties)
+    }
+
+    private func trackVideoInviteAction(_ action: String) {
+        guard let invite = store.pendingVideoSeatInvite,
+              trackedVideoInviteActionId != invite.inviteId else { return }
+        trackedVideoInviteActionId = invite.inviteId
+        var properties = PartyAnalytics.roomProperties(
+            roomId: invite.roomId ?? store.roomInfo?.id ?? roomId,
+            ownerId: invite.fromUserId ?? store.roomInfo?.ownerId,
+            roomTempId: store.roomInfo?.roomTempId
+        )
+        properties["user_id"] = SessionStore.shared.user?.userId.map(String.init) ?? ""
+        properties["host_id"] = invite.fromUserId ?? ""
+        properties["seat_index"] = invite.seatIndex
+        properties["action"] = action
+        properties["decision_ms"] = max(0, Int((Date().timeIntervalSince(videoInviteShownAt ?? Date())) * 1_000))
+        PartyAnalytics.track("b_video_invite_action", properties: properties)
     }
 
     private func handleVideoSeatInviteResult(_ result: PartyVideoSeatInviteResult?) {
@@ -1362,6 +1495,7 @@ struct PartyRoomView: View {
         // F 里程碑（spec §3.4 P0-2）：挂 CallStore observer 监听 PartyCall 通话结束触发 resumeParty
         // NSHashTable 多观察者数组，与 LiveStore attach 互不干扰
         CallStore.shared.attach(store)
+        reportCornerBannerViewIfNeeded()
         Task { await loadQuickPhrases() }
         guard !didStartEnter else { return }
         didStartEnter = true
@@ -1378,6 +1512,7 @@ struct PartyRoomView: View {
         guard scenePhase != .background else { return }
         // H5 小窗只卸载房间页面，RTC/IM/任务追踪仍必须继续；真正退出才执行下方清理。
         guard !store.isMinimized else { return }
+        trackVideoInviteAction("out room")
         // F 里程碑：显式 detach（NSHashTable weak 会自动清，但显式调用是最佳实践）
         CallStore.shared.detach(store)
         store.resumeAutoOfflineMonitorIfNeeded()
@@ -1445,7 +1580,7 @@ struct PartyRoomView: View {
             await store.forceLeaveRoom(.userRequest)
         }
         // v8：密码房带 password 参数（对齐 PartyAPI.enterRoom 已有 password 字段）
-        await store.enterRoom(roomId: roomId, password: password)
+        await store.enterRoom(roomId: roomId, password: password, entryPath: entryPath)
     }
 
     // MARK: - 麦位点击分流
@@ -1487,12 +1622,16 @@ struct PartyRoomView: View {
             return
         }
         if (seat.lockFlag ?? 0) == 1 {
+            if seat.isVideoSeat {
+                trackVideoSeatBlocked(seatIndex: idx)
+            }
             roomActionToast = L10n.PartyRoom.seatLockedToast
             return
         }
         // H5 `joinOrOutMic` 对普通用户的空视频位直接拦截，不能因排麦开关开启而进入申请流，
         // 也不能由已在其他麦位的状态进入切麦确认。
         if seat.seatType == PartyRoomSeatType.video.rawValue {
+            trackVideoSeatBlocked(seatIndex: idx)
             roomActionToast = L10n.PartyRoom.videoSeatNeedsInviteToast
             return
         }
@@ -1512,6 +1651,20 @@ struct PartyRoomView: View {
             return
         }
         Task { await store.requestOnSeat(seatIndex: idx) }
+    }
+
+    private func trackVideoSeatBlocked(seatIndex: Int) {
+        videoSeatBlockedCount += 1
+        var properties = PartyAnalytics.roomProperties(
+            roomId: store.roomInfo?.id ?? roomId,
+            ownerId: store.roomInfo?.ownerId,
+            roomTempId: store.roomInfo?.roomTempId
+        )
+        properties["user_id"] = SessionStore.shared.user?.userId.map(String.init) ?? ""
+        properties["seat_index"] = seatIndex
+        properties["user_identity"] = SessionStore.shared.user?.userType == 2 ? "Anchor" : "User"
+        properties["blocked_count_in_session"] = videoSeatBlockedCount
+        PartyAnalytics.track("b_video_seat_blocked", properties: properties)
     }
 
     // MARK: - v15 UserCard sheet(sheet 化后 helper computed 已删,挂载走 §.userCardSheet 一行 modifier)
@@ -1636,8 +1789,8 @@ struct PartyRoomView: View {
             }
             Button(L10n.toolInvite) {
                 adminSeatActionsTarget = nil
-                // 先关闭 confirmation dialog，再打开 sheet，避免 iOS 同帧呈现冲突。
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                // 在 confirmation dialog 状态清除后的下一轮提交根 sheet，不依赖固定动画时长。
+                DispatchQueue.main.async {
                     seatInvitePresentation = PartySeatInvitePresentation(seat: seat)
                 }
             }
@@ -1651,8 +1804,9 @@ struct PartyRoomView: View {
             if seat.isMCSeat, store.selfRole == .owner {
                 Button(L10n.Party.mcSeatChange) {
                     adminSeatActionsTarget = nil
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        activeRoomTool = .mcSeat
+                    // 与邀请页相同，确认框消失后由房间根容器呈现下一级 sheet。
+                    DispatchQueue.main.async {
+                        transitionRoomTool(to: .mcSeat)
                     }
                 }
             }
@@ -1680,6 +1834,11 @@ struct PartyRoomView: View {
                 .filter { !$0.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
                 .sorted { $0.orderNumber < $1.orderNumber }
             areQuickPhrasesDismissed = false
+            let trackingRoomID = store.roomInfo?.id ?? roomId
+            if !quickPhrases.isEmpty, quickPhraseImpressionRoomID != trackingRoomID {
+                quickPhrases.forEach { trackQuickPhrase("b_quick_phrase_impression", phrase: $0) }
+                quickPhraseImpressionRoomID = trackingRoomID
+            }
         } catch {
             quickPhrases = []
             AppLogger.party.warning("[PartyRoom] load quick phrases failed error=\(String(describing: error), privacy: .private)")
@@ -1690,8 +1849,30 @@ struct PartyRoomView: View {
     private func sendQuickPhrase(_ phrase: PartyQuickPhrase) {
         let content = phrase.content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty, store.roomState == .joined else { return }
+        trackQuickPhrase("b_quick_msg_item_click", phrase: phrase)
         store.chat.sendText(content)
         areQuickPhrasesDismissed = true
+    }
+
+    private func trackQuickPhrase(_ event: String, phrase: PartyQuickPhrase) {
+        PartyAnalytics.track(
+            event,
+            properties: quickPhraseTrackingProperties([
+                "msg_id": phrase.id,
+                "msg_content": phrase.content,
+                "msg_type": phrase.msgType ?? "normal",
+            ])
+        )
+    }
+
+    private func quickPhraseTrackingProperties(_ extra: [String: Any]) -> [String: Any] {
+        var properties = PartyAnalytics.roomProperties(
+            roomId: store.roomInfo?.id ?? roomId,
+            ownerId: store.roomInfo?.ownerId,
+            roomTempId: store.roomInfo?.roomTempId
+        )
+        extra.forEach { properties[$0.key] = $0.value }
+        return properties
     }
 
     // MARK: - 顶部工具栏 handler
@@ -1716,19 +1897,104 @@ struct PartyRoomView: View {
     /// 顶部房主头像与 H5 `openUserCard(ownerInfo.userId)` 对齐，复用房内既有名片卡承载。
     private func handleAnchorTap() {
         guard let ownerId = store.roomInfo?.ownerId, !ownerId.isEmpty else { return }
+        // 房主在 Party 协议中固定为主播，确保名片曝光的 card_type 与 H5 一致。
+        userCardPreview = UserCardPreview(userId: ownerId, userType: 2)
         userCardForUserId = ownerId
     }
 
+    private func trackPartyUserCardPresentation(_ userId: String?) {
+        guard let userId, !userId.isEmpty,
+              userId != String(SessionStore.shared.user?.userId ?? 0) else { return }
+        PartyAnalytics.track(
+            "b_party_card_popup_show",
+            properties: [
+                "card_type": userCardPreview?.userType == 2 ? "anchor" : "user",
+                "target_uid": userId,
+                "msg": "Party房用户/主播信息弹窗曝光",
+            ]
+        )
+    }
+
+    private func trackPartyUserCardChat(userId: String) {
+        PartyAnalytics.track(
+            "b_party_card_chat_click",
+            properties: [
+                "target_uid": userId,
+                "msg": "Party房主播信息弹窗点击 chat 按钮",
+            ]
+        )
+    }
+
     /// http(s) 活动在应用内展示；后端若配置自定义 scheme 则交给系统处理。
+    @MainActor
     private func handleCornerBannerTap(_ banner: PartyCornerBanner) {
         guard let rawURL = banner.directUrl, let url = URL(string: rawURL) else { return }
+        PartyAnalytics.track("b_activity_click", properties: cornerBannerActivityProperties(banner))
         presentActivityURL(url)
     }
 
     /// 右下角轮播 Banner 与顶部活动位使用同一跳转策略。
+    @MainActor
     private func handlePartyBannerTap(_ banner: PartyRoomBanner) {
         guard let rawURL = banner.directUrl, let url = URL(string: rawURL) else { return }
+        PartyAnalytics.track("b_activity_click", properties: partyBannerActivityProperties(banner))
         presentActivityURL(url)
+    }
+
+    private func reportPartyBannerView(_ banner: PartyRoomBanner) {
+        PartyAnalytics.track("b_activity_view", properties: partyBannerActivityProperties(banner))
+    }
+
+    private func partyBannerActivityProperties(_ banner: PartyRoomBanner) -> [String: Any] {
+        var properties = PartyAnalytics.roomProperties(
+            roomId: store.roomInfo?.id ?? roomId,
+            ownerId: store.roomInfo?.ownerId,
+            roomTempId: store.roomInfo?.roomTempId
+        )
+        let queryItems = banner.directUrl.flatMap(URLComponents.init(string:))?.queryItems ?? []
+        func value(_ name: String) -> String {
+            queryItems.first(where: { $0.name == name })?.value ?? ""
+        }
+        properties["name"] = banner.activityName ?? banner.name ?? ""
+        properties["type"] = "room"
+        properties["taskid"] = value("taskId")
+        properties["activity_id"] = value("activityId")
+        properties["lotteryId"] = value("lotteryId")
+        return properties
+    }
+
+    private var cornerBannerTrackingKey: String {
+        guard let banner = store.roomInfo?.cornerBannerList?.first(where: \.isDisplayable) else {
+            return ""
+        }
+        let bannerID = banner.id ?? [banner.picUrl, banner.directUrl].compactMap { $0 }.joined(separator: "|")
+        return "\(store.roomInfo?.id ?? roomId)|\(bannerID)"
+    }
+
+    private func reportCornerBannerViewIfNeeded() {
+        guard let banner = store.roomInfo?.cornerBannerList?.first(where: \.isDisplayable),
+              !cornerBannerTrackingKey.isEmpty,
+              reportedCornerBannerKey != cornerBannerTrackingKey else { return }
+        reportedCornerBannerKey = cornerBannerTrackingKey
+        PartyAnalytics.track("b_activity_view", properties: cornerBannerActivityProperties(banner))
+    }
+
+    private func cornerBannerActivityProperties(_ banner: PartyCornerBanner) -> [String: Any] {
+        var properties = PartyAnalytics.roomProperties(
+            roomId: store.roomInfo?.id ?? roomId,
+            ownerId: store.roomInfo?.ownerId,
+            roomTempId: store.roomInfo?.roomTempId
+        )
+        let queryItems = banner.directUrl.flatMap(URLComponents.init(string:))?.queryItems ?? []
+        func value(_ name: String) -> String {
+            queryItems.first(where: { $0.name == name })?.value ?? ""
+        }
+        properties["name"] = value("name")
+        properties["type"] = "room"
+        properties["taskid"] = value("taskId")
+        properties["activity_id"] = value("activityId")
+        properties["lotteryId"] = value("lotteryId")
+        return properties
     }
 
     private func handlePartyGameTap(_ game: PartyBannerGame) {
@@ -1740,9 +2006,17 @@ struct PartyRoomView: View {
         }
     }
 
+    @MainActor
     private func presentActivityURL(_ url: URL) {
         if url.scheme == "http" || url.scheme == "https" {
-            activeCornerBannerURL = PartyCornerBannerPresentation(url: url)
+            activeCornerBannerPage = PartyCornerBannerPresentation(
+                page: H5Page.banner(
+                    url: url,
+                    roomId: store.roomInfo?.id ?? roomId,
+                    roomType: "1",
+                    isInPartyRoom: true
+                )
+            )
         } else {
             UIApplication.shared.open(url)
         }
@@ -1757,10 +2031,14 @@ struct PartyRoomView: View {
             AppLogger.party.notice("[PartyWinner] ignored invalid activity URL")
             return
         }
-        winnerActivityPage = H5Page(
+        winnerActivityPage = H5Page.activity(
             url: url,
-            bridgeMode: .trusted(H5TrustedOriginPolicy(origins: [url])),
-            runtimeContext: .activity()
+            runtimeContext: .activity(
+                roomId: store.roomInfo?.id ?? roomId,
+                roomType: "1",
+                reportParams: ["path": "party"],
+                isInPartyRoom: true
+            )
         )
     }
 
@@ -1776,11 +2054,16 @@ struct PartyRoomView: View {
     @MainActor
     private func handleWinnerActivityAction(_ action: H5BridgeAction) {
         switch action {
-        case .goLive, .goRoom, .close:
+        case .close:
             winnerActivityPage = nil
+        case .goLive, .goRoom, .jumpWallet, .jumpRanking, .commonJump:
+            winnerActivityPage = nil
+            _ = H5NativeActionRouter.shared.dispatch(action)
         case .goProfile(let userId):
             winnerActivityPage = nil
-            if let userId, !userId.isEmpty { userCardForUserId = userId }
+            guard let userId, !userId.isEmpty,
+                  userId != String(SessionStore.shared.user?.userId ?? 0) else { return }
+            pendingUserCardPresentation = UserCardPresentation(userId: userId)
         default:
             break
         }
@@ -1789,6 +2072,7 @@ struct PartyRoomView: View {
     /// v9：公告只读 sheet（对齐 H5 announcement-popup.vue，MVP 只读）
     /// 房主/房管编辑权限 F 期补（PartyAPI.setAnnouncement 端点 + 编辑态 UI）。
     private func handleAnnouncementTap() {
+        trackTopbarTap("Announcement")
         showAnnouncement = true
     }
 
@@ -1797,6 +2081,7 @@ struct PartyRoomView: View {
             AppLogger.party.notice("[PartyRoom] share tapped but roomId missing")
             return
         }
+        trackTopbarTap("share")
         showShareInviteSheet = true
         AppLogger.party.info("[PartyRoom] share tapped roomId=\(rid, privacy: .public)")
     }
@@ -1804,6 +2089,7 @@ struct PartyRoomView: View {
     private var shareInviteSheet: some View {
         PartyShareInviteSheet(
             roomId: store.roomInfo?.id ?? roomId,
+            ownerId: store.roomInfo?.ownerId,
             recentSessions: MessageSessionStore.shared.sessions(in: .flame)
                 + MessageSessionStore.shared.sessions(in: .prime)
                 + MessageSessionStore.shared.sessions(in: .stranger),
@@ -1816,6 +2102,7 @@ struct PartyRoomView: View {
         // v7.4.1：房主 + admin 都能打开 tools sheet（对齐 anchorBar canManage 判定；观众依然拦下）
         // Bug 1a 已修 selfRole 优先从 selfSeat.roomRoleType 派生 → admin 权限实时生效
         if store.selfRole == .owner || store.selfRole == .admin {
+            trackTopbarTap("roomTool")
             activeRoomTool = .tools
         } else {
             AppLogger.party.notice("[PartyRoom] management tapped by audience; ignored")
@@ -1835,28 +2122,15 @@ struct PartyRoomView: View {
                 // 平台超管在 selfRole 层已提权为 .owner（PartyStore.selfRole 首判 isPlatformAdmin），此参数保留
                 // 为语义冗余安全网 —— MC Seat `if isOwner || isPlatformAdmin` 条件下双重命中
                 isPlatformAdmin: store.roomInfo?.isPlatformAdmin ?? false,
+                onTrackToolTap: trackRoomToolTap,
                 onTapSettings: {
-                    // 用 Task.sleep 一帧规避 iOS 16 sheet 切换 race
-                    Task { @MainActor in
-                        activeRoomTool = nil
-                        try? await Task.sleep(nanoseconds: 350_000_000)
-                        activeRoomTool = .settings
-                    }
+                    transitionRoomTool(to: .settings)
                 },
                 onTapBlocklist: {
-                    Task { @MainActor in
-                        activeRoomTool = nil
-                        try? await Task.sleep(nanoseconds: 350_000_000)
-                        activeRoomTool = .blocklist
-                    }
+                    transitionRoomTool(to: .blocklist)
                 },
                 onTapRoomMode: {
-                    // E v2 §1：切 Room Mode 模板 grid sheet
-                    Task { @MainActor in
-                        activeRoomTool = nil
-                        try? await Task.sleep(nanoseconds: 350_000_000)
-                        activeRoomTool = .roomMode
-                    }
+                    transitionRoomTool(to: .roomMode)
                 },
                 onTapMicApplication: {
                     // H5 room-mana-popup 直接切换排麦开关；申请列表仍由底栏申请入口打开。
@@ -1865,7 +2139,7 @@ struct PartyRoomView: View {
                     if alreadyConfirmed {
                         Task { await store.toggleMicApplicationSwitch(enable: willEnable) }
                     } else {
-                        activeRoomTool = .micApplicationSwitchConfirm
+                        transitionRoomTool(to: .micApplicationSwitchConfirm)
                     }
                 },
                 isRoomLocked: store.roomInfo?.lockFlag == 1,
@@ -1879,17 +2153,9 @@ struct PartyRoomView: View {
                 onTapLockRoom: {
                     // spec §3.4：已锁态直接调 unlockRoom（无弹窗）；未锁态才弹密码输入 sheet
                     if store.roomInfo?.lockFlag == 1 {
-                        Task { @MainActor in
-                            activeRoomTool = nil
-                            try? await Task.sleep(nanoseconds: 200_000_000)
-                            await store.unlockRoom()
-                        }
+                        transitionRoomToolThenUnlockRoom()
                     } else {
-                        Task { @MainActor in
-                            activeRoomTool = nil
-                            try? await Task.sleep(nanoseconds: 350_000_000)
-                            activeRoomTool = .lockRoom
-                        }
+                        transitionRoomTool(to: .lockRoom)
                     }
                 },
                 onTapMCSeat: {
@@ -1897,11 +2163,7 @@ struct PartyRoomView: View {
                     if store.seatList.contains(where: { $0.isMCSeat }) {
                         Task { await store.closeMCSeat() }
                     } else {
-                        Task { @MainActor in
-                            activeRoomTool = nil
-                            try? await Task.sleep(nanoseconds: 350_000_000)
-                            activeRoomTool = .mcSeat
-                        }
+                        transitionRoomTool(to: .mcSeat)
                     }
                 }
             )
@@ -1941,12 +2203,8 @@ struct PartyRoomView: View {
             PartyRoomModeSheet(
                 store: store,
                 onConfirmRequest: { tempId in
-                    Task { @MainActor in
-                        activeRoomTool = nil
-                        try? await Task.sleep(nanoseconds: 350_000_000)
-                        pendingRoomModeTempId = tempId
-                        activeRoomTool = .roomModeConfirm
-                    }
+                    pendingRoomModeTempId = tempId
+                    transitionRoomTool(to: .roomModeConfirm)
                 }
             )
             .preferredColorScheme(.dark)
@@ -1989,11 +2247,7 @@ struct PartyRoomView: View {
                         Task { await store.toggleMicApplicationSwitch(enable: willEnable) }
                         return
                     }
-                    Task { @MainActor in
-                        activeRoomTool = nil
-                        try? await Task.sleep(nanoseconds: 350_000_000)
-                        activeRoomTool = .micApplicationSwitchConfirm
-                    }
+                    transitionRoomTool(to: .micApplicationSwitchConfirm)
                 }, onDismissAfterCancel: {
                     // 对齐安卓 §3.7 giveUpApplyMic → dismiss 弹窗
                     pendingApplySeatIndex = nil
@@ -2002,17 +2256,9 @@ struct PartyRoomView: View {
                     // 对齐安卓 §3.3 h_applySeat 提交后清 pending，避免重复消费；等 IM 分流后 sheet 内 CTA 变"放弃申请"
                     pendingApplySeatIndex = nil
                 }, onTapApprove: { item in
-                    // 对齐安卓 SeatRosterDialog(isAgreeOnSeatMode=true)：房主 tap Approve → 弹选座 sheet
-                    // 关当前 sheet + 350ms 后打开 approveSeatPicker（规避 iOS 16 双 sheet race）
-                    // isSheetTransitioning=true 让中间的 activeRoomTool=nil 不触发 onChange 清 candidate
+                    // 对齐安卓 SeatRosterDialog(isAgreeOnSeatMode=true)：关闭列表后再打开选座页。
                     approveSeatPickerCandidate = item
-                    isSheetTransitioning = true
-                    Task { @MainActor in
-                        activeRoomTool = nil
-                        try? await Task.sleep(nanoseconds: 350_000_000)
-                        activeRoomTool = .approveSeatPicker
-                        isSheetTransitioning = false
-                    }
+                    transitionRoomTool(to: .approveSeatPicker)
                 })
             }
             .preferredColorScheme(.dark)
@@ -2127,6 +2373,7 @@ struct PartyRoomView: View {
     /// v9：更多菜单（对齐 H5 more-tool-popup.vue Minimize + Exit 二选一）
     /// 目前 Minimize（PiP）留 F 期，MVP 只提供 Exit + Cancel。
     private func handleMoreTap() {
+        trackTopbarTap("more")
         showMoreActions = true
     }
 
@@ -2146,12 +2393,58 @@ struct PartyRoomView: View {
     /// v12：消息按钮（对齐 H5 footer-wrap.vue onClickMsgBtn → partyStore.openPartyMessage()）
     /// A 档接入：复用 Live 侧 ConversationSheetContent 半屏消息列表
     private func handleMessageTap() {
+        PartyAnalytics.track("msg_view", properties: ["path": "party_drawer"])
         showMessageSheet = true
     }
 
     /// H5 `party-tool-menu.vue` 聚合工具面板入口。
     private func handleToolMenuTap() {
+        PartyAnalytics.track(
+            "b_party_menu_click",
+            properties: roomAnalyticsProperties()
+        )
         showToolMenu = true
+    }
+
+    private func roomAnalyticsProperties() -> [String: Any] {
+        var properties = PartyAnalytics.roomProperties(
+            roomId: store.roomInfo?.id ?? roomId,
+            ownerId: store.roomInfo?.ownerId,
+            roomTempId: store.roomInfo?.roomTempId
+        )
+        properties["host_id"] = store.roomInfo?.ownerId ?? ""
+        return properties
+    }
+
+    private func trackTopbarTap(_ type: String) {
+        var properties = PartyAnalytics.roomProperties(
+            roomId: store.roomInfo?.id ?? roomId,
+            ownerId: store.roomInfo?.ownerId,
+            roomTempId: store.roomInfo?.roomTempId
+        )
+        properties["type"] = type
+        PartyAnalytics.track("partyRoom_topbar_click", properties: properties)
+    }
+
+    private func trackRoomToolTap(_ type: String) {
+        var properties = PartyAnalytics.roomProperties(
+            roomId: store.roomInfo?.id ?? roomId,
+            ownerId: store.roomInfo?.ownerId,
+            roomTempId: store.roomInfo?.roomTempId
+        )
+        properties["type"] = type
+        PartyAnalytics.track("partyRoom_tool_click", properties: properties)
+    }
+
+    private func trackSuperWheelIcon(_ event: String) {
+        guard let state = superWheelStore.wheelState else { return }
+        var properties = PartyAnalytics.roomProperties(
+            roomId: state.roomId,
+            ownerId: state.hostId ?? store.roomInfo?.ownerId,
+            roomTempId: store.roomInfo?.roomTempId
+        )
+        properties["hostid"] = state.hostId ?? ""
+        PartyAnalytics.track(event, properties: properties)
     }
 
     private var hotTaskSheetPresented: Binding<Bool> {
@@ -2189,6 +2482,10 @@ struct PartyRoomView: View {
             if superWheelStore.isActive {
                 superWheelStore.isPanelPresented = true
             } else {
+                PartyAnalytics.track(
+                    "h_superwheel_config_click",
+                    properties: ["roomid": store.roomInfo?.id ?? roomId]
+                )
                 Task { await superWheelStore.prepareConfig() }
             }
         case .luckyNumberSettings:
@@ -2226,6 +2523,42 @@ struct PartyRoomView: View {
         showGiftPanel = true
     }
 
+    private func trackPartyGiftTabClick(from: GiftPanelTab, to: GiftPanelTab) {
+        PartyAnalytics.track(
+            "gift_tab_click",
+            properties: [
+                "tab_code": to.rawValue,
+                "from_tab": from.rawValue,
+                "tab_position": GiftPanelTab.allCases.firstIndex(of: to).map { $0 + 1 } ?? 0,
+                "scene": "PARTY_GIFT",
+            ]
+        )
+    }
+
+    private func trackPartyGiftTabClick(from: GiftPanelTab, toBackpack: Bool) {
+        guard toBackpack else { return }
+        PartyAnalytics.track(
+            "gift_tab_click",
+            properties: [
+                "tab_code": "backpack",
+                "from_tab": from.rawValue,
+                "tab_position": 0,
+                "scene": "PARTY_GIFT",
+            ]
+        )
+    }
+
+    private func trackPartyBackpackOpen(giftCount: Int) {
+        PartyAnalytics.track(
+            "backpack_open",
+            properties: [
+                "scene": "PARTY_GIFT",
+                // H5 `giftBackpackStore.total` is the currently loaded distinct gift count.
+                "gift_count": giftCount,
+            ]
+        )
+    }
+
     /// H-5：礼物面板 sheet 内容 —— CommonGiftPanel + `.partySend` 工厂配置。
     /// receivers 由 [PartyGiftPanelBridge.makeReceiversConfig] 从 seatList 派生（过滤空 yxAccid/自己）。
     ///
@@ -2255,9 +2588,62 @@ struct PartyRoomView: View {
         let config = CommonGiftPanelConfig.partySend(
             roomId: store.roomInfo?.id ?? roomId,
             receivers: receivers,
-            onOpenBackpack: { showPartyBackpack = true },
-            onSend: { _, _, _ in
+            onOpenBackpack: { currentTab in
+                trackPartyGiftTabClick(from: currentTab, toBackpack: true)
+                showPartyBackpack = true
+            },
+            onTabChange: { from, to in
+                trackPartyGiftTabClick(from: from, to: to)
+            },
+            onBackpackEntryShown: {
+                PartyAnalytics.track(
+                    "backpack_icon_show",
+                    properties: [
+                        "scene": "PARTY_GIFT",
+                        // 当前 iOS 入口未实现红点数据源，展示态即无红点。
+                        "has_red_dot": false,
+                    ]
+                )
+            },
+            onSend: { gift, count, receiverIds in
                 giftSentToast = L10n.giftPickerSentToast
+                let recipientCount = max(receiverIds.count, 1)
+                var properties = PartyAnalytics.roomProperties(
+                    roomId: store.roomInfo?.id ?? roomId,
+                    ownerId: store.roomInfo?.ownerId,
+                    roomTempId: store.roomInfo?.roomTempId
+                )
+                // 收礼人的业务 id / 用户类型在面板创建时随 ReceiverItem 固化；发送成功的异步回调
+                // 不能再读取会实时变化的 seatList，否则离麦或资料卡送礼会污染本次送礼事件。
+                let recipients = receiverIds.map { accid in
+                    (accid, receivers.items.first { $0.id == accid })
+                }
+                // H5 reports Party recipient business ids and derives host/user from userType, not roomRoleType.
+                properties["receive_id"] = recipients
+                    .map { $0.1?.userId ?? $0.0 }
+                    .joined(separator: ",")
+                properties["receive_role"] = recipients
+                    .map { $0.1?.userType == 2 ? "host" : "user" }
+                    .joined(separator: ",")
+                properties["gift_id"] = gift.id
+                properties["gift_num"] = count * recipientCount
+                let totalPrice = gift.giftPrice * Int64(count) * Int64(recipientCount)
+                properties["dia"] = totalPrice
+                PartyAnalytics.track("partyRoom_sent_gift", properties: properties)
+                if battleStore.isRunning || battleStore.isSelecting {
+                    PartyAnalytics.track(
+                        "gift_send_click",
+                        properties: [
+                            "path": "roompk",
+                            "hostid": store.roomInfo?.ownerId ?? "",
+                            "host_id": store.roomInfo?.ownerId ?? "",
+                            "userid": SessionStore.shared.user?.userId ?? 0,
+                            "giftid": gift.id,
+                            "giftNum": count * recipientCount,
+                            "giftdia": totalPrice,
+                        ]
+                    )
+                }
             }
         )
         VStack(spacing: 0) {
@@ -2273,6 +2659,7 @@ struct PartyRoomView: View {
                 roomId: store.roomInfo?.id ?? roomId,
                 receivers: receivers,
                 recipientSelection: giftRecipientSelection,
+                onLoaded: trackPartyBackpackOpen,
                 onSent: {
                     giftSentToast = L10n.giftPickerSentToast
                     showPartyBackpack = false
@@ -2410,16 +2797,28 @@ struct PartyRoomView: View {
     @ViewBuilder
     private var moreActionsButtons: some View {
         Button(L10n.Party.moreMenuMinimize) {
+            trackMoreAction("minimize")
             guard store.minimizeRoom() else { return }
             dismiss()
         }
         Button(L10n.PartyRoom.moreMenuLeave, role: .destructive) {
+            trackMoreAction("exit")
             // 退房逻辑（HTTP + RTC + Chat）后台跑；立即 dismiss 让用户感知不到接口延迟。
             // leaveRoom 内同步转 roomState = .leaving，handleDisappear guard 会拒绝重入，无重复请求。
             Task { await store.leaveRoom() }
             dismiss()
         }
         Button(L10n.Party.cancel, role: .cancel) {}
+    }
+
+    private func trackMoreAction(_ type: String) {
+        var properties = PartyAnalytics.roomProperties(
+            roomId: store.roomInfo?.id ?? roomId,
+            ownerId: store.roomInfo?.ownerId,
+            roomTempId: store.roomInfo?.roomTempId
+        )
+        properties["type"] = type
+        PartyAnalytics.track("partyRoom_more_click", properties: properties)
     }
 
     // MARK: - 底部工具栏覆盖层（message / toolMenu；v13 已删 apply）
@@ -2433,6 +2832,7 @@ struct PartyRoomView: View {
                 PartyRoomToolMenuSheet(
                     luckyNumberStore: luckyNumberStore,
                     roomId: store.roomInfo?.id ?? roomId,
+                    hostId: store.roomInfo?.ownerId,
                     // H5 :show-pk = roomTempId===1 && battleStore.isFunctionEnabled，再由组件按管理员身份门控。
                     showPk: battleStore.canManage
                         && battleStore.isFunctionEnabled
@@ -2443,12 +2843,24 @@ struct PartyRoomView: View {
                         pendingToolMenuPresentation = .pk
                     },
                     onOpenSuperWheel: {
+                        PartyAnalytics.track(
+                            "h_superwheel_entry_click",
+                            properties: ["roomid": store.roomInfo?.id ?? roomId]
+                        )
                         pendingToolMenuPresentation = .superWheel
                     },
                     onToggleRoomMute: {
                         store.toggleRoomMute()
                     },
                     onOpenLuckyNumberSettings: {
+                        PartyAnalytics.track(
+                            "b_lucky_number_view",
+                            properties: roomAnalyticsProperties()
+                        )
+                        PartyAnalytics.track(
+                            "b_lucky_number_setting_click",
+                            properties: roomAnalyticsProperties()
+                        )
                         pendingToolMenuPresentation = .luckyNumberSettings
                     }
                 )
@@ -2733,9 +3145,18 @@ private struct PartyShareInviteSheet: View {
             case .followers: return L10n.profileFollowers
             }
         }
+
+        var analyticsTagName: String {
+            switch self {
+            case .recent: return "Recent Chat"
+            case .following: return "Follow"
+            case .followers: return "Followers"
+            }
+        }
     }
 
     let roomId: String
+    let ownerId: String?
     let recentSessions: [MessageSession]
     let onInviteCompleted: () -> Void
 
@@ -2869,8 +3290,18 @@ private struct PartyShareInviteSheet: View {
 
     private func invite() {
         guard !selectedYxAccids.isEmpty, !isInviting else { return }
-        isInviting = true
         let invitees = Array(selectedYxAccids)
+        let selectedRecipients = recipients.filter { selectedYxAccids.contains($0.yxAccid) }
+        PartyAnalytics.track(
+            "invite_click",
+            properties: [
+                "roomHost_id": ownerId ?? "",
+                "roomID": roomId,
+                "tab": tab.analyticsTagName,
+                "inviteIds": selectedRecipients.compactMap(\.userId).joined(separator: ","),
+            ]
+        )
+        isInviting = true
         Task {
             defer { isInviting = false }
             do {
@@ -2909,20 +3340,9 @@ struct PartyShareRecipient: Decodable, Identifiable, Hashable {
     }
 }
 
-/// `SFSafariViewController` 的 SwiftUI 承载；以 sheet 展示，关闭后仍停留在当前 Party 房。
-private struct PartyActivitySafariView: UIViewControllerRepresentable {
-    let url: URL
-
-    func makeUIViewController(context: Context) -> SFSafariViewController {
-        SFSafariViewController(url: url)
-    }
-
-    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
-}
-
 private struct PartyCornerBannerPresentation: Identifiable {
-    let url: URL
-    var id: String { url.absoluteString }
+    let page: H5Page
+    var id: UUID { page.id }
 }
 
 /// 半屏游戏展示上下文。游戏页由一个唯一的房间级 sheet 承载，避免轮播中多页重复呈现。
@@ -3111,42 +3531,241 @@ private enum PartyGameURLBuilder {
     }
 }
 
-/// H5 的 iframe 半屏游戏原生承载。离开 sheet 时停止加载，防止已关闭游戏继续占用网络与 JS 计时器。
+private enum PartyGameWebState: Equatable {
+    case loading(progress: Double)
+    case ready
+    case failed
+}
+
+private enum PartyGameBridgeAction {
+    case recharge
+    case clickRecharge
+    case close
+}
+
+/// 派对游戏使用独立 bridge，不复用活动页 `App`。初始游戏域才可调用原生方法，
+/// 避免游戏内跳转到其它网页后仍保留充值或关闭能力。
 private struct PartyGameWebView: UIViewRepresentable {
     let url: URL
+    let onStateChange: (PartyGameWebState) -> Void
+    let onAction: (PartyGameBridgeAction) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(url: url, onStateChange: onStateChange, onAction: onAction)
+    }
 
     func makeUIView(context: Context) -> WKWebView {
+        let contentController = WKUserContentController()
+        contentController.addUserScript(
+            WKUserScript(
+                source: Self.bridgeScript(for: url),
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            )
+        )
+        contentController.add(context.coordinator, name: "JSBridgeService")
+
         let configuration = WKWebViewConfiguration()
-        // 游戏链接含本次会话的临时鉴权参数，关闭半屏游戏后不保留第三方 cookie/cache。
+        configuration.userContentController = contentController
+        // 游戏链接带一次性会话参数，关闭后不保留第三方 cookie/cache。
         configuration.websiteDataStore = .nonPersistent()
+        configuration.preferences.javaScriptCanOpenWindowsAutomatically = false
+
         let view = WKWebView(frame: .zero, configuration: configuration)
         view.isOpaque = false
         view.backgroundColor = .black
         view.scrollView.backgroundColor = .black
-        view.load(URLRequest(url: url))
+        view.navigationDelegate = context.coordinator
+        view.uiDelegate = context.coordinator
+        context.coordinator.attach(to: view)
+        context.coordinator.load(url)
         return view
     }
 
     func updateUIView(_ view: WKWebView, context: Context) {
-        guard view.url != url else { return }
-        view.load(URLRequest(url: url))
+        context.coordinator.load(url)
     }
 
-    static func dismantleUIView(_ view: WKWebView, coordinator: ()) {
+    static func dismantleUIView(_ view: WKWebView, coordinator: Coordinator) {
+        coordinator.detach()
         view.stopLoading()
         view.navigationDelegate = nil
         view.uiDelegate = nil
+        view.configuration.userContentController.removeScriptMessageHandler(forName: "JSBridgeService")
+        view.configuration.userContentController.removeAllUserScripts()
+        view.loadHTMLString("", baseURL: nil)
+    }
+
+    private static func bridgeScript(for url: URL) -> String {
+        let origin = normalizedOrigin(url) ?? ""
+        let originJSON = javaScriptString(origin)
+        return """
+        (function() {
+          if (window.location.origin !== \(originJSON)) return;
+          var handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.JSBridgeService;
+          if (!handler) return;
+          function post(method, payload) { handler.postMessage({ method: method, payload: payload }); }
+          var bridge = window.JSBridgeService || {};
+          bridge.OpenGameSucc = function(value) { post('OpenGameSucc', value); };
+          bridge.recharge = function() { post('recharge', null); };
+          bridge.clickRecharge = function() { post('clickRecharge', null); };
+          bridge.newTppClose = function() { post('newTppClose', null); };
+          window.JSBridgeService = bridge;
+        })();
+        """
+    }
+
+    private static func normalizedOrigin(_ url: URL) -> String? {
+        guard let scheme = url.scheme?.lowercased(),
+              let host = url.host?.lowercased(),
+              scheme == "https" || scheme == "http" else { return nil }
+        return "\(scheme)://\(host)\(url.port.map { ":\($0)" } ?? "")"
+    }
+
+    private static func javaScriptString(_ value: String) -> String {
+        let data = try? JSONSerialization.data(withJSONObject: [value])
+        let array = data.flatMap { String(data: $0, encoding: .utf8) } ?? "[\"\"]"
+        return String(array.dropFirst().dropLast())
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
+        private let allowedOrigin: String?
+        private let onStateChange: (PartyGameWebState) -> Void
+        private let onAction: (PartyGameBridgeAction) -> Void
+        private weak var webView: WKWebView?
+        private var progressObservation: NSKeyValueObservation?
+        private var pendingState: PartyGameWebState?
+        private var isStateDeliveryScheduled = false
+        private var requestedURL: URL?
+
+        init(url: URL,
+             onStateChange: @escaping (PartyGameWebState) -> Void,
+             onAction: @escaping (PartyGameBridgeAction) -> Void) {
+            allowedOrigin = PartyGameWebView.normalizedOrigin(url)
+            self.onStateChange = onStateChange
+            self.onAction = onAction
+        }
+
+        func attach(to webView: WKWebView) {
+            self.webView = webView
+            progressObservation = webView.observe(\.estimatedProgress, options: [.new]) { [weak self] view, _ in
+                guard view.isLoading else { return }
+                self?.emitState(.loading(progress: view.estimatedProgress))
+            }
+        }
+
+        func detach() {
+            progressObservation?.invalidate()
+            progressObservation = nil
+            pendingState = nil
+            webView = nil
+        }
+
+        func load(_ url: URL) {
+            guard requestedURL != url else { return }
+            requestedURL = url
+            emitState(.loading(progress: 0))
+            webView?.load(URLRequest(url: url, cachePolicy: .reloadRevalidatingCacheData))
+        }
+
+        func webView(_ webView: WKWebView,
+                     decidePolicyFor navigationAction: WKNavigationAction,
+                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            guard let url = navigationAction.request.url else {
+                decisionHandler(.cancel)
+                return
+            }
+            switch url.scheme?.lowercased() {
+            case "http", "https":
+                decisionHandler(.allow)
+            default:
+                decisionHandler(.cancel)
+            }
+        }
+
+        func webView(_ webView: WKWebView,
+                     createWebViewWith configuration: WKWebViewConfiguration,
+                     for navigationAction: WKNavigationAction,
+                     windowFeatures: WKWindowFeatures) -> WKWebView? {
+            // target=_blank 仍在当前受管控 WebView 中加载。
+            if navigationAction.targetFrame == nil, let url = navigationAction.request.url,
+               url.scheme?.lowercased() == "https" || url.scheme?.lowercased() == "http" {
+                webView.load(URLRequest(url: url))
+            }
+            return nil
+        }
+
+        func webView(_ webView: WKWebView,
+                     didFailProvisionalNavigation navigation: WKNavigation?,
+                     withError error: Error) {
+            guard (error as? URLError)?.code != .cancelled else { return }
+            emitState(.failed)
+        }
+
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage) {
+            guard message.name == "JSBridgeService",
+                  let currentURL = webView?.url,
+                  PartyGameWebView.normalizedOrigin(currentURL) == allowedOrigin,
+                  let body = message.body as? [String: Any],
+                  let method = body["method"] as? String else { return }
+            switch method.lowercased() {
+            case "opengamesucc":
+                emitState(.ready)
+            case "recharge":
+                onAction(.recharge)
+            case "clickrecharge":
+                onAction(.clickRecharge)
+            case "newtppclose":
+                onAction(.close)
+            default:
+                AppLogger.party.notice("[PartyGame] ignored unknown bridge method")
+            }
+        }
+
+        private func emitState(_ state: PartyGameWebState) {
+            pendingState = state
+            guard !isStateDeliveryScheduled else { return }
+            isStateDeliveryScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.isStateDeliveryScheduled = false
+                guard let pendingState = self.pendingState else { return }
+                self.pendingState = nil
+                self.onStateChange(pendingState)
+            }
+        }
     }
 }
 
 private struct PartyHalfScreenGameSheet: View {
     let presentation: PartyGamePresentation
     @Environment(\.dismiss) private var dismiss
+    @State private var state: PartyGameWebState = .loading(progress: 0)
+    @State private var didReportLoadingOutcome = false
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
-            PartyGameWebView(url: presentation.url)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            PartyGameWebView(
+                url: presentation.url,
+                onStateChange: handleStateChange,
+                onAction: handleBridgeAction
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+            if isLoading {
+                VStack(spacing: 12) {
+                    Image(systemName: "gamecontroller.fill")
+                        .font(.system(size: 28, weight: .medium))
+                    ProgressView(value: loadingProgress)
+                        .tint(.white)
+                        .frame(width: 150)
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black.opacity(0.72))
+                .allowsHitTesting(false)
+            }
 
             Button { dismiss() } label: {
                 Image(systemName: "xmark.circle.fill")
@@ -3158,6 +3777,58 @@ private struct PartyHalfScreenGameSheet: View {
             .accessibilityLabel(L10n.mediaPreviewClose)
         }
         .background(Color.black)
+        .onAppear {
+            PartyAnalytics.track("partyGameLoadingEnter", properties: ["gameId": presentation.game.gameId])
+        }
+        .onDisappear {
+            reportLoadingOutcome(success: false, reason: "dismissed")
+        }
+    }
+
+    private var isLoading: Bool {
+        if case .loading(let progress) = state { return progress < 0.8 }
+        return false
+    }
+
+    private var loadingProgress: Double {
+        if case .loading(let progress) = state { return progress }
+        return 1
+    }
+
+    private func handleStateChange(_ newState: PartyGameWebState) {
+        state = newState
+        switch newState {
+        case .ready:
+            reportLoadingOutcome(success: true, reason: "game_ready")
+        case .failed:
+            reportLoadingOutcome(success: false, reason: "load_failed")
+        case .loading:
+            break
+        }
+    }
+
+    private func reportLoadingOutcome(success: Bool, reason: String) {
+        guard !didReportLoadingOutcome else { return }
+        didReportLoadingOutcome = true
+        PartyAnalytics.track("partyGameLoadingLeave", properties: [
+            "gameId": presentation.game.gameId,
+            "success": success ? "true" : "false",
+            "reason": reason,
+        ])
+    }
+
+    private func handleBridgeAction(_ action: PartyGameBridgeAction) {
+        switch action {
+        case .recharge:
+            dismiss()
+            DispatchQueue.main.async {
+                _ = H5NativeActionRouter.shared.dispatch(.jumpWallet)
+            }
+        case .clickRecharge:
+            AppToastCenter.shared.show("Recharge is not available")
+        case .close:
+            dismiss()
+        }
     }
 }
 
@@ -3166,6 +3837,7 @@ private struct PartyHalfScreenGameSheet: View {
 private struct PartyBackpackGiftSheet: View {
     let roomId: String
     let receivers: ReceiversConfig
+    let onLoaded: (Int) -> Void
     let onSent: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -3178,6 +3850,7 @@ private struct PartyBackpackGiftSheet: View {
     @State private var isLoading = true
     @State private var isSending = false
     @State private var loadFailed = false
+    @State private var hasReportedOpen = false
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 4)
 
@@ -3185,10 +3858,12 @@ private struct PartyBackpackGiftSheet: View {
         roomId: String,
         receivers: ReceiversConfig,
         recipientSelection: GiftRecipientSelectionState,
+        onLoaded: @escaping (Int) -> Void,
         onSent: @escaping () -> Void
     ) {
         self.roomId = roomId
         self.receivers = receivers
+        self.onLoaded = onLoaded
         self.onSent = onSent
         _recipientSelection = ObservedObject(wrappedValue: recipientSelection)
     }
@@ -3489,6 +4164,10 @@ private struct PartyBackpackGiftSheet: View {
             if selectedGift.flatMap({ gift in gifts.contains(where: { $0.id == gift.id }) ? gift : nil }) == nil {
                 selectedGiftID = nil
                 count = 1
+            }
+            if reset, !hasReportedOpen {
+                hasReportedOpen = true
+                onLoaded(gifts.count)
             }
         } catch {
             loadFailed = true

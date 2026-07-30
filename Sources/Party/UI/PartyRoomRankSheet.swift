@@ -7,15 +7,15 @@ import SwiftUI
 struct PartyRoomRankSheet: View {
     let initialMode: PartyRoomRankMode
     let roomId: String
-    let onUserTap: (String) -> Void
+    /// 由房间根容器在当前 sheet 完全关闭后消费，避免在 sheet 层内竞争呈现层级。
+    let onUserTap: (UserCardPreview) -> Void
 
     @StateObject private var store: PartyRankStore
-    @Environment(\.dismiss) private var dismiss
 
     init(
         initialMode: PartyRoomRankMode,
         roomId: String,
-        onUserTap: @escaping (String) -> Void = { _ in }
+        onUserTap: @escaping (UserCardPreview) -> Void = { _ in }
     ) {
         self.initialMode = initialMode
         self.roomId = roomId
@@ -37,6 +37,10 @@ struct PartyRoomRankSheet: View {
         }
         .background(Color(hex: 0x1A0033).ignoresSafeArea())
         .task { await store.load() }
+        // 仅按可见榜单类型和统计周期记录曝光；翻页、刷新、当前/上一期切换不增加噪声。
+        .task(id: "\(store.mode.rawValue)-\(store.timeframe.rawValue)") {
+            reportRankExposure()
+        }
     }
 
     // MARK: - Header
@@ -165,6 +169,25 @@ struct PartyRoomRankSheet: View {
         return String(format: "%02dD:%02dH:%02dM", days, hours, minutes)
     }
 
+    private func reportRankExposure() {
+        switch store.mode {
+        case .contribution:
+            PartyAnalytics.track(
+                "party_contributionRank",
+                properties: ["roomId": roomId, "cycle": store.timeframe.rawValue]
+            )
+        case .honor:
+            PartyAnalytics.track(
+                "party_honorRank",
+                properties: ["roomId": roomId, "cycle": store.timeframe.rawValue]
+            )
+        case .viewers:
+            PartyAnalytics.track("partyRoom_onlineView_view", properties: ["roomId": roomId])
+        case .gameTask:
+            break
+        }
+    }
+
     // MARK: - List content
 
     @ViewBuilder
@@ -221,7 +244,7 @@ struct PartyRoomRankSheet: View {
 
     private func entryRow(entry: PartyRankEntry, rank: Int?) -> some View {
         Button {
-            openUserCard(entry.userId)
+            openUserCard(entry.userCardPreview)
         } label: {
             HStack(spacing: 12) {
                 rankBadge(rank)
@@ -255,13 +278,9 @@ struct PartyRoomRankSheet: View {
         .buttonStyle(.plain)
     }
 
-    private func openUserCard(_ userId: String) {
-        guard !userId.isEmpty else { return }
-        dismiss()
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 250_000_000)
-            onUserTap(userId)
-        }
+    private func openUserCard(_ preview: UserCardPreview) {
+        guard !preview.userId.isEmpty else { return }
+        onUserTap(preview)
     }
 
     @ViewBuilder

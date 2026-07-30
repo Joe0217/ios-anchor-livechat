@@ -48,6 +48,9 @@ struct CommonGiftPanel: View {
             }
         }
         .task {
+            if store.config.backpack.isVisible {
+                store.config.onBackpackEntryShown?()
+            }
             await store.load()
         }
         .onChange(of: store.phase) { newPhase in

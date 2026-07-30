@@ -28,6 +28,10 @@ struct CommonGiftPanelConfig {
     /// tap "Recharge" 按钮触发（phase = insufficientBalance 时 · H-5）；
     /// 主动重拉一次 balance；若仍不足 caller 可挂 toast/CTA
     var onRechargeRequested: (() -> Void)?
+    /// 礼物分类实际切换后回调。仅 Party 场景用于埋点，不能参与面板状态机或业务请求。
+    var onTabChange: ((_ from: GiftPanelTab, _ to: GiftPanelTab) -> Void)?
+    /// 背包入口实际展示后的旁路回调。当前仅 Party 使用，不影响面板加载。
+    var onBackpackEntryShown: (() -> Void)?
     /// F-spec 派对房私 call 场景：cell 内钻石图标用蓝色（对齐设计稿要求）。
     /// 默认 false 保持其他场景（callGate 黄 / partySend 紫）行为不变。
     var useBlueDiamond: Bool
@@ -47,6 +51,8 @@ struct CommonGiftPanelConfig {
                 dataSource: GiftPanelDataSource,
                 onDismiss: (() -> Void)? = nil,
                 onRechargeRequested: (() -> Void)? = nil,
+                onTabChange: ((_ from: GiftPanelTab, _ to: GiftPanelTab) -> Void)? = nil,
+                onBackpackEntryShown: (() -> Void)? = nil,
                 useBlueDiamond: Bool = false) {
         self.tabs = tabs
         self.initialTab = initialTab
@@ -63,6 +69,8 @@ struct CommonGiftPanelConfig {
         self.dataSource = dataSource
         self.onDismiss = onDismiss
         self.onRechargeRequested = onRechargeRequested
+        self.onTabChange = onTabChange
+        self.onBackpackEntryShown = onBackpackEntryShown
         self.useBlueDiamond = useBlueDiamond
     }
 
@@ -122,9 +130,9 @@ enum BalancePolicy {
 /// Backpack 右上角入口策略。
 enum BackpackEntryPolicy {
     case hidden
-    case visible(onTap: () -> Void)
+    case visible(onTap: (_ currentTab: GiftPanelTab) -> Void)
 
-    var onTap: (() -> Void)? {
+    var onTap: ((GiftPanelTab) -> Void)? {
         if case .visible(let cb) = self { return cb }
         return nil
     }
@@ -189,11 +197,23 @@ struct ReceiverItem: Identifiable, Equatable {
     let id: String
     let avatarURL: URL?
     let seatIndex: Int?
+    /// Party 礼物成功埋点使用的业务用户 id；非 Party 场景可为空。
+    let userId: String?
+    /// H5 `receive_role` 由用户类型派生：2=host，其余=user。
+    let userType: Int?
 
-    init(id: String, avatarURL: URL?, seatIndex: Int? = nil) {
+    init(
+        id: String,
+        avatarURL: URL?,
+        seatIndex: Int? = nil,
+        userId: String? = nil,
+        userType: Int? = nil
+    ) {
         self.id = id
         self.avatarURL = avatarURL
         self.seatIndex = seatIndex
+        self.userId = userId
+        self.userType = userType
     }
 }
 
@@ -298,7 +318,9 @@ extension CommonGiftPanelConfig {
                           sendService: PartyGiftSendService? = nil,
                           balance: GiftPanelBalanceSource? = nil,
                           onRechargeRequested: @escaping () -> Void = {},
-                          onOpenBackpack: (() -> Void)? = nil,
+                          onOpenBackpack: ((GiftPanelTab) -> Void)? = nil,
+                          onTabChange: ((_ from: GiftPanelTab, _ to: GiftPanelTab) -> Void)? = nil,
+                          onBackpackEntryShown: (() -> Void)? = nil,
                           onSend: @escaping (_ gift: GiftListData, _ count: Int, _ yxAccidList: [String]) -> Void) -> Self {
         let effectiveSendService = sendService ?? DefaultPartyGiftSendService(roomId: roomId)
         // review #2 · balance 一体化：单一 PartyGiftDataSource 实例同时作 dataSource + balance source
@@ -316,7 +338,9 @@ extension CommonGiftPanelConfig {
             interaction: .selectable,
             title: nil,
             dataSource: sharedDataSource,  // H-5 · 走 sapi 域 PartyAPI.getPartyRoomGift（不走 /api/gift/v3/getGiftList，后端不识别 PARTY_ROOM）
-            onRechargeRequested: onRechargeRequested
+            onRechargeRequested: onRechargeRequested,
+            onTabChange: onTabChange,
+            onBackpackEntryShown: onBackpackEntryShown
         )
     }
 

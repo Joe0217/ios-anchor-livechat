@@ -35,7 +35,17 @@ struct PartyExpressionPanel: View {
         }
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .task { await store.loadExpressionList() }
+        .task {
+            PartyAnalytics.track(
+                "b_emoji_panel_open",
+                properties: PartyAnalytics.roomProperties(
+                    roomId: store.roomInfo?.id,
+                    ownerId: store.roomInfo?.ownerId,
+                    roomTempId: store.roomInfo?.roomTempId
+                )
+            )
+            await store.loadExpressionList()
+        }
         .presentationDetents([.height(panelSheetHeight)])
         .overlay(alignment: .top) {
             if let msg = toastMessage {
@@ -177,6 +187,15 @@ struct PartyExpressionPanel: View {
                                     if selectedClassIndex != i {
                                         selectedClassIndex = i
                                         selectedPageIndex = 0
+                                        let name = visibleClassifications[i].classType
+                                        PartyAnalytics.track(
+                                            "b_emoji_tab_switch",
+                                            properties: [
+                                                "tabname": name,
+                                                "tabIndex": i,
+                                                "classType": name,
+                                            ]
+                                        )
                                     }
                                 }
                         }
@@ -219,6 +238,7 @@ struct PartyExpressionPanel: View {
             showToast(L10n.PartyRoom.emojiPlayError)
             return
         }
+        PartyAnalytics.track("b_emoji_mic_play", properties: ["emoji": item.id])
         store.sendEmoji(item)
         // 点选后即时关闭 sheet（对齐 H5 party-expression-popup.vue L98 close popup）
         dismiss()

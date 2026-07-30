@@ -17,6 +17,7 @@ struct PartyBattleUIModifier: ViewModifier {
     @Binding var showForceEnd: Bool
     @Binding var showCooldownToast: Bool
     @Binding var showRules: Bool
+    @State private var shouldPresentSettlementAfterCooldownDismissal = false
 
     func body(content: Content) -> some View {
         content
@@ -39,18 +40,14 @@ struct PartyBattleUIModifier: ViewModifier {
                     .presentationDetents([.fraction(0.5), .fraction(0.8)])
                     .partyBattleSheetBackground(.dark)
             }
-            .sheet(isPresented: $showCooldownToast) {
+            .sheet(isPresented: $showCooldownToast, onDismiss: presentQueuedSettlementAfterCooldownDismissal) {
                 // 模态弹窗（非自清 toast）· 用户点 X 或 View Previous Settlement 关闭
                 // review 回调 → 关闭本 sheet + 触发 showSettlement=true 打开结算 popup（对齐 H5 g-agora-party.vue:705）
                 PartyBattleCooldownToast(
                     store: battleStore,
                     isPresented: $showCooldownToast,
                     onReviewLast: {
-                        // dismiss 完成后再 flip showSettlement · 避免同一 tick 与 cooldown sheet 冲突
-                        Task { @MainActor in
-                            try? await Task.sleep(nanoseconds: 100_000_000)  // 100ms 让 dismiss 完成
-                            battleStore.showSettlementBinding.wrappedValue = true
-                        }
+                        shouldPresentSettlementAfterCooldownDismissal = true
                     }
                 )
                 .presentationDetents([.fraction(0.5), .fraction(0.8)])
@@ -85,6 +82,12 @@ struct PartyBattleUIModifier: ViewModifier {
     private func handleTick() {
         guard battleStore.isSelecting || battleStore.isRunning else { return }
         battleStore.tickLeft()
+    }
+
+    private func presentQueuedSettlementAfterCooldownDismissal() {
+        guard shouldPresentSettlementAfterCooldownDismissal else { return }
+        shouldPresentSettlementAfterCooldownDismissal = false
+        battleStore.showSettlementBinding.wrappedValue = true
     }
 }
 

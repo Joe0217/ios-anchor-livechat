@@ -9,6 +9,7 @@ import UIKit
 struct PartyRoomBannerCarousel: View {
     let banners: [PartyRoomBanner]
     let onTap: (PartyRoomBanner) -> Void
+    let onPageDisplayed: (PartyRoomBanner) -> Void
 
     @State private var currentIndex = 0
     /// 多页时使用 0=末页副本、1...n=真实页、n+1=首页副本，实现手势跨首尾循环。
@@ -17,6 +18,17 @@ struct PartyRoomBannerCarousel: View {
     @State private var pageChangeOrigin: PageChangeOrigin?
     @State private var manualInteractionGeneration = 0
     @State private var isManualDragInProgress = false
+    @State private var exposedBannerKeys: Set<String> = []
+
+    init(
+        banners: [PartyRoomBanner],
+        onTap: @escaping (PartyRoomBanner) -> Void,
+        onPageDisplayed: @escaping (PartyRoomBanner) -> Void = { _ in }
+    ) {
+        self.banners = banners
+        self.onTap = onTap
+        self.onPageDisplayed = onPageDisplayed
+    }
 
     private enum PageChangeOrigin {
         case automatic
@@ -70,6 +82,13 @@ struct PartyRoomBannerCarousel: View {
                 currentIndex = 0
                 selectedPage = 1
                 autoplayEnabled = true
+                exposedBannerKeys.removeAll()
+                reportDisplayedBanner(items[0])
+            }
+            .onAppear {
+                if items.indices.contains(currentIndex) {
+                    reportDisplayedBanner(items[currentIndex])
+                }
             }
             .task(id: LoopKey(banners: loopKey, autoplayEnabled: autoplayEnabled)) {
                 guard autoplayEnabled, items.count > 1 else { return }
@@ -107,14 +126,15 @@ struct PartyRoomBannerCarousel: View {
             .tabViewStyle(.page(indexDisplayMode: .never))
             .simultaneousGesture(manualPagingGesture)
             .onChange(of: selectedPage) { page in
-                handlePageChange(page, itemCount: items.count)
+                handlePageChange(page, items: items)
             }
         } else if let banner = items.first {
             bannerImage(banner)
         }
     }
 
-    private func handlePageChange(_ page: Int, itemCount: Int) {
+    private func handlePageChange(_ page: Int, items: [PartyRoomBanner]) {
+        let itemCount = items.count
         let origin = pageChangeOrigin
         pageChangeOrigin = nil
         if origin == nil {
@@ -130,6 +150,13 @@ struct PartyRoomBannerCarousel: View {
         } else {
             currentIndex = page - 1
         }
+        reportDisplayedBanner(items[currentIndex])
+    }
+
+    private func reportDisplayedBanner(_ banner: PartyRoomBanner) {
+        let key = "\(banner.id ?? "")_\(banner.picUrl ?? "")_\(banner.directUrl ?? "")"
+        guard exposedBannerKeys.insert(key).inserted else { return }
+        onPageDisplayed(banner)
     }
 
     private func resetLoopPage(from sentinel: Int, to page: Int) {

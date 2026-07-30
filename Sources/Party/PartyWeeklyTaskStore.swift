@@ -406,6 +406,9 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
             return
         }
         applyProgress(reward.liveTime)
+        // 活动页可能同时以 Banner / 房内入口展示；奖励通知真正落地后，
+        // 通过活动 bridge 让仍展示中的任务页重新拉取进度。
+        H5ActivityBridge.refreshTask()
         queuedRewards.append(reward)
         presentNextRewardIfPossible()
     }
@@ -550,7 +553,7 @@ final class PartyTopRoomGuideStore: ObservableObject {
             // Android 在成功获取目标后、显示弹窗前写入当天标记；关闭不重弹。
             defaults.set(Date().timeIntervalSince1970, forKey: Self.shownAtDefaultsKey)
             guide = target
-            AnalyticsTracker.track(
+            PartyAnalytics.track(
                 "h_party_top3_popup_show",
                 properties: ["hasAvailableSeat": target.hasSeat]
             )
@@ -564,7 +567,7 @@ final class PartyTopRoomGuideStore: ObservableObject {
     }
 
     func confirmEnter(_ target: PartyHotRoomGuide) {
-        AnalyticsTracker.track(
+        PartyAnalytics.track(
             "h_party_top3_popup_click",
             properties: [
                 "targetRoomId": target.roomId,

@@ -40,17 +40,17 @@ struct PartyTabRootView: View {
                 listStore: listStore,
                 isLobbyVisible: path.isEmpty,
                 onTapCreate: tapCreate,
-                onTapMyRoom: { roomId in
+                onTapMyRoom: { roomId, entryPath in
                     // v2：已有 myRoom 时点击浮动按钮直接进自己的房（对齐 H5 index.vue L191-207）
-                    path.append(PartyRoute.room(id: roomId, password: nil))
+                    path.append(PartyRoute.room(id: roomId, password: nil, entryPath: entryPath))
                 },
-                onTapRoom: { room in
-                    handleTapRoom(room)
+                onTapRoom: { room, entryPath in
+                    handleTapRoom(room, entryPath: entryPath)
                 },
                 onTapSearch: { path.append(PartyRoute.search) },
                 onTapRanking: { path.append(PartyRoute.lobbyRanking(.partyRich)) },
-                onTapBannerRoom: { roomId in
-                    path.append(PartyRoute.room(id: roomId, password: nil))
+                onTapBannerRoom: { roomId, entryPath in
+                    path.append(PartyRoute.room(id: roomId, password: nil, entryPath: entryPath))
                 },
                 onEnterTopRoomGuide: { roomId in
                     enterTopRoomGuide(roomId)
@@ -67,7 +67,7 @@ struct PartyTabRootView: View {
                         userLevel: AnchorInfoStore.shared.mine?.level ?? 0,
                         onCreated: { roomId in
                             path.removeLast()
-                            path.append(PartyRoute.room(id: roomId, password: nil))
+                            path.append(PartyRoute.room(id: roomId, password: nil, entryPath: .myRoom))
                             // v2：刚创建完房 pop 回大厅时刷新 myRoom 状态，浮按钮切到 My Room
                             Task { await listStore.reloadMyRoom() }
                         }
@@ -83,11 +83,11 @@ struct PartyTabRootView: View {
                     }
                 case .search:
                     PartySearchView(onTapRoom: { room in
-                        handleTapRoom(room)
+                        handleTapRoom(room, entryPath: .search)
                     })
                 case .lobbyRanking(let kind):
                     PartyLobbyRankingView(initialKind: kind) { roomId in
-                        path.append(PartyRoute.room(id: roomId, password: nil))
+                        path.append(PartyRoute.room(id: roomId, password: nil, entryPath: .rankRoom))
                     }
                 }
             }
@@ -104,7 +104,7 @@ struct PartyTabRootView: View {
         .sheet(item: $pendingPasswordRoom) { room in
             PartyEnterPasswordSheet(roomId: room.id, store: PartyStore.shared) {
                 pendingPasswordRoom = nil
-                path.append(PartyRoute.room(id: room.id, password: nil))
+                path.append(PartyRoute.room(id: room.id, password: nil, entryPath: room.entryPath))
             }
             .giftPanelSheetBackground()
         }
@@ -126,7 +126,7 @@ struct PartyTabRootView: View {
     /// v8：房卡点击统一入口（PartyListMainView + PartySearchView 共用）。
     /// 密码房 → 弹密码 alert，输入密码后再 push；普通房 → 直接 push。
     /// 对齐 H5 index.vue L165-188 `clickRoomItem` 密码房判断（H5 那段已注释，iOS 按语义激活）。
-    private func handleTapRoom(_ room: PartyRoomInfo) {
+    private func handleTapRoom(_ room: PartyRoomInfo, entryPath: PartyRoomEntryPath) {
         // P 项目权限管理：走统一 gate helper（code-review Finding 6 消除 4 行复制）
         guard SelfPermissionBridge.shared.gate(.party, action: "handleTapRoom") else { return }
         // F 期 Live↔Party 互斥（对齐安卓 isLiveing||isPartying toast，2026-07-17）：
@@ -139,9 +139,9 @@ struct PartyTabRootView: View {
         guard let rid = room.id, !rid.isEmpty else { return }
         let isLocked = (room.lockFlag == 1) || (room.needPassword == true)
         if isLocked {
-            pendingPasswordRoom = PasswordRoom(id: rid)
+            pendingPasswordRoom = PasswordRoom(id: rid, entryPath: entryPath)
         } else {
-            path.append(PartyRoute.room(id: rid, password: nil))
+            path.append(PartyRoute.room(id: rid, password: nil, entryPath: entryPath))
         }
     }
 
@@ -157,6 +157,7 @@ struct PartyTabRootView: View {
 
     private struct PasswordRoom: Identifiable {
         let id: String
+        let entryPath: PartyRoomEntryPath
     }
 
     private func tapCreate() {

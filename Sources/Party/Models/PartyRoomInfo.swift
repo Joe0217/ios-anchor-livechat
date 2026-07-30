@@ -292,6 +292,8 @@ private extension KeyedDecodingContainer {
 struct PartyRoomBanner: Codable, Equatable {
     let id: String?
     let picUrl: String?
+    let activityName: String?
+    let name: String?
     let directUrl: String?
     let activityFlamePic: String?
     let flameStartTime: String?
@@ -301,12 +303,14 @@ struct PartyRoomBanner: Codable, Equatable {
     var isDisplayable: Bool { picUrl?.isEmpty == false }
     var isNavigable: Bool { directUrl?.isEmpty == false }
     enum CodingKeys: String, CodingKey {
-        case id, picUrl, directUrl, activityFlamePic, flameStartTime, flameEndTime
+        case id, picUrl, activityName, name, directUrl, activityFlamePic, flameStartTime, flameEndTime
     }
 
     init(
         id: String? = nil,
         picUrl: String? = nil,
+        activityName: String? = nil,
+        name: String? = nil,
         directUrl: String? = nil,
         activityFlamePic: String? = nil,
         flameStartTime: String? = nil,
@@ -314,6 +318,8 @@ struct PartyRoomBanner: Codable, Equatable {
     ) {
         self.id = id
         self.picUrl = picUrl
+        self.activityName = activityName
+        self.name = name
         self.directUrl = directUrl
         self.activityFlamePic = activityFlamePic
         self.flameStartTime = flameStartTime
@@ -330,6 +336,8 @@ struct PartyRoomBanner: Codable, Equatable {
             id = nil
         }
         picUrl = try? container.decode(String.self, forKey: .picUrl)
+        activityName = try? container.decode(String.self, forKey: .activityName)
+        name = try? container.decode(String.self, forKey: .name)
         directUrl = try? container.decode(String.self, forKey: .directUrl)
         activityFlamePic = try? container.decode(String.self, forKey: .activityFlamePic)
         flameStartTime = Self.decodeStringOrNumber(container, key: .flameStartTime)

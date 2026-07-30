@@ -71,7 +71,9 @@ enum PartyGiftPanelBridge {
             return ReceiverItem(
                 id: accid,
                 avatarURL: seat.avatar.flatMap { URL(string: $0) },
-                seatIndex: seat.seatIndex
+                seatIndex: seat.seatIndex,
+                userId: seat.userId,
+                userType: seat.userType
             )
         }
 
