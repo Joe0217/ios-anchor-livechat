@@ -11,40 +11,41 @@ struct TextBubbleView: View {
     let isOutgoing: Bool
     /// 主播穿戴的气泡装扮 URL（H-3 spec §1.6）—— 非 nil 走点九图背景，nil 走默认色底
     var chatBubble: URL? = nil
-    /// Batch 6.3.3：翻译后文本；非 nil 时替代 `text` 显示（内存态,不持久化，对齐 H5 chatStore.translatedMap）
+    /// 翻译后文本；非 nil 时在原文下方显示（内存态,不持久化，对齐 H5 chatStore.translatedMap）。
     var translatedText: String? = nil
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            // 原文
-            Text(text)
-                .font(.system(size: 14))
-                .lineSpacing(4)
-                .foregroundStyle(.white)
-
-            // 已翻译:分隔线 + 译文(对齐 H5 border-t-1-black + mt-4 pt4)
-            if let tx = translatedText {
-                Rectangle()
-                    .fill(.white.opacity(0.2))
-                    .frame(height: 0.5)
-                    .padding(.top, 2)
-                Text(tx)
+        PublicChatContentHuggingLayout(maxWidth: ChatConstants.textBubbleMaxWidth) {
+            VStack(alignment: .leading, spacing: 4) {
+                // 原文
+                Text(text)
                     .font(.system(size: 14))
                     .lineSpacing(4)
                     .foregroundStyle(.white)
-                    .padding(.top, 2)
+
+                // 已翻译:分隔线 + 译文(对齐 H5 border-t-1-black + mt-4 pt4)
+                if let tx = translatedText {
+                    Rectangle()
+                        .fill(.white.opacity(0.2))
+                        .frame(height: 0.5)
+                        .padding(.top, 2)
+                    Text(tx)
+                        .font(.system(size: 14))
+                        .lineSpacing(4)
+                        .foregroundStyle(.white)
+                        .padding(.top, 2)
+                }
             }
-        }
-        .padding(.horizontal, chatBubble == nil ? 12 : ChatSkinMetrics.horizontalContentInset)
-        .padding(.vertical, chatBubble == nil ? 8 : ChatSkinMetrics.verticalContentInset)
-        .frame(maxWidth: ChatConstants.textBubbleMaxWidth, alignment: .leading)
-        .fixedSize(horizontal: false, vertical: true)
-        .background {
-            if let url = chatBubble {
-                // H5 custom class 强制 transparent / border-radius: 0，不叠默认圆角色底。
-                NinePatchImageView(url: url)
-            } else {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(defaultBubbleColor)
+            .padding(.horizontal, chatBubble == nil ? 12 : ChatSkinMetrics.horizontalContentInset)
+            .padding(.vertical, chatBubble == nil ? 8 : ChatSkinMetrics.verticalContentInset)
+            .fixedSize(horizontal: false, vertical: true)
+            .background {
+                if let url = chatBubble {
+                    // H5 custom class 强制 transparent / border-radius: 0，不叠默认圆角色底。
+                    NinePatchImageView(url: url)
+                } else {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(defaultBubbleColor)
+                }
             }
         }
         // H5 自定义皮肤 `border-radius: 0`，不得裁掉点九图自身的角和挂饰。

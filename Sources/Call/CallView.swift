@@ -1686,24 +1686,26 @@ private struct CallMessageScroller: View {
                           content: String,
                           translation: String?) -> some View {
         if let bubble = sender.chatBubble, !bubble.isEmpty, let bubbleURL = URL(string: bubble) {
-            translatedTextContent(sender: sender, content: content, translation: translation, color: .white)
-                .padding(.horizontal, ChatSkinMetrics.horizontalContentInset)
-                .padding(.vertical, ChatSkinMetrics.verticalContentInset)
-                .background {
-                    NinePatchImageView(url: bubbleURL)
-                }
-                .frame(maxWidth: 270, alignment: .leading)
+            PublicChatContentHuggingLayout(maxWidth: 270) {
+                translatedTextContent(sender: sender, content: content, translation: translation, color: .white)
+                    .padding(.horizontal, ChatSkinMetrics.horizontalContentInset)
+                    .padding(.vertical, ChatSkinMetrics.verticalContentInset)
+                    .background {
+                        NinePatchImageView(url: bubbleURL)
+                    }
+            }
         } else {
-            translatedTextContent(
-                sender: sender,
-                content: content,
-                translation: translation,
-                color: sender.isSelf ? .white : remoteTextColor
-            )
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(.black.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .frame(maxWidth: 270, alignment: .leading)
+            PublicChatContentHuggingLayout(maxWidth: 270) {
+                translatedTextContent(
+                    sender: sender,
+                    content: content,
+                    translation: translation,
+                    color: sender.isSelf ? .white : remoteTextColor
+                )
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(.black.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
         }
     }
 

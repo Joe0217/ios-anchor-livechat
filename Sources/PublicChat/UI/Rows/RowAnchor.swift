@@ -14,41 +14,41 @@ struct RowAnchor: View {
 
     var body: some View {
         let hasChatSkin = sender?.chatBubble?.isEmpty == false
-        VStack(alignment: .leading, spacing: 3) {
-            if hasChatSkin {
-                HStack(alignment: .center, spacing: 4) {
-                    hostIcon
-                    nicknameText
+        PublicChatContentHuggingLayout(maxWidth: 249) {
+            VStack(alignment: .leading, spacing: 3) {
+                if hasChatSkin {
+                    HStack(alignment: .center, spacing: 4) {
+                        hostIcon
+                        nicknameText
+                    }
+                    // 自定义皮肤时正文单列，避免长消息把主播标识与昵称压缩到窄列。
+                    Text(content)
+                        .font(theme.textFont)
+                        .foregroundColor(.white)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 35)
+                } else {
+                    HStack(alignment: .center, spacing: 4) {
+                        hostIcon
+                        inlineText
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
-                // 自定义皮肤时正文单列，避免长消息把主播标识与昵称压缩到窄列。
-                Text(content)
-                    .font(theme.textFont)
-                    .foregroundColor(.white)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.leading, 35)
-            } else {
-                HStack(alignment: .center, spacing: 4) {
-                    hostIcon
-                    inlineText
+                if let t = translation, !t.isEmpty {
+                    Divider().overlay(Color.white.opacity(0.16))
+                    Text(t)
+                        .font(theme.textFont)
+                        .foregroundColor(.white)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            if let t = translation, !t.isEmpty {
-                Text(t)
-                    .font(theme.textFont)
-                    .foregroundColor(.white)
-                    .fixedSize(horizontal: false, vertical: true)
-                    // H5 译文容器是 `ml4`。
-                    .padding(.leading, 4)
-            }
+            // H5 `.chat-bubble-custom` 的 `padding: 0 !important` 会覆盖主播行的 `px8 py5`。
+            .padding(.horizontal, hasChatSkin ? ChatSkinMetrics.horizontalContentInset : 8)
+            .padding(.vertical, hasChatSkin ? ChatSkinMetrics.verticalContentInset : 5)
+            .frame(minHeight: 22)
+            .background(anchorBoxBackground)
+            .padding(.vertical, hasChatSkin ? ChatSkinMetrics.livePublicMessageVerticalSpacing : 0)
         }
-        // H5 `.chat-bubble-custom` 的 `padding: 0 !important` 会覆盖主播行的 `px8 py5`。
-        .padding(.horizontal, hasChatSkin ? ChatSkinMetrics.horizontalContentInset : 8)
-        .padding(.vertical, hasChatSkin ? ChatSkinMetrics.verticalContentInset : 5)
-        .frame(minHeight: 22)
-        .frame(maxWidth: 249, alignment: .leading)
-        .background(anchorBoxBackground)
-        .padding(.vertical, hasChatSkin ? ChatSkinMetrics.livePublicMessageVerticalSpacing : 0)
     }
 
     private var inlineText: some View {

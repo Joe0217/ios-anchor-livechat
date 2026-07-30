@@ -24,13 +24,14 @@ private struct SystemBubbleContainer<Content: View>: View {
     }
 
     var body: some View {
-        content()
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .frame(maxWidth: maxWidth, alignment: .leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .background(Color(hex: 0x2B213E), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .foregroundStyle(.white)
+        PublicChatContentHuggingLayout(maxWidth: maxWidth) {
+            content()
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .fixedSize(horizontal: false, vertical: true)
+                .background(Color(hex: 0x2B213E), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .foregroundStyle(.white)
+        }
     }
 }
 

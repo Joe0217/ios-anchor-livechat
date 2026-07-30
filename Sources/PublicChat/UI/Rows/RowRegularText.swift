@@ -92,7 +92,7 @@ struct RowRegularText: View {
         // v24（B4）：气泡 + 可选 hi 图标兄弟（H5 messageScroller.vue L435-472 用户消息末尾 hi 图标）
         if let tapHi = onTapHi {
             HStack(alignment: .center, spacing: 4) {
-                bubble
+                PublicChatContentHuggingLayout(maxWidth: 249) { bubble }
                 Button(action: tapHi) {
                     // v24 verify finding · HIG 44x44 hit target：外层扩到 44 保 tap 命中率，
                     // 视觉圆 20×20 保原设计尺寸；内 background Circle 附着在 20 icon 上
@@ -109,7 +109,7 @@ struct RowRegularText: View {
                 .accessibilityLabel(Text("\(L10n.publicScreenHiActionA11y): \(sender?.nickname ?? "")"))
             }
         } else {
-            bubble
+            PublicChatContentHuggingLayout(maxWidth: 249) { bubble }
         }
     }
 

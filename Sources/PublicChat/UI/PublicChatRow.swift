@@ -1,5 +1,41 @@
 import SwiftUI
 
+/// 让气泡按内容宽度收紧；长文本才使用调用方给定的最大宽度换行。
+///
+/// 普通 `frame(maxWidth:)` 在父容器提供明确宽度时会扩展至上限，带 Divider 的译文气泡尤其明显。
+/// 这个 layout 先以无约束尺寸确定内容宽度，再以既有最大宽度约束长文本。
+struct PublicChatContentHuggingLayout: Layout {
+    let maxWidth: CGFloat
+
+    func sizeThatFits(
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) -> CGSize {
+        guard let subview = subviews.first else { return .zero }
+        let availableWidth = min(proposal.width ?? maxWidth, maxWidth)
+        let intrinsic = subview.sizeThatFits(.unspecified)
+        let width = min(intrinsic.width, availableWidth)
+        let fitted = subview.sizeThatFits(ProposedViewSize(width: width, height: proposal.height))
+        return CGSize(width: width, height: fitted.height)
+    }
+
+    func placeSubviews(
+        in bounds: CGRect,
+        proposal: ProposedViewSize,
+        subviews: Subviews,
+        cache: inout ()
+    ) {
+        for subview in subviews {
+            subview.place(
+                at: bounds.origin,
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: bounds.width, height: bounds.height)
+            )
+        }
+    }
+}
+
 /// 单行分派：按 variant.discriminator 分 3 组 `@ViewBuilder`，
 /// 避免 16 分支 switch 触发 SwiftUI type-check timeout（swiftui-body-type-check-timeout.md）
 ///
@@ -219,16 +255,26 @@ private struct RowPartyRegularText: View {
     private var bubbleBody: some View {
         let showTranslate = translation == nil && onTapTranslate != nil
         let hasChatSkin = sender?.chatBubble?.isEmpty == false
-        return HStack(alignment: .top, spacing: 4) {
-            bodyText(showTranslate: showTranslate)
-                .fixedSize(horizontal: false, vertical: true)
+        return PublicChatContentHuggingLayout(maxWidth: 213) {
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .top, spacing: 4) {
+                    bodyText(showTranslate: showTranslate)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let translation, !translation.isEmpty {
+                    Divider().overlay(Color.white.opacity(0.16))
+                    Text(translation)
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.85))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(.horizontal, hasChatSkin ? ChatSkinMetrics.horizontalContentInset : 8)
+            .padding(.vertical, hasChatSkin ? ChatSkinMetrics.verticalContentInset : 4)
+            .frame(minHeight: 22)
+            .background(bubbleBackground)
+            .padding(.vertical, hasChatSkin ? ChatSkinMetrics.messageVerticalSpacing : 0)
         }
-        .padding(.horizontal, hasChatSkin ? ChatSkinMetrics.horizontalContentInset : 8)
-        .padding(.vertical, hasChatSkin ? ChatSkinMetrics.verticalContentInset : 4)
-        .frame(minHeight: 22)
-        .frame(maxWidth: 213, alignment: .leading)
-        .background(bubbleBackground)
-        .padding(.vertical, hasChatSkin ? ChatSkinMetrics.messageVerticalSpacing : 0)
         .contentShape(Rectangle())
         .onTapGesture {
             if showTranslate && !isTranslating { onTapTranslate?() }
@@ -243,7 +289,7 @@ private struct RowPartyRegularText: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(Color(red: 231/255, green: 84/255, blue: 2/255))  // #E75402
         }
-        result = result + Text(translation?.isEmpty == false ? translation! : content)
+        result = result + Text(content)
             .font(.system(size: 13))
             .foregroundColor(.white)
         if showTranslate {
