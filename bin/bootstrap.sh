@@ -28,5 +28,7 @@ done
 cat <<'EOF'
 
 Fill every __REQUIRED__ value using the approved credential channel before building.
+Sentry is optional: configure HILY_SENTRY_DSN and HILY_SENTRY_ENVIRONMENT for the environments
+that should upload crash reports.
 Then close Xcode and run ./bin/regen.sh.
 EOF

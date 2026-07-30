@@ -56,6 +56,22 @@ enum AppConfig {
         return (appId, serverURL)
     }
 
+    // MARK: - Sentry crash reporting
+    /// Sentry DSN 是可选基础设施配置。未注入时崩溃上报关闭，不影响主业务启动。
+    static var sentryDSN: URL? {
+        guard let raw = optionalPlistString("HilySentryDSN"),
+              let url = URL(string: raw),
+              url.scheme?.lowercased() == "https",
+              url.host != nil else {
+            return nil
+        }
+        return url
+    }
+
+    static var crashReportingEnvironment: String {
+        optionalPlistString("HilySentryEnvironment") ?? defaultCrashReportingEnvironment
+    }
+
     /// WebView H5 的受信任部署入口。xcconfig 只保存 host，避免 `//` 被当作注释；路由以 history path 附加。
     static var webFeatureBaseURL: URL? {
         guard let host = optionalPlistString("HilyWebFeatureBaseURL"),
@@ -112,8 +128,16 @@ enum AppConfig {
         let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !value.isEmpty,
               !value.hasPrefix("$("),
-              !value.hasPrefix("__REQUIRED") else { return nil }
+              !value.hasPrefix("__") else { return nil }
         return value
+    }
+
+    private static var defaultCrashReportingEnvironment: String {
+        #if DEBUG
+        return "development"
+        #else
+        return "production"
+        #endif
     }
 
     #if HILY_TESTS

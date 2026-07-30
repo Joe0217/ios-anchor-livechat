@@ -50,6 +50,10 @@
 	<string>$(HILY_SAPI_AES_KEY)</string>
 	<key>HilySAPIHost</key>
 	<string>$(HILY_SAPI_HOST)</string>
+	<key>HilySentryDSN</key>
+	<string>$(HILY_SENTRY_DSN)</string>
+	<key>HilySentryEnvironment</key>
+	<string>$(HILY_SENTRY_ENVIRONMENT)</string>
 	<key>HilySocketHost</key>
 	<string>$(HILY_SOCKET_HOST)</string>
 	<key>HilyThinkingDataAppID</key>

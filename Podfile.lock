@@ -7,6 +7,9 @@ PODS:
   - NIMSDK_LITE/NOS (10.10.0):
     - YXArtemis_XCFramework
   - Protobuf (3.29.6)
+  - Sentry (9.19.1):
+    - Sentry/Core (= 9.19.1)
+  - Sentry/Core (9.19.1)
   - SSZipArchive (2.6.0)
   - SVGAPlayer (2.5.7):
     - SVGAPlayer/Core (= 2.5.7)
@@ -39,6 +42,7 @@ DEPENDENCIES:
   - AgoraRtm_OC_Special/RtmKit (~> 2.2.6)
   - AgoraVideo_Special_iOS (= 4.5.2.9.BASIC)
   - NIMSDK_LITE (~> 10.10.0)
+  - Sentry (~> 9.19.1)
   - SVGAPlayer (~> 2.5)
   - ThinkingSDK (~> 3.4.6)
   - YYEVA (~> 1.1.42)
@@ -49,6 +53,7 @@ SPEC REPOS:
     - AgoraVideo_Special_iOS
     - NIMSDK_LITE
     - Protobuf
+    - Sentry
     - SSZipArchive
     - SVGAPlayer
     - ThinkingDataCore
@@ -61,6 +66,7 @@ SPEC CHECKSUMS:
   AgoraVideo_Special_iOS: 46096d4dcb2b39e0a2dd3961825518b50c96ff73
   NIMSDK_LITE: 44550282d52550ee7be31ca25341f44b905b917d
   Protobuf: 8d5596f7468be5400861a6bbfb2dfe9d0d1cde34
+  Sentry: e4588d62ac3fd3c82652bb7c8a215ec8c3de776b
   SSZipArchive: 8a6ee5677c8e304bebc109e39cf0da91ccef22ea
   SVGAPlayer: 318b85a78b61292d6ae9dfcd651f3f0d1cdadd86
   ThinkingDataCore: c0711ed6e2b141beabaeda6bc1c45460fa6718c4
@@ -68,6 +74,6 @@ SPEC CHECKSUMS:
   YXArtemis_XCFramework: d9a8b9439d7a6c757ed00ada53a6d2dd9b13f9c7
   YYEVA: d7892b3faee9a4303bb21284a0c109236e34d1ad
 
-PODFILE CHECKSUM: 49471c5cc8380710c3cb87325e3573bca43112b4
+PODFILE CHECKSUM: d991ca2c50fca11a660c6772220c2fcd64ad5557
 
 COCOAPODS: 1.16.2

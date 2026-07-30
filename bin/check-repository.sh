@@ -25,7 +25,7 @@ if git ls-files --error-unmatch Config/Config-Dev.xcconfig >/dev/null 2>&1; then
   echo "warning: Config/Config-Dev.xcconfig is still tracked; rotate its credentials, then remove it from Git."
 fi
 
-non_placeholder_values="$(awk -F= '/^[[:space:]]*HILY_[A-Z_]+/ && $2 !~ /__REQUIRED/ { print FILENAME ":" FNR ":" $0 }' Config/*.xcconfig.example)"
+non_placeholder_values="$(awk -F= '/^[[:space:]]*HILY_[A-Z_]+/ && $2 !~ /__(REQUIRED|OPTIONAL)/ { print FILENAME ":" FNR ":" $0 }' Config/*.xcconfig.example)"
 if [ -n "$non_placeholder_values" ]; then
   echo "error: a config template contains a non-placeholder value" >&2
   printf '%s\n' "$non_placeholder_values" >&2

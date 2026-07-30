@@ -29,6 +29,8 @@ target 'Hily' do
   pod 'YYEVA', '~> 1.1.42'
   # 数数 ThinkingData：统一事件、用户身份和即时 flush，配置由本机 xcconfig 注入。
   pod 'ThinkingSDK', '~> 3.4.6'
+  # Sentry：捕获未处理崩溃和 App Hang；DSN 只由本机 xcconfig 注入，未配置时应用层不初始化。
+  pod 'Sentry', '~> 9.19.1'
 end
 
 # ⚠️ SVGAPlayer 2.5.x upstream bug（截至 2026-07）：Svga.pbobjc.m 用 OSAtomicCompareAndSwapPtrBarrier

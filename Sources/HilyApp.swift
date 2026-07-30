@@ -8,6 +8,7 @@ struct HilyApp: App {
 
     init() {
         AnalyticsTracker.start()
+        CrashReporter.start()
 
         // 全局 URLCache：内存 50MB + 磁盘 500MB。
         // 与 ImageCache（NSCache 内存层）协同：URLCache 给 URLSession 用，远端图片切 tab / 跨启动都不重下。
