@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import WebKit
+import Combine
 
 /// 通用 H5 容器的页面描述。业务方只提供页面与上下文，不直接触碰 WKWebView。
 struct H5Page: Identifiable {
@@ -11,21 +12,31 @@ struct H5Page: Identifiable {
         case trusted(H5TrustedOriginPolicy)
     }
 
+    /// 不同 H5 业务共享同一安全容器，但协议不能互相渗透。
+    /// 活动页保留 Android 兼容的命名 handler；普通主播 H5 只使用 `App`。
+    enum BridgeProfile: Equatable {
+        case standard
+        case activity
+    }
+
     let id: UUID
     let url: URL
     let title: String?
     let bridgeMode: BridgeMode
+    let bridgeProfile: BridgeProfile
     let runtimeContext: H5RuntimeContext
 
     init(id: UUID = UUID(),
          url: URL,
          title: String? = nil,
          bridgeMode: BridgeMode = .disabled,
+         bridgeProfile: BridgeProfile = .standard,
          runtimeContext: H5RuntimeContext) {
         self.id = id
         self.url = url
         self.title = title
         self.bridgeMode = bridgeMode
+        self.bridgeProfile = bridgeProfile
         self.runtimeContext = runtimeContext
     }
 
@@ -34,12 +45,14 @@ struct H5Page: Identifiable {
     init(id: UUID = UUID(),
          url: URL,
          title: String? = nil,
-         bridgeMode: BridgeMode = .disabled) {
+         bridgeMode: BridgeMode = .disabled,
+         bridgeProfile: BridgeProfile = .standard) {
         self.init(
             id: id,
             url: url,
             title: title,
             bridgeMode: bridgeMode,
+            bridgeProfile: bridgeProfile,
             runtimeContext: .current()
         )
     }
@@ -60,6 +73,8 @@ struct H5TrustedOriginPolicy: Hashable {
 
     /// 已确认的用户协议/隐私政策站点。活动域名需在接入该业务时显式加入，不能由后端 URL 自动信任。
     static let liveHot = H5TrustedOriginPolicy(origins: [URL(string: "https://h5.livehot.site")!])
+    /// `hn-activity-h5` 的受控部署域。活动链接只能携带路径和查询，不能反向把任意来源升级成可信页面。
+    static let activityH5 = H5TrustedOriginPolicy(origins: [URL(string: "https://h5-activity-common.pages.dev")!])
     func allows(_ url: URL) -> Bool {
         guard url.scheme?.lowercased() == "https",
               let origin = Self.normalizedOrigin(url) else { return false }
@@ -80,6 +95,7 @@ enum H5EmbeddedFeature: String {
     case anchorGuide = "anchorGuide"
     case invite
     case wallet
+    case ranking = "rank"
 
     func url(baseURL: URL) -> URL? {
         guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
@@ -96,6 +112,7 @@ enum H5EmbeddedFeature: String {
 /// H5 通过 `getAppParams` 获取的运行时参数。敏感字段只进入受信任页面的 JS 内存，绝不拼接 URL。
 struct H5RuntimeContext {
     let token: String
+    let loginUuid: String
     let apiToken: String
     let authToken: String
     let appId: String
@@ -117,8 +134,8 @@ struct H5RuntimeContext {
                         requestParams: [String: String] = [:],
                         reportParams: [String: String] = [:]) -> H5RuntimeContext {
         H5RuntimeContext(
-            // 完整主播 H5 的常规运行时上下文。活动页不得使用这个上下文，避免把 App 主会话交给 WebView。
-            token: SessionStore.shared.user?.loginUuid ?? "",
+            token: SessionStore.shared.user?.token ?? "",
+            loginUuid: SessionStore.shared.user?.loginUuid ?? "",
             apiToken: SessionStore.shared.user?.token ?? "",
             authToken: SapiTokenStore.shared.authToken ?? "",
             appId: AppConfig.appId,
@@ -135,17 +152,24 @@ struct H5RuntimeContext {
         )
     }
 
-    /// 对齐活动 H5 的受限认证上下文。
-    ///
-    /// 活动页用 `loginUuid` 发起自身的加密请求；绝不向页面提供 App 主登录 token 或 SAPI token。
-    /// `apiToken` 保留为 `loginUuid` 是对现有完整 H5 `tokenManager` 的兼容字段，不能改为主 token。
+    /// 对齐 Android `H5NativeInterface.getAppParams()` 的活动页上下文。
+    /// `token` 是活动页请求拦截器写入 `loginToken` 的真实登录 token；`loginUuid` 单独保留。
     @MainActor
-    static func activity() -> H5RuntimeContext {
-        let loginUuid = SessionStore.shared.user?.loginUuid ?? ""
+    static func activity(roomId: String = "",
+                         roomType: String = "",
+                         requestParams: [String: String] = [:],
+                         reportParams: [String: String] = [:],
+                         isInLiveRoom: Bool = false,
+                         isInPartyRoom: Bool = false) -> H5RuntimeContext {
+        let token = SessionStore.shared.user?.token ?? ""
+        var activityRequestParams = requestParams
+        activityRequestParams["isInLiveRoom"] = isInLiveRoom ? "true" : "false"
+        activityRequestParams["isInPartyRoom"] = isInPartyRoom ? "true" : "false"
         return H5RuntimeContext(
-            token: loginUuid,
-            apiToken: loginUuid,
-            authToken: "",
+            token: token,
+            loginUuid: SessionStore.shared.user?.loginUuid ?? "",
+            apiToken: token,
+            authToken: SapiTokenStore.shared.authToken ?? "",
             appId: AppConfig.appId,
             acceptLanguage: AppLocaleStore.shared.effectiveLanguage.rawValue,
             deviceType: "iPhone",
@@ -153,18 +177,18 @@ struct H5RuntimeContext {
             osType: "iOS",
             osVersion: UIDevice.current.systemVersion,
             embeddedWebFeature: false,
-            roomId: "",
-            roomType: "",
-            requestParams: [:],
-            reportParams: [:]
+            roomId: roomId,
+            roomType: roomType,
+            requestParams: activityRequestParams,
+            reportParams: reportParams
         )
     }
 
     func jsonString() -> String? {
-        let value: [String: Any] = [
+        var value: [String: Any] = [
             "type": "getAppParams",
             "token": token,
-            "loginUuid": token,
+            "loginUuid": loginUuid,
             "apiToken": apiToken,
             "auth_token": authToken,
             "appId": appId,
@@ -181,12 +205,28 @@ struct H5RuntimeContext {
             "roomId": roomId,
             "roomType": roomType,
             "requestParams": requestParams,
-            "reportParams": reportParams,
+            "reportParams": serializedReportParams,
             "debug": Self.isDebugBuild,
         ]
+        // Android uses `HashMap.putAll(requestParams)`. Keep the nested field for backwards
+        // compatibility, then expose safe values at the top level without permitting override of
+        // authentication or runtime metadata.
+        let reservedKeys = Set(value.keys)
+        for (key, requestValue) in requestParams where !reservedKeys.contains(key) {
+            value[key] = requestValue
+        }
         guard JSONSerialization.isValidJSONObject(value),
               let data = try? JSONSerialization.data(withJSONObject: value),
               let string = String(data: data, encoding: .utf8) else { return nil }
+        return string
+    }
+
+    private var serializedReportParams: String {
+        guard JSONSerialization.isValidJSONObject(reportParams),
+              let data = try? JSONSerialization.data(withJSONObject: reportParams),
+              let string = String(data: data, encoding: .utf8) else {
+            return "{}"
+        }
         return string
     }
 
@@ -212,6 +252,84 @@ extension H5Page {
             title: title,
             bridgeMode: .trusted(H5TrustedOriginPolicy(origins: [baseURL])),
             runtimeContext: .current(embeddedWebFeature: true)
+        )
+    }
+
+    @MainActor
+    static func embeddedRanking(pageType: String?, hideMonthTab: Bool) -> H5Page? {
+        guard let baseURL = AppConfig.webFeatureBaseURL,
+              var url = H5EmbeddedFeature.ranking.url(baseURL: baseURL),
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+        var queryItems: [URLQueryItem] = []
+        if pageType?.uppercased() == "GAME_TASK" {
+            queryItems.append(URLQueryItem(name: "from", value: "gameTask"))
+        }
+        if hideMonthTab {
+            queryItems.append(URLQueryItem(name: "hideMonthTab", value: "1"))
+        }
+        components.queryItems = queryItems.isEmpty ? nil : queryItems
+        guard let resolvedURL = components.url else { return nil }
+        url = resolvedURL
+        return H5Page(
+            url: url,
+            title: nil,
+            bridgeMode: .trusted(H5TrustedOriginPolicy(origins: [baseURL])),
+            runtimeContext: .current(embeddedWebFeature: true)
+        )
+    }
+
+    /// 活动 URL 可以来自 IM/后端，但只有已审核的活动 origin 能拿到 bridge 和会话参数。
+    @MainActor
+    static func activity(url: URL, runtimeContext: H5RuntimeContext) -> H5Page? {
+        guard H5TrustedOriginPolicy.activityH5.allows(url) else {
+            AppLogger.net.notice("[H5Bridge] rejected untrusted activity origin")
+            return nil
+        }
+        return H5Page(
+            url: url,
+            bridgeMode: .trusted(.activityH5),
+            bridgeProfile: .activity,
+            runtimeContext: runtimeContext
+        )
+    }
+
+    /// Banner URL 来自后端，但只有明确受信任的完整主播 H5 或活动 H5 可得到 bridge。
+    /// Android 对所有 Banner 统一传 `reportParams.path = banner`，房间归属不能覆盖这个来源语义。
+    @MainActor
+    static func banner(url: URL,
+                       reportPath: String = "banner",
+                       roomId: String = "",
+                       roomType: String = "",
+                       isInLiveRoom: Bool = false,
+                       isInPartyRoom: Bool = false) -> H5Page {
+        let reportParams = ["path": reportPath]
+        if H5TrustedOriginPolicy.activityH5.allows(url),
+           let page = H5Page.activity(
+               url: url,
+               runtimeContext: .activity(
+                   roomId: roomId,
+                   roomType: roomType,
+                   reportParams: reportParams,
+                   isInLiveRoom: isInLiveRoom,
+                   isInPartyRoom: isInPartyRoom
+               )
+           ) {
+            return page
+        }
+        if let baseURL = AppConfig.webFeatureBaseURL,
+           H5TrustedOriginPolicy(origins: [baseURL]).allows(url) {
+            return H5Page(
+                url: url,
+                bridgeMode: .trusted(H5TrustedOriginPolicy(origins: [baseURL])),
+                runtimeContext: .current(embeddedWebFeature: true, reportParams: reportParams)
+            )
+        }
+        return H5Page(
+            url: url,
+            bridgeMode: .disabled,
+            runtimeContext: .current()
         )
     }
 }
@@ -245,6 +363,7 @@ enum H5BridgeAction {
     case openExternal(URL)
     case jumpWallet
     case jumpRanking(pageType: String?, hideMonthTab: Bool)
+    case commonJump(className: String)
     case goLive
     case goRoom(roomId: String?)
     case goProfile(userId: String?)
@@ -297,5 +416,74 @@ enum H5WebSession {
                 callback()
             }
         }
+    }
+}
+
+/// 活动 H5 已实现 `window.__actBridge.onMessage({type: 'REFRESH_TASK'})`。
+/// 原生任务、充值或奖励流程完成后调用 `refreshTask()`，当前仍展示中的活动页会立即刷新任务进度。
+enum H5ActivityBridge {
+    static let refreshTaskNotification = Notification.Name("H5ActivityBridge.refreshTask")
+
+    static func refreshTask() {
+        NotificationCenter.default.post(name: refreshTaskNotification, object: nil)
+    }
+}
+
+/// Core 只把受信任 H5 意图转换为有限的业务目的地；主 Tab 是唯一实际执行导航的位置。
+/// 这样活动 sheet、全屏 H5 和未来入口不会各自维护一套不一致的跳转协议。
+final class H5NativeActionRouter {
+    enum Destination: Equatable {
+        case wallet
+        case ranking(pageType: String?, hideMonthTab: Bool)
+        case liveSettings
+        case partyRoom(id: String)
+        case userProfile(id: String)
+    }
+
+    static let shared = H5NativeActionRouter()
+
+    private let subject = PassthroughSubject<Destination, Never>()
+    var publisher: AnyPublisher<Destination, Never> { subject.eraseToAnyPublisher() }
+
+    private init() {}
+
+    /// Returns false for actions that require a page-local handler, such as `GO_PROFILE`.
+    @discardableResult
+    func dispatch(_ action: H5BridgeAction) -> Bool {
+        let destination: Destination
+        switch action {
+        case .jumpWallet:
+            destination = .wallet
+        case .jumpRanking(let pageType, let hideMonthTab):
+            destination = .ranking(pageType: pageType, hideMonthTab: hideMonthTab)
+        case .goLive:
+            destination = .liveSettings
+        case .goRoom(let roomId):
+            guard let roomId = roomId?.trimmingCharacters(in: .whitespacesAndNewlines), !roomId.isEmpty else {
+                return false
+            }
+            destination = .partyRoom(id: roomId)
+        case .goProfile(let userId):
+            guard let userId = userId?.trimmingCharacters(in: .whitespacesAndNewlines), !userId.isEmpty else {
+                return false
+            }
+            destination = .userProfile(id: userId)
+        case .commonJump(let className):
+            // `hn-activity-h5` 当前唯一的 Android className 是开播设置页；未知类名绝不反射或拼 URL。
+            guard className == "com.gzxkwl.livehot.page.activity.LiveSettingActivity" else {
+                AppLogger.net.notice("[H5Bridge] rejected unsupported commonJump")
+                return false
+            }
+            destination = .liveSettings
+        default:
+            return false
+        }
+
+        // WKScriptMessage can arrive during a SwiftUI presentation transaction. Deferring one
+        // run-loop lets the source sheet finish dismissing before a tab/path mutation begins.
+        DispatchQueue.main.async { [weak self] in
+            self?.subject.send(destination)
+        }
+        return true
     }
 }

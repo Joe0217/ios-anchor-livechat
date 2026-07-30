@@ -18,7 +18,8 @@ enum H5Bridge {
             guard !event.isEmpty else { return nil }
             return .report(event: event, properties: scalarStrings(payload["params"]))
         case "OPEN_BROWSER", "OPENBROWSER":
-            let raw = string(payload["url"]) ?? string(message["url"])
+            let browserPayload = object(from: message["data"]) ?? payload
+            let raw = string(browserPayload["url"]) ?? string(message["url"])
             guard let raw, let url = URL(string: raw) else { return nil }
             return .openExternal(url)
         case "JUMP_WALLET", "JUMPWALLET":
@@ -28,6 +29,9 @@ enum H5Bridge {
                 pageType: string(payload["pageType"]),
                 hideMonthTab: bool(payload["hideMonthTab"], default: false)
             )
+        case "COMMON_JUMP", "COMMONJUMP":
+            guard let className = string(payload["className"]) ?? string(payload["path"]) else { return nil }
+            return .commonJump(className: className)
         case "GO_LIVE", "JUMPLIVEROOM":
             return .goLive
         case "GO_ROOM", "JUMPPARTROOM":
@@ -37,6 +41,15 @@ enum H5Bridge {
         default:
             return .unsupported(type: type)
         }
+    }
+
+    /// 活动 H5 在 iOS WebKit 环境优先调用命名 handler `hnActReportShuShu`。
+    /// Android 的同名 App 方法收到 JSON 字符串；这里同时接受 object 和字符串，统一收敛为受限标量。
+    static func activityReportAction(from body: Any) -> H5BridgeAction? {
+        guard let payload = object(from: body),
+              let event = string(payload["eventName"]) ?? string(payload["event"]),
+              !event.isEmpty else { return nil }
+        return .report(event: event, properties: scalarStrings(payload["params"]))
     }
 
     /// `WKScriptMessage` 可传 object，也有老活动页把整段 JSON 字符串传进来。
@@ -74,7 +87,7 @@ enum H5Bridge {
 
     /// 埋点仅接收扁平标量，拒绝对象/数组避免不受控 payload 进入 SDK。
     private static func scalarStrings(_ value: Any?) -> [String: String] {
-        guard let dict = value as? [String: Any] else { return [:] }
+        guard let dict = object(from: value) else { return [:] }
         return dict.reduce(into: [:]) { result, element in
             guard element.key.utf8.count <= 80,
                   let value = string(element.value), value.utf8.count <= 1_024 else { return }

@@ -308,6 +308,7 @@ final class WalletStore: ObservableObject {
             passwordRequest = nil
             withdrawalAuthorization = nil
             completedWithdrawalID = UUID()
+            H5ActivityBridge.refreshTask()
             await loadWithdrawalData()
             await loadRecords()
             AppToastCenter.shared.show(L10n.Wallet.withdrawalSubmitted)

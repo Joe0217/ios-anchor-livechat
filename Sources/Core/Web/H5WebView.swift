@@ -32,12 +32,20 @@ struct H5WebView: UIViewRepresentable {
         if page.allowsBridge(for: page.url), let runtime = page.runtimeContext.jsonString() {
             contentController.addUserScript(
                 WKUserScript(
-                    source: Self.bridgeScript(runtimeJSON: runtime, trustedURL: page.url),
+                    source: Self.bridgeScript(
+                        runtimeJSON: runtime,
+                        trustedURL: page.url,
+                        bridgeProfile: page.bridgeProfile
+                    ),
                     injectionTime: .atDocumentStart,
                     forMainFrameOnly: true
                 )
             )
             contentController.add(context.coordinator, name: "App")
+            if page.bridgeProfile == .activity {
+                contentController.add(context.coordinator, name: "Close")
+                contentController.add(context.coordinator, name: "hnActReportShuShu")
+            }
         }
 
         let view = WKWebView(frame: .zero, configuration: configuration)
@@ -65,6 +73,8 @@ struct H5WebView: UIViewRepresentable {
         view.navigationDelegate = nil
         view.uiDelegate = nil
         view.configuration.userContentController.removeScriptMessageHandler(forName: "App")
+        view.configuration.userContentController.removeScriptMessageHandler(forName: "Close")
+        view.configuration.userContentController.removeScriptMessageHandler(forName: "hnActReportShuShu")
         view.configuration.userContentController.removeAllUserScripts()
         view.loadHTMLString("", baseURL: nil)
     }
@@ -82,6 +92,7 @@ struct H5WebView: UIViewRepresentable {
         private var isStateDeliveryScheduled = false
         private var loadRequestID = 0
         private var webContentTerminationReloadCount = 0
+        private var refreshTaskObserver: NSObjectProtocol?
 
         init(page: H5Page,
              reloadGeneration: Int,
@@ -105,12 +116,24 @@ struct H5WebView: UIViewRepresentable {
                 guard view.isLoading else { return }
                 self?.emitState(.loading(progress: view.estimatedProgress))
             }
+            guard page.bridgeProfile == .activity else { return }
+            refreshTaskObserver = NotificationCenter.default.addObserver(
+                forName: H5ActivityBridge.refreshTaskNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.sendRefreshTaskIfTrusted()
+            }
         }
 
         func detach() {
             loadRequestID += 1
             progressObservation?.invalidate()
             progressObservation = nil
+            if let refreshTaskObserver {
+                NotificationCenter.default.removeObserver(refreshTaskObserver)
+                self.refreshTaskObserver = nil
+            }
             pendingState = nil
             navigationGestureState?.detach()
             webView = nil
@@ -224,10 +247,20 @@ struct H5WebView: UIViewRepresentable {
 
         func userContentController(_ userContentController: WKUserContentController,
                                    didReceive message: WKScriptMessage) {
-            guard message.name == "App",
-                  let currentURL = webView?.url,
-                  page.allowsBridge(for: currentURL),
-                  let action = H5Bridge.action(from: message.body) else { return }
+            guard let currentURL = webView?.url,
+                  page.allowsBridge(for: currentURL) else { return }
+            let action: H5BridgeAction?
+            switch message.name {
+            case "App":
+                action = H5Bridge.action(from: message.body)
+            case "Close" where page.bridgeProfile == .activity:
+                action = .close
+            case "hnActReportShuShu" where page.bridgeProfile == .activity:
+                action = H5Bridge.activityReportAction(from: message.body)
+            default:
+                return
+            }
+            guard let action else { return }
             if case .requestAppParams = action, let webView {
                 sendRuntimeContextIfTrusted(in: webView)
                 return
@@ -242,6 +275,16 @@ struct H5WebView: UIViewRepresentable {
             AppLogger.net.debug("[H5Bridge] runtime context delivered path=\(currentURL.path, privacy: .public) embedded=\(self.page.runtimeContext.embeddedWebFeature, privacy: .public)")
             let script = "window.__hilyReceiveNativeMessage && window.__hilyReceiveNativeMessage(\(payload));"
             webView.evaluateJavaScript(script)
+        }
+
+        private func sendRefreshTaskIfTrusted() {
+            guard page.bridgeProfile == .activity,
+                  let webView,
+                  let currentURL = webView.url,
+                  page.allowsBridge(for: currentURL) else { return }
+            webView.evaluateJavaScript(
+                "window.__hilyReceiveNativeMessage && window.__hilyReceiveNativeMessage({type:'REFRESH_TASK'});"
+            )
         }
 
         private func configureWebViewBackGesture(in webView: WKWebView) {
@@ -266,30 +309,40 @@ struct H5WebView: UIViewRepresentable {
         }
     }
 
-    private static func bridgeScript(runtimeJSON: String, trustedURL: URL) -> String {
+    private static func bridgeScript(runtimeJSON: String,
+                                     trustedURL: URL,
+                                     bridgeProfile: H5Page.BridgeProfile) -> String {
         guard let origin = H5TrustedOriginPolicy.normalizedOriginForScript(trustedURL) else { return "" }
+        let isActivityProfile = bridgeProfile == .activity ? "true" : "false"
         return """
         (function() {
           if (window.location.origin !== \(javaScriptString(origin))) return;
           var nativeHandler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.App;
           if (!nativeHandler) return;
           var runtime = \(runtimeJSON);
-          var known = ['getAppParams', 'SET_NAV', 'CLOSE', 'JUMP_WALLET', 'JUMP_RANKING', 'REPORT_SHUSHU', 'GO_ROOM', 'GO_PROFILE', 'GO_LIVE'];
+          var isActivityProfile = \(isActivityProfile);
+          var known = ['getAppParams', 'SET_NAV', 'CLOSE', 'JUMP_WALLET', 'JUMP_RANKING', 'REPORT_SHUSHU', 'GO_ROOM', 'GO_PROFILE', 'GO_LIVE', 'COMMON_JUMP'];
           function post(type, data) { nativeHandler.postMessage({ type: type, data: data || {} }); }
           window.__hilyReceiveNativeMessage = function(payload) {
             if (payload && payload.type === 'getAppParams') runtime = payload;
+            if (isActivityProfile && window.__actBridge && typeof window.__actBridge.onMessage === 'function') {
+              try { window.__actBridge.onMessage(payload); } catch (_) {}
+            }
             window.dispatchEvent(new MessageEvent('message', { data: payload, origin: window.location.origin }));
           };
           var previousApp = window.App || {};
           window.App = Object.assign(previousApp, {
-            getAppParams: function() { return runtime; },
+            getAppParams: function() { return isActivityProfile ? JSON.stringify(runtime) : runtime; },
             closePage: function() { post('CLOSE'); },
             reportShuShu: function(eventName, params) { post('REPORT_SHUSHU', { eventName: eventName, params: params || {} }); },
             openBrowser: function(params) { post('OPEN_BROWSER', params || {}); },
             jumpWallet: function() { post('JUMP_WALLET'); },
             jumpRanking: function(pageType, hideMonthTab) { post('JUMP_RANKING', { pageType: pageType, hideMonthTab: !!hideMonthTab }); },
+            commonJump: function(className) { post('COMMON_JUMP', { className: className || '' }); },
             jumpLiveRoom: function() { post('GO_LIVE'); },
-            jumpPartRoom: function(roomId) { post('GO_ROOM', { roomId: roomId }); }
+            jumpPartRoom: function(roomId) { post('GO_ROOM', { roomId: roomId }); },
+            isInLiveRoom: function() { return String(runtime.isInLiveRoom).toLowerCase() === 'true'; },
+            isInPartyRoom: function() { return String(runtime.isInPartyRoom).toLowerCase() === 'true'; }
           });
           var originalPostMessage = window.postMessage.bind(window);
           window.postMessage = function(message, targetOrigin, transfer) {

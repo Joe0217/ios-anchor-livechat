@@ -316,6 +316,7 @@ final class TaskCenterStore: ObservableObject {
                 )
             }
             // 刷新当前 cycle + rank(领奖后积分/收入可能变)
+            H5ActivityBridge.refreshTask()
             await loadCycle(activeCycle)
             fetchRank()
         } catch {
@@ -353,6 +354,7 @@ final class TaskCenterStore: ObservableObject {
                     AppToastCenter.shared.show(String(format: L10n.taskClaimAllMultiTypeFormat, claimed.count))
                 }
             }
+            H5ActivityBridge.refreshTask()
             await loadCycle(activeCycle)
             fetchRank()
         } catch {
@@ -379,6 +381,7 @@ final class TaskCenterStore: ObservableObject {
         do {
             try await service.claimLegacyTask(taskId: taskId)
             AppToastCenter.shared.show(L10n.taskClaimSuccess)
+            H5ActivityBridge.refreshTask()
             await loadCycle(.daily)
             fetchRank()
         } catch {

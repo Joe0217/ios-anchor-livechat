@@ -80,7 +80,9 @@ struct H5WebContainerView: View {
         case .unsupported(let type):
             AppLogger.net.notice("[H5Bridge] unsupported action type=\(type, privacy: .public)")
         default:
-            onAction(action)
+            if !H5NativeActionRouter.shared.dispatch(action) {
+                onAction(action)
+            }
         }
     }
 }

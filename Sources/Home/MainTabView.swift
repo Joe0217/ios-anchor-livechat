@@ -41,6 +41,8 @@ struct MainTabView: View {
     @State private var profilePath: NavigationPath = NavigationPath()
     /// 最小化 Party 房点击开播时的二次确认目标；完整 Party 房仍维持原 toast 互斥。
     @State private var pendingLiveEntryTarget: LiveEntryTarget?
+    /// 活动页 `GAME_TASK` 排行榜复用受信任的主播 H5 路由，避免降级到不包含任务奖励字段的原生通用榜。
+    @State private var activityRankingPage: H5Page?
     @Environment(\.scenePhase) private var scenePhase
 
     /// `.starting` 期间锁 tabbar 拦截触摸，防止 push 到 LiveRoomView 前 tab 切换导致
@@ -184,6 +186,10 @@ struct MainTabView: View {
         } message: {
             Text(L10n.Party.mutexBlockedByParty)
         }
+        .fullScreenCover(item: $activityRankingPage) { page in
+            H5WebSheetView(page: page)
+                .ignoresSafeArea()
+        }
         .onChange(of: isOnSubpageSignal) { newValue in
             InviteMessageCenter.shared.updateDisplayContext(isAtRootPage: !newValue)
             RobotCallRouteGate.shared.update(isAtRootPage: !newValue)
@@ -209,6 +215,9 @@ struct MainTabView: View {
             guard let yxAccid = notification.userInfo?["yxAccid"] as? String,
                   !yxAccid.isEmpty else { return }
             openChatAction.perform(yxAccid)
+        }
+        .onReceive(H5NativeActionRouter.shared.publisher) { destination in
+            handleH5NativeDestination(destination)
         }
         .task {
             // 全局图片配置预热（对齐 H5 app.js `getBannerList([2])`）：
@@ -775,6 +784,72 @@ struct MainTabView: View {
             workPath.append(route)
         }
     }
+
+    private func handleH5NativeDestination(_ destination: H5NativeActionRouter.Destination) {
+        switch destination {
+        case .wallet:
+            selectWorkRoute(.wallet)
+        case .ranking(let pageType, let hideMonthTab):
+            openActivityRanking(pageType: pageType, hideMonthTab: hideMonthTab)
+        case .liveSettings:
+            selectWorkForLiveSettings()
+        case .partyRoom(let roomId):
+            guard permission.canParty else {
+                AppToastCenter.shared.show(L10n.commonNoContent)
+                return
+            }
+            suppressPathClearOnTabChange = true
+            selection = .party
+            partyPath = NavigationPath([PartyRoute.room(id: roomId, password: nil)])
+            DispatchQueue.main.async { suppressPathClearOnTabChange = false }
+        case .userProfile(let userId):
+            openUserProfileAction.perform(userId)
+        }
+    }
+
+    private func selectWorkRoute(_ route: WorkRoute) {
+        suppressPathClearOnTabChange = true
+        selection = .work
+        workPath = NavigationPath([route])
+        DispatchQueue.main.async { suppressPathClearOnTabChange = false }
+    }
+
+    private func selectWorkForLiveSettings() {
+        suppressPathClearOnTabChange = true
+        selection = .work
+        workPath = NavigationPath()
+        DispatchQueue.main.async {
+            suppressPathClearOnTabChange = false
+            requestLiveEntry(.work)
+        }
+    }
+
+    private func openActivityRanking(pageType: String?, hideMonthTab: Bool) {
+        switch pageType?.uppercased() {
+        case "GAME_TASK":
+            guard let page = H5Page.embeddedRanking(pageType: pageType, hideMonthTab: hideMonthTab) else {
+                AppLogger.net.error("[H5Bridge] unavailable embedded game-task ranking page")
+                return
+            }
+            activityRankingPage = page
+        case "PARTY_ROOM":
+            guard permission.canParty else {
+                AppToastCenter.shared.show(L10n.commonNoContent)
+                return
+            }
+            suppressPathClearOnTabChange = true
+            selection = .party
+            partyPath = NavigationPath([PartyRoute.lobbyRanking(.partyRich)])
+            DispatchQueue.main.async { suppressPathClearOnTabChange = false }
+        default:
+            // `NORMAL` 及服务端缺省值均进入现有主播榜；`hideMonthTab` 仅 GAME_TASK 页有业务含义。
+            _ = hideMonthTab
+            suppressPathClearOnTabChange = true
+            selection = .home
+            homePath = NavigationPath([HomeLeaderboardRoute.ranking])
+            DispatchQueue.main.async { suppressPathClearOnTabChange = false }
+        }
+    }
 }
 
 /// H5 `party-floating.vue` 的应用内小窗。保持在主壳，因而用户切换任意 tab 后仍可恢复 Party 房。
@@ -1035,7 +1110,6 @@ struct HomeBannerH5Route: Hashable {
     let originalURLString: String
     let resolvedURLString: String
     let reportPath: String?
-    let trustedOriginURLString: String?
     let isInternalH5Route: Bool
 
     init?(item: AppPictureItem) {
@@ -1046,32 +1120,18 @@ struct HomeBannerH5Route: Hashable {
         self.originalURLString = raw
         self.resolvedURLString = resolved.url.absoluteString
         self.reportPath = resolved.reportPath
-        self.trustedOriginURLString = resolved.url.scheme?.lowercased() == "https" ? resolved.url.absoluteString : nil
         self.isInternalH5Route = resolved.isInternalH5Route
     }
 
     @MainActor
     var page: H5Page? {
         guard let url = URL(string: resolvedURLString) else { return nil }
-        let bridgeMode: H5Page.BridgeMode
-        if let trustedOriginURLString, let trustedOriginURL = URL(string: trustedOriginURLString) {
-            bridgeMode = .trusted(H5TrustedOriginPolicy(origins: [trustedOriginURL]))
-        } else {
-            bridgeMode = .disabled
-        }
-        return H5Page(
-            url: url,
-            title: nil,
-            bridgeMode: bridgeMode,
-            runtimeContext: .current(reportParams: reportPath.map { ["path": $0] } ?? [:])
-        )
+        return H5Page.banner(url: url, reportPath: reportPath ?? "banner")
     }
 
     private static func resolve(_ raw: String) -> (url: URL, reportPath: String?, isInternalH5Route: Bool)? {
         if raw.contains("isHuanNiuOwnH5") {
-            let innerPath = internalPath(from: raw)
-            guard !innerPath.isEmpty,
-                  let url = URL(string: "https://ios-web.netlify.app/#\(innerPath)") else { return nil }
+            guard let url = internalURL(from: raw) else { return nil }
             return (url, nil, true)
         }
 
@@ -1082,14 +1142,21 @@ struct HomeBannerH5Route: Hashable {
         return (url, nil, false)
     }
 
-    private static func internalPath(from raw: String) -> String {
-        if raw.contains("http"), let url = URL(string: raw) {
-            var path = url.path.isEmpty ? "/" : url.path
-            if let query = url.query, !query.isEmpty { path += "?\(query)" }
-            if let fragment = url.fragment, !fragment.isEmpty { path += "#\(fragment)" }
-            return path
+    private static func internalURL(from raw: String) -> URL? {
+        let base = "https://ios-web.netlify.app"
+        if let externalURL = URL(string: raw), externalURL.host != nil {
+            // 老链接可能使用 hash 路由，fragment 本身就是当前 H5 的 history path。
+            if let fragment = externalURL.fragment, fragment.hasPrefix("/") {
+                return URL(string: base + fragment)
+            }
+            guard var components = URLComponents(string: base) else { return nil }
+            components.path = externalURL.path.isEmpty ? "/" : externalURL.path
+            components.query = externalURL.query
+            return components.url
         }
-        return raw.hasPrefix("/") ? raw : "/\(raw)"
+
+        let path = raw.hasPrefix("/") ? raw : "/\(raw)"
+        return URL(string: base + path)
     }
 
     private static func strippedLotteryRuntimeURL(_ url: URL) -> URL? {
