@@ -28,44 +28,40 @@ struct TopSheetsModifier: ViewModifier {
     let onRouletteEnabledChanged: (Bool) -> Void
     /// Enable 成功后 sheet 立即关闭，toast 需上抛到 LiveRoomView 全屏层展示
     let onRouletteToast: (String) -> Void
+    @State private var pendingUserCardUserId: String?
 
     func body(content: Content) -> some View {
         // v17: 所有直播间 sheet 加 .fraction(0.4) + .large 双 detents —— 默认 2/5 屏，允许用户拖大
         // 对齐用户明示"不要遮挡直播画面"
         content
-            .sheet(isPresented: $showContribution) {
+            .sheet(isPresented: $showContribution, onDismiss: presentPendingUserCardAfterSheetDismissal) {
                 ContributionSheetView(anchorId: uidStr,
                                       roomId: roomIdStr,
                                       currentIncome: contributionStore.currentLiveIncome,
                                       isPresented: $showContribution,
                                       onUserTap: { userId in
-                                          guard !userId.isEmpty else { return }
-                                          // 资料卡同样是 sheet，先关闭贡献面板避免 sheet 覆盖。
+                                          guard shouldPresentUserCard(for: userId) else { return }
+                                          pendingUserCardUserId = userId
                                           showContribution = false
-                                          DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                                              onContributionUserTap(userId)
-                                          }
                                       })
                     .sheetTopInset()
                     .presentationDetents([.fraction(0.4)])
                     .presentationDragIndicator(.visible)   // 用顶部 X 关闭，隐藏 drag indicator
             }
-            .sheet(isPresented: $showRank) {
+            .sheet(isPresented: $showRank, onDismiss: presentPendingUserCardAfterSheetDismissal) {
                 // Rank 徽章入口 → 主播收礼周榜（对齐 H5 girlWeeklyRank.vue）
                 RankSheetView(anchorUserId: uidStr,
                               isPresented: $showRank,
                               onRankUpdate: onRankUpdate,
                               onUserTap: { userId in
-                                  guard !userId.isEmpty else { return }
+                                  guard shouldPresentUserCard(for: userId) else { return }
+                                  pendingUserCardUserId = userId
                                   showRank = false
-                                  DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                                      onContributionUserTap(userId)
-                                  }
                               })
                     .presentationDetents([.fraction(0.4)])
                     .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showUserWeeklyRank) {
+            .sheet(isPresented: $showUserWeeklyRank, onDismiss: presentPendingUserCardAfterSheetDismissal) {
                 // 观众数字入口 → 观众列表 + 送礼榜（对齐 H5 userWeeklyRank.vue）
                 UserWeeklyRankSheetView(
                     isPresented: $showUserWeeklyRank,
@@ -73,11 +69,9 @@ struct TopSheetsModifier: ViewModifier {
                     dbId: Int(roomIdStr) ?? 0,
                     initialTopTab: userWeeklyRankInitialTopTab,
                     onUserTap: { userId in
-                        guard !userId.isEmpty else { return }
+                        guard shouldPresentUserCard(for: userId) else { return }
+                        pendingUserCardUserId = userId
                         showUserWeeklyRank = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                            onContributionUserTap(userId)
-                        }
                     }
                 )
                     .sheetTopInset()
@@ -101,5 +95,16 @@ struct TopSheetsModifier: ViewModifier {
                     showRouletteSetting = true
                 })
             }
+    }
+
+    private func presentPendingUserCardAfterSheetDismissal() {
+        guard let userId = pendingUserCardUserId else { return }
+        pendingUserCardUserId = nil
+        onContributionUserTap(userId)
+    }
+
+    private func shouldPresentUserCard(for userId: String) -> Bool {
+        guard !userId.isEmpty else { return false }
+        return userId != String(SessionStore.shared.user?.userId ?? 0)
     }
 }

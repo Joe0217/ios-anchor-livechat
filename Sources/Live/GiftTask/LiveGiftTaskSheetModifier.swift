@@ -20,24 +20,34 @@ struct LiveGiftTaskSheetModifier: ViewModifier {
     let store: LiveGiftTaskStore
     let anchorId: String
     let onUserTap: (String) -> Void
+    @State private var pendingUserCardUserId: String?
 
     func body(content: Content) -> some View {
-        content.sheet(isPresented: $isPresented) {
+        content.sheet(isPresented: $isPresented, onDismiss: presentPendingUserCardAfterSheetDismissal) {
             LiveGiftTaskSheet(
                 store: store,
                 anchorId: anchorId,
                 isPresented: $isPresented,
                 onUserTap: { userId in
-                    guard !userId.isEmpty else { return }
+                    guard shouldPresentUserCard(for: userId) else { return }
+                    pendingUserCardUserId = userId
                     isPresented = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        onUserTap(userId)
-                    }
                 }
             )
             .sheetTopInset()
             .presentationDetents([.height(460)])
             .presentationDragIndicator(.visible)
         }
+    }
+
+    private func presentPendingUserCardAfterSheetDismissal() {
+        guard let userId = pendingUserCardUserId else { return }
+        pendingUserCardUserId = nil
+        onUserTap(userId)
+    }
+
+    private func shouldPresentUserCard(for userId: String) -> Bool {
+        guard !userId.isEmpty else { return false }
+        return userId != String(SessionStore.shared.user?.userId ?? 0)
     }
 }

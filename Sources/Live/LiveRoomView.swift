@@ -136,6 +136,8 @@ struct LiveRoomView: View {
     @State private var winnerActivityPage: H5Page?
     /// UserCard tap 头像触发 → nil = 隐藏，非 nil = 该 userId 的 popup 显示
     @State private var userCardUserId: String? = nil
+    /// 根 sheet 关闭后待展示的名片卡，避免名片卡 overlay 位于 sheet 下层。
+    @State private var pendingUserCardUserId: String?
     /// v10 心愿单半屏面板显隐
     @State private var showWishlistPanel: Bool = false
 
@@ -215,7 +217,7 @@ struct LiveRoomView: View {
         #if DEBUG
         .sheet(isPresented: $showPKDebug) { pkDebugPanel }   // M0 调试入口（仅 DEBUG，不限高）
         #endif
-        .sheet(isPresented: $showInviteSheet) { inviteSheetContent }
+        .sheet(isPresented: $showInviteSheet, onDismiss: presentPendingUserCardAfterSheetDismissal) { inviteSheetContent }
         // v26（2026-07-15）：PKInvitedSheet 双挂载策略——LiveRoomView 层负责"sheet 未打开时"，
         // PKInviteSheet 内 fullScreenCover 负责"sheet 打开时"（iOS UIKit modal stack 限制：
         // sheet 打开时 root vc 的 fullScreenCover 会排队等 sheet dismiss，无法盖过 sheet）。
@@ -302,7 +304,7 @@ struct LiveRoomView: View {
         // **半屏私聊 sheet 挂在 ConversationSheetContent 内部**（sheet-over-sheet），此层只管消息列表。
         // SwiftUI 同一 view 挂多个平行 sheet 同一时刻只显示一个，会出现"点会话 → 消息列表关闭后才显示私聊"的错觉。
         .sheet(isPresented: $showMessageSheet) { messageSheetContent.giftPanelSheetBackground() }
-        .sheet(item: $winnerActivityPage) { page in
+        .sheet(item: $winnerActivityPage, onDismiss: presentPendingUserCardAfterSheetDismissal) { page in
             H5WebSheetView(page: page, onAction: handleWinnerActivityAction)
                 .presentationDetents([.fraction(0.5)])
                 .presentationDragIndicator(.visible)
@@ -566,8 +568,9 @@ struct LiveRoomView: View {
 
     // tap 主播头像 → 关邀请 sheet + 打开 UserCard popup（对齐 H5 openAnchorProfile）
     private func handleInviteAvatarTap(_ uid: String) {
+        guard shouldPresentUserCard(for: uid) else { return }
+        pendingUserCardUserId = uid
         showInviteSheet = false
-        userCardUserId = uid
     }
     // v22（2026-07-11）：Waiting 按钮 tap 时才打开 waiting popup（不自动触发）
     private func handleInviteOpenWaiting() { showPKInviteWaiting = true }
@@ -647,10 +650,14 @@ struct LiveRoomView: View {
             AppLogger.net.notice("[LiveWinner] ignored invalid activity URL")
             return
         }
-        winnerActivityPage = H5Page(
+        winnerActivityPage = H5Page.activity(
             url: url,
-            bridgeMode: .trusted(H5TrustedOriginPolicy(origins: [url])),
-            runtimeContext: .activity()
+            runtimeContext: .activity(
+                roomId: roomInfo.id.map { String($0) } ?? "",
+                roomType: "0",
+                reportParams: ["path": "live"],
+                isInLiveRoom: true
+            )
         )
     }
 
@@ -667,14 +674,31 @@ struct LiveRoomView: View {
     @MainActor
     private func handleWinnerActivityAction(_ action: H5BridgeAction) {
         switch action {
-        case .goLive, .goRoom, .close:
+        case .close:
             winnerActivityPage = nil
+        case .goLive, .goRoom, .jumpWallet, .jumpRanking, .commonJump:
+            winnerActivityPage = nil
+            _ = H5NativeActionRouter.shared.dispatch(action)
         case .goProfile(let userId):
             winnerActivityPage = nil
-            if let userId, !userId.isEmpty { userCardUserId = userId }
+            guard let userId, shouldPresentUserCard(for: userId) else { return }
+            pendingUserCardUserId = userId
         default:
             break
         }
+    }
+
+    private func presentPendingUserCardAfterSheetDismissal() {
+        guard let userId = pendingUserCardUserId else { return }
+        pendingUserCardUserId = nil
+        // 收到 PK 邀请时全屏接收页必须优先，不能留下被其遮挡的名片卡状态。
+        guard pkStore.state != .invited else { return }
+        userCardUserId = userId
+    }
+
+    private func shouldPresentUserCard(for userId: String) -> Bool {
+        guard !userId.isEmpty else { return false }
+        return userId != String(SessionStore.shared.user?.userId ?? 0)
     }
 
     /// v10/v11/v25 触发 5 个 store 初始化拉取（进房时）

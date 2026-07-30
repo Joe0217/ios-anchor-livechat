@@ -305,16 +305,7 @@ struct UserCardPopup: View {
 
                 previewMeta(preview: preview)
 
-                HStack(spacing: 44) {
-                    VStack(spacing: 6) {
-                        skeletonBar(width: 38, height: 18)
-                        skeletonBar(width: 72, height: 14)
-                    }
-                    VStack(spacing: 6) {
-                        skeletonBar(width: 38, height: 18)
-                        skeletonBar(width: 72, height: 14)
-                    }
-                }
+                skeletonStatsRow
                 .padding(.top, 6)
 
                 skeletonGiftWall
@@ -431,6 +422,21 @@ struct UserCardPopup: View {
         .padding(.vertical, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white.opacity(0.08)))
+    }
+
+    /// 与详情态 `statsRow` 保持同一条横向基线和标签间距，避免加载完成时关注数据区域重排。
+    private var skeletonStatsRow: some View {
+        HStack(spacing: 0) {
+            skeletonBar(width: 38, height: 18)
+            skeletonBar(width: 72, height: 14)
+                .padding(.leading, 6)
+                .padding(.trailing, 48)
+
+            skeletonBar(width: 38, height: 18)
+            skeletonBar(width: 72, height: 14)
+                .padding(.horizontal, 6)
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 
     private func skeletonBar(width: CGFloat?, height: CGFloat, cornerRadius: CGFloat = 6) -> some View {

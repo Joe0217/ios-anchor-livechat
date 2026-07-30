@@ -40,11 +40,8 @@ struct WishlistAnchorPanel: View {
 
                     WishTop6Row(gifters: store.topSixSlots) { gifter in
                         guard let userId = gifter.userId, !userId.isEmpty else { return }
-                        // H5 先关闭高层心愿面板，再展示资料卡，避免 sheet 覆盖资料卡。
-                        isPresented = false
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                            onGifterTap(userId)
-                        }
+                        // 调用方负责在 sheet 完成关闭后展示根层名片卡。
+                        onGifterTap(userId)
                     }
                         .padding(.horizontal, 16).padding(.bottom, 16)
                 }

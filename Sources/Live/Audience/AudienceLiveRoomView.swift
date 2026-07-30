@@ -24,6 +24,8 @@ struct AudienceLiveRoomView: View {
     @State private var showWishlist = false
     /// 客态中奖公屏点击后的受限活动半屏页。
     @State private var winnerActivityPage: H5Page?
+    /// 当前根 sheet 关闭后待展示的名片卡，避免根层 overlay 被 sheet 遮挡。
+    @State private var pendingUserCardUserId: String?
     @State private var userCardUserId: String?
     @State private var chatSheetPeerYxAccId: String?
     @State private var pkRankSide: PKRankSide?
@@ -88,12 +90,12 @@ struct AudienceLiveRoomView: View {
             )
             .avatarUserCardPresenter { userCardUserId = $0 }
             .avatarTapEnvironmentOverride(.liveRoom)
-            .sheet(isPresented: $showContribution) { contributionSheet }
-            .sheet(isPresented: $showAnchorRank) { anchorRankSheet }
-            .sheet(isPresented: $showAudienceRank) { audienceRankSheet }
-            .sheet(isPresented: $showTask) { taskSheet }
-            .sheet(isPresented: $showWishlist) { wishlistSheet }
-            .sheet(item: $winnerActivityPage) { page in
+            .sheet(isPresented: $showContribution, onDismiss: presentPendingUserCardAfterSheetDismissal) { contributionSheet }
+            .sheet(isPresented: $showAnchorRank, onDismiss: presentPendingUserCardAfterSheetDismissal) { anchorRankSheet }
+            .sheet(isPresented: $showAudienceRank, onDismiss: presentPendingUserCardAfterSheetDismissal) { audienceRankSheet }
+            .sheet(isPresented: $showTask, onDismiss: presentPendingUserCardAfterSheetDismissal) { taskSheet }
+            .sheet(isPresented: $showWishlist, onDismiss: presentPendingUserCardAfterSheetDismissal) { wishlistSheet }
+            .sheet(item: $winnerActivityPage, onDismiss: presentPendingUserCardAfterSheetDismissal) { page in
                 H5WebSheetView(page: page, onAction: handleWinnerActivityAction)
                     .presentationDetents([.fraction(0.5)])
                     .presentationDragIndicator(.visible)
@@ -288,7 +290,7 @@ struct AudienceLiveRoomView: View {
                     roomId: String(info.liveRecordId),
                     currentIncome: nim.contributionStore.currentLiveIncome,
                     isPresented: $showContribution,
-                    onUserTap: { userCardUserId = $0 }
+                    onUserTap: { queueUserCardAfterSheetDismissal($0, dismiss: { showContribution = false }) }
                 )
                 .sheetTopInset()
                 .presentationDetents([.fraction(0.4)])
@@ -304,7 +306,7 @@ struct AudienceLiveRoomView: View {
                     anchorUserId: info.anchorUserIdString,
                     isPresented: $showAnchorRank,
                     onRankUpdate: { nim.anchorRankStore.setRank($0) },
-                    onUserTap: { userCardUserId = $0 }
+                    onUserTap: { queueUserCardAfterSheetDismissal($0, dismiss: { showAnchorRank = false }) }
                 )
                 .presentationDetents([.fraction(0.4)])
                 .presentationDragIndicator(.visible)
@@ -320,7 +322,7 @@ struct AudienceLiveRoomView: View {
                     anchorUserId: info.anchorUserId,
                     dbId: info.liveRecordId,
                     initialTopTab: audienceRankInitialTopTab,
-                    onUserTap: { userCardUserId = $0 }
+                    onUserTap: { queueUserCardAfterSheetDismissal($0, dismiss: { showAudienceRank = false }) }
                 )
                 .sheetTopInset()
                 .presentationDetents([.fraction(0.4)])
@@ -336,7 +338,7 @@ struct AudienceLiveRoomView: View {
                     store: nim.liveGiftTaskStore,
                     anchorId: info.anchorUserIdString,
                     isPresented: $showTask,
-                    onUserTap: { userCardUserId = $0 }
+                    onUserTap: { queueUserCardAfterSheetDismissal($0, dismiss: { showTask = false }) }
                 )
                 .sheetTopInset()
                 .presentationDetents([.fraction(0.4)])
@@ -352,7 +354,7 @@ struct AudienceLiveRoomView: View {
                     store: nim.wishlistStore,
                     isPresented: $showWishlist,
                     liveRecordId: String(info.liveRecordId),
-                    onGifterTap: { userCardUserId = $0 }
+                    onGifterTap: { queueUserCardAfterSheetDismissal($0, dismiss: { showWishlist = false }) }
                 )
                 .sheetTopInset()
                 .giftPanelSheetBackground()
@@ -537,6 +539,23 @@ struct AudienceLiveRoomView: View {
         }
     }
 
+    private func queueUserCardAfterSheetDismissal(_ userId: String, dismiss: () -> Void) {
+        guard shouldPresentUserCard(for: userId) else { return }
+        pendingUserCardUserId = userId
+        dismiss()
+    }
+
+    private func presentPendingUserCardAfterSheetDismissal() {
+        guard let userId = pendingUserCardUserId else { return }
+        pendingUserCardUserId = nil
+        userCardUserId = userId
+    }
+
+    private func shouldPresentUserCard(for userId: String) -> Bool {
+        guard !userId.isEmpty else { return false }
+        return userId != String(SessionStore.shared.user?.userId ?? 0)
+    }
+
     /// 与主播态一致：活动留在当前直播页的半屏容器内，只有 HTTPS 页面能获得受限 Bridge 上下文。
     @MainActor
     private func openWinnerActivity(_ rawURL: String) {
@@ -546,10 +565,14 @@ struct AudienceLiveRoomView: View {
             AppLogger.net.notice("[AudienceLiveWinner] ignored invalid activity URL")
             return
         }
-        winnerActivityPage = H5Page(
+        winnerActivityPage = H5Page.activity(
             url: url,
-            bridgeMode: .trusted(H5TrustedOriginPolicy(origins: [url])),
-            runtimeContext: .activity()
+            runtimeContext: .activity(
+                roomId: currentActivityRoomId,
+                roomType: "0",
+                reportParams: ["path": "live"],
+                isInLiveRoom: true
+            )
         )
     }
 
@@ -565,14 +588,25 @@ struct AudienceLiveRoomView: View {
     @MainActor
     private func handleWinnerActivityAction(_ action: H5BridgeAction) {
         switch action {
-        case .goLive, .goRoom, .close:
+        case .close:
             winnerActivityPage = nil
+        case .goLive, .goRoom, .jumpWallet, .jumpRanking, .commonJump:
+            winnerActivityPage = nil
+            _ = H5NativeActionRouter.shared.dispatch(action)
         case .goProfile(let userId):
             winnerActivityPage = nil
-            if let userId, !userId.isEmpty { userCardUserId = userId }
+            guard let userId, shouldPresentUserCard(for: userId) else { return }
+            pendingUserCardUserId = userId
         default:
             break
         }
+    }
+
+    private var currentActivityRoomId: String {
+        if case .live(let room) = store.state {
+            return String(room.liveRecordId)
+        }
+        return anchor.userId
     }
 
     private func leaveRoomResources() {

@@ -17,6 +17,7 @@ struct LiveRoomExtraOverlaysModifier: ViewModifier {
     let liveRecordId: String
     /// v20 公告保存成功回调 —— 父层用于往公屏 messagesStore append announcement 消息
     let onAnnouncementSaved: (String) -> Void
+    @State private var pendingUserCardUserId: String?
 
     func body(content: Content) -> some View {
         content
@@ -53,16 +54,31 @@ struct LiveRoomExtraOverlaysModifier: ViewModifier {
                     .presentationDetents([.fraction(0.4)])
                     .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: $showWishlistPanel) {
+            .sheet(isPresented: $showWishlistPanel, onDismiss: presentPendingUserCardAfterWishlistDismissal) {
                 WishlistAnchorPanel(store: wishlistStore,
                                     isPresented: $showWishlistPanel,
                                     liveRecordId: liveRecordId,
-                                    onGifterTap: { userCardUserId = $0 })
+                                    onGifterTap: { userId in
+                                        guard shouldPresentUserCard(for: userId) else { return }
+                                        pendingUserCardUserId = userId
+                                        showWishlistPanel = false
+                                    })
                     .sheetTopInset()
                     .giftPanelSheetBackground()
                     .presentationDetents([.fraction(0.4)])
                     .presentationDragIndicator(.visible)
             }
+    }
+
+    private func presentPendingUserCardAfterWishlistDismissal() {
+        guard let userId = pendingUserCardUserId else { return }
+        pendingUserCardUserId = nil
+        userCardUserId = userId
+    }
+
+    private func shouldPresentUserCard(for userId: String) -> Bool {
+        guard !userId.isEmpty else { return false }
+        return userId != String(SessionStore.shared.user?.userId ?? 0)
     }
 
 }
