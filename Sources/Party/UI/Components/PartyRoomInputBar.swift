@@ -11,7 +11,6 @@ import SwiftUI
 /// 按钮顺序（未 focused 时全显）：输入框 · [micApplication] · emoji · message · mic · game · toolMenu · gift
 /// - micApplication：房主/房管 + 排麦开关开 时显示（对齐安卓 flMicApplication 输入框上方快捷入口）
 struct PartyRoomInputBar: View {
-    @Environment(\.layoutDirection) private var layoutDirection
     @Binding var text: String
     let micOn: Bool
     /// 自己是否已上麦（emoji + mic 按钮显隐门槛：H5 `inPartyRole > -1`）
@@ -116,10 +115,6 @@ struct PartyRoomInputBar: View {
                             onQuickPhraseSlide(value.translation.width < 0 ? "left" : "right")
                         }
                 )
-
-                quickPhraseFade
-                    .frame(width: 88)
-                    .allowsHitTesting(false)
             }
             .frame(maxWidth: .infinity)
 
@@ -137,28 +132,8 @@ struct PartyRoomInputBar: View {
         .padding(.trailing, 8)
         .frame(height: 42)
         .background(
-            LinearGradient(
-                colors: [Color(hex: 0x14112B, opacity: 0), Color(hex: 0x14112B, opacity: 0.58)],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
-    }
-
-    private var quickPhraseFade: LinearGradient {
-        let opaque = Color(hex: 0x14112B, opacity: 0.9)
-        let middle = Color(hex: 0x14112B, opacity: 0.8)
-        if layoutDirection == .rightToLeft {
-            return LinearGradient(
-                colors: [opaque, middle, .clear],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-        }
-        return LinearGradient(
-            colors: [.clear, middle, opaque],
-            startPoint: .leading,
-            endPoint: .trailing
+            // 关闭按钮同属快捷消息栏，整行使用同一层 20% 透明底色。
+            Color(hex: 0x14112B, opacity: 0.2)
         )
     }
 

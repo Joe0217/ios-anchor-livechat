@@ -577,7 +577,7 @@ struct PartyRoomView: View {
     /// 所有项目处于同一纵向容器，统一向下、向右对齐，且各项目不可见时不产生占位。
     /// 底部随输入栏/键盘整体上移。
     private var partyPluginStack: some View {
-        VStack(alignment: .trailing, spacing: 8) {
+        VStack(alignment: .trailing, spacing: 0) {
             if !store.partyPrivateCallHiddenForPK {
                 PartyRoomPrivateCallButton(
                     isOn: privateCallOn,
@@ -587,8 +587,8 @@ struct PartyRoomView: View {
                     onToggle: handlePartyCallToggle,
                     onTapGift: handlePartyCallGiftReselect
                 )
-                // 容器基础间距为 8pt；私 call 与 Banner 单独对齐为 10pt。
-                .padding(.bottom, hasDisplayablePartyBanner ? 2 : 0)
+                // 私 call 与 Banner 的间距独立固定为 4pt，不叠加容器间距。
+                .padding(.bottom, hasDisplayablePartyBanner ? 4 : 0)
             }
             if hasDisplayablePartyBanner, let banners = store.roomInfo?.bannerList {
                 PartyRoomBannerCarousel(

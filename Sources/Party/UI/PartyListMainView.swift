@@ -88,6 +88,12 @@ struct PartyListMainView: View {
                 }
                 tabContent
             }
+
+            // 等待 My Room 请求完成，避免先显示 Create Room 再切换为 My Room。
+            if listStore.didLoadMyRoom {
+                anchorMyRoomButton
+                    .transition(.opacity)
+            }
         }
         .task(id: isPartyTabActive) {
             guard isPartyTabActive else {
@@ -253,6 +259,61 @@ struct PartyListMainView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.Party.listCreateRoom)
+            }
+        }
+    }
+
+    /// 主播端大厅底部常驻入口。房间信息未准备好时点击重拉，避免用未知状态直接进创房页。
+    private var anchorMyRoomButton: some View {
+        VStack {
+            Spacer()
+            Button(action: openAnchorMyRoom) {
+                HStack(spacing: 6) {
+                    if listStore.myRoom != nil {
+                        Image(systemName: "house.fill")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .accessibilityHidden(true)
+                    } else {
+                        Image("partyCreatePlus")
+                            .resizable()
+                            .frame(width: 20, height: 20)
+                            .accessibilityHidden(true)
+                    }
+                    Text(listStore.myRoom != nil ? L10n.Party.myRoom : L10n.Party.listCreateRoom)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(
+                    Capsule().fill(
+                        LinearGradient(
+                            colors: [Theme.Palette.partyCreateBtnA, Theme.Palette.partyCreateBtnB],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                )
+                .shadow(color: Theme.Palette.partyCreateBtnA.opacity(0.5), radius: 12, y: 4)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(listStore.myRoom != nil ? L10n.Party.myRoom : L10n.Party.listCreateRoom)
+            .padding(.bottom, 24)
+        }
+    }
+
+    private func openAnchorMyRoom() {
+        if let roomId = listStore.myRoom?.id, !roomId.isEmpty {
+            onTapMyRoom(roomId, .myRoom)
+            return
+        }
+        Task {
+            await listStore.reloadMyRoom()
+            if let roomId = listStore.myRoom?.id, !roomId.isEmpty {
+                onTapMyRoom(roomId, .myRoom)
+            } else if listStore.didLoadMyRoom {
+                onTapCreate()
             }
         }
     }
