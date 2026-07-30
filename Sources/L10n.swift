@@ -2804,3 +2804,9 @@ enum L10n {
         static var startChat: String { localize("invite.startChat", comment: "开始聊天") }
     }
 }
+        static var superWheelGetReady: String { localize("partyRoom.superWheel.getReady", comment: "Super Winner 准备阶段提示") }
+        static var superWheelJoined: String { localize("partyRoom.superWheel.joined", comment: "Super Winner 已报名") }
+        static var superWheelSpectating: String { localize("partyRoom.superWheel.spectating", comment: "Super Winner 观战提示") }
+        static var superWheelWinningRatio: String { localize("partyRoom.superWheel.winningRatio", comment: "Super Winner 胜率标签") }
+        static var superWheelNextRound: String { localize("partyRoom.superWheel.nextRound", comment: "Super Winner 淘汰后下一轮提示") }
+        static var superWheelRewardHint: String { localize("partyRoom.superWheel.rewardHint", comment: "Super Winner 开局奖励说明") }

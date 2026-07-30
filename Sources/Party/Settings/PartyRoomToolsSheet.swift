@@ -1468,6 +1468,11 @@ extension View {
 
 // MARK: - Super Wheel state
 
+enum PartySuperWheelResultKind: Equatable {
+    case eliminated
+    case winner
+}
+
 /// Party 房 Super Wheel 的单一状态源。HTTP 全量状态用于进房/重连对账，1150-1156 IM
 /// 广播用于实时推进阶段；两条链路都归约到这里，避免 UI 直接依赖不完整的消息 payload。
 @MainActor
@@ -1482,6 +1487,8 @@ final class PartySuperWheelStore: ObservableObject {
     @Published private(set) var isPerformingAction = false
     @Published var isPanelPresented = false
     @Published var isConfigPresented = false
+    @Published private(set) var isPanelDismissed = false
+    @Published private(set) var isResultDismissed = false
 
     private var countdownTask: Task<Void, Never>?
     private var shouldPresentPanelAfterConfigDismissal = false
@@ -1501,8 +1508,13 @@ final class PartySuperWheelStore: ObservableObject {
 
     var isSignup: Bool { wheelState?.state == 3 }
     var isBetting: Bool { wheelState?.state == 5 }
+    var isSpinning: Bool { wheelState?.state == 6 }
+    var isReveal: Bool { wheelState?.state == 7 }
     var isFinal: Bool { wheelState?.state == 8 }
-    var entryFees: [Int] { config?.entryFees ?? [] }
+    var entryFees: [Int] {
+        let fees = config?.entryFees ?? []
+        return fees.isEmpty ? [100, 300, 500] : fees
+    }
     var isEnabled: Bool { config?.enabled ?? false }
     var myParticipant: PartySuperWheelParticipant? {
         guard let userId = SessionStore.shared.user?.userId else { return nil }
@@ -1514,6 +1526,34 @@ final class PartySuperWheelStore: ObservableObject {
         return [1, 2, 3].contains(wheelState?.state ?? 0)
     }
     var canBet: Bool { isBetting && myParticipant?.status == 1 }
+    var isMyParticipantAlive: Bool { myParticipant?.status == 1 }
+    var isParticipant: Bool { myParticipant != nil }
+    var isRegistering: Bool { [1, 2, 3].contains(wheelState?.state ?? 0) }
+    var isSpectating: Bool { isActive && !isMyParticipantAlive && !canJoin }
+    var shouldShowBetArea: Bool {
+        isMyParticipantAlive && [5, 6, 7, 8].contains(wheelState?.state ?? 0)
+    }
+    var isBetDisabled: Bool { !isBetting }
+    var hasBigCountdown: Bool {
+        remainingSeconds > 0 && [3, 4, 5].contains(wheelState?.state ?? 0)
+    }
+    var myWinningRatio: Int {
+        guard let mine = myParticipant else { return 0 }
+        let aliveBet = wheelState?.participants
+            .filter { $0.status == 1 }
+            .reduce(Int64(0)) { $0 + max(0, $1.totalBet) } ?? 0
+        guard aliveBet > 0 else { return 0 }
+        return min(100, max(0, Int((Double(max(0, mine.totalBet)) / Double(aliveBet) * 100).rounded())))
+    }
+    var resultKind: PartySuperWheelResultKind? {
+        if isFinal, (wheelState?.winner != nil || wheelState?.winnerId != nil) { return .winner }
+        if isReveal, wheelState?.revealUser != nil { return .eliminated }
+        return nil
+    }
+    /// 已参与的用户即使将大面板最小化，也必须收到淘汰/获胜结果；观战用户只在面板展开时展示。
+    var shouldPresentResult: Bool {
+        resultKind != nil && !isResultDismissed && (isParticipant || isPanelPresented)
+    }
 
     func beginTracking(roomId: String) {
         guard !roomId.isEmpty else { return }
@@ -1528,6 +1568,8 @@ final class PartySuperWheelStore: ObservableObject {
         remainingSeconds = 0
         reconciledDeadlineMs = nil
         isPanelPresented = false
+        isPanelDismissed = false
+        isResultDismissed = false
     }
 
     func prepareConfig() async {
@@ -1563,8 +1605,8 @@ final class PartySuperWheelStore: ObservableObject {
             guard requestSequence == stateRequestSequence,
                   trackedRoomId == roomId,
                   response.roomId.isEmpty || response.roomId == roomId else { return }
-            wheelState = response
-            if presentWhenActive { isPanelPresented = true }
+            applyLoadedState(response)
+            if presentWhenActive, shouldAutomaticallyPresentPanel { isPanelPresented = true }
             refreshCountdown()
         } catch {
             AppLogger.party.notice("[SuperWheel] state load failed: \(String(describing: error), privacy: .private)")
@@ -1582,7 +1624,9 @@ final class PartySuperWheelStore: ObservableObject {
             wheelState = PartySuperWheelState(
                 roundId: opened.roundId,
                 roomId: roomId,
-                hostId: nil,
+                hostId: SessionStore.shared.user.flatMap { user in
+                    user.userId.map { String($0) }
+                },
                 entryFee: opened.entryFee,
                 state: opened.state,
                 roundNo: 0,
@@ -1592,8 +1636,12 @@ final class PartySuperWheelStore: ObservableObject {
                 winnerId: nil,
                 winner: nil,
                 winnerAmount: nil,
+                hostAmount: nil,
+                platformAmount: nil,
                 revealUser: nil,
-                remainCount: nil
+                remainCount: nil,
+                eliminatedUserId: nil,
+                sectorIndex: nil
             )
             queuePanelAfterConfigDismissal()
             PartyAnalytics.track(
@@ -1665,7 +1713,25 @@ final class PartySuperWheelStore: ObservableObject {
     func presentQueuedPanelAfterConfigDismissal() {
         guard shouldPresentPanelAfterConfigDismissal, !isConfigPresented else { return }
         shouldPresentPanelAfterConfigDismissal = false
+        openPanel()
+    }
+
+    /// 常驻图标/工具入口展开本局面板时，同时允许重新查看当前结算结果。
+    func openPanel() {
+        isPanelDismissed = false
+        isResultDismissed = false
         isPanelPresented = true
+    }
+
+    /// 最小化不结束游戏。淘汰者和未参与者本局不再被状态同步反复拉回，已参与者仍会收到结算。
+    func dismissPanel() {
+        isPanelPresented = false
+        isPanelDismissed = true
+    }
+
+    func dismissResult() {
+        isResultDismissed = true
+        dismissPanel()
     }
 
     func bet(amount: Int) async {
@@ -1705,16 +1771,21 @@ final class PartySuperWheelStore: ObservableObject {
         }
         let incomingRoomId = PartySuperWheelBroadcast.string(payload["roomId"])
         guard incomingRoomId == nil || incomingRoomId == trackedRoomId else { return }
-        guard wheelState == nil || wheelState?.roundId == incomingRoundId else {
-            Task { await loadState(roomId: trackedRoomId, presentWhenActive: false) }
-            return
-        }
-
-        if attachType == PartyAttachType.superWheelStateSync.rawValue,
-           let fullState = try? PartySuperWheelState.from(payload),
-           fullState.roomId.isEmpty || fullState.roomId == trackedRoomId {
-            wheelState = fullState
-            isPanelPresented = true
+        if attachType == PartyAttachType.superWheelStateSync.rawValue {
+            // 1150 的基类 payload 在新局时可能不带 entryFee。先拉 /state，绝不能让 0 或上一局档位
+            // 短暂出现在 Join 按钮上；这与 H5 新 roundId 的处理一致。
+            guard let current = wheelState, current.roundId == incomingRoundId else {
+                Task { await loadState(roomId: trackedRoomId, presentWhenActive: false) }
+                return
+            }
+            guard var fullState = try? PartySuperWheelState.from(payload),
+                  fullState.roomId.isEmpty || fullState.roomId == trackedRoomId else { return }
+            if fullState.entryFee <= 0 { fullState.entryFee = current.entryFee }
+            if PartySuperWheelBroadcast.array(payload["participants"]) == nil {
+                fullState.participants = current.participants
+            }
+            applyLoadedState(fullState)
+            if shouldAutomaticallyPresentPanel { isPanelPresented = true }
             refreshCountdown()
             return
         }
@@ -1727,22 +1798,35 @@ final class PartySuperWheelStore: ObservableObject {
 
         switch attachType {
         case PartyAttachType.superWheelSpin.rawValue:
-            if let rawAliveIDs = PartySuperWheelBroadcast.array(payload["aliveUserIds"]) {
-                let aliveIDs = rawAliveIDs.compactMap(PartySuperWheelBroadcast.string)
-                state.participants = state.participants.map { participant in
-                    var updated = participant
-                    if !aliveIDs.contains(participant.userId) { updated.status = 2 }
-                    return updated
-                }
-            }
+            // H5 在转动/揭晓期间冻结盘面；不可在 1152 提前把命中者移出扇区。
+            state.state = 6
+            state.eliminatedUserId = PartySuperWheelBroadcast.string(payload["eliminatedUserId"])
+            state.sectorIndex = PartySuperWheelBroadcast.int(payload["sectorIndex"])
         case PartyAttachType.superWheelReveal.rawValue:
+            state.state = 7
+            isResultDismissed = false
             state.revealUser = PartySuperWheelUser.from(payload["eliminatedUser"] as? [String: Any])
+            if state.revealUser == nil,
+               let userId = PartySuperWheelBroadcast.string(payload["eliminatedUserId"])
+                    ?? state.eliminatedUserId,
+               let participant = state.participants.first(where: { $0.userId == userId }) {
+                state.revealUser = PartySuperWheelUser(
+                    userId: participant.userId,
+                    nickname: participant.nickname,
+                    avatar: participant.avatar
+                )
+            }
+            state.eliminatedUserId = PartySuperWheelBroadcast.string(payload["eliminatedUserId"])
+                ?? state.revealUser?.userId
+                ?? state.eliminatedUserId
             state.remainCount = PartySuperWheelBroadcast.int(payload["remainCount"])
             if let userId = state.revealUser?.userId,
                let index = state.participants.firstIndex(where: { $0.userId == userId }) {
                 state.participants[index].status = 2
             }
         case PartyAttachType.superWheelFinal.rawValue:
+            state.state = 8
+            isResultDismissed = false
             state.winner = PartySuperWheelUser.from(payload["winner"] as? [String: Any])
             state.winnerId = PartySuperWheelBroadcast.string(payload["winnerId"]) ?? state.winner?.userId
             if state.winner == nil,
@@ -1755,6 +1839,8 @@ final class PartySuperWheelStore: ObservableObject {
                 )
             }
             state.winnerAmount = PartySuperWheelBroadcast.int64(payload["winnerAmount"])
+            state.hostAmount = PartySuperWheelBroadcast.int64(payload["hostAmount"])
+            state.platformAmount = PartySuperWheelBroadcast.int64(payload["platformAmount"])
         case PartyAttachType.superWheelClosed.rawValue:
             state.state = 9
             isPanelPresented = false
@@ -1779,6 +1865,8 @@ final class PartySuperWheelStore: ObservableObject {
         shouldPresentPanelAfterConfigDismissal = false
         isPanelPresented = false
         isConfigPresented = false
+        isPanelDismissed = false
+        isResultDismissed = false
         trackedRoomId = nil
         stateRequestSequence &+= 1
         reconciledDeadlineMs = nil
@@ -1796,6 +1884,18 @@ final class PartySuperWheelStore: ObservableObject {
                 self?.updateRemainingSeconds()
             }
         }
+    }
+
+    private var shouldAutomaticallyPresentPanel: Bool {
+        !isPanelDismissed || isMyParticipantAlive
+    }
+
+    private func applyLoadedState(_ state: PartySuperWheelState) {
+        if wheelState?.roundId != state.roundId {
+            isPanelDismissed = false
+            isResultDismissed = false
+        }
+        wheelState = state
     }
 
     private func updateRemainingSeconds() {
@@ -1857,12 +1957,28 @@ struct PartySuperWheelConfigSheet: View {
     let roomId: String
     @Environment(\.dismiss) private var dismiss
     @State private var selectedFee: Int?
+    @State private var showsRules = false
 
     var body: some View {
         VStack(spacing: 20) {
-            Text(L10n.PartyRoom.superWheelTitle)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.white)
+            HStack {
+                Text(L10n.PartyRoom.superWheelTitle)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.white)
+                Spacer()
+                Button { showsRules = true } label: {
+                    Image(systemName: "questionmark.circle.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.84))
+                }
+                .buttonStyle(.plain)
+                Button(action: dismiss.callAsFunction) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.84))
+                }
+                .buttonStyle(.plain)
+            }
 
             if wheelStore.isConfigLoading && wheelStore.config == nil {
                 ProgressView().tint(.white)
@@ -1896,6 +2012,10 @@ struct PartySuperWheelConfigSheet: View {
                         .buttonStyle(.plain)
                     }
                 }
+                Text(L10n.PartyRoom.superWheelRewardHint)
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.78))
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             Button {
@@ -1931,6 +2051,11 @@ struct PartySuperWheelConfigSheet: View {
         .onChange(of: wheelStore.isConfigPresented) { visible in
             if !visible { dismiss() }
         }
+        .overlay {
+            if showsRules {
+                PartySuperWheelRulesOverlay { showsRules = false }
+            }
+        }
     }
 }
 
@@ -1940,87 +2065,130 @@ struct PartySuperWheelPanel: View {
     let isRoomOwner: Bool
     @Environment(\.dismiss) private var dismiss
     @State private var reportedFinalRoundID: String?
+    @State private var showsRules = false
 
     var body: some View {
-        VStack(spacing: 16) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
+        ZStack {
+            Color.black.opacity(0.72).ignoresSafeArea()
+            VStack(spacing: 12) {
+                header
+                if let state = wheelStore.wheelState {
                     Text(L10n.PartyRoom.superWheelTitle)
-                        .font(.system(size: 20, weight: .bold))
-                    Text(statusText)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.white.opacity(0.68))
-                }
-                Spacer()
-                if wheelStore.remainingSeconds > 0 {
-                    Text("\(wheelStore.remainingSeconds)s")
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .font(.system(size: 24, weight: .heavy, design: .rounded))
                         .foregroundColor(Color(hex: 0xFFDD63))
+                        .padding(.top, 44)
+                        .overlay(alignment: .top) {
+                            if wheelStore.hasBigCountdown {
+                                VStack(spacing: 2) {
+                                    Text("\(wheelStore.remainingSeconds)")
+                                        .font(.system(size: 38, weight: .heavy, design: .rounded))
+                                        .foregroundColor(Color(hex: 0xA8FC56))
+                                        .monospacedDigit()
+                                    if state.state == 4 {
+                                        Text(L10n.PartyRoom.superWheelGetReady)
+                                            .font(.system(size: 12, weight: .semibold))
+                                            .foregroundColor(Color(hex: 0xFFE9A6))
+                                    }
+                                }
+                                .transition(.opacity)
+                            }
+                        }
+
+                    PartySuperWheelDial(state: state)
+                        .frame(height: 218)
+
+                    HStack(spacing: 5) {
+                        Image("partyGems")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 18, height: 18)
+                        Text("\(state.totalPool)")
+                            .font(.system(size: 19, weight: .bold))
+                        Text(L10n.PartyRoom.superWheelPool)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.white.opacity(0.62))
+                    }
+                    .foregroundColor(.white)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        participantGrid(state.participants)
+                    }
+                        .frame(height: 62)
+
+                    actionBar.frame(height: 56)
+                } else {
+                    ProgressView().tint(.white)
                 }
-                Button {
-                    wheelStore.isPanelPresented = false
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(.white.opacity(0.75))
-                }
-                .buttonStyle(.plain)
             }
-
-            if let state = wheelStore.wheelState {
-                HStack(spacing: 5) {
-                    Image("partyGems")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 18, height: 18)
-                    Text("\(state.totalPool)")
-                        .font(.system(size: 19, weight: .bold))
-                    Text(L10n.PartyRoom.superWheelPool)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.white.opacity(0.62))
-                }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.08)))
-
-                PartySuperWheelDial(state: state)
-
-                ScrollView {
-                    participantGrid(state.participants)
-                }
-                .frame(maxHeight: 126)
-
-                if let reveal = state.revealUser, state.state == 7 {
-                    Text(String(format: L10n.PartyRoom.superWheelOutFormat, reveal.nickname ?? L10n.PartyRoom.superWheelPlayer))
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.88))
-                }
-                if let winner = state.winner, state.state == 8 {
-                    Text(String(
-                        format: L10n.PartyRoom.superWheelWinnerFormat,
-                        winner.nickname ?? L10n.PartyRoom.superWheelPlayer,
-                        state.winnerAmount ?? 0
-                    ))
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(Color(hex: 0xFFDD63))
-                }
-            } else {
-                ProgressView().tint(.white).frame(maxHeight: .infinity)
-            }
-
-            actionBar
+            .padding(.horizontal, 22)
+            .padding(.vertical, 16)
+            .frame(maxWidth: 360)
         }
-        .padding(20)
-        .preferredColorScheme(.dark)
+        .overlay {
+            if wheelStore.shouldPresentResult {
+                PartySuperWheelResultOverlay(wheelStore: wheelStore, isRoomOwner: isRoomOwner)
+            }
+            if showsRules {
+                PartySuperWheelRulesOverlay { showsRules = false }
+            }
+        }
         .task(id: finalResultTrackingKey) {
             reportFinalResultIfNeeded()
         }
     }
 
+    private var header: some View {
+        HStack {
+            Button {
+                if isRoomOwner, wheelStore.isActive {
+                    Task { await wheelStore.close() }
+                } else {
+                    minimize()
+                }
+            } label: {
+                Image(systemName: isRoomOwner && wheelStore.isActive ? "xmark.circle.fill" : "chevron.left.circle.fill")
+                    .font(.system(size: 24, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.88))
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+            VStack(spacing: 2) {
+                Text(statusText)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.82))
+                if wheelStore.remainingSeconds > 0, !wheelStore.hasBigCountdown {
+                    Text("\(wheelStore.remainingSeconds)s")
+                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .foregroundColor(Color(hex: 0xFFDD63))
+                        .monospacedDigit()
+                }
+            }
+            Spacer()
+
+            HStack(spacing: 14) {
+                Button { showsRules = true } label: {
+                    Image(systemName: "questionmark.circle.fill")
+                        .font(.system(size: 21, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.88))
+                }
+                Button(action: minimize) {
+                    Image(systemName: "arrow.down.right.and.arrow.up.left")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white.opacity(0.88))
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func minimize() {
+        wheelStore.dismissPanel()
+        dismiss()
+    }
+
     private func participantGrid(_ participants: [PartySuperWheelParticipant]) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 12) {
+        LazyHStack(spacing: 8) {
             ForEach(participants) { participant in
                 VStack(spacing: 4) {
                     CachedAsyncImage(url: participant.avatar.flatMap(URL.init(string:)), contentMode: .fill, persistent: true) {
@@ -2034,6 +2202,7 @@ struct PartySuperWheelPanel: View {
                         .foregroundColor(.white.opacity(participant.status == 2 ? 0.4 : 0.85))
                         .lineLimit(1)
                 }
+                .frame(width: 46)
             }
         }
         .frame(maxWidth: .infinity)
@@ -2041,29 +2210,89 @@ struct PartySuperWheelPanel: View {
 
     @ViewBuilder
     private var actionBar: some View {
-        if wheelStore.canJoin {
-            actionButton(title: L10n.PartyRoom.superWheelJoin) { Task { await wheelStore.join() } }
-        } else if wheelStore.canBet {
-            Menu {
-                ForEach(wheelStore.entryFees, id: \.self) { amount in
-                    Button("\(L10n.PartyRoom.superWheelBet) +\(amount)") { Task { await wheelStore.bet(amount: amount) } }
+        Group {
+            if wheelStore.shouldShowBetArea {
+                HStack(spacing: 16) {
+                    winningRatio
+                    HStack(spacing: 8) {
+                        betButton(50)
+                        betButton(500)
+                    }
                 }
-            } label: {
-                actionButtonLabel(title: L10n.PartyRoom.superWheelBet)
+            } else if wheelStore.canJoin {
+                Button { Task { await wheelStore.join() } } label: {
+                    HStack(spacing: 6) {
+                        Text(L10n.PartyRoom.superWheelJoin)
+                        Text("· \(wheelStore.wheelState?.entryFee ?? 0)")
+                        Image("partyGems").resizable().scaledToFit().frame(width: 18, height: 18)
+                    }
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 184, height: 48)
+                    .background(Capsule().fill(Theme.Palette.brandPink))
+                }
+                .buttonStyle(.plain)
+                .disabled(wheelStore.isPerformingAction)
+            } else if wheelStore.isMyParticipantAlive && wheelStore.isRegistering {
+                actionButton(title: L10n.PartyRoom.superWheelJoined, disabled: true) {}
+            } else if wheelStore.isSpectating {
+                Text(L10n.PartyRoom.superWheelSpectating)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white.opacity(0.68))
+                    .frame(height: 48)
+            } else {
+                Color.clear.frame(height: 48)
             }
-            .disabled(wheelStore.isPerformingAction)
-        } else if isRoomOwner && wheelStore.isActive {
-            actionButton(title: L10n.PartyRoom.superWheelClose, destructive: true) { Task { await wheelStore.close() } }
         }
     }
 
-    private func actionButton(title: String, destructive: Bool = false, action: @escaping () -> Void) -> some View {
-        Button(action: action) { actionButtonLabel(title: title, destructive: destructive) }
-            .buttonStyle(.plain)
-            .disabled(wheelStore.isPerformingAction)
+    private var winningRatio: some View {
+        HStack(spacing: 6) {
+            GeometryReader { proxy in
+                ZStack(alignment: .bottom) {
+                    Capsule().fill(Color(hex: 0x2E2E2E))
+                    Capsule()
+                        .fill(wheelStore.myWinningRatio >= 50 ? Color.red : Color(hex: 0xFF9D2C))
+                        .frame(height: proxy.size.height * CGFloat(wheelStore.myWinningRatio) / 100)
+                }
+            }
+            .frame(width: 11, height: 52)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.PartyRoom.superWheelWinningRatio)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.white.opacity(0.75))
+                Text("\(wheelStore.myWinningRatio)%")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(wheelStore.myWinningRatio >= 50 ? Color(hex: 0xF5AB00) : .white)
+            }
+        }
+        .frame(width: 114, alignment: .leading)
     }
 
-    private func actionButtonLabel(title: String, destructive: Bool = false) -> some View {
+    private func betButton(_ amount: Int) -> some View {
+        Button { Task { await wheelStore.bet(amount: amount) } } label: {
+            HStack(spacing: 3) {
+                Text("+\(amount)")
+                Image("partyGems").resizable().scaledToFit().frame(width: 15, height: 15)
+            }
+            .font(.system(size: 14, weight: .bold))
+            .foregroundColor(.white)
+            .frame(width: 86, height: 48)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: 0x9A3EF7)))
+            .grayscale(wheelStore.isBetDisabled ? 1 : 0)
+            .opacity(wheelStore.isBetDisabled ? 0.48 : 1)
+        }
+        .buttonStyle(.plain)
+        .disabled(wheelStore.isBetDisabled || wheelStore.isPerformingAction)
+    }
+
+    private func actionButton(title: String, disabled: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) { actionButtonLabel(title: title) }
+            .buttonStyle(.plain)
+            .disabled(disabled || wheelStore.isPerformingAction)
+    }
+
+    private func actionButtonLabel(title: String) -> some View {
         Group {
             if wheelStore.isPerformingAction {
                 ProgressView().tint(.white)
@@ -2072,8 +2301,8 @@ struct PartySuperWheelPanel: View {
             }
         }
         .foregroundColor(.white)
-        .frame(maxWidth: .infinity, minHeight: 46)
-        .background(Capsule().fill(destructive ? Color.red.opacity(0.86) : Theme.Palette.brandPink))
+        .frame(width: 184, height: 48)
+        .background(Capsule().fill(Theme.Palette.brandPink.opacity(0.48)))
     }
 
     private var statusText: String {
@@ -2109,9 +2338,13 @@ struct PartySuperWheelPanel: View {
 private struct PartySuperWheelDial: View {
     let state: PartySuperWheelState
     @State private var rotation = 0.0
+    @State private var frozenParticipants: [PartySuperWheelParticipant] = []
 
     private var visibleParticipants: [PartySuperWheelParticipant] {
-        Array(state.participants.prefix(8))
+        if (state.state == 6 || state.state == 7), !frozenParticipants.isEmpty {
+            return frozenParticipants
+        }
+        return state.participants.filter { $0.status == 1 }
     }
 
     var body: some View {
@@ -2119,19 +2352,27 @@ private struct PartySuperWheelDial: View {
             Circle()
                 .fill(
                     AngularGradient(
-                        colors: [Color(hex: 0xFD3F86), Color(hex: 0x714CFF), Color(hex: 0xFFB84D), Color(hex: 0xFD3F86)],
+                        colors: [Color(hex: 0xFBDE29), Color(hex: 0xF29DE8), Color(hex: 0xA2A8F4),
+                                 Color(hex: 0xF8BA50), Color(hex: 0x83F0F7), Color(hex: 0xB26DF8),
+                                 Color(hex: 0xF763DA), Color(hex: 0x8BF592), Color(hex: 0xFBDE29)],
                         center: .center
                     )
                 )
-                .overlay(Circle().stroke(Color.white.opacity(0.42), lineWidth: 2))
-                .rotationEffect(.degrees(rotation))
+                .overlay(Circle().stroke(Color.white.opacity(0.58), lineWidth: 3))
 
-            ForEach(Array(visibleParticipants.enumerated()), id: \.element.id) { index, participant in
-                participantAvatar(participant)
-                    .offset(y: -55)
-                    .rotationEffect(.degrees(Double(index) * 360 / Double(max(visibleParticipants.count, 1))))
-                    .rotationEffect(.degrees(rotation))
+            ZStack {
+                ForEach(Array(visibleParticipants.enumerated()), id: \.element.id) { index, participant in
+                    participantAvatar(participant)
+                        .overlay {
+                            if state.state == 7, participant.userId == state.eliminatedUserId {
+                                Circle().stroke(Color(hex: 0xF0625A), lineWidth: 3)
+                                    .shadow(color: Color(hex: 0xF0625A), radius: 4)
+                            }
+                        }
+                        .offset(participantOffset(index: index, count: visibleParticipants.count))
+                }
             }
+            .rotationEffect(.degrees(rotation))
 
             Circle()
                 .fill(Color(hex: 0x301151))
@@ -2154,9 +2395,11 @@ private struct PartySuperWheelDial: View {
         }
         .frame(width: 184, height: 184)
         .frame(maxWidth: .infinity)
-        .onAppear(perform: spinForCurrentState)
-        .onChange(of: state.roundNo) { _ in spinForCurrentState() }
-        .onChange(of: state.state) { _ in spinForCurrentState() }
+        .onAppear(perform: updateForState)
+        .onChange(of: state.roundId) { _ in resetForNewRound() }
+        .onChange(of: state.roundNo) { _ in updateForState() }
+        .onChange(of: state.state) { _ in updateForState() }
+        .onChange(of: state.eliminatedUserId) { _ in updateForState() }
         .accessibilityLabel(L10n.PartyRoom.superWheelTitle)
     }
 
@@ -2170,29 +2413,280 @@ private struct PartySuperWheelDial: View {
         .opacity(participant.status == 2 ? 0.32 : 1)
     }
 
-    private func spinForCurrentState() {
-        let turns = state.state == 6 ? 3.0 : 0.5
-        withAnimation(.easeOut(duration: state.state == 6 ? 1.15 : 0.4)) {
-            rotation += 360 * turns
+    private func participantOffset(index: Int, count: Int) -> CGSize {
+        let step = 2 * Double.pi / Double(max(count, 1))
+        let angle = Double(index) * step
+        return CGSize(width: sin(angle) * 66, height: -cos(angle) * 66)
+    }
+
+    private func updateForState() {
+        guard state.state == 6 else {
+            if state.state != 7 {
+                frozenParticipants = []
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    rotation = (rotation / 360).rounded() * 360
+                }
+            }
+            return
+        }
+        if frozenParticipants.isEmpty {
+            frozenParticipants = state.participants.filter { $0.status == 1 }
+        }
+        let participants = frozenParticipants
+        guard !participants.isEmpty else { return }
+        let index = participants.firstIndex(where: { $0.userId == state.eliminatedUserId })
+            ?? state.sectorIndex
+            ?? 0
+        let normalizedIndex = ((index % participants.count) + participants.count) % participants.count
+        let targetBase = -Double(normalizedIndex) * 360 / Double(participants.count)
+        var target = targetBase
+        while target <= rotation { target += 360 }
+        withAnimation(.timingCurve(0.12, 0.6, 0.12, 1, duration: 6)) {
+            rotation = target + 5 * 360
+        }
+    }
+
+    private func resetForNewRound() {
+        frozenParticipants = []
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            rotation = 0
+        }
+    }
+}
+
+/// H5 的淘汰/终局结算层。结果完全由 1153/1154 或 /state 下发，不从盘面推导。
+struct PartySuperWheelResultOverlay: View {
+    @ObservedObject var wheelStore: PartySuperWheelStore
+    let isRoomOwner: Bool
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.42).ignoresSafeArea()
+            VStack(spacing: 16) {
+                HStack {
+                    Button(action: closeOrMinimize) {
+                        Image(systemName: isRoomOwner && wheelStore.isActive ? "xmark.circle.fill" : "chevron.left.circle.fill")
+                            .font(.system(size: 23, weight: .semibold))
+                    }
+                    Spacer()
+                    Button(action: wheelStore.dismissResult) {
+                        Image(systemName: "arrow.down.right.and.arrow.up.left")
+                            .font(.system(size: 18, weight: .bold))
+                    }
+                }
+                .foregroundColor(.white.opacity(0.9))
+                .buttonStyle(.plain)
+
+                resultContent
+            }
+            .padding(22)
+            .frame(maxWidth: 330)
+            .background(
+                LinearGradient(
+                    colors: [Color(hex: 0x3E1168), Color(hex: 0x160026)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                ),
+                in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+            )
+            .shadow(color: Color(hex: 0xFFDD63).opacity(0.22), radius: 18)
+        }
+        .zIndex(2_000)
+        .accessibilityAddTraits(.isModal)
+    }
+
+    @ViewBuilder
+    private var resultContent: some View {
+        if wheelStore.resultKind == .winner, let state = wheelStore.wheelState {
+            VStack(spacing: 12) {
+                Image(systemName: "crown.fill")
+                    .font(.system(size: 44, weight: .bold))
+                    .foregroundColor(Color(hex: 0xFFE9A6))
+                winnerAvatar(state)
+                Text(L10n.PartyRoom.superWheelTitle)
+                    .font(.system(size: 23, weight: .heavy, design: .rounded))
+                    .foregroundColor(Color(hex: 0xFFDD00))
+                Text(state.winner?.nickname ?? L10n.PartyRoom.superWheelPlayer)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white)
+                HStack(spacing: 5) {
+                    Text("+\(state.winnerAmount ?? 0)")
+                    Image("partyGems").resizable().scaledToFit().frame(width: 26, height: 26)
+                }
+                .font(.system(size: 24, weight: .heavy))
+                .foregroundColor(Color(hex: 0xFFFB00))
+            }
+        } else if let state = wheelStore.wheelState, let eliminated = state.revealUser {
+            VStack(spacing: 13) {
+                Text(L10n.PartyRoom.superWheelTitle)
+                    .font(.system(size: 22, weight: .heavy, design: .rounded))
+                    .foregroundColor(Color(hex: 0xFFDD63))
+                Text(String(format: L10n.PartyRoom.superWheelOutFormat,
+                            eliminated.nickname ?? L10n.PartyRoom.superWheelPlayer))
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                userAvatar(eliminated, size: 106)
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "cloud.rain.fill")
+                            .font(.system(size: 26, weight: .bold))
+                            .foregroundColor(Color(hex: 0x93C5FD))
+                            .offset(x: 6, y: 5)
+                    }
+                Text(L10n.PartyRoom.superWheelNextRound)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white.opacity(0.78))
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+
+    private func winnerAvatar(_ state: PartySuperWheelState) -> some View {
+        userAvatar(state.winner ?? PartySuperWheelUser(
+            userId: state.winnerId ?? "",
+            nickname: nil,
+            avatar: nil
+        ), size: 110)
+            .overlay(Circle().stroke(Color(hex: 0xFFE9A6), lineWidth: 3))
+    }
+
+    private func userAvatar(_ user: PartySuperWheelUser, size: CGFloat) -> some View {
+        CachedAsyncImage(url: user.avatar.flatMap(URL.init(string:)), contentMode: .fill, persistent: true) {
+            Circle().fill(Color.white.opacity(0.16))
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+
+    private func closeOrMinimize() {
+        if isRoomOwner, wheelStore.isActive {
+            Task { await wheelStore.close() }
+        } else {
+            wheelStore.dismissResult()
+        }
+    }
+}
+
+/// H5 规则正文刻意只维护英文，产品规则变更随客户端版本发布。
+private struct PartySuperWheelRulesOverlay: View {
+    let onDismiss: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.58).ignoresSafeArea()
+            VStack(spacing: 14) {
+                HStack {
+                    Spacer()
+                    Text("Rules")
+                        .font(.system(size: 19, weight: .bold))
+                        .foregroundColor(.white)
+                    Spacer()
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white.opacity(0.8))
+                    }
+                    .buttonStyle(.plain)
+                }
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        ruleSection(
+                            1,
+                            title: "Game Description",
+                            text: "Super Winner is a multiplayer game started by room owners. Players join by paying an entry fee. The game starts automatically when more than two players join before the countdown ends."
+                        )
+                        Divider().overlay(Color.white.opacity(0.14))
+                        ruleSection(
+                            2,
+                            title: "Game rewards",
+                            text: "One player is eliminated each round until one winner remains. The winner receives 80% of the jackpot and the room owner receives 10%. If the game is closed before a winner is produced, all entry fees are refunded."
+                        )
+                        Divider().overlay(Color.white.opacity(0.14))
+                        ruleSection(
+                            3,
+                            title: "Bets adding session",
+                            text: "Each round has 5 seconds to add bets. Adding more bets during this period increases your winning probability."
+                        )
+                        Divider().overlay(Color.white.opacity(0.14))
+                        Text("This game is not related to Apple.")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                    .padding(14)
+                    .background(Color.black.opacity(0.28), in: RoundedRectangle(cornerRadius: 8))
+                }
+                Button(L10n.Party.ok, action: onDismiss)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(Theme.Palette.brandPink, in: Capsule())
+                    .buttonStyle(.plain)
+            }
+            .padding(20)
+            .frame(maxWidth: 330, maxHeight: 560)
+            .background(Color(hex: 0x1A0033), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .padding(.horizontal, 24)
+        }
+        .zIndex(2_100)
+        .accessibilityAddTraits(.isModal)
+    }
+
+    private func ruleSection(_ index: Int, title: String, text: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("\(index). \(title)")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(Color(hex: 0xFFB100))
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.82))
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
 
 struct PartySuperWheelFloatingButton: View {
+    let state: Int
     let onTap: () -> Void
     let onVisible: () -> Void
+    @State private var isRotating = false
+
+    private var showsWaiting: Bool { (1...5).contains(state) }
+    private var isGameSpinning: Bool { (4...8).contains(state) }
 
     var body: some View {
         Button(action: onTap) {
-            Image(systemName: "circle.dotted.circle")
-                .font(.system(size: 22, weight: .bold))
-                .foregroundColor(Color(hex: 0xFFDD63))
-                .frame(width: 46, height: 46)
-                .background(Circle().fill(Color(hex: 0x4C286E).opacity(0.94)))
-                .overlay(Circle().stroke(Color(hex: 0xFFDD63).opacity(0.55), lineWidth: 1))
+            ZStack(alignment: .bottom) {
+                Image(systemName: "circle.dotted.circle")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(Color(hex: 0xFFDD63))
+                    .frame(width: 46, height: 46)
+                    .background(Circle().fill(Color(hex: 0x4C286E).opacity(0.94)))
+                    .overlay(Circle().stroke(Color(hex: 0xFFDD63).opacity(0.55), lineWidth: 1))
+                    .rotationEffect(.degrees(isRotating ? 360 : 0))
+                if showsWaiting {
+                    Text(L10n.PartyRoom.superWheelWaiting)
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color(hex: 0xAD48FF)))
+                        .offset(y: 5)
+                }
+            }
         }
         .buttonStyle(.plain)
-        .onAppear(perform: onVisible)
+        .onAppear {
+            onVisible()
+            isRotating = isGameSpinning
+        }
+        .onChange(of: isGameSpinning) { spinning in
+            isRotating = spinning
+        }
+        .animation(.linear(duration: 2).repeatForever(autoreverses: false), value: isRotating)
         .accessibilityLabel(L10n.PartyRoom.superWheelTitle)
     }
 }

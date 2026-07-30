@@ -2132,3 +2132,9 @@
 "liveGift.firstGiftStreamer" = "Streamer";
 "liveGift.firstGiftKick" = "لنبدأ لحظة التحية الأولى";
 "virtualProps.effectSwitch.tip" = "Effect Switch Here";
+"partyRoom.superWheel.getReady" = "استعد";
+"partyRoom.superWheel.joined" = "انضممت";
+"partyRoom.superWheel.spectating" = "لقد خرجت. أنت تشاهد";
+"partyRoom.superWheel.winningRatio" = "نسبة الفوز";
+"partyRoom.superWheel.nextRound" = "ينتقل جميع اللاعبين إلى الجولة التالية";
+"partyRoom.superWheel.rewardHint" = "يحصل الفائز على 80٪ من الجائزة ويحصل مالك الغرفة على 10٪.";

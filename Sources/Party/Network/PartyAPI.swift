@@ -1594,8 +1594,12 @@ struct PartySuperWheelState: Equatable {
     var winnerId: String?
     var winner: PartySuperWheelUser?
     var winnerAmount: Int64?
+    var hostAmount: Int64?
+    var platformAmount: Int64?
     var revealUser: PartySuperWheelUser?
     var remainCount: Int?
+    var eliminatedUserId: String?
+    var sectorIndex: Int?
 
     static func decodeOptional(from data: Data) throws -> Self? {
         let trimmed = String(decoding: data, as: UTF8.self)
@@ -1630,8 +1634,12 @@ struct PartySuperWheelState: Equatable {
             winnerId: winnerId,
             winner: resolvedWinner,
             winnerAmount: PartySuperWheelJSON.int64(object["winnerAmount"]),
+            hostAmount: PartySuperWheelJSON.int64(object["hostAmount"]),
+            platformAmount: PartySuperWheelJSON.int64(object["platformAmount"]),
             revealUser: PartySuperWheelUser.from(object["eliminatedUser"] as? [String: Any]),
-            remainCount: PartySuperWheelJSON.int(object["remainCount"])
+            remainCount: PartySuperWheelJSON.int(object["remainCount"]),
+            eliminatedUserId: PartySuperWheelJSON.string(object["eliminatedUserId"]),
+            sectorIndex: PartySuperWheelJSON.int(object["sectorIndex"])
         )
     }
 }

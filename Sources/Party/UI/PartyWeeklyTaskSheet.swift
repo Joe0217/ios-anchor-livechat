@@ -748,11 +748,15 @@ private struct PartyHotTaskProgressGuide: View {
                     .font(.system(size: 13))
                     .foregroundColor(.white.opacity(0.74))
                     .multilineTextAlignment(.center)
-                Button(L10n.Party.ok, action: onDismiss)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity, minHeight: 42)
-                    .background(Color(hex: 0xFE00DE), in: RoundedRectangle(cornerRadius: 8))
+                Button(action: onDismiss) {
+                    Text(L10n.Party.ok)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity, minHeight: 42)
+                        .background(Color(hex: 0xFE00DE), in: RoundedRectangle(cornerRadius: 8))
+                        .contentShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
             }
             .padding(22)
             .frame(maxWidth: 300)

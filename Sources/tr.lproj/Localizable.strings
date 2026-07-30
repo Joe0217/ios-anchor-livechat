@@ -2133,3 +2133,9 @@
 "liveGift.firstGiftStreamer" = "yayıncıya";
 "liveGift.firstGiftKick" = "İlk selamlaşma anını başlat";
 "virtualProps.effectSwitch.tip" = "Effect Switch Here";
+"partyRoom.superWheel.getReady" = "Hazır olun";
+"partyRoom.superWheel.joined" = "Katıldın";
+"partyRoom.superWheel.spectating" = "Elendin. İzliyorsun";
+"partyRoom.superWheel.winningRatio" = "Kazanma Oranı";
+"partyRoom.superWheel.nextRound" = "Tüm oyuncular bir sonraki tura geçer";
+"partyRoom.superWheel.rewardHint" = "Kazanan havuzun %80'ini, oda sahibi %10'unu alır.";

@@ -513,14 +513,6 @@ struct PartyRoomView: View {
                 showCooldownToast: $showBattleCooldownToast,
                 showRules: $showBattleRules
             ))
-            .modifier(PartyWeeklyTaskUIModifier(
-                weeklyStore: weeklyTaskStore,
-                hotStore: hotTaskStore,
-                isWeeklyTaskPresented: $showWeeklyTaskSheet,
-                isHotTaskPresented: hotTaskSheetPresented,
-                onHotTaskDismiss: { isHotTaskSheetPresentationActive = false },
-                roomId: store.roomInfo?.id ?? roomId
-            ))
             .overlay {
                 if let guide = hotTaskStore.guide {
                     PartyTopRoomBonusDialog(
@@ -538,6 +530,24 @@ struct PartyRoomView: View {
                     PartyHotTaskRewardOverlay(notification: notification) {
                         hotTaskStore.dismissReward(notification.id)
                     }
+                }
+            }
+            // 任务引导必须处于房间所有自定义浮层之上，避免透明/动画浮层吞掉 OK 点击。
+            .modifier(PartyWeeklyTaskUIModifier(
+                weeklyStore: weeklyTaskStore,
+                hotStore: hotTaskStore,
+                isWeeklyTaskPresented: $showWeeklyTaskSheet,
+                isHotTaskPresented: hotTaskSheetPresented,
+                onHotTaskDismiss: { isHotTaskSheetPresentationActive = false },
+                roomId: store.roomInfo?.id ?? roomId
+            ))
+            // Super Winner 结果不依赖面板是否展开：参与者最小化后仍必须看到淘汰/获胜结算。
+            .overlay {
+                if superWheelStore.shouldPresentResult, !superWheelStore.isPanelPresented {
+                    PartySuperWheelResultOverlay(
+                        wheelStore: superWheelStore,
+                        isRoomOwner: store.isSelfRoomOwner
+                    )
                 }
             }
             .preferredColorScheme(.dark)
@@ -589,9 +599,9 @@ struct PartyRoomView: View {
             }
             // 半屏游戏暂不接入，隐藏房内游戏 Banner 入口。
             if superWheelStore.isActive {
-                PartySuperWheelFloatingButton {
+                PartySuperWheelFloatingButton(state: superWheelStore.wheelState?.state ?? 0) {
                     trackSuperWheelIcon("b_wheel_icon_click")
-                    superWheelStore.isPanelPresented = true
+                    superWheelStore.openPanel()
                 } onVisible: {
                     trackSuperWheelIcon("b_wheel_icon_view")
                 }
@@ -2461,7 +2471,7 @@ struct PartyRoomView: View {
         Binding(
             get: { superWheelStore.isPanelPresented && !isHotTaskSheetPresentationActive },
             set: { isPresented in
-                if !isPresented { superWheelStore.isPanelPresented = false }
+                if !isPresented { superWheelStore.dismissPanel() }
             }
         )
     }
@@ -2480,7 +2490,7 @@ struct PartyRoomView: View {
             handlePkTap()
         case .superWheel:
             if superWheelStore.isActive {
-                superWheelStore.isPanelPresented = true
+                superWheelStore.openPanel()
             } else {
                 PartyAnalytics.track(
                     "h_superwheel_config_click",
@@ -2877,18 +2887,16 @@ struct PartyRoomView: View {
                     roomId: store.roomInfo?.id ?? roomId
                 )
                 .giftPanelSheetBackground()
-                .presentationDetents([.height(360)])
+                .presentationDetents([.fraction(0.5), .fraction(0.8)])
                 .presentationDragIndicator(.visible)
             }
-            .sheet(isPresented: superWheelPanelPresented) {
+            .fullScreenCover(isPresented: superWheelPanelPresented) {
                 PartySuperWheelPanel(
                     wheelStore: superWheelStore,
                     // H5 仅真实房主可中途关闭并退款；平台管理员的 Party 管理提权不等同该玩法所有权。
                     isRoomOwner: store.isSelfRoomOwner
                 )
-                .giftPanelSheetBackground()
-                .presentationDetents([.fraction(0.65), .large])
-                .presentationDragIndicator(.visible)
+                .preferredColorScheme(.dark)
             }
             .sheet(isPresented: $showLuckyNumberSettings) {
                 PartyLuckyNumberSettingsSheet(
