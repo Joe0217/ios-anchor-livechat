@@ -12,6 +12,8 @@ import SwiftUI
 /// - `.onReceive Timer.publish`：每秒 tickLeft 递减 leftSec（SELECTING/RUNNING 期）
 struct PartyBattleUIModifier: ViewModifier {
     @ObservedObject var battleStore: PartyBattleStore
+    /// 由 PartyRoomView 的权限桥接传入。关闭时整个 PK UI 只能清理，不能继续拉状态或展示残留弹层。
+    let isFeatureEnabled: Bool
     let effectiveRoomId: String
     @Binding var showInitiate: Bool
     @Binding var showForceEnd: Bool
@@ -21,7 +23,7 @@ struct PartyBattleUIModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .sheet(isPresented: $showInitiate) {
+            .sheet(isPresented: featureBinding($showInitiate)) {
                 PartyBattleInitiatePopup(store: battleStore) {
                     // 直接回写 sheet binding，确保 PK 创建成功后立即关闭发起页。
                     showInitiate = false
@@ -30,17 +32,17 @@ struct PartyBattleUIModifier: ViewModifier {
                     .presentationDragIndicator(.visible)
                     .partyBattleSheetBackground(.initiate)
             }
-            .sheet(isPresented: $showForceEnd) {
+            .sheet(isPresented: featureBinding($showForceEnd)) {
                 PartyBattleForceEndConfirm(store: battleStore)
                     .presentationDetents([.fraction(0.5), .fraction(0.8)])
                     .partyBattleSheetBackground(.dark)
             }
-            .sheet(isPresented: $showRules) {
+            .sheet(isPresented: featureBinding($showRules)) {
                 PartyBattleRulesPopup()
                     .presentationDetents([.fraction(0.5), .fraction(0.8)])
                     .partyBattleSheetBackground(.dark)
             }
-            .sheet(isPresented: $showCooldownToast, onDismiss: presentQueuedSettlementAfterCooldownDismissal) {
+            .sheet(isPresented: featureBinding($showCooldownToast), onDismiss: presentQueuedSettlementAfterCooldownDismissal) {
                 // 模态弹窗（非自清 toast）· 用户点 X 或 View Previous Settlement 关闭
                 // review 回调 → 关闭本 sheet + 触发 showSettlement=true 打开结算 popup（对齐 H5 g-agora-party.vue:705）
                 PartyBattleCooldownToast(
@@ -55,7 +57,7 @@ struct PartyBattleUIModifier: ViewModifier {
             }
             // H5 `endedSettlement.vue` 使用 fixed mask 覆盖房间，而不是底部 sheet。
             .overlay {
-                if battleStore.showSettlement {
+                if isFeatureEnabled && battleStore.showSettlement {
                     PartyBattleEndedSettlement(store: battleStore) {
                         battleStore.closeSettlement()
                     }
@@ -63,31 +65,71 @@ struct PartyBattleUIModifier: ViewModifier {
                     .zIndex(100)
                 }
             }
-            .task(id: effectiveRoomId) { await handleAppearTask() }
+            .task(id: featureTaskID) { await handleAppearTask() }
             .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
                 handleTick()
+            }
+            .onChange(of: isFeatureEnabled) { enabled in
+                if !enabled {
+                    disableFeature()
+                }
             }
     }
 
     // MARK: - Tasks / handlers
 
     private func handleAppearTask() async {
+        guard isFeatureEnabled else {
+            disableFeature()
+            return
+        }
+
         // 冷启动 refresh 兜底（R-20）+ 全局开关按需拉取（首版每进房一次）
         if !effectiveRoomId.isEmpty {
             await battleStore.refreshIfNeeded(roomId: effectiveRoomId)
         }
+        // `.task(id:)` 在能力撤销时会取消旧任务；在继续进行下一次请求前明确检查，
+        // 避免取消后的旧 View 继续触发全局配置拉取。
+        guard !Task.isCancelled, isFeatureEnabled else { return }
         await battleStore.loadGlobalConfig()
     }
 
     private func handleTick() {
+        guard isFeatureEnabled else { return }
         guard battleStore.isSelecting || battleStore.isRunning else { return }
         battleStore.tickLeft()
     }
 
     private func presentQueuedSettlementAfterCooldownDismissal() {
+        guard isFeatureEnabled else {
+            shouldPresentSettlementAfterCooldownDismissal = false
+            return
+        }
         guard shouldPresentSettlementAfterCooldownDismissal else { return }
         shouldPresentSettlementAfterCooldownDismissal = false
         battleStore.showSettlementBinding.wrappedValue = true
+    }
+
+    private var featureTaskID: String {
+        "\(effectiveRoomId)|\(isFeatureEnabled ? "enabled" : "disabled")"
+    }
+
+    /// 同时处理权限热切换与初次 deny-by-default。绑定本身也在 getter 处硬拒绝，
+    /// 因此 SwiftUI sheet 动画尚未完成时不会重新呈现被关闭的 PK 页面。
+    private func disableFeature() {
+        showInitiate = false
+        showForceEnd = false
+        showCooldownToast = false
+        showRules = false
+        shouldPresentSettlementAfterCooldownDismissal = false
+        battleStore.reset()
+    }
+
+    private func featureBinding(_ binding: Binding<Bool>) -> Binding<Bool> {
+        Binding(
+            get: { isFeatureEnabled && binding.wrappedValue },
+            set: { binding.wrappedValue = isFeatureEnabled && $0 }
+        )
     }
 }
 

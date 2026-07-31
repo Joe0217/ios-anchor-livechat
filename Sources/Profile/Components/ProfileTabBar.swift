@@ -4,10 +4,16 @@ import SwiftUI
 /// 选中态：黄色加粗 + 下方短金色横线。
 struct ProfileTabBar: View {
     @Binding var selected: ProfileTab
+    let tabs: [ProfileTab]
+
+    init(selected: Binding<ProfileTab>, tabs: [ProfileTab] = ProfileTab.allCases) {
+        _selected = selected
+        self.tabs = tabs
+    }
 
     var body: some View {
         HStack(spacing: Theme.Metric.profileTabGap) {
-            ForEach(ProfileTab.allCases, id: \.self) { tab in
+            ForEach(tabs, id: \.self) { tab in
                 Button { selected = tab } label: {
                     tabLabel(for: tab)
                 }

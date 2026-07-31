@@ -371,6 +371,14 @@ struct PartyBannerGame: Identifiable, Equatable {
 
     var isDisplayable: Bool { partyIcon?.isEmpty == false }
     var isLaunchable: Bool { !gameId.isEmpty && gameLink?.isEmpty == false }
+    /// 107 仅允许这类无付费、无奖品的房内互动；其他 H5 游戏仍需完整 Party 游戏权限。
+    var isFreePartyInteraction: Bool {
+        PartyFreeInteractionPolicy.allows(
+            gameID: gameId,
+            gameName: gameName,
+            gameType: gameType
+        )
+    }
 
     static func decodeAnchorBannerGames(from data: Data) throws -> [PartyBannerGame] {
         let object = try JSONSerialization.jsonObject(with: data)
@@ -419,6 +427,31 @@ struct PartyBannerGame: Identifiable, Equatable {
             if type != "c" && type != "B" { return value.stringValue }
         }
         return nil
+    }
+}
+
+/// Party 免费互动的保守白名单。服务端下发的其他游戏即使带图标或链接，也不会因 107 放行。
+enum PartyFreeInteractionPolicy {
+    private static let allowedASCIIIdentifiers: Set<String> = [
+        "rps",
+        "rockpaperscissors",
+        "dice",
+    ]
+
+    static func allows(gameID: String?, gameName: String?, gameType: String?) -> Bool {
+        [gameID, gameName, gameType]
+            .compactMap { $0 }
+            .contains { value in
+                let lowered = value.lowercased()
+                if lowered.contains("猜拳") || lowered.contains("石头剪刀布") || lowered.contains("骰子") {
+                    return true
+                }
+                let normalized = lowered.unicodeScalars
+                    .filter { CharacterSet.alphanumerics.contains($0) }
+                    .map(String.init)
+                    .joined()
+                return allowedASCIIIdentifiers.contains(normalized)
+            }
     }
 }
 

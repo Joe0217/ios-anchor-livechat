@@ -352,6 +352,7 @@ private extension PropsInventoryStore.RejectionReason {
         case .alreadyWorn:             return "You already wear this"
         case .alreadyUnequipped:       return "You already unequip this"
         case .busy:                    return "Please wait..."
+        case .permissionDenied:        return "This feature is unavailable"
         case .staleServerAuthoritative: return "Refreshing..."
         case .apiFailed(let msg):      return msg.isEmpty ? "Failed. Please try again." : msg
         }

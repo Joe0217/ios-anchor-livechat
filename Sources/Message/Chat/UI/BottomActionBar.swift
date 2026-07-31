@@ -14,6 +14,7 @@ import SwiftUI
 struct BottomActionBar: View {
     let chatType: ChatType
     let canCall: Bool
+    var canUsePrivateMedia: Bool = true
     let inputMode: ChatInputBar.InputMode
 
     let onToggleVoice: () -> Void
@@ -38,9 +39,11 @@ struct BottomActionBar: View {
                 OperateButton(imageName: "ChatBottomPhoto",
                               accessibilityLabel: "Album",
                               action: onOpenRegularAlbum)
-                OperateButton(imageName: "ChatBottomPrivate",
-                              accessibilityLabel: "Private Album",
-                              action: onOpenPrivateAlbum)
+                if canUsePrivateMedia {
+                    OperateButton(imageName: "ChatBottomPrivate",
+                                  accessibilityLabel: "Private Album",
+                                  action: onOpenPrivateAlbum)
+                }
             case .customer:
                 // 客服会话仅相册按钮（走系统 PhotosPicker 读手机相册,由 caller 挂 PhotosPicker）
                 OperateButton(imageName: "ChatBottomPhoto",

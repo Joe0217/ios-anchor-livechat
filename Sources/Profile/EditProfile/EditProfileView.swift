@@ -22,6 +22,7 @@ struct EditProfileView: View {
     @StateObject private var store: EditProfileStore
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     /// 生产入口：内部创建 store 并由 @StateObject 保留生命周期。
     init(service: EditProfileServiceProtocol) {
@@ -199,10 +200,14 @@ struct EditProfileView: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 16) {
                 basicSection
-                photosSection
-                videosSection
-                callVideoSection
-                greetMsgsSection
+                if permission.canProfileSocial {
+                    photosSection
+                    videosSection
+                    if permission.canCall {
+                        callVideoSection
+                    }
+                    greetMsgsSection
+                }
                 Spacer(minLength: 24)
             }
             .padding(16)

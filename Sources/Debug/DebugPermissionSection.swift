@@ -5,7 +5,7 @@ import SwiftUI
 ///
 /// **不入 Release 包**（整个文件 `#if DEBUG` 门）。
 ///
-/// **UI 交互**：直接列 7 个 Button rows（对齐 SettingsView `settingsRow` pattern），点击 row 立即切换。
+/// **UI 交互**：直接列 8 个 Button rows（对齐 SettingsView `settingsRow` pattern），点击 row 立即切换。
 /// **不用 Picker.menu** —— iOS 16 List 里 Picker 默认 `.menu` style 只右侧 chevron 是 tap 区，
 /// 左侧 label 文字点不动（SwiftUI 已知陷阱）。改 Button + `.contentShape(Rectangle())` 让整 row 都是热区
 /// （对齐 rule swiftui-button-plain-hitarea）。
@@ -44,7 +44,10 @@ struct DebugPermissionSection: View {
             }
 
             infoRow(title: "Effective", value: effectiveText, mono: true)
-            infoRow(title: "canCall / canLive / canParty", value: permissionsText, mono: true)
+            infoRow(title: "Call / Live / Party", value: permissionsText, mono: true)
+            infoRow(title: "Gift / Wallet / WD / EX", value: economyPermissionsText, mono: true)
+            infoRow(title: "Lot / Game / Item / Home / Work / H5", value: reviewPermissionsText, mono: true)
+            infoRow(title: "Msg / Social / Notice / Party Video", value: isolationPermissionsText, mono: true)
         }
         .listRowBackground(Theme.Palette.cardFill.opacity(0.6))
         .onAppear { syncSelectionFromOverride() }
@@ -79,6 +82,18 @@ struct DebugPermissionSection: View {
         "\(mark(permission.canCall)) / \(mark(permission.canLive)) / \(mark(permission.canParty))"
     }
 
+    private var economyPermissionsText: String {
+        "\(mark(permission.canGiftSending)) / \(mark(permission.canWallet)) / \(mark(permission.canWithdrawal)) / \(mark(permission.canCurrencyExchange))"
+    }
+
+    private var reviewPermissionsText: String {
+        "\(mark(permission.canLottery)) / \(mark(permission.canPartyGames)) / \(mark(permission.canPartyLuckyNumber)) / \(mark(permission.canPartyFreeGames)) / \(mark(permission.canVirtualItems)) / \(mark(permission.canHomeDiscovery)) / \(mark(permission.canWorkDashboard)) / \(mark(permission.canPartyActivities))"
+    }
+
+    private var isolationPermissionsText: String {
+        "\(mark(permission.canDirectMessages)) / \(mark(permission.canProfileSocial)) / \(mark(permission.canSystemAnnouncements)) / \(mark(permission.canPartyVideo))"
+    }
+
     private func mark(_ v: Bool) -> String { v ? "✓" : "✗" }
 
     /// 从 DebugPermissionOverride 反向同步 selection（进入 Settings 时保持一致）
@@ -101,6 +116,7 @@ struct DebugPermissionSection: View {
         case v104 = 104
         case v105 = 105
         case v106 = 106
+        case v107 = 107
 
         var id: Int { rawValue }
 
@@ -113,6 +129,7 @@ struct DebugPermissionSection: View {
             case .v104: return "104 · 屏通话+匹配+直播"
             case .v105: return "105 · 屏通话+匹配+Party"
             case .v106: return "106 · 屏直播+Party"
+            case .v107: return "107 · Party-only"
             }
         }
     }

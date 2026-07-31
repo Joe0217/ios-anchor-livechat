@@ -12,6 +12,7 @@ import PhotosUI
 /// - **F 期**：OSS 头像上传 / Background 背景图选择 / 段位不足充值升级引导（本 MVP 仅显示"Lv.X required"toast）
 struct PartyCreateRoomView: View {
     @StateObject var store: PartyCreateStore
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     var onCreated: (String) -> Void = { _ in }   // 提交成功回调（外部 push PartyRoomView）
 
     @State private var showModePicker = false
@@ -84,7 +85,15 @@ struct PartyCreateRoomView: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbarBackground(Theme.Palette.partyListBackground, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
-        .task { await store.loadInitial() }
+        .task {
+            await store.loadInitial()
+            store.refreshPartyVideoCapability()
+        }
+        .onChange(of: permission.canPartyVideo) { allowed in
+            // 账号被动态降为 107 时，关闭已打开的双房型 picker，避免用户停留在视频 tab。
+            if !allowed { showModePicker = false }
+            store.refreshPartyVideoCapability()
+        }
         .sheet(isPresented: $showModePicker) {
             PartyCreateModePickerSheet(store: store) { showModePicker = false }
                 .giftPanelSheetBackground()
@@ -453,13 +462,13 @@ struct PartyCreateRoomView: View {
 /// v7.14 起 UI 抽到 [PartyRoomTemplatePickerSheet](Components/PartyRoomTemplatePickerSheet.swift)
 /// 通用组件，与房间内 Room Mode sheet 复用。本 wrapper 只做 create 侧 store 桥接。
 ///
-/// **数据桥**：voice/live 各从 `store.templatesByMode[1/2]` 读；filter valid 与老逻辑对齐
-/// （PartyCreateStore.templates computed 已 filter `.hasValidDisplay`）
+/// **数据桥**：voice/live 从 `store.visibleTemplates(for:)` 读；107 Party-only 账号只提供语音 tab，
+/// 原始 cache 不直接暴露给 UI。
 ///
-/// **Tab 切换**：`onTabChange` → `store.mode = type.rawValue` → 触发 store.mode.didSet 自动
+/// **Tab 切换**：`onTabChange` → `store.selectMode` → 触发 Store 自动
 /// 补拉 + 切 selectedTemplate 到该 mode 首张（保留原副作用链）
 ///
-/// **Confirm**：本地暂存 `store.selectedTemplate = template + store.mode = type.rawValue`，
+/// **Confirm**：本地暂存 Store 已校验的 template + mode，
 /// 关 sheet；等 submit createRoom 时才发接口
 struct PartyCreateModePickerSheet: View {
     @ObservedObject var store: PartyCreateStore
@@ -469,6 +478,7 @@ struct PartyCreateModePickerSheet: View {
         PartyRoomTemplatePickerSheet(
             voiceTemplates: validTemplates(mode: PartyCreateStore.modeVoice),
             liveTemplates: validTemplates(mode: PartyCreateStore.modeLiveVoice),
+            availableTypes: availableTemplateTypes,
             isLoading: store.templatesLoading && store.templates.isEmpty,
             errorMessage: store.templatesError.isEmpty ? nil : store.templatesError,
             onRetry: { Task { await store.loadTemplates(for: store.mode) } },
@@ -478,17 +488,14 @@ struct PartyCreateModePickerSheet: View {
             emptyText: L10n.Party.createTemplateEmpty,
             onTabChange: { type in
                 // Tab 切换 → store.mode 更新触发 didSet：补拉未 cache 的 mode + 重置 selectedTemplate 到首张
-                store.mode = type.rawValue
+                _ = store.selectMode(type.rawValue)
             },
             onConfirm: { tempId, type in
                 // Confirm：从对应 tab 的 filter valid 列表找 tempId → 本地暂存到 store
                 let picked = validTemplates(mode: type.rawValue).first { $0.id == tempId }
-                if let picked {
-                    store.selectedTemplate = picked
-                    if store.mode != type.rawValue {
-                        store.mode = type.rawValue
-                    }
-                }
+                guard store.selectMode(type.rawValue),
+                      let picked,
+                      store.selectTemplate(picked, for: type.rawValue) else { return }
                 onConfirm()
             }
         )
@@ -499,9 +506,13 @@ struct PartyCreateModePickerSheet: View {
         store.mode == PartyCreateStore.modeVoice ? .voiceOnly : .liveAndVoice
     }
 
+    private var availableTemplateTypes: [PartyRoomModeType] {
+        store.canUseVideoTemplates ? PartyRoomModeType.allCases : [.voiceOnly]
+    }
+
     /// filter valid（对齐 PartyCreateStore.templates computed 的 filter 规则）
     private func validTemplates(mode: Int) -> [PartyRoomTemplate] {
-        (store.templatesByMode[mode] ?? []).filter(\.hasValidDisplay)
+        store.visibleTemplates(for: mode)
     }
 }
 

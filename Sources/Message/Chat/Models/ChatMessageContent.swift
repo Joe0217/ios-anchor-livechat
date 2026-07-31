@@ -70,6 +70,20 @@ enum ChatMessageContent: Equatable, Hashable {
     /// 兜底文本 —— attach 有 body/content 但 attachType 未识别（对齐 H5 v-else v-html body）
     /// 与 `.text` 语义不同（`.text` 是 NIM 原生 text 消息；此为 custom 消息兜底展示）
     case systemFallback(text: String)
+
+    /// 历史消息中会直接展示虚拟道具、钻石或充值信息的内容。
+    ///
+    /// Party-only 审核账号关闭 `virtualItems` 后，聊天仍可保留普通沟通，但不能通过
+    /// 旧消息或系统通知重新暴露经济能力。私密媒体另由 `giftSending + virtualItems`
+    /// 的组合能力控制，不放在本分类中。
+    var isVirtualItemOrPaymentMessage: Bool {
+        switch self {
+        case .systemGift, .cpRankReward, .itemNotice, .rewardDiamond, .rechargeNotify:
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 /// CP 榜奖励卡片单个道具项。

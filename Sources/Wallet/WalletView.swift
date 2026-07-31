@@ -3,6 +3,7 @@ import UIKit
 
 struct WalletView: View {
     @StateObject private var store = WalletStore()
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     var body: some View {
         ScrollView {
@@ -35,24 +36,26 @@ struct WalletView: View {
                         .foregroundStyle(.white.opacity(0.74))
                 }
                 Spacer(minLength: 14)
-                NavigationLink {
-                    WithdrawalView(store: store)
-                } label: {
-                    Label(L10n.Wallet.withdrawal, systemImage: "arrow.up.right.circle.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .frame(height: 38)
-                        .background(
-                            LinearGradient(
-                                colors: [Theme.Palette.partyCreateBtnA, Theme.Palette.partyCreateBtnB],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ),
-                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        )
+                if permission.canWithdrawal {
+                    NavigationLink {
+                        WithdrawalView(store: store)
+                    } label: {
+                        Label(L10n.Wallet.withdrawal, systemImage: "arrow.up.right.circle.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .frame(height: 38)
+                            .background(
+                                LinearGradient(
+                                    colors: [Theme.Palette.partyCreateBtnA, Theme.Palette.partyCreateBtnB],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                ),
+                                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            )
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
 
             Divider().overlay(.white.opacity(0.14))

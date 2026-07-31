@@ -40,6 +40,11 @@ struct ToolsSection: View {
             ("toolMyGuardian", L10n.guardianMyGuardians),
             ("toolPartyData", L10n.toolPartyData),
         ]
+        // 107 Party-only 账号不应通过工作台看到私密付费内容、虚拟道具或守护者权益。
+        if !permission.canVirtualItems || !permission.canGiftSending {
+            let restrictedIcons: Set<String> = ["toolGiftMessage", "toolBackpack", "toolMyGuardian"]
+            arr.removeAll { restrictedIcons.contains($0.icon) }
+        }
         if showNewbie { arr.append(("toolNewbie", L10n.toolNewbie)) }
         arr.append(("toolBigR", L10n.toolStarUser))
         return arr

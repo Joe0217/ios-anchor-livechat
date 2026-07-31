@@ -47,6 +47,12 @@ final class P2PChatStore: ObservableObject {
     /// Batch 6.2a：回复积分 4 tip L10n 文案（caller 传入,Store 转发给 ReplyPointsStore.onReceiveUserMsg 触发 stimulate tip）
     /// nil = 不触发回复积分接线（HilyTests / customer / system 会话场景兼容）
     private let replyPointsTipTexts: ReplyPointsTipTexts?
+    /// P2P 的总权限闸门。生产默认接 `SelfPermissionBridge`；测试可注入 fake。
+    private let directMessagesGate: (String) -> Bool
+    /// `false` 在权限桥启动绑定前仅代表未知，不应把正常账号的 Store 永久撤销。
+    private let isDirectMessagesPermissionResolved: () -> Bool
+    /// 权限撤销时由 publisher 主动停订阅和清内存态，不能只依赖 View 从层级移除。
+    private var directMessagesPermissionCancellable: AnyCancellable?
 
     // MARK: - 内部态
 
@@ -57,6 +63,8 @@ final class P2PChatStore: ObservableObject {
     /// 埋点去重：SDK completion 与 async send 返回可能先后各到一次，业务成功事件只能报一次。
     private var analyticsSentMessageIds: Set<String> = []
     private var analyticsFirstReplyIncomingIds: Set<String> = []
+    /// 该 Store 绑定单个会话。动态撤权后永久失效，重新授权必须新建会话页，避免旧消息和旧 SDK 回调复活。
+    private var isDirectMessagesAccessRevoked = false
 
     // MARK: - init / teardown
 
@@ -65,16 +73,51 @@ final class P2PChatStore: ObservableObject {
          provider: P2PChatProviderProtocol,
          sendPrivateInfoService: SendPrivateInfoServiceProtocol? = nil,
          pageSize: Int = 20,
-         replyPointsTipTexts: ReplyPointsTipTexts? = nil) {
+         replyPointsTipTexts: ReplyPointsTipTexts? = nil,
+         directMessagesGate: ((String) -> Bool)? = nil,
+         isDirectMessagesPermissionResolved: (() -> Bool)? = nil,
+         directMessagesPublisher: AnyPublisher<Bool, Never>? = nil,
+         directMessagesLoadedPublisher: AnyPublisher<Bool, Never>? = nil) {
+        // Default argument expressions are evaluated outside this @MainActor initializer. Resolve
+        // bridge-backed defaults here so Swift's actor isolation remains intact.
+        let resolvedGate = directMessagesGate ?? Self.defaultDirectMessagesGate
+        let resolvedPermissionState = isDirectMessagesPermissionResolved
+            ?? Self.defaultDirectMessagesPermissionResolved
+        let resolvedPublisher = directMessagesPublisher ?? Self.defaultDirectMessagesPublisher
+        let resolvedLoadedPublisher: AnyPublisher<Bool, Never>?
+        if directMessagesPublisher == nil {
+            resolvedLoadedPublisher = directMessagesLoadedPublisher
+                ?? Self.defaultDirectMessagesLoadedPublisher
+        } else {
+            resolvedLoadedPublisher = directMessagesLoadedPublisher
+        }
+
         self.peerYxAccId = peerYxAccId
         self.selfYxAccId = selfYxAccId
         self.provider = provider
         self.sendPrivateInfoService = sendPrivateInfoService
         self.pageSize = pageSize
         self.replyPointsTipTexts = replyPointsTipTexts
+        self.directMessagesGate = resolvedGate
+        self.isDirectMessagesPermissionResolved = resolvedPermissionState
 
         provider.subscribe { [weak self] event in
             self?.handleEvent(event)
+        }
+        if resolvedPermissionState(),
+           !resolvedGate("p2pSubscribe") {
+            revokeDirectMessagesAccess()
+        }
+        if let resolvedPublisher {
+            let loadedPublisher = resolvedLoadedPublisher
+                ?? Just(true).eraseToAnyPublisher()
+            directMessagesPermissionCancellable = loadedPublisher
+                .combineLatest(resolvedPublisher)
+                .removeDuplicates(by: Self.sameDirectMessagesPermission)
+                .sink { [weak self] loaded, allowed in
+                    guard loaded, !allowed else { return }
+                    self?.revokeDirectMessagesAccess()
+                }
         }
     }
 
@@ -87,6 +130,7 @@ final class P2PChatStore: ObservableObject {
     /// 供容器在依赖首屏历史的后续逻辑（回复积分 hydrate / 私密状态校验）前等待加载结束。
     /// `ChatDetailView.task` 与 `ChatDetailContainer.task` 同时启动，不能假设二者先后顺序。
     func waitForInitialLoad() async {
+        guard requireDirectMessages(action: "p2pWaitForInitialLoad") else { return }
         while case .loading = state {
             do {
                 try await Task.sleep(nanoseconds: 50_000_000)
@@ -116,6 +160,7 @@ final class P2PChatStore: ObservableObject {
     /// - 命中但 lockStatus 未变 → 短路(避免无谓 state 重赋)
     /// `ChatMessage.content` 是 `let`,更新走 struct 完整重建(保留 status/chatBubble/privateId 等 var 字段)。
     func applyPrivateLockStatuses(_ statuses: [String: PrivateLockStatus]) {
+        guard requireDirectMessages(action: "p2pApplyPrivateLockStatuses") else { return }
         guard case .loaded(let current) = state, !statuses.isEmpty else { return }
         var changed = false
         let updated = current.map { m -> ChatMessage in
@@ -149,14 +194,17 @@ final class P2PChatStore: ObservableObject {
 
     /// 首屏 load + markAllRead + sendReceipt(最新非我消息)。
     func load() async {
+        guard requireDirectMessages(action: "p2pLoad") else { return }
         state = .loading
         pendingEvents.removeAll()
 
         do {
             let msgs = try await provider.fetchHistory(peerYxAccId: peerYxAccId, anchor: nil, limit: pageSize)
+            guard requireDirectMessages(action: "p2pLoadAfterHistory") else { return }
             // 空态判定：空数组 → .empty（新会话）；否则合并 pending 事件后进 .loaded
             if msgs.isEmpty {
                 state = .empty
+                guard requireDirectMessages(action: "p2pMarkAllRead") else { return }
                 await provider.markAllRead(peerYxAccId: peerYxAccId)
                 pendingEvents.removeAll()
                 return
@@ -182,17 +230,21 @@ final class P2PChatStore: ObservableObject {
             }
 
             // 进页副作用：清本地 unread + 给对端已读回执（最后一条非我消息）
+            guard requireDirectMessages(action: "p2pMarkAllRead") else { return }
             await provider.markAllRead(peerYxAccId: peerYxAccId)
             if let lastIncoming = merged.last(where: { !$0.isOutgoing }) {
+                guard requireDirectMessages(action: "p2pInitialReceipt") else { return }
                 await provider.sendReceipt(peerYxAccId: peerYxAccId, lastReceivedMessageId: lastIncoming.id)
             }
         } catch {
+            guard requireDirectMessages(action: "p2pLoadError") else { return }
             state = .error(String(describing: error))
         }
     }
 
     /// 上拉加载 20 条。anchor 用当前最旧一条的 messageId。
     func loadMore() async {
+        guard requireDirectMessages(action: "p2pLoadMore") else { return }
         guard case .loaded(let current) = state,
               !isEndReached,
               !isLoadingMore,
@@ -203,6 +255,7 @@ final class P2PChatStore: ObservableObject {
 
         do {
             let older = try await provider.fetchHistory(peerYxAccId: peerYxAccId, anchor: oldest.id, limit: pageSize)
+            guard requireDirectMessages(action: "p2pLoadMoreAfterHistory") else { return }
             if older.isEmpty {
                 isEndReached = true
                 return
@@ -213,12 +266,14 @@ final class P2PChatStore: ObservableObject {
             state = .loaded(deduped + current)
             isEndReached = older.count < pageSize
         } catch {
+            guard requireDirectMessages(action: "p2pLoadMoreError") else { return }
             // 上拉失败仅 log，不切 state.error（保留已有历史）
         }
     }
 
     /// 重试（用户点错误页重试按钮）
     func retry() async {
+        guard requireDirectMessages(action: "p2pRetry") else { return }
         await load()
     }
 
@@ -226,6 +281,7 @@ final class P2PChatStore: ObservableObject {
 
     /// 发文字消息（H-2 spec §4.2）。
     func sendText(_ text: String) async {
+        guard requireDirectMessages(action: "p2pSendText") else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let clientMsgId = UUID().uuidString
@@ -247,10 +303,13 @@ final class P2PChatStore: ObservableObject {
 
         do {
             let messageId = try await provider.sendText(peerYxAccId: peerYxAccId, text: trimmed, clientMsgId: clientMsgId)
+            guard requireDirectMessages(action: "p2pSendTextCompleted") else { return }
             finalizeSending(clientMsgId: clientMsgId, messageId: messageId, error: nil)
         } catch let e as SendError {
+            guard requireDirectMessages(action: "p2pSendTextError") else { return }
             finalizeSending(clientMsgId: clientMsgId, messageId: nil, error: e)
         } catch {
+            guard requireDirectMessages(action: "p2pSendTextError") else { return }
             finalizeSending(clientMsgId: clientMsgId, messageId: nil, error: .retryable(errorCode: nil))
         }
     }
@@ -260,6 +319,7 @@ final class P2PChatStore: ObservableObject {
     ///   - localFilePath: 已 copy 到 chat 目录持久化的音频路径
     ///   - dur: 秒数
     func sendAudio(localFilePath: String, dur: Int, previewURL: URL) async {
+        guard requireDirectMessages(action: "p2pSendAudio") else { return }
         guard dur >= 1 else { return }
         let clientMsgId = UUID().uuidString
         let now = currentTimestampMs()
@@ -274,16 +334,20 @@ final class P2PChatStore: ObservableObject {
 
         do {
             let messageId = try await provider.sendAudio(peerYxAccId: peerYxAccId, localFilePath: localFilePath, dur: dur, clientMsgId: clientMsgId)
+            guard requireDirectMessages(action: "p2pSendAudioCompleted") else { return }
             finalizeSending(clientMsgId: clientMsgId, messageId: messageId, error: nil)
         } catch let e as SendError {
+            guard requireDirectMessages(action: "p2pSendAudioError") else { return }
             finalizeSending(clientMsgId: clientMsgId, messageId: nil, error: e)
         } catch {
+            guard requireDirectMessages(action: "p2pSendAudioError") else { return }
             finalizeSending(clientMsgId: clientMsgId, messageId: nil, error: .retryable(errorCode: "upload"))
         }
     }
 
     /// 发图片消息（H-2 spec §4.4 主路径：外链免上传）。
     func sendImage(item: AnchorMediaItem) async {
+        guard requireDirectMessages(action: "p2pSendImage") else { return }
         let clientMsgId = UUID().uuidString
         let now = currentTimestampMs()
         appendOptimistic(ChatMessage(
@@ -297,10 +361,13 @@ final class P2PChatStore: ObservableObject {
 
         do {
             let messageId = try await provider.sendImage(peerYxAccId: peerYxAccId, url: item.mediaUrl, clientMsgId: clientMsgId)
+            guard requireDirectMessages(action: "p2pSendImageCompleted") else { return }
             finalizeSending(clientMsgId: clientMsgId, messageId: messageId, error: nil)
         } catch let e as SendError {
+            guard requireDirectMessages(action: "p2pSendImageError") else { return }
             finalizeSending(clientMsgId: clientMsgId, messageId: nil, error: e)
         } catch {
+            guard requireDirectMessages(action: "p2pSendImageError") else { return }
             finalizeSending(clientMsgId: clientMsgId, messageId: nil, error: .retryable(errorCode: nil))
         }
     }
@@ -312,7 +379,9 @@ final class P2PChatStore: ObservableObject {
     /// **caller (ChatDetailContainer)** 从 `GiftMessageService.fetchList` 拉私密相册 → 用户选一项 →
     /// 转 `PrivateMediaSelection` → 调用本方法。
     func sendPrivateImage(peerUserId: String, media: PrivateMediaSelection) async {
-        guard media.iconType == 1 else { return }   // 类型不匹配
+        guard requireDirectMessages(action: "p2pSendPrivateImage"),
+              media.iconType == 1,
+              Self.canSendPrivateMedia(action: "sendPrivateImage") else { return }
         guard let sendPrivateService = self.sendPrivateInfoService else {
             // service 未注入 —— H-2 兼容路径不该走到；ChatDetailContainer 层保证注入
             return
@@ -332,6 +401,11 @@ final class P2PChatStore: ObservableObject {
 
         do {
             let signedData = try await sendPrivateService.fetchSignedData(peerUserId: peerUserId, privateId: media.privateId)
+            guard requireDirectMessages(action: "p2pSendPrivateImageAfterSign"),
+                  Self.canSendPrivateMedia(action: "sendPrivateImage") else {
+                removeMessage(clientMsgId: clientMsgId)
+                return
+            }
             let messageId = try await provider.sendPrivateImage(
                 peerYxAccId: peerYxAccId, peerUserId: peerUserId, url: media.url,
                 privateId: media.privateId, signedData: signedData, clientMsgId: clientMsgId
@@ -339,8 +413,10 @@ final class P2PChatStore: ObservableObject {
             finalizeSending(clientMsgId: clientMsgId, messageId: messageId, error: nil)
             trackPrivateMediaSend(type: "photo", price: media.giftPrice)
         } catch let e as SendError {
+            guard requireDirectMessages(action: "p2pSendPrivateImageError") else { return }
             finalizeSending(clientMsgId: clientMsgId, messageId: nil, error: e)
         } catch {
+            guard requireDirectMessages(action: "p2pSendPrivateImageError") else { return }
             // sendPrivateInfo 失败 or NIM SDK 非 SendError → 归类 retryable
             finalizeSending(clientMsgId: clientMsgId, messageId: nil, error: .retryable(errorCode: "signPrivate"))
         }
@@ -348,7 +424,9 @@ final class P2PChatStore: ObservableObject {
 
     /// 发私密视频消息（结构同 sendPrivateImage；lockStatus 初始 .unknown；解密播放由 GiftMessageService.decryptVideoUrl 复用）。
     func sendPrivateVideo(peerUserId: String, media: PrivateMediaSelection) async {
-        guard media.iconType == 2 else { return }
+        guard requireDirectMessages(action: "p2pSendPrivateVideo"),
+              media.iconType == 2,
+              Self.canSendPrivateMedia(action: "sendPrivateVideo") else { return }
         guard let sendPrivateService = self.sendPrivateInfoService else { return }
 
         let clientMsgId = UUID().uuidString
@@ -366,6 +444,11 @@ final class P2PChatStore: ObservableObject {
 
         do {
             let signedData = try await sendPrivateService.fetchSignedData(peerUserId: peerUserId, privateId: media.privateId)
+            guard requireDirectMessages(action: "p2pSendPrivateVideoAfterSign"),
+                  Self.canSendPrivateMedia(action: "sendPrivateVideo") else {
+                removeMessage(clientMsgId: clientMsgId)
+                return
+            }
             let messageId = try await provider.sendPrivateVideo(
                 peerYxAccId: peerYxAccId, peerUserId: peerUserId, url: media.url,
                 thumbnailUrl: media.coverUrl, dur: media.dur ?? 0,
@@ -374,14 +457,17 @@ final class P2PChatStore: ObservableObject {
             finalizeSending(clientMsgId: clientMsgId, messageId: messageId, error: nil)
             trackPrivateMediaSend(type: "video", price: media.giftPrice)
         } catch let e as SendError {
+            guard requireDirectMessages(action: "p2pSendPrivateVideoError") else { return }
             finalizeSending(clientMsgId: clientMsgId, messageId: nil, error: e)
         } catch {
+            guard requireDirectMessages(action: "p2pSendPrivateVideoError") else { return }
             finalizeSending(clientMsgId: clientMsgId, messageId: nil, error: .retryable(errorCode: "signPrivate"))
         }
     }
 
     /// 发视频消息（H-2 spec §4.4）。
     func sendVideo(item: AnchorMediaItem) async {
+        guard requireDirectMessages(action: "p2pSendVideo") else { return }
         let clientMsgId = UUID().uuidString
         let now = currentTimestampMs()
         appendOptimistic(ChatMessage(
@@ -395,10 +481,13 @@ final class P2PChatStore: ObservableObject {
 
         do {
             let messageId = try await provider.sendVideo(peerYxAccId: peerYxAccId, url: item.mediaUrl, thumbnailUrl: item.coverUrl, dur: item.dur ?? 0, clientMsgId: clientMsgId)
+            guard requireDirectMessages(action: "p2pSendVideoCompleted") else { return }
             finalizeSending(clientMsgId: clientMsgId, messageId: messageId, error: nil)
         } catch let e as SendError {
+            guard requireDirectMessages(action: "p2pSendVideoError") else { return }
             finalizeSending(clientMsgId: clientMsgId, messageId: nil, error: e)
         } catch {
+            guard requireDirectMessages(action: "p2pSendVideoError") else { return }
             finalizeSending(clientMsgId: clientMsgId, messageId: nil, error: .retryable(errorCode: nil))
         }
     }
@@ -406,6 +495,7 @@ final class P2PChatStore: ObservableObject {
     /// 重发失败消息（用户 tap 红叹号触发）。
     /// **仅** `.failed` 可重发；`.refused` 拒绝（UI 层应隐藏红叹号）。
     func resend(clientMsgId: String) async {
+        guard requireDirectMessages(action: "p2pResend") else { return }
         guard case .loaded(let msgs) = state,
               let msg = msgs.first(where: { $0.clientMsgId == clientMsgId }) else { return }
         // 重发前先删掉旧的失败消息，再走一遍发送流程
@@ -436,6 +526,7 @@ final class P2PChatStore: ObservableObject {
     // MARK: - Delegate 事件（NIMChatAdapter → @MainActor）
 
     func handleEvent(_ event: P2PChatEvent) {
+        guard requireDirectMessages(action: "p2pHandleEvent") else { return }
         // loading 期入队
         if case .loading = state {
             pendingEvents.append(event)
@@ -467,7 +558,7 @@ final class P2PChatStore: ObservableObject {
                 state = .loaded(incoming)
                 // 收到对端新消息 → 立即回执 + badge（视为 view 已 active）
                 if let last = incoming.last(where: { !$0.isOutgoing }) {
-                    Task { await provider.sendReceipt(peerYxAccId: peerYxAccId, lastReceivedMessageId: last.id) }
+                    sendReceiptIfAllowed(lastReceivedMessageId: last.id)
                 }
                 pendingBottomBadge += incoming.count
             }
@@ -482,7 +573,7 @@ final class P2PChatStore: ObservableObject {
 
         // 收到对端新消息 → 已读回执给对端
         if let lastIncoming = deduped.last(where: { !$0.isOutgoing }) {
-            Task { await provider.sendReceipt(peerYxAccId: peerYxAccId, lastReceivedMessageId: lastIncoming.id) }
+            sendReceiptIfAllowed(lastReceivedMessageId: lastIncoming.id)
         }
 
         // Batch 6.2a：对端消息累加回复积分进度 + 触发 stimulate tip
@@ -520,6 +611,86 @@ final class P2PChatStore: ObservableObject {
             var m = msg; m.status = .read; return m
         }
         if changed { state = .loaded(updated) }
+    }
+
+    private func sendReceiptIfAllowed(lastReceivedMessageId: String) {
+        Task { @MainActor [weak self] in
+            guard let self,
+                  self.requireDirectMessages(action: "p2pEventReceipt") else { return }
+            await self.provider.sendReceipt(
+                peerYxAccId: self.peerYxAccId,
+                lastReceivedMessageId: lastReceivedMessageId
+            )
+        }
+    }
+
+    // MARK: - 账户权限
+
+    /// 所有 P2P 入口必须经过该总闸门，不能只依赖 ChatDetailContainer 的 UI 显隐。
+    private func requireDirectMessages(action: String) -> Bool {
+        guard !isDirectMessagesAccessRevoked else { return false }
+        guard directMessagesGate(action) else {
+            if isDirectMessagesPermissionResolved() {
+                revokeDirectMessagesAccess()
+            }
+            return false
+        }
+        return true
+    }
+
+    /// 动态撤权时立即解除 SDK delegate、清空敏感内存态；所有 async 返回点会再经过
+    /// `requireDirectMessages`，因此已经发出的请求不能把旧历史或乐观消息写回页面。
+    private func revokeDirectMessagesAccess() {
+        guard !isDirectMessagesAccessRevoked else { return }
+        isDirectMessagesAccessRevoked = true
+        provider.unsubscribe()
+        pendingEvents.removeAll()
+        clientToServerId.removeAll()
+        analyticsSentMessageIds.removeAll()
+        analyticsFirstReplyIncomingIds.removeAll()
+        pendingBottomBadge = 0
+        isLoadingMore = false
+        isEndReached = true
+        state = .empty
+    }
+
+    private static func defaultDirectMessagesGate(action: String) -> Bool {
+        #if HILY_TESTS
+        true
+        #else
+        SelfPermissionBridge.shared.gate(.directMessages, action: action)
+        #endif
+    }
+
+    private static func defaultDirectMessagesPermissionResolved() -> Bool {
+        #if HILY_TESTS
+        true
+        #else
+        SelfPermissionBridge.shared.isLoaded
+        #endif
+    }
+
+    private static var defaultDirectMessagesPublisher: AnyPublisher<Bool, Never>? {
+        #if HILY_TESTS
+        nil
+        #else
+        SelfPermissionBridge.shared.$canDirectMessages.eraseToAnyPublisher()
+        #endif
+    }
+
+    private static var defaultDirectMessagesLoadedPublisher: AnyPublisher<Bool, Never>? {
+        #if HILY_TESTS
+        nil
+        #else
+        SelfPermissionBridge.shared.$isLoaded.eraseToAnyPublisher()
+        #endif
+    }
+
+    private static func sameDirectMessagesPermission(
+        _ lhs: (Bool, Bool),
+        _ rhs: (Bool, Bool)
+    ) -> Bool {
+        lhs.0 == rhs.0 && lhs.1 == rhs.1
     }
 
     // MARK: - 内部：乐观 UI 更新工具
@@ -674,6 +845,16 @@ final class P2PChatStore: ObservableObject {
         ]
         AnalyticsTracker.track("primsg_send_suc", properties: properties)
         AnalyticsTracker.track("h_primsg_send_suc", properties: properties)
+        #endif
+    }
+
+    /// 私密媒体可绑定礼物价格，必须同时具备礼物与虚拟道具能力。
+    private static func canSendPrivateMedia(action: String) -> Bool {
+        #if HILY_TESTS
+        return true
+        #else
+        return SelfPermissionBridge.shared.gate(.giftSending, action: action)
+            && SelfPermissionBridge.shared.gate(.virtualItems, action: action)
         #endif
     }
 

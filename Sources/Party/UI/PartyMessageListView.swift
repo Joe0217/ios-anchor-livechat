@@ -21,6 +21,12 @@ struct PartyMessageListView: View {
     var filter: PartyRoomChatFilter = .all
     /// v3 前置字段，暂保留兼容 caller；v3 后 gift 已进 feed 无需 banner，不再渲染
     let lastGiftEvent: PartyGiftEvent?
+    /// Store 层已经阻止新增敏感广播；这里再过滤已有缓存，覆盖账号权限运行中收回的场景。
+    var showsGiftMessages: Bool = true
+    var showsLotteryMessages: Bool = true
+    var showsPartyGameMessages: Bool = true
+    var showsActivityMessages: Bool = true
+    var showsVirtualItemMessages: Bool = true
     /// 防重入 map:正在翻译中的 msgId
     @State private var pendingTranslateIds: Set<UUID> = []
     @State private var deleteActionMessage: UnifiedPublicChatMessage?
@@ -37,13 +43,31 @@ struct PartyMessageListView: View {
 
     /// 过滤后的消息列表（对齐 H5/Android tab 过滤语义 + unified variant discriminator）
     private var filteredMessages: [UnifiedPublicChatMessage] {
+        let visibleMessages = chat.messages.filter { isMessageAllowed($0.variant) }
         switch filter {
         case .all:
-            return chat.messages
+            return visibleMessages
         case .chat:
-            return chat.messages.filter { !isGiftLikeVariant($0.variant) }
+            return visibleMessages.filter { !isGiftLikeVariant($0.variant) }
         case .gift:
-            return chat.messages.filter { isGiftLikeVariant($0.variant) }
+            return visibleMessages.filter { isGiftLikeVariant($0.variant) }
+        }
+    }
+
+    private func isMessageAllowed(_ variant: PublicChatVariant) -> Bool {
+        switch variant {
+        case .gift, .luckyGift, .firstGiftMoment, .diamondGift, .bonus:
+            return showsGiftMessages
+        case .partyLuckyNumber, .wheelRes:
+            return showsLotteryMessages
+        case .gameWinNotify, .partyBattle, .pkNotify, .pkTopContributors, .rpsWin:
+            return showsPartyGameMessages
+        case .winnerBroadcast, .wishlistEffect:
+            return showsActivityMessages
+        case .enterRoom:
+            return showsVirtualItemMessages
+        default:
+            return true
         }
     }
 

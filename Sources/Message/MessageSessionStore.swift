@@ -133,6 +133,13 @@ final class MessageSessionStore: ObservableObject {
     /// 决定是否保留 .loading 等 publisher sink 触发 reload，避免直接切 .loaded([]) 让用户见空态。
     private var isIMSynced: Bool = false
 
+    /// 107 撤销 P2P 后，Store 仍会被 NIM 的 connection publisher 唤醒。仅隐藏消息 Tab
+    /// 无法阻止它重拉会话、用户资料和关注列表，因此此处保留独立的运行时暂停态。
+    private var isDirectMessagesSuspended: Bool = false
+    /// 每次暂停/恢复递增。异步请求返回时必须与启动时的 epoch 一致，避免撤权前已经发出的
+    /// 请求把旧会话或资料重新写回内存。
+    private var directMessagesAccessEpoch: UInt = 0
+
     private let logger = Logger(subsystem: "com.anchor.livechat", category: "MessageSessionStore")
 
     // MARK: - init / teardown
@@ -170,6 +177,10 @@ final class MessageSessionStore: ObservableObject {
                     // 无条件更新本地 sync 标记（load() 空返守卫用；断连时置回 false）
                     self.isIMSynced = isConnected
                     guard isConnected else { return }
+                    guard !self.isDirectMessagesSuspended else {
+                        self.logger.debug("🟣 [MessageStore] isConnected=true ignored while P2P is suspended")
+                        return
+                    }
                     self.logger.info("🟢 [MessageStore] isConnected=true → reload (无条件覆盖 stale cache)")
                     await self.load()
                 }
@@ -180,7 +191,8 @@ final class MessageSessionStore: ObservableObject {
         customerServiceStore.customerYxAccIdPublisher
             .removeDuplicates()
             .sink { [weak self] _ in
-                self?.recomputeSystemInbox()
+                guard let self, !self.isDirectMessagesSuspended else { return }
+                self.recomputeSystemInbox()
             }
             .store(in: &cancellables)
 
@@ -203,6 +215,11 @@ final class MessageSessionStore: ObservableObject {
     }
 
     func load() async {
+        guard !isDirectMessagesSuspended else {
+            logger.debug("🟣 [MessageStore] load ignored while P2P is suspended")
+            return
+        }
+        let accessEpoch = directMessagesAccessEpoch
         // M-8:state=.loaded([MessageSession]) reflection dump 会带 peerNickname/lastMessage/yxAccid 等 PII,
         // 用短摘要替代整 state,避免 unified log 泄漏聊天摘要(App Store 5.1.1 privacy 相关)
         logger.info("🟢 [MessageStore] load() start stateKind=\(Self.stateKindLabel(self.state), privacy: .public)")
@@ -219,19 +236,25 @@ final class MessageSessionStore: ObservableObject {
         }
 
         // v4 新增：客服 yxAccId 幂等拉取（若已缓存立即返；否则并发拉取不阻塞主路径）
-        Task { await self.customerServiceStore.refreshIfNeeded() }
+        Task { [weak self] in
+            guard let self, self.isDirectMessagesAccessActive(accessEpoch) else { return }
+            await self.customerServiceStore.refreshIfNeeded()
+        }
 
         // v4 新增：station HTTP 拉取（不阻塞主路径 sessions/prime）
         Task { [weak self] in
-            let mail = await self?.stationProvider.fetchLatest()
+            guard let self, self.isDirectMessagesAccessActive(accessEpoch) else { return }
+            let mail = await self.stationProvider.fetchLatest()
             await MainActor.run { [weak self] in
-                self?.stationMail = mail
-                self?.recomputeSystemInbox()
+                guard let self, self.isDirectMessagesAccessActive(accessEpoch) else { return }
+                self.stationMail = mail
+                self.recomputeSystemInbox()
             }
         }
 
         do {
             let all = try await provider.fetchAll()
+            guard isDirectMessagesAccessActive(accessEpoch) else { return }
             logger.info("🟢 [MessageStore] fetchAll returned count=\(all.count, privacy: .public)")
 
             // v5.2 修复（Q3 IM 断连保护）：fetchAll 拿到空数组时，若当前 state 已 loaded 非空
@@ -265,6 +288,7 @@ final class MessageSessionStore: ObservableObject {
             let newPrimes = await primesTask
             let newProfiles = await profilesTask
             let newFollowSet = await followTask
+            guard isDirectMessagesAccessActive(accessEpoch) else { return }
 
             // v5.3 修复（Q4 Prime 分类丢失）：primeUidSet 拉到空且原本非空 → 保留旧值。
             // 原因：PrimeLevelService.fetchPrime 全批失败降级为空 Set（spec R-1）；直接覆盖赋值会
@@ -318,6 +342,7 @@ final class MessageSessionStore: ObservableObject {
             startOnlineStatusRefresh()   // v4e: 启动 20s 周期在线状态刷新
             logger.info("🟢 [MessageStore] loaded final count=\(finalSessions.count, privacy: .public) pendingMerged=\(merged.count, privacy: .public)")
         } catch {
+            guard isDirectMessagesAccessActive(accessEpoch) else { return }
             state = .error(String(describing: error))
             logger.error("🔴 [MessageStore] load failed \(String(describing: error), privacy: .private)")
         }
@@ -330,6 +355,7 @@ final class MessageSessionStore: ObservableObject {
     // MARK: - Delegate 增量事件（Adapter → @MainActor）
 
     func handleEvent(_ event: MessageSessionEvent) {
+        guard !isDirectMessagesSuspended else { return }
         switch state {
         case .loading:
             pendingUpdates.append(event)
@@ -353,6 +379,7 @@ final class MessageSessionStore: ObservableObject {
     // MARK: - 置顶 / 删除（乐观更新 + 失败回滚）
 
     func setStickTop(sessionId: String, isTop: Bool) async {
+        guard !isDirectMessagesSuspended else { return }
         guard case .loaded(let current) = state else { return }
 
         let optimistic = current.map { s -> MessageSession in
@@ -366,12 +393,14 @@ final class MessageSessionStore: ObservableObject {
         do {
             try await provider.setStickTop(sessionId: sessionId, isTop: isTop)
         } catch {
+            guard !isDirectMessagesSuspended else { return }
             state = .loaded(current)
             logger.notice("[MessageStore] setStickTop rollback \(sessionId, privacy: .private) isTop=\(isTop, privacy: .public)")
         }
     }
 
     func delete(sessionId: String) async {
+        guard !isDirectMessagesSuspended else { return }
         guard case .loaded(let current) = state else { return }
         let filtered = current.filter { $0.id != sessionId }
         state = .loaded(filtered)
@@ -383,6 +412,7 @@ final class MessageSessionStore: ObservableObject {
         do {
             try await provider.delete(sessionId: sessionId)
         } catch {
+            guard !isDirectMessagesSuspended else { return }
             state = .loaded(current)
             logger.notice("[MessageStore] delete rollback \(sessionId, privacy: .private)")
         }
@@ -392,6 +422,7 @@ final class MessageSessionStore: ObservableObject {
     /// - `.flame` / `.prime` / `.stranger` 里显示的所有 P2P 会话逐条 delete；系统入口（Station/Notification/Admin）不受影响
     /// - 失败静默；每条走同款 provider.delete 有单独 rollback
     func clearCategory(_ cat: MessageSessionCategory) async {
+        guard !isDirectMessagesSuspended else { return }
         let targets = sessions(in: cat)
         guard !targets.isEmpty else { return }
         logger.info("[MessageStore] clearCategory \(cat.rawValue, privacy: .public) count=\(targets.count, privacy: .public)")
@@ -402,6 +433,7 @@ final class MessageSessionStore: ObservableObject {
 
     /// 用户点击 Station 入口：标记已读 + 重算 unread（v4 新增）。
     func markStationRead() {
+        guard !isDirectMessagesSuspended else { return }
         guard let mail = stationMail else { return }
         stationProvider.markRead(mail)
         recomputeSystemInbox()
@@ -410,12 +442,16 @@ final class MessageSessionStore: ObservableObject {
     // MARK: - Prime + Profile 增量拉取
 
     private func refreshIncremental(for uids: [String], prime: Bool, profile: Bool) async {
+        let accessEpoch = directMessagesAccessEpoch
+        guard isDirectMessagesAccessActive(accessEpoch) else { return }
         if prime {
             let newPrimes = await primeProvider.fetchPrime(yxAccIds: uids)
+            guard isDirectMessagesAccessActive(accessEpoch) else { return }
             primeUidSet.formUnion(newPrimes)
         }
         if profile {
             let newProfiles = await profileProvider.fetch(yxAccIds: uids)
+            guard isDirectMessagesAccessActive(accessEpoch) else { return }
             for (k, v) in newProfiles { conversationProfiles[k] = v }
         }
         // v5.1 修复：refreshIncremental 增量场景（新 session .add 到达）后**无条件**重赋 state，
@@ -456,6 +492,7 @@ final class MessageSessionStore: ObservableObject {
     /// **对比 H5**：H5 走 5s WS 心跳里嵌套 `updateLimit=2/6`（10s/30s）；iOS 简化为独立 20s Task。
     /// **对比安卓**：安卓走 NIM subscribeOnlineStateEvent 推送；iOS 用轮询（H5 路径）成本更低。
     private func startOnlineStatusRefresh() {
+        guard !isDirectMessagesSuspended else { return }
         onlineStatusRefreshTask?.cancel()
         attachBackgroundObservers()   // v5 F-1: 首次启动时挂后台观察者（幂等）
         onlineStatusRefreshTask = Task { [weak self] in
@@ -478,11 +515,14 @@ final class MessageSessionStore: ObservableObject {
     /// SwiftUI TabView(.page) 3 tag 预建 + MainTabView keep-alive 三层容器让 onAppear "可见"语义失真；
     /// 快速滚动无 debounce 会反向恶化为 N 次单点 API 突刺。真正优化路径是云信 NIMSubscribeManager 推送（Android 已用），留 J 期评估。
     private func refreshOnlineStatus() async {
+        let accessEpoch = directMessagesAccessEpoch
+        guard isDirectMessagesAccessActive(accessEpoch) else { return }
         guard case .loaded(let sessions) = state, !sessions.isEmpty else { return }
         let excludedIds = excludedSystemIds()
         let uids = sessions.map(\.id).filter { !excludedIds.contains($0) }
         guard !uids.isEmpty else { return }
         let newProfiles = await profileProvider.fetch(yxAccIds: uids)
+        guard isDirectMessagesAccessActive(accessEpoch) else { return }
 
         // v5.1 修复：以 profile 是否变化（含 onlineGroupStatus）作为重赋 state 的判据。
         // 旧版用 applyProfiles 后 sessions 数组相等检查，只比 nickname/avatar，onlineGroupStatus
@@ -512,6 +552,7 @@ final class MessageSessionStore: ObservableObject {
     /// - 规则 B：A 后仍 > 200 且最旧一条 < now - 15d → LRU 清到 200；最旧 ≥ 15 天则 skip
     /// - 保护清单：置顶 / 系统账号 (`excludedSystemIds()`) / Prime / Flame / 未读未超 30 天 / 通话中对端
     func performIdleCleanupWithProtection(activeCallPeerId: String?) async {
+        guard !isDirectMessagesSuspended else { return }
         guard !isCleaningUp else {
             logger.debug("[Cleanup] skipped: isCleaningUp=true")
             return
@@ -611,9 +652,35 @@ final class MessageSessionStore: ObservableObject {
         return false
     }
 
-    /// v5 F-1: 登出/切账号显式清空（`SessionStore.logout` 调）。
-    /// Store 是 `.shared` 单例不 deinit，无用户可感知触发场景走此路径。
+    /// P2P 权限变化入口。暂停时清内存态并停止轮询；恢复时只在 IM 已同步后重新加载。
+    /// `SessionStore` 与 MainTabView 均会调用它，但重复调用保持幂等。
+    func setDirectMessagesCapabilityEnabled(_ enabled: Bool) {
+        if enabled {
+            guard isDirectMessagesSuspended else { return }
+            isDirectMessagesSuspended = false
+            directMessagesAccessEpoch &+= 1
+            logger.info("🟢 [MessageStore] P2P capability resumed")
+            guard isIMSynced else { return }
+            Task { @MainActor [weak self] in
+                await self?.load()
+            }
+            return
+        }
+
+        guard !isDirectMessagesSuspended else { return }
+        isDirectMessagesSuspended = true
+        directMessagesAccessEpoch &+= 1
+        resetDirectMessagesData()
+        logger.info("🟢 [MessageStore] P2P capability suspended")
+    }
+
+    /// 登出/切账号兼容入口。Store 是 `.shared` 单例不 deinit，清空必须同时阻止后续 SDK
+    /// connection 事件把会话重新拉回。
     func clear() {
+        setDirectMessagesCapabilityEnabled(false)
+    }
+
+    private func resetDirectMessagesData() {
         onlineStatusRefreshTask?.cancel()
         onlineStatusRefreshTask = nil
         detachBackgroundObservers()
@@ -624,7 +691,10 @@ final class MessageSessionStore: ObservableObject {
         systemInboxEntries = []
         pendingUpdates.removeAll()
         state = .idle
-        logger.info("🟢 [MessageStore] cleared (logout/switch account)")
+    }
+
+    private func isDirectMessagesAccessActive(_ epoch: UInt) -> Bool {
+        !isDirectMessagesSuspended && directMessagesAccessEpoch == epoch
     }
 
     /// v5 F-1: 切后台 pause + 回前台 restart 观察者（对齐 CLAUDE.md v5.3.2 "后台静默 + 回前台冷却"）
@@ -636,9 +706,10 @@ final class MessageSessionStore: ObservableObject {
             object: nil, queue: .main
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.onlineStatusRefreshTask?.cancel()
-                self?.onlineStatusRefreshTask = nil
-                self?.logger.debug("🟣 [MessageStore] background → pause 20s task")
+                guard let self, !self.isDirectMessagesSuspended else { return }
+                self.onlineStatusRefreshTask?.cancel()
+                self.onlineStatusRefreshTask = nil
+                self.logger.debug("🟣 [MessageStore] background → pause 20s task")
             }
         }
         foregroundObserver = center.addObserver(
@@ -647,6 +718,7 @@ final class MessageSessionStore: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                guard !self.isDirectMessagesSuspended else { return }
                 if case .loaded = self.state {
                     self.startOnlineStatusRefresh()
                     self.logger.debug("🟣 [MessageStore] foreground → restart 20s task")
@@ -713,6 +785,7 @@ final class MessageSessionStore: ObservableObject {
     ///
     /// **3 入口永远显示**（无数据时 preview/时间/unread=0，UI 空态兜底）。
     private func recomputeSystemInbox() {
+        guard !isDirectMessagesSuspended else { return }
         let all: [MessageSession] = {
             if case .loaded(let s) = state { return s }
             return []

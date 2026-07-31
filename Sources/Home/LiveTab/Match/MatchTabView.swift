@@ -9,9 +9,11 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "MatchTa
 /// 组合：跑马灯（顶部）+ 主视觉合成图（中部）+ 用户列表（底部）+ 背景切图。
 /// 详见 `docs/plan/L-spec-视频匹配Match-*.md` §4.1。
 ///
-/// **加载策略**：`.onAppear` 首次触发 `loadIfNeeded()`（lazy load，非全局单例）。
+/// **加载策略**：仅在 Home 与 Match 子 tab 均实际可见且具备通话能力时触发 `loadIfNeeded()`。
 /// **交互**：点击用户卡片 → sheet 弹出用户详情（MVP 阶段用 fullScreenCover 前的 sheet 简化）。
 struct MatchTabView: View {
+    /// Home 的 TabView 会预创建所有子页；由父层传入真实可见性，避免隐藏页预热匹配池。
+    var isActive: Bool = true
     @StateObject private var vm = MatchTabViewModel()
 
     // 摄像头会话与匹配预览浮窗 **已提到 MainTabView 层**（跨 tab 全局展示），
@@ -56,7 +58,10 @@ struct MatchTabView: View {
         .background(Theme.Palette.matchPageBackground)
         .clipped()
         // 摄像头浮窗/attach 已在 MainTabView 层做全局管理
-        .task { await vm.loadIfNeeded() }
+        .task(id: isActive) {
+            guard isActive else { return }
+            await vm.loadIfNeeded()
+        }
         .sheet(item: $vm.presentedUser) { user in
             MatchUserCardSheet(user: user)
                 .sheetTopInset()
@@ -101,10 +106,19 @@ final class MatchTabViewModel: ObservableObject {
         loadState = .loading
         do {
             let pool = try await service.loadMatchPoolData()
+            guard !Task.isCancelled else {
+                hasLoaded = false
+                loadState = .idle
+                return
+            }
             callList = pool.callList
             userList = pool.userList
             loadState = .loaded
             logger.info("MatchTab loaded: callList=\(pool.callList.count) userList=\(pool.userList.count)")
+        } catch is CancellationError {
+            // `task(id:)` 在切走 Home/Match 时会取消；保留 idle 让下次真正进入时可重试。
+            hasLoaded = false
+            loadState = .idle
         } catch {
             loadState = .error(String(describing: error))
             logger.error("MatchTab load failed: \(String(describing: error))")

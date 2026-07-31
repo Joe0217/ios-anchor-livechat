@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 
 /// H-2 spec §5 验收清单的 Store 层单测（正向 + 反向）。
@@ -254,5 +255,142 @@ final class P2PChatStoreTests: XCTestCase {
 
         guard case .loaded(let all) = store.state else { return XCTFail() }
         XCTAssertEqual(all.map(\.id), ["1", "2"])
+    }
+
+    // MARK: - 账户级 P2P 权限
+
+    func test_directMessagesBootstrapDenyDoesNotPermanentlyRevokeNormalStore() async {
+        let directMessages = CurrentValueSubject<Bool, Never>(false)
+        let permissionLoaded = CurrentValueSubject<Bool, Never>(false)
+        var isResolved = false
+        let provider = FakeP2PChatProvider()
+        provider.stubHistory = [nil: .success([ChatMessageFactory.make(id: "history")])]
+        let store = P2PChatStore(
+            peerYxAccId: "peer",
+            selfYxAccId: "self",
+            provider: provider,
+            directMessagesGate: { _ in directMessages.value },
+            isDirectMessagesPermissionResolved: { isResolved },
+            directMessagesPublisher: directMessages.eraseToAnyPublisher(),
+            directMessagesLoadedPublisher: permissionLoaded.eraseToAnyPublisher()
+        )
+
+        XCTAssertEqual(provider.unsubscribeCallCount, 0)
+
+        isResolved = true
+        directMessages.send(true)
+        permissionLoaded.send(true)
+        await store.load()
+
+        guard case .loaded(let messages) = store.state else {
+            return XCTFail("resolved normal permission must be usable")
+        }
+        XCTAssertEqual(messages.map(\.id), ["history"])
+        XCTAssertEqual(provider.unsubscribeCallCount, 0)
+    }
+
+    func test_directMessagesRevocation_clearsStoreAndBlocksAllNewOperations() async {
+        let permission = CurrentValueSubject<Bool, Never>(true)
+        let provider = FakeP2PChatProvider()
+        let privateInfoService = FakeSendPrivateInfoService()
+        provider.stubHistory = [nil: .success([ChatMessageFactory.make(id: "history")])]
+        let store = P2PChatStore(
+            peerYxAccId: "peer",
+            selfYxAccId: "self",
+            provider: provider,
+            sendPrivateInfoService: privateInfoService,
+            directMessagesGate: { _ in permission.value },
+            directMessagesPublisher: permission.eraseToAnyPublisher()
+        )
+        await store.load()
+        guard case .loaded = store.state else { return XCTFail("precondition: history loaded") }
+
+        permission.send(false)
+
+        XCTAssertEqual(store.state, .empty)
+        XCTAssertEqual(store.pendingBottomBadge, 0)
+        XCTAssertTrue(store.isEndReached)
+        XCTAssertEqual(provider.unsubscribeCallCount, 1)
+
+        let historyCallCount = provider.fetchHistoryCalls.count
+        let image = AnchorMediaItem(
+            id: "image",
+            mediaUrl: URL(string: "https://example.com/pic.jpg")!,
+            coverUrl: nil,
+            kind: .image,
+            dur: nil
+        )
+        let video = AnchorMediaItem(
+            id: "video",
+            mediaUrl: URL(string: "https://example.com/video.mp4")!,
+            coverUrl: nil,
+            kind: .video,
+            dur: 5
+        )
+        let privateImage = PrivateMediaSelection(
+            privateId: "private-image",
+            iconType: 1,
+            url: URL(string: "https://example.com/private.jpg")!,
+            coverUrl: nil,
+            dur: nil
+        )
+        let privateVideo = PrivateMediaSelection(
+            privateId: "private-video",
+            iconType: 2,
+            url: URL(string: "https://example.com/private.mp4")!,
+            coverUrl: URL(string: "https://example.com/private-cover.jpg"),
+            dur: 5
+        )
+        await store.load()
+        await store.loadMore()
+        await store.retry()
+        await store.sendText("blocked")
+        await store.sendAudio(
+            localFilePath: "/tmp/blocked.m4a",
+            dur: 1,
+            previewURL: URL(string: "file:///tmp/blocked.m4a")!
+        )
+        await store.sendImage(item: image)
+        await store.sendVideo(item: video)
+        await store.sendPrivateImage(peerUserId: "peer-user", media: privateImage)
+        await store.sendPrivateVideo(peerUserId: "peer-user", media: privateVideo)
+        await store.resend(clientMsgId: "old-client-id")
+        provider.emit(.received([ChatMessageFactory.make(id: "late")]))
+        store.handleEvent(.received([ChatMessageFactory.make(id: "late-after-unsubscribe")]))
+
+        XCTAssertEqual(provider.fetchHistoryCalls.count, historyCallCount)
+        XCTAssertTrue(provider.stubSendTextCalls.isEmpty)
+        XCTAssertTrue(provider.stubSendAudioCalls.isEmpty)
+        XCTAssertTrue(provider.stubSendImageCalls.isEmpty)
+        XCTAssertTrue(provider.stubSendVideoCalls.isEmpty)
+        XCTAssertTrue(provider.stubSendPrivateImageCalls.isEmpty)
+        XCTAssertTrue(provider.stubSendPrivateVideoCalls.isEmpty)
+        XCTAssertTrue(privateInfoService.calls.isEmpty)
+        XCTAssertEqual(store.state, .empty)
+    }
+
+    func test_directMessagesRevocation_discardsInFlightHistoryResult() async {
+        let permission = CurrentValueSubject<Bool, Never>(true)
+        let provider = FakeP2PChatProvider()
+        provider.stubHistory = [nil: .success([ChatMessageFactory.make(id: "history")])]
+        provider.fetchSuspends = true
+        let store = P2PChatStore(
+            peerYxAccId: "peer",
+            selfYxAccId: "self",
+            provider: provider,
+            directMessagesGate: { _ in permission.value },
+            directMessagesPublisher: permission.eraseToAnyPublisher()
+        )
+
+        let loadTask = Task { await store.load() }
+        await Task.yield()
+        XCTAssertEqual(store.state, .loading)
+
+        permission.send(false)
+        provider.resumeFetch()
+        await loadTask.value
+
+        XCTAssertEqual(store.state, .empty)
+        XCTAssertEqual(provider.unsubscribeCallCount, 1)
     }
 }

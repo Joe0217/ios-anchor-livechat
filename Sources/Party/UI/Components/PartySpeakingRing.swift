@@ -116,11 +116,12 @@ struct PartySeatCallBubble: View {
     let isVisible: Bool
     let placement: Placement
 
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     @State private var marqueeOffset: CGFloat = 42
 
     var body: some View {
         Group {
-            if isVisible {
+            if permission.canGiftSending && isVisible {
                 bubble
                     .transition(.opacity)
                     .task {

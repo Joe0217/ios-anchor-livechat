@@ -503,10 +503,13 @@ final class CallStore: ObservableObject {
         AppLogger.rtm.debug("📶 [CallStore] NWPathMonitor 已启动")
     }
 
-    /// 登出时清理 RTM + RTC + 状态。
+    /// 登录态结束或完整主播能力撤销时清理 RTM + RTC + 状态。
     /// D 里程碑修复（v5.4）：改 async，等 `agora.leave()` 真正完成（didLeaveChannelWith 回调）
     /// 再做后续清理，避免下次 start 拿到半销毁 SDK singleton。
-    func stop() async {
+    ///
+    /// - Parameter destroySharedAgoraEngine: 仅登出/完全受限时为 true。107 Party-only 账号降级时
+    ///   Party 房仍在使用同一进程级 Agora 引擎，必须只退出通话而保留该引擎。
+    func stop(destroySharedAgoraEngine: Bool = true) async {
         AppSoundPlayer.shared.stopIncomingCallRingtone()
         cancelCallOutTimeout()
         cancelCallInTimeout()
@@ -528,10 +531,11 @@ final class CallStore: ObservableObject {
         current = CurrentCallInfo()
         isEndingCall = false
         isStartingDirectCall = false
-        // 退登链路：销毁 AgoraRtcEngineKit 全局单例。
-        // stop() 仅在 RootView.syncSessionDependent 的 logout 分支调用（唯一路径），
-        // 接通后下次登录时 sharedEngine(with:) 会拿到干净的新 singleton。
-        AgoraManager.destroyEngine()
+        if destroySharedAgoraEngine {
+            // 退登/完全受限链路：销毁 AgoraRtcEngineKit 全局单例，
+            // 下次登录时 sharedEngine(with:) 会拿到干净的新 singleton。
+            AgoraManager.destroyEngine()
+        }
     }
 
     // MARK: - 主叫：拨号
@@ -787,6 +791,10 @@ final class CallStore: ObservableObject {
     /// - 跳过弹浮层等候用户操作的 calling 中间态视觉环节
     /// - 显式标记 `frontGameType = .live`，CallView UI 据此显示"直播私 call"标识 + "挂断回直播"
     func acceptIncomingFromLive(msg: CallMessage) async {
+        guard SelfPermissionBridge.shared.gate(.call, action: "acceptIncomingFromLive") else {
+            await publishRejectBusy(msg: msg, reason: "permission_denied")
+            return
+        }
         guard acquireDirectCallAdmission() else {
             await publishRejectBusy(msg: msg, reason: "busy")
             return
@@ -877,6 +885,10 @@ final class CallStore: ObservableObject {
     /// 与 acceptIncomingFromLive 的唯一差异：`frontGameType = .party`。其余时序、信令、joinRtc、
     /// 接通率上报、joinCall 拉资料完全一致（复用直播私 call 立即接听模式 · D-1 决策：无 5s delay）。
     func acceptIncomingFromParty(msg: CallMessage) async {
+        guard SelfPermissionBridge.shared.gate(.call, action: "acceptIncomingFromParty") else {
+            await publishRejectBusy(msg: msg, reason: "permission_denied")
+            return
+        }
         guard acquireDirectCallAdmission() else {
             await publishRejectBusy(msg: msg, reason: "busy")
             return
@@ -957,6 +969,12 @@ final class CallStore: ObservableObject {
 
     /// 被叫接受通话。
     func accept(auto: Bool = false) async {
+        guard SelfPermissionBridge.shared.gate(.call, action: "acceptIncomingCall") else {
+            if state == .calling {
+                await reject()
+            }
+            return
+        }
         guard state == .calling, current.inOrOut == .in, let signaling else { return }
         guard await requireMediaAccess(.liveStream, retry: { [weak self] in
             await self?.accept(auto: auto)
@@ -1970,6 +1988,109 @@ extension CallStore {
         )
         AppLogger.call.info("[CallStore] P2P SEND_GIFT accepted effect=\(accepted, privacy: .public) scope=\(self.current.callId, privacy: .private)")
         return true
+    }
+
+    /// Party 私 call 的送礼仍由 Party 聊天室 `2049` 广播下发，不会经过 P2P `SEND_GIFT`。
+    ///
+    /// 仅接受当前通话对端送给当前主播的礼物：Party 房在通话覆盖期间仍持续收 2049，
+    /// 不做双向校验会把房内其他人的送礼误显示到通话公屏。
+    @discardableResult
+    func handleRemoteGiftFromPartyBroadcast(_ data: [String: Any]) -> Bool {
+        guard state == .connected,
+              current.frontGameType == .party,
+              !current.callId.isEmpty,
+              isPartyCallGiftForCurrentParticipants(data),
+              firstNonEmptyGiftImage(in: data) != nil else {
+            return false
+        }
+
+        let sendUser = data["sendUser"] as? [String: Any]
+        let senderYxAccid = firstNonEmptyString(
+            data["senderYxAccid"], data["sendYxAccid"], sendUser?["yxAccid"]
+        )
+        var payload = data
+        // 2049 把发送人嵌在 sendUser；通用通话解码器读取顶层字段，补齐后复用同一特效/公屏链路。
+        if let senderYxAccid {
+            payload["fromAccid"] = senderYxAccid
+            payload["senderYxAccid"] = senderYxAccid
+        } else if !current.remoteYxAccid.isEmpty {
+            // joinCall 尚未返回时可只靠 userId 完成参与者校验；此处绝不写入空账号。
+            payload["fromAccid"] = current.remoteYxAccid
+            payload["senderYxAccid"] = current.remoteYxAccid
+        }
+        if firstNonEmptyString(payload["senderNickname"]) == nil {
+            payload["senderNickname"] = sendUser?["nickname"]
+        }
+        if firstNonEmptyString(payload["senderAvatar"]) == nil {
+            payload["senderAvatar"] = sendUser?["avatar"]
+                ?? sendUser?["icon"]
+                ?? sendUser?["userAvatar"]
+        }
+
+        let accepted = GiftEffectIntake.ingest(
+            scene: .call,
+            scopeId: current.callId,
+            payload: payload,
+            mineYxAccid: SessionStore.shared.user?.yxAccid ?? ""
+        )
+        guard accepted else { return false }
+
+        appendChatGiftFromPayload(payload)
+        AppLogger.call.info(
+            "[CallStore] Party 2049 gift displayed scope=\(self.current.callId, privacy: .private)"
+        )
+        return true
+    }
+
+    private func isPartyCallGiftForCurrentParticipants(_ data: [String: Any]) -> Bool {
+        let sendUser = data["sendUser"] as? [String: Any]
+        let senderYxAccid = firstNonEmptyString(
+            data["senderYxAccid"], data["sendYxAccid"], sendUser?["yxAccid"]
+        )
+        let senderUserId = firstNonEmptyString(
+            data["senderUserId"], data["sendUserId"], sendUser?["userId"]
+        )
+
+        if let senderYxAccid, !current.remoteYxAccid.isEmpty {
+            guard senderYxAccid == current.remoteYxAccid else { return false }
+        } else if let senderUserId {
+            guard senderUserId == String(current.remoteUserId) else { return false }
+        } else {
+            return false
+        }
+
+        guard let recipients = data["receiveUserList"] as? [[String: Any]],
+              !recipients.isEmpty else {
+            return false
+        }
+        let myUserId = SessionStore.shared.user?.userId.map(String.init)
+        let myYxAccid = firstNonEmptyString(SessionStore.shared.user?.yxAccid)
+        return recipients.contains { recipient in
+            let recipientUserId = firstNonEmptyString(recipient["userId"])
+            let recipientYxAccid = firstNonEmptyString(recipient["yxAccid"])
+            if let myUserId, recipientUserId == myUserId { return true }
+            if let myYxAccid, recipientYxAccid == myYxAccid { return true }
+            return false
+        }
+    }
+
+    private func firstNonEmptyGiftImage(in payload: [String: Any]) -> String? {
+        firstNonEmptyString(payload["smallImg"], payload["giftSmallImg"], payload["giftImg"], payload["giftIcon"])
+    }
+
+    private func firstNonEmptyString(_ values: Any?...) -> String? {
+        values.lazy.compactMap { value in
+            if let string = value as? String {
+                let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : trimmed
+            }
+            if let number = value as? NSNumber, !(number is Bool) {
+                return number.stringValue
+            }
+            if let integer = value as? Int { return String(integer) }
+            if let integer = value as? Int64 { return String(integer) }
+            return nil
+        }.first
     }
 
     /// 通话公屏礼物 append helper。

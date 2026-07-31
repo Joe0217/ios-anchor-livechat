@@ -417,6 +417,20 @@ final class PropsInventoryStoreTests: XCTestCase {
         XCTAssertEqual(fake.recordedOps.count, 0)  // 前置校验拦，API 未调
     }
 
+    func test_ops_permissionDenied_doesNotCallService() async {
+        let fake = PropsServiceFake()
+        let item = makeItem(id: 100)
+        fake.enqueue(.page(makePage([item])))
+        let store = PropsInventoryStore(service: fake, canManageVirtualItems: { false })
+        store.loadFirst()
+        await waitForState(store)
+
+        let result = await store.performOps(item: item, action: .equip)
+
+        XCTAssertEqual(result, .rejected(.permissionDenied))
+        XCTAssertEqual(fake.recordedOps.count, 0)
+    }
+
     // MARK: - R8 / R9 重复穿戴/卸下
 
     func test_equip_alreadyWorn_rejected() async {

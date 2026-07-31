@@ -139,6 +139,9 @@ final class WalletStore: ObservableObject {
     }
 
     func addAccount(type: String, address: String, name: String) async -> Bool {
+        guard SelfPermissionBridge.shared.gate(.withdrawal, action: "walletAddAccount") else {
+            return false
+        }
         let trimmedAddress = address.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedAddress.isEmpty, !trimmedName.isEmpty,
@@ -164,6 +167,9 @@ final class WalletStore: ObservableObject {
     }
 
     func removeAccount(_ account: WithdrawalAccount) async {
+        guard SelfPermissionBridge.shared.gate(.withdrawal, action: "walletRemoveAccount") else {
+            return
+        }
         guard !isMutatingAccount else { return }
         isMutatingAccount = true
         defer { isMutatingAccount = false }
@@ -201,6 +207,9 @@ final class WalletStore: ObservableObject {
     }
 
     func prepareWithdrawal(amountText: String) async {
+        guard SelfPermissionBridge.shared.gate(.withdrawal, action: "walletPrepareWithdrawal") else {
+            return
+        }
         guard !isPreparingWithdrawal else { return }
         guard let error = validationError(for: amountText) else {
             guard let wallet = withdrawalWallet,
@@ -239,6 +248,9 @@ final class WalletStore: ObservableObject {
     }
 
     func completeFaceLiveness(jpegData: Data) async throws {
+        guard SelfPermissionBridge.shared.gate(.withdrawal, action: "walletCompleteFaceLiveness") else {
+            throw WalletServiceError.invalidResponse
+        }
         guard let authorization = withdrawalAuthorization,
               let account = selectedAccount,
               authorization.accountID == account.id,
@@ -277,6 +289,9 @@ final class WalletStore: ObservableObject {
     }
 
     func submitPassword(_ password: String) async -> Bool {
+        guard SelfPermissionBridge.shared.gate(.withdrawal, action: "walletSubmitWithdrawal") else {
+            return false
+        }
         guard password.utf8.count == 6,
               password.utf8.allSatisfy({ (48...57).contains($0) }),
               let request = passwordRequest else {

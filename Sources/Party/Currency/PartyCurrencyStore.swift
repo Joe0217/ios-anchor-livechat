@@ -26,10 +26,16 @@ final class PartyCurrencyStore: ObservableObject {
     @Published private(set) var selectedTarget: PartyCurrencyTarget = .diamond
 
     private let service: PartyCurrencyService
+    private let canAccessAssets: @Sendable () -> Bool
+    private let canExchange: @Sendable () -> Bool
     private var balanceRequestID = UUID()
 
-    init(service: PartyCurrencyService) {
+    init(service: PartyCurrencyService,
+         canAccessAssets: @escaping @Sendable () -> Bool = PartyCurrencyStore.defaultCanAccessAssets,
+         canExchange: @escaping @Sendable () -> Bool = PartyCurrencyStore.defaultCanExchange) {
         self.service = service
+        self.canAccessAssets = canAccessAssets
+        self.canExchange = canExchange
     }
 
     var enteredGems: Int64? {
@@ -50,12 +56,21 @@ final class PartyCurrencyStore: ObservableObject {
     }
 
     func fillAllGems() {
+        guard canAccessAssets() else {
+            clearUnavailableAssetState()
+            return
+        }
         guard let balance else { return }
         amountText = String(balance.availableWholeGems)
         validationError = nil
     }
 
     func loadBalance() async {
+        guard canAccessAssets() else {
+            clearUnavailableAssetState()
+            return
+        }
+
         let requestID = UUID()
         balanceRequestID = requestID
         isLoadingBalance = true
@@ -69,16 +84,31 @@ final class PartyCurrencyStore: ObservableObject {
         do {
             let loaded = try await service.fetchBalance()
             guard balanceRequestID == requestID else { return }
+            guard canAccessAssets() else {
+                clearUnavailableAssetState()
+                return
+            }
             balance = loaded
         } catch is CancellationError {
             return
         } catch {
             guard balanceRequestID == requestID else { return }
+            guard canAccessAssets() else {
+                clearUnavailableAssetState()
+                return
+            }
             didFailLoadingBalance = true
         }
     }
 
     func exchange() async -> PartyCurrencyExchangeOutcome {
+        guard canAccessAssets() else {
+            clearUnavailableAssetState()
+            return .ignored
+        }
+        guard canExchange() else {
+            return .ignored
+        }
         guard !isExchanging else { return .ignored }
         guard let gems = enteredGems else {
             validationError = .invalidAmount
@@ -98,11 +128,18 @@ final class PartyCurrencyStore: ObservableObject {
 
         do {
             try await service.exchange(gems: gems, target: target)
+            guard canAccessAssets() else {
+                clearUnavailableAssetState()
+                return .ignored
+            }
+            guard canExchange() else {
+                return .ignored
+            }
             amountText = ""
 
             // The transaction succeeded even if reconciliation cannot complete. Keep the last known balance
             // in that case instead of reporting a completed exchange as failed.
-            if let refreshed = try? await service.fetchBalance() {
+            if let refreshed = try? await service.fetchBalance(), canAccessAssets() {
                 self.balance = refreshed
                 didFailLoadingBalance = false
             }
@@ -112,6 +149,35 @@ final class PartyCurrencyStore: ObservableObject {
         } catch {
             return .failed
         }
+    }
+
+    /// 动态降为 107 时，已展示或在途的 Party 资产不能继续留在内存/UI 中。
+    private func clearUnavailableAssetState() {
+        balanceRequestID = UUID()
+        balance = nil
+        isLoadingBalance = false
+        didFailLoadingBalance = false
+        isExchanging = false
+        validationError = nil
+        amountText = ""
+    }
+
+    nonisolated private static func defaultCanAccessAssets() -> Bool {
+        #if HILY_TESTS
+        // HilyTests 独立编译，不链接 SessionStore / SelfPermissionBridge+Shared。
+        return true
+        #else
+        return SelfPermissionBridge.shared.gate(.wallet, action: "partyCurrencyAssets")
+        #endif
+    }
+
+    nonisolated private static func defaultCanExchange() -> Bool {
+        #if HILY_TESTS
+        // HilyTests 独立编译，不链接 SessionStore / SelfPermissionBridge+Shared。
+        return true
+        #else
+        return SelfPermissionBridge.shared.gate(.currencyExchange, action: "partyCurrencyExchange")
+        #endif
     }
 }
 
@@ -124,6 +190,7 @@ final class PartyCurrencyRecordStore: ObservableObject {
     @Published private(set) var hasMore = true
 
     private let service: PartyCurrencyService
+    private let canAccessAssets: @Sendable () -> Bool
     private let pageSize = 20
     private var activeTab: PartyCurrencyWalletTab?
     private var requestID = UUID()
@@ -138,12 +205,18 @@ final class PartyCurrencyRecordStore: ObservableObject {
         var didFailLoading = false
     }
 
-    init(service: PartyCurrencyService) {
+    init(service: PartyCurrencyService,
+         canAccessAssets: @escaping @Sendable () -> Bool = PartyCurrencyRecordStore.defaultCanAccessAssets) {
         self.service = service
+        self.canAccessAssets = canAccessAssets
     }
 
     /// 每个资产 tab 首次进入时拉取；同页切换恢复内存缓存，不重复请求。
     func activate(tab: PartyCurrencyWalletTab) async {
+        guard canAccessAssets() else {
+            clearCache()
+            return
+        }
         guard activeTab != tab else { return }
         requestID = UUID()
         isLoading = false
@@ -155,6 +228,10 @@ final class PartyCurrencyRecordStore: ObservableObject {
     }
 
     func refresh(tab: PartyCurrencyWalletTab) async {
+        guard canAccessAssets() else {
+            clearCache()
+            return
+        }
         requestID = UUID()
         isLoading = false
         activeTab = tab
@@ -181,6 +258,10 @@ final class PartyCurrencyRecordStore: ObservableObject {
     }
 
     func loadMore(tab: PartyCurrencyWalletTab) async {
+        guard canAccessAssets() else {
+            clearCache()
+            return
+        }
         guard activeTab == tab, !isLoading else { return }
         var state = cache[tab] ?? CachedState()
         guard state.hasMore else { return }
@@ -203,6 +284,10 @@ final class PartyCurrencyRecordStore: ObservableObject {
                 offset: state.nextOffset
             )
             guard requestID == id, activeTab == tab else { return }
+            guard canAccessAssets() else {
+                clearCache()
+                return
+            }
 
             let deduplicated = uniqueRecords(loaded)
             if state.nextPage == 1 {
@@ -225,6 +310,10 @@ final class PartyCurrencyRecordStore: ObservableObject {
             return
         } catch {
             guard requestID == id else { return }
+            guard canAccessAssets() else {
+                clearCache()
+                return
+            }
             state.didFailLoading = true
             cache[tab] = state
             apply(state)
@@ -240,5 +329,14 @@ final class PartyCurrencyRecordStore: ObservableObject {
     private func uniqueRecords(_ records: [PartyCurrencyRecord]) -> [PartyCurrencyRecord] {
         var ids = Set<String>()
         return records.filter { ids.insert($0.id).inserted }
+    }
+
+    nonisolated private static func defaultCanAccessAssets() -> Bool {
+        #if HILY_TESTS
+        // HilyTests 独立编译，不链接 SessionStore / SelfPermissionBridge+Shared。
+        return true
+        #else
+        return SelfPermissionBridge.shared.gate(.wallet, action: "partyCurrencyRecords")
+        #endif
     }
 }

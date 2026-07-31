@@ -393,7 +393,8 @@ final class EditProfileStore: ObservableObject {
     /// 返回新 tile 的稳定 id
     @discardableResult
     func addPhotoPlaceholder(localId: String = UUID().uuidString) -> String? {
-        guard phase == .editing else { return nil }
+        guard phase == .editing,
+              Self.gateProfileSocialConfiguration(action: "editProfileAddPhoto") else { return nil }
         // spec N-9: 相册满 9 张不允许再加
         guard draft.photos.count < EditProfileLimits.photosMaxCount else {
             transientToast = .photosLimit
@@ -405,6 +406,7 @@ final class EditProfileStore: ObservableObject {
     }
 
     func markPhotoUploaded(id: String, url: String) {
+        guard Self.canConfigureProfileSocial else { return }
         updateMediaItem(id: id, in: \.photos) { item in
             item.url = url
             item.uploadState = .idle
@@ -412,16 +414,19 @@ final class EditProfileStore: ObservableObject {
     }
 
     func markPhotoFailed(id: String, message: String) {
+        guard Self.canConfigureProfileSocial else { return }
         updateMediaItem(id: id, in: \.photos) { $0.uploadState = .failed(message: message) }
     }
 
     func removePhoto(id: String) {
-        guard phase == .editing else { return }
+        guard phase == .editing,
+              Self.gateProfileSocialConfiguration(action: "editProfileRemovePhoto") else { return }
         draft.photos.removeAll { $0.id == id }
     }
 
     func retryPhoto(id: String) {
         guard phase == .editing,
+              Self.gateProfileSocialConfiguration(action: "editProfileRetryPhoto"),
               let idx = draft.photos.firstIndex(where: { $0.id == id })
         else { return }
         // 重试：state 转 uploading（真上传 task 由 Step 1c 外部触发）
@@ -432,7 +437,8 @@ final class EditProfileStore: ObservableObject {
     // 视频 / 来电视频 相同模式
     @discardableResult
     func addVideoPlaceholder(localId: String = UUID().uuidString) -> String? {
-        guard phase == .editing else { return nil }
+        guard phase == .editing,
+              Self.gateProfileSocialConfiguration(action: "editProfileAddVideo") else { return nil }
         guard draft.videos.count < EditProfileLimits.videosMaxCount else {
             transientToast = .videosLimit
             return nil
@@ -443,6 +449,7 @@ final class EditProfileStore: ObservableObject {
     }
 
     func markVideoUploaded(id: String, url: String, coverUrl: String? = nil) {
+        guard Self.canConfigureProfileSocial else { return }
         updateMediaItem(id: id, in: \.videos) {
             $0.url = url
             $0.coverUrl = coverUrl
@@ -451,16 +458,19 @@ final class EditProfileStore: ObservableObject {
     }
 
     func markVideoFailed(id: String, message: String) {
+        guard Self.canConfigureProfileSocial else { return }
         updateMediaItem(id: id, in: \.videos) { $0.uploadState = .failed(message: message) }
     }
 
     func removeVideo(id: String) {
-        guard phase == .editing else { return }
+        guard phase == .editing,
+              Self.gateProfileSocialConfiguration(action: "editProfileRemoveVideo") else { return }
         draft.videos.removeAll { $0.id == id }
     }
 
     func retryVideo(id: String) {
         guard phase == .editing,
+              Self.gateProfileSocialConfiguration(action: "editProfileRetryVideo"),
               let idx = draft.videos.firstIndex(where: { $0.id == id })
         else { return }
         let newLocalId = UUID().uuidString
@@ -469,14 +479,17 @@ final class EditProfileStore: ObservableObject {
 
     // Call Video (max 1)
     func setCallVideoPlaceholder(localId: String = UUID().uuidString) -> String? {
-        guard phase == .editing else { return nil }
+        guard phase == .editing,
+              Self.gateCallVideoConfiguration(action: "editProfileSetCallVideo") else { return nil }
         let item = DraftMediaItem.newLocal(localId: localId)
         draft.callVideo = item
         return item.id
     }
 
     func markCallVideoUploaded(id: String, url: String, coverUrl: String? = nil) {
-        guard var v = draft.callVideo, v.id == id else { return }
+        guard Self.canConfigureCallVideo,
+              var v = draft.callVideo,
+              v.id == id else { return }
         v.url = url
         v.coverUrl = coverUrl
         v.uploadState = .idle
@@ -484,20 +497,24 @@ final class EditProfileStore: ObservableObject {
     }
 
     func markCallVideoFailed(id: String, message: String) {
-        guard var v = draft.callVideo, v.id == id else { return }
+        guard Self.canConfigureCallVideo,
+              var v = draft.callVideo,
+              v.id == id else { return }
         v.uploadState = .failed(message: message)
         draft.callVideo = v
     }
 
     func clearCallVideo() {
-        guard phase == .editing else { return }
+        guard phase == .editing,
+              Self.gateCallVideoConfiguration(action: "editProfileClearCallVideo") else { return }
         draft.callVideo = nil
     }
 
     // MARK: - Greet Messages
 
     func addGreetMsg(content: String) {
-        guard phase == .editing else { return }
+        guard phase == .editing,
+              Self.gateProfileSocialConfiguration(action: "editProfileAddGreetMessage") else { return }
         let trimmed = String(content.prefix(EditProfileLimits.greetMsgMaxLength))
         guard !trimmed.isEmpty else { return }
         // spec N-23: 允许重复（H5 也允许）
@@ -505,7 +522,8 @@ final class EditProfileStore: ObservableObject {
     }
 
     func removeGreetMsg(id: String) {
-        guard phase == .editing else { return }
+        guard phase == .editing,
+              Self.gateProfileSocialConfiguration(action: "editProfileRemoveGreetMessage") else { return }
         draft.greetMsgs.removeAll { $0.id == id }
     }
 
@@ -535,15 +553,15 @@ final class EditProfileStore: ObservableObject {
     }
 
     var hasUploadingTile: Bool {
-        draft.photos.contains { if case .uploading = $0.uploadState { return true }; return false }
-            || draft.videos.contains { if case .uploading = $0.uploadState { return true }; return false }
-            || (draft.callVideo.map { if case .uploading = $0.uploadState { return true }; return false } ?? false)
+        (Self.canConfigureProfileSocial && (draft.photos.contains { if case .uploading = $0.uploadState { return true }; return false }
+            || draft.videos.contains { if case .uploading = $0.uploadState { return true }; return false }))
+            || (Self.canConfigureCallVideo && (draft.callVideo.map { if case .uploading = $0.uploadState { return true }; return false } ?? false))
     }
 
     var hasFailedTile: Bool {
-        draft.photos.contains { if case .failed = $0.uploadState { return true }; return false }
-            || draft.videos.contains { if case .failed = $0.uploadState { return true }; return false }
-            || (draft.callVideo.map { if case .failed = $0.uploadState { return true }; return false } ?? false)
+        (Self.canConfigureProfileSocial && (draft.photos.contains { if case .failed = $0.uploadState { return true }; return false }
+            || draft.videos.contains { if case .failed = $0.uploadState { return true }; return false }))
+            || (Self.canConfigureCallVideo && (draft.callVideo.map { if case .failed = $0.uploadState { return true }; return false } ?? false))
     }
 
     /// 计算 diff → 有变更调 updateUserInfo；无变更 phase 转 success（view 层 dismiss 无 toast）
@@ -691,7 +709,8 @@ final class EditProfileStore: ObservableObject {
 
     /// 相册照片上传：先 addPhotoPlaceholder → 拿到 id → 上传成功后 markPhotoUploaded
     func uploadPhoto(data: Data) async {
-        guard phase == .editing else { return }
+        guard phase == .editing,
+              Self.gateProfileSocialConfiguration(action: "editProfileUploadPhoto") else { return }
         guard data.count <= EditProfileLimits.imageMaxSizeBytes else {
             transientToast = .imageTooLarge
             return
@@ -700,12 +719,14 @@ final class EditProfileStore: ObservableObject {
         let epoch = beginUpload()
         do {
             let url = try await service.uploadImage(data: data, preset: .moment)
-            guard isUploadCurrent(epoch: epoch),
+            guard Self.canConfigureProfileSocial,
+                  isUploadCurrent(epoch: epoch),
                   draft.photos.contains(where: { $0.id == tileId })
             else { return }
             markPhotoUploaded(id: tileId, url: url)
         } catch {
-            guard isUploadCurrent(epoch: epoch),
+            guard Self.canConfigureProfileSocial,
+                  isUploadCurrent(epoch: epoch),
                   draft.photos.contains(where: { $0.id == tileId })
             else { return }
             logger.error("uploadPhoto failed: \(String(describing: error))")
@@ -715,18 +736,21 @@ final class EditProfileStore: ObservableObject {
 
     /// 相册视频上传
     func uploadVideo(data: Data, fileExtension: String) async {
-        guard phase == .editing else { return }
+        guard phase == .editing,
+              Self.gateProfileSocialConfiguration(action: "editProfileUploadVideo") else { return }
         guard validateVideoInputs(data: data, ext: fileExtension) else { return }
         guard let tileId = addVideoPlaceholder() else { return }
         let epoch = beginUpload()
         do {
             let url = try await service.uploadVideo(data: data, fileExtension: fileExtension)
-            guard isUploadCurrent(epoch: epoch),
+            guard Self.canConfigureProfileSocial,
+                  isUploadCurrent(epoch: epoch),
                   draft.videos.contains(where: { $0.id == tileId })
             else { return }
             markVideoUploaded(id: tileId, url: url)
         } catch {
-            guard isUploadCurrent(epoch: epoch),
+            guard Self.canConfigureProfileSocial,
+                  isUploadCurrent(epoch: epoch),
                   draft.videos.contains(where: { $0.id == tileId })
             else { return }
             logger.error("uploadVideo failed: \(String(describing: error))")
@@ -736,7 +760,8 @@ final class EditProfileStore: ObservableObject {
 
     /// 来电视频上传（max 1，覆盖上传时先清）
     func uploadCallVideo(data: Data, fileExtension: String) async {
-        guard phase == .editing else { return }
+        guard phase == .editing,
+              Self.gateCallVideoConfiguration(action: "editProfileUploadCallVideo") else { return }
         guard validateVideoInputs(data: data, ext: fileExtension) else { return }
         // 若已有旧的 uploading，先递增 epoch 让它 stale
         if draft.callVideo != nil {
@@ -746,12 +771,14 @@ final class EditProfileStore: ObservableObject {
         let epoch = beginUpload()
         do {
             let url = try await service.uploadVideo(data: data, fileExtension: fileExtension)
-            guard isUploadCurrent(epoch: epoch),
+            guard Self.canConfigureCallVideo,
+                  isUploadCurrent(epoch: epoch),
                   draft.callVideo?.id == tileId
             else { return }
             markCallVideoUploaded(id: tileId, url: url)
         } catch {
-            guard isUploadCurrent(epoch: epoch),
+            guard Self.canConfigureCallVideo,
+                  isUploadCurrent(epoch: epoch),
                   draft.callVideo?.id == tileId
             else { return }
             logger.error("uploadCallVideo failed: \(String(describing: error))")
@@ -799,70 +826,109 @@ final class EditProfileStore: ObservableObject {
             req.signature = draft.signature
         }
 
-        // Photos：新增 URL + 删除 id（含 vaild=3 强制清）
-        let newPhotoUrls = draft.photos
-            .filter { $0.serverId == nil }
-            .map(\.url)
-            .filter { !$0.isEmpty }
-        let draftPhotoServerIds = Set(draft.photos.compactMap(\.serverId))
-        var picsDel = originalSnapshot.photos
-            .compactMap(\.assetId)
-            .filter { !draftPhotoServerIds.contains($0) }
-        picsDel.append(contentsOf: originalSnapshot.hiddenRejectedPhotoIds)
-        picsDel = Array(Set(picsDel))  // 去重
+        // Photos / videos 属于资料社交能力。107 保存基础资料时不夹带历史媒体的新增或删除 diff。
+        if Self.canConfigureProfileSocial {
+            let newPhotoUrls = draft.photos
+                .filter { $0.serverId == nil }
+                .map(\.url)
+                .filter { !$0.isEmpty }
+            let draftPhotoServerIds = Set(draft.photos.compactMap(\.serverId))
+            var picsDel = originalSnapshot.photos
+                .compactMap(\.assetId)
+                .filter { !draftPhotoServerIds.contains($0) }
+            picsDel.append(contentsOf: originalSnapshot.hiddenRejectedPhotoIds)
+            picsDel = Array(Set(picsDel))
 
-        if !newPhotoUrls.isEmpty { req.pics = newPhotoUrls }
-        if !picsDel.isEmpty { req.picsDel = picsDel }
+            if !newPhotoUrls.isEmpty { req.pics = newPhotoUrls }
+            if !picsDel.isEmpty { req.picsDel = picsDel }
 
-        // Videos：同 photos
-        let newVideoUrls = draft.videos
-            .filter { $0.serverId == nil }
-            .map(\.url)
-            .filter { !$0.isEmpty }
-        let draftVideoServerIds = Set(draft.videos.compactMap(\.serverId))
-        var videosDel = originalSnapshot.videos
-            .compactMap(\.assetId)
-            .filter { !draftVideoServerIds.contains($0) }
-        videosDel.append(contentsOf: originalSnapshot.hiddenRejectedVideoIds)
-        videosDel = Array(Set(videosDel))
+            let newVideoUrls = draft.videos
+                .filter { $0.serverId == nil }
+                .map(\.url)
+                .filter { !$0.isEmpty }
+            let draftVideoServerIds = Set(draft.videos.compactMap(\.serverId))
+            var videosDel = originalSnapshot.videos
+                .compactMap(\.assetId)
+                .filter { !draftVideoServerIds.contains($0) }
+            videosDel.append(contentsOf: originalSnapshot.hiddenRejectedVideoIds)
+            videosDel = Array(Set(videosDel))
 
-        if !newVideoUrls.isEmpty { req.videos = newVideoUrls }
-        if !videosDel.isEmpty { req.videosDel = videosDel }
-
-        // Call Video：draft 与 original 对比
-        let origCallId = originalSnapshot.callVideo?.assetId
-        switch (draft.callVideo, origCallId) {
-        case (let cur?, let oId?) where cur.serverId == nil:
-            // 新上传：设新 URL + 删旧 id
-            if !cur.url.isEmpty { req.callVideoUrl = cur.url }
-            req.callVideosDel = [oId]
-        case (nil, let oId?):
-            // 用户清空来电视频
-            req.callVideosDel = [oId]
-        case (let cur?, nil) where cur.serverId == nil:
-            // 原来无，新上传
-            if !cur.url.isEmpty { req.callVideoUrl = cur.url }
-        default:
-            break
+            if !newVideoUrls.isEmpty { req.videos = newVideoUrls }
+            if !videosDel.isEmpty { req.videosDel = videosDel }
         }
 
-        // GreetMsgs：新增（无 serverId 的 content）+ 删除（原有 - draft 现存的 serverId）
-        let newGreetContents = draft.greetMsgs
-            .filter { $0.serverId == nil }
-            .map(\.content)
-            .filter { !$0.isEmpty }
-        let draftGreetServerIds = Set(draft.greetMsgs.compactMap(\.serverId))
-        let delGreetIds = originalSnapshot.greetMsgs
-            .compactMap(\.serverId)
-            .filter { !draftGreetServerIds.contains($0) }
+        // Call Video：仅具备通话能力的账号可变更，107 保存基础资料时不夹带该字段。
+        if Self.canConfigureCallVideo {
+            let origCallId = originalSnapshot.callVideo?.assetId
+            switch (draft.callVideo, origCallId) {
+            case (let cur?, let oId?) where cur.serverId == nil:
+                // 新上传：设新 URL + 删旧 id
+                if !cur.url.isEmpty { req.callVideoUrl = cur.url }
+                req.callVideosDel = [oId]
+            case (nil, let oId?):
+                // 用户清空来电视频
+                req.callVideosDel = [oId]
+            case (let cur?, nil) where cur.serverId == nil:
+                // 原来无，新上传
+                if !cur.url.isEmpty { req.callVideoUrl = cur.url }
+            default:
+                break
+            }
+        }
 
-        if !newGreetContents.isEmpty { req.addGreetList = newGreetContents }
-        if !delGreetIds.isEmpty { req.delGreetList = delGreetIds }
+        // 问候语会进入 P2P 社交链路，107 同样不提交。
+        if Self.canConfigureProfileSocial {
+            let newGreetContents = draft.greetMsgs
+                .filter { $0.serverId == nil }
+                .map(\.content)
+                .filter { !$0.isEmpty }
+            let draftGreetServerIds = Set(draft.greetMsgs.compactMap(\.serverId))
+            let delGreetIds = originalSnapshot.greetMsgs
+                .compactMap(\.serverId)
+                .filter { !draftGreetServerIds.contains($0) }
+
+            if !newGreetContents.isEmpty { req.addGreetList = newGreetContents }
+            if !delGreetIds.isEmpty { req.delGreetList = delGreetIds }
+        }
 
         return req.isEmpty ? nil : req
     }
 
     // MARK: - Helpers
+
+    /// 来电视频属于通话定价能力。测试 target 不链接全局 SessionStore 权限桥，保留原有注入式测试语义。
+    private static var canConfigureCallVideo: Bool {
+        #if HILY_TESTS
+        return true
+        #else
+        return SelfPermissionBridge.shared.canCallSnapshot
+        #endif
+    }
+
+    /// 相册、视频和问候语属于资料社交能力。测试 target 保留现有注入式测试语义。
+    private static var canConfigureProfileSocial: Bool {
+        #if HILY_TESTS
+        return true
+        #else
+        return SelfPermissionBridge.shared.canProfileSocialSnapshot
+        #endif
+    }
+
+    private static func gateProfileSocialConfiguration(action: String) -> Bool {
+        #if HILY_TESTS
+        return true
+        #else
+        return SelfPermissionBridge.shared.gate(.profileSocial, action: action)
+        #endif
+    }
+
+    private static func gateCallVideoConfiguration(action: String) -> Bool {
+        #if HILY_TESTS
+        return true
+        #else
+        return SelfPermissionBridge.shared.gate(.call, action: action)
+        #endif
+    }
 
     private func updateMediaItem(
         id: String,

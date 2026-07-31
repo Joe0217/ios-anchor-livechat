@@ -15,6 +15,7 @@ import SwiftUI
 /// PartyTabRootView dismount → PartyListStore deinit → currentTask cancel（自动路径）。
 struct PartyTabRootView: View {
     @Binding var path: NavigationPath
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     /// view-owned Store。构造时注入 Live service。
     @StateObject private var listStore = PartyListStore(
@@ -34,6 +35,10 @@ struct PartyTabRootView: View {
     // 密码房前置 sheet：H5 限制 4 位数字，校验接口成功后才创建房间路由。
     @State private var pendingPasswordRoom: PasswordRoom?
 
+    private var canShowValueRankings: Bool {
+        permission.canVirtualItems && permission.canGiftSending
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
             PartyListMainView(
@@ -48,7 +53,13 @@ struct PartyTabRootView: View {
                     handleTapRoom(room, entryPath: entryPath)
                 },
                 onTapSearch: { path.append(PartyRoute.search) },
-                onTapRanking: { path.append(PartyRoute.lobbyRanking(.partyRich)) },
+                onTapRanking: {
+                    guard SelfPermissionBridge.shared.gate(.virtualItems, action: "partyLobbyRanking"),
+                          SelfPermissionBridge.shared.gate(.giftSending, action: "partyLobbyRanking") else {
+                        return
+                    }
+                    path.append(PartyRoute.lobbyRanking(.partyRich))
+                },
                 onTapBannerRoom: { roomId, entryPath in
                     path.append(PartyRoute.room(id: roomId, password: nil, entryPath: entryPath))
                 },
@@ -86,8 +97,12 @@ struct PartyTabRootView: View {
                         handleTapRoom(room, entryPath: .search)
                     })
                 case .lobbyRanking(let kind):
-                    PartyLobbyRankingView(initialKind: kind) { roomId in
-                        path.append(PartyRoute.room(id: roomId, password: nil, entryPath: .rankRoom))
+                    if canShowValueRankings {
+                        PartyLobbyRankingView(initialKind: kind) { roomId in
+                            path.append(PartyRoute.room(id: roomId, password: nil, entryPath: .rankRoom))
+                        }
+                    } else {
+                        EmptyView()
                     }
                 }
             }
@@ -146,7 +161,8 @@ struct PartyTabRootView: View {
     }
 
     private func enterTopRoomGuide(_ roomId: String) {
-        guard SelfPermissionBridge.shared.gate(.party, action: "enterTopRoomGuide") else { return }
+        guard SelfPermissionBridge.shared.gate(.party, action: "enterTopRoomGuide"),
+              SelfPermissionBridge.shared.gate(.partyActivities, action: "enterTopRoomGuide") else { return }
         if LiveStore.shared.state == .living {
             permissionDeniedToast = L10n.Party.mutexBlockedByLive
             return

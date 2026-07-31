@@ -67,6 +67,8 @@ extension GlobalP2PMessageObserver: NIMChatManagerDelegate {
     }
 
     private func processIncomingMessage(_ nim: NIMMessage) {
+        // 107 只保留 Party chatroom。P2P 的提示音、充值合成和通话礼物分发均不可后台继续执行。
+        guard SelfPermissionBridge.shared.canDirectMessagesSnapshot else { return }
         playNotificationToneIfNeeded(for: nim)
 
         // 只处理自定义消息类型
@@ -79,8 +81,10 @@ extension GlobalP2PMessageObserver: NIMChatManagerDelegate {
 
         let attachType = Self.extractAttachType(dict)
 
-        // 用户充值成功系统通知（对齐 H5 message.js:811-815 + handleUserRechargeNotification）
-        if attachType == 35 {
+        // 用户充值成功系统通知（对齐 H5 message.js:811-815 + handleUserRechargeNotification）。
+        // 107 不具备虚拟道具能力，不能把原始 IM 事件再合成为可见的充值系统会话。
+        if attachType == 35,
+           SelfPermissionBridge.shared.gate(.virtualItems, action: "globalP2PRechargeNotification") {
             synthesizeRechargeNotification(originalMessage: nim, attach: dict)
         }
 

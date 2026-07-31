@@ -20,6 +20,7 @@ import SwiftUI
 /// 到 `.roomModeConfirm` 打开 PartyRoomModeConfirmSheet，不在本文件挂链式 sheet。
 struct PartyRoomModeSheet: View {
     @ObservedObject var store: PartyStore
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     /// 用户 tap Confirm 上抛 selectedTempId；父层收到后关本 sheet 并打开二次确认
     let onConfirmRequest: (Int) -> Void
     @State private var selectedType: PartyRoomModeType = .liveAndVoice
@@ -29,6 +30,7 @@ struct PartyRoomModeSheet: View {
             PartyRoomTemplatePickerSheet(
                 voiceTemplates: voiceTemplates,
                 liveTemplates: liveTemplates,
+                availableTypes: availableTemplateTypes,
                 isLoading: isLoading,
                 errorMessage: errorMessage,
                 onRetry: { Task { await store.loadRoomModeTemplates() } },
@@ -37,7 +39,8 @@ struct PartyRoomModeSheet: View {
                 enforceLevelGate: false,          // 用户明示：对齐 create v6 无等级门槛（2026-07-16）
                 emptyText: L10n.Party.roomModeEmptyState,
                 onTabChange: { selectedType = $0 },
-                onConfirm: { tempId, _ in
+                onConfirm: { tempId, type in
+                    guard availableTemplateTypes.contains(type) else { return }
                     onConfirmRequest(tempId)
                 }
             )
@@ -45,6 +48,11 @@ struct PartyRoomModeSheet: View {
         // 单一自适应 detent：少量模板不保留无意义的大块空白，多行模板到达上限后由 grid 自身滚动。
         .presentationDetents([.height(adaptiveSheetHeight)])
         .task { await store.loadRoomModeTemplates() }
+        .onChange(of: permission.canPartyVideo) { allowed in
+            // 动态降级为 107 时将已打开的 picker 收敛到语音 tab；Store 会清掉 live cache。
+            if !allowed { selectedType = .voiceOnly }
+            Task { await store.loadRoomModeTemplates() }
+        }
     }
 
     // MARK: - 数据桥（PartyStore.roomModeTemplatesState → voice/live 两数组 + isLoading + error）
@@ -58,6 +66,7 @@ struct PartyRoomModeSheet: View {
     }
 
     private var liveTemplates: [PartyRoomTemplate] {
+        guard permission.canPartyVideo else { return [] }
         switch store.roomModeTemplatesState {
         case .loaded(_, let l): return l
         case .partialLoaded(_, let l): return l ?? []
@@ -77,8 +86,14 @@ struct PartyRoomModeSheet: View {
         return nil
     }
 
-    /// 默认打开 Live+Voice tab（与原 PartyRoomModeSheet 初始态一致）
-    private var initialType: PartyRoomModeType { .liveAndVoice }
+    /// 默认打开 Live+Voice tab（与原 PartyRoomModeSheet 初始态一致）；107 固定语音。
+    private var initialType: PartyRoomModeType {
+        permission.canPartyVideo ? .liveAndVoice : .voiceOnly
+    }
+
+    private var availableTemplateTypes: [PartyRoomModeType] {
+        permission.canPartyVideo ? PartyRoomModeType.allCases : [.voiceOnly]
+    }
 
     private var selectedTemplates: [PartyRoomTemplate] {
         selectedType == .voiceOnly ? voiceTemplates : liveTemplates

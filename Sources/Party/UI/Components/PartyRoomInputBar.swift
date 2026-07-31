@@ -17,6 +17,10 @@ struct PartyRoomInputBar: View {
     let isOnSeat: Bool
     /// 是否显示游戏按钮（H5 v-if=hasGameCenter；主播端默认 false）
     let showGameButton: Bool
+    /// 107 Party-only 账号不显示送礼入口。
+    let showGiftButton: Bool
+    /// Party-only 账号不进入 P2P 会话中心。
+    let showMessageButton: Bool
     /// 消息按钮未读徽章数（对齐 H5 useUnreadMessageCount + van-badge，>99 显 99+）
     let unreadCount: Int
     /// 对齐安卓 §1 checkMicApplicationVisible：`onSeatApplySwitch && (owner||admin||平台管理员)` 才显示
@@ -65,13 +69,13 @@ struct PartyRoomInputBar: View {
                 if isOnSeat {
                     emojiButton
                 }
-                messageButton
+                if showMessageButton { messageButton }
                 if isOnSeat {
                     micButton
                 }
                 if showGameButton { gameButton }
                 toolMenuButton
-                giftButton
+                if showGiftButton { giftButton }
             }
         }
         .padding(.horizontal, Theme.Metric.partyRoomScreenH)

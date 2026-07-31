@@ -17,10 +17,16 @@ enum PartyRoomChatFilter: Int, CaseIterable, Identifiable {
 
 struct PartyRoomChatTabStrip: View {
     @Binding var selection: PartyRoomChatFilter
+    /// 审核账号不展示 Gift 标签；其余账号保持 All / Chat / Gift 三档。
+    var showsGiftTab: Bool = true
+
+    private var availableTabs: [PartyRoomChatFilter] {
+        showsGiftTab ? PartyRoomChatFilter.allCases : [.all, .chat]
+    }
 
     var body: some View {
         HStack(spacing: Theme.Metric.partyRoomTabGap) {
-            ForEach(PartyRoomChatFilter.allCases) { tab in
+            ForEach(availableTabs) { tab in
                 tabButton(tab)
             }
             Spacer()

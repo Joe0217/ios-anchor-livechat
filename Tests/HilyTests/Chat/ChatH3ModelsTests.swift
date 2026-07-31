@@ -6,6 +6,31 @@ import XCTest
 /// + Major-4（activeTycoon 透传）+ Major-6（tip tieBreaker 优先级）。
 final class ChatH3ModelsTests: XCTestCase {
 
+    // MARK: - Party-only review message visibility
+
+    func testVirtualItemOrPaymentHistory_IdentifiesAllRestrictedMessageKinds() {
+        let restricted: [ChatMessageContent] = [
+            .systemGift(smallImg: nil, giftNum: 1),
+            .cpRankReward(rankNo: 1, items: []),
+            .itemNotice(kind: .get, itemName: "Skin", itemType: 4, addTime: nil),
+            .rewardDiamond(demoContent: "10"),
+            .rechargeNotify(content: "Recharge completed", targetUserId: nil, targetYxAccId: nil),
+        ]
+
+        XCTAssertTrue(restricted.allSatisfy(\.isVirtualItemOrPaymentMessage))
+    }
+
+    func testVirtualItemOrPaymentHistory_LeavesNormalChatAndSafetyMessagesVisible() {
+        let visible: [ChatMessageContent] = [
+            .text("hello"),
+            .missedCall(kind: .missed),
+            .punishmentAppeal(text: "Appeal", penaltyUserId: "42"),
+            .systemFallback(text: "System notice"),
+        ]
+
+        XCTAssertTrue(visible.allSatisfy { !$0.isVirtualItemOrPaymentMessage })
+    }
+
     // MARK: - PrivateLockStatus.init(rawInt:)
 
     func testPrivateLockStatus_FromRawInt_0_IsLocked() {

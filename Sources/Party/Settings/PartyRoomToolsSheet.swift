@@ -719,6 +719,10 @@ final class PartyLuckyNumberStore: ObservableObject {
     private var historyRequestId = UUID()
 
     func loadConfig(roomId: String, force: Bool = false) async {
+        guard Self.canUseLuckyNumber(action: "partyLuckyNumberLoadConfig") else {
+            clearForDisabledLottery()
+            return
+        }
         guard !roomId.isEmpty else { return }
         let roomChanged = configRoomId != roomId
         if roomChanged {
@@ -748,7 +752,9 @@ final class PartyLuckyNumberStore: ObservableObject {
     }
 
     func generate(roomId: String, hostId: String?) async -> Bool {
-        guard !roomId.isEmpty, !isGenerating else { return false }
+        guard Self.canUseLuckyNumber(action: "partyLuckyNumberGenerate"),
+              !roomId.isEmpty,
+              !isGenerating else { return false }
         isGenerating = true
         defer { isGenerating = false }
         // 对齐 H5：用户有效点击即入队，不等待生成接口成功，且不阻塞请求。
@@ -773,7 +779,9 @@ final class PartyLuckyNumberStore: ObservableObject {
         luckyNumber: Int?,
         adminCanSet: Bool?
     ) async -> Bool {
-        guard !roomId.isEmpty, !isSaving else { return false }
+        guard Self.canUseLuckyNumber(action: "partyLuckyNumberSave"),
+              !roomId.isEmpty,
+              !isSaving else { return false }
         isSaving = true
         defer { isSaving = false }
         do {
@@ -805,6 +813,10 @@ final class PartyLuckyNumberStore: ObservableObject {
     }
 
     func loadHistory(roomId: String, reset: Bool = false) async {
+        guard Self.canUseLuckyNumber(action: "partyLuckyNumberLoadHistory") else {
+            clearForDisabledLottery()
+            return
+        }
         guard !roomId.isEmpty else { return }
         let shouldReset = historyRoomId != roomId || reset
         guard !isLoadingHistory || shouldReset else { return }
@@ -847,6 +859,25 @@ final class PartyLuckyNumberStore: ObservableObject {
         historyRoomId = ""
         nextHistoryPage = 1
     }
+
+    /// 角色撤销抽奖能力时，作废在途读请求并清掉已缓存的抽奖数据。
+    /// 服务端仍必须拒绝在途写请求；这里确保客户端不会在权限收回后继续展示旧内容。
+    func clearForDisabledLottery() {
+        configRequestId = UUID()
+        configRoomId = ""
+        config = nil
+        isLoadingConfig = false
+        resetHistory()
+    }
+
+    private static func canUseLuckyNumber(action: String) -> Bool {
+        #if HILY_TESTS
+        // HilyTests 独立编译，不链接 SelfPermissionBridge+Shared。
+        return true
+        #else
+        return SelfPermissionBridge.shared.gate(.partyLuckyNumber, action: action)
+        #endif
+    }
 }
 
 /// 底部 Tools 面板：结构、可见性与 H5 `party-tool-menu.vue` 对齐。
@@ -856,6 +887,7 @@ struct PartyRoomToolMenuSheet: View {
     let hostId: String?
     let showPk: Bool
     let showSuperWheel: Bool
+    let showsLuckyNumber: Bool
     let isRoomMuted: Bool
     let onStartPk: () -> Void
     let onOpenSuperWheel: () -> Void
@@ -874,51 +906,60 @@ struct PartyRoomToolMenuSheet: View {
             .padding(.top, 16)
             .padding(.bottom, 18)
         }
-        .task(id: roomId) {
+        .task(id: "\(roomId)-\(showsLuckyNumber)") {
+            guard showsLuckyNumber else {
+                luckyNumberStore.clearForDisabledLottery()
+                return
+            }
             await luckyNumberStore.loadConfig(roomId: roomId)
         }
     }
 
+    @ViewBuilder
     private var interactiveGames: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(L10n.PartyRoom.toolMenuInteractiveGames)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white.opacity(0.7))
+        if showPk || showSuperWheel || showsLuckyNumber {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(L10n.PartyRoom.toolMenuInteractiveGames)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
 
-            HStack(alignment: .top, spacing: 12) {
-                if showPk {
-                    Button {
-                        dismiss()
-                        onStartPk()
-                    } label: {
-                        toolGameCard(icon: "partyPkLogo", title: L10n.PartyRoom.toolMenuPk)
-                    }
-                    .buttonStyle(.plain)
-                }
-
-                if showSuperWheel {
-                    Button {
-                        dismiss()
-                        onOpenSuperWheel()
-                    } label: {
-                        VStack(spacing: 8) {
-                            Image(systemName: "circle.dotted.circle")
-                                .font(.system(size: 34, weight: .bold))
-                                .foregroundColor(Color(hex: 0xFFDD63))
-                                .frame(width: 50, height: 50)
-                            Text(L10n.PartyRoom.superWheelTitle)
-                                .font(.system(size: 13))
-                                .foregroundColor(.white)
-                                .lineLimit(1)
+                HStack(alignment: .top, spacing: 12) {
+                    if showPk {
+                        Button {
+                            dismiss()
+                            onStartPk()
+                        } label: {
+                            toolGameCard(icon: "partyPkLogo", title: L10n.PartyRoom.toolMenuPk)
                         }
-                        .frame(width: 100, height: 126)
-                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.06)))
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
-                }
 
-                luckyNumberCard
-                Spacer(minLength: 0)
+                    if showSuperWheel {
+                        Button {
+                            dismiss()
+                            onOpenSuperWheel()
+                        } label: {
+                            VStack(spacing: 8) {
+                                Image(systemName: "circle.dotted.circle")
+                                    .font(.system(size: 34, weight: .bold))
+                                    .foregroundColor(Color(hex: 0xFFDD63))
+                                    .frame(width: 50, height: 50)
+                                Text(L10n.PartyRoom.superWheelTitle)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.white)
+                                    .lineLimit(1)
+                            }
+                            .frame(width: 100, height: 126)
+                            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white.opacity(0.06)))
+                        }
+                        .buttonStyle(.plain)
+                    }
+
+                    if showsLuckyNumber {
+                        luckyNumberCard
+                    }
+                    Spacer(minLength: 0)
+                }
             }
         }
     }
@@ -1556,6 +1597,10 @@ final class PartySuperWheelStore: ObservableObject {
     }
 
     func beginTracking(roomId: String) {
+        guard Self.canUseLottery(action: "partySuperWheelTracking") else {
+            reset()
+            return
+        }
         guard !roomId.isEmpty else { return }
         guard trackedRoomId != roomId else { return }
         countdownTask?.cancel()
@@ -1573,6 +1618,10 @@ final class PartySuperWheelStore: ObservableObject {
     }
 
     func prepareConfig() async {
+        guard Self.canUseLottery(action: "partySuperWheelPrepareConfig") else {
+            reset()
+            return
+        }
         isConfigPresented = true
         guard !isConfigLoading else { return }
         isConfigLoading = true
@@ -1586,6 +1635,10 @@ final class PartySuperWheelStore: ObservableObject {
     }
 
     func loadState(roomId: String, presentWhenActive: Bool) async {
+        guard Self.canUseLottery(action: "partySuperWheelLoadState") else {
+            reset()
+            return
+        }
         guard !roomId.isEmpty, trackedRoomId == roomId else { return }
         let requestSequence = { stateRequestSequence &+= 1; return stateRequestSequence }()
         isLoading = true
@@ -1614,7 +1667,8 @@ final class PartySuperWheelStore: ObservableObject {
     }
 
     func open(roomId: String, entryFee: Int) async {
-        guard trackedRoomId == roomId,
+        guard Self.canUseLottery(action: "partySuperWheelOpen"),
+              trackedRoomId == roomId,
               entryFees.contains(entryFee),
               !isPerformingAction else { return }
         isPerformingAction = true
@@ -1665,7 +1719,9 @@ final class PartySuperWheelStore: ObservableObject {
     }
 
     func join() async {
-        guard let wheelState, !isPerformingAction else { return }
+        guard Self.canUseLottery(action: "partySuperWheelJoin"),
+              let wheelState,
+              !isPerformingAction else { return }
         let trackingProperties = wheelTrackingProperties(for: wheelState)
         isPerformingAction = true
         defer { isPerformingAction = false }
@@ -1711,6 +1767,10 @@ final class PartySuperWheelStore: ObservableObject {
     }
 
     func presentQueuedPanelAfterConfigDismissal() {
+        guard Self.canUseLottery(action: "partySuperWheelPresentPanel") else {
+            reset()
+            return
+        }
         guard shouldPresentPanelAfterConfigDismissal, !isConfigPresented else { return }
         shouldPresentPanelAfterConfigDismissal = false
         openPanel()
@@ -1718,6 +1778,10 @@ final class PartySuperWheelStore: ObservableObject {
 
     /// 常驻图标/工具入口展开本局面板时，同时允许重新查看当前结算结果。
     func openPanel() {
+        guard Self.canUseLottery(action: "partySuperWheelOpenPanel") else {
+            reset()
+            return
+        }
         isPanelDismissed = false
         isResultDismissed = false
         isPanelPresented = true
@@ -1735,7 +1799,10 @@ final class PartySuperWheelStore: ObservableObject {
     }
 
     func bet(amount: Int) async {
-        guard let wheelState, amount > 0, !isPerformingAction else { return }
+        guard Self.canUseLottery(action: "partySuperWheelBet"),
+              let wheelState,
+              amount > 0,
+              !isPerformingAction else { return }
         isPerformingAction = true
         defer { isPerformingAction = false }
         do {
@@ -1748,7 +1815,9 @@ final class PartySuperWheelStore: ObservableObject {
     }
 
     func close() async {
-        guard let wheelState, !isPerformingAction else { return }
+        guard Self.canUseLottery(action: "partySuperWheelClose"),
+              let wheelState,
+              !isPerformingAction else { return }
         isPerformingAction = true
         defer { isPerformingAction = false }
         do {
@@ -1765,6 +1834,10 @@ final class PartySuperWheelStore: ObservableObject {
     }
 
     func applyBroadcast(attachType: Int, payload: [String: Any]) {
+        guard Self.canUseLottery(action: "partySuperWheelBroadcast") else {
+            reset()
+            return
+        }
         guard let trackedRoomId else { return }
         guard let incomingRoundId = PartySuperWheelBroadcast.string(payload["roundId"]), !incomingRoundId.isEmpty else {
             return
@@ -1888,6 +1961,15 @@ final class PartySuperWheelStore: ObservableObject {
 
     private var shouldAutomaticallyPresentPanel: Bool {
         !isPanelDismissed || isMyParticipantAlive
+    }
+
+    private static func canUseLottery(action: String) -> Bool {
+        #if HILY_TESTS
+        // HilyTests 独立编译，不链接 SelfPermissionBridge+Shared。
+        return true
+        #else
+        return SelfPermissionBridge.shared.gate(.lottery, action: action)
+        #endif
     }
 
     private func applyLoadedState(_ state: PartySuperWheelState) {

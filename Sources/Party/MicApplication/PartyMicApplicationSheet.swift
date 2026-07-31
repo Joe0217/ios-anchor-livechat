@@ -14,6 +14,7 @@ import SwiftUI
 /// - `.refreshing([items])` 状态与 `.loaded` 视觉一致，仅 SwiftUI 自带顶部 spinner 表达"刷新中"
 struct PartyMicApplicationSheet: View {
     @ObservedObject var store: PartyStore
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     /// spec §2 房主端 A4：Owner tap switch toggle → 上层弹 SwitchConfirmSheet 走首次协议 or 直接调 API
     /// 观众视角 hidden。closure 由 PartyRoomView 层接 activeRoomTool = .micApplicationSwitchConfirm
     var onTapSwitchToggle: (() -> Void)? = nil
@@ -234,9 +235,10 @@ struct PartyMicApplicationSheet: View {
 
     @ViewBuilder
     private func avatar(item: PartyMicApplication) -> some View {
-        let hasHeadFrame = item.headFrame?.isEmpty == false
+        let headFrame = permission.canVirtualItems ? item.headFrame : nil
+        let hasHeadFrame = headFrame?.isEmpty == false
         // 静态框由 AvatarView 统一渲染；SVGA 使用 HeadFrameView 的动画分流。
-        if let headFrame = item.headFrame, HeadFrameView.isSVGAURL(headFrame) {
+        if let headFrame, HeadFrameView.isSVGAURL(headFrame) {
             ZStack {
                 AvatarView(urlString: item.avatar, size: 40, kind: .user,
                            userId: item.userId)
@@ -249,7 +251,7 @@ struct PartyMicApplicationSheet: View {
                 urlString: item.avatar,
                 size: 40,
                 kind: .user,
-                headwearURL: hasHeadFrame ? item.headFrame : nil,
+                headwearURL: headFrame,
                 headwearRatio: hasHeadFrame ? 52.0 / 40.0 : 1,
                 userId: item.userId
             )

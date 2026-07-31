@@ -15,6 +15,9 @@ struct DefaultPartyGiftSendService: PartyGiftSendService {
     }
 
     func send(giftId: Int64, num: Int, yxAccidList: [String]) async throws -> PartySendGiftResult {
+        guard SelfPermissionBridge.shared.gate(.giftSending, action: "partySendGift") else {
+            throw GiftSendError.generic(message: "Gift sending is unavailable")
+        }
         do {
             return try await PartyAPI.sendGift(
                 roomId: roomId,

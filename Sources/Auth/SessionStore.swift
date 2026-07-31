@@ -177,14 +177,32 @@ final class SessionStore: ObservableObject {
         // H-3：AppConfigStore 横断基建（视频通话权限 / 翻译 key / 回复积分 config），
         // 挂 session-scoped rule 双入口之 login refresh；一次拉 4 key 逗号 join
         Task { await AppConfigStore.shared.activate() }
-        // Batch 6.1.3：全局 P2P 消息监听（充值通知 attachType=35 → 合成塞进 notification 会话）
-        // 挂 session-scoped rule 双入口之 login activate；SDK 已完成 login 后 add delegate 才能收消息
-        GlobalP2PMessageObserver.shared.activate()
+        // 107 仅保留 Party chatroom，不能因登录完成而注册 P2P delegate。这里直接按 userType
+        // 同步，不能读异步装配中的 PermissionBridge（启动期仍可能是 deny-by-default）。
+        synchronizeGlobalP2PObserver(for: result.userType)
+        synchronizeMessageSessionStore(for: result.userType)
         // sapi（vvi 派对房/背包等链路）token 主动预取，对齐 H5 login/index.vue:86 `await getBagShopToken()`
         // forceRefresh=true 保证换账号后不复用上个账号残留（虽 logout 已 clear，双保险）
         Task { try? await SapiTokenStore.shared.ensureValid(forceRefresh: true) }
         _ = token   // 消除 unused warning（token 是 guard 的语义约束，不需要真使用）
         return true
+    }
+
+    /// 全局 P2P delegate 是会话级资源。107 禁用 P2P 后必须在 SDK 层解除注册，而不只是
+    /// 在回调里丢弃消息；普通账号仍沿用既有登录和冷启动恢复行为。
+    private func synchronizeGlobalP2PObserver(for userType: Int?) {
+        if UserPermissionMapping.blocked(for: userType).contains(.directMessages) {
+            GlobalP2PMessageObserver.shared.deactivate()
+        } else {
+            GlobalP2PMessageObserver.shared.activate()
+        }
+    }
+
+    /// MessageSessionStore 是懒加载单例；这里只通知已经创建的实例，不能让 107 冷启动因为
+    /// 权限同步而创建 NIMSessionAdapter。登录、冷启动和审核角色切换共用这一入口。
+    private func synchronizeMessageSessionStore(for userType: Int?) {
+        let isAllowed = !UserPermissionMapping.blocked(for: userType).contains(.directMessages)
+        MessageSessionStore.updateSharedDirectMessagesCapability(isAllowed: isAllowed)
     }
 
     func logout() {
@@ -224,9 +242,9 @@ final class SessionStore: ObservableObject {
         ImageCache.shared.clear()
         // IM 场景闸门清空（防 A 账号场景残留误导 B 账号过滤逻辑）
         IMSceneGate.shared.resetAll()
-        // v5 F-1: P2P 会话列表 store 清空（20s task/sessions/profiles/系统入口/可见集全清 + state=.idle）
-        // 未清则登出后 task 仍 401 循环，新账号登录看到旧账号残留数据（review 报告 F-1）
-        MessageSessionStore.shared.clear()
+        // P2P 会话列表只停已创建的 shared Store，避免 107 从未打开消息页时登出反而初始化 NIM adapter。
+        // 暂停同时取消 20s 轮询并阻止后续 connection 回调重拉旧会话。
+        MessageSessionStore.updateSharedDirectMessagesCapability(isAllowed: false)
         // v5.4 缓存审计补漏（logout 清理漏斗完整性）：
         // G1: station 已读态跨账号串扰 — 若 A 已读 mail id=X，B 收到同 id 会误判已读永远漏红点
         UserDefaults.standard.removeObject(forKey: "hily.station.lastReadId")
@@ -332,6 +350,8 @@ final class SessionStore: ObservableObject {
         )
         user = updated
         save()
+        synchronizeGlobalP2PObserver(for: updated.userType)
+        synchronizeMessageSessionStore(for: updated.userType)
         AppLogger.auth.info("[Session] refreshAuditStatus OK userType=\(updated.userType ?? -1) valid=\(updated.valid ?? -1) onReview=\(updated.onReview == true) banAlways=\(updated.banAlways == true)")
     }
 
@@ -369,8 +389,9 @@ final class SessionStore: ObservableObject {
             AuthToken.value = t
             AnalyticsTracker.login(userId: u.userId)
             CrashReporter.setUser(userID: u.userId)
-            // Batch 6.1.3: 冷启动已登录 → 立即 activate 全局 P2P observer（避免走 login 路径遗漏）
-            GlobalP2PMessageObserver.shared.activate()
+            // 冷启动恢复同样按账号能力决定是否注册 P2P observer，避免 107 在后台收到私聊事件。
+            synchronizeGlobalP2PObserver(for: u.userType)
+            synchronizeMessageSessionStore(for: u.userType)
             // H-3: 冷启动 restore 时也 activate AppConfigStore(rule session-scoped-store-refresh 双入口)
             // 否则 microsoftTranslatorKey/Area 为 nil,翻译 tap 会 toast "Translation config missing"
             Task { await AppConfigStore.shared.activate() }
@@ -391,8 +412,9 @@ final class SessionStore: ObservableObject {
             AuthToken.value = t
             AnalyticsTracker.login(userId: u.userId)
             CrashReporter.setUser(userID: u.userId)
-            // Batch 6.1.3: 同步 v1 迁移路径也 activate
-            GlobalP2PMessageObserver.shared.activate()
+            // v1 迁移路径与 Keychain 恢复保持相同权限语义。
+            synchronizeGlobalP2PObserver(for: u.userType)
+            synchronizeMessageSessionStore(for: u.userType)
             // H-3: 同 v2 路径,冷启动 restore 后 activate AppConfigStore
             Task { await AppConfigStore.shared.activate() }
             // 2026-07-17:v1 迁移路径同步 hydrate(与 v2 分支对称)

@@ -37,6 +37,7 @@ final class LotteryStore: ObservableObject {
     let route: LotteryRoute
 
     private let service: LotteryServicing
+    private let canDrawLottery: @Sendable () -> Bool
     private var nextRecordPage = 1
     private var recordsRequestID = UUID()
     private var recordsTask: Task<Void, Never>?
@@ -47,9 +48,12 @@ final class LotteryStore: ObservableObject {
     private var roomNavigationRequestID = UUID()
     private var clockTask: Task<Void, Never>?
 
-    init(route: LotteryRoute, service: LotteryServicing = LotteryServiceReal()) {
+    init(route: LotteryRoute,
+         service: LotteryServicing = LotteryServiceReal(),
+         canDrawLottery: @escaping @Sendable () -> Bool = LotteryStore.defaultCanDrawLottery) {
         self.route = route
         self.service = service
+        self.canDrawLottery = canDrawLottery
     }
 
     deinit {
@@ -99,6 +103,9 @@ final class LotteryStore: ObservableObject {
     }
 
     func startDraw(_ mode: LotteryDrawMode, entry: LotteryDrawEntry? = nil) {
+        guard canDrawLottery() else {
+            return
+        }
         let safeEntry = entry ?? (mode == .five ? .five : .one)
         guard !isBusy else {
             AppToastCenter.shared.show(L10n.Lottery.pleaseWait)
@@ -453,5 +460,14 @@ final class LotteryStore: ObservableObject {
     private func presentInsufficientPopup(entry: LotteryDrawEntry) {
         insufficientEntry = entry
         isInsufficientPresented = true
+    }
+
+    nonisolated private static func defaultCanDrawLottery() -> Bool {
+        #if HILY_TESTS
+        // HilyTests 独立编译，不链接 SessionStore / SelfPermissionBridge+Shared。
+        return true
+        #else
+        return SelfPermissionBridge.shared.gate(.lottery, action: "nativeLotteryDraw")
+        #endif
     }
 }

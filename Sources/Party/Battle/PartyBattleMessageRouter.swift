@@ -13,6 +13,16 @@ enum PartyBattleMessageRouter {
     /// 主分发入口。返回 true 表示已识别并分发（无论 payload decode 成败）
     @discardableResult
     static func dispatch(attachType: PartyAttachType, payload: [String: Any]) -> Bool {
+        // 保持该 router 对非 Battle 号段的既有语义：不消费、不影响当前状态。
+        guard isBattleAttachType(attachType) else { return false }
+
+        // UI 隐藏不足以阻止 IM 延迟消息把 PK 状态重新写回。107（以及未来关闭
+        // Party 游戏能力的账号）收到任何 Battle 号段时都必须丢弃，并清理残留状态。
+        guard SelfPermissionBridge.shared.gate(.partyGames, action: "partyBattleMessage") else {
+            PartyBattleStore.shared.reset()
+            return true
+        }
+
         // spec §5.3 首次真机 log 校对 —— dataKeys 一行 print 便于字段名对照
         AppLogger.party.info(
             "[Battle] recv attachType=\(attachType.rawValue, privacy: .public) dataKeys=\(Array(payload.keys).sorted().joined(separator: ","), privacy: .public)")
@@ -107,6 +117,18 @@ enum PartyBattleMessageRouter {
 
         default:
             return false  // 非 battle 号段
+        }
+    }
+
+    private static func isBattleAttachType(_ attachType: PartyAttachType) -> Bool {
+        switch attachType {
+        case .battleSelectingStart, .battleTeamMemberChange, .battleApplyReceived,
+             .battleRunningStart, .battleLeaderboardUpdate, .battleCrownHolderUpdate,
+             .battleEnd, .battleBroadcast, .battleCooldownEnd,
+             .battleHeartbeat, .battleGiftNotify, .battleForceEndConfirm, .battleApplyPendingNotice:
+            return true
+        default:
+            return false
         }
     }
 

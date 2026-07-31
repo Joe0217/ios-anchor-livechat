@@ -130,6 +130,45 @@ final class MessageSessionStoreTests: XCTestCase {
         XCTAssertFalse(all.contains(where: { $0.id == "u1" }))
     }
 
+    // MARK: - 107: P2P 权限热撤销
+
+    func test_suspended_p2p_store_ignores_nim_reconnect_and_delegate_events() async {
+        let provider = FakeMessageSessionProvider()
+        provider.stubSessions = .success([MessageSessionFactory.make(id: "u1")])
+        let store = MessageSessionStore(
+            provider: provider,
+            primeProvider: FakePrimeLevelProvider(),
+            stationProvider: FakeStationListProvider(),
+            customerServiceStore: FakeCustomerServiceIdStore(),
+            profileProvider: FakeConversationProfileProvider(),
+            followProvider: FakeFollowUserListProvider()
+        )
+
+        // 先复现请求已发出、但结果尚未返回的窗口。107 热撤权后不能由迟到结果写回会话。
+        provider.fetchSuspends = true
+        let loadTask = Task { await store.load() }
+        await Task.yield()
+        XCTAssertEqual(store.state, .loading)
+
+        store.setDirectMessagesCapabilityEnabled(false)
+        XCTAssertEqual(store.state, .idle, "撤销 P2P 权限应立即清空会话数据")
+        provider.resumeFetch()
+        await loadTask.value
+        XCTAssertEqual(store.state, .idle, "撤权前已发出的请求也不能把会话重新写回")
+
+        provider.emit(.add(MessageSessionFactory.make(id: "u2")))
+        provider.connectionStateSubject.value = true
+        for _ in 0..<4 { await Task.yield() }
+        XCTAssertEqual(store.state, .idle, "撤权后 NIM 增量和重连均不可重新加载 P2P 会话")
+
+        store.setDirectMessagesCapabilityEnabled(true)
+        for _ in 0..<6 { await Task.yield() }
+        guard case .loaded(let sessions) = store.state else {
+            return XCTFail("恢复 P2P 权限且 IM 已同步后应重新加载")
+        }
+        XCTAssertEqual(sessions.map(\.id), ["u1"])
+    }
+
     // MARK: - R-8: IM 未登录时 fetch 空 → 登录后自动重试（Step 3 反悔 #1）
 
     func test_load_deferred_when_im_not_connected_and_auto_loads_after_connect() async {

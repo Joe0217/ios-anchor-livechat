@@ -213,7 +213,13 @@ struct LiveTabView: View {
                 liveStream(isActive: isHomeTabActive && current == .live).tag(HomeTopTab.live)
                 LiveListView(viewModel: listViewModel).tag(HomeTopTab.list)
                 // L 里程碑：Match tab 实装（v3 spec §4.1）。placeholderTab → MatchTabView。
-                MatchTabView().tag(HomeTopTab.match)
+                MatchTabView(
+                    isActive: isHomeTabActive
+                        && current == .match
+                        && permission.canHomeDiscovery
+                        && permission.canCall
+                )
+                .tag(HomeTopTab.match)
                 // CircleView 接收 isActive，在 outer tab 切到 .circle 时才触发 sub store 的 lazy load
                 CircleView(isActive: current == .circle).tag(HomeTopTab.circle)
             }

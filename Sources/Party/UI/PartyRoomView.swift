@@ -28,6 +28,8 @@ struct PartyRoomView: View {
     var onSwitchToHotRoom: ((String, PartyRoomEntryPath) -> Void)? = nil
 
     @ObservedObject private var store = PartyStore.shared
+    /// 107 Party-only 账号在保留房间基础互动时隐藏经济、随机玩法和私 call。
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     /// 观众数权威源（对齐 H5 party.js:1017 NIM notification type=0/1 ++/--）：
     /// 直接订阅 PartyRoomChatManager.onlineCount（云信 chatroom 总在场人数,进/退实时增减），
     /// 而非 room/enter 一次性快照 `roomInfo.audienceNum`（后端多返 0）。
@@ -168,6 +170,10 @@ struct PartyRoomView: View {
     /// 榜单 sheet 内点用户后的名片卡。仅在榜单完成关闭后由根容器展示，避免被 UIKit sheet 遮挡。
     @State private var pendingUserCardPresentation: UserCardPresentation? = nil
 
+    private var canShowValueRankings: Bool {
+        permission.canVirtualItems && permission.canGiftSending
+    }
+
     private enum ToolMenuPresentation {
         case pk
         case superWheel
@@ -183,10 +189,17 @@ struct PartyRoomView: View {
 
     var body: some View {
         sceneBody
-            .giftEffectScene(.party, scopeId: store.roomInfo?.id ?? roomId)
-            // v23（2026-07-13）派对房进场特效：与 giftEffectScene 并列驱动 EnterEffectCenter
-            // scopeId 同源用 roomInfo?.id（与 PartyStore.didReceiveEnterAnimation 内 EnterEffectCenter.enqueue 的 scopeId 强对齐）
-            .enterEffectScene(.party, scopeId: store.roomInfo?.id ?? roomId)
+            // 特效 modifier 保持挂载，内部按权限启动/停止，避免切换权限时触发房间根视图 onDisappear。
+            .giftEffectScene(
+                .party,
+                scopeId: store.roomInfo?.id ?? roomId,
+                isEnabled: permission.canGiftSending
+            )
+            .enterEffectScene(
+                .party,
+                scopeId: store.roomInfo?.id ?? roomId,
+                isEnabled: permission.canVirtualItems
+            )
             .chatDetailBottomSheet(
                 peer: $chatSheetPeerYxAccid,
                 selfYxAccId: SessionStore.shared.user?.yxAccid ?? ""
@@ -231,24 +244,40 @@ struct PartyRoomView: View {
             }
             .sheet(isPresented: $showShareInviteSheet) { shareInviteSheet.giftPanelSheetBackground() }
             .sheet(item: $activeCornerBannerPage) { presentation in
-                H5WebSheetView(page: presentation.page) { action in
-                    guard H5NativeActionRouter.shared.dispatch(action) else { return }
-                    activeCornerBannerPage = nil
+                if permission.canPartyActivities {
+                    H5WebSheetView(page: presentation.page) { action in
+                        guard permission.canPartyActivities else {
+                            activeCornerBannerPage = nil
+                            return
+                        }
+                        guard H5NativeActionRouter.shared.dispatch(action) else { return }
+                        activeCornerBannerPage = nil
+                    }
+                        .presentationDetents([.fraction(0.5), .fraction(0.8)])
+                        .presentationDragIndicator(.visible)
+                } else {
+                    EmptyView()
                 }
-                    .presentationDetents([.fraction(0.5), .fraction(0.8)])
-                    .presentationDragIndicator(.visible)
             }
             .sheet(item: $winnerActivityPage, onDismiss: presentPendingUserCardAfterWinnerActivityDismissal) { page in
-                H5WebSheetView(page: page, onAction: handleWinnerActivityAction)
-                    .presentationDetents([.fraction(0.5)])
-                    .presentationDragIndicator(.visible)
+                if permission.canPartyActivities {
+                    H5WebSheetView(page: page, onAction: handleWinnerActivityAction)
+                        .presentationDetents([.fraction(0.5)])
+                        .presentationDragIndicator(.visible)
+                } else {
+                    EmptyView()
+                }
             }
             .sheet(item: $activePartyGame, onDismiss: {
                 H5ActivityBridge.refreshTask()
             }) { presentation in
-                PartyHalfScreenGameSheet(presentation: presentation)
-                    .presentationDetents([.height(presentation.preferredHeight)])
-                    .presentationDragIndicator(.visible)
+                if canPresentPartyGame(presentation.game) {
+                    PartyHalfScreenGameSheet(presentation: presentation)
+                        .presentationDetents([.height(presentation.preferredHeight)])
+                        .presentationDragIndicator(.visible)
+                } else {
+                    EmptyView()
+                }
             }
             // v8.1 房间工具 sheet（单一挂点，enum 切换 tools / settings 内嵌 push）
             .sheet(item: $activeRoomTool, onDismiss: presentPendingRoomToolPresentation) { kind in
@@ -271,17 +300,27 @@ struct PartyRoomView: View {
                 }
             }
             // H-5：底部礼物 icon → CommonGiftPanel sheet（对齐 H5 party-gift-popup.vue）
-            .sheet(isPresented: $showGiftPanel) { giftPanelSheet }
+            .sheet(isPresented: $showGiftPanel) {
+                if permission.canGiftSending {
+                    giftPanelSheet
+                } else {
+                    EmptyView()
+                }
+            }
             // 顶栏 Rank / Viewers sheet（对齐 H5 room-rank.vue 单 sheet 3 mode 切换）
             .sheet(item: $activeRankSheet, onDismiss: presentPendingUserCardAfterRankSheetDismissal) { mode in
-                PartyRoomRankSheet(
-                    initialMode: mode,
-                    roomId: store.roomInfo?.id ?? roomId,
-                    onUserTap: { preview in
-                        queueUserCardAfterRankSheetDismissal(preview)
-                    }
-                )
-                .presentationDetents([.fraction(0.5), .fraction(0.8)])
+                if canShowValueRankings {
+                    PartyRoomRankSheet(
+                        initialMode: mode,
+                        roomId: store.roomInfo?.id ?? roomId,
+                        onUserTap: { preview in
+                            queueUserCardAfterRankSheetDismissal(preview)
+                        }
+                    )
+                    .presentationDetents([.fraction(0.5), .fraction(0.8)])
+                } else {
+                    EmptyView()
+                }
             }
             // F 里程碑（2026-07-17）表情面板 sheet 挂载；高度由 PartyExpressionPanel 按当前内容计算。
             .sheet(isPresented: $showExpressionPanel) {
@@ -333,6 +372,85 @@ struct PartyRoomView: View {
                 showPartyBackpack = false
                 giftRecipientOverride = nil
                 giftRecipientSelection.reset()
+            }
+            .onChange(of: permission.canGiftSending) { canSendGift in
+                if !canSendGift {
+                    showGiftPanel = false
+                    showPartyBackpack = false
+                    giftRecipientOverride = nil
+                    giftRecipientSelection.reset()
+                    store.clearLastGiftEvent()
+                    store.giftEffects.reset()
+                    store.firstGiftFloatQueue.clear()
+                    GiftEffectCenter.shared.reset()
+                    activeRankSheet = nil
+                    if activeRoomTool == .privateCall {
+                        activeRoomTool = nil
+                    }
+                }
+            }
+            .onChange(of: permission.canCall) { canCall in
+                if !canCall, activeRoomTool == .privateCall {
+                    activeRoomTool = nil
+                }
+            }
+            .onChange(of: permission.canDirectMessages) { allowed in
+                if !allowed {
+                    showMessageSheet = false
+                    chatSheetPeerYxAccid = nil
+                    showShareInviteSheet = false
+                }
+            }
+            .onChange(of: permission.canProfileSocial) { allowed in
+                if !allowed {
+                    showShareInviteSheet = false
+                }
+            }
+            .onChange(of: permission.canPartyVideo, perform: handlePartyVideoPermissionChange)
+            .onChange(of: permission.canVirtualItems) { canUseVirtualItems in
+                if !canUseVirtualItems {
+                    activeRankSheet = nil
+                    EnterEffectCenter.shared.reset()
+                    store.clearEnterFloatingEffects()
+                }
+            }
+            .onChange(of: permission.canLottery) { canUseLottery in
+                if !canUseLottery {
+                    superWheelStore.reset()
+                }
+            }
+            .onChange(of: permission.canPartyLuckyNumber) { canUseLuckyNumber in
+                if !canUseLuckyNumber {
+                    luckyNumberStore.clearForDisabledLottery()
+                    showLuckyNumberSettings = false
+                    store.dismissLuckyNumberWinPopup()
+                }
+            }
+            .onChange(of: permission.canPartyGames) { canUsePartyGames in
+                if !canUsePartyGames {
+                    dismissPartyBattleUI()
+                    if let game = activePartyGame?.game,
+                       !(permission.canPartyFreeGames && game.isFreePartyInteraction) {
+                        activePartyGame = nil
+                    }
+                }
+            }
+            .onChange(of: permission.canPartyFreeGames) { canUseFreePartyGames in
+                if !canUseFreePartyGames,
+                   activePartyGame?.game.isFreePartyInteraction == true,
+                   !permission.canPartyGames {
+                    activePartyGame = nil
+                }
+            }
+            .onChange(of: permission.canPartyActivities) { canUseActivities in
+                if !canUseActivities {
+                    activeCornerBannerPage = nil
+                    winnerActivityPage = nil
+                    showWeeklyTaskSheet = false
+                    showHotTaskSheet = false
+                    isHotTaskSheetPresentationActive = false
+                    stopTaskTracking()
+                }
             }
             .onChange(of: store.roomState) { state in
                 switch state {
@@ -421,6 +539,9 @@ struct PartyRoomView: View {
                     }
                 ),
                 onMessageTap: { userId, yxAccid in
+                    guard SelfPermissionBridge.shared.gate(.directMessages, action: "partyUserCardMessage") else {
+                        return
+                    }
                     guard let yxAccid, !yxAccid.isEmpty else { return }
                     trackPartyUserCardChat(userId: userId)
                     // 对齐 H5 直播名片的 openTalkPopup：关闭名片，再由顶层挂载半屏私聊。
@@ -432,6 +553,9 @@ struct PartyRoomView: View {
                 },
                 isPartyRoom: true,
                 onSendGiftTap: { info in
+                    guard SelfPermissionBridge.shared.gate(.giftSending, action: "partyUserCardGift") else {
+                        return
+                    }
                     let seatMatch = store.seatList.first {
                         $0.yxAccid == info.yxAccid || $0.userId == info.userId
                     }
@@ -507,6 +631,7 @@ struct PartyRoomView: View {
             // F-1a Task 22：PartyBattle UI 挂载点（避免 sceneBody 复杂度爆炸抽独立 modifier）
             .modifier(PartyBattleUIModifier(
                 battleStore: battleStore,
+                isFeatureEnabled: permission.canPartyGames,
                 effectiveRoomId: store.roomInfo?.id ?? roomId,
                 showInitiate: $showBattleInitiate,
                 showForceEnd: $showBattleForceEnd,
@@ -514,7 +639,7 @@ struct PartyRoomView: View {
                 showRules: $showBattleRules
             ))
             .overlay {
-                if let guide = hotTaskStore.guide {
+                if permission.canPartyActivities, let guide = hotTaskStore.guide {
                     PartyTopRoomBonusDialog(
                         kind: .outOfTop,
                         guide: guide,
@@ -526,7 +651,7 @@ struct PartyRoomView: View {
             }
             .partyLuckyNumberWinOverlay(store: store)
             .overlay {
-                if let notification = hotTaskStore.pendingReward {
+                if permission.canPartyActivities, let notification = hotTaskStore.pendingReward {
                     PartyHotTaskRewardOverlay(notification: notification) {
                         hotTaskStore.dismissReward(notification.id)
                     }
@@ -543,7 +668,9 @@ struct PartyRoomView: View {
             ))
             // Super Winner 结果不依赖面板是否展开：参与者最小化后仍必须看到淘汰/获胜结算。
             .overlay {
-                if superWheelStore.shouldPresentResult, !superWheelStore.isPanelPresented {
+                if permission.canLottery,
+                   superWheelStore.shouldPresentResult,
+                   !superWheelStore.isPanelPresented {
                     PartySuperWheelResultOverlay(
                         wheelStore: superWheelStore,
                         isRoomOwner: store.isSelfRoomOwner
@@ -560,9 +687,15 @@ struct PartyRoomView: View {
             backgroundLayer
             contentColumn
             // H5 Party 专属静态礼物效果：中央缩放、收礼麦位缩放和最多三条送礼飘屏。
-            PartyGiftEffectOverlay()
-            PartyEnterFloatingOverlay(message: store.enterFloatingMessage)
-            FirstGiftFloat(queue: store.firstGiftFloatQueue)
+            if permission.canGiftSending {
+                PartyGiftEffectOverlay()
+            }
+            if permission.canVirtualItems {
+                PartyEnterFloatingOverlay(message: store.enterFloatingMessage)
+            }
+            if permission.canGiftSending {
+                FirstGiftFloat(queue: store.firstGiftFloatQueue)
+            }
             partyPluginStack
             // v8：进房 loading overlay（对齐 H5 clickRoomItem 全屏 isSearchLoading 反馈）
             // 显示条件：preparing / entering 态；joined 或 ended 时消失让房内 UI 显现
@@ -578,7 +711,7 @@ struct PartyRoomView: View {
     /// 底部随输入栏/键盘整体上移。
     private var partyPluginStack: some View {
         VStack(alignment: .trailing, spacing: 0) {
-            if !store.partyPrivateCallHiddenForPK {
+            if canUsePartyPrivateCall && !store.partyPrivateCallHiddenForPK {
                 PartyRoomPrivateCallButton(
                     isOn: privateCallOn,
                     selectedGiftIcon: store.partyCallGiftIcon,
@@ -598,7 +731,7 @@ struct PartyRoomView: View {
                 )
             }
             // 半屏游戏暂不接入，隐藏房内游戏 Banner 入口。
-            if superWheelStore.isActive {
+            if permission.canLottery && superWheelStore.isActive {
                 PartySuperWheelFloatingButton(state: superWheelStore.wheelState?.state ?? 0) {
                     trackSuperWheelIcon("b_wheel_icon_click")
                     superWheelStore.openPanel()
@@ -624,7 +757,8 @@ struct PartyRoomView: View {
     }
 
     private var hasDisplayablePartyBanner: Bool {
-        store.roomInfo?.bannerList?.contains(where: \.isDisplayable) == true
+        permission.canPartyActivities
+            && store.roomInfo?.bannerList?.contains(where: \.isDisplayable) == true
     }
 
     private var hasVisibleQuickPhrases: Bool {
@@ -741,12 +875,18 @@ struct PartyRoomView: View {
             anchorAvatarURL: store.roomInfo?.roomAvatar,
             // v12：头像装饰框 URL（async 从 apiPartyGetUser 拉；对齐 H5 head-frame.vue）
             headFrameURL: store.ownerHeadFrameURL,
+            showsHeadFrame: permission.canVirtualItems,
             wealthText: PartyNumberFormat.compact(store.roomInfo?.contributionCostNumInt ?? 0),
             honorText: PartyNumberFormat.compact(store.roomInfo?.honorDailyTotalInt ?? 0),
+            showsRank: canShowValueRankings,
             audienceCountText: "\(chat.onlineCount)",
             showsViewerEntry: chat.onlineCount > 0,
-            cornerBanner: store.roomInfo?.cornerBannerList?.first,
+            cornerBanner: permission.canPartyActivities
+                ? store.roomInfo?.cornerBannerList?.first
+                : nil,
             isFollowing: store.isFollowingAnchor,
+            showsFollow: permission.canProfileSocial,
+            showsShare: permission.canDirectMessages && permission.canProfileSocial,
             // 用 isSelfRoomOwner（ownerId==myUserId）而非 selfRole == .owner：
             // 平台超管在他人房 selfRole 已被提权为 .owner（管理权限用），但**关注按钮显隐**
             // 属"是否房主本人"身份判定 —— 超管应能像普通用户一样关注房主
@@ -755,7 +895,8 @@ struct PartyRoomView: View {
             // （Bug 1a 已修 selfRole 优先 selfSeat.roomRoleType 派生 → admin 权限实时生效）
             canManage: store.selfRole == .owner || store.selfRole == .admin,
             // 与 H5/安卓主播端保持同一门控：管理员 + Battle Team 房型 + 后台总开关开启。
-            canStartPk: battleStore.canManage
+            canStartPk: permission.canPartyGames
+                && battleStore.canManage
                 && battleStore.isFunctionEnabled
                 && store.roomInfo?.roomTempIdInt == 1,
             onFollowTap: handleFollowTap,
@@ -769,16 +910,20 @@ struct PartyRoomView: View {
             onRankTap: handleRankTap,
             onViewerTap: handleViewerTap,
             // 入口直接由 room/enter.rewardQuantity 控制，避免异步 tracking 时序让入口短暂或永久缺失。
-            showWeeklyTask: (store.roomInfo?.rewardQuantity ?? 0) > 0,
-            weeklyTaskRewardQuantity: max(0, store.roomInfo?.rewardQuantity ?? weeklyTaskStore.rewardQuantity),
+            showWeeklyTask: permission.canPartyActivities && (store.roomInfo?.rewardQuantity ?? 0) > 0,
+            weeklyTaskRewardQuantity: permission.canPartyActivities
+                ? max(0, store.roomInfo?.rewardQuantity ?? weeklyTaskStore.rewardQuantity)
+                : 0,
             onWeeklyTaskTap: {
+                guard SelfPermissionBridge.shared.gate(.partyActivities, action: "partyWeeklyTask") else { return }
                 startTaskTrackingIfNeeded()
                 showWeeklyTaskSheet = true
             },
-            showHotTask: hotTaskStore.showsEntry,
-            hotTaskStatus: hotTaskStore.status,
+            showHotTask: permission.canPartyActivities && hotTaskStore.showsEntry,
+            hotTaskStatus: permission.canPartyActivities ? hotTaskStore.status : nil,
             hotTaskTopRankLimit: hotTaskStore.topRankLimit,
             onHotTaskTap: {
+                guard SelfPermissionBridge.shared.gate(.partyActivities, action: "partyHotTask") else { return }
                 if hotTaskStore.status?.isActive == true {
                     Task { await hotTaskStore.loadMissionRules() }
                     presentHotTaskSheet()
@@ -796,6 +941,7 @@ struct PartyRoomView: View {
     ///
     /// H5 强约束：发起 PK 前若排麦关闭，主动开启（后端 PK 依赖排麦通道）；开启失败直接终止不进 PK
     private func handlePkTap() {
+        guard SelfPermissionBridge.shared.gate(.partyGames, action: "partyBattleEntry") else { return }
         // 入口和实际动作共用相同的权限、房型和后台开关校验，避免隐藏入口仍可由旧事件触发。
         guard battleStore.canManage,
               battleStore.isFunctionEnabled,
@@ -813,8 +959,12 @@ struct PartyRoomView: View {
                 Task {
                     await store.toggleMicApplicationSwitch(enable: true)
                     // 等 1021 广播回来 micApplicationSwitchOn=true 才进 PK popup（避免开启失败仍进 popup）
-                    if store.micApplicationSwitchOn {
-                        await MainActor.run { showBattleInitiate = true }
+                    if store.micApplicationSwitchOn,
+                       SelfPermissionBridge.shared.gate(.partyGames, action: "partyBattleEntryAfterMic") {
+                        await MainActor.run {
+                            guard permission.canPartyGames else { return }
+                            showBattleInitiate = true
+                        }
                     }
                 }
             } else {
@@ -823,7 +973,27 @@ struct PartyRoomView: View {
         }
     }
 
+    /// Party 游戏能力被服务端撤销时，清除所有 PK 专属弹层和延后跳转。
+    /// `PartyBattleUIModifier` 也会用同一能力 flag 保护展示层；这里额外清 View
+    /// 状态，避免旧的异步工具菜单回调在后续重新开通能力时弹出陈旧页面。
+    private func dismissPartyBattleUI() {
+        showBattleInitiate = false
+        showBattleForceEnd = false
+        showBattleCooldownToast = false
+        showBattleRules = false
+        battleGiftTeam = 1
+        if case .some(.pk) = pendingToolMenuPresentation {
+            pendingToolMenuPresentation = nil
+        }
+        battleStore.reset()
+    }
+
     private func handleRankTap(_ kind: PartyRankKind) {
+        guard SelfPermissionBridge.shared.gate(.virtualItems, action: "partyRoomRank"),
+              SelfPermissionBridge.shared.gate(.giftSending, action: "partyRoomRank") else {
+            activeRankSheet = nil
+            return
+        }
         // 对齐 H5 header-wrap.vue: wealthRank tap → showRankPopupType='rank' / honorRank tap → 'honor'
         switch kind {
         case .wealth: activeRankSheet = .contribution
@@ -900,6 +1070,27 @@ struct PartyRoomView: View {
         }
     }
 
+    /// 视频能力热切换时，RTC 必须无条件按最新能力重建；否则正常账号会在 Bridge
+    /// 初始 deny-by-default 后一直不订阅视频。降为 107 时同时撤销正在展示或等待展示的
+    /// Live+Voice 房型页面，避免旧 sheet 的确认动作穿过新的 Store 层 gate。
+    private func handlePartyVideoPermissionChange(_ allowed: Bool) {
+        if !allowed {
+            showSelfActions = false
+            pendingRoomModeTempId = nil
+
+            if activeRoomTool == .roomMode || activeRoomTool == .roomModeConfirm {
+                activeRoomTool = nil
+            }
+            if case .some(.sheet(let target)) = pendingRoomToolPresentation,
+               target == .roomMode || target == .roomModeConfirm {
+                pendingRoomToolPresentation = nil
+            }
+
+            Task { await store.rejectVideoSeatInvite() }
+        }
+        store.refreshPartyVideoCapability()
+    }
+
     // MARK: - 大麦位（按模板动态：0/1/2/3/6+ 视频位）
 
     /// v12（对齐 H5 蓝本 livechat-h5/src/components/party/components/main-wrap.vue）：
@@ -909,7 +1100,7 @@ struct PartyRoomView: View {
     /// - `0`：整行隐藏（纯语聊模板）
     @ViewBuilder
     private var bigSeatRow: some View {
-        if battleStore.isSelecting, !bigSeats.isEmpty {
+        if permission.canPartyGames, battleStore.isSelecting, !bigSeats.isEmpty {
             PkSelectingVideoTripleView(
                 bigSeats: bigSeats,
                 battleStore: battleStore,
@@ -941,7 +1132,10 @@ struct PartyRoomView: View {
                 isLocalCameraActive: store.isLocalCameraActive,
                 camera: store.camera,
                 engine: store.rtc,
-                aspectRatio: nil
+                aspectRatio: nil,
+                showsGiftValue: canShowValueRankings,
+                showsHeadFrame: permission.canVirtualItems,
+                allowsVideo: permission.canPartyVideo
             )
             .frame(width: 186)
             // 单视频位：index=0/total=1 → H5 pkVideoSlotTeamClass 返回 'pk-team-red'
@@ -967,7 +1161,10 @@ struct PartyRoomView: View {
                     isLocalCameraActive: store.isLocalCameraActive,
                     camera: store.camera,
                     engine: store.rtc,
-                    aspectRatio: 6.0 / 5.0
+                    aspectRatio: 6.0 / 5.0,
+                    showsGiftValue: canShowValueRankings,
+                    showsHeadFrame: permission.canVirtualItems,
+                    allowsVideo: permission.canPartyVideo
                 )
                 // 视频位按 index 判定色边（对齐 H5 pkVideoSlotTeamClass：首位红 / 末位蓝）
                 .partyBattleVideoSeatRing(index: idx, total: total)
@@ -1007,7 +1204,10 @@ struct PartyRoomView: View {
                     isLocalCameraActive: store.isLocalCameraActive,
                     camera: store.camera,
                     engine: store.rtc,
-                    aspectRatio: multiBigSeatAspectRatio
+                    aspectRatio: multiBigSeatAspectRatio,
+                    showsGiftValue: canShowValueRankings,
+                    showsHeadFrame: permission.canVirtualItems,
+                    allowsVideo: permission.canPartyVideo
                 )
                 // 视频位按 index 判定色边（对齐 H5 pkVideoSlotTeamClass：首位红 / 末位蓝 / 中间无色）
                 .partyBattleVideoSeatRing(index: idx, total: total)
@@ -1127,7 +1327,7 @@ struct PartyRoomView: View {
     }
 
     private var isBattleActive: Bool {
-        battleStore.isSelecting || battleStore.isRunning
+        permission.canPartyGames && (battleStore.isSelecting || battleStore.isRunning)
     }
 
     /// v17（对齐 H5 `@media (max-width: 380px)` 音频位缩小）：小屏统一 sm 变体（35pt 头像 vs 46pt 默认）
@@ -1145,7 +1345,10 @@ struct PartyRoomView: View {
                     isSelf: isSelf(seat),
                     isSpeaking: store.isSpeaking(seat: seat),
                     isVoicePrintActive: store.isVoicePrintActive(seat: seat),
-                    sizeVariant: variant
+                    sizeVariant: variant,
+                    showsGiftValue: canShowValueRankings,
+                    showsHeadFrame: permission.canVirtualItems,
+                    showsTaskVoicePrint: permission.canPartyActivities && permission.canVirtualItems
                 )
                 .partyBattleSeatRing(seat: seat)
                 .onTapGesture { handleSeatTap(seat) }
@@ -1165,7 +1368,10 @@ struct PartyRoomView: View {
                     isSelf: isSelf(seat),
                     isSpeaking: store.isSpeaking(seat: seat),
                     isVoicePrintActive: store.isVoicePrintActive(seat: seat),
-                    sizeVariant: .sm
+                    sizeVariant: .sm,
+                    showsGiftValue: canShowValueRankings,
+                    showsHeadFrame: permission.canVirtualItems,
+                    showsTaskVoicePrint: permission.canPartyActivities && permission.canVirtualItems
                 )
                 .partyBattleSeatRing(seat: seat)
                 .onTapGesture { handleSeatTap(seat) }
@@ -1222,7 +1428,10 @@ struct PartyRoomView: View {
             isSelf: isSelf(seat),
             isSpeaking: store.isSpeaking(seat: seat),
             isVoicePrintActive: store.isVoicePrintActive(seat: seat),
-            sizeVariant: variant
+            sizeVariant: variant,
+            showsGiftValue: canShowValueRankings,
+            showsHeadFrame: permission.canVirtualItems,
+            showsTaskVoicePrint: permission.canPartyActivities && permission.canVirtualItems
         )
         .frame(width: cellW)
         .partyBattleSeatRing(seat: seat)
@@ -1247,16 +1456,25 @@ struct PartyRoomView: View {
     // MARK: - 聊天区
 
     private var chatArea: some View {
-        PartyRoomChatArea(
+        let winnerActivityHandler: ((String) -> Void)? = permission.canPartyActivities
+            ? { rawURL in openWinnerActivity(rawURL) }
+            : nil
+
+        return PartyRoomChatArea(
             filter: $chatFilter,
             welcomeMessage: store.roomInfo?.greetingMessage ?? L10n.PartyRoom.welcomeFallback,
             chat: store.chat,
-            lastGiftEvent: store.lastGiftEvent,
+            lastGiftEvent: permission.canGiftSending ? store.lastGiftEvent : nil,
             canDeleteTextMessages: store.selfRole == .owner || store.selfRole == .admin,
             onDeleteTextMessage: { message in
                 await store.deletePartyMessage(message)
             },
-            onWinnerActivity: openWinnerActivity
+            onWinnerActivity: winnerActivityHandler,
+            showsGiftContent: permission.canGiftSending,
+            showsLotteryContent: permission.canLottery,
+            showsPartyGameContent: permission.canPartyGames,
+            showsActivityContent: permission.canPartyActivities,
+            showsVirtualItemContent: permission.canVirtualItems
         )
         .padding(.top, 6)
     }
@@ -1269,11 +1487,19 @@ struct PartyRoomView: View {
         store.roomInfo?.isPartyPrivateCallEnabled == true
     }
 
+    /// Party 私 call 同时属于通话和礼物链路。不能只按礼物显隐，否则 101/104 等已禁通话的
+    /// 账号仍会看到开关并发送更新接口。
+    private var canUsePartyPrivateCall: Bool {
+        permission.canCall && permission.canGiftSending
+    }
+
     /// 浮动按钮 tap handler（v5-需求 1：已有 giftId 复用不重选）：
     /// - 关 → 开：若 `roomInfo.partyCallGiftId` 已有 → 直接 API set enable=1 复用礼物（无需弹 sheet）
     ///           若无 → 拉起 `CommonGiftPanel.callGate` 让房主选礼物；confirm 后才 API set enable=1
     /// - 开 → 关：直接 `PartyStore.setPrivateCall(enable: false)`（视觉切换由 store 回写驱动）
     private func handlePartyCallToggle(_ next: Bool) {
+        guard SelfPermissionBridge.shared.gate(.call, action: "partyPrivateCallToggle"),
+              SelfPermissionBridge.shared.gate(.giftSending, action: "partyPrivateCallToggle") else { return }
         guard !store.partyPrivateCallHiddenForPK else { return }
         if next {
             if let existingGiftId = store.roomInfo?.partyCallGiftId, !existingGiftId.isEmpty {
@@ -1289,6 +1515,8 @@ struct PartyRoomView: View {
     /// tap 按钮上的礼物 icon —— 无论开关状态都可以重选礼物（弹 gift panel）
     /// 复用与 `handlePartyCallToggle` 开启态相同的 sheet；confirm 后走 setPrivateCall(enable: true) 更新礼物
     private func handlePartyCallGiftReselect() {
+        guard SelfPermissionBridge.shared.gate(.call, action: "partyPrivateCallGiftReselect"),
+              SelfPermissionBridge.shared.gate(.giftSending, action: "partyPrivateCallGiftReselect") else { return }
         guard !store.partyPrivateCallHiddenForPK else { return }
         transitionRoomTool(to: .privateCall)
     }
@@ -1303,6 +1531,8 @@ struct PartyRoomView: View {
             isOnSeat: store.selfSeat != nil,
             // v9：游戏按钮主播端不显示（对齐 H5 v-if=hasGameCenter，APP_USER_ROLE=2 主播端恒 false）
             showGameButton: false,
+            showGiftButton: permission.canGiftSending,
+            showMessageButton: permission.canDirectMessages,
             // v12：消息未读徽章（对齐 H5 useUnreadMessageCount + van-badge）
             unreadCount: unreadBridge.totalUnread,
             // 对齐安卓 §1 checkMicApplicationVisible：房主/房管 + 排麦开关开时显示快捷入口
@@ -1356,13 +1586,14 @@ struct PartyRoomView: View {
 
     private var invitePresented: Binding<Bool> {
         Binding(
-            get: { store.pendingVideoSeatInvite != nil },
+            get: { permission.canPartyVideo && store.pendingVideoSeatInvite != nil },
             set: { if !$0 { store.clearPendingVideoSeatInvite() } }
         )
     }
 
     @ViewBuilder private var inviteAlertButtons: some View {
         Button(L10n.Party.inviteAccept) {
+            guard SelfPermissionBridge.shared.gate(.partyVideo, action: "partyAcceptVideoSeatInvite") else { return }
             trackVideoInviteAction("Accept")
             Task { await store.acceptVideoSeatInvite() }
         }
@@ -1385,6 +1616,10 @@ struct PartyRoomView: View {
 
     @MainActor
     private func runVideoSeatInviteCountdown() async {
+        guard permission.canPartyVideo else {
+            await store.rejectVideoSeatInvite()
+            return
+        }
         guard let invite = store.pendingVideoSeatInvite else { return }
         videoInviteRemainingSeconds = invite.ttlSeconds
         while videoInviteRemainingSeconds > 0, !Task.isCancelled {
@@ -1460,7 +1695,7 @@ struct PartyRoomView: View {
     @ViewBuilder private var selfActionsButtons: some View {
         if let me = store.selfSeat {
             let micOn = (me.microphoneEnabled ?? 0) == 1 && (me.seatMicrophoneEnabled ?? 0) == 1
-            if me.isVideoSeat {
+            if me.isVideoSeat, permission.canPartyVideo {
                 // 视频位不提供禁麦；历史脏数据需要走管理员解禁接口，而不是 updateMedia。
                 if me.isSeatMicrophoneProhibited,
                    (store.selfRole == .owner || store.selfRole == .admin),
@@ -1478,7 +1713,7 @@ struct PartyRoomView: View {
                     Task { await store.toggleSelfMedia(type: 1, enable: !micOn) }
                 }
             }
-            if me.seatType == 1 {
+            if me.seatType == 1, permission.canPartyVideo {
                 let camOn = (me.cameraEnabled ?? 0) == 1
                 Button(camOn ? L10n.Party.selfCamOff : L10n.Party.selfCamOn) {
                     Task { await store.toggleSelfMedia(type: 2, enable: !camOn) }
@@ -1540,6 +1775,10 @@ struct PartyRoomView: View {
     }
 
     private func startTaskTrackingIfNeeded() {
+        guard permission.canPartyActivities else {
+            stopTaskTracking()
+            return
+        }
         guard store.roomState == .entering || store.roomState == .joined else { return }
         let trackedRoomId = store.roomInfo?.id ?? roomId
         weeklyTaskStore.beginTracking(
@@ -1552,6 +1791,7 @@ struct PartyRoomView: View {
     }
 
     private func switchToHotRoom(_ guide: PartyHotRoomGuide) {
+        guard SelfPermissionBridge.shared.gate(.partyActivities, action: "partyTopRoomGuide") else { return }
         hotTaskStore.dismissGuide()
         let currentRoomId = store.roomInfo?.id ?? roomId
         // 全部热门房暂时无空麦时，服务端仍返回第一名。主播可进入房间等待，不应阻断跳转。
@@ -1623,6 +1863,10 @@ struct PartyRoomView: View {
         }
         let isManager = store.selfRole == .owner || store.selfRole == .admin
         guard let idx = seat.seatIndex else { return }
+        if seat.isVideoSeat, !permission.canPartyVideo {
+            roomActionToast = L10n.commonNoContent
+            return
+        }
         if isManager {
             adminSeatActionsTarget = seat
             return
@@ -1893,6 +2137,9 @@ struct PartyRoomView: View {
     /// 本 view 不再本地弹（避免与全局 toast 重复展示）。
     /// 进房关注态由 room/enter 接口 `isFollowOwner` 字段初始化，退出重进保持一致。
     private func handleFollowTap() {
+        guard SelfPermissionBridge.shared.gate(.profileSocial, action: "partyFollowAnchor") else {
+            return
+        }
         // 用 isSelfRoomOwner 而非 selfRole == .owner：
         // 平台超管 selfRole 被提权为 .owner，但可关注房主 —— 参见 isSelfRoom 相同逻辑
         guard !store.isSelfRoomOwner else {
@@ -1938,6 +2185,7 @@ struct PartyRoomView: View {
     /// http(s) 活动在应用内展示；后端若配置自定义 scheme 则交给系统处理。
     @MainActor
     private func handleCornerBannerTap(_ banner: PartyCornerBanner) {
+        guard SelfPermissionBridge.shared.gate(.partyActivities, action: "partyCornerBanner") else { return }
         guard let rawURL = banner.directUrl, let url = URL(string: rawURL) else { return }
         PartyAnalytics.track("b_activity_click", properties: cornerBannerActivityProperties(banner))
         presentActivityURL(url)
@@ -1946,12 +2194,14 @@ struct PartyRoomView: View {
     /// 右下角轮播 Banner 与顶部活动位使用同一跳转策略。
     @MainActor
     private func handlePartyBannerTap(_ banner: PartyRoomBanner) {
+        guard SelfPermissionBridge.shared.gate(.partyActivities, action: "partyRoomBanner") else { return }
         guard let rawURL = banner.directUrl, let url = URL(string: rawURL) else { return }
         PartyAnalytics.track("b_activity_click", properties: partyBannerActivityProperties(banner))
         presentActivityURL(url)
     }
 
     private func reportPartyBannerView(_ banner: PartyRoomBanner) {
+        guard permission.canPartyActivities else { return }
         PartyAnalytics.track("b_activity_view", properties: partyBannerActivityProperties(banner))
     }
 
@@ -1974,6 +2224,7 @@ struct PartyRoomView: View {
     }
 
     private var cornerBannerTrackingKey: String {
+        guard permission.canPartyActivities else { return "" }
         guard let banner = store.roomInfo?.cornerBannerList?.first(where: \.isDisplayable) else {
             return ""
         }
@@ -1982,6 +2233,7 @@ struct PartyRoomView: View {
     }
 
     private func reportCornerBannerViewIfNeeded() {
+        guard permission.canPartyActivities else { return }
         guard let banner = store.roomInfo?.cornerBannerList?.first(where: \.isDisplayable),
               !cornerBannerTrackingKey.isEmpty,
               reportedCornerBannerKey != cornerBannerTrackingKey else { return }
@@ -2008,6 +2260,7 @@ struct PartyRoomView: View {
     }
 
     private func handlePartyGameTap(_ game: PartyBannerGame) {
+        guard canLaunchPartyGame(game) else { return }
         guard activePartyGame == nil, game.isLaunchable,
               let roomId = store.roomInfo?.id, !roomId.isEmpty else { return }
         Task { @MainActor in
@@ -2016,8 +2269,23 @@ struct PartyRoomView: View {
         }
     }
 
+    private func canLaunchPartyGame(_ game: PartyBannerGame) -> Bool {
+        if permission.canPartyGames {
+            return SelfPermissionBridge.shared.gate(.partyGames, action: "partyBannerGame")
+        }
+        guard game.isFreePartyInteraction else {
+            return SelfPermissionBridge.shared.gate(.partyGames, action: "partyBannerGame")
+        }
+        return SelfPermissionBridge.shared.gate(.partyFreeGames, action: "partyFreeBannerGame")
+    }
+
+    private func canPresentPartyGame(_ game: PartyBannerGame) -> Bool {
+        permission.canPartyGames || (permission.canPartyFreeGames && game.isFreePartyInteraction)
+    }
+
     @MainActor
     private func presentActivityURL(_ url: URL) {
+        guard SelfPermissionBridge.shared.gate(.partyActivities, action: "partyActivityPage") else { return }
         if url.scheme == "http" || url.scheme == "https" {
             activeCornerBannerPage = PartyCornerBannerPresentation(
                 page: H5Page.banner(
@@ -2035,6 +2303,7 @@ struct PartyRoomView: View {
     /// H5 `winner_broadcast` 在房内打开半屏活动页；活动页关闭后仍停留在原 Party 房。
     @MainActor
     private func openWinnerActivity(_ rawURL: String) {
+        guard SelfPermissionBridge.shared.gate(.partyActivities, action: "partyWinnerActivity") else { return }
         guard let url = sanitizedWinnerActivityURL(rawURL),
               url.scheme?.lowercased() == "https",
               url.host != nil else {
@@ -2063,6 +2332,10 @@ struct PartyRoomView: View {
 
     @MainActor
     private func handleWinnerActivityAction(_ action: H5BridgeAction) {
+        guard permission.canPartyActivities else {
+            winnerActivityPage = nil
+            return
+        }
         switch action {
         case .close:
             winnerActivityPage = nil
@@ -2087,6 +2360,11 @@ struct PartyRoomView: View {
     }
 
     private func handleShareTap() {
+        guard SelfPermissionBridge.shared.gate(.directMessages, action: "partyShareInvite"),
+              SelfPermissionBridge.shared.gate(.profileSocial, action: "partyShareInvite") else {
+            showShareInviteSheet = false
+            return
+        }
         guard let rid = store.roomInfo?.id, !rid.isEmpty else {
             AppLogger.party.notice("[PartyRoom] share tapped but roomId missing")
             return
@@ -2096,17 +2374,22 @@ struct PartyRoomView: View {
         AppLogger.party.info("[PartyRoom] share tapped roomId=\(rid, privacy: .public)")
     }
 
+    @ViewBuilder
     private var shareInviteSheet: some View {
-        PartyShareInviteSheet(
-            roomId: store.roomInfo?.id ?? roomId,
-            ownerId: store.roomInfo?.ownerId,
-            recentSessions: MessageSessionStore.shared.sessions(in: .flame)
-                + MessageSessionStore.shared.sessions(in: .prime)
-                + MessageSessionStore.shared.sessions(in: .stranger),
-            onInviteCompleted: { showShareInviteSheet = false }
-        )
-        .presentationDetents([.fraction(0.5), .fraction(0.8)])
-        .presentationDragIndicator(.visible)
+        if permission.canDirectMessages && permission.canProfileSocial {
+            PartyShareInviteSheet(
+                roomId: store.roomInfo?.id ?? roomId,
+                ownerId: store.roomInfo?.ownerId,
+                recentSessions: MessageSessionStore.shared.sessions(in: .flame)
+                    + MessageSessionStore.shared.sessions(in: .prime)
+                    + MessageSessionStore.shared.sessions(in: .stranger),
+                onInviteCompleted: { showShareInviteSheet = false }
+            )
+            .presentationDetents([.fraction(0.5), .fraction(0.8)])
+            .presentationDragIndicator(.visible)
+        } else {
+            EmptyView().onAppear { showShareInviteSheet = false }
+        }
     }
     private func handleManagementTap() {
         // v7.4.1：房主 + admin 都能打开 tools sheet（对齐 anchorBar canManage 判定；观众依然拦下）
@@ -2388,10 +2671,17 @@ struct PartyRoomView: View {
     }
 
     private func handleHeatTap() {
+        guard SelfPermissionBridge.shared.gate(.virtualItems, action: "partyHeatRank"),
+              SelfPermissionBridge.shared.gate(.giftSending, action: "partyHeatRank") else { return }
         // 热度入口显示房间贡献榜（与 H5 room-rank wealthRank 同一数据源）。
         activeRankSheet = .contribution
     }
     private func handleViewerTap() {
+        guard SelfPermissionBridge.shared.gate(.virtualItems, action: "partyViewerRank"),
+              SelfPermissionBridge.shared.gate(.giftSending, action: "partyViewerRank") else {
+            activeRankSheet = nil
+            return
+        }
         // 对齐 H5 header-wrap.vue: userRank tap → showRankPopupType='onlineUser'（apiGetPartyOnlineList）
         activeRankSheet = .viewers
     }
@@ -2403,6 +2693,7 @@ struct PartyRoomView: View {
     /// v12：消息按钮（对齐 H5 footer-wrap.vue onClickMsgBtn → partyStore.openPartyMessage()）
     /// A 档接入：复用 Live 侧 ConversationSheetContent 半屏消息列表
     private func handleMessageTap() {
+        guard SelfPermissionBridge.shared.gate(.directMessages, action: "partyMessageCenter") else { return }
         PartyAnalytics.track("msg_view", properties: ["path": "party_drawer"])
         showMessageSheet = true
     }
@@ -2487,8 +2778,10 @@ struct PartyRoomView: View {
 
         switch presentation {
         case .pk:
+            guard SelfPermissionBridge.shared.gate(.partyGames, action: "partyBattle") else { return }
             handlePkTap()
         case .superWheel:
+            guard SelfPermissionBridge.shared.gate(.lottery, action: "partySuperWheel") else { return }
             if superWheelStore.isActive {
                 superWheelStore.openPanel()
             } else {
@@ -2499,6 +2792,7 @@ struct PartyRoomView: View {
                 Task { await superWheelStore.prepareConfig() }
             }
         case .luckyNumberSettings:
+            guard SelfPermissionBridge.shared.gate(.partyLuckyNumber, action: "partyLuckyNumber") else { return }
             showLuckyNumberSettings = true
         }
     }
@@ -2528,6 +2822,7 @@ struct PartyRoomView: View {
     /// H-5：底部礼物 icon tap → 拉起礼物面板（对齐 H5 party-gift-popup.vue showPartyGiftPopup=true）。
     /// 面板内首次 `.onAppear` 触发 `PartyGiftDataSource.load` → sapi `getPartyRoomGift` 拉列表。
     private func handleGiftTap() {
+        guard SelfPermissionBridge.shared.gate(.giftSending, action: "partyGift") else { return }
         giftRecipientOverride = nil
         giftRecipientSelection.reset()
         showGiftPanel = true
@@ -2599,6 +2894,10 @@ struct PartyRoomView: View {
             roomId: store.roomInfo?.id ?? roomId,
             receivers: receivers,
             onOpenBackpack: { currentTab in
+                guard SelfPermissionBridge.shared.gate(.giftSending, action: "partyBackpack") else {
+                    showPartyBackpack = false
+                    return
+                }
                 trackPartyGiftTabClick(from: currentTab, toBackpack: true)
                 showPartyBackpack = true
             },
@@ -2665,19 +2964,23 @@ struct PartyRoomView: View {
                 .id(receiverConfigID)
         }
         .sheet(isPresented: $showPartyBackpack) {
-            PartyBackpackGiftSheet(
-                roomId: store.roomInfo?.id ?? roomId,
-                receivers: receivers,
-                recipientSelection: giftRecipientSelection,
-                onLoaded: trackPartyBackpackOpen,
-                onSent: {
-                    giftSentToast = L10n.giftPickerSentToast
-                    showPartyBackpack = false
-                    showGiftPanel = false
-                }
-            )
-            .presentationDetents([.fraction(0.55), .large])
-            .presentationDragIndicator(.visible)
+            if permission.canGiftSending {
+                PartyBackpackGiftSheet(
+                    roomId: store.roomInfo?.id ?? roomId,
+                    receivers: receivers,
+                    recipientSelection: giftRecipientSelection,
+                    onLoaded: trackPartyBackpackOpen,
+                    onSent: {
+                        giftSentToast = L10n.giftPickerSentToast
+                        showPartyBackpack = false
+                        showGiftPanel = false
+                    }
+                )
+                .presentationDetents([.fraction(0.55), .large])
+                .presentationDragIndicator(.visible)
+            } else {
+                EmptyView().onAppear { showPartyBackpack = false }
+            }
         }
         // RUNNING 期 tab +54pt → fraction 从 0.4 上调到 0.5 容纳；非 PK 期沿用 0.4
         .presentationDetents(battleStore.isRunning ? [.fraction(0.5)] : [.fraction(0.4)])
@@ -2837,17 +3140,25 @@ struct PartyRoomView: View {
     /// 避免 modifier chain 累加触发 SwiftUI type-check timeout（rule swiftui-body-type-check-timeout §4）
     private var stageContentWithFooterOverlays: some View {
         stageContent
-            .sheet(isPresented: $showMessageSheet) { messageSheetContent.giftPanelSheetBackground() }
+            .sheet(isPresented: $showMessageSheet) {
+                if permission.canDirectMessages {
+                    messageSheetContent.giftPanelSheetBackground()
+                } else {
+                    EmptyView()
+                }
+            }
             .sheet(isPresented: $showToolMenu, onDismiss: presentPendingToolMenuPresentation) {
                 PartyRoomToolMenuSheet(
                     luckyNumberStore: luckyNumberStore,
                     roomId: store.roomInfo?.id ?? roomId,
                     hostId: store.roomInfo?.ownerId,
                     // H5 :show-pk = roomTempId===1 && battleStore.isFunctionEnabled，再由组件按管理员身份门控。
-                    showPk: battleStore.canManage
+                    showPk: permission.canPartyGames
+                        && battleStore.canManage
                         && battleStore.isFunctionEnabled
                         && store.roomInfo?.roomTempIdInt == 1,
-                    showSuperWheel: store.selfRole == .owner || store.selfRole == .admin,
+                    showSuperWheel: permission.canLottery && (store.selfRole == .owner || store.selfRole == .admin),
+                    showsLuckyNumber: permission.canPartyLuckyNumber,
                     isRoomMuted: store.isRoomMuted,
                     onStartPk: {
                         pendingToolMenuPresentation = .pk
@@ -2863,6 +3174,7 @@ struct PartyRoomView: View {
                         store.toggleRoomMute()
                     },
                     onOpenLuckyNumberSettings: {
+                        guard SelfPermissionBridge.shared.gate(.partyLuckyNumber, action: "partyLuckyNumberMenu") else { return }
                         PartyAnalytics.track(
                             "b_lucky_number_view",
                             properties: roomAnalyticsProperties()
@@ -2882,31 +3194,43 @@ struct PartyRoomView: View {
                 isPresented: $superWheelStore.isConfigPresented,
                 onDismiss: superWheelStore.presentQueuedPanelAfterConfigDismissal
             ) {
-                PartySuperWheelConfigSheet(
-                    wheelStore: superWheelStore,
-                    roomId: store.roomInfo?.id ?? roomId
-                )
-                .giftPanelSheetBackground()
-                .presentationDetents([.fraction(0.5), .fraction(0.8)])
-                .presentationDragIndicator(.visible)
+                if permission.canLottery {
+                    PartySuperWheelConfigSheet(
+                        wheelStore: superWheelStore,
+                        roomId: store.roomInfo?.id ?? roomId
+                    )
+                    .giftPanelSheetBackground()
+                    .presentationDetents([.fraction(0.5), .fraction(0.8)])
+                    .presentationDragIndicator(.visible)
+                } else {
+                    EmptyView()
+                }
             }
             .fullScreenCover(isPresented: superWheelPanelPresented) {
-                PartySuperWheelPanel(
-                    wheelStore: superWheelStore,
-                    // H5 仅真实房主可中途关闭并退款；平台管理员的 Party 管理提权不等同该玩法所有权。
-                    isRoomOwner: store.isSelfRoomOwner
-                )
-                .preferredColorScheme(.dark)
+                if permission.canLottery {
+                    PartySuperWheelPanel(
+                        wheelStore: superWheelStore,
+                        // H5 仅真实房主可中途关闭并退款；平台管理员的 Party 管理提权不等同该玩法所有权。
+                        isRoomOwner: store.isSelfRoomOwner
+                    )
+                    .preferredColorScheme(.dark)
+                } else {
+                    EmptyView()
+                }
             }
             .sheet(isPresented: $showLuckyNumberSettings) {
-                PartyLuckyNumberSettingsSheet(
-                    luckyNumberStore: luckyNumberStore,
-                    roomId: store.roomInfo?.id ?? roomId,
-                    isRoomOwner: store.isLuckyNumberRoomOwner
-                )
-                .giftPanelSheetBackground()
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+                if permission.canPartyLuckyNumber {
+                    PartyLuckyNumberSettingsSheet(
+                        luckyNumberStore: luckyNumberStore,
+                        roomId: store.roomInfo?.id ?? roomId,
+                        isRoomOwner: store.isLuckyNumberRoomOwner
+                    )
+                    .giftPanelSheetBackground()
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                } else {
+                    EmptyView()
+                }
             }
     }
 
@@ -3168,11 +3492,24 @@ private struct PartyShareInviteSheet: View {
     let recentSessions: [MessageSession]
     let onInviteCompleted: () -> Void
 
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     @State private var tab: Tab = .recent
     @State private var remoteRecipients: [Tab: [PartyShareRecipient]] = [:]
     @State private var selectedYxAccids = Set<String>()
     @State private var isLoading = false
     @State private var isInviting = false
+    /// 权限收回后让在途请求的结果失效，不能把联系人或发送成功状态写回已关闭的能力面。
+    @State private var permissionGeneration = 0
+    @State private var inviteTask: Task<Void, Never>?
+
+    private var canShareInvite: Bool {
+        permission.canDirectMessages && permission.canProfileSocial
+    }
+
+    /// tab 或权限变化都会取消并重建 SwiftUI task；generation 仍负责屏蔽不响应取消的底层请求回填。
+    private var remoteRecipientLoadTaskID: String {
+        "\(tab.rawValue)-\(canShareInvite)"
+    }
 
     private var recipients: [PartyShareRecipient] {
         switch tab {
@@ -3194,7 +3531,10 @@ private struct PartyShareInviteSheet: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             inviteButton
         }
-        .task { loadRemoteRecipientsIfNeeded() }
+        .task(id: remoteRecipientLoadTaskID) {
+            await loadRemoteRecipientsIfNeeded()
+        }
+        .onChange(of: canShareInvite, perform: handleShareInvitePermissionChange)
     }
 
     private var titleView: some View {
@@ -3206,14 +3546,21 @@ private struct PartyShareInviteSheet: View {
     }
 
     private var tabPicker: some View {
-        Picker("", selection: $tab) {
+        Picker("", selection: tabSelection) {
             ForEach(Tab.allCases) { tab in
                 Text(tab.title).tag(tab)
             }
         }
         .pickerStyle(.segmented)
         .padding(.horizontal, 16)
-        .onChange(of: tab) { _ in loadRemoteRecipientsIfNeeded() }
+        .disabled(!canShareInvite)
+    }
+
+    private var tabSelection: Binding<Tab> {
+        Binding(
+            get: { tab },
+            set: { selectTab($0) }
+        )
     }
 
     @ViewBuilder
@@ -3258,6 +3605,7 @@ private struct PartyShareInviteSheet: View {
             .padding(.vertical, 9)
         }
         .buttonStyle(.plain)
+        .disabled(!canShareInvite)
     }
 
     private var inviteButton: some View {
@@ -3268,38 +3616,68 @@ private struct PartyShareInviteSheet: View {
                 .frame(height: 48)
         }
         .foregroundStyle(.white)
-        .background(selectedYxAccids.isEmpty || isInviting ? Color.white.opacity(0.2) : Theme.Palette.partyRoomFollowFill)
+        .background(canInvite ? Theme.Palette.partyRoomFollowFill : Color.white.opacity(0.2))
         .clipShape(Capsule())
         .padding(16)
-        .disabled(selectedYxAccids.isEmpty || isInviting)
+        .disabled(!canInvite)
+    }
+
+    private var canInvite: Bool {
+        canShareInvite && !selectedYxAccids.isEmpty && !isInviting
     }
 
     private func toggle(_ yxAccid: String) {
+        guard hasShareInvitePermission(action: "partyShareInviteToggle") else { return }
         if selectedYxAccids.contains(yxAccid) { selectedYxAccids.remove(yxAccid) }
         else { selectedYxAccids.insert(yxAccid) }
     }
 
-    private func loadRemoteRecipientsIfNeeded() {
+    private func selectTab(_ nextTab: Tab) {
+        guard hasShareInvitePermission(action: "partyShareInviteTab") else { return }
+        tab = nextTab
+    }
+
+    private func loadRemoteRecipientsIfNeeded() async {
+        guard hasShareInvitePermission(action: "partyShareInviteLoadRecipients") else { return }
         guard tab != .recent, remoteRecipients[tab] == nil, !isLoading else { return }
         isLoading = true
         let requestedTab = tab
-        Task {
-            defer { isLoading = false }
-            do {
-                remoteRecipients[requestedTab] = try await PartyAPI.shareFollowUsers(
-                    followType: requestedTab == .following ? 0 : 1
-                )
-            } catch {
-                AppLogger.party.error("[PartyShare] load recipients failed: \(String(describing: error), privacy: .public)")
-                remoteRecipients[requestedTab] = []
+        let requestPermissionGeneration = permissionGeneration
+        defer {
+            if requestPermissionGeneration == permissionGeneration {
+                isLoading = false
             }
+        }
+        do {
+            let recipients = try await PartyAPI.shareFollowUsers(
+                followType: requestedTab == .following ? 0 : 1
+            )
+            guard requestPermissionGeneration == permissionGeneration,
+                  !Task.isCancelled,
+                  hasShareInvitePermission(action: "partyShareInviteLoadRecipients") else {
+                return
+            }
+            remoteRecipients[requestedTab] = recipients
+        } catch {
+            guard requestPermissionGeneration == permissionGeneration,
+                  !Task.isCancelled,
+                  hasShareInvitePermission(action: "partyShareInviteLoadRecipients") else {
+                return
+            }
+            AppLogger.party.error("[PartyShare] load recipients failed: \(String(describing: error), privacy: .public)")
+            remoteRecipients[requestedTab] = []
         }
     }
 
     private func invite() {
-        guard !selectedYxAccids.isEmpty, !isInviting else { return }
+        guard hasShareInvitePermission(action: "partyShareInviteSend"),
+              !selectedYxAccids.isEmpty,
+              !isInviting else {
+            return
+        }
         let invitees = Array(selectedYxAccids)
         let selectedRecipients = recipients.filter { selectedYxAccids.contains($0.yxAccid) }
+        let requestPermissionGeneration = permissionGeneration
         PartyAnalytics.track(
             "invite_click",
             properties: [
@@ -3310,16 +3688,61 @@ private struct PartyShareInviteSheet: View {
             ]
         )
         isInviting = true
-        Task {
-            defer { isInviting = false }
+        inviteTask = Task {
+            defer {
+                if requestPermissionGeneration == permissionGeneration {
+                    isInviting = false
+                    inviteTask = nil
+                }
+            }
             do {
+                guard requestPermissionGeneration == permissionGeneration,
+                      !Task.isCancelled,
+                      hasShareInvitePermission(action: "partyShareInviteSend") else {
+                    return
+                }
                 try await PartyAPI.inviteUsersToRoom(roomId: roomId, yxAccidList: invitees)
+                guard requestPermissionGeneration == permissionGeneration,
+                      !Task.isCancelled,
+                      hasShareInvitePermission(action: "partyShareInviteSend") else {
+                    return
+                }
                 AppToastCenter.shared.show(L10n.Party.shareInviteSent)
                 onInviteCompleted()
             } catch {
+                guard requestPermissionGeneration == permissionGeneration,
+                      !Task.isCancelled,
+                      hasShareInvitePermission(action: "partyShareInviteSend") else {
+                    return
+                }
                 AppLogger.party.error("[PartyShare] invite failed: \(String(describing: error), privacy: .public)")
             }
         }
+    }
+
+    private func hasShareInvitePermission(action: String) -> Bool {
+        guard SelfPermissionBridge.shared.gate(.directMessages, action: action),
+              SelfPermissionBridge.shared.gate(.profileSocial, action: action) else {
+            invalidateForDisabledShareInvitePermission()
+            return false
+        }
+        return true
+    }
+
+    private func handleShareInvitePermissionChange(_ allowed: Bool) {
+        guard !allowed else { return }
+        invalidateForDisabledShareInvitePermission()
+    }
+
+    private func invalidateForDisabledShareInvitePermission() {
+        permissionGeneration &+= 1
+        inviteTask?.cancel()
+        inviteTask = nil
+        selectedYxAccids.removeAll()
+        remoteRecipients = [:]
+        isLoading = false
+        isInviting = false
+        tab = .recent
     }
 }
 
@@ -3849,6 +4272,7 @@ private struct PartyBackpackGiftSheet: View {
     let onSent: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     @ObservedObject private var recipientSelection: GiftRecipientSelectionState
     @State private var gifts: [PartyBackpackGift] = []
     @State private var selectedGiftID: String?
@@ -3887,7 +4311,8 @@ private struct PartyBackpackGiftSheet: View {
                 footer
             }
         }
-        .task { await reload() }
+        .task(id: canUseBackpack) { await reload() }
+        .onChange(of: canUseBackpack, perform: handleBackpackPermissionChange)
         .onChange(of: recipientSelection.ids) { _ in clampCount() }
         .preferredColorScheme(.dark)
     }
@@ -4103,7 +4528,8 @@ private struct PartyBackpackGiftSheet: View {
     }
 
     private var canSend: Bool {
-        !isSending
+        canUseBackpack
+            && !isSending
             && !roomId.isEmpty
             && selectedGift != nil
             && !recipientSelection.ids.isEmpty
@@ -4144,6 +4570,7 @@ private struct PartyBackpackGiftSheet: View {
     }
 
     private func reload() async {
+        guard hasBackpackPermission(action: "partyBackpackLoad") else { return }
         page = 1
         gifts = []
         hasMore = false
@@ -4152,16 +4579,20 @@ private struct PartyBackpackGiftSheet: View {
     }
 
     private func loadNextPage() async {
+        guard hasBackpackPermission(action: "partyBackpackLoadMore") else { return }
         await loadPage(reset: false)
     }
 
     private func loadPage(reset: Bool) async {
+        guard hasBackpackPermission(action: "partyBackpackLoadPage") else { return }
         guard !isLoading || reset else { return }
         isLoading = true
         defer { isLoading = false }
         do {
             let response = try await PartyAPI.partyBackpack(page: page)
+            guard hasBackpackPermission(action: "partyBackpackLoadPage") else { return }
             let validGifts = response.list.filter { $0.giftId > 0 && $0.quantity > 0 }
+            guard hasBackpackPermission(action: "partyBackpackLoadPage") else { return }
             if reset {
                 gifts = validGifts
             } else {
@@ -4178,12 +4609,14 @@ private struct PartyBackpackGiftSheet: View {
                 onLoaded(gifts.count)
             }
         } catch {
+            guard hasBackpackPermission(action: "partyBackpackLoadPage") else { return }
             loadFailed = true
             AppLogger.party.error("[PartyBackpack] load failed: \(String(describing: error), privacy: .private)")
         }
     }
 
     private func send() async {
+        guard hasBackpackPermission(action: "partyBackpackGift") else { return }
         guard let gift = selectedGift,
               isSendableInParty(gift),
               canSend else { return }
@@ -4197,6 +4630,7 @@ private struct PartyBackpackGiftSheet: View {
                 num: count,
                 yxAccidList: recipients
             )
+            guard hasBackpackPermission(action: "partyBackpackGift") else { return }
             let fallbackRemaining = max(0, gift.quantity - count * recipients.count)
             let nextQuantity = remaining ?? fallbackRemaining
             if nextQuantity == 0 {
@@ -4221,7 +4655,37 @@ private struct PartyBackpackGiftSheet: View {
             onSent()
             dismiss()
         } catch {
+            guard hasBackpackPermission(action: "partyBackpackGift") else { return }
             AppLogger.party.error("[PartyBackpack] send failed: \(String(describing: error), privacy: .private)")
         }
+    }
+
+    private var canUseBackpack: Bool {
+        permission.canGiftSending
+    }
+
+    private func hasBackpackPermission(action: String) -> Bool {
+        guard SelfPermissionBridge.shared.gate(.giftSending, action: action) else {
+            invalidateUnavailableBackpack()
+            return false
+        }
+        return true
+    }
+
+    private func handleBackpackPermissionChange(_ allowed: Bool) {
+        guard !allowed else { return }
+        invalidateUnavailableBackpack()
+        dismiss()
+    }
+
+    private func invalidateUnavailableBackpack() {
+        gifts = []
+        selectedGiftID = nil
+        count = 1
+        page = 1
+        hasMore = false
+        isLoading = false
+        isSending = false
+        loadFailed = false
     }
 }

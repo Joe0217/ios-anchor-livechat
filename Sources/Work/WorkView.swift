@@ -13,6 +13,8 @@ import SwiftUI
 struct WorkView: View {
     @StateObject private var vm = WorkViewModel()
     @Binding var path: NavigationPath
+    /// 107 Party-only 账号只保留 Party 基础能力，不展示资产、兑换或提现入口。
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     var body: some View {
         ZStack {
@@ -21,12 +23,22 @@ struct WorkView: View {
             ScrollView {
                 VStack(spacing: Theme.Metric.sectionSpacing) {
                     WeeklyLevelHeader(vm: vm)
-                    LiveOverviewCardsRow(vm: vm) { tab in
-                        path.append(WorkRoute.currencyExchange(tab: tab))
+                    if permission.canCurrencyExchange {
+                        LiveOverviewCardsRow(vm: vm) { tab in
+                            guard SelfPermissionBridge.shared.gate(.currencyExchange, action: "workCurrencyExchange") else {
+                                return
+                            }
+                            path.append(WorkRoute.currencyExchange(tab: tab))
+                        }
                     }
                     StatCardsRow(vm: vm)
-                    TodayIncomeCard(vm: vm) {
-                        path.append(WorkRoute.wallet)
+                    if permission.canWallet {
+                        TodayIncomeCard(vm: vm) {
+                            guard SelfPermissionBridge.shared.gate(.wallet, action: "workWallet") else {
+                                return
+                            }
+                            path.append(WorkRoute.wallet)
+                        }
                     }
                     ToolsSection(showNewbie: vm.showNewbie, path: $path)
                     WorkSysInfoFooter(whatsapp: vm.whatsappPhone)

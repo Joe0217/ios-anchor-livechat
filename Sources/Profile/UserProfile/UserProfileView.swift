@@ -41,7 +41,9 @@ struct UserProfileView: View {
     var body: some View {
         ZStack {
             Theme.Palette.profileBackground.ignoresSafeArea()
-            content
+            if permission.canProfileSocial {
+                content
+            }
             transientErrorToast
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -51,7 +53,12 @@ struct UserProfileView: View {
         .toolbarBackground(Theme.Palette.profileBackground, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .task {
+        .task(id: permission.canProfileSocial) {
+            guard permission.canProfileSocial else {
+                showingMenu = false
+                showingReportSheet = false
+                return
+            }
             // 首次进入触发拉取（idle / error 都可重拉，loading 中守护已在 VM 内）
             if case .loaded = vm.loadState { return }
             await vm.loadDetail()
@@ -116,7 +123,7 @@ struct UserProfileView: View {
         }
         // 不显示昵称在 NavBar（H5 行为，标题为空）
         ToolbarItemGroup(placement: .topBarTrailing) {
-            if vm.detail != nil {
+            if permission.canProfileSocial, vm.detail != nil {
                 followButton
                 Button {
                     showingMenu = true
@@ -218,14 +225,14 @@ struct UserProfileView: View {
                     .padding(.horizontal, Theme.Metric.userProfileScreenHPadding)
 
                 // H5 guardian-card：直接消费 getUserDetail.guardianList 前三项，空态整卡隐藏。
-                if !detail.guardianList.isEmpty {
+                if permission.canVirtualItems, !detail.guardianList.isEmpty {
                     UserGuardianCard(guardians: detail.guardianList)
                         .padding(.horizontal, Theme.Metric.userProfileScreenHPadding)
                         .padding(.top, Theme.Metric.userProfileSectionVTop)
                 }
 
                 // 礼物墙（H5 gifts.vue：list 非空横向 grid 渲染；空 → 不显示整个区块）
-                if !detail.giftList.isEmpty {
+                if permission.canVirtualItems, !detail.giftList.isEmpty {
                     giftWallSection(gifts: detail.giftList)
                         .padding(.horizontal, Theme.Metric.userProfileScreenHPadding)
                         .padding(.top, Theme.Metric.userProfileSectionVTop)

@@ -34,6 +34,7 @@ private struct PartyLobbyRankingScrollOffsetMarker: View {
 /// **架构**：view 只订阅 Store。副作用（拉数据/切语言/dispatch 榜单入口）全走 Store 方法。
 struct PartyListMainView: View {
     @ObservedObject var listStore: PartyListStore
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     /// NavigationStack push 后大厅仍保活；仅根页真实可见时可以触发奖励引导。
     let isLobbyVisible: Bool
     /// Follow tab store（v2：跟 listStore 同类型，kind=.followed）
@@ -74,6 +75,29 @@ struct PartyListMainView: View {
         let isPartyTabActive: Bool
         let isLobbyVisible: Bool
         let activeTab: Int
+        let canPartyActivities: Bool
+    }
+
+    private var canShowValueRankings: Bool {
+        permission.canVirtualItems && permission.canGiftSending
+    }
+
+    /// Follow 房间依赖账号关注关系；107 只保留 Party 大厅和自身最近访问的 Party 房。
+    private var visibleTabIndices: [Int] {
+        permission.canProfileSocial ? [0, 1, 2] : [0, 2]
+    }
+
+    /// `TabView(.page)` 在动态移除 tag=1 时不能保留一个失效 selection。
+    /// binding 在 SwiftUI 回写旧页索引的瞬间也会回退到 Party，onChange 再同步真实状态。
+    private var activeTabSelection: Binding<Int> {
+        Binding(
+            get: { normalizedTabIndex(activeTab) },
+            set: { activeTab = normalizedTabIndex($0) }
+        )
+    }
+
+    private func normalizedTabIndex(_ tabIndex: Int) -> Int {
+        visibleTabIndices.contains(tabIndex) ? tabIndex : 0
     }
 
     var body: some View {
@@ -84,7 +108,9 @@ struct PartyListMainView: View {
                 topBar
                 if activeTab == 0 {
                     languagePillBar
-                    partyHomeBanner
+                    if permission.canPartyActivities {
+                        partyHomeBanner
+                    }
                 }
                 tabContent
             }
@@ -105,7 +131,7 @@ struct PartyListMainView: View {
             // 首屏独立资源没有依赖，保持与列表并发；仅 Tab 曝光必须等待列表完成以判断 PK 标识。
             async let loadLanguages: Void = listStore.loadLanguagesIfNeeded()
             async let loadMyRoom: Void = listStore.loadMyRoomIfNeeded()
-            async let loadBanners: Void = homeBannerStore.loadIfNeeded()
+            async let loadBanners: Void = loadPartyHomeBannersIfAllowed()
             // v7（2026-07-14）：.idle **和** .error 都触发拉取 —— 首次失败后 tab 切走再回可自愈
             switch listStore.state {
             case .idle, .loading, .error:
@@ -120,8 +146,13 @@ struct PartyListMainView: View {
         .task(id: TopRoomGuideTaskKey(
             isPartyTabActive: isPartyTabActive,
             isLobbyVisible: isLobbyVisible,
-            activeTab: activeTab
+            activeTab: activeTab,
+            canPartyActivities: permission.canPartyActivities
         )) {
+            guard permission.canPartyActivities else {
+                topRoomGuideStore.clearForDisabledActivities()
+                return
+            }
             guard isPartyTabActive, isLobbyVisible, activeTab == 0 else { return }
             await topRoomGuideStore.loadIfEligible()
         }
@@ -137,8 +168,20 @@ struct PartyListMainView: View {
                 activeBannerPage = nil
             }
         }
+        .onChange(of: permission.canPartyActivities) { allowed in
+            if !allowed {
+                activeBannerPage = nil
+                homeBannerStore.clearForDisabledActivities()
+                topRoomGuideStore.clearForDisabledActivities()
+            } else if isPartyTabActive, activeTab == 0 {
+                // 权限 Bridge 首次完成绑定后再加载，避免启动期 deny-by-default 把正常账号
+                // 永久停在空 banner；107 始终不会走到此分支。
+                Task { await loadPartyHomeBannersIfAllowed() }
+            }
+        }
+        .onChange(of: permission.canProfileSocial, perform: handleProfileSocialPermissionChange)
         .overlay {
-            if isLobbyVisible, let guide = topRoomGuideStore.guide {
+            if permission.canPartyActivities, isLobbyVisible, let guide = topRoomGuideStore.guide {
                 PartyTopRoomBonusDialog(
                     kind: .enterTopRoom,
                     guide: guide,
@@ -158,7 +201,7 @@ struct PartyListMainView: View {
     private var topBar: some View {
         HStack(alignment: .center, spacing: 0) {
             HStack(spacing: 20) {
-                ForEach(0..<3, id: \.self) { i in
+                ForEach(visibleTabIndices, id: \.self) { i in
                     tabButton(index: i, label: tabLabel(i))
                 }
             }
@@ -219,20 +262,29 @@ struct PartyListMainView: View {
         .accessibilityLabel(L10n.Party.searchPlaceholder)
     }
 
+    @ViewBuilder
     private var rankBadge: some View {
-        Button(action: onTapRanking) {
-            Image("liveRankBadge")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 36, height: 36)
-                .contentShape(Rectangle())
+        if canShowValueRankings {
+            Button {
+                guard SelfPermissionBridge.shared.gate(.virtualItems, action: "partyLobbyRanking"),
+                      SelfPermissionBridge.shared.gate(.giftSending, action: "partyLobbyRanking") else {
+                    return
+                }
+                onTapRanking()
+            } label: {
+                Image("liveRankBadge")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.Party.rankPartyRich)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.Party.rankPartyRich)
     }
 
-    /// H5 右上角互斥入口：已有房间显示 My Room，否则显示 Create Room。
-    /// My Room 不受创建权限限制；首次请求未成功前不渲染，不能把网络错误错误地呈现为创建入口。
+    /// H5 用户端右上角互斥入口：已有房间显示 My Room，否则显示 Create Room。
+    /// 首次请求未成功前不渲染，不能把网络错误错误地呈现为创建入口。
     @ViewBuilder
     private var roomShortcut: some View {
         if listStore.didLoadMyRoom {
@@ -383,6 +435,9 @@ struct PartyListMainView: View {
     }
 
     private func handleHomeBannerTap(_ item: AppPictureItem) {
+        guard SelfPermissionBridge.shared.gate(.partyActivities, action: "partyHomeBanner") else {
+            return
+        }
         guard let banner = homeBannerStore.items.first(where: { $0.id == item.id }) else { return }
         reportBannerClick(banner)
         if banner.clickType == 3, let roomId = banner.partyRoomId, !roomId.isEmpty {
@@ -398,6 +453,23 @@ struct PartyListMainView: View {
         activeBannerPage = H5Page.banner(url: url)
     }
 
+    /// 调用层先拒绝 107，Store 仍会在请求前后复核能力，覆盖权限在 await 期间变化的情形。
+    private func loadPartyHomeBannersIfAllowed() async {
+        guard permission.canPartyActivities else {
+            homeBannerStore.clearForDisabledActivities()
+            return
+        }
+        await homeBannerStore.loadIfNeeded()
+    }
+
+    private func refreshPartyHomeBannersIfAllowed() async {
+        guard permission.canPartyActivities else {
+            homeBannerStore.clearForDisabledActivities()
+            return
+        }
+        await homeBannerStore.refresh()
+    }
+
     private func handleHomeBannerDisplayed(_ item: AppPictureItem) {
         guard let banner = homeBannerStore.items.first(where: { $0.id == item.id }) else { return }
         reportBannerExposureIfNeeded(banner)
@@ -406,7 +478,7 @@ struct PartyListMainView: View {
     // MARK: - TabView 3 页
 
     private var tabContent: some View {
-        TabView(selection: $activeTab) {
+        TabView(selection: activeTabSelection) {
             PartyRoomListContent(
                 store: listStore,
                 languages: listStore.languages,
@@ -420,19 +492,21 @@ struct PartyListMainView: View {
                     // 对齐 H5 onRefresh：并行刷新我的房间、房间列表和 Party 首页 banner。
                     async let a: Void = listStore.refreshAsync()
                     async let b: Void = listStore.reloadMyRoom()
-                    async let c: Void = homeBannerStore.refresh()
+                    async let c: Void = refreshPartyHomeBannersIfAllowed()
                     _ = await (a, b, c)
                 }
                 .tag(0)
-            PartyRoomListContent(
-                store: followStore,
-                languages: listStore.languages,
-                myRoomID: listStore.myRoom?.id,
-                onTapRoom: { onTapRoom($0, .partyFollow) },
-                comingSoonOnEmpty: false
-            )
-                .refreshable { await followStore.refreshAsync() }
-                .tag(1)
+            if permission.canProfileSocial {
+                PartyRoomListContent(
+                    store: followStore,
+                    languages: listStore.languages,
+                    myRoomID: listStore.myRoom?.id,
+                    onTapRoom: { onTapRoom($0, .partyFollow) },
+                    comingSoonOnEmpty: false
+                )
+                    .refreshable { await followStore.refreshAsync() }
+                    .tag(1)
+            }
             PartyRoomListContent(
                 store: recentStore,
                 languages: listStore.languages,
@@ -444,6 +518,8 @@ struct PartyListMainView: View {
                 .tag(2)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
+        // Follow 页本身不保留给 107；切换身份时重建 pager，避免 UIKit pager 缓存已移除的 tag=1。
+        .id(permission.canProfileSocial)
         // 横滑手势/按钮点击切 tab 时首次触发对应 store 拉数据（真接口，替换 v1 占位空态）
         // v7：.idle **和** .error 都触发拉取 —— 首次失败后切走再回可自愈（对齐 Party tab .task 逻辑）
         .onChange(of: activeTab) { newValue in
@@ -452,6 +528,10 @@ struct PartyListMainView: View {
             Task { @MainActor in
                 switch newValue {
                 case 1:
+                    guard permission.canProfileSocial else {
+                        activeTab = 0
+                        return
+                    }
                     switch followStore.state {
                     case .idle, .loading, .error: await followStore.refreshAsync()
                     default: break
@@ -470,6 +550,11 @@ struct PartyListMainView: View {
                 reportLobbyTabExposure(for: newValue, sessionID: sessionID)
             }
         }
+    }
+
+    private func handleProfileSocialPermissionChange(_ allowed: Bool) {
+        guard !allowed else { return }
+        activeTab = normalizedTabIndex(activeTab)
     }
 
     private var activeTabName: String {
@@ -517,13 +602,15 @@ struct PartyListMainView: View {
     }
 
     private func reportFirstBannerExposureIfNeeded() {
-        guard isPartyTabActive, activeTab == 0,
+        guard permission.canPartyActivities,
+              isPartyTabActive, activeTab == 0,
               let banner = homeBannerStore.items.first else { return }
         reportBannerExposureIfNeeded(banner)
     }
 
     private func reportBannerExposureIfNeeded(_ banner: PartyHomeBanner) {
-        guard isPartyTabActive, activeTab == 0,
+        guard permission.canPartyActivities,
+              isPartyTabActive, activeTab == 0,
               exposedBannerIDs.insert(banner.id).inserted else { return }
         PartyAnalytics.track("b_banner_party_view", properties: bannerTrackingProperties(banner))
         PartyAnalytics.track("b_activity_view", properties: activityTrackingProperties(banner))
@@ -573,19 +660,31 @@ struct PartyListMainView: View {
 private final class PartyLobbyRankingStore: ObservableObject {
     @Published private(set) var payloads: [String: PartyLobbyRankResponse] = [:]
     @Published private(set) var loadingKeys: Set<String> = []
+    private var permissionGeneration = 0
+
+    private var canUseValueRankings: Bool {
+        SelfPermissionBridge.shared.canVirtualItems && SelfPermissionBridge.shared.canGiftSending
+    }
 
     func payload(kind: PartyLobbyRankingKind, timeframe: PartyLobbyRankingTimeframe, period: PartyLobbyRankingPeriod) -> PartyLobbyRankResponse? {
-        payloads[key(kind: kind, timeframe: timeframe, period: period)]
+        guard canUseValueRankings else { return nil }
+        return payloads[key(kind: kind, timeframe: timeframe, period: period)]
     }
 
     func isLoading(kind: PartyLobbyRankingKind, timeframe: PartyLobbyRankingTimeframe, period: PartyLobbyRankingPeriod) -> Bool {
-        loadingKeys.contains(key(kind: kind, timeframe: timeframe, period: period))
+        guard canUseValueRankings else { return false }
+        return loadingKeys.contains(key(kind: kind, timeframe: timeframe, period: period))
     }
 
     func load(kind: PartyLobbyRankingKind, timeframe: PartyLobbyRankingTimeframe, period: PartyLobbyRankingPeriod, force: Bool = false) async {
+        guard canUseValueRankings else {
+            clearForDisabledValueRankings()
+            return
+        }
         let requestKey = key(kind: kind, timeframe: timeframe, period: period)
         if !force, payloads[requestKey] != nil || loadingKeys.contains(requestKey) { return }
         loadingKeys.insert(requestKey)
+        let requestPermissionGeneration = permissionGeneration
         defer { loadingKeys.remove(requestKey) }
         do {
             let response: PartyLobbyRankResponse
@@ -595,11 +694,29 @@ private final class PartyLobbyRankingStore: ObservableObject {
             case .room:
                 response = try await PartyAPI.partyLobbyRoomRank(rankType: timeframe.rawValue, periodType: period.rawValue)
             }
+            guard requestPermissionGeneration == permissionGeneration else { return }
+            guard canUseValueRankings else {
+                clearForDisabledValueRankings()
+                return
+            }
             payloads[requestKey] = response
         } catch {
+            guard requestPermissionGeneration == permissionGeneration else { return }
+            guard canUseValueRankings else {
+                clearForDisabledValueRankings()
+                return
+            }
             if Task.isCancelled || GlobalErrorBannerNotify.isCancellation(error) { return }
             AppLogger.party.error("[PartyLobbyRank] load \(requestKey, privacy: .public) failed: \(String(describing: error), privacy: .public)")
         }
+    }
+
+    /// 权限撤销时清缓存并使已开始的请求失效，避免导航恢复后出现旧榜单数据。
+    func clearForDisabledValueRankings() {
+        guard !canUseValueRankings else { return }
+        permissionGeneration &+= 1
+        payloads = [:]
+        loadingKeys = []
     }
 
     private func key(kind: PartyLobbyRankingKind, timeframe: PartyLobbyRankingTimeframe, period: PartyLobbyRankingPeriod) -> String {
@@ -614,27 +731,50 @@ private final class PartyHomeBannerStore: ObservableObject {
     private var requestToken = UUID()
 
     func loadIfNeeded() async {
+        guard canLoadPartyActivities else {
+            clearForDisabledActivities()
+            return
+        }
         guard !didLoad else { return }
         await load()
     }
 
     func refresh() async {
+        guard canLoadPartyActivities else {
+            clearForDisabledActivities()
+            return
+        }
         await load(force: true)
     }
 
+    /// 权限撤销时清旧内容并失效飞行请求，防止 await 返回后把活动 banner 写回内存。
+    func clearForDisabledActivities() {
+        requestToken = UUID()
+        didLoad = false
+        items = []
+    }
+
     private func load(force: Bool = false) async {
+        guard canLoadPartyActivities else {
+            clearForDisabledActivities()
+            return
+        }
         guard force || !didLoad else { return }
         let token = UUID()
         requestToken = token
         do {
             let result = try await PartyAPI.partyHomeBanners()
-            guard requestToken == token, !Task.isCancelled else { return }
+            guard requestToken == token, !Task.isCancelled, canLoadPartyActivities else { return }
             items = result.filter { $0.picUrl?.isEmpty == false }
             didLoad = true
         } catch {
             guard requestToken == token, !Task.isCancelled else { return }
             AppLogger.party.error("[PartyHomeBanner] load failed: \(String(describing: error), privacy: .public)")
         }
+    }
+
+    private var canLoadPartyActivities: Bool {
+        SelfPermissionBridge.shared.canPartyActivities
     }
 }
 
@@ -671,6 +811,7 @@ struct PartyLobbyRankingView: View {
     @State private var userCard: UserCardPresentation?
     @State private var isNavigationBarScrolled = false
     @State private var openedAt: Date?
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     @Environment(\.dismiss) private var dismiss
 
     init(initialKind: PartyLobbyRankingKind, onOpenRoom: @escaping (String) -> Void) {
@@ -683,7 +824,22 @@ struct PartyLobbyRankingView: View {
         store.payload(kind: kind, timeframe: timeframe, period: period)
     }
 
+    private var canShowValueRankings: Bool {
+        permission.canVirtualItems && permission.canGiftSending
+    }
+
     var body: some View {
+        Group {
+            if canShowValueRankings {
+                rankingContent
+            } else {
+                Color.clear.onAppear(perform: dismissIfValueRankingsAreDisabled)
+            }
+        }
+        .onChange(of: canShowValueRankings, perform: handleValueRankingPermissionChange)
+    }
+
+    private var rankingContent: some View {
         GeometryReader { proxy in
             ZStack(alignment: .top) {
                 Color(hex: kind == .partyRich ? 0x957654 : 0x3B5D45).ignoresSafeArea()
@@ -797,6 +953,20 @@ struct PartyLobbyRankingView: View {
         }
     }
 
+    private func handleValueRankingPermissionChange(_ allowed: Bool) {
+        guard !allowed else { return }
+        dismissIfValueRankingsAreDisabled()
+    }
+
+    private func dismissIfValueRankingsAreDisabled() {
+        guard !canShowValueRankings else { return }
+        store.clearForDisabledValueRankings()
+        showRules = false
+        rewardEntry = nil
+        userCard = nil
+        dismiss()
+    }
+
     private var requestKey: String { "\(kind.rawValue)-\(timeframe.rawValue)-\(period.rawValue)" }
 
     private func backgroundHeight(topSafeArea: CGFloat) -> CGFloat {
@@ -813,6 +983,7 @@ struct PartyLobbyRankingView: View {
     }
 
     private func tapEntry(_ entry: PartyRankEntry) {
+        guard canShowValueRankings else { return }
         switch kind {
         case .partyRich:
             guard !entry.userId.isEmpty else { return }

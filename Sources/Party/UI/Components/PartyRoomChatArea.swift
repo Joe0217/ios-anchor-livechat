@@ -13,16 +13,26 @@ struct PartyRoomChatArea: View {
     let canDeleteTextMessages: Bool
     let onDeleteTextMessage: (UnifiedPublicChatMessage) async -> Bool
     let onWinnerActivity: ((String) -> Void)?
+    /// 审核账号不展示 Gift 标签，也不保留收礼类缓存消息。
+    var showsGiftContent: Bool = true
+    var showsLotteryContent: Bool = true
+    var showsPartyGameContent: Bool = true
+    var showsActivityContent: Bool = true
+    var showsVirtualItemContent: Bool = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            PartyRoomChatTabStrip(selection: $filter)
+            PartyRoomChatTabStrip(selection: $filter, showsGiftTab: showsGiftContent)
             // v3（2026-07-15）：welcomeBanner 只在 All tab 顶部显示（对齐 H5 public-chat.vue L194-197
             // 只在 `state.tabList[0]` 顶部渲染 convention 绿字）；Chat/Gift tab 隐藏。
             if filter == .all {
                 welcomeBanner
             }
             messageList
+        }
+        .onAppear(perform: resetUnavailableGiftFilter)
+        .onChange(of: showsGiftContent) { _ in
+            resetUnavailableGiftFilter()
         }
     }
 
@@ -46,10 +56,21 @@ struct PartyRoomChatArea: View {
             chat: chat,
             filter: filter,
             lastGiftEvent: lastGiftEvent,
+            showsGiftMessages: showsGiftContent,
+            showsLotteryMessages: showsLotteryContent,
+            showsPartyGameMessages: showsPartyGameContent,
+            showsActivityMessages: showsActivityContent,
+            showsVirtualItemMessages: showsVirtualItemContent,
             canDeleteTextMessages: canDeleteTextMessages,
             onDeleteTextMessage: onDeleteTextMessage,
             onWinnerActivity: onWinnerActivity
         )
             .padding(.horizontal, Theme.Metric.partyRoomChatHPadding)
+    }
+
+    private func resetUnavailableGiftFilter() {
+        if !showsGiftContent, filter == .gift {
+            filter = .all
+        }
     }
 }

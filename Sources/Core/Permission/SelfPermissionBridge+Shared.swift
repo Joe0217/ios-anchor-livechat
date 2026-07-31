@@ -9,17 +9,15 @@ extension SelfPermissionBridge {
     /// 通过 `Task { @MainActor }` 异步绑定。启动瞬间 Task 立即调度到 main runloop，UI 层订阅 `isLoaded == false`
     /// 期间 deny-by-default 兜底（对齐 spec §6.1）。
     ///
-    /// **不入 HilyTests 白名单**：SessionStore 有 Networking / SDK 依赖；单测走 `init(userTypePublisher:loadedPublisher:)` 注 fake。
+    /// **不入 HilyTests 白名单**：SessionStore 有 Networking / SDK 依赖；单测走 `init(sessionPublisher:)` 注 fake。
     static let shared: SelfPermissionBridge = makeShared()
 
-    /// nonisolated 静态工厂：创建 relay + Bridge，异步 Task 里绑定 SessionStore（避免直接跨 actor 读 @MainActor 属性）。
+    /// nonisolated 静态工厂：创建会话状态 relay + Bridge，异步 Task 里绑定 SessionStore（避免直接跨 actor 读 @MainActor 属性）。
     private static func makeShared() -> SelfPermissionBridge {
-        let userTypeRelay = CurrentValueSubject<Int?, Never>(nil)
-        let loadedRelay = CurrentValueSubject<Bool, Never>(false)
+        let sessionRelay = CurrentValueSubject<PermissionSessionState, Never>(.loggedOut)
 
         let bridge = SelfPermissionBridge(
-            userTypePublisher: userTypeRelay.eraseToAnyPublisher(),
-            loadedPublisher: loadedRelay.eraseToAnyPublisher()
+            sessionPublisher: sessionRelay.eraseToAnyPublisher()
         )
 
         // 异步派发到 MainActor 绑定 SessionStore（+ DEBUG 通道叠加）
@@ -31,15 +29,19 @@ extension SelfPermissionBridge {
             DebugPermissionOverride.shared.publisher
                 .combineLatest(session.$user)
                 .sink { override, user in
-                    userTypeRelay.send(override ?? user?.userType)
-                    loadedRelay.send(user != nil)
+                    sessionRelay.send(PermissionSessionState(
+                        userType: override ?? user?.userType,
+                        isAuthenticated: user != nil
+                    ))
                 }
                 .store(in: &sharedBindCancellables)
             #else
             session.$user
                 .sink { user in
-                    userTypeRelay.send(user?.userType)
-                    loadedRelay.send(user != nil)
+                    sessionRelay.send(PermissionSessionState(
+                        userType: user?.userType,
+                        isAuthenticated: user != nil
+                    ))
                 }
                 .store(in: &sharedBindCancellables)
             #endif

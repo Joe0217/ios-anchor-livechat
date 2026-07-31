@@ -34,6 +34,7 @@ enum ProfileRoute: Hashable {
 
 struct ProfileView: View {
     @StateObject private var vm = ProfileViewModel()
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     @State private var galleryContext: MediaGalleryContext?
     @Binding var path: NavigationPath
 
@@ -52,14 +53,16 @@ struct ProfileView: View {
         // NavigationLink(value:) 自动沿 stack 找匹配 destination，无需在此再注册。
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
-                ProfileHeaderView(vm: vm)
+                ProfileHeaderView(vm: vm, showsSocial: permission.canProfileSocial)
 
-                ProfileBioView(bio: vm.bio)
+                if permission.canProfileSocial {
+                    ProfileBioView(bio: vm.bio)
 
-                ProfileTabBar(selected: $vm.selectedTab)
-                    .padding(.top, 4)
+                    ProfileTabBar(selected: $vm.selectedTab, tabs: visibleTabs)
+                        .padding(.top, 4)
 
-                contentForSelectedTab
+                    contentForSelectedTab
+                }
             }
             .padding(.bottom, 24)
         }
@@ -79,6 +82,16 @@ struct ProfileView: View {
         // 下拉刷新：强制重拉（用户主动触发）。系统下拉转圈样式保留默认。
         .refreshable {
             await vm.refresh()
+        }
+        .onChange(of: permission.canVirtualItems) { allowed in
+            if !allowed, vm.selectedTab == .gifts {
+                vm.selectedTab = .album
+            }
+        }
+        .onChange(of: permission.canProfileSocial) { allowed in
+            if !allowed {
+                galleryContext = nil
+            }
         }
         // Profile 主页设计稿无系统标题栏；FollowList/Settings/LevelDetail 子页内部自行配置 toolbar
         .toolbar(.hidden, for: .navigationBar)
@@ -172,12 +185,20 @@ struct ProfileView: View {
                 )
             }
         case .gifts:
-            ProfileGiftsTabView(vm: vm)
+            if permission.canVirtualItems {
+                ProfileGiftsTabView(vm: vm)
+            } else {
+                EmptyView()
+            }
         case .moment:
             // onMediaPreview 上传 galleryContext → 复用本 view 顶层 fullScreenCover 的公共 MediaGalleryView
             // 见 [swiftui-fullscreencover-hoist.md](../../.claude/rules/swiftui-fullscreencover-hoist.md)：modal 挂唯一容器层
             MomentTabView(onMediaPreview: { galleryContext = $0 })
         }
+    }
+
+    private var visibleTabs: [ProfileTab] {
+        permission.canVirtualItems ? ProfileTab.allCases : [.album, .moment]
     }
 
     private var emptyPlaceholder: some View {

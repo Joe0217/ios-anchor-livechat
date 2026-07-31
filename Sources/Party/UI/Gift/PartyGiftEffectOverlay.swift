@@ -7,25 +7,30 @@ import SwiftUI
 /// 麦位效果则由 `PartyGiftReceiverEffect` 就近叠加在每个 seat 上。
 struct PartyGiftEffectOverlay: View {
     @ObservedObject private var coordinator = PartyGiftEffectCoordinator.shared
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                if let gift = coordinator.centralGift,
-                   let url = gift.staticImageURL {
-                    PartyGiftZoomImage(id: gift.id, urlString: url, size: 150, phase: .central)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
+        Group {
+            if permission.canGiftSending {
+                GeometryReader { proxy in
+                    ZStack {
+                        if let gift = coordinator.centralGift,
+                           let url = gift.staticImageURL {
+                            PartyGiftZoomImage(id: gift.id, urlString: url, size: 150, phase: .central)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
 
-                PartyGiftFloatingStack(
-                    messages: coordinator.floatingMessages,
-                    width: min(360, max(0, proxy.size.width)),
-                    travelDistance: max(0, proxy.size.width),
-                    onAnimationFinished: { coordinator.finishFloatingAnimation(id: $0) }
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                // H5 `floating-message-manager.vue` pins the 50pt container at top: 300px.
-                .offset(y: 300)
+                        PartyGiftFloatingStack(
+                            messages: coordinator.floatingMessages,
+                            width: min(360, max(0, proxy.size.width)),
+                            travelDistance: max(0, proxy.size.width),
+                            onAnimationFinished: { coordinator.finishFloatingAnimation(id: $0) }
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        // H5 `floating-message-manager.vue` pins the 50pt container at top: 300px.
+                        .offset(y: 300)
+                    }
+                }
             }
         }
         .allowsHitTesting(false)
@@ -38,9 +43,11 @@ struct PartyGiftReceiverEffect: View {
     let userId: String?
     let size: CGFloat
     @ObservedObject private var coordinator = PartyGiftEffectCoordinator.shared
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     var body: some View {
-        if let userId,
+        if permission.canGiftSending,
+           let userId,
            let gift = coordinator.receiverGift,
            gift.receiverUserIds.contains(userId),
            let url = gift.receiverImageURL {

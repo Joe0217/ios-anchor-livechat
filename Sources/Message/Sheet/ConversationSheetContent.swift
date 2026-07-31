@@ -17,6 +17,7 @@ import SwiftUI
 struct ConversationSheetContent: View {
 
     @ObservedObject var store: MessageSessionStore
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     /// ChatDetailContainer 构造用 —— 由 LiveRoomView / PartyRoomView 从 SessionStore 传入
     let selfYxAccId: String
     /// 关闭整个消息列表 sheet（点会话进私聊时不调，仅供未来扩展用）
@@ -44,9 +45,15 @@ struct ConversationSheetContent: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            content
+        Group {
+            if permission.canDirectMessages {
+                VStack(spacing: 0) {
+                    header
+                    content
+                }
+            } else {
+                EmptyView()
+            }
         }
         // 半屏私聊叠加（对齐 H5 talkPopup 覆盖 messagePopup）—— 私聊 back 点击 = selectedChatPeer = nil，
         // 半屏消息列表保持可见（不关闭），符合用户"back 返回列表"预期

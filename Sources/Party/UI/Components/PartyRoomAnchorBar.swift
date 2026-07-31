@@ -16,15 +16,23 @@ struct PartyRoomAnchorBar: View {
     /// v12：房主头像装饰框 URL（对齐 H5 head-frame.vue，源自 `apiPartyGetUser.headFrameSmallImg`）
     /// SVGA / 静态图统一由 `HeadFrameView` 分流（v16 SVGA 已接 RemoteSVGAImageView 循环播放）
     let headFrameURL: String?
+    /// 头像框属于虚拟道具展示；Party-only 账号仅保留基础 Party 信息。
+    var showsHeadFrame: Bool = true
     /// v11 对齐 H5 header-wrap.vue：统计条从 heat+viewers 改为 wealth/honor 轮播 + audience
     let wealthText: String
     let honorText: String
+    /// 107 Party-only 账号隐藏财富/荣耀榜与对应数值；观众入口和任务入口保持独立可用。
+    var showsRank: Bool = true
     let audienceCountText: String
     /// H5 仅在 audienceNum 非零时展示观众入口；iOS 由实时 chatroom 在线数派生。
     let showsViewerEntry: Bool
     /// 安卓主播端进房响应下发的右上角活动资源位；仅展示首条。
     let cornerBanner: PartyCornerBanner?
     let isFollowing: Bool
+    /// Party-only 账号不暴露关注关系。
+    var showsFollow: Bool = true
+    /// 房间分享会读取私聊/关注联系人；无 P2P 能力时不展示。
+    var showsShare: Bool = true
     /// v3：自己的房间（房主本人）不显示关注按钮（对齐 H5 用户端 index.vue 同 owner 隐藏 follow）
     let isSelfRoom: Bool
     /// 是否有管理权限（房主或房管）—— 决定房管按钮是否显示（对齐 H5 header-wrap.vue v-if=computedRoomRoleType!==NORMAL）
@@ -79,7 +87,7 @@ struct PartyRoomAnchorBar: View {
                 .padding(.horizontal, 4)
                 anchorTextBlock
                 // Component 11 关注按钮紧贴房间信息（房名/ID 右侧）；自己房间不显示（isSelfRoom）
-                if !isSelfRoom {
+                if showsFollow, !isSelfRoom {
                     followButton
                 }
                 // v12：PK 入口（房主/房管 + roomTempId=1 + feature flag 时显示）
@@ -110,11 +118,14 @@ struct PartyRoomAnchorBar: View {
     }
 
     /// 头像装饰框（源自后端 `headFrameSmallImg`；对齐 H5 head-frame.vue 双路径 —— SVGA / 静态图）
+    @ViewBuilder
     private var headFrameDecoration: some View {
-        HeadFrameView(urlString: headFrameURL,
-                      size: Theme.Metric.partyRoomAnchorAvatar + 12)
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
+        if showsHeadFrame {
+            HeadFrameView(urlString: headFrameURL,
+                          size: Theme.Metric.partyRoomAnchorAvatar + 12)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
     }
 
     private var avatarCircle: some View {
@@ -199,9 +210,11 @@ struct PartyRoomAnchorBar: View {
             iconButton(asset: "partyIconAnnouncement",
                        label: L10n.PartyRoom.a11yAnnouncement,
                        action: onAnnouncementTap)
-            iconButton(asset: "partyIconShare",
-                       label: L10n.PartyRoom.a11yShare,
-                       action: onShareTap)
+            if showsShare {
+                iconButton(asset: "partyIconShare",
+                           label: L10n.PartyRoom.a11yShare,
+                           action: onShareTap)
+            }
             // 管理按钮：仅房主/房管显示（对齐 H5 header-wrap.vue v-if=computedRoomRoleType!==NORMAL）
             if canManage {
                 iconButton(asset: "partyIconManagement",
@@ -263,7 +276,9 @@ struct PartyRoomAnchorBar: View {
 
     private var leadingStatContent: some View {
         HStack(spacing: 4) {
-            rankSwiperButton
+            if showsRank {
+                rankSwiperButton
+            }
             taskEntries
         }
     }

@@ -59,6 +59,15 @@ final class MatchPopupCoordinator: ObservableObject {
         logger.info("MatchPopupCoordinator started (interval 10min)")
     }
 
+    /// 审核账号或运行时权限撤销时停止提示调度。这里不改持久化的「今日不再提醒」状态，
+    /// 账号重新获得通话能力后仍按原有产品规则继续。
+    func stop() {
+        timerTask?.cancel()
+        timerTask = nil
+        isShowing = false
+        logger.info("MatchPopupCoordinator stopped by capability gate")
+    }
+
     /// scenePhase 观察：app hidden/active 变化时更新
     func updateAppHidden(_ hidden: Bool) {
         appHidden = hidden

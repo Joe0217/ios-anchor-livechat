@@ -69,13 +69,15 @@ final class ReplyPointsStore: ObservableObject {
 
     /// 会话是否开启付费消息（H-3 §1.2.1）：拉到 messageBoxList 且非空
     func isOpenPaidMessage(peer: String) -> Bool {
+        guard Self.messageRewardsAvailable else { return false }
         guard let list = sessions[peer]?.messageBoxList else { return false }
         return !list.isEmpty
     }
 
     /// 派生 view 用的 tip 列表；ChatDetailView 混入 messagesData 按 stableSortKey 排序
     func tips(for peer: String) -> [ChatTip] {
-        sessions[peer]?.tips ?? []
+        guard Self.messageRewardsAvailable else { return [] }
+        return sessions[peer]?.tips ?? []
     }
 
     // MARK: - 会话生命周期
@@ -95,8 +97,16 @@ final class ReplyPointsStore: ObservableObject {
         tipTexts: ReplyPointsTipTexts,
         now: Date = Date()
     ) async {
+        guard Self.gateMessageRewards(action: "replyPointsBeginSession") else {
+            endSession(peer: peer)
+            return
+        }
         do {
             let list = try await service.fetchMessageBoxList(userYxAccid: peer)
+            guard Self.messageRewardsAvailable else {
+                endSession(peer: peer)
+                return
+            }
             var state = PeerReplyPointsState(from: list)
             if let last = initialLastUserMsg {
                 state.lastUserMsgInfo = last
@@ -154,7 +164,9 @@ final class ReplyPointsStore: ObservableObject {
         stimulateTipText: String,
         now: Date = Date()
     ) {
-        guard !isGift, isOpenPaidMessage(peer: peer) else { return }
+        guard Self.messageRewardsAvailable,
+              !isGift,
+              isOpenPaidMessage(peer: peer) else { return }
         guard configBridge.isLoaded,
               let payPoints = configBridge.payMsgPoints,
               let freePoints = configBridge.freeMsgPoints
@@ -195,6 +207,12 @@ final class ReplyPointsStore: ObservableObject {
               let last = state.lastUserMsgInfo
         else { return }
 
+        guard Self.messageRewardsAvailable else {
+            state.lastUserMsgInfo = nil
+            sessions[peer] = state
+            return
+        }
+
         // isGift 短路也清（对齐 H5 line 1090-1092）
         guard !last.isGift else {
             state.lastUserMsgInfo = nil
@@ -215,6 +233,7 @@ final class ReplyPointsStore: ObservableObject {
                 userMsgId: last.msgId,
                 msgType: last.msgType   // P1-1：传用户消息的 pay/free（对齐 H5 line 1108 lastMsg.msgType），已在 onReceiveUserMsg 里 ?? "pay" 兜底
             )
+            guard Self.messageRewardsAvailable else { return }
             if res.settled {
                 // M-7:整块回写 stale state 会覆盖并发的 autoClaimIfNeeded / checkReplyRemindTrigger 修改
                 // (settle 挂起窗口内 messageBoxList 可能被 auto-claim 改成 .claimed / tips 追加 replyRemind)
@@ -243,11 +262,14 @@ final class ReplyPointsStore: ObservableObject {
     /// 拉 messageBoxList 完成后，对所有 `.claimable` 节点依次调 apiTreasurePointBox。
     /// 失败 → toast + node status 不变（下次进页重试）；view 层订阅 sessions 感知领奖弹窗时机。
     private func autoClaimIfNeeded(peer: String) async {
+        guard Self.messageRewardsAvailable else { return }
         guard let items = sessions[peer]?.messageBoxList else { return }
         var totalClaimedDiamond = 0
         for (idx, item) in items.enumerated() where item.status == .claimable {
+            guard Self.messageRewardsAvailable else { return }
             do {
                 let diamond = try await service.claimTreasureBox(userYxAccid: peer)
+                guard Self.messageRewardsAvailable else { return }
                 logger.info("[ReplyPoints] auto-claim ok peer=\(peer, privacy: .private) idx=\(idx) diamond=\(diamond)")
                 // 更新本地 status → .claimed（避免下次 onReceive 时误重复触发）
                 if var list = sessions[peer]?.messageBoxList, idx < list.count {
@@ -287,6 +309,7 @@ final class ReplyPointsStore: ObservableObject {
         tipTexts: ReplyPointsTipTexts,
         now: Date = Date()
     ) {
+        guard Self.messageRewardsAvailable else { return }
         guard var state = sessions[peer] else { return }
         guard state.lastUserMsgInfo == nil else { return }
         guard let last = msgs.reversed().first(where: { m in
@@ -325,8 +348,10 @@ final class ReplyPointsStore: ObservableObject {
     ///
     /// 失败静默：下次 settle 再重试；网络错也不打断主结算成功日志。
     private func refreshMessageBoxAndAutoClaim(peer: String) async {
+        guard Self.messageRewardsAvailable else { return }
         do {
             let list = try await service.fetchMessageBoxList(userYxAccid: peer)
+            guard Self.messageRewardsAvailable else { return }
             guard var state = sessions[peer] else { return }
             // 只更新 messageBoxList,currentProgress 已由 settle 权威覆盖不动
             state.messageBoxList = list.pointInfoList
@@ -347,6 +372,7 @@ final class ReplyPointsStore: ObservableObject {
     /// - `!hasHistoryReply`
     /// - `replyRemindBaseTs` 存在 && `now - baseTs >= 15min`
     func checkReplyRemindTrigger(peer: String, tipText: String, now: Date = Date()) {
+        guard Self.messageRewardsAvailable else { return }
         guard isOpenPaidMessage(peer: peer) else { return }
         guard var state = sessions[peer] else { return }
         guard !state.replyRemindSent, !state.hasHistoryReply else { return }
@@ -412,6 +438,23 @@ final class ReplyPointsStore: ObservableObject {
     }
 
     // MARK: - 内部：tip append
+
+    /// 回复奖励会结算并领取钻石，107 及未来关闭虚拟道具的账号一律不进入该业务流。
+    private static var messageRewardsAvailable: Bool {
+        #if HILY_TESTS
+        return true
+        #else
+        return SelfPermissionBridge.shared.canVirtualItemsSnapshot
+        #endif
+    }
+
+    private static func gateMessageRewards(action: String) -> Bool {
+        #if HILY_TESTS
+        return true
+        #else
+        return SelfPermissionBridge.shared.gate(.virtualItems, action: action)
+        #endif
+    }
 
     private func appendTip(peer: String, kind: ChatTipKind, text: String, timestamp: Int64) {
         var state = sessions[peer] ?? PeerReplyPointsState()

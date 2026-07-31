@@ -125,8 +125,7 @@ private struct UserCardOverlayModifier: ViewModifier {
 /// - 深紫渐变背景 240° `#17175A → #1D0E4C 35% → #130A2A`
 /// - 头像 86pt 悬出卡片顶端 45pt(H5 `.photo-bg { top: -55px }`)—— overlay-based modal 支持真溢出
 /// - 头饰道具框:静态图走 `AvatarView.headwearURL`,SVGA 走 `HeadFrameView`(对齐 H5 `<head-frame>` 分流)
-/// - 左上 Block pill(未拉黑 vs 已拉黑 视觉区分)
-/// - 底部 Follow / Message 双按钮
+/// - 账户权限实时收口私聊、关系链和虚拟道具展示；Party 房管理能力不受影响
 struct UserCardPopup: View {
     let userId: String
     let preview: UserCardPreview?
@@ -139,6 +138,11 @@ struct UserCardPopup: View {
     var partyAdminContext: PartyAdminContext? = nil
 
     @StateObject private var store: UserCardStore
+    /// Party-only 账号仍可查看房内成员的基础身份与执行房间管理；
+    /// 私聊、关系链和虚拟道具内容必须随账户权限立即收起。
+    @ObservedObject private var permission = SelfPermissionBridge.shared
+    /// Party-only 保留 UGC 安全处置，不依赖被关闭的用户资料页。
+    @State private var showingReportSheet = false
 
     /// 头像上半悬出卡片顶端的高度(视觉,对齐 H5 `.photo-bg { top: -55px }`)
     private static let avatarOverhang: CGFloat = 45
@@ -204,6 +208,18 @@ struct UserCardPopup: View {
                 }
             } message: {
                 Text(L10n.userCardUnblockConfirmMessage)
+            }
+            .sheet(isPresented: $showingReportSheet) {
+                ReportUserSheet(
+                    userId: userId,
+                    onSubmitSuccess: {
+                        showingReportSheet = false
+                        AppToastCenter.shared.show(L10n.reportSuccessToast)
+                    }
+                )
+                .giftPanelSheetBackground()
+                .presentationDetents([.medium, .fraction(0.8)])
+                .presentationDragIndicator(.visible)
             }
             // 派对房 Kick 2 步:Step 1 选踢房时长(Limited hours / Permanent)
             .confirmationDialog(
@@ -305,24 +321,32 @@ struct UserCardPopup: View {
 
                 previewMeta(preview: preview)
 
-                skeletonStatsRow
-                .padding(.top, 6)
-
-                skeletonGiftWall
-                    .padding(.top, 8)
-
-                HStack(spacing: 12) {
-                    skeletonBar(width: nil, height: 44, cornerRadius: 22)
-                    skeletonBar(width: nil, height: 44, cornerRadius: 22)
+                if permission.canProfileSocial {
+                    skeletonStatsRow
+                        .padding(.top, 6)
                 }
-                .padding(.top, 6)
+
+                if permission.canVirtualItems {
+                    skeletonGiftWall
+                        .padding(.top, 8)
+                }
+
+                if permission.canGiftSending || permission.canDirectMessages {
+                    HStack(spacing: 12) {
+                        skeletonBar(width: nil, height: 44, cornerRadius: 22)
+                        skeletonBar(width: nil, height: 44, cornerRadius: 22)
+                    }
+                    .padding(.top, 6)
+                }
             }
             .padding(.horizontal, 15)
             .padding(.bottom, 34)
 
-            skeletonBar(width: 54, height: 28, cornerRadius: 14)
-                .padding(.leading, 15)
-                .padding(.top, 15)
+            if permission.canProfileSocial {
+                skeletonBar(width: 54, height: 28, cornerRadius: 14)
+                    .padding(.leading, 15)
+                    .padding(.top, 15)
+            }
         }
         .background(cardFrameOverlay(urlString: preview?.cardFrameUrl))
         .accessibilityElement(children: .ignore)
@@ -349,9 +373,17 @@ struct UserCardPopup: View {
 
     @ViewBuilder
     private func previewAvatar(preview: UserCardPreview?) -> some View {
-        if let headwearUrl = preview?.headwearUrl, HeadFrameView.isSVGAURL(headwearUrl) {
+        if !permission.canVirtualItems {
+            AvatarView(
+                urlString: preview?.avatarUrl,
+                size: 86,
+                kind: .user,
+                headwearURL: nil,
+                disablesTap: true
+            )
+        } else if let headwearUrl = preview?.headwearUrl, HeadFrameView.isSVGAURL(headwearUrl) {
             ZStack {
-                AvatarView(urlString: preview?.avatarUrl, size: 86, kind: .user)
+                AvatarView(urlString: preview?.avatarUrl, size: 86, kind: .user, disablesTap: true)
                 HeadFrameView(urlString: headwearUrl, size: 116)
                     .allowsHitTesting(false)
             }
@@ -361,7 +393,8 @@ struct UserCardPopup: View {
                 size: 86,
                 kind: .user,
                 headwearURL: preview?.headwearUrl,
-                headwearRatio: 1.35
+                headwearRatio: 1.35,
+                disablesTap: true
             )
         }
     }
@@ -381,28 +414,34 @@ struct UserCardPopup: View {
 
     @ViewBuilder
     private func previewMeta(preview: UserCardPreview?) -> some View {
-        if let preview,
-           preview.gender != nil || preview.countryEmoji != nil || preview.levelName != nil || preview.isVip == true || preview.isActiveTycoon == true {
-            HStack(spacing: 8) {
-                if let gender = preview.gender, let age = preview.age, gender != .unknown {
-                    HStack(spacing: 2) {
-                        Image(systemName: gender == .female ? "person.fill" : "person")
-                            .font(.system(size: 10))
-                        Text("\(age)").font(.system(size: 10))
+        if let preview {
+            let hasCoreMeta = preview.gender != nil || preview.countryEmoji != nil
+            let hasVirtualMeta = permission.canVirtualItems
+                && (preview.levelName?.isEmpty == false || preview.isVip == true || preview.isActiveTycoon == true)
+            if hasCoreMeta || hasVirtualMeta {
+                HStack(spacing: 8) {
+                    if let gender = preview.gender, let age = preview.age, gender != .unknown {
+                        HStack(spacing: 2) {
+                            Image(systemName: gender == .female ? "person.fill" : "person")
+                                .font(.system(size: 10))
+                            Text("\(age)").font(.system(size: 10))
+                        }
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 4).padding(.vertical, 2)
+                        .background(Capsule().fill(gender == .female ? Color(hex: 0xFF1AA7) : Color(hex: 0x205FFF)))
                     }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 4).padding(.vertical, 2)
-                    .background(Capsule().fill(gender == .female ? Color(hex: 0xFF1AA7) : Color(hex: 0x205FFF)))
+                    if let country = preview.countryEmoji { Text(country).font(.system(size: 16)) }
+                    if permission.canVirtualItems {
+                        if preview.isActiveTycoon == true { ActiveTycoonBadge(style: .bigRText, size: .small) }
+                        if let levelName = preview.levelName, !levelName.isEmpty {
+                            UserLevelBadge(level: preview.level ?? 0, size: .small)
+                        }
+                        if preview.isVip == true { VIPBadge(size: .small) }
+                    }
                 }
-                if let country = preview.countryEmoji { Text(country).font(.system(size: 16)) }
-                if preview.isActiveTycoon == true { ActiveTycoonBadge(style: .bigRText, size: .small) }
-                if let levelName = preview.levelName, !levelName.isEmpty {
-                    UserLevelBadge(level: preview.level ?? 0, size: .small)
-                }
-                if preview.isVip == true { VIPBadge(size: .small) }
+                .frame(maxWidth: .infinity, alignment: .center)
             }
-            .frame(maxWidth: .infinity, alignment: .center)
-        } else {
+        } else if permission.canVirtualItems {
             skeletonBar(width: 104, height: 18)
         }
     }
@@ -463,18 +502,24 @@ struct UserCardPopup: View {
                 uidWithCopyButton(userId: info.userId)
 
                 // meta row:性别 pill / 国旗 / Lv 徽章 / VIP
-                metaRow(info: info)
+                if hasVisibleMeta(info) {
+                    metaRow(info: info)
+                }
 
                 // medals row(独立,横滚兜底防溢出)
-                if !info.medals.isEmpty {
+                if permission.canVirtualItems, !info.medals.isEmpty {
                     medalsRow(medals: info.medals)
                 }
 
                 // fans / following row
-                statsRow(info: info)
+                if permission.canProfileSocial {
+                    statsRow(info: info)
+                }
 
                 // liveWelcome(可选)
-                if let welcome = info.liveWelcome, !welcome.isEmpty {
+                if permission.canProfileSocial,
+                   let welcome = info.liveWelcome,
+                   !welcome.isEmpty {
                     Text(welcome)
                         .font(.system(size: 13))
                         .foregroundColor(.white.opacity(0.5))
@@ -484,8 +529,10 @@ struct UserCardPopup: View {
                 }
 
                 // 礼物墙
-                giftWallCard(info: info)
-                    .padding(.top, 4)
+                if permission.canVirtualItems {
+                    giftWallCard(info: info)
+                        .padding(.top, 4)
+                }
 
                 // 底部按钮(Follow + Message)
                 bottomButtons(info: info)
@@ -501,12 +548,9 @@ struct UserCardPopup: View {
             .padding(.horizontal, 15)
             .padding(.bottom, 34)
 
-            // 主播/虚拟主播名片不提供拉黑操作；仅普通用户或机器人可拉黑。
-            if !info.isAnchor {
-                blockPill(info: info)
-                    .padding(.leading, 15)
-                    .padding(.top, 15)
-            }
+            safetyActions(info: info)
+                .padding(.leading, 15)
+                .padding(.top, 15)
         }
         .background(cardFrameOverlay(urlString: info.cardFrameUrl))
     }
@@ -515,7 +559,10 @@ struct UserCardPopup: View {
     /// 宽度随卡片，顶部向上扩展卡片高度的 26%，且不改变内容布局或命中区域。
     @ViewBuilder
     private func cardFrameOverlay(urlString: String?) -> some View {
-        if let urlString, !urlString.isEmpty, let url = URL(string: urlString) {
+        if permission.canVirtualItems,
+           let urlString,
+           !urlString.isEmpty,
+           let url = URL(string: urlString) {
             GeometryReader { geometry in
                 CachedAsyncImage(url: url, contentMode: .fit, persistent: true) {
                     Color.clear
@@ -531,8 +578,8 @@ struct UserCardPopup: View {
     // MARK: - 头像 block(粉紫渐变环 + 头饰框 SVGA 分流)
 
     /// **注意**: 不用 `Button + .disabled(onAvatarTap == nil)` —— SwiftUI 系统给 disabled Button 自动
-    /// 加半透视觉(.opacity ~0.5),导致头像整块半透。改用 `.onTapGesture`,onAvatarTap == nil 时
-    /// 挂空 closure(no-op),视觉保持完全不透明。
+    /// 加半透视觉(.opacity ~0.5),导致头像整块半透。改用 `.onTapGesture`,当 callback 为空或
+    /// `profileSocial` 被收口时 no-op，视觉保持完全不透明。
     private func avatarBlock(info: UserCardInfo) -> some View {
         ZStack {
             // 粉紫渐变环 96pt(H5 `.photo-bg`)
@@ -560,20 +607,33 @@ struct UserCardPopup: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            onAvatarTap?()
+            guard let onAvatarTap,
+                  SelfPermissionBridge.shared.gate(.profileSocial, action: "userCardAvatar") else {
+                return
+            }
+            onAvatarTap()
         }
     }
 
     /// P0-5 头饰 SVGA 分流:URL 含 `.svga`(不分大小写)→ HeadFrameView 播动画;否则 AvatarView.headwearURL 静态图
     @ViewBuilder
     private func headwearAwareAvatar(info: UserCardInfo) -> some View {
-        if let hw = info.headwearUrl, HeadFrameView.isSVGAURL(hw) {
+        if !permission.canVirtualItems {
+            AvatarView(
+                urlString: info.avatarUrl,
+                size: 86,
+                kind: .user,
+                headwearURL: nil,
+                disablesTap: true
+            )
+        } else if let hw = info.headwearUrl, HeadFrameView.isSVGAURL(hw) {
             ZStack {
                 AvatarView(
                     urlString: info.avatarUrl,
                     size: 86,
                     kind: .user,
-                    headwearURL: nil
+                    headwearURL: nil,
+                    disablesTap: true
                 )
                 HeadFrameView(urlString: hw, size: 116)
                     .allowsHitTesting(false)
@@ -584,7 +644,8 @@ struct UserCardPopup: View {
                 size: 86,
                 kind: .user,
                 headwearURL: info.headwearUrl,
-                headwearRatio: 1.35
+                headwearRatio: 1.35,
+                disablesTap: true
             )
         }
     }
@@ -602,8 +663,11 @@ struct UserCardPopup: View {
                 .foregroundColor(.white)
                 .lineLimit(1)
 
-            if !info.isFollowed {
+            if permission.canProfileSocial, !info.isFollowed {
                 Button {
+                    guard SelfPermissionBridge.shared.gate(.profileSocial, action: "userCardFollow") else {
+                        return
+                    }
                     store.toggleFollow()
                 } label: {
                     Image("partyUserCardFollow")
@@ -651,6 +715,13 @@ struct UserCardPopup: View {
 
     // MARK: - meta row(性别/国旗/Lv/VIP)
 
+    private func hasVisibleMeta(_ info: UserCardInfo) -> Bool {
+        if info.gender != .unknown, info.age != nil { return true }
+        if info.countryEmoji != nil { return true }
+        guard permission.canVirtualItems else { return false }
+        return info.isActiveTycoon || info.isVip || info.levelName?.isEmpty == false
+    }
+
     private func metaRow(info: UserCardInfo) -> some View {
         HStack(spacing: 8) {
             if info.gender != .unknown, let age = info.age {
@@ -674,17 +745,19 @@ struct UserCardPopup: View {
                 Text(flag).font(.system(size: 16))
             }
 
-            // v24（B1）：大 R 徽章（对齐 H5 userCard.vue 徽章 row；`activeTycoon` 后端字段）
-            if info.isActiveTycoon {
-                ActiveTycoonBadge(style: .bigRText, size: .small)
-            }
+            if permission.canVirtualItems {
+                // v24（B1）：大 R 徽章（对齐 H5 userCard.vue 徽章 row；`activeTycoon` 后端字段）
+                if info.isActiveTycoon {
+                    ActiveTycoonBadge(style: .bigRText, size: .small)
+                }
 
-            if let lv = info.levelName, !lv.isEmpty {
-                UserLevelBadge(level: info.level, size: .small)
-            }
+                if let lv = info.levelName, !lv.isEmpty {
+                    UserLevelBadge(level: info.level, size: .small)
+                }
 
-            if info.isVip {
-                VIPBadge(size: .small)
+                if info.isVip {
+                    VIPBadge(size: .small)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .center)
@@ -889,60 +962,72 @@ struct UserCardPopup: View {
 
     @ViewBuilder
     private func bottomButtons(info: UserCardInfo) -> some View {
-        let canShowMessage = !info.isAnchor && onMessageTap != nil
-        let canShowGift = isPartyRoom && onSendGiftTap != nil
+        let canShowMessage = permission.canDirectMessages && !info.isAnchor && onMessageTap != nil
+        let canShowGift = permission.canGiftSending
+            && permission.canVirtualItems
+            && isPartyRoom
+            && onSendGiftTap != nil
         if canShowGift || canShowMessage {
-        HStack(spacing: 12) {
-            if let onSendGiftTap, canShowGift {
-                // 送礼仅属于 Party 房内用户卡；非 Party 场景不保留 disabled 占位按钮。
-                Button {
-                    onSendGiftTap(info)
-                } label: {
-                    HStack(spacing: 8) {
-                        Image("partyUserCardSendGift")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 24, height: 24)
-                        Text(L10n.userCardSendGift)
-                            .font(.system(size: 18, weight: .bold))
+            HStack(spacing: 12) {
+                if let onSendGiftTap, canShowGift {
+                    // 送礼仅属于 Party 房内用户卡；非 Party 场景不保留 disabled 占位按钮。
+                    Button {
+                        guard SelfPermissionBridge.shared.gate(.giftSending, action: "userCardGift"),
+                              SelfPermissionBridge.shared.gate(.virtualItems, action: "userCardGift") else {
+                            return
+                        }
+                        onSendGiftTap(info)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image("partyUserCardSendGift")
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 24, height: 24)
+                            Text(L10n.userCardSendGift)
+                                .font(.system(size: 18, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(Capsule().fill(Color(hex: 0x3625AA)))
+                        .contentShape(Rectangle())
                     }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(Capsule().fill(Color(hex: 0x3625AA)))
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-            }
 
-            // 主播不支持从名片卡发起私聊。
-            if canShowMessage {
-                Button {
-                    onMessageTap?(info.userId, info.yxAccid)
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "message.fill")
-                            .font(.system(size: 14, weight: .bold))
-                        Text(L10n.userCardMessage)
-                            .font(.system(size: 18, weight: .bold))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
-                    .background(
-                        Capsule().fill(
-                            LinearGradient(
-                                colors: [Color(hex: 0x8E60E6), Color(hex: 0xD074E9)],
-                                startPoint: .leading,
-                                endPoint: .trailing
+                // 主播不支持从名片卡发起私聊。
+                if canShowMessage {
+                    Button {
+                        guard SelfPermissionBridge.shared.gate(.directMessages, action: "userCardMessage") else {
+                            return
+                        }
+                        onMessageTap?(info.userId, info.yxAccid)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "message.fill")
+                                .font(.system(size: 14, weight: .bold))
+                            Text(L10n.userCardMessage)
+                                .font(.system(size: 18, weight: .bold))
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(
+                            Capsule().fill(
+                                LinearGradient(
+                                    colors: [Color(hex: 0x8E60E6), Color(hex: 0xD074E9)],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
                             )
                         )
-                    )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(info.isBlocked || info.yxAccid == nil || info.yxAccid?.isEmpty == true)
+                    .opacity((info.isBlocked || info.yxAccid == nil) ? 0.5 : 1.0)
                 }
-                .buttonStyle(.plain)
-                .disabled(info.isBlocked || info.yxAccid == nil || info.yxAccid?.isEmpty == true)
-                .opacity((info.isBlocked || info.yxAccid == nil) ? 0.5 : 1.0)
             }
-        }
         } else {
             EmptyView()
         }
@@ -1039,6 +1124,34 @@ struct UserCardPopup: View {
     }
 
     // MARK: - Block pill(左上角)
+
+    @ViewBuilder
+    private func safetyActions(info: UserCardInfo) -> some View {
+        HStack(spacing: 8) {
+            // 主播/虚拟主播名片不提供拉黑操作；仅普通用户或机器人可拉黑。
+            // 拉黑属于 UGC 安全处置，不是资料社交能力；Party-only 账号必须保留。
+            if !info.isAnchor {
+                blockPill(info: info)
+            }
+            Button {
+                showingReportSheet = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "flag.fill")
+                        .font(.system(size: 12))
+                    Text(L10n.userProfileMenuReport)
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundColor(Color.white.opacity(0.78))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(Color.white.opacity(0.1)))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.userProfileMenuReport)
+        }
+    }
 
     private func blockPill(info: UserCardInfo) -> some View {
         Button {

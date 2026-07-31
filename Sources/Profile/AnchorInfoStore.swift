@@ -63,6 +63,7 @@ final class AnchorInfoStore: ObservableObject {
     private static let obsoleteCacheKeys = ["anchorInfoStore.v3"]
     private var inflightTask: Task<Void, Never>?
     private var followObserver: NSObjectProtocol?
+    private var permissionCancellables = Set<AnyCancellable>()
 
     /// 代际 token：`clear()` 递增，`performReload` 起点快照，`doReload` 落地前对比。
     /// A logout 时正在飞的 detached task 完成时 epoch mismatch → 丢弃结果不写 store/keychain，
@@ -90,6 +91,7 @@ final class AnchorInfoStore: ObservableObject {
                 self.saveToDisk()
             }
         }
+        observeVirtualItemsPermission()
     }
 
     deinit {
@@ -219,8 +221,14 @@ final class AnchorInfoStore: ObservableObject {
                 return nil
             }
         }()
-        // 礼物墙独立接口（H5 mine/index.vue:92）；失败不阻塞主流程 → 空数组 UI 走空态
+        // 礼物墙独立接口（H5 mine/index.vue:92）。107 的 Party-only 会话没有
+        // 虚拟道具能力，连同旧缓存一起收口，不能只靠 Profile UI 隐藏入口。
+        let shouldLoadGiftWall = canAccessVirtualItems
+        if !shouldLoadGiftWall {
+            clearGiftWallForDisabledVirtualItems()
+        }
         async let giftTask: [GiftItem] = {
+            guard shouldLoadGiftWall else { return [] }
             do { return try await ProfileService.getGiftWallList() }
             catch {
                 logger.warning("getGiftWallList failed (non-fatal): \(String(describing: error))")
@@ -240,7 +248,7 @@ final class AnchorInfoStore: ObservableObject {
         }
 
         self.info = anchor
-        self.giftWallList = giftWall
+        self.giftWallList = canAccessVirtualItems ? giftWall : []
         // `mine` 保留 hydrateFromLogin 注入值，不在此重写
 
         // 社交数从接口字段直接写入（覆盖；用户操作的增减在 Notification 收到时再叠加）；
@@ -349,7 +357,8 @@ final class AnchorInfoStore: ObservableObject {
     /// 礼物墙：优先独立接口 `giftWallList`（H5 mine/index.vue:92）；
     /// 兜底 anchor/mine 里可能夹带的 giftList（后端偶尔混发时不丢）。
     var giftList: [GiftItem] {
-        !giftWallList.isEmpty ? giftWallList
+        guard canAccessVirtualItems else { return [] }
+        return !giftWallList.isEmpty ? giftWallList
             : (info?.giftList ?? mine?.giftList ?? [])
     }
 
@@ -427,6 +436,43 @@ final class AnchorInfoStore: ObservableObject {
         if let data = try? JSONEncoder().encode(snap) {
             KeychainStore.setData(data, for: cacheKey)
         }
+    }
+
+    // MARK: - Virtual item permission
+
+    /// Bridge 首次绑定 SessionStore 前保留 userType 映射兜底：正常主播不会因启动时序漏拉
+    /// 礼物墙，107 则从登录响应落地起就被拒绝。未登录时一律不请求。
+    private var canAccessVirtualItems: Bool {
+        let permission = SelfPermissionBridge.shared
+        if permission.isLoaded {
+            return permission.canVirtualItems
+        }
+        guard SessionStore.shared.isLoggedIn,
+              let userType = SessionStore.shared.user?.userType else {
+            return false
+        }
+        return !UserPermissionMapping.blocked(for: userType).contains(.virtualItems)
+    }
+
+    /// 角色热切换时清掉独立礼物墙缓存。飞行中的 reload 在落地时会再次读取
+    /// `canAccessVirtualItems`，不会把旧角色的结果重新写回内存。
+    private func observeVirtualItemsPermission() {
+        let permission = SelfPermissionBridge.shared
+        permission.$isLoaded
+            .combineLatest(permission.$canVirtualItems)
+            .sink { [weak self] isLoaded, canVirtualItems in
+                guard isLoaded, !canVirtualItems else { return }
+                self?.clearGiftWallForDisabledVirtualItems()
+            }
+            .store(in: &permissionCancellables)
+    }
+
+    private func clearGiftWallForDisabledVirtualItems() {
+        guard !giftWallList.isEmpty else { return }
+        let urls = giftWallList.compactMap { $0.iconUrl.flatMap(URL.init(string:)) }
+        giftWallList = []
+        ImageCache.shared.invalidate(urls)
+        saveToDisk()
     }
 
     // MARK: - Helpers

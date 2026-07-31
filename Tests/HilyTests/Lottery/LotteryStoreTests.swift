@@ -233,6 +233,18 @@ final class LotteryStoreTests: XCTestCase {
         XCTAssertTrue(service.drawCalls.isEmpty)
     }
 
+    func testDraw_permissionDenied_doesNotCallService() async {
+        let service = FakeLotteryService(activity: activity(prizeCount: 8))
+        let store = LotteryStore(route: route(), service: service, canDrawLottery: { false })
+
+        await store.loadIfNeeded()
+        store.startDraw(.one)
+        await wait(seconds: 0.05)
+
+        XCTAssertTrue(service.drawCalls.isEmpty)
+        XCTAssertEqual(store.state, .ready)
+    }
+
     private func route() -> LotteryRoute {
         LotteryRoute(url: URL(string: "https://h5-activity-common.pages.dev/lottery?lotteryId=26")!)!
     }

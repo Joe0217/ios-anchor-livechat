@@ -21,6 +21,10 @@ struct PartyRoomBigSeatCell: View {
     let aspectRatio: CGFloat?
     /// PK 选队特殊三栏沿用本视频渲染，但 H5 不显示麦位收礼值。
     let showsGiftValue: Bool
+    /// 麦位头像框属于虚拟道具展示，可单独在审核账号隐藏。
+    let showsHeadFrame: Bool
+    /// Party-only 审核账号保留麦位和语音，不渲染视频麦位画面。
+    let allowsVideo: Bool
 
     /// PK-aware gems 显示（SELECTING 期强制 0，对齐 H5 audio-wrap.vue :93-97）
     /// cell 直接订阅 battleStore 触发 SELECTING → RUNNING 时 gems 数字自动重绘
@@ -33,7 +37,9 @@ struct PartyRoomBigSeatCell: View {
         camera: CameraManager?,
         engine: PartyRTCEngine,
         aspectRatio: CGFloat? = 9.0 / 16.0,
-        showsGiftValue: Bool = true
+        showsGiftValue: Bool = true,
+        showsHeadFrame: Bool = true,
+        allowsVideo: Bool = true
     ) {
         self.seat = seat
         self.isSelf = isSelf
@@ -42,6 +48,8 @@ struct PartyRoomBigSeatCell: View {
         self.engine = engine
         self.aspectRatio = aspectRatio
         self.showsGiftValue = showsGiftValue
+        self.showsHeadFrame = showsHeadFrame
+        self.allowsVideo = allowsVideo
     }
 
     var body: some View {
@@ -176,7 +184,8 @@ struct PartyRoomBigSeatCell: View {
     /// 视频位 seat.seatType==1 且 cameraEnabled==1 时不显示；语聊/视频关摄像头时显示
     @ViewBuilder
     private var headFrameOverlay: some View {
-        if seat.occupied,
+        if showsHeadFrame,
+           seat.occupied,
            let raw = seat.headFrame, !raw.isEmpty,
            !isVideoActiveOnThisSeat,
            !isCameraOffVideoSeat {
@@ -190,6 +199,7 @@ struct PartyRoomBigSeatCell: View {
     /// 判断本 seat 是否正在展示实时视频（本端 CameraPreview 或 远端 PartyRemoteVideoView）
     /// 视频活跃时装饰框会被视频占据 → 不叠（对齐 H5 视频位有摄像头时不显示 head-frame）
     private var isVideoActiveOnThisSeat: Bool {
+        guard allowsVideo else { return false }
         guard seat.seatType == 1 else { return false }
         if isSelf { return isLocalCameraActive }
         return (seat.cameraEnabled ?? 0) == 1
@@ -229,11 +239,11 @@ struct PartyRoomBigSeatCell: View {
     @ViewBuilder
     private var videoLayer: some View {
         if seat.occupied, seat.seatType == 1 {
-            if isSelf, isLocalCameraActive, let cm = camera {
+            if allowsVideo, isSelf, isLocalCameraActive, let cm = camera {
                 CameraPreview(camera: cm, agora: nil, scalingMode: .aspectFill)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
-            } else if !isSelf, let idx = seat.seatIndex, (seat.cameraEnabled ?? 0) == 1 {
+            } else if allowsVideo, !isSelf, let idx = seat.seatIndex, (seat.cameraEnabled ?? 0) == 1 {
                 PartyRemoteVideoView(seatIndex: idx, engine: engine)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()

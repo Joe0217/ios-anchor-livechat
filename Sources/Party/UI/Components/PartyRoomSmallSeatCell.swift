@@ -21,6 +21,12 @@ struct PartyRoomSmallSeatCell: View {
     var isVoicePrintActive: Bool = false
     /// v17：尺寸变体（对齐 H5 30 麦 sm + @media(<380) 缩小）
     var sizeVariant: SizeVariant = .default
+    /// 审核账号不展示麦位礼物/宝石累计值；默认保持其他账号的既有视觉。
+    var showsGiftValue: Bool = true
+    /// 头像框属于虚拟道具展示；审核账号仅保留基础麦位信息。
+    var showsHeadFrame: Bool = true
+    /// 任务奖励声纹含服务端虚拟装扮资源；基础 Party 房保留普通说话环。
+    var showsTaskVoicePrint: Bool = true
 
     /// PK-aware gems 显示（SELECTING 期强制 0，对齐 H5 audio-wrap.vue :93-97）
     /// cell 直接订阅 battleStore 触发 SELECTING → RUNNING 时 gems 数字自动重绘
@@ -59,7 +65,7 @@ struct PartyRoomSmallSeatCell: View {
             PartySmallSeatSpeakingEffect(
                 isSpeaking: isSpeaking && seat.occupied,
                 isVoicePrintActive: isVoicePrintActive && seat.occupied,
-                vfxURL: seat.anchorTaskRewardExt?.vfxUrl,
+                vfxURL: showsTaskVoicePrint ? seat.anchorTaskRewardExt?.vfxUrl : nil,
                 avatarDiameter: avatarSize,
                 diameter: avatarSize + (sizeVariant == .sm ? 24 : 28)
             )
@@ -68,7 +74,7 @@ struct PartyRoomSmallSeatCell: View {
 
             // v16：占用态头像装饰框（对齐 H5 `seat-roster-item.vue` head-frame 组件）
             // 空位不叠（视觉焦点让给 partySeatEmpty 空位切图）。
-            if seat.occupied, let raw = seat.headFrame, !raw.isEmpty {
+            if showsHeadFrame, seat.occupied, let raw = seat.headFrame, !raw.isEmpty {
                 HeadFrameView(urlString: raw,
                               size: avatarSize + 12)
                     .allowsHitTesting(false)
@@ -164,14 +170,16 @@ struct PartyRoomSmallSeatCell: View {
                         .truncationMode(.tail)
                     PartyRoleBadge(roomRoleType: seat.roomRoleType, size: 12)
                 }
-                HStack(spacing: 2) {
-                    Image("partyGems")
-                        .resizable().scaledToFit()
-                        .frame(width: 10, height: 10)
-                    // PK 期 SELECTING 强制归零（对齐 H5 audio-wrap.vue :93-97 seatScore）
-                    Text(PartyNumberFormat.compact(PartyBattleSeatDisplay.giftValueCountInt(for: seat)))
-                        .font(Theme.Typography.partyRoomGemsNumber)
-                        .foregroundColor(Theme.Palette.partyRoomGemsText)
+                if showsGiftValue {
+                    HStack(spacing: 2) {
+                        Image("partyGems")
+                            .resizable().scaledToFit()
+                            .frame(width: 10, height: 10)
+                        // PK 期 SELECTING 强制归零（对齐 H5 audio-wrap.vue :93-97 seatScore）
+                        Text(PartyNumberFormat.compact(PartyBattleSeatDisplay.giftValueCountInt(for: seat)))
+                            .font(Theme.Typography.partyRoomGemsNumber)
+                            .foregroundColor(Theme.Palette.partyRoomGemsText)
+                    }
                 }
             }
         } else if let idx = seat.seatIndex {

@@ -47,6 +47,16 @@ final class PartyCurrencyStoreTests: XCTestCase {
         XCTAssertEqual(store.validationError, .insufficientGems)
     }
 
+    func test_exchange_permissionDenied_doesNotCallService() async {
+        let service = FakePartyCurrencyService(balances: [])
+        let store = PartyCurrencyStore(service: service, canExchange: { false })
+
+        let outcome = await store.exchange()
+
+        XCTAssertEqual(outcome, .ignored)
+        XCTAssertTrue(service.exchangeCalls.isEmpty)
+    }
+
     func test_setAmount_ignoresNonAsciiNumerals() {
         let store = PartyCurrencyStore(service: FakePartyCurrencyService(balances: []))
 

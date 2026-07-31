@@ -58,6 +58,9 @@ final class PartyRTCEngine: NSObject, ObservableObject {
 
     /// 视频位推帧是否已启用（默认 false，仅 `enableVideoSeat()` 后置 true）
     private(set) var videoSeatActive = false
+    /// 107 Party-only 角色保留 Party 语音，但不能接收、展示或发布视频麦位。
+    /// 该值单独保存，支持用户角色在已进房时动态切换。
+    private var partyVideoCapabilityEnabled = true
 
     /// 上一次 Agora 连接态（用于 F 期断线重连 partyRTCEngineDidReconnect 检测）。
     /// - nil = 未收到过 connectionChangedTo（初始态）
@@ -124,7 +127,7 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         option.publishMicrophoneTrack = false
         option.publishCustomVideoTrack = false
         option.autoSubscribeAudio = true
-        option.autoSubscribeVideo = true
+        option.autoSubscribeVideo = partyVideoCapabilityEnabled
 
         localAgoraUid = uid  // v15 声纹：speakers.uid=0 → localAgoraUid 映射用
         state = .joining
@@ -150,8 +153,8 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         let option = AgoraRtcChannelMediaOptions()
         option.clientRoleType = .broadcaster
         option.publishMicrophoneTrack = true
-        // 视频位的 publishCustomVideoTrack 在 enableVideoSeat 内开
-        option.publishCustomVideoTrack = (seatType == .video) ? true : false
+        // 视频位的 publishCustomVideoTrack 在 enableVideoSeat 内开；107 只保留语音发布。
+        option.publishCustomVideoTrack = seatType == .video && partyVideoCapabilityEnabled
         engine.updateChannel(with: option)
         AppLogger.party.info("[PartyRTC] upperSeat seatType=\(seatType.rawValue, privacy: .public)")
     }
@@ -209,10 +212,40 @@ final class PartyRTCEngine: NSObject, ObservableObject {
 
     // MARK: - 视频位（M5 完整实装；M2 仅占位接口让 PartyStore 编译过）
 
+    /// 同步当前账号的 Party 视频能力。权限关闭时立即断开远端 canvas 并停止本端推帧；
+    /// 语音 RTC 会话保持不变，避免把 Party-only 账号误踢出房间。
+    @MainActor
+    func setPartyVideoCapabilityEnabled(_ enabled: Bool) {
+        guard partyVideoCapabilityEnabled != enabled else { return }
+        partyVideoCapabilityEnabled = enabled
+        guard let engine else { return }
+
+        let option = AgoraRtcChannelMediaOptions()
+        option.autoSubscribeVideo = enabled
+        if !enabled {
+            option.publishCustomVideoTrack = false
+        }
+        engine.updateChannel(with: option)
+
+        guard !enabled else { return }
+        if videoSeatActive {
+            disableVideoSeatInternal()
+        } else {
+            engine.disableVideo()
+        }
+        releaseAllRemoteViews()
+        AppLogger.party.notice("[PartyRTC] Party video capability disabled")
+    }
+
     /// 启用视频位推帧。本端帧由 PartyStore 接 CameraManager v5.8 订阅字典推到 `pushFrame`。
     /// MVP 编码档位固定 360×640 @ 15fps（spec §1.4.3 + §1.5 #12）。
     @MainActor
     func enableVideoSeat() {
+        guard partyVideoCapabilityEnabled,
+              SelfPermissionBridge.shared.gate(.partyVideo, action: "partyEnableVideoSeat") else {
+            disableVideoSeat()
+            return
+        }
         guard let engine else { return }
         guard !videoSeatActive else { return }
         engine.enableVideo()
@@ -272,9 +305,14 @@ final class PartyRTCEngine: NSObject, ObservableObject {
 
     /// 绑定 seatIndex 对应的远端视频流到 (uid, view) canvas。
     /// 幂等：同 (seatIndex, uid) 重入 = no-op；不同 uid（换人）= 先清旧 uid 再绑新 uid。
-    /// `autoSubscribeVideo` 已在 join 时置 true，无需 muteRemoteVideoStream(false)。
+    /// `autoSubscribeVideo` 会随账号能力更新；Party-only 账号不创建远端视频 canvas。
     @MainActor
     func bindRemoteVideo(seatIndex: Int, uid: UInt) {
+        guard partyVideoCapabilityEnabled,
+              SelfPermissionBridge.shared.canPartyVideoSnapshot else {
+            unbindRemoteVideo(seatIndex: seatIndex)
+            return
+        }
         guard let engine, uid > 0 else { return }
         if let last = seatIndexToBoundUid[seatIndex], last == uid {
             return  // 幂等：无变化

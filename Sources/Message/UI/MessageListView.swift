@@ -13,6 +13,7 @@ import UIKit
 struct MessageListView: View {
 
     @ObservedObject var store: MessageSessionStore
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     @StateObject private var massTextingStore = MassTextingStore()
     /// H-2 spec §4.1：短按 row 时把 peerYxAccId 追加到 path 触发 push；由 MainTabView 上抬持有
     @Binding var messagesPath: NavigationPath
@@ -44,16 +45,18 @@ struct MessageListView: View {
                         .foregroundStyle(.white)
                     Spacer()
                     // 左 icon:通话/消息记录切图(Frame 390 日历+时钟)——H5 tap 跳 /communication Records tab
-                    Button {
-                        messagesPath.append(MessageListView.callRecordsSentinel)
-                    } label: {
-                        Image("messageNavHistory")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 28, height: 28)
-                            .contentShape(Rectangle())
+                    if permission.canCall {
+                        Button {
+                            messagesPath.append(MessageListView.callRecordsSentinel)
+                        } label: {
+                            Image("messageNavHistory")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 28, height: 28)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                     // 右 icon:清空当前 tab 会话列表(切图"清除.png")
                     Button {
                         showClearTabConfirm = true

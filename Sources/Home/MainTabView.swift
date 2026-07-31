@@ -28,10 +28,11 @@ struct MainTabView: View {
         case work
     }
 
-    @State private var selection: MainTab = .home
+    @State private var selection: MainTab
     /// P 项目权限管理：Party tab 按 userType 黑名单动态显隐（bit `.party` 命中 → 隐藏）。
     /// 本项目底 tab bar 是 ForEach + 自定义 Button（非 SwiftUI TabView），tab 数量变化不触发 tag 消失坑。
     @ObservedObject private var permission = SelfPermissionBridge.shared
+    @EnvironmentObject private var session: SessionStore
     @State private var homePath: NavigationPath = NavigationPath()
     @State private var workPath: NavigationPath = NavigationPath()
     /// H-2 spec §4.1：Messages tab 加 NavigationStack path 支持 push ChatDetailView（对齐 homePath 模式）
@@ -68,6 +69,12 @@ struct MainTabView: View {
     /// Party 小窗的窄观察源，避免主壳订阅 PartyStore 的高频麦位/公屏更新。
     @ObservedObject private var minimizedParty = PartyStore.shared.minimizedBridge
 
+    /// 107 的 Party-only 会话从 Party 起始，避免权限 Bridge 首次异步绑定前短暂显示首页。
+    /// 角色运行中变化仍由 `enforceVisibleSelection()` 负责，不依赖这个初始值。
+    init(initialSelection: MainTab = .home) {
+        _selection = State(initialValue: initialSelection)
+    }
+
     /// 直播结束页 back 时切 Work Tab + 清 Home/Work path。
     /// 两 path 都清：Home QuickGoLive 与 Work Go Live 两个入口都可能把 LiveSettings/LiveRoomView
     /// 塞进对应 path，切 tab 到 Work 时若不清对方 path，用户回到起始入口 tab 仍能 back 回残留 view。
@@ -85,6 +92,10 @@ struct MainTabView: View {
     /// Work Match 图标点击 → 切 Home Tab + 请求 LiveTabView 切 Match top tab（对齐首页 Match 入口）。
     private var openHomeMatchAction: OpenHomeMatchAction {
         OpenHomeMatchAction {
+            guard permission.canHomeDiscovery, permission.canCall else {
+                AppToastCenter.shared.show(L10n.commonNoContent)
+                return
+            }
             selection = .home
             HomeNavigationBus.shared.requestTopTab(.match)
         }
@@ -98,7 +109,10 @@ struct MainTabView: View {
     /// 覆盖同帧刚设置的 `[peerYxAccId]` → Messages Tab 只显示会话列表根页，push 丢失。
     private var openChatAction: OpenChatAction {
         OpenChatAction { peerYxAccId in
-            guard !peerYxAccId.isEmpty else { return }
+            guard permission.canDirectMessages, !peerYxAccId.isEmpty else {
+                AppToastCenter.shared.show(L10n.commonNoContent)
+                return
+            }
             suppressPathClearOnTabChange = true
             selection = .messages
             homePath = NavigationPath()
@@ -113,6 +127,10 @@ struct MainTabView: View {
     /// 已注册的各 tab navigationDestination(for: UserProfileRoute.self) 会自动接单。
     private var openUserProfileAction: OpenUserProfileAction {
         OpenUserProfileAction { userId in
+            guard permission.canProfileSocial else {
+                AppToastCenter.shared.show(L10n.commonNoContent)
+                return
+            }
             let route = UserProfileRoute.userId(userId)
             switch selection {
             case .home:     homePath.append(route)
@@ -219,12 +237,14 @@ struct MainTabView: View {
         .onReceive(H5NativeActionRouter.shared.publisher) { destination in
             handleH5NativeDestination(destination)
         }
-        .task {
+        .task(id: permission.canHomeDiscovery) {
+            guard permission.canHomeDiscovery else { return }
             // 全局图片配置预热（对齐 H5 app.js `getBannerList([2])`）：
             // 首页 banner 位靠此接口喂数据；J 里程碑接入启动图/挂件/榜单/分类贴图时按需扩 types
             await AppPictureStore.shared.loadIfNeeded(types: [.banner])
         }
-        .task {
+        .task(id: permission.canHomeDiscovery) {
+            guard permission.canHomeDiscovery else { return }
             // 跑马灯预热（对齐 H5 `getLiveMarqueeListData()` 进 Live 广场就调）——
             // 独立 .task 让两个预热并发起飞（一起 await 也可以；分开更直观）
             await GiftMarqueeStore.shared.loadIfNeeded()
@@ -232,17 +252,10 @@ struct MainTabView: View {
         .onAppear {
             InviteMessageCenter.shared.updateDisplayContext(isAtRootPage: !isOnSubpageSignal)
             RobotCallRouteGate.shared.update(isAtRootPage: !isOnSubpageSignal)
-            // L 里程碑：一次性 attach 全局匹配摄像头会话到 MatchStore.shared
-            MatchStore.shared.attachCameraSession(matchCameraSession)
-            // L 里程碑 #3c：启动 10 分钟提示弹窗调度
-            matchPopupCoordinator.start()
+            updateMatchCapability()
             // E-spec §0.2 F-16：初始 gate 同步（onChange 不触发首次；覆盖冷启动 selection != .home 的场景）
             matchPopupCoordinator.updatePartyTabBlocked(selection == .party)
-            // P 项目权限管理：冷启动 selection == .party 但 permission.canParty == false 时兜底
-            if selection == .party && !permission.canParty {
-                partyPath = NavigationPath()
-                selection = .home
-            }
+            enforceVisibleSelection()
         }
         // 观察 scenePhase 更新 popupCoordinator.appHidden 用于组合态 gate
         .onChange(of: scenePhase) { newPhase in
@@ -256,15 +269,34 @@ struct MainTabView: View {
             if !newValue {
                 partyPath = NavigationPath()
                 if selection == .party {
-                    selection = .home
+                    selection = fallbackVisibleTab()
                 }
                 Task { await PartyStore.shared.forceLeaveRoom(.userRequest) }
             }
         }
+        .onChange(of: permission.isLoaded) { _ in enforceVisibleSelection() }
+        .onChange(of: permission.canHomeDiscovery) { allowed in
+            if !allowed {
+                homePath = NavigationPath()
+                activityRankingPage = nil
+            }
+            enforceVisibleSelection()
+        }
+        .onChange(of: permission.canWorkDashboard) { _ in enforceVisibleSelection() }
+        .onChange(of: permission.canDirectMessages) { allowed in
+            if !allowed {
+                messagesPath = NavigationPath()
+            }
+            // DEBUG override 和服务端角色热切换均会走这里。仅隐藏 keep-alive 消息树不足以
+            // 阻止既有 Store 处理 NIM 重连并拉取 P2P 数据。
+            MessageSessionStore.updateSharedDirectMessagesCapability(isAllowed: allowed)
+            enforceVisibleSelection()
+        }
+        .onChange(of: matchCapabilityEnabled) { _ in updateMatchCapability() }
         // L 里程碑：全局匹配预览浮窗（跨 tab 展示）
         // .overlay 挂在 safeAreaInset 之后 → 覆盖全屏（含 tabbar 区域）
         .overlay {
-            if matchStore.state == .matching {
+            if permission.canCall, matchStore.state == .matching {
                 MatchCameraPreviewFloating(
                     camera: matchCameraSession.camera,
                     onClose: {
@@ -293,7 +325,7 @@ struct MainTabView: View {
         .animation(.easeInOut(duration: 0.2), value: minimizedParty.isVisible)
         // L 里程碑 #3c：10 分钟提示弹窗（全局跨 tab）
         .overlay {
-            if matchPopupCoordinator.isShowing {
+            if permission.canCall, matchPopupCoordinator.isShowing {
                 MatchTipPopup(
                     onGoMatch: { noReminder in
                         if noReminder {
@@ -325,7 +357,7 @@ struct MainTabView: View {
         .animation(.easeInOut(duration: 0.2), value: matchPopupCoordinator.isShowing)
         // L 里程碑 #3d：未露脸倒计时弹窗（.matching 期间人脸检测未检出触发）
         .overlay {
-            if matchStore.showNoFacePopup {
+            if permission.canCall, matchStore.showNoFacePopup {
                 MatchNoFacePopup(onDismiss: { matchStore.dismissNoFacePopup() })
                     .transition(.opacity)
                     .zIndex(60)
@@ -333,7 +365,7 @@ struct MainTabView: View {
         }
         // L 里程碑 #3d：移除匹配弹窗（未露脸倒计时结束 → 已 blocked → 展示确认）
         .overlay {
-            if matchStore.showExitMatchPopup {
+            if permission.canCall, matchStore.showExitMatchPopup {
                 MatchExitPopup(onOK: { matchStore.dismissExitMatchPopup() })
                     .transition(.opacity)
                     .zIndex(60)
@@ -343,7 +375,7 @@ struct MainTabView: View {
         .animation(.easeInOut(duration: 0.2), value: matchStore.showExitMatchPopup)
         // Match toast 全局展示：沿用项目通用 toast 视觉和时长。
         .overlay(alignment: .top) {
-            if let toast = matchStore.lastToast {
+            if permission.canCall, let toast = matchStore.lastToast {
                 Text(toast.localized)
                     .toastStyle()
                     .transition(Toast.transition)
@@ -358,7 +390,7 @@ struct MainTabView: View {
         .alert(
             L10n.matchResumeAlertTitle,
             isPresented: Binding(
-                get: { matchStore.showResumeMatchAlert },
+                get: { permission.canCall && matchStore.showResumeMatchAlert },
                 set: { if !$0 { matchStore.dismissResumeMatchAlert() } }
             )
         ) {
@@ -371,11 +403,14 @@ struct MainTabView: View {
     }
 
     /// content 分两层：
-    /// 1. ZStack 永久持有 Home / Messages（opacity 切显隐，view 树不 dismantle）
+    /// 1. ZStack 在能力允许时永久持有 Home / Messages（opacity 切显隐，view 树不 dismantle）
     /// 2. 内嵌 if 切换 Work / Profile（销毁重建，资源不长持）
     private var content: some View {
         ZStack {
-            // —— Home：永久持有 ——
+            // —— Home：仅在发现能力可用时挂载并永久持有 ——
+            // 不能只隐藏 tab：Home 内的 TabView 会预创建 MatchTabView，后者有异步数据任务。
+            // 107 必须完全不构造此子树，避免 Party-only 角色后台访问发现/匹配接口。
+            if shouldMountHomeContent {
             // H-0：home tab 加 NavigationStack 支持多入口 UserProfileRoute（spec §5.3）。
             // 未来兄弟入口（Circle 头像 / Live 主播头像）也通过 NavigationLink(value: UserProfileRoute.userId(...)) 推入。
             //
@@ -389,9 +424,13 @@ struct MainTabView: View {
                     .avatarProfilePusher { uid in homePath.append(UserProfileRoute.userId(uid)) }
                     // 客态直播间必须走 homePath，令主 TabBar 与其他首页子页统一隐藏和恢复。
                     .navigationDestination(for: AudienceLiveRoomRoute.self) { route in
-                        switch route {
-                        case .room(let anchor):
-                            AudienceLiveRoomView(anchor: anchor)
+                        if permission.canHomeDiscovery {
+                            switch route {
+                            case .room(let anchor):
+                                AudienceLiveRoomView(anchor: anchor)
+                            }
+                        } else {
+                            EmptyView()
                         }
                     }
                     // 首页右上排行榜：Live/List/Match 进全站 Charm/Wealth/CP 榜；Circle 进积分榜。
@@ -409,15 +448,19 @@ struct MainTabView: View {
                         }
                     }
                     .navigationDestination(for: LotteryRoute.self) { route in
-                        LotteryView(
-                            route: route,
-                            onOpenPartyRoom: { roomID in
-                                openLotteryPartyRoom(roomID)
-                            },
-                            onOpenLiveSettings: {
-                                openLotteryLiveSettings()
-                            }
-                        )
+                        if permission.canLottery {
+                            LotteryView(
+                                route: route,
+                                onOpenPartyRoom: { roomID in
+                                    openLotteryPartyRoom(roomID)
+                                },
+                                onOpenLiveSettings: {
+                                    openLotteryLiveSettings()
+                                }
+                            )
+                        } else {
+                            EmptyView()
+                        }
                     }
                     // Home 也持有 WorkRoute destination——QuickGoLive 从 Home 内 push LiveSettings 后,
                     // LiveSettings 内嵌 NavigationLink(WorkRoute.wishSetting/.beautySettings) 也要能
@@ -426,7 +469,8 @@ struct MainTabView: View {
                     // 复用 WorkRoute 类型（不新建 HomeRoute）——LiveSettings 内的链接 value 类型已固定为 WorkRoute，
                     // 换类型需侵入 LiveSettings 源码。
                     .navigationDestination(for: WorkRoute.self) { route in
-                        switch route {
+                        if allowsWorkRoute(route) {
+                            switch route {
                         case .firstLiveRule:  FirstLiveRuleView(path: $homePath)
                         case .liveSettings:   LiveSettingsView()
                         case .wishSetting:    WishSettingView()
@@ -477,6 +521,9 @@ struct MainTabView: View {
                             PartyCurrencyExchangeView(initialTab: tab)
                         case .liveResult(let begin, let end, let endType):
                             LiveResultView(range: (begin, end), endType: endType, hostPath: $homePath)
+                            }
+                        } else {
+                            EmptyView()
                         }
                     }
                     // 结果页 push 私聊页（LiveResultView 从 homePath push String type peerYxAccId）
@@ -495,6 +542,10 @@ struct MainTabView: View {
                 if !route.isInternalH5Route,
                    let url = URL(string: route.resolvedURLString),
                    let lotteryRoute = LotteryRoute(url: url) {
+                    guard permission.canLottery else {
+                        AppToastCenter.shared.show(L10n.commonNoContent)
+                        return
+                    }
                     homePath.append(lotteryRoute)
                 } else {
                     homePath.append(route)
@@ -506,6 +557,10 @@ struct MainTabView: View {
             })
             .environment(\.audienceGoLive, AudienceGoLiveAction {
                 // 客态房间已在调用侧完成 RTC/IM 退出；路径只保留设置页，返回即回首页根页。
+                guard permission.canLive else {
+                    AppToastCenter.shared.show(L10n.commonNoContent)
+                    return
+                }
                 homePath = NavigationPath([WorkRoute.liveSettings])
             })
             .environment(\.liveTermination, liveTerminationAction)
@@ -514,36 +569,40 @@ struct MainTabView: View {
             .opacity(selection == .home ? 1 : 0)
             .allowsHitTesting(selection == .home)
             .accessibilityHidden(selection != .home)
-
-            // —— Messages：永久持有 ——
-            // H-1 MVP：P2P 会话列表 shared 单例 + keep-alive；切走再回来保留 selectedCategory /
-            // sessions / delegate 订阅。详见 [MessageSessionStoreShared.swift](../Message/MessageSessionStoreShared.swift)
-            //
-            // H-2：包 NavigationStack path 支持 push 到 ChatDetailContainer（tap row 触发）
-            NavigationStack(path: $messagesPath) {
-                MessageListView(store: MessageSessionStore.shared, messagesPath: $messagesPath)
-                    .navigationDestination(for: String.self) { pathValue in
-                        // Batch 3.8：sentinel `__station_list__` → StationListView（独立 HTTP 列表页）
-                        if pathValue == MessageListView.stationSentinel {
-                            StationListView()
-                        } else if pathValue == MessageListView.callRecordsSentinel {
-                            // 通话历史记录页（对齐 H5 `/communication?from=news&active=0`）
-                            CallRecordListView(path: $messagesPath)
-                        } else {
-                            let selfYxAccId = SessionStore.shared.user?.yxAccid ?? ""
-                            ChatDetailContainer(peerYxAccId: pathValue, selfYxAccId: selfYxAccId)
-                        }
-                    }
-                    // 详情↔聊天互跳所有 destination(UserProfileRoute + ChatFromProfileRoute) 统一注册
-                    // —— ChatMessageRow 内 NavigationLink(value: UserProfileRoute) 会走 helper 里的 UserProfileRoute case
-                    .userProfileAndChatDestinations()
-                    .environment(\.openUserProfile, openUserProfileAction)
-                    // 头像 tap 内置分派：非房间态 → push UserProfileRoute 跳详情页
-                    .avatarProfilePusher { uid in messagesPath.append(UserProfileRoute.userId(uid)) }
             }
-            .opacity(selection == .messages ? 1 : 0)
-            .allowsHitTesting(selection == .messages)
-            .accessibilityHidden(selection != .messages)
+
+            // —— Messages：仅在 P2P 消息能力开启时挂载 ——
+            // 107 不可仅隐藏 tab：keep-alive 容器会让列表 task、群发提示和会话订阅继续运行。
+            if permission.canDirectMessages {
+                NavigationStack(path: $messagesPath) {
+                    MessageListView(store: MessageSessionStore.shared, messagesPath: $messagesPath)
+                        .navigationDestination(for: String.self) { pathValue in
+                            // Batch 3.8：sentinel `__station_list__` → StationListView（独立 HTTP 列表页）
+                            if pathValue == MessageListView.stationSentinel {
+                                StationListView()
+                            } else if pathValue == MessageListView.callRecordsSentinel {
+                                // 通话历史记录页（对齐 H5 `/communication?from=news&active=0`）
+                                if permission.canCall {
+                                    CallRecordListView(path: $messagesPath)
+                                } else {
+                                    EmptyView()
+                                }
+                            } else {
+                                let selfYxAccId = SessionStore.shared.user?.yxAccid ?? ""
+                                ChatDetailContainer(peerYxAccId: pathValue, selfYxAccId: selfYxAccId)
+                            }
+                        }
+                        // 详情↔聊天互跳所有 destination(UserProfileRoute + ChatFromProfileRoute) 统一注册
+                        // —— ChatMessageRow 内 NavigationLink(value: UserProfileRoute) 会走 helper 里的 UserProfileRoute case
+                        .userProfileAndChatDestinations()
+                        .environment(\.openUserProfile, openUserProfileAction)
+                        // 头像 tap 内置分派：非房间态 → push UserProfileRoute 跳详情页
+                        .avatarProfilePusher { uid in messagesPath.append(UserProfileRoute.userId(uid)) }
+                }
+                .opacity(selection == .messages ? 1 : 0)
+                .allowsHitTesting(selection == .messages)
+                .accessibilityHidden(selection != .messages)
+            }
 
             // —— Party：永久持有（E-spec §6B v4 反悔 2026-07-10 从 if 销毁重建改 keep-alive）——
             // 切走再回 tab 保留 PartyListStore state / rooms / scroll offset，对齐 home/messages 模式。
@@ -564,7 +623,8 @@ struct MainTabView: View {
                             requestLiveEntry(.work)
                         })
                         .navigationDestination(for: WorkRoute.self) { route in
-                            switch route {
+                            if allowsWorkRoute(route) {
+                                switch route {
                             case .firstLiveRule:
                                 FirstLiveRuleView(path: $workPath)
                             case .liveSettings:
@@ -631,6 +691,9 @@ struct MainTabView: View {
                                 PartyCurrencyExchangeView(initialTab: tab)
                             case .liveResult(let begin, let end, let endType):
                                 LiveResultView(range: (begin, end), endType: endType, hostPath: $workPath)
+                                }
+                            } else {
+                                EmptyView()
                             }
                         }
                         .navigationDestination(for: HomeLeaderboardRoute.self) { route in
@@ -658,13 +721,22 @@ struct MainTabView: View {
                 NavigationStack(path: $profilePath) {
                     ProfileView(path: $profilePath)
                         .navigationDestination(for: FollowSegment.self) { segment in
-                            FollowListView(initialSegment: segment)
+                            if permission.canProfileSocial {
+                                FollowListView(initialSegment: segment)
+                            } else {
+                                EmptyView()
+                            }
                         }
                         .navigationDestination(for: ProfileRoute.self) { route in
                             switch route {
                             case .settings:     SettingsView(path: $profilePath)
                             case .levelDetail:  LevelDetailView()
-                            case .dataStatistics: DataStatisticsView()
+                            case .dataStatistics:
+                                if permission.canWorkDashboard {
+                                    DataStatisticsView()
+                                } else {
+                                    EmptyView()
+                                }
                             case .blocklist:    BlocklistView()
                             case .editProfile:  EditProfileView(service: EditProfileService.shared)
                             case .anchorPolicy: AnchorPolicyView()
@@ -735,9 +807,56 @@ struct MainTabView: View {
         MainTab.allCases.filter { tab in
             switch tab {
             case .party: return permission.canParty
-            default:     return true
+            case .home: return permission.canHomeDiscovery
+            case .work: return permission.canWorkDashboard
+            case .messages: return permission.canDirectMessages
+            case .profile: return true
             }
         }
+    }
+
+    /// 结构性挂载不能只等 Bridge 的异步 `@Published` 更新：普通账号的首页应保持原有首帧行为，
+    /// 但 107 在 Bridge 尚未装配时也绝不能短暂构造 Home 子树。会话已存在时复用同一映射同步判定；
+    /// 无会话则保守不挂载。
+    private var shouldMountHomeContent: Bool {
+        if permission.isLoaded { return permission.canHomeDiscovery }
+        guard let userType = session.user?.userType else { return false }
+        return !UserPermissionMapping.blocked(for: userType).contains(.homeDiscovery)
+    }
+
+    /// 107 在会话权限加载后从默认 Home 收敛到 Party；其他账号类型仍沿用既有 tab 行为。
+    private func enforceVisibleSelection() {
+        guard permission.isLoaded, !visibleTabs.contains(selection) else { return }
+        switch selection {
+        case .home: homePath = NavigationPath()
+        case .work: workPath = NavigationPath()
+        case .party: partyPath = NavigationPath()
+        case .messages: messagesPath = NavigationPath()
+        case .profile: break
+        }
+        selection = fallbackVisibleTab()
+    }
+
+    private func fallbackVisibleTab() -> MainTab {
+        if permission.canParty { return .party }
+        if permission.canHomeDiscovery { return .home }
+        if permission.canDirectMessages { return .messages }
+        return .profile
+    }
+
+    private var matchCapabilityEnabled: Bool {
+        permission.canCall && permission.canHomeDiscovery
+    }
+
+    /// Match 的相机预览和 10 分钟提示均属于完整主播通话能力。107 进入 Party 时，
+    /// 既不挂接相机，也不保留上一个账号/角色留下的定时提示。
+    private func updateMatchCapability() {
+        guard matchCapabilityEnabled else {
+            matchPopupCoordinator.stop()
+            return
+        }
+        MatchStore.shared.attachCameraSession(matchCameraSession)
+        matchPopupCoordinator.start()
     }
 
     private func tabItem(_ tab: MainTab, isSelected: Bool) -> some View {
@@ -773,6 +892,10 @@ struct MainTabView: View {
     }
 
     private func requestLiveEntry(_ target: LiveEntryTarget) {
+        guard permission.canLive else {
+            AppToastCenter.shared.show(L10n.commonNoContent)
+            return
+        }
         let partyStore = PartyStore.shared
         guard partyStore.roomState == .joined else {
             openLiveEntry(target)
@@ -808,7 +931,7 @@ struct MainTabView: View {
     /// 才由服务端给出的热门房 ID 进入对应房间。
     private func openLotteryPartyRoom(_ roomID: String) -> Bool {
         let trimmedRoomID = roomID.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedRoomID.isEmpty, permission.canParty else {
+        guard !trimmedRoomID.isEmpty, permission.canLottery, permission.canParty else {
             AppToastCenter.shared.show(L10n.commonNoContent)
             return false
         }
@@ -836,6 +959,10 @@ struct MainTabView: View {
     /// Live 引导继续复用主播开播设置流。`getRoomId(roomType: 0)` 只证明服务端当前存在可用直播，
     /// 不能将它误解为主播端可直接构造的 AudienceLiveRoomRoute。
     private func openLotteryLiveSettings() -> Bool {
+        guard permission.canLottery, permission.canLive else {
+            AppToastCenter.shared.show(L10n.commonNoContent)
+            return false
+        }
         let partyStore = PartyStore.shared
         switch partyStore.roomState {
         case .idle, .ended:
@@ -857,10 +984,24 @@ struct MainTabView: View {
     private func handleH5NativeDestination(_ destination: H5NativeActionRouter.Destination) {
         switch destination {
         case .wallet:
+            guard permission.canWallet else {
+                AppToastCenter.shared.show(L10n.commonNoContent)
+                return
+            }
             selectWorkRoute(.wallet)
         case .ranking(let pageType, let hideMonthTab):
+            // Party Rich/Room 榜同样会展示礼物贡献、奖励和虚拟道具；107 不可因 H5
+            // Bridge 的 `PARTY_ROOM` 参数绕过大厅入口隐藏。
+            guard permission.canHomeDiscovery else {
+                AppToastCenter.shared.show(L10n.commonNoContent)
+                return
+            }
             openActivityRanking(pageType: pageType, hideMonthTab: hideMonthTab)
         case .liveSettings:
+            guard permission.canLive else {
+                AppToastCenter.shared.show(L10n.commonNoContent)
+                return
+            }
             selectWorkForLiveSettings()
         case .partyRoom(let roomId):
             guard permission.canParty else {
@@ -877,6 +1018,10 @@ struct MainTabView: View {
     }
 
     private func selectWorkRoute(_ route: WorkRoute) {
+        guard allowsWorkRoute(route) else {
+            AppToastCenter.shared.show(L10n.commonNoContent)
+            return
+        }
         suppressPathClearOnTabChange = true
         selection = .work
         workPath = NavigationPath([route])
@@ -884,6 +1029,10 @@ struct MainTabView: View {
     }
 
     private func selectWorkForLiveSettings() {
+        guard permission.canLive else {
+            AppToastCenter.shared.show(L10n.commonNoContent)
+            return
+        }
         suppressPathClearOnTabChange = true
         selection = .work
         workPath = NavigationPath()
@@ -896,13 +1045,17 @@ struct MainTabView: View {
     private func openActivityRanking(pageType: String?, hideMonthTab: Bool) {
         switch pageType?.uppercased() {
         case "GAME_TASK":
+            guard permission.canHomeDiscovery else {
+                AppToastCenter.shared.show(L10n.commonNoContent)
+                return
+            }
             guard let page = H5Page.embeddedRanking(pageType: pageType, hideMonthTab: hideMonthTab) else {
                 AppLogger.net.error("[H5Bridge] unavailable embedded game-task ranking page")
                 return
             }
             activityRankingPage = page
         case "PARTY_ROOM":
-            guard permission.canParty else {
+            guard permission.canParty, permission.canVirtualItems else {
                 AppToastCenter.shared.show(L10n.commonNoContent)
                 return
             }
@@ -911,12 +1064,36 @@ struct MainTabView: View {
             partyPath = NavigationPath([PartyRoute.lobbyRanking(.partyRich)])
             DispatchQueue.main.async { suppressPathClearOnTabChange = false }
         default:
+            guard permission.canHomeDiscovery else {
+                AppToastCenter.shared.show(L10n.commonNoContent)
+                return
+            }
             // `NORMAL` 及服务端缺省值均进入现有主播榜；`hideMonthTab` 仅 GAME_TASK 页有业务含义。
             _ = hideMonthTab
             suppressPathClearOnTabChange = true
             selection = .home
             homePath = NavigationPath([HomeLeaderboardRoute.ranking])
             DispatchQueue.main.async { suppressPathClearOnTabChange = false }
+        }
+    }
+
+    /// 所有 WorkRoute destination 都经过此处，避免 107 仅隐藏工作台按钮却能被
+    /// H5 Bridge、旧路径或状态恢复直接导航到敏感页面。
+    private func allowsWorkRoute(_ route: WorkRoute) -> Bool {
+        // 107 的 Work Tab 整体不可用。先在路由层整体拒绝，避免 task/invite/data 等
+        // 未单列 feature 的历史 route 因 switch default 而绕过。
+        guard permission.canWorkDashboard else { return false }
+        switch route {
+        case .firstLiveRule, .liveSettings, .wishSetting, .liveData, .liveResult:
+            return permission.canLive
+        case .wallet:
+            return permission.canWallet
+        case .currencyExchange:
+            return permission.canCurrencyExchange
+        case .giftMessage, .myGuardian, .props, .propsRules:
+            return permission.canVirtualItems
+        default:
+            return true
         }
     }
 }

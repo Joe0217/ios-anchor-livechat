@@ -99,6 +99,7 @@ private struct PartyRoomRightToLeftMarquee: View {
 /// **spec §7 §12 F 期演进笔记**已在 v3 落地；E 增强对齐 H5 用户端 `/party/index.vue` 3-tab TabView(.page)。
 struct PartyRoomListContent<Store: PartyRoomListLike>: View {
     @ObservedObject var store: Store
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     /// H5 的房间语言展示通过全局 Party language list 将 code 转成名称。
     /// Follow/Recent 也复用 Party 首页已加载的同一份列表。
     let languages: [PartyLanguage]
@@ -108,6 +109,10 @@ struct PartyRoomListContent<Store: PartyRoomListLike>: View {
     let onTapRoom: (PartyRoomInfo) -> Void
     /// 保留给调用方的空态策略；H5 三个 tab 均使用同一种 Party 空态。
     let comingSoonOnEmpty: Bool
+
+    private var showsRankVisuals: Bool {
+        permission.canVirtualItems && permission.canGiftSending
+    }
 
     var body: some View {
         contentArea
@@ -235,7 +240,8 @@ struct PartyRoomListContent<Store: PartyRoomListLike>: View {
                         PartyRoomCardView(
                             room: room,
                             languageName: languageName(for: room.roomLanguage),
-                            isMyRoom: room.id == myRoomID
+                            isMyRoom: room.id == myRoomID,
+                            showsRankVisuals: showsRankVisuals
                         )
                         // Top3 背景的装饰边框会越出卡片底部，预留下方空间避免覆盖下一行。
                         .padding(.bottom, hasDecorativeRankBorder(room) ? 8 : 0)
@@ -262,6 +268,7 @@ struct PartyRoomListContent<Store: PartyRoomListLike>: View {
     }
 
     private func hasDecorativeRankBorder(_ room: PartyRoomInfo) -> Bool {
+        guard showsRankVisuals else { return false }
         guard let rank = room.rangIndex else { return false }
         return (1...3).contains(rank)
     }
@@ -308,6 +315,8 @@ struct PartyRoomCardView: View {
     let room: PartyRoomInfo
     let languageName: String
     let isMyRoom: Bool
+    /// 107 Party-only 账号不展示房间周榜、Top3 背景或排行榜奖励箱。
+    var showsRankVisuals: Bool = true
 
     var body: some View {
         ZStack {
@@ -485,7 +494,7 @@ struct PartyRoomCardView: View {
 
     @ViewBuilder
     private var rankTag: some View {
-        if let rank = room.rangIndex, (1...3).contains(rank) {
+        if showsRankVisuals, let rank = room.rangIndex, (1...3).contains(rank) {
             weeklyRankTag(rank: rank)
         }
     }
@@ -525,7 +534,9 @@ struct PartyRoomCardView: View {
 
     @ViewBuilder
     private var rankBackground: some View {
-        if let rank = room.rangIndex, let assetName = rankBackgroundAssetName(for: rank) {
+        if showsRankVisuals,
+           let rank = room.rangIndex,
+           let assetName = rankBackgroundAssetName(for: rank) {
             Image(assetName)
                 .resizable()
                 .scaledToFill()
@@ -547,7 +558,7 @@ struct PartyRoomCardView: View {
         VStack(spacing: 0) {
             Color.clear.frame(height: 20)
             Spacer(minLength: 0)
-            if room.showChest == true {
+            if showsRankVisuals, room.showChest == true {
                 AnimatedGIFView(name: "roomlist-top3-box-new", fileExtension: "webp")
                     .frame(width: 46, height: 38)
             } else {

@@ -453,17 +453,32 @@ final class H5NativeActionRouter {
         let destination: Destination
         switch action {
         case .jumpWallet:
+            guard SelfPermissionBridge.shared.gate(.wallet, action: "h5JumpWallet") else {
+                return false
+            }
             destination = .wallet
         case .jumpRanking(let pageType, let hideMonthTab):
+            guard SelfPermissionBridge.shared.gate(.homeDiscovery, action: "h5JumpRanking") else {
+                return false
+            }
             destination = .ranking(pageType: pageType, hideMonthTab: hideMonthTab)
         case .goLive:
+            guard SelfPermissionBridge.shared.gate(.live, action: "h5GoLive") else {
+                return false
+            }
             destination = .liveSettings
         case .goRoom(let roomId):
+            guard SelfPermissionBridge.shared.gate(.party, action: "h5GoRoom") else {
+                return false
+            }
             guard let roomId = roomId?.trimmingCharacters(in: .whitespacesAndNewlines), !roomId.isEmpty else {
                 return false
             }
             destination = .partyRoom(id: roomId)
         case .goProfile(let userId):
+            guard SelfPermissionBridge.shared.gate(.profileSocial, action: "h5GoProfile") else {
+                return false
+            }
             guard let userId = userId?.trimmingCharacters(in: .whitespacesAndNewlines), !userId.isEmpty else {
                 return false
             }
@@ -472,6 +487,9 @@ final class H5NativeActionRouter {
             // `hn-activity-h5` 当前唯一的 Android className 是开播设置页；未知类名绝不反射或拼 URL。
             guard className == "com.gzxkwl.livehot.page.activity.LiveSettingActivity" else {
                 AppLogger.net.notice("[H5Bridge] rejected unsupported commonJump")
+                return false
+            }
+            guard SelfPermissionBridge.shared.gate(.live, action: "h5CommonJumpLiveSettings") else {
                 return false
             }
             destination = .liveSettings

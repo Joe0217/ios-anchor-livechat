@@ -49,6 +49,10 @@ struct ChatDetailView: View {
     let chatType: ChatType
     /// 视频通话权限（从 CallAuthBridge.canCall 派生；未 loaded / mine.levelName 未在 achorHideButton 内 → false）
     let canCall: Bool
+    /// 私密媒体含礼物定价，需同时具备礼物与虚拟道具能力。
+    let canUsePrivateMedia: Bool
+    /// 回复奖励会领取钻石，仅在允许虚拟道具时保留。
+    let canUseReplyRewards: Bool
 
     // Batch 6.1：回复积分状态（订阅 store 的 sessions[peer] 派生 RewardProgress 显示）
     @ObservedObject var replyPointsStore: ReplyPointsStore
@@ -76,6 +80,8 @@ struct ChatDetailView: View {
         onClose: (() -> Void)?,
         chatType: ChatType,
         canCall: Bool,
+        canUsePrivateMedia: Bool = true,
+        canUseReplyRewards: Bool = true,
         replyPointsStore: ReplyPointsStore,
         sheetDetent: Binding<PresentationDetent>? = nil,
         onRefreshPrivateMedia: @escaping () async -> Void = {}
@@ -93,6 +99,8 @@ struct ChatDetailView: View {
         self.onClose = onClose
         self.chatType = chatType
         self.canCall = canCall
+        self.canUsePrivateMedia = canUsePrivateMedia
+        self.canUseReplyRewards = canUseReplyRewards
         self._replyPointsStore = ObservedObject(wrappedValue: replyPointsStore)
         self.sheetDetent = sheetDetent
         self.onRefreshPrivateMedia = onRefreshPrivateMedia
@@ -161,7 +169,9 @@ struct ChatDetailView: View {
     /// 半屏模式派生:onClose 非 nil 表示 wrapper 用 sheet 承载 ChatDetailContainer(拉起半屏)
     private var isPopupMode: Bool { onClose != nil }
     /// 顶部奖励进度条只在全屏普通私聊中挂载；半屏私聊空间受限，进度条与其引导必须一并隐藏。
-    private var showsRewardProgress: Bool { chatType == .regular && !isPopupMode }
+    private var showsRewardProgress: Bool {
+        canUseReplyRewards && chatType == .regular && !isPopupMode
+    }
     /// 引导需要实际可见的进度条作为锚点，不能只根据付费消息状态触发。
     private var canShowRewardProgressGuide: Bool {
         showsRewardProgress && replyPointsStore.isOpenPaidMessage(peer: store.peerYxAccId)
@@ -219,6 +229,7 @@ struct ChatDetailView: View {
                     BottomActionBar(
                         chatType: chatType,
                         canCall: canCall,
+                        canUsePrivateMedia: canUsePrivateMedia,
                         inputMode: inputMode,
                         onToggleVoice: { inputMode = (inputMode == .voice) ? .text : .voice },
                         onTapCall: handleTapCall,
@@ -231,7 +242,7 @@ struct ChatDetailView: View {
 
             VoiceRecordingOverlay(state: voiceState)
 
-            if showPrivateMediaGuide {
+            if canUsePrivateMedia, showPrivateMediaGuide {
                 privateMediaGuide
                     .zIndex(250)
             }
@@ -258,6 +269,25 @@ struct ChatDetailView: View {
             if canShow, !chatIntroSeen, introStep == 0 {
                 introStep = 1
             }
+        }
+        .onChange(of: canUsePrivateMedia) { allowed in
+            guard allowed else {
+                showPrivateMediaGuide = false
+                showPrivateMediaSheet = false
+                showPrivateMediaManager = false
+                pendingPrivateMediaManager = false
+                reopenPrivateMediaSheetAfterManager = false
+                // 热切换到审核账号时，已打开的私密媒体预览也必须立即关闭。
+                galleryContext = nil
+                return
+            }
+            presentPrivateMediaGuideIfNeeded()
+        }
+        .onChange(of: canUseReplyRewards) { allowed in
+            guard !allowed else { return }
+            introStep = 0
+            showRewardRecords = false
+            replyPointsStore.pendingClaimDiamond = nil
         }
         // 云端历史拉空 + 会话在列表中已存在 → 一次性 toast(对齐 H5 loadHistoryMsgs)
         // 触发点:store.state 首次进 .empty 时判定,后续 didCheckHistoryExpired 短路
@@ -318,35 +348,44 @@ struct ChatDetailView: View {
         }
         // 私密相册 sheet：V2 列表含审核态/发送开关；send 走 P2PChatStore.sendPrivateImage/Video。
         .sheet(isPresented: $showPrivateMediaSheet, onDismiss: {
-            guard pendingPrivateMediaManager else { return }
+            guard canUsePrivateMedia, pendingPrivateMediaManager else { return }
             pendingPrivateMediaManager = false
             showPrivateMediaManager = true
         }) {
-            MediaPickerSheet(
-                items: privateItems,
-                isLoading: privateItemsLoading,
-                showLockIcon: true,
-                onSend: handleSendPrivateMedia,
-                onDismiss: { showPrivateMediaSheet = false },
-                onCreate: openPrivateMediaManager,
-                onUnavailable: handleUnavailablePrivateMedia
-            )
-            .sheetTopInset()
-            .giftPanelSheetBackground()
-            .presentationDetents([.height(280)])
-            .presentationDragIndicator(.hidden)
+            if canUsePrivateMedia {
+                MediaPickerSheet(
+                    items: privateItems,
+                    isLoading: privateItemsLoading,
+                    showLockIcon: true,
+                    onSend: handleSendPrivateMedia,
+                    onDismiss: { showPrivateMediaSheet = false },
+                    onCreate: openPrivateMediaManager,
+                    onUnavailable: handleUnavailablePrivateMedia
+                )
+                .sheetTopInset()
+                .giftPanelSheetBackground()
+                .presentationDetents([.height(280)])
+                .presentationDragIndicator(.hidden)
+            } else {
+                EmptyView()
+            }
         }
         .sheet(isPresented: $showPrivateMediaManager, onDismiss: {
             Task {
+                guard canUsePrivateMedia else { return }
                 await onRefreshPrivateMedia()
                 guard reopenPrivateMediaSheetAfterManager else { return }
                 reopenPrivateMediaSheetAfterManager = false
                 showPrivateMediaSheet = true
             }
         }) {
-            GiftMessageView(userId: SessionStore.shared.user?.userId ?? 0)
-                .presentationDetents([.fraction(0.8)])
-                .presentationDragIndicator(.visible)
+            if canUsePrivateMedia {
+                GiftMessageView(userId: SessionStore.shared.user?.userId ?? 0)
+                    .presentationDetents([.fraction(0.8)])
+                    .presentationDragIndicator(.visible)
+            } else {
+                EmptyView()
+            }
         }
         // Batch 3.7：统一公共 MediaGalleryView 全屏预览（含图 + 视频；对齐朋友圈 CircleView 用法）
         .fullScreenCover(item: $galleryContext) { ctx in
@@ -354,7 +393,7 @@ struct ChatDetailView: View {
         }
         // Batch 6.3.1：钻石领取弹窗 —— 订阅 pendingClaimDiamond auto-claim 触发
         .overlay {
-            if let n = replyPointsStore.pendingClaimDiamond, n > 0 {
+            if canUseReplyRewards, let n = replyPointsStore.pendingClaimDiamond, n > 0 {
                 DiaReceivePopup(
                     diamondCount: n,
                     onGet: { replyPointsStore.pendingClaimDiamond = nil }
@@ -366,7 +405,7 @@ struct ChatDetailView: View {
         .animation(.easeInOut(duration: 0.2), value: replyPointsStore.pendingClaimDiamond)
         // Batch 6.1.4：奖励记录弹窗 —— overlay 顶层覆盖(iOS 16.0 不支持 fullScreenCover 透明背景;overlay 满屏黑遮罩自然全覆盖)
         .overlay {
-            if showRewardRecords {
+            if canUseReplyRewards, showRewardRecords {
                 RewardRecordsPopup(
                     records: rewardRecords,
                     freeMessagePoints: AppConfigStore.shared.freeMsgPoints ?? 0,
@@ -451,7 +490,7 @@ struct ChatDetailView: View {
         // P1-3：15min replyRemind timer 驱动 —— 每分钟检查一次 replyRemindBaseTs（对齐 H5 chat/index.vue:907-918
         // watch(msgArr.length){ setTimeout(15min → addReplyTip) }）。Store 内部 guard 无变化零 side effect。
         .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
-            guard chatType == .regular else { return }
+            guard canUseReplyRewards, chatType == .regular else { return }
             ReplyPointsStore.shared.checkReplyRemindTrigger(
                 peer: store.peerYxAccId,
                 tipText: L10n.chatReplyRemindTip
@@ -560,10 +599,20 @@ struct ChatDetailView: View {
     /// - 让 tip 出现在**同时间戳**真实消息后（同 ts 但 tieBreaker 更大 → 排序靠后）
     /// - weakTxtType 103/104 系统提示按 type 去重(H5 chat/index.vue weakTextList 语义:每种 type 只保留最新一条)
     private func mergedItems(_ messages: [ChatMessage]) -> [ChatMessage] {
+        // UI 入口隐藏不足以覆盖云信历史消息。107 保留普通私聊，但不能从旧礼物、
+        // 道具、钻石或充值通知中重新看到经济能力；私密媒体按独立组合权限处理。
+        let visibleMessages = messages.filter { message in
+            switch message.content {
+            case .privateImage, .privateVideo:
+                return canUsePrivateMedia
+            default:
+                return canUseReplyRewards || !message.content.isVirtualItemOrPaymentMessage
+            }
+        }
         // Step 1: weakTxtType 系统提示按 type 去重 —— H5 每种只显示最新 1 条
-        let deduped = Self.dedupeSystemTips(messages)
+        let deduped = Self.dedupeSystemTips(visibleMessages)
 
-        let tips = replyPointsStore.tips(for: store.peerYxAccId)
+        let tips = canUseReplyRewards ? replyPointsStore.tips(for: store.peerYxAccId) : []
         guard !tips.isEmpty else { return deduped }
 
         let tipMessages: [ChatMessage] = tips.map { tip in
@@ -859,12 +908,14 @@ struct ChatDetailView: View {
 
     /// H5 以 userId + app version 记录私密消息首次引导；iOS 使用相同粒度，升级后可再次展示。
     private var privateMediaGuideKey: String? {
+        guard canUsePrivateMedia else { return nil }
         guard let userId = SessionStore.shared.user?.userId, userId > 0 else { return nil }
         return "hily.chat.privateMediaGuide.\(userId).\(AppConfig.appVersion)"
     }
 
     private func presentPrivateMediaGuideIfNeeded() {
-        guard chatType == .regular,
+        guard canUsePrivateMedia,
+              chatType == .regular,
               peerUserId != nil,
               let key = privateMediaGuideKey,
               !UserDefaults.standard.bool(forKey: key) else {
@@ -934,15 +985,17 @@ struct ChatDetailView: View {
 
     /// H5 `onPrivateAlbumClick`：先校验当前主播是否可向该用户发送私密消息，再刷新 V2 审核态列表。
     private func handleOpenPrivateAlbum() {
-        guard let peerUserId else { return }
+        guard canUsePrivateMedia, let peerUserId else { return }
         dismissPrivateMediaGuide()
         AnalyticsTracker.track("admin_primsg_click", properties: ["user_id": peerUserId])
         Task {
             do {
                 try await ChatPrivateMediaHTTPService.shared.verifyCanSend(to: String(peerUserId))
                 await onRefreshPrivateMedia()
+                guard canUsePrivateMedia else { return }
                 showPrivateMediaSheet = true
             } catch {
+                guard canUsePrivateMedia else { return }
                 showCallToast(privateMediaErrorMessage(error))
             }
         }
@@ -950,6 +1003,7 @@ struct ChatDetailView: View {
 
     /// 私密相册点击 + 号：先关闭当前 sheet，再拉起管理页；关闭管理页后刷新并回到相册。
     private func openPrivateMediaManager() {
+        guard canUsePrivateMedia else { return }
         reopenPrivateMediaSheetAfterManager = true
         pendingPrivateMediaManager = true
         showPrivateMediaSheet = false
@@ -1018,7 +1072,7 @@ struct ChatDetailView: View {
     /// - 对端 userId 从 `peerUserId` 传入；缺失时无法签发，只 dismiss
     private func handleSendPrivateMedia(_ item: AnchorMediaItem) {
         showPrivateMediaSheet = false
-        guard let uid = peerUserId else { return }
+        guard canUsePrivateMedia, let uid = peerUserId else { return }
         let peerUidStr = String(uid)
         let selection = PrivateMediaSelection(
             privateId: item.id,
@@ -1083,6 +1137,7 @@ struct ChatDetailView: View {
         case .video(let url, _, _):
             galleryContext = MediaGalleryContext(urls: [url.absoluteString], startIndex: 0)
         case .privateVideo(let url, _, _, _):
+            guard canUsePrivateMedia else { return }
             // 私密视频 URL 需 STS 签名后才能播 —— 对齐 H5 `msgItem.vue:129-154 getFinalUrl`。
             // 直链不带签名会 403(OSS 需 authorizationParam)。失败静默(用户可以再点)。
             Task {
@@ -1099,7 +1154,10 @@ struct ChatDetailView: View {
 
     private func handleTapImage(_ msg: ChatMessage) {
         switch msg.content {
-        case .image(let url, _), .privateImage(let url, _):
+        case .image(let url, _):
+            galleryContext = MediaGalleryContext(urls: [url.absoluteString], startIndex: 0)
+        case .privateImage(let url, _):
+            guard canUsePrivateMedia else { return }
             galleryContext = MediaGalleryContext(urls: [url.absoluteString], startIndex: 0)
         default:
             return
@@ -1272,14 +1330,18 @@ struct ChatDetailView: View {
 
     /// Batch 6.1.4：拉取奖励记录 + 打开弹窗（hoist 到 ChatDetailView 层，避免 overlay 被消息气泡遮挡）
     private func handleTapRewardRecords() {
+        guard canUseReplyRewards else { return }
         showRewardRecords = true
         Task {
             isLoadingRewardRecords = true
             defer { isLoadingRewardRecords = false }
             do {
-                rewardRecords = try await ReplyPointsHTTPService.shared
+                let records = try await ReplyPointsHTTPService.shared
                     .fetchMessageBoxRecords(userYxAccid: store.peerYxAccId)
+                guard canUseReplyRewards else { return }
+                rewardRecords = records
             } catch {
+                guard canUseReplyRewards else { return }
                 rewardRecords = []
             }
         }

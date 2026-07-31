@@ -20,9 +20,13 @@ final class PartyWeeklyTaskStore: ObservableObject {
     private var nextOffset: Int64?
     private var requestSequence = 0
 
-    var isTracking: Bool { trackedRoomId != nil }
-    var showsEntry: Bool { isTracking && rewardQuantity > 0 }
-    var hasMore: Bool { nextOffset != nil && !giftHistory.isEmpty }
+    private var canUsePartyActivities: Bool {
+        SelfPermissionBridge.shared.canPartyActivities
+    }
+
+    var isTracking: Bool { canUsePartyActivities && trackedRoomId != nil }
+    var showsEntry: Bool { canUsePartyActivities && isTracking && rewardQuantity > 0 }
+    var hasMore: Bool { canUsePartyActivities && nextOffset != nil && !giftHistory.isEmpty }
     var progressFraction: Double {
         min(1, max(0, Double(currentProgress) / Double(max(targetValue, 1))))
     }
@@ -30,6 +34,10 @@ final class PartyWeeklyTaskStore: ObservableObject {
     private init() {}
 
     func beginTracking(roomId: String, rewardQuantity: Int) {
+        guard canUsePartyActivities else {
+            clearRestrictedState()
+            return
+        }
         guard trackedRoomId != roomId else {
             self.rewardQuantity = max(0, rewardQuantity)
             return
@@ -45,6 +53,10 @@ final class PartyWeeklyTaskStore: ObservableObject {
     }
 
     func stopTracking(roomId: String) {
+        guard canUsePartyActivities else {
+            clearRestrictedState()
+            return
+        }
         guard trackedRoomId == roomId else { return }
         trackedRoomId = nil
         nextOffset = nil
@@ -55,6 +67,10 @@ final class PartyWeeklyTaskStore: ObservableObject {
     }
 
     func load(reset: Bool = true) async {
+        guard canUsePartyActivities else {
+            clearRestrictedState()
+            return
+        }
         guard trackedRoomId != nil else { return }
         if reset, isLoading { return }
         if !reset, (nextOffset == nil || isLoading || isLoadingMore) { return }
@@ -77,6 +93,10 @@ final class PartyWeeklyTaskStore: ObservableObject {
         do {
             let page = try await PartyAPI.weeklyTaskInfo(pageSize: pageSize, offset: offset)
             guard sequence == requestSequence else { return }
+            guard canUsePartyActivities else {
+                clearRestrictedState()
+                return
+            }
             targetValue = page.targetValue
             currentProgress = page.currentProgress
             if reset {
@@ -90,13 +110,35 @@ final class PartyWeeklyTaskStore: ObservableObject {
             hasLoadError = false
         } catch {
             guard sequence == requestSequence else { return }
+            guard canUsePartyActivities else {
+                clearRestrictedState()
+                return
+            }
             hasLoadError = true
             AppLogger.party.error("[PartyWeeklyTask] load failed err=\(String(describing: error), privacy: .public)")
         }
 
         guard sequence == requestSequence else { return }
+        guard canUsePartyActivities else {
+            clearRestrictedState()
+            return
+        }
         isLoading = false
         isLoadingMore = false
+    }
+
+    /// 权限撤销时必须使在途请求失效，并清掉此前已展示的奖励、礼物流水和分页游标。
+    private func clearRestrictedState() {
+        trackedRoomId = nil
+        targetValue = 0
+        currentProgress = 0
+        giftHistory = []
+        rewardQuantity = 0
+        nextOffset = nil
+        requestSequence &+= 1
+        isLoading = false
+        isLoadingMore = false
+        hasLoadError = false
     }
 }
 
@@ -133,21 +175,30 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
     private var topRankConfigRequestSequence = 0
     private let guideDefaults = UserDefaults.standard
 
-    var isTracking: Bool { roomId != nil }
+    private var canUsePartyActivities: Bool {
+        SelfPermissionBridge.shared.canPartyActivities
+    }
+
+    var isTracking: Bool { canUsePartyActivities && roomId != nil }
     /// 仅在接口给出确定结果后显示：TopX 有档位展示进度，非 TopX 展示掉榜提示。
     /// TopX 但后台未配置档位时，安卓会隐藏该任务容器。
     var showsEntry: Bool {
+        guard canUsePartyActivities else { return false }
         guard isTracking, let status else { return false }
         return !status.isTopRoom || status.isActive
     }
-    var isOutOfTop: Bool { status?.isTopRoom == false }
-    var isTopRoom: Bool { status?.isTopRoom == true }
+    var isOutOfTop: Bool { canUsePartyActivities && status?.isTopRoom == false }
+    var isTopRoom: Bool { canUsePartyActivities && status?.isTopRoom == true }
 
     private init() {
         NIMService.shared.registerRouter(self)
     }
 
     func beginTracking(roomId: String, entryPath: PartyRoomEntryPath) {
+        guard canUsePartyActivities else {
+            stopTracking()
+            return
+        }
         guard self.roomId != roomId else {
             // 小窗恢复会重新构造 PartyRoomView，但房间会话未离开；不能让默认路由来源抹掉
             // 已记录的热门房引导来源。
@@ -192,20 +243,30 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
         accumulatedLiveValue = 0
         isLoadingMissionRules = false
         missionRuleRequestSequence &+= 1
+        topRankConfigRequestSequence &+= 1
         missionRuleImageURL = nil
         rewardEffect = nil
         pendingReward = nil
         shouldPresentProgressGuide = false
         faceVerificationWarning = nil
         queuedRewards = []
+        topRankLimit = 3
     }
 
     @discardableResult
     func refresh(isInitial: Bool = false) async -> Bool {
+        guard canUsePartyActivities else {
+            stopTracking()
+            return false
+        }
         guard let roomId else { return false }
         do {
             let newStatus = try await PartyAPI.hotRoomTaskStatus(roomId: roomId)
             guard self.roomId == roomId else { return false }
+            guard canUsePartyActivities else {
+                stopTracking()
+                return false
+            }
             let previousStatus = status
             let previousFaceErrorCount = previousStatus?.nowFaceErrorCount
             // Android 仅以 checkExistHot3、1022 与 1023 同步累计值。保留单调性只用于抵抗
@@ -242,6 +303,10 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
             updateFaceCheckTask()
             return true
         } catch {
+            guard canUsePartyActivities else {
+                stopTracking()
+                return false
+            }
             AppLogger.party.error("[PartyHotTask] check failed err=\(String(describing: error), privacy: .public)")
             return false
         }
@@ -260,7 +325,7 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
 
     private func updateFaceCheckTask() {
         // 只有已上视频麦且摄像头有效开启时才开始 60 秒周期；这样主播刚上麦不会沿用离麦期间的剩余等待时间。
-        guard isEligibleForHotTaskTiming else {
+        guard canUsePartyActivities, isEligibleForHotTaskTiming else {
             faceCheckTask?.cancel()
             faceCheckTask = nil
             return
@@ -280,7 +345,7 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
     }
 
     private var isEligibleForHotTaskTiming: Bool {
-        isFaceVerificationAllowed && PartyStore.shared.isEligibleForHotTaskTiming
+        canUsePartyActivities && isFaceVerificationAllowed && PartyStore.shared.isEligibleForHotTaskTiming
     }
 
     /// 安卓仅在热门任务未完成且违规数未超过服务端阈值时截图和上报。
@@ -291,11 +356,16 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
 
     /// 麦时由服务端推送；这里仅做人脸检测。检测失败时才上传图片并调用违规上报接口。
     private func checkFaceAndReportIfNeeded() async {
-        guard let snapshot = await PartyStore.shared.hotTaskFaceSnapshot(),
+        guard canUsePartyActivities,
+              let snapshot = await PartyStore.shared.hotTaskFaceSnapshot(),
               self.roomId == snapshot.roomId else { return }
         let result = await Task.detached(priority: .utility) {
             PartyHotTaskFaceDetector.detect(in: snapshot.imageData)
         }.value
+        guard canUsePartyActivities else {
+            stopTracking()
+            return
+        }
         guard result == .noFace else {
             if result == .unavailable {
                 AppLogger.party.notice("[PartyHotTask] face check skipped: frame could not be analyzed")
@@ -304,7 +374,12 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
         }
         do {
             let url = try await ImageUploader.shared.upload(rawData: snapshot.imageData, preset: .feedback)
-            guard self.roomId == snapshot.roomId, self.isFaceVerificationAllowed else { return }
+            guard canUsePartyActivities else {
+                stopTracking()
+                return
+            }
+            guard self.roomId == snapshot.roomId,
+                  self.isFaceVerificationAllowed else { return }
             try await PartyAPI.reportHotRoomTask(
                 roomId: snapshot.roomId,
                 content: url,
@@ -319,10 +394,18 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
 
     /// 麦位、摄像头或任务完成状态改变时立即重新评估，不等待下一次 60 秒轮询。
     func reevaluateFaceCheck() {
+        guard canUsePartyActivities else {
+            stopTracking()
+            return
+        }
         updateFaceCheckTask()
     }
 
     func loadMissionRules() async {
+        guard canUsePartyActivities else {
+            stopTracking()
+            return
+        }
         guard let requestedRoomId = roomId, !isLoadingMissionRules else { return }
         isLoadingMissionRules = true
         let requestSequence = { missionRuleRequestSequence &+= 1; return missionRuleRequestSequence }()
@@ -334,18 +417,34 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
         do {
             let imageURL = try await PartyAPI.hotRoomTaskRuleImageURL()
             guard roomId == requestedRoomId, requestSequence == missionRuleRequestSequence else { return }
+            guard canUsePartyActivities else {
+                stopTracking()
+                return
+            }
             missionRuleImageURL = imageURL
         } catch {
             guard roomId == requestedRoomId, requestSequence == missionRuleRequestSequence else { return }
+            guard canUsePartyActivities else {
+                stopTracking()
+                return
+            }
             AppLogger.party.error("[PartyHotTask] rule config failed err=\(String(describing: error), privacy: .public)")
         }
     }
 
     private func loadTopRankLimit(for requestedRoomId: String) async {
+        guard canUsePartyActivities else {
+            stopTracking()
+            return
+        }
         let requestSequence = { topRankConfigRequestSequence &+= 1; return topRankConfigRequestSequence }()
         do {
             let config = try await AppConfigService.fetch(keys: ["anchor_subsidy_top_x"])
             guard roomId == requestedRoomId, requestSequence == topRankConfigRequestSequence else { return }
+            guard canUsePartyActivities else {
+                stopTracking()
+                return
+            }
             let value: Int?
             if let intValue = config["anchor_subsidy_top_x"] as? Int {
                 value = intValue
@@ -360,12 +459,20 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
                 topRankLimit = value
             }
         } catch {
+            guard canUsePartyActivities else {
+                stopTracking()
+                return
+            }
             AppLogger.party.notice("[PartyHotTask] top rank config unavailable; using Top \(self.topRankLimit, privacy: .public)")
         }
     }
 
     /// 仅由列表热门房引导进入的主播，掉出 TOPx 后才请求新的目标房。
     private func requestTopRoomGuide() async {
+        guard canUsePartyActivities else {
+            stopTracking()
+            return
+        }
         guard let roomId, !isLoadingGuide, guide == nil else { return }
         guard enteredFromTopRoomGuide,
               status?.isTopRoom == false,
@@ -375,23 +482,36 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
         do {
             let target = try await PartyAPI.hotRoomWithAvailableSeat()
             guard self.roomId == roomId, let target else { return }
+            guard canUsePartyActivities else {
+                stopTracking()
+                return
+            }
             // 当前房就是服务端返回的首选 Top 房时不弹；本次掉榜已处理，避免轮询反复请求。
             hasPresentedOutOfTopGuide = true
             guard target.roomId != roomId else { return }
             guide = target
         } catch {
+            guard canUsePartyActivities else {
+                stopTracking()
+                return
+            }
             AppLogger.party.error("[PartyHotTask] available seat check failed err=\(String(describing: error), privacy: .public)")
         }
     }
 
     func dismissReward(_ id: UUID) {
+        guard canUsePartyActivities else {
+            stopTracking()
+            return
+        }
         guard pendingReward?.id == id else { return }
         pendingReward = nil
         presentNextRewardIfPossible()
     }
 
     private func receiveProgress(_ payload: [String: Any]) {
-        guard isForTrackedRoom(payload),
+        guard canUsePartyActivities,
+              isForTrackedRoom(payload),
               let liveTime = PartyWeeklyTaskPage.firstInt(
                 in: payload,
                 keys: ["liveValue", "liveTime", "accumulatedDuration"]
@@ -401,7 +521,9 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
     }
 
     private func receiveReward(_ payload: [String: Any]) {
-        guard isForTrackedRoom(payload), let reward = PartyHotTaskRewardNotification(payload: payload) else { return }
+        guard canUsePartyActivities,
+              isForTrackedRoom(payload),
+              let reward = PartyHotTaskRewardNotification(payload: payload) else { return }
         guard handledRewardDeliveryKeys.insert(rewardDeliveryKey(for: payload, reward: reward)).inserted else {
             return
         }
@@ -416,6 +538,10 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
     /// 轮询、1022 与 1023 都必须单调推进。服务端回包/通知到达顺序不保证，
     /// 不能让较旧的值回退 UI 的进度条和倒计时。
     private func applyProgress(_ value: Int) {
+        guard canUsePartyActivities else {
+            stopTracking()
+            return
+        }
         let mergedLiveValue = max(accumulatedLiveValue, value)
         accumulatedLiveValue = mergedLiveValue
         if let status {
@@ -425,6 +551,10 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
     }
 
     private func presentNextRewardIfPossible() {
+        guard canUsePartyActivities else {
+            stopTracking()
+            return
+        }
         guard rewardEffect == nil, pendingReward == nil, !queuedRewards.isEmpty else { return }
         let reward = queuedRewards.removeFirst()
         rewardEffect = reward
@@ -439,6 +569,10 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
     }
 
     func completeRewardEffect(_ id: UUID) {
+        guard canUsePartyActivities else {
+            stopTracking()
+            return
+        }
         guard let reward = rewardEffect, reward.id == id else { return }
         rewardEffectTask?.cancel()
         rewardEffectTask = nil
@@ -495,6 +629,14 @@ final class PartyHotRoomTaskStore: ObservableObject, MessageRouter {
     }
 
     func route(_ attachType: AttachType, payload: [String: Any], context: MessageContext) -> Bool {
+        let isTaskNotification = attachType == .partyTaskProgress || attachType == .partyTaskReward
+        guard canUsePartyActivities else {
+            if isTaskNotification {
+                // 已识别的任务通知必须由本 router 消费，避免落到其他 router 后意外展示。
+                stopTracking()
+            }
+            return isTaskNotification
+        }
         switch context {
         case .sysMsg, .syncSysMsg:
             break
@@ -534,21 +676,43 @@ final class PartyTopRoomGuideStore: ObservableObject {
     private static let shownAtDefaultsKey = "party.topRoomGuide.shownAt"
     private let defaults: UserDefaults
     private var isLoading = false
+    private var requestSequence = 0
+
+    private var canUsePartyActivities: Bool {
+        SelfPermissionBridge.shared.canPartyActivities
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
 
     func loadIfEligible() async {
+        guard canUsePartyActivities else {
+            clearForDisabledActivities()
+            return
+        }
         guard !isLoading, guide == nil, !hasShownToday else { return }
         isLoading = true
-        defer { isLoading = false }
+        let sequence = { requestSequence &+= 1; return requestSequence }()
+        defer {
+            if sequence == requestSequence {
+                isLoading = false
+            }
+        }
 
         do {
             guard let target = try await PartyAPI.hotRoomWithAvailableSeat() else { return }
-            guard !Task.isCancelled else { return }
-            await loadTopRankLimit()
-            guard !Task.isCancelled else { return }
+            guard sequence == requestSequence, !Task.isCancelled else { return }
+            guard canUsePartyActivities else {
+                clearForDisabledActivities()
+                return
+            }
+            await loadTopRankLimit(requestSequence: sequence)
+            guard sequence == requestSequence, !Task.isCancelled else { return }
+            guard canUsePartyActivities else {
+                clearForDisabledActivities()
+                return
+            }
 
             // Android 在成功获取目标后、显示弹窗前写入当天标记；关闭不重弹。
             defaults.set(Date().timeIntervalSince1970, forKey: Self.shownAtDefaultsKey)
@@ -558,15 +722,28 @@ final class PartyTopRoomGuideStore: ObservableObject {
                 properties: ["hasAvailableSeat": target.hasSeat]
             )
         } catch {
+            guard sequence == requestSequence else { return }
+            guard canUsePartyActivities else {
+                clearForDisabledActivities()
+                return
+            }
             AppLogger.party.error("[PartyTopRoomGuide] available seat check failed err=\(String(describing: error), privacy: .public)")
         }
     }
 
     func dismiss() {
+        guard canUsePartyActivities else {
+            clearForDisabledActivities()
+            return
+        }
         guide = nil
     }
 
     func confirmEnter(_ target: PartyHotRoomGuide) {
+        guard canUsePartyActivities else {
+            clearForDisabledActivities()
+            return
+        }
         PartyAnalytics.track(
             "h_party_top3_popup_click",
             properties: [
@@ -576,6 +753,15 @@ final class PartyTopRoomGuideStore: ObservableObject {
             ]
         )
         guide = nil
+    }
+
+    /// UI 在权限热切换时调用；递增版本号可以阻止旧网络响应恢复已隐藏的引导。
+    func clearForDisabledActivities() {
+        guard !canUsePartyActivities else { return }
+        requestSequence &+= 1
+        isLoading = false
+        guide = nil
+        topRankLimit = 3
     }
 
     private var hasShownToday: Bool {
@@ -590,9 +776,18 @@ final class PartyTopRoomGuideStore: ObservableObject {
         return calendar.startOfDay(for: date)
     }
 
-    private func loadTopRankLimit() async {
+    private func loadTopRankLimit(requestSequence: Int) async {
+        guard canUsePartyActivities else {
+            clearForDisabledActivities()
+            return
+        }
         do {
             let config = try await AppConfigService.fetch(keys: ["anchor_subsidy_top_x"])
+            guard requestSequence == self.requestSequence else { return }
+            guard canUsePartyActivities else {
+                clearForDisabledActivities()
+                return
+            }
             let value: Int?
             if let intValue = config["anchor_subsidy_top_x"] as? Int {
                 value = intValue

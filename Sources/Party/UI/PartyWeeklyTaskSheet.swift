@@ -4,16 +4,42 @@ import SwiftUI
 struct PartyWeeklyTaskSheet: View {
     let roomId: String
     @ObservedObject var store: PartyWeeklyTaskStore
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
+        Group {
+            if permission.canPartyActivities {
+                taskContent
+            } else {
+                Color.clear.onAppear(perform: dismissIfActivitiesAreDisabled)
+            }
+        }
+        .onChange(of: permission.canPartyActivities, perform: handleActivitiesPermissionChange)
+    }
+
+    private var taskContent: some View {
         VStack(spacing: 0) {
             header
             progressCard
             giftHistory
         }
         .background(Color(hex: 0x1A0033).ignoresSafeArea())
-        .task(id: roomId) { await store.load() }
+        .task(id: roomId) {
+            guard permission.canPartyActivities else { return }
+            await store.load()
+        }
+    }
+
+    private func handleActivitiesPermissionChange(_ allowed: Bool) {
+        guard !allowed else { return }
+        dismissIfActivitiesAreDisabled()
+    }
+
+    private func dismissIfActivitiesAreDisabled() {
+        guard !permission.canPartyActivities else { return }
+        store.stopTracking(roomId: roomId)
+        dismiss()
     }
 
     private var header: some View {
@@ -647,13 +673,16 @@ struct PartyHotTaskRewardSheet: View {
 struct PartyHotTaskRewardOverlay: View {
     let notification: PartyHotTaskRewardNotification
     let onDismiss: () -> Void
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     var body: some View {
-        ZStack {
-            Color.black.opacity(0.62).ignoresSafeArea()
-            PartyHotTaskRewardSheet(notification: notification, onDismiss: onDismiss)
+        if permission.canPartyActivities {
+            ZStack {
+                Color.black.opacity(0.62).ignoresSafeArea()
+                PartyHotTaskRewardSheet(notification: notification, onDismiss: onDismiss)
+            }
+            .zIndex(1_000)
         }
-        .zIndex(1_000)
     }
 }
 
@@ -661,6 +690,7 @@ struct PartyHotTaskRewardOverlay: View {
 struct PartyWeeklyTaskUIModifier: ViewModifier {
     @ObservedObject var weeklyStore: PartyWeeklyTaskStore
     @ObservedObject var hotStore: PartyHotRoomTaskStore
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     @Binding var isWeeklyTaskPresented: Bool
     @Binding var isHotTaskPresented: Bool
     let onHotTaskDismiss: () -> Void
@@ -669,29 +699,42 @@ struct PartyWeeklyTaskUIModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .sheet(isPresented: $isWeeklyTaskPresented) {
-                PartyWeeklyTaskSheet(roomId: roomId, store: weeklyStore)
-                    .giftPanelSheetBackground()
-                    .presentationDetents([.fraction(0.5), .fraction(0.8)])
-                    .presentationDragIndicator(.visible)
+                if permission.canPartyActivities {
+                    PartyWeeklyTaskSheet(roomId: roomId, store: weeklyStore)
+                        .giftPanelSheetBackground()
+                        .presentationDetents([.fraction(0.5), .fraction(0.8)])
+                        .presentationDragIndicator(.visible)
+                } else {
+                    EmptyView()
+                }
             }
             .sheet(isPresented: $isHotTaskPresented, onDismiss: onHotTaskDismiss) {
-                PartyHotRoomTaskSheet(
-                    status: hotStore.status,
-                    ruleImageURL: hotStore.missionRuleImageURL,
-                    topRankLimit: hotStore.topRankLimit
-                )
-                    .giftPanelSheetBackground()
-                    .presentationDetents([.fraction(0.5), .fraction(0.8)])
-                    .presentationDragIndicator(.visible)
+                if permission.canPartyActivities {
+                    PartyHotRoomTaskSheet(
+                        status: hotStore.status,
+                        ruleImageURL: hotStore.missionRuleImageURL,
+                        topRankLimit: hotStore.topRankLimit
+                    )
+                        .giftPanelSheetBackground()
+                        .presentationDetents([.fraction(0.5), .fraction(0.8)])
+                        .presentationDragIndicator(.visible)
+                } else {
+                    EmptyView()
+                }
             }
             .onChange(of: hotStore.shouldPresentMissionRules) { shouldPresent in
+                guard permission.canPartyActivities else {
+                    handleActivitiesPermissionChange(false)
+                    return
+                }
                 if shouldPresent {
                     isHotTaskPresented = true
                     hotStore.dismissMissionRules()
                 }
             }
             .overlay {
-                if hotStore.shouldPresentProgressGuide,
+                if permission.canPartyActivities,
+                   hotStore.shouldPresentProgressGuide,
                    hotStore.pendingReward == nil,
                    hotStore.rewardEffect == nil {
                     PartyHotTaskProgressGuide(topRankLimit: hotStore.topRankLimit) {
@@ -700,7 +743,7 @@ struct PartyWeeklyTaskUIModifier: ViewModifier {
                 }
             }
             .alert(item: Binding(
-                get: { hotStore.faceVerificationWarning },
+                get: { permission.canPartyActivities ? hotStore.faceVerificationWarning : nil },
                 set: { if $0 == nil { hotStore.dismissFaceVerificationWarning() } }
             )) { warning in
                 Alert(
@@ -713,6 +756,15 @@ struct PartyWeeklyTaskUIModifier: ViewModifier {
                     }
                 )
             }
+            .onChange(of: permission.canPartyActivities, perform: handleActivitiesPermissionChange)
+    }
+
+    private func handleActivitiesPermissionChange(_ allowed: Bool) {
+        guard !allowed else { return }
+        isWeeklyTaskPresented = false
+        isHotTaskPresented = false
+        weeklyStore.stopTracking(roomId: roomId)
+        hotStore.stopTracking()
     }
 }
 
@@ -721,9 +773,10 @@ struct PartyWeeklyTaskRewardSeatEffect: View {
     let isSelf: Bool
     let size: CGFloat
     @ObservedObject private var store = PartyHotRoomTaskStore.shared
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     var body: some View {
-        if isSelf, let reward = store.rewardEffect {
+        if permission.canPartyActivities, isSelf, let reward = store.rewardEffect {
             PartyHotTaskRewardSeatEffectView(reward: reward, size: size)
                 .id(reward.id)
         }

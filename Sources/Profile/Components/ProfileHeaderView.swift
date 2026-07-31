@@ -6,6 +6,9 @@ import SwiftUI
 /// 本视图只画 content；ScrollView content 顶在 safe area 下方，状态栏区已由背景图覆盖。
 struct ProfileHeaderView: View {
     @ObservedObject var vm: ProfileViewModel
+    /// 107 保留账户设置与基础资料，移除关注关系等非 Party 社交内容。
+    var showsSocial: Bool = true
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     var body: some View {
         content
@@ -25,9 +28,11 @@ struct ProfileHeaderView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
 
-            statsRow
-                .padding(.horizontal, 24)
-                .padding(.bottom, 18)
+            if showsSocial {
+                statsRow
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 18)
+            }
 
             profileCompletionHint
                 .padding(.horizontal, 20)
@@ -137,7 +142,7 @@ struct ProfileHeaderView: View {
     @ViewBuilder
     private var tierBlock: some View {
         // tierLabel 与 ratePerMin 全空时整块不渲染（避免空白胶囊）
-        if !vm.tierLabel.isEmpty || vm.ratePerMin > 0 {
+        if permission.canWorkDashboard && (!vm.tierLabel.isEmpty || vm.ratePerMin > 0) {
             NavigationLink(value: ProfileRoute.dataStatistics) {
                 VStack(alignment: .trailing, spacing: 0) {
                     if !vm.tierLabel.isEmpty {

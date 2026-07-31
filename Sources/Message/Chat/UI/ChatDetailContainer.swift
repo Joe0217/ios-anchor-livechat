@@ -74,6 +74,16 @@ struct ChatDetailContainer: View {
     }
 
     var body: some View {
+        Group {
+            if permission.canDirectMessages {
+                chatDetail
+            } else {
+                EmptyView()
+            }
+        }
+    }
+
+    private var chatDetail: some View {
         ChatDetailView(
             store: store,
             peerNickname: peerNickname,
@@ -88,52 +98,34 @@ struct ChatDetailContainer: View {
             onClose: onClose,
             chatType: chatType,
             canCall: callAuthBridge.canCall && permission.canCall,
+            canUsePrivateMedia: canUsePrivateMedia,
+            canUseReplyRewards: canUseReplyRewards,
             replyPointsStore: replyPointsStore,
             sheetDetent: sheetDetent,
             onRefreshPrivateMedia: { await loadPrivateAlbum(force: true) }
         )
-        // Batch 3.6+3.7：进入私聊页并行拉普通相册（picList）+ 私密相册（privateInfo）
-        // Batch 6.1：regular 会话时触发 ReplyPointsStore.beginSession（拉 messageBoxList + auto-claim）
+        // 普通相册不涉及经济能力，可与主聊天加载并行；私密相册、回复奖励均等权限桥完成后再启动。
         .task {
-            async let myAlbum: Void = loadMyAlbum()
-            async let privateAlbum: Void = loadPrivateAlbum()
-            _ = await (myAlbum, privateAlbum)
+            await loadMyAlbum()
             // 保留原有 AnchorInfoStore.loadIfNeeded（给头像等其他字段兜底）
             await anchorInfoStore.loadIfNeeded()
-
-            // regular 会话才触发回复积分 beginSession；system / customer 会话不走
-            if chatType == .regular {
-                await replyPointsStore.beginSession(
-                    peer: peerYxAccId,
-                    initialLastUserMsg: nil,   // 首屏完成后用 hydrateLastUserMsgFromHistory 补全并派生 hasHistoryReply
-                    tipTexts: ReplyPointsTipTexts(
-                        guide: L10n.chatGuideTip,
-                        stimulate: L10n.chatStimulateTip,
-                        replyPointGuide: L10n.chatReplyFastTip,
-                        replyRemind: L10n.chatReplyRemindTip
-                    )
-                )
-
-                await store.waitForInitialLoad()
-                // `store.load()` 与本容器 task 并发。若历史先加载，原 hydrate 会因 session 尚未建立而短路；
-                // beginSession 完成后再补一次，保证历史最后一条用户消息能触发积分结算和未回复提醒。
-                if case .loaded(let messages) = store.state {
-                    replyPointsStore.hydrateLastUserMsgFromHistory(
-                        peer: peerYxAccId,
-                        msgs: messages,
-                        tipTexts: ReplyPointsTipTexts(
-                            guide: L10n.chatGuideTip,
-                            stimulate: L10n.chatStimulateTip,
-                            replyPointGuide: L10n.chatReplyFastTip,
-                            replyRemind: L10n.chatReplyRemindTip
-                        )
-                    )
-                }
-
-                // 首屏结束后再校验历史私密消息 lockStatus，避免与 `store.load()` 并发时取到空 privateIds。
-                await checkPrivateMessagesLockStatus()
-            }
         }
+        .task(id: canUsePrivateMedia) {
+            guard canUsePrivateMedia else {
+                privateCache = []
+                privateLoadState = .idle
+                return
+            }
+            await loadPrivateAlbum()
+        }
+        .task(id: canUseReplyRewards) {
+            guard canUseReplyRewards, chatType == .regular else {
+                replyPointsStore.endSession(peer: peerYxAccId)
+                return
+            }
+            await beginReplyPointsSession()
+        }
+
         // 离开页面清 session 内 sticky 字段（对齐 spec §Q7 "pop 即清"）
         .onDisappear {
             replyPointsStore.endSession(peer: peerYxAccId)
@@ -146,12 +138,14 @@ struct ChatDetailContainer: View {
     /// 对齐 H5 chat/index.vue checkPrivateInfo():180-206。
     /// 空 privateIds / mine.userId 缺失 / 接口失败 → 静默返(不影响主流程,lockStatus 保持 .unknown 兜底态)。
     private func checkPrivateMessagesLockStatus() async {
+        guard canUsePrivateMedia else { return }
         let ids = store.currentPrivateMessageIds
         guard !ids.isEmpty else { return }
         guard let uid = anchorInfoStore.mine?.userId ?? sessionAuthStore.user?.userId else { return }
         do {
             let statuses = try await CheckPrivateInfoHTTPService.shared
                 .checkPrivateInfo(userId: String(uid), privateIds: ids)
+            guard canUsePrivateMedia else { return }
             store.applyPrivateLockStatuses(statuses)
         } catch {
             // 静默失败:lockStatus 保持 .unknown,UI 无锁 icon 兜底
@@ -175,6 +169,11 @@ struct ChatDetailContainer: View {
 
     /// Batch 3.7：拉私密相册（对齐 H5 chat/index.vue:159 `apiGetPrivateInfo({ userId: mineInfo.userId })`）
     private func loadPrivateAlbum(force: Bool = false) async {
+        guard canUsePrivateMedia else {
+            privateCache = []
+            privateLoadState = .idle
+            return
+        }
         guard force || privateLoadState == .idle else { return }
         privateLoadState = .loading
         // userId：优先 mine，兜底 SessionStore.user（登录成功一定有值）
@@ -184,6 +183,11 @@ struct ChatDetailContainer: View {
         }
         do {
             let list = try await ChatPrivateMediaHTTPService.shared.fetchList(userId: uid)
+            guard canUsePrivateMedia else {
+                privateCache = []
+                privateLoadState = .idle
+                return
+            }
             privateCache = list.compactMap(AnchorMediaItem.fromPrivateMedia)
             privateLoadState = .loaded
         } catch {
@@ -204,6 +208,53 @@ struct ChatDetailContainer: View {
             return .customer
         }
         return .regular
+    }
+
+    /// 私密媒体会创建礼物定价私信，107 需同时关闭礼物与虚拟道具能力。
+    private var canUsePrivateMedia: Bool {
+        permission.canGiftSending && permission.canVirtualItems
+    }
+
+    /// 回复奖励会自动领取钻石，因此仅允许虚拟道具能力开启的账号进入该业务流。
+    private var canUseReplyRewards: Bool {
+        permission.canVirtualItems
+    }
+
+    private func beginReplyPointsSession() async {
+        guard canUseReplyRewards, chatType == .regular else { return }
+        let tipTexts = ReplyPointsTipTexts(
+            guide: L10n.chatGuideTip,
+            stimulate: L10n.chatStimulateTip,
+            replyPointGuide: L10n.chatReplyFastTip,
+            replyRemind: L10n.chatReplyRemindTip
+        )
+        await replyPointsStore.beginSession(
+            peer: peerYxAccId,
+            initialLastUserMsg: nil,
+            tipTexts: tipTexts
+        )
+
+        guard canUseReplyRewards else {
+            replyPointsStore.endSession(peer: peerYxAccId)
+            return
+        }
+        await store.waitForInitialLoad()
+        guard canUseReplyRewards else {
+            replyPointsStore.endSession(peer: peerYxAccId)
+            return
+        }
+        // `store.load()` 与本容器 task 并发。若历史先加载，原 hydrate 会因 session 尚未建立而短路；
+        // beginSession 完成后再补一次，保证历史最后一条用户消息能触发积分结算和未回复提醒。
+        if case .loaded(let messages) = store.state {
+            replyPointsStore.hydrateLastUserMsgFromHistory(
+                peer: peerYxAccId,
+                msgs: messages,
+                tipTexts: tipTexts
+            )
+        }
+
+        // 首屏结束后再校验历史私密消息 lockStatus，避免与 `store.load()` 并发时取到空 privateIds。
+        await checkPrivateMessagesLockStatus()
     }
 
     // MARK: - 派生数据

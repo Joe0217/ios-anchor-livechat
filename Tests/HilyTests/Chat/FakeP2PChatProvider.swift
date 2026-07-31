@@ -14,6 +14,8 @@ final class FakeP2PChatProvider: P2PChatProviderProtocol {
     var stubSendAudioCalls: [(peer: String, path: String, dur: Int, clientMsgId: String)] = []
     var stubSendImageCalls: [(peer: String, url: URL, clientMsgId: String)] = []
     var stubSendVideoCalls: [(peer: String, url: URL, coverUrl: URL?, dur: Int, clientMsgId: String)] = []
+    var fetchHistoryCalls: [(peer: String, anchor: String?, limit: Int)] = []
+    var unsubscribeCallCount: Int = 0
 
     /// fetchHistory 是否挂起等 resumeFetch()（复现 loading 期事件入队场景）
     var fetchSuspends: Bool = false
@@ -35,6 +37,7 @@ final class FakeP2PChatProvider: P2PChatProviderProtocol {
     // MARK: - Protocol
 
     func fetchHistory(peerYxAccId: String, anchor: String?, limit: Int) async throws -> [ChatMessage] {
+        fetchHistoryCalls.append((peerYxAccId, anchor, limit))
         if fetchSuspends {
             await withCheckedContinuation { cont in
                 fetchResumeHandle = cont
@@ -97,6 +100,7 @@ final class FakeP2PChatProvider: P2PChatProviderProtocol {
     }
 
     func unsubscribe() {
+        unsubscribeCallCount += 1
         self.handler = nil
     }
 }

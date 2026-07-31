@@ -100,6 +100,14 @@ final class PartyBattleStore: ObservableObject {
         actionError = nil
     }
 
+    private func allowsPartyGames(action: String) -> Bool {
+        guard SelfPermissionBridge.shared.gate(.partyGames, action: action) else {
+            reset()
+            return false
+        }
+        return true
+    }
+
     // MARK: - Score display (spec §4.3 gems fallback getter)
 
     var redScoreDisplay: Double {
@@ -315,6 +323,7 @@ extension PartyBattleStore {
     /// 让 UI 立即响应（不必等 IM 1100 到达）；IM 1100 到达后 `onSelectingStart` 会 merge 覆盖完整字段。
     @discardableResult
     func start(templateId: String, durationSec: Int, hostInitialTeam: Int?) async -> Bool {
+        guard allowsPartyGames(action: "partyBattleStart") else { return false }
         clearActionError()
         guard canManage, isFunctionEnabled, roomEnv.roomTempId == 1 else {
             AppLogger.party.warning("[Battle] start rejected: insufficient permission or battle disabled")
@@ -425,6 +434,7 @@ extension PartyBattleStore {
 
     /// 切队（观众/主播端参战方在 SELECTING/RUNNING 期切红蓝）
     func switchTeam(targetTeam: Int) async {
+        guard allowsPartyGames(action: "partyBattleSwitchTeam") else { return }
         guard !pkId.isEmpty, targetTeam == 1 || targetTeam == 2,
               isSelecting || isRunning else { return }
         do {
@@ -437,6 +447,7 @@ extension PartyBattleStore {
     /// 房主提前进入 RUNNING（SELECTING 期 "Start Now"）
     @discardableResult
     func startNow() async -> Bool {
+        guard allowsPartyGames(action: "partyBattleStartNow") else { return false }
         clearActionError()
         guard !pkId.isEmpty, canManage, isSelecting else {
             actionError = L10n.Party.Battle.alreadyEnded
@@ -472,6 +483,7 @@ extension PartyBattleStore {
     /// 房主强制结束（RUNNING 期 ForceEndConfirm）
     @discardableResult
     func forceEnd() async -> Bool {
+        guard allowsPartyGames(action: "partyBattleForceEnd") else { return false }
         clearActionError()
         guard !pkId.isEmpty, canManage, isRunning else {
             actionError = L10n.Party.Battle.alreadyEnded
@@ -527,6 +539,7 @@ extension PartyBattleStore {
     /// H5 partyBattle.ts:267-275：**RUNNING 阶段 approve 通过后主动 refresh 一次**
     /// 因后端 RUNNING 期审核通过后无专门推送（1101 仅 SELECTING），refresh 拉回 redTeam/blueTeam 让 UI 立刻看到新人
     func approveApply(applyId: Int, approve: Bool) async {
+        guard allowsPartyGames(action: "partyBattleApproveApply") else { return }
         guard !pkId.isEmpty, applyId > 0, canManage else { return }
         do {
             try await service.approveApply(
@@ -545,6 +558,7 @@ extension PartyBattleStore {
     /// H5 partyBattle.ts:211-225 loadApplications —— 房主/房管拉取待审申请列表
     /// 权限不足后端返空 list，前端统一覆盖；接口异常保留本地 IM 累加不覆盖
     func loadApplications(roomId: String) async {
+        guard allowsPartyGames(action: "partyBattleLoadApplications") else { return }
         guard let requestedRoomId = Int64(roomId), requestedRoomId > 0 else { return }
         let requestRevision = stateRevision
         let requestPkId = pkId
@@ -566,6 +580,7 @@ extension PartyBattleStore {
 
     /// 观众申请上麦（PartyRoomView 观众端麦位排队入口调）
     func applyMic(desiredTeam: Int?, desiredMicId: Int?) async {
+        guard allowsPartyGames(action: "partyBattleApplyMic") else { return }
         guard !pkId.isEmpty else { return }
         do {
             _ = try await service.applyMic(
@@ -597,6 +612,7 @@ extension PartyBattleStore {
 
     /// F-1a 全局开关拉取（PartyStore 进房 enterRoom 成功后调）
     func loadGlobalConfig() async {
+        guard allowsPartyGames(action: "partyBattleLoadConfig") else { return }
         do {
             if let cfg = try await service.fetchGlobalConfig() {
                 totalSwitch = cfg.totalSwitch
@@ -617,6 +633,7 @@ extension PartyBattleStore {
     /// - SELECTING 归零 → onRunningStart 本地兜底进 RUNNING
     /// - RUNNING 归零 → onEnd(null) → refresh(roomId) → fetchSettlement 覆盖 cooldownLeftSec
     func tickLeft() {
+        guard allowsPartyGames(action: "partyBattleTick") else { return }
         guard leftSec > 0 else { return }
         leftSec -= 1
         if var s = state {
@@ -1068,6 +1085,7 @@ extension PartyBattleStore {
     /// F-1a Task 10d · 冷启动/断网重连兜底
     /// 调用点：PartyRoomView.task { await battleStore.refreshIfNeeded(roomId: ...) }
     func refreshIfNeeded(roomId: String) async {
+        guard allowsPartyGames(action: "partyBattleRefresh") else { return }
         guard let requestedRoomId = Int64(roomId), requestedRoomId > 0 else { return }
         let requestRevision = stateRevision
         do {
@@ -1091,6 +1109,7 @@ extension PartyBattleStore {
     ///
     /// 幂等 guard `templates.isEmpty` 保护重入
     func loadTemplatesIfNeeded() async {
+        guard allowsPartyGames(action: "partyBattleLoadTemplates") else { return }
         guard templates.isEmpty else { return }
         do {
             templates = try await service.fetchTemplates()

@@ -110,6 +110,7 @@ final class PropsInventoryStore: ObservableObject {
 
     private let service: PropsService
     private let pageSize: Int
+    private let canManageVirtualItems: @Sendable () -> Bool
 
     // MARK: - 内部状态
 
@@ -121,9 +122,14 @@ final class PropsInventoryStore: ObservableObject {
 
     // MARK: - 生命周期
 
-    init(service: PropsService, pageSize: Int = PropsInventoryStore.defaultPageSize) {
+    init(
+        service: PropsService,
+        pageSize: Int = PropsInventoryStore.defaultPageSize,
+        canManageVirtualItems: @escaping @Sendable () -> Bool = PropsInventoryStore.defaultCanManageVirtualItems
+    ) {
         self.service = service
         self.pageSize = pageSize
+        self.canManageVirtualItems = canManageVirtualItems
     }
 
     deinit {
@@ -308,6 +314,9 @@ final class PropsInventoryStore: ObservableObject {
     /// - Returns: `.success` / `.rejected(reason)` · 供 view 判断是否需要弹 toast
     @discardableResult
     func performOps(item: PropItem, action: PropEquipAction) async -> OpsResult {
+        guard canManageVirtualItems() else {
+            return .rejected(.permissionDenied)
+        }
         // 前置校验（对齐 H5 equipBtn 三条 toast）
         if item.isFromBag != 1 {
             return .rejected(.notOwned)
@@ -367,8 +376,18 @@ final class PropsInventoryStore: ObservableObject {
         case alreadyWorn                 // 已穿戴又 equip（"You already wear this"）
         case alreadyUnequipped           // 未穿戴又 unequip（"You already unequip this"）
         case busy                        // 同 item ops 进行中
+        case permissionDenied            // 审核/权限账号禁止修改虚拟道具
         case staleServerAuthoritative    // Ops 期 refresh 已在途，不回滚
         case apiFailed(message: String)  // 网络/业务错
+    }
+
+    nonisolated private static func defaultCanManageVirtualItems() -> Bool {
+        #if HILY_TESTS
+        // HilyTests 独立编译，不链接 SessionStore / SelfPermissionBridge+Shared。
+        return true
+        #else
+        return SelfPermissionBridge.shared.gate(.virtualItems, action: "propsInventoryOperation")
+        #endif
     }
 
     private func applyLocalOps(item: PropItem, action: PropEquipAction) {

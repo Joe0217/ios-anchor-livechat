@@ -9,8 +9,8 @@ import SwiftUI
 /// 300ms throttle + PartyRoomModeType 枚举。
 ///
 /// **交互**：
-/// - Tab 切换：本地 @State selectedType；`onTabChange` 回调让父层同步 store（如 create
-///   store.mode = type.rawValue 触发补拉）
+/// - Tab 切换：本地 @State selectedType；`onTabChange` 回调让父层同步 Store（如 create
+///   `store.selectMode(type.rawValue)` 触发补拉）
 /// - Card tap：`enforceLevelGate=true` 时 `createRoomLevel > userLevel` 弹 toast 不选中；
 ///   否则本地 selectedTempId 更新
 /// - Confirm：`onConfirm(tempId, type)` 上抛，父层负责关闭 + 后续动作（create 侧写
@@ -24,6 +24,8 @@ struct PartyRoomTemplatePickerSheet: View {
 
     let voiceTemplates: [PartyRoomTemplate]
     let liveTemplates: [PartyRoomTemplate]
+    /// 107 Party-only 账号只允许语音模板。默认保留既有两种房型，避免影响普通账号。
+    let availableTypes: [PartyRoomModeType]
     let isLoading: Bool
     let errorMessage: String?
     let onRetry: (() -> Void)?
@@ -59,6 +61,7 @@ struct PartyRoomTemplatePickerSheet: View {
     init(
         voiceTemplates: [PartyRoomTemplate],
         liveTemplates: [PartyRoomTemplate],
+        availableTypes: [PartyRoomModeType] = PartyRoomModeType.allCases,
         isLoading: Bool,
         errorMessage: String?,
         onRetry: (() -> Void)? = nil,
@@ -72,17 +75,22 @@ struct PartyRoomTemplatePickerSheet: View {
     ) {
         self.voiceTemplates = voiceTemplates
         self.liveTemplates = liveTemplates
+        let resolvedTypes = availableTypes.isEmpty ? [.voiceOnly] : availableTypes
+        self.availableTypes = resolvedTypes
         self.isLoading = isLoading
         self.errorMessage = errorMessage
         self.onRetry = onRetry
-        self.initialType = initialType
+        let resolvedInitialType = resolvedTypes.contains(initialType)
+            ? initialType
+            : (resolvedTypes.first ?? .voiceOnly)
+        self.initialType = resolvedInitialType
         self.initialSelectedTempId = initialSelectedTempId
         self.userLevel = userLevel
         self.enforceLevelGate = enforceLevelGate
         self.emptyText = emptyText
         self.onTabChange = onTabChange
         self.onConfirm = onConfirm
-        _selectedType = State(initialValue: initialType)
+        _selectedType = State(initialValue: resolvedInitialType)
         _selectedTempId = State(initialValue: initialSelectedTempId)
     }
 
@@ -117,19 +125,29 @@ struct PartyRoomTemplatePickerSheet: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: toast)
+        .onChange(of: availableTypes) { types in
+            guard !types.contains(selectedType) else { return }
+            let fallback = types.first ?? .voiceOnly
+            selectedType = fallback
+            selectedTempId = nil
+            onTabChange?(fallback)
+        }
     }
 
     // MARK: - Tab strip（Room Mode 版：gradient + throttle + enum）
 
+    @ViewBuilder
     private var tabStrip: some View {
-        HStack(spacing: 0) {
-            ForEach(PartyRoomModeType.allCases, id: \.id) { type in
-                tabButton(type: type)
+        if availableTypes.count > 1 {
+            HStack(spacing: 0) {
+                ForEach(availableTypes, id: \.id) { type in
+                    tabButton(type: type)
+                }
             }
+            .padding(4)
+            .background(Capsule().fill(Theme.Palette.partyCreateInputFill))
+            .padding(.horizontal, 20)
         }
-        .padding(4)
-        .background(Capsule().fill(Theme.Palette.partyCreateInputFill))
-        .padding(.horizontal, 20)
     }
 
     private func tabButton(type: PartyRoomModeType) -> some View {
@@ -161,6 +179,7 @@ struct PartyRoomTemplatePickerSheet: View {
     }
 
     private func handleTabTap(_ type: PartyRoomModeType) {
+        guard availableTypes.contains(type) else { return }
         let now = Date()
         if let last = lastTabTapAt, now.timeIntervalSince(last) < 0.3 { return }
         lastTabTapAt = now

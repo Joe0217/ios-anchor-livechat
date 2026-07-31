@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// 根视图：按登录态和审核角色在登录、受限、主播主界面之间切换。
-/// 通话和主播实时能力只允许已审核主播（`userType == 2`）启动。
+/// 根视图：按登录态和角色能力在登录、受限、主播主界面之间切换。
+/// `107` 是 Party-only 角色：可进入主界面，但不能启动完整主播实时能力。
 struct RootView: View {
     @EnvironmentObject private var session: SessionStore
     @StateObject private var callStore = CallStore.shared
@@ -11,6 +11,7 @@ struct RootView: View {
     @StateObject private var startupStationMail = StartupStationMailStore()
     @StateObject private var inviteMessage = InviteMessageCenter.shared
     @ObservedObject private var matchStore = MatchStore.shared
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     @Environment(\.scenePhase) private var scenePhase
     /// v23（2026-07-13）code-review 修复：warmup Task 需要 cancel 入口
     /// 场景：快速 login→logout→login（token 失效重刷）→ 旧 Task 迟到对新 router 冗余 warmup + 与新 Task 双打
@@ -28,13 +29,13 @@ struct RootView: View {
                 // 缺失角色字段时 fail-closed，防止不完整登录响应放行未审核账号。
                 RestrictedTabView()
             } else {
-                MainTabView()
+                MainTabView(initialSelection: session.user?.userType == 107 ? .party : .home)
             }
 
             // 直播私 call 由 LiveRoomView 持有的 CallView 展示，并注入直播相机。
             // 根层若再创建一个未注入相机的 CallView，会竞争相机、抢占 Agora remoteView，导致双方画面黑屏。
             // 角色被服务端降级时，即使 RTM 尚在异步停机，也不能覆盖受限页。
-            if isApprovedHost,
+            if hasFullHostRealtimeCapability,
                callStore.state != .idle,
                callStore.current.frontGameType != .live {
                 CallView(store: callStore)
@@ -42,14 +43,14 @@ struct RootView: View {
                     .zIndex(100)
             }
 
-            if isApprovedHost, robotCallStore.state != .idle || robotCallStore.reward != nil {
+            if hasFullHostRealtimeCapability, robotCallStore.state != .idle || robotCallStore.reward != nil {
                 RobotCallOverlay(store: robotCallStore)
                     .transition(.opacity)
                     .zIndex(150)
             }
 
             // 长时间无操作自动离线弹窗（对齐 H5 App.vue useDynamicInactivityTimer）
-            if isApprovedHost, autoOffline.showDialog {
+            if hasFullHostRealtimeCapability, autoOffline.showDialog {
                 AutoOfflineDialog(
                     onGoOnline: { autoOffline.handleGoOnline() },
                     onDismiss: { autoOffline.handleDialogDismiss() }
@@ -59,7 +60,7 @@ struct RootView: View {
             }
 
             // 启动站内信（对齐 H5 GLoadList）：独立于消息页入口，登录后全局展示最新未读公告。
-            if let mail = startupStationMail.mail {
+            if permission.canSystemAnnouncements, let mail = startupStationMail.mail {
                 StartupStationMailPopup(
                     mail: mail,
                     isRead: startupStationMail.isRead,
@@ -71,7 +72,7 @@ struct RootView: View {
             }
 
             // 裂变邀请 103/104：通话/机器人通话不展示，避免覆盖核心实时链路。
-            if isApprovedHost,
+            if hasFullHostRealtimeCapability,
                scenePhase == .active,
                inviteMessage.isAtRootPage,
                callStore.state == .idle,
@@ -151,19 +152,29 @@ struct RootView: View {
             }
         }
         .task(id: sessionCapabilityKey) {
-            if session.isLoggedIn, let userId = session.user?.userId {
-                Task { await startupStationMail.loadIfNeeded(for: userId) }
-            } else {
-                startupStationMail.clear()
-            }
             await syncSessionDependent()
+        }
+        .task(id: "\(sessionCapabilityKey)-\(permission.canSystemAnnouncements)") {
+            guard session.isLoggedIn,
+                  permission.canSystemAnnouncements,
+                  let userId = session.user?.userId else {
+                startupStationMail.clear()
+                return
+            }
+            await startupStationMail.loadIfNeeded(for: userId)
         }
         // App 级语言环境注入（Settings → Language 切换后立即生效）
         .appLocaleEnvironment()
     }
 
-    /// H5 `isHost` / `isAgency` 对齐：主播可进入主界面，代理被阻止，其他和未知角色受限。
-    private var isApprovedHost: Bool {
+    /// 完整主播和 Party-only 角色可进入主界面。
+    private var canEnterMainApp: Bool {
+        let userType = session.user?.userType
+        return userType == 2 || userType == 107
+    }
+
+    /// 仅完整主播允许启动 RTM、WS、匹配、直播、机器人通话等完整实时能力。
+    private var hasFullHostRealtimeCapability: Bool {
         session.user?.userType == 2
     }
 
@@ -173,26 +184,39 @@ struct RootView: View {
 
     /// 已登录却缺少角色字段时保持受限，避免不完整响应绕过审核页。
     private var isRestricted: Bool {
-        !isApprovedHost
+        !canEnterMainApp
     }
 
-    /// 审核角色变化时也要重新同步主播能力。
+    /// 角色能力变化时也要重新同步主播能力。
     private var sessionCapabilityKey: String {
         let user = session.user
         return "\(session.isLoggedIn)-\(user?.userId ?? -1)-\(user?.userType ?? -1)"
     }
 
-    /// 登录态连接同步：NIM 保留给受限页客服聊天；主播专属实时能力按审核角色门控。
+    /// 登录态连接同步：NIM 保留给受限页客服聊天和 Party-only 会话；
+    /// 只有完整主播角色才启动主播专属实时能力。
     private func syncSessionDependent() async {
         if session.isLoggedIn, let user = session.user {
             // 受限页仍需 NIM 联系管理员、接收 attachType=58；但其他主播实时能力全部关闭。
-            guard isApprovedHost else {
+            guard hasFullHostRealtimeCapability else {
                 if let account = user.yxAccid, !account.isEmpty,
                    let token = user.imToken, !token.isEmpty {
                     NIMOnlineKeeper.shared.start(account: account, token: token)
                 }
                 Task { try? await SapiTokenStore.shared.ensureValid() }
-                await stopHostCapabilities()
+                // Party-only 角色保留 Party 的 RTC/NIM 会话和 chat router；其他受限角色沿用完整清理。
+                await stopHostCapabilities(preservingPartySession: canEnterMainApp)
+                // Party-only 角色不在登录时常驻 WS；但正在 Party 房时必须立刻恢复带 roomId 的心跳，
+                // 否则后端的 30s Party TTL 会把本端强制下麦。
+                if canEnterMainApp {
+                    // PartyRoomView 在小窗态已卸载，不能依赖页面级权限观察来停止热门/周任务。
+                    // 保留普通 Party 会话，但立即撤销活动任务的后台网络与人脸校验链路。
+                    PartyStore.shared.suspendPartyActivitiesForRestrictedRole()
+                    // PartyRoomView 在小窗态已经卸载，不能依赖其 onChange 撤销已有 RTC 视频订阅。
+                    // 角色从完整主播动态降为 Party-only 时，在根级同步中收敛为纯语音 Party 会话。
+                    PartyStore.shared.refreshPartyVideoCapability()
+                    PartyStore.shared.resumePartyOnlyHeartbeatIfNeeded()
+                }
                 return
             }
             // GiftEffect 引擎冷启：Window + install 生产 router + 5s 后 warmup SVGA parser
@@ -260,16 +284,31 @@ struct RootView: View {
     }
 
     /// 角色降级和登出共用的主播能力清理。NIM 由调用方控制，受限页仍需要它。
-    private func stopHostCapabilities() async {
+    ///
+    /// `preservingPartySession` 仅用于 Party-only 角色：它必须关闭完整主播能力，同时保留 Party 房和
+    /// 对应 IM router。Party、直播和通话共用声网进程级单例，因此该分支也不能销毁该引擎。
+    private func stopHostCapabilities(preservingPartySession: Bool = false) async {
         WSHeartbeat.shared.stop()
         // 先结束所有活跃媒体。CallStore.stop() 会销毁共享 Agora 引擎，必须最后执行，
         // 否则直播/机器人播报/派对房来不及正常 leave。
         MatchStore.shared.stopForSessionEnd()
         await LiveSessionRegistry.shared.stopForSessionEnd()
         await robotCallStore.resetForSessionEnd()
-        await PartyStore.shared.forceLeaveRoom(.userRequest)
-        PartyStore.shared.detachChatRouter()
-        await callStore.stop()
+        if !preservingPartySession {
+            await PartyStore.shared.forceLeaveRoom(.userRequest)
+            PartyStore.shared.detachChatRouter()
+        }
+
+        // Party 私 call 被角色降级中断时，PartyStore 仍处于 .joined 但 RTC 已为私 call 离开。
+        // 先让 CallStore 释放通话，再重新加入原 Party 房；不能依赖其异步 observer，因为 stop()
+        // 会立即清空 current。
+        let shouldResumePartyAfterStoppingCall = preservingPartySession
+            && callStore.current.frontGameType == .party
+            && PartyStore.shared.roomState == .joined
+        await callStore.stop(destroySharedAgoraEngine: !preservingPartySession)
+        if shouldResumePartyAfterStoppingCall {
+            await PartyStore.shared.resumeParty()
+        }
         AutoOfflineMonitor.shared.stop()
         warmupTask?.cancel()
         warmupTask = nil
@@ -310,6 +349,7 @@ private final class StartupStationMailStore: ObservableObject {
               requestedUserId == userId,
               SessionStore.shared.isLoggedIn,
               SessionStore.shared.user?.userId == userId,
+              SelfPermissionBridge.shared.canSystemAnnouncementsSnapshot,
               let latest = await service.fetchLatest(),
               latest.id != UserDefaults.standard.string(forKey: Self.readMailIdKey) else {
             return

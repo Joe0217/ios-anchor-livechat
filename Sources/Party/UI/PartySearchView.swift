@@ -6,10 +6,15 @@ import SwiftUI
 /// **交互**：回车触发搜索（`.onSubmit`）+ Store 层 1500ms throttle；空搜结果显 empty 空态卡
 struct PartySearchView: View {
     @StateObject private var store = PartySearchStore()
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     /// v4：传完整对象让上层判密码房前置弹窗
     let onTapRoom: (PartyRoomInfo) -> Void
     @Environment(\.dismiss) private var dismiss
     @FocusState private var searchFocused: Bool
+
+    private var showsRankVisuals: Bool {
+        permission.canVirtualItems && permission.canGiftSending
+    }
 
     var body: some View {
         ZStack {
@@ -129,7 +134,8 @@ struct PartySearchView: View {
                         PartyRoomCardView(
                             room: room,
                             languageName: room.roomLanguage ?? L10n.Party.listPillLanguageFallback,
-                            isMyRoom: false
+                            isMyRoom: false,
+                            showsRankVisuals: showsRankVisuals
                         )
                     }
                     .buttonStyle(.plain)
