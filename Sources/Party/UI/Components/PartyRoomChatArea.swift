@@ -17,6 +17,8 @@ struct PartyRoomChatArea: View {
     var showsGiftContent: Bool = true
     var showsLotteryContent: Bool = true
     var showsPartyGameContent: Bool = true
+    /// 107 保留骰子/猜拳结果，但不因此放开 PK、PartyBattle 或其他游戏消息。
+    var showsFreePartyGameContent: Bool = true
     var showsActivityContent: Bool = true
     var showsVirtualItemContent: Bool = true
 
@@ -59,6 +61,7 @@ struct PartyRoomChatArea: View {
             showsGiftMessages: showsGiftContent,
             showsLotteryMessages: showsLotteryContent,
             showsPartyGameMessages: showsPartyGameContent,
+            showsFreePartyGameMessages: showsFreePartyGameContent,
             showsActivityMessages: showsActivityContent,
             showsVirtualItemMessages: showsVirtualItemContent,
             canDeleteTextMessages: canDeleteTextMessages,

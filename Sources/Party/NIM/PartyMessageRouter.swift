@@ -233,6 +233,11 @@ final class PartyMessageRouter: MessageRouter {
             // 2. self-echo skip：云信 chatroom 会 push 自己发的消息回来（H5 明示"self-echo skip 已踩坑"）
             // 3. 派发到 Store 队列 → 麦位 SVGA player 消费
             AppLogger.party.info("[PartyRouter] \(attachType.rawValue, privacy: .public) payloadKeys=\(Array(payload.keys), privacy: .public)")
+            let isPlayEmoji = attachType == .emojiPlay
+            if isPlayEmoji,
+               !SelfPermissionBridge.shared.gate(.partyGames, action: "partyPlayEmojiReceiveRouter") {
+                return
+            }
             guard let emojiPayload = PartyEmojiPayload.from(payload: payload) else {
                 AppLogger.party.notice("[PartyRouter] \(attachType.rawValue, privacy: .public) emoji payload missing required fields (emojiId/playUrl/sendUserId); drop")
                 return
@@ -243,7 +248,12 @@ final class PartyMessageRouter: MessageRouter {
                 AppLogger.party.debug("[PartyRouter] \(attachType.rawValue, privacy: .public) self-echo skip uid=\(myUserId, privacy: .public)")
                 return
             }
-            delegate?.partyRoomChat(chat, didReceiveEmoji: emojiPayload, raw: m)
+            delegate?.partyRoomChat(
+                chat,
+                didReceiveEmoji: emojiPayload,
+                isPlay: isPlayEmoji,
+                raw: m
+            )
 
         // MARK: - 占位群组（F 期功能未落 / Android 独有不实装）
 

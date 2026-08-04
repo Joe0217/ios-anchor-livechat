@@ -91,6 +91,24 @@ final class UserProfileViewModelTests: XCTestCase {
 
     // MARK: - Follow (optimistic)
 
+    func test_toggleFollow_whenProfileSocialDenied_doesNotMutateOrCallService() async {
+        let fake = FakeUserProfileService()
+        fake.fetchResult = .success(.fixture(followed: false))
+        let vm = UserProfileViewModel(
+            userId: "100",
+            service: fake,
+            canFollowProvider: { false }
+        )
+        await vm.loadDetail()
+
+        await vm.toggleFollow()
+
+        XCTAssertEqual(vm.detail?.followed, false)
+        XCTAssertTrue(fake.followCalls.isEmpty)
+        XCTAssertTrue(vm.pendingFollowIds.isEmpty)
+        XCTAssertTrue(vm.isFollowButtonDisabled)
+    }
+
     func test_toggleFollow_optimistic_truthOnSuccess() async {
         let fake = FakeUserProfileService()
         fake.fetchResult = .success(.fixture(followed: false))
@@ -225,6 +243,24 @@ final class UserProfileViewModelTests: XCTestCase {
     }
 
     // MARK: - Block (非 optimistic)
+
+    func test_profileSocialDenied_stillAllowsDetailLoadAndBlock() async {
+        let fake = FakeUserProfileService()
+        fake.fetchResult = .success(.fixture(yxAccid: "yx", isBlocked: nil))
+        let vm = UserProfileViewModel(
+            userId: "100",
+            service: fake,
+            canFollowProvider: { false }
+        )
+
+        await vm.loadDetail()
+        vm.openBlockConfirm()
+        await vm.confirmBlock()
+
+        XCTAssertEqual(fake.fetchCalls, [100])
+        XCTAssertEqual(fake.blockCalls.count, 1)
+        XCTAssertEqual(vm.detail?.isBlocked, 1)
+    }
 
     func test_openBlockConfirm_validShows() async {
         let fake = FakeUserProfileService()

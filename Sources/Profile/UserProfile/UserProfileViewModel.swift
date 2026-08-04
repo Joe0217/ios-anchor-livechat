@@ -27,17 +27,21 @@ final class UserProfileViewModel: ObservableObject {
     private var loadGeneration: Int = 0
     /// 主播自己直播态注入（spec §6 Q2：LiveStore.state == .living 派生）
     private let isLiveProvider: () -> Int
+    /// 关注是资料社交写操作；与只读资料及举报/拉黑能力分离。
+    private let canFollowProvider: () -> Bool
     private let networkErrorFallback: String
     private let badUserIdFallback: String
 
     init(userId: String,
          service: UserProfileServiceProtocol,
          isLiveProvider: @escaping () -> Int = { 0 },
+         canFollowProvider: @escaping () -> Bool = { true },
          networkErrorFallback: String = "Network error, please try again.",
          badUserIdFallback: String = "Invalid user ID") {
         self.userId = userId
         self.service = service
         self.isLiveProvider = isLiveProvider
+        self.canFollowProvider = canFollowProvider
         self.networkErrorFallback = networkErrorFallback
         self.badUserIdFallback = badUserIdFallback
     }
@@ -84,6 +88,7 @@ final class UserProfileViewModel: ObservableObject {
     /// 失败 revert + 代际守卫；成功 post `.followRelationChanged` 跨页同步（参 FollowListVM）。
     func toggleFollow() async {
         // 1. 守卫（外层不 mutation - 不变量 #4 持稳）
+        guard canFollowProvider() else { return }
         guard let d = detail else { return }
         guard let uidInt = Int(userId) else {
             transientError = badUserIdFallback
@@ -217,6 +222,6 @@ final class UserProfileViewModel: ObservableObject {
 
     /// 关注按钮是否 disabled（spec R-9 + 并发守）。
     var isFollowButtonDisabled: Bool {
-        Int(userId) == nil || pendingFollowIds.contains(userId)
+        !canFollowProvider() || Int(userId) == nil || pendingFollowIds.contains(userId)
     }
 }

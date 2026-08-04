@@ -1120,6 +1120,18 @@ enum L10n {
     static var settingsPrivacyPolicy: String   { localize("settings.privacy", comment: "隐私政策") }
     static var settingsLogout: String          { localize("settings.logout", comment: "退出登录按钮") }
     static var settingsLogoutConfirm: String   { localize("settings.logoutConfirm", comment: "退出登录确认") }
+    static var settingsDeleteAccount: String   { localize("settings.deleteAccount", comment: "删除账号入口") }
+    static var settingsDeleteAccountTitle: String { localize("settings.deleteAccount.title", comment: "删除账号页标题") }
+    static var settingsDeleteAccountDescription: String { localize("settings.deleteAccount.description", comment: "删除账号风险说明") }
+    static var settingsDeleteAccountConsequenceProfile: String { localize("settings.deleteAccount.consequence.profile", comment: "删除资料后果") }
+    static var settingsDeleteAccountConsequenceContent: String { localize("settings.deleteAccount.consequence.content", comment: "删除内容后果") }
+    static var settingsDeleteAccountConsequenceRecovery: String { localize("settings.deleteAccount.consequence.recovery", comment: "不可恢复说明") }
+    static var settingsDeleteAccountAction: String { localize("settings.deleteAccount.action", comment: "删除账号主按钮") }
+    static var settingsDeleteAccountConfirmTitle: String { localize("settings.deleteAccount.confirm.title", comment: "删除账号二次确认标题") }
+    static var settingsDeleteAccountConfirmMessage: String { localize("settings.deleteAccount.confirm.message", comment: "删除账号二次确认正文") }
+    static var settingsDeleteAccountConfirmAction: String { localize("settings.deleteAccount.confirm.action", comment: "永久删除确认按钮") }
+    static var settingsDeleteAccountUnavailable: String { localize("settings.deleteAccount.unavailable", comment: "删除接口未配置") }
+    static var settingsDeleteAccountFailed: String { localize("settings.deleteAccount.failed", comment: "删除失败") }
     static var settingsCancel: String          { localize("settings.cancel", comment: "取消") }
     static var settingsConfirm: String         { localize("settings.confirm", comment: "确认") }
     static var settingsAnchorPolicy: String    { localize("settings.anchorPolicy", comment: "主播规范条目") }

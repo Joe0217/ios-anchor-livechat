@@ -25,6 +25,7 @@ struct PartyMessageListView: View {
     var showsGiftMessages: Bool = true
     var showsLotteryMessages: Bool = true
     var showsPartyGameMessages: Bool = true
+    var showsFreePartyGameMessages: Bool = true
     var showsActivityMessages: Bool = true
     var showsVirtualItemMessages: Bool = true
     /// 防重入 map:正在翻译中的 msgId
@@ -60,7 +61,19 @@ struct PartyMessageListView: View {
             return showsGiftMessages
         case .partyLuckyNumber, .wheelRes:
             return showsLotteryMessages
-        case .gameWinNotify, .partyBattle, .pkNotify, .pkTopContributors, .rpsWin:
+        case .rpsWin:
+            // attachType 144 只承载猜拳/幸运骰子，两者都是 107 明确保留的免费互动。
+            return showsPartyGameMessages || showsFreePartyGameMessages
+        case .gameWinNotify(let payload):
+            return showsPartyGameMessages || (
+                showsFreePartyGameMessages
+                    && PartyFreeInteractionPolicy.allows(
+                        gameID: payload.gameId,
+                        gameName: payload.gameName,
+                        gameType: payload.gameType
+                    )
+            )
+        case .partyBattle, .pkNotify, .pkTopContributors:
             return showsPartyGameMessages
         case .winnerBroadcast, .wishlistEffect:
             return showsActivityMessages

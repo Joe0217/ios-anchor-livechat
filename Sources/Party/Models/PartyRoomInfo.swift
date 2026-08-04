@@ -432,26 +432,30 @@ struct PartyBannerGame: Identifiable, Equatable {
 
 /// Party 免费互动的保守白名单。服务端下发的其他游戏即使带图标或链接，也不会因 107 放行。
 enum PartyFreeInteractionPolicy {
-    private static let allowedASCIIIdentifiers: Set<String> = [
+    /// 仅保留已经确认无付费、无奖品的两个互动。比较前去掉空格、连接符和下划线，
+    /// 但必须完整命中，避免名称中夹带 "dice" / "猜拳" 的其他游戏被误放行。
+    private static let allowedIdentifiers: Set<String> = [
         "rps",
         "rockpaperscissors",
         "dice",
+        "luckydice",
+        "猜拳",
+        "石头剪刀布",
+        "骰子",
     ]
 
     static func allows(gameID: String?, gameName: String?, gameType: String?) -> Bool {
         [gameID, gameName, gameType]
             .compactMap { $0 }
-            .contains { value in
-                let lowered = value.lowercased()
-                if lowered.contains("猜拳") || lowered.contains("石头剪刀布") || lowered.contains("骰子") {
-                    return true
-                }
-                let normalized = lowered.unicodeScalars
-                    .filter { CharacterSet.alphanumerics.contains($0) }
-                    .map(String.init)
-                    .joined()
-                return allowedASCIIIdentifiers.contains(normalized)
-            }
+            .map(normalizedIdentifier)
+            .contains(where: allowedIdentifiers.contains)
+    }
+
+    private static func normalizedIdentifier(_ value: String) -> String {
+        value.lowercased().unicodeScalars
+            .filter { CharacterSet.alphanumerics.contains($0) }
+            .map(String.init)
+            .joined()
     }
 }
 

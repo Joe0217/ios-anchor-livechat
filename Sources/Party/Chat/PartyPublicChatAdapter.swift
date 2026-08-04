@@ -234,7 +234,9 @@ enum PartyPublicChatAdapter {
             avatar: (payload["avatar"] as? String) ?? (payload["picture"] as? String),
             nickname: nickname,
             winAmount: winAmountStr,
+            gameId: PartyValueNormalizer.stringify(payload["gameId"]),
             gameName: gameName,
+            gameType: PartyValueNormalizer.stringify(payload["gameType"]),
             gameIcon: (payload["gameIcon"] as? String) ?? (payload["listPageIcon"] as? String)
         )
         return UnifiedPublicChatMessage(

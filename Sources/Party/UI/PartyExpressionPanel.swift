@@ -5,7 +5,8 @@ import SwiftUI
 /// **对齐 H5 蓝本** `livechat-h5/src/components/party/components/party-expression-popup.vue`：
 /// - `van-popup position="bottom"` 底部半屏 sheet · min-h 50%（iOS 用 `.fraction(0.5)`）
 /// - 上部 `v-swiper` 分类 × 分页拍平 · 每页固定 **4×3 = 12** 格
-/// - 暂不接入第三个半屏游戏分类，保留骰子、猜拳等玩法表情及其他表情分类
+/// - 完整账号顺序固定为：普通表情 → 免费游戏 → 半屏游戏
+/// - 无完整 Party 游戏权限时只展示普通表情内容并隐藏 tab 栏
 /// - 底部 tab bar 横向可滚 · 每 tab 圆形 24×24 · 激活 opacity 0.16 底色
 /// - 单分类多页时展示自绘小圆点 indicator
 ///
@@ -13,9 +14,10 @@ import SwiftUI
 /// ignoresSafeArea / shared store 自持依赖 · 可作 sheet 半屏。
 struct PartyExpressionPanel: View {
     @ObservedObject private var store = PartyStore.shared
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     @Environment(\.dismiss) private var dismiss
 
-    /// 当前分类 index（对应 `store.expressionListState.loaded` 里的 index）
+    /// 当前分类 index（对应权限过滤、重排后的可见分类 index）
     @State private var selectedClassIndex: Int = 0
     /// 当前分类下的分页 index（0-based · 每页 12 格）
     @State private var selectedPageIndex: Int = 0
@@ -45,6 +47,11 @@ struct PartyExpressionPanel: View {
                 )
             )
             await store.loadExpressionList()
+            selectDefaultExpressionTab()
+        }
+        .onChange(of: permission.canPartyGames) { _ in
+            // 账号运行中撤权/恢复时，可见分类会变化；旧 index 不能继续指向另一分类。
+            selectDefaultExpressionTab()
         }
         .presentationDetents([.height(panelSheetHeight)])
         .overlay(alignment: .top) {
@@ -176,7 +183,9 @@ struct PartyExpressionPanel: View {
 
     @ViewBuilder
     private var tabBar: some View {
-        if case .loaded(let classifications) = store.expressionListState {
+        if !permission.canPartyGames {
+            EmptyView()
+        } else if case .loaded(let classifications) = store.expressionListState {
             let visibleClassifications = visibleClassifications(from: classifications)
             if !visibleClassifications.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -228,6 +237,11 @@ struct PartyExpressionPanel: View {
     // MARK: - Pick handler
 
     private func handleEmojiPick(_ item: PartyEmojiItem) {
+        // UI 第一层防护：受限账号的面板不应出现玩法项；权限运行中切换时仍 fail closed。
+        if item.isPlayEmoji, !permission.canPartyGames {
+            showToast(L10n.PartyRoom.emojiPlayError)
+            return
+        }
         // 玩法 -11 门槛：观众 tap 走 toast（对齐 H5 `usePartyHooks.js:1783` `inPartyRole > 0`）
         if item.isPlayEmoji, store.selfSeat == nil {
             showToast(L10n.PartyRoom.emojiOnSeatRequired)
@@ -253,11 +267,64 @@ struct PartyExpressionPanel: View {
         }
     }
 
-    /// 第三个 tab 是半屏游戏入口，功能未接入前不展示；骰子、猜拳所属的玩法表情分类不受影响。
+    /// 后端把 `classType` 当不透明业务码，不能依赖固定字符串识别普通表情分类。
+    /// 优先选择全部为普通表情的分类；兼容脏数据时回退到首个含普通表情的分类。
+    ///
+    /// 完整账号：普通表情移到 index 0；服务端原始 index 2 的半屏游戏移到最后，免费游戏居中。
+    /// 受限账号：仅保留普通表情，并剔除其中可能混入的玩法项。
     private func visibleClassifications(from classifications: [PartyEmojiClassification]) -> [PartyEmojiClassification] {
-        classifications.enumerated().compactMap { index, classification in
-            index == 2 ? nil : classification
+        guard let expressionIndex = expressionClassificationIndex(in: classifications) else {
+            // 完整账号不因服务端异常分类丢失所有内容；受限账号无法确认安全分类时默认不展示。
+            return permission.canPartyGames ? classifications : []
         }
+
+        let expression = classifications[expressionIndex]
+        guard permission.canPartyGames else {
+            let staticItems = expression.emojisList.filter { !$0.isPlayEmoji }
+            guard !staticItems.isEmpty else { return [] }
+            return [PartyEmojiClassification(
+                classType: expression.classType,
+                coverImage: expression.coverImage,
+                emojisList: staticItems
+            )]
+        }
+
+        let halfScreenGameIndex = 2
+        var ordered = [expression]
+        ordered.append(contentsOf: classifications.enumerated().compactMap { index, classification in
+            guard index != expressionIndex, index != halfScreenGameIndex else { return nil }
+            return classification
+        })
+        if classifications.indices.contains(halfScreenGameIndex),
+           halfScreenGameIndex != expressionIndex {
+            ordered.append(classifications[halfScreenGameIndex])
+        }
+        return ordered
+    }
+
+    private func expressionClassificationIndex(in classifications: [PartyEmojiClassification]) -> Int? {
+        if let index = classifications.firstIndex(where: { classification in
+            !classification.emojisList.isEmpty
+                && classification.emojisList.allSatisfy { !$0.isPlayEmoji }
+        }) {
+            return index
+        }
+        return classifications.firstIndex(where: { classification in
+            classification.emojisList.contains { !$0.isPlayEmoji }
+        })
+    }
+
+    /// 面板每次拉起按内容语义选中普通表情，不依赖服务端原始下标。
+    private func selectDefaultExpressionTab() {
+        selectedPageIndex = 0
+        guard case .loaded(let classifications) = store.expressionListState,
+              let expressionIndex = expressionClassificationIndex(in: classifications) else {
+            selectedClassIndex = 0
+            return
+        }
+        let expressionID = classifications[expressionIndex].id
+        let visible = visibleClassifications(from: classifications)
+        selectedClassIndex = visible.firstIndex(where: { $0.id == expressionID }) ?? 0
     }
 
     private func selectAdjacentTab(delta: Int, count: Int) {

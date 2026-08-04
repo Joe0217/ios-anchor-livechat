@@ -476,7 +476,7 @@ final class H5NativeActionRouter {
             }
             destination = .partyRoom(id: roomId)
         case .goProfile(let userId):
-            guard SelfPermissionBridge.shared.gate(.profileSocial, action: "h5GoProfile") else {
+            guard SelfPermissionBridge.shared.gate(.profileViewing, action: "h5GoProfile") else {
                 return false
             }
             guard let userId = userId?.trimmingCharacters(in: .whitespacesAndNewlines), !userId.isEmpty else {

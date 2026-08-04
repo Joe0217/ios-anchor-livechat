@@ -50,8 +50,8 @@ struct DebugPermissionSection: View {
             infoRow(title: "Effective", value: effectiveText, mono: true)
             infoRow(title: "Call / Live / Party", value: permissionsText, mono: true)
             infoRow(title: "Gift / Wallet / WD / EX", value: economyPermissionsText, mono: true)
-            infoRow(title: "Lot / Game / Item / Home / Work / H5", value: reviewPermissionsText, mono: true)
-            infoRow(title: "Msg / Social / Notice / Party Video", value: isolationPermissionsText, mono: true)
+            infoRow(title: "Lot / Game / Lucky / Free / Item / Home / Work / H5", value: reviewPermissionsText, mono: true)
+            infoRow(title: "Msg / View / Social / Notice / Party Video", value: isolationPermissionsText, mono: true)
         }
         .listRowBackground(Theme.Palette.cardFill.opacity(0.6))
         .onAppear { syncSelectionFromOverride() }
@@ -95,7 +95,7 @@ struct DebugPermissionSection: View {
     }
 
     private var isolationPermissionsText: String {
-        "\(mark(permission.canDirectMessages)) / \(mark(permission.canProfileSocial)) / \(mark(permission.canSystemAnnouncements)) / \(mark(permission.canPartyVideo))"
+        "\(mark(permission.canDirectMessages)) / \(mark(permission.canProfileViewing)) / \(mark(permission.canProfileSocial)) / \(mark(permission.canSystemAnnouncements)) / \(mark(permission.canPartyVideo))"
     }
 
     private func mark(_ v: Bool) -> String { v ? "✓" : "✗" }

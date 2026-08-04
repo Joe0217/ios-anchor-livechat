@@ -81,6 +81,9 @@ final class UserCardStore: ObservableObject {
     // MARK: - Follow / Unfollow(optimistic + revert + pending guard)
 
     func toggleFollow() {
+        guard SelfPermissionBridge.shared.gate(.profileSocial, action: "userCardToggleFollow") else {
+            return
+        }
         guard case .loaded(var info) = state else { return }
         guard !pendingFollow else {
             logger.info("toggleFollow uid=\(self.userId, privacy: .private) skip: pendingFollow=true")

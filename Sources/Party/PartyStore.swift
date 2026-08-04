@@ -696,7 +696,7 @@ final class PartyStore: ObservableObject {
         Task { [weak self] in await self?.loadCurrentRoomBackground() }
         // H5 也在进房后单独拉 music/settings；roomMusicSwitc 只控制入口可见性。
         Task { [weak self] in await self?.loadRoomMusicSettings() }
-        // 半屏游戏暂不接入：当前环境未部署 anchor/list，先不在进房时发起请求。
+        // 清理上一房间的游戏资源；RTC + Chat 双 ready 后再请求当前房间可用游戏。
         partyBannerGamesEpoch &+= 1
         partyBannerGames = []
         roomState = .entering
@@ -1255,6 +1255,11 @@ final class PartyStore: ObservableObject {
             AppLogger.party.notice("[PartyStore] sendEmoji skip: no userId")
             return
         }
+        // Store 第二层防护：UI 隐藏不能替代业务入口 gate；权限在点击与发送之间变化时 fail closed。
+        if item.isPlayEmoji,
+           !SelfPermissionBridge.shared.gate(.partyGames, action: "partyPlayEmojiSend") {
+            return
+        }
         // 玩法 -11 门槛：仅上麦者可发（对齐 H5 `usePartyHooks.js:1783` `inPartyRole > 0`）
         // 静态 -10 无门槛（对齐权限矩阵"emoji 全员基础能力"）
         if item.isPlayEmoji, selfSeat == nil {
@@ -1549,6 +1554,7 @@ final class PartyStore: ObservableObject {
         guard isJoinedChannel, imAlive else { return }
         roomState = .joined
         partyJoinedAt = Date()
+        Task { [weak self] in await self?.loadPartyBannerGames() }
         if let info = roomInfo {
             var properties = PartyAnalytics.roomProperties(
                 roomId: info.id,
@@ -4401,8 +4407,18 @@ extension PartyStore: PartyRoomChatManagerDelegate {
     /// - Router 已完成 self-echo skip（sendUserId == 自己 → 已在本地 sendEmoji 时 enqueue，不重复）
     /// - Router 已完成 payload 严校验（emojiId / playUrl / sendUserId 必须非空）
     /// - 此处只做入队；播放由麦位 SVGA player 观察 emojiQueueMap[sendUserId] 驱动
-    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveEmoji payload: PartyEmojiPayload, raw: NIMMessage) {
+    func partyRoomChat(
+        _ chat: PartyRoomChatManager,
+        didReceiveEmoji payload: PartyEmojiPayload,
+        isPlay: Bool,
+        raw: NIMMessage
+    ) {
         _ = raw
+        // Router 已提前拒绝；Store 再守一次，避免未来新增入口绕过消息路由层。
+        if isPlay,
+           !SelfPermissionBridge.shared.gate(.partyGames, action: "partyPlayEmojiReceiveStore") {
+            return
+        }
         guard !isMinimized else { return }
         enqueueEmoji(seatUserId: payload.sendUserId, payload: payload)
         AppLogger.party.info("[PartyStore] emoji enqueued sender=\(payload.sendUserId, privacy: .public) emojiId=\(payload.emojiId, privacy: .public) queueSize=\(self.emojiQueueMap[payload.sendUserId]?.count ?? 0, privacy: .public)")

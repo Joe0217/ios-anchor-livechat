@@ -41,6 +41,8 @@ struct GameWinPayload: Equatable {
     let avatar: String?
     let nickname: String        // 青绿 #1AFFCD
     let winAmount: String       // 粉 #FE00DE
+    let gameId: String?
     let gameName: String        // 白色 [xxx]
+    let gameType: String?
     let gameIcon: String?       // h20 w20
 }

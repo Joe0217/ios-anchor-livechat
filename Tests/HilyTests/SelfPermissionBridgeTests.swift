@@ -130,7 +130,7 @@ final class SelfPermissionBridgeTests: XCTestCase {
         XCTAssertFalse(bridge.canCurrencyExchangeSnapshot)
         XCTAssertFalse(bridge.canLotterySnapshot)
         XCTAssertFalse(bridge.canPartyGamesSnapshot)
-        XCTAssertTrue(bridge.canPartyLuckyNumberSnapshot)
+        XCTAssertFalse(bridge.canPartyLuckyNumberSnapshot)
         XCTAssertTrue(bridge.canPartyFreeGamesSnapshot)
         XCTAssertFalse(bridge.canVirtualItemsSnapshot)
         XCTAssertFalse(bridge.canHomeDiscoverySnapshot)
@@ -140,6 +140,7 @@ final class SelfPermissionBridgeTests: XCTestCase {
         XCTAssertFalse(bridge.canProfileSocialSnapshot)
         XCTAssertFalse(bridge.canSystemAnnouncementsSnapshot)
         XCTAssertFalse(bridge.canPartyVideoSnapshot)
+        XCTAssertTrue(bridge.canProfileViewingSnapshot)
     }
 
     func test_userTypes_101To106_keepNewSensitiveCapabilitiesEnabled() {
@@ -163,6 +164,7 @@ final class SelfPermissionBridgeTests: XCTestCase {
             XCTAssertTrue(bridge.canProfileSocialSnapshot, "userType \(userType) must retain social permission")
             XCTAssertTrue(bridge.canSystemAnnouncementsSnapshot, "userType \(userType) must retain announcement permission")
             XCTAssertTrue(bridge.canPartyVideoSnapshot, "userType \(userType) must retain Party video permission")
+            XCTAssertTrue(bridge.canProfileViewingSnapshot, "userType \(userType) must retain profile viewing permission")
         }
     }
 
@@ -187,6 +189,7 @@ final class SelfPermissionBridgeTests: XCTestCase {
             XCTAssertFalse(bridge.canCall)
             XCTAssertFalse(bridge.canParty)
             XCTAssertFalse(bridge.canDirectMessages)
+            XCTAssertFalse(bridge.canProfileViewing)
         }
     }
 
@@ -215,6 +218,9 @@ final class SelfPermissionBridgeTests: XCTestCase {
 
         XCTAssertTrue(bridge.canPartySnapshot)
         XCTAssertFalse(bridge.canPartyVideoSnapshot)
+        XCTAssertFalse(bridge.canPartyLuckyNumberSnapshot)
+        XCTAssertTrue(bridge.canPartyFreeGamesSnapshot)
+        XCTAssertTrue(bridge.canProfileViewingSnapshot)
     }
 
     func test_partyFreeInteractionPolicy_allowsOnlyFreePartyInteractions() {
@@ -267,6 +273,7 @@ final class SelfPermissionBridgeTests: XCTestCase {
             XCTAssertEqual(bridge.canPartyVideo, bridge.canPartyVideoSnapshot)
             XCTAssertEqual(bridge.canPartyLuckyNumber, bridge.canPartyLuckyNumberSnapshot)
             XCTAssertEqual(bridge.canPartyFreeGames, bridge.canPartyFreeGamesSnapshot)
+            XCTAssertEqual(bridge.canProfileViewing, bridge.canProfileViewingSnapshot)
         }
     }
 

@@ -28,16 +28,18 @@ struct BlockedFeatures: OptionSet {
     static let partyActivities = BlockedFeatures(rawValue: 1 << 12)
     /// 仅 107 使用：关闭 P2P 消息、群发和私密媒体链路；Party 房公屏不受此位影响。
     static let directMessages = BlockedFeatures(rawValue: 1 << 13)
-    /// 仅 107 使用：关闭关注关系、相册、动态和他人资料等非 Party 社交内容。
+    /// 仅 107 使用：关闭关注关系、相册、动态和分享等非 Party 社交内容。
     static let profileSocial = BlockedFeatures(rawValue: 1 << 14)
     /// 仅 107 使用：不展示非 Party 的启动站内公告。
     static let systemAnnouncements = BlockedFeatures(rawValue: 1 << 15)
     /// 仅 107 使用：Party 房保留语音和公屏互动，但不采集或展示视频麦位。
     static let partyVideo = BlockedFeatures(rawValue: 1 << 16)
-    /// Party 房免费 Lucky Number；与外部抽奖/转盘分离，107 可用。
+    /// Party 房 Lucky Number；与外部抽奖/转盘分离，107 仍单独屏蔽。
     static let partyLuckyNumber = BlockedFeatures(rawValue: 1 << 17)
     /// 仅限服务端标识为免费互动的 Party 游戏（猜拳、骰子）；PK 和其他游戏不在此范围内。
     static let partyFreeGames = BlockedFeatures(rawValue: 1 << 18)
+    /// 他人基础资料的只读查看及举报/拉黑安全处置；与关注、私聊等社交动作分离。
+    static let profileViewing = BlockedFeatures(rawValue: 1 << 19)
 }
 
 /// 认证态与 userType 必须作为同一条事件传给权限桥。
@@ -75,7 +77,7 @@ enum UserPermissionMapping {
                 .lottery, .partyGames, .virtualItems,
                 .homeDiscovery, .workDashboard, .partyActivities,
                 .directMessages, .profileSocial, .systemAnnouncements,
-                .partyVideo
+                .partyVideo, .partyLuckyNumber
             ]
         default:  return []
         }
@@ -105,6 +107,7 @@ enum PermissionFeature: CaseIterable {
     case partyVideo
     case partyLuckyNumber
     case partyFreeGames
+    case profileViewing
 
     fileprivate var blockedFeature: BlockedFeatures {
         switch self {
@@ -127,6 +130,7 @@ enum PermissionFeature: CaseIterable {
         case .partyVideo: return .partyVideo
         case .partyLuckyNumber: return .partyLuckyNumber
         case .partyFreeGames: return .partyFreeGames
+        case .profileViewing: return .profileViewing
         }
     }
 }
@@ -164,6 +168,7 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
     @MainActor @Published private(set) var canPartyVideo: Bool = false
     @MainActor @Published private(set) var canPartyLuckyNumber: Bool = false
     @MainActor @Published private(set) var canPartyFreeGames: Bool = false
+    @MainActor @Published private(set) var canProfileViewing: Bool = false
     @MainActor @Published private(set) var isLoaded: Bool = false
 
     // MARK: Store 层 nonisolated snapshot（原子读，避免 @MainActor hop）
@@ -201,6 +206,7 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
     nonisolated var canPartyVideoSnapshot: Bool { canUseSnapshot(.partyVideo) }
     nonisolated var canPartyLuckyNumberSnapshot: Bool { canUseSnapshot(.partyLuckyNumber) }
     nonisolated var canPartyFreeGamesSnapshot: Bool { canUseSnapshot(.partyFreeGames) }
+    nonisolated var canProfileViewingSnapshot: Bool { canUseSnapshot(.profileViewing) }
 
     /// 任意 actor 可读的能力快照。业务入口必须用它或 `gate`，不能只依赖 UI 显隐。
     nonisolated func canUseSnapshot(_ feature: PermissionFeature) -> Bool {
@@ -288,6 +294,7 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
         canPartyVideo = loaded && !blocked.contains(.partyVideo)
         canPartyLuckyNumber = loaded && !blocked.contains(.partyLuckyNumber)
         canPartyFreeGames = loaded && !blocked.contains(.partyFreeGames)
+        canProfileViewing = loaded && !blocked.contains(.profileViewing)
         isLoaded = loaded
     }
 }

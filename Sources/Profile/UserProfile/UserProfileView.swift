@@ -32,6 +32,9 @@ struct UserProfileView: View {
             userId: userId,
             service: svc,
             isLiveProvider: { 0 },   // step 2 接 LiveStore.state == .living 派生
+            canFollowProvider: {
+                SelfPermissionBridge.shared.canProfileSocialSnapshot
+            },
             networkErrorFallback: L10n.userProfileNetworkError,
             badUserIdFallback: L10n.userProfileBadUserId
         ))
@@ -41,7 +44,7 @@ struct UserProfileView: View {
     var body: some View {
         ZStack {
             Theme.Palette.profileBackground.ignoresSafeArea()
-            if permission.canProfileSocial {
+            if permission.canProfileViewing {
                 content
             }
             transientErrorToast
@@ -53,8 +56,8 @@ struct UserProfileView: View {
         .toolbarBackground(Theme.Palette.profileBackground, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
-        .task(id: permission.canProfileSocial) {
-            guard permission.canProfileSocial else {
+        .task(id: permission.canProfileViewing) {
+            guard permission.canProfileViewing else {
                 showingMenu = false
                 showingReportSheet = false
                 return
@@ -123,8 +126,10 @@ struct UserProfileView: View {
         }
         // 不显示昵称在 NavBar（H5 行为，标题为空）
         ToolbarItemGroup(placement: .topBarTrailing) {
-            if permission.canProfileSocial, vm.detail != nil {
-                followButton
+            if permission.canProfileViewing, vm.detail != nil {
+                if permission.canProfileSocial {
+                    followButton
+                }
                 Button {
                     showingMenu = true
                 } label: {
@@ -220,9 +225,11 @@ struct UserProfileView: View {
                     .padding(.horizontal, Theme.Metric.userProfileScreenHPadding)
                     .padding(.bottom, Theme.Metric.userProfileMetaBottomMargin)
 
-                // like / favorite 卡片
-                statsRow(detail: detail)
-                    .padding(.horizontal, Theme.Metric.userProfileScreenHPadding)
+                // 关注相关统计属于社交能力；107 只保留基础资料和安全处置入口。
+                if permission.canProfileSocial {
+                    statsRow(detail: detail)
+                        .padding(.horizontal, Theme.Metric.userProfileScreenHPadding)
+                }
 
                 // H5 guardian-card：直接消费 getUserDetail.guardianList 前三项，空态整卡隐藏。
                 if permission.canVirtualItems, !detail.guardianList.isEmpty {
@@ -256,7 +263,9 @@ struct UserProfileView: View {
                 // 消息：push ChatDetailContainer（复用父 NavigationStack 已注册的
                 // navigationDestination(for: String.self) —— 与 LiveResultView:328 同款）；
                 // yxAccid 缺失时 disabled + 半透明视觉降级，不隐藏避免布局跳变
-                messageButton(detail: detail)
+                if permission.canDirectMessages {
+                    messageButton(detail: detail)
+                }
                 // 拨打：接 CallStore.shared.callOut（trial #3 step 3 反悔 #10）
                 // P 项目：userType 黑名单命中时隐藏（三层防护 UI 层）
                 if permission.canCall {
@@ -416,7 +425,7 @@ struct UserProfileView: View {
                          text: "\(age)")
             }
             // connRate
-            if let cr = detail.connRate, !cr.isEmpty {
+            if permission.canCall, let cr = detail.connRate, !cr.isEmpty {
                 Spacer().frame(width: Theme.Metric.userProfileMetaGroupGap)
                 metaItem(iconName: nil,
                          sfFallback: "video.fill",

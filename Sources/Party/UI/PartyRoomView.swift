@@ -728,7 +728,12 @@ struct PartyRoomView: View {
                     onPageDisplayed: reportPartyBannerView
                 )
             }
-            // 半屏游戏暂不接入，隐藏房内游戏 Banner 入口。
+            if !visiblePartyBannerGames.isEmpty {
+                PartyGameBannerCarousel(
+                    games: visiblePartyBannerGames,
+                    onTap: handlePartyGameTap
+                )
+            }
             if permission.canLottery && superWheelStore.isActive {
                 PartySuperWheelFloatingButton(state: superWheelStore.wheelState?.state ?? 0) {
                     trackSuperWheelIcon("b_wheel_icon_click")
@@ -1481,6 +1486,7 @@ struct PartyRoomView: View {
             showsGiftContent: permission.canGiftSending,
             showsLotteryContent: permission.canLottery,
             showsPartyGameContent: permission.canPartyGames,
+            showsFreePartyGameContent: permission.canPartyFreeGames,
             showsActivityContent: permission.canPartyActivities,
             showsVirtualItemContent: permission.canVirtualItems
         )
@@ -2288,6 +2294,14 @@ struct PartyRoomView: View {
 
     private func canPresentPartyGame(_ game: PartyBannerGame) -> Bool {
         permission.canPartyGames || (permission.canPartyFreeGames && game.isFreePartyInteraction)
+    }
+
+    /// Store 在请求回包时先过滤一次；View 再按实时权限过滤缓存，覆盖房内动态撤权。
+    private var visiblePartyBannerGames: [PartyBannerGame] {
+        store.partyBannerGames.filter {
+            permission.canPartyGames
+                || (permission.canPartyFreeGames && $0.isFreePartyInteraction)
+        }
     }
 
     @MainActor

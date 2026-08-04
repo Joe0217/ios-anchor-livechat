@@ -21,6 +21,7 @@ import UIKit
 /// FollowSegment 已是另一个独立 NavigationDestination；本 enum 容纳剩余子页路由。
 enum ProfileRoute: Hashable {
     case settings
+    case deleteAccount
     case levelDetail
     case dataStatistics
     case blocklist

@@ -52,7 +52,7 @@ final class PermissionMappingTests: XCTestCase {
             .lottery, .partyGames, .virtualItems,
             .homeDiscovery, .workDashboard, .partyActivities,
             .directMessages, .profileSocial, .systemAnnouncements,
-            .partyVideo
+            .partyVideo, .partyLuckyNumber
         ]
 
         for userType in 101...106 {
@@ -84,6 +84,9 @@ final class PermissionMappingTests: XCTestCase {
         XCTAssertTrue(blocked.contains(.profileSocial))
         XCTAssertTrue(blocked.contains(.systemAnnouncements))
         XCTAssertTrue(blocked.contains(.partyVideo))
+        XCTAssertTrue(blocked.contains(.partyLuckyNumber))
+        XCTAssertFalse(blocked.contains(.partyFreeGames))
+        XCTAssertFalse(blocked.contains(.profileViewing))
     }
 
     // MARK: - R-3: 未知 userType 视为不受限

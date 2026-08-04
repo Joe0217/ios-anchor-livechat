@@ -234,7 +234,9 @@ final class PartyPublicChatAdapterTests: XCTestCase {
             "avatar": "https://cdn/av.png",
             "nickname": "Alice",
             "winAmount": "1000",
+            "gameId": "dice",
             "gameName": "Dice",
+            "gameType": "dice",
             "gameIcon": "https://cdn/dice.png",
         ]
         guard let msg = PartyPublicChatAdapter.gameWinNotify(payload: payload) else {
@@ -245,7 +247,9 @@ final class PartyPublicChatAdapterTests: XCTestCase {
         }
         XCTAssertEqual(gp.nickname, "Alice")
         XCTAssertEqual(gp.winAmount, "1000")
+        XCTAssertEqual(gp.gameId, "dice")
         XCTAssertEqual(gp.gameName, "Dice")
+        XCTAssertEqual(gp.gameType, "dice")
     }
 
     func test_gameWinNotify_winAmountAsNumber_convertedToString() {

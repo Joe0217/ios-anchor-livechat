@@ -660,8 +660,13 @@ protocol PartyRoomChatManagerDelegate: AnyObject {
 
     /// F 里程碑（2026-07-17）表情面板 IM 分发：attachType `-10 emojiStatic` / `-11 emojiPlay` 分发到麦位队列。
     /// payload 已经过 `PartyEmojiPayload.from(payload:)` 严校验（缺 emojiId/playUrl/sendUserId 任一 drop）+
-    /// self-echo skip 于 router 层完成 · 到 Store 时 payload 已保证 fresh 非 self。
-    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveEmoji payload: PartyEmojiPayload, raw: NIMMessage)
+    /// self-echo skip 于 router 层完成 · `isPlay` 来自 attachType，不能依赖可缺失的 payload.playType 猜测。
+    func partyRoomChat(
+        _ chat: PartyRoomChatManager,
+        didReceiveEmoji payload: PartyEmojiPayload,
+        isPlay: Bool,
+        raw: NIMMessage
+    )
 }
 
 /// NIMCustomAttachment 空桥接实现（发送 custom 消息必需 · attachType 与 data 已通过 `remoteExt` 传输，

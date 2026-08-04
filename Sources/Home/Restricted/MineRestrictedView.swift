@@ -45,6 +45,7 @@ struct MineRestrictedView: View {
                 .navigationDestination(for: ProfileRoute.self) { route in
                     switch route {
                     case .settings:     SettingsView(path: $pathHolder.path)
+                    case .deleteAccount: AccountDeletionView()
                     case .blocklist:    BlocklistView()
                     case .anchorPolicy: AnchorPolicyView()
                     case .language:     LanguageView()

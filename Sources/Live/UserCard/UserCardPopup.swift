@@ -342,11 +342,10 @@ struct UserCardPopup: View {
             .padding(.horizontal, 15)
             .padding(.bottom, 34)
 
-            if permission.canProfileSocial {
-                skeletonBar(width: 54, height: 28, cornerRadius: 14)
-                    .padding(.leading, 15)
-                    .padding(.top, 15)
-            }
+            skeletonBar(width: 54, height: 28, cornerRadius: 14)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.horizontal, 15)
+                .padding(.top, 15)
         }
         .background(cardFrameOverlay(urlString: preview?.cardFrameUrl))
         .accessibilityElement(children: .ignore)
@@ -549,7 +548,8 @@ struct UserCardPopup: View {
             .padding(.bottom, 34)
 
             safetyActions(info: info)
-                .padding(.leading, 15)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 15)
                 .padding(.top, 15)
         }
         .background(cardFrameOverlay(urlString: info.cardFrameUrl))
@@ -579,7 +579,7 @@ struct UserCardPopup: View {
 
     /// **注意**: 不用 `Button + .disabled(onAvatarTap == nil)` —— SwiftUI 系统给 disabled Button 自动
     /// 加半透视觉(.opacity ~0.5),导致头像整块半透。改用 `.onTapGesture`,当 callback 为空或
-    /// `profileSocial` 被收口时 no-op，视觉保持完全不透明。
+    /// `profileViewing` 被收口时 no-op，视觉保持完全不透明。
     private func avatarBlock(info: UserCardInfo) -> some View {
         ZStack {
             // 粉紫渐变环 96pt(H5 `.photo-bg`)
@@ -608,7 +608,7 @@ struct UserCardPopup: View {
         .contentShape(Rectangle())
         .onTapGesture {
             guard let onAvatarTap,
-                  SelfPermissionBridge.shared.gate(.profileSocial, action: "userCardAvatar") else {
+                  SelfPermissionBridge.shared.gate(.profileViewing, action: "userCardAvatar") else {
                 return
             }
             onAvatarTap()
@@ -1133,6 +1133,7 @@ struct UserCardPopup: View {
             if !info.isAnchor {
                 blockPill(info: info)
             }
+            Spacer(minLength: 8)
             Button {
                 showingReportSheet = true
             } label: {

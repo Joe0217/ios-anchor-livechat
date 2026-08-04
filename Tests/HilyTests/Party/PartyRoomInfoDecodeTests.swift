@@ -322,6 +322,64 @@ final class PartyRoomInfoDecodeTests: XCTestCase {
         XCTAssertEqual(info.announcement, "Please keep the chat friendly")
     }
 
+    // MARK: - Party-only free interaction whitelist
+
+    func test_freeInteractionPolicy_acceptsOnlyCanonicalDiceAndRPSIdentifiers() {
+        XCTAssertTrue(PartyFreeInteractionPolicy.allows(
+            gameID: "dice",
+            gameName: nil,
+            gameType: nil
+        ))
+        XCTAssertTrue(PartyFreeInteractionPolicy.allows(
+            gameID: nil,
+            gameName: nil,
+            gameType: "LUCKY_DICE"
+        ))
+        XCTAssertTrue(PartyFreeInteractionPolicy.allows(
+            gameID: nil,
+            gameName: "Rock Paper Scissors",
+            gameType: nil
+        ))
+        XCTAssertTrue(PartyFreeInteractionPolicy.allows(
+            gameID: nil,
+            gameName: nil,
+            gameType: "rock_paper_scissors"
+        ))
+        XCTAssertTrue(PartyFreeInteractionPolicy.allows(
+            gameID: nil,
+            gameName: "石头剪刀布",
+            gameType: nil
+        ))
+        XCTAssertTrue(PartyFreeInteractionPolicy.allows(
+            gameID: nil,
+            gameName: "骰子",
+            gameType: nil
+        ))
+    }
+
+    func test_freeInteractionPolicy_rejectsEmbeddedOrUnknownGameNames() {
+        XCTAssertFalse(PartyFreeInteractionPolicy.allows(
+            gameID: "super-dice-wheel",
+            gameName: nil,
+            gameType: nil
+        ))
+        XCTAssertFalse(PartyFreeInteractionPolicy.allows(
+            gameID: nil,
+            gameName: "付费猜拳抽奖",
+            gameType: "lottery"
+        ))
+        XCTAssertFalse(PartyFreeInteractionPolicy.allows(
+            gameID: nil,
+            gameName: "超级骰子转盘",
+            gameType: nil
+        ))
+        XCTAssertFalse(PartyFreeInteractionPolicy.allows(
+            gameID: nil,
+            gameName: nil,
+            gameType: nil
+        ))
+    }
+
     // MARK: - helpers
 
     private func makeRoom(isPlatformAdmin: Bool? = nil,

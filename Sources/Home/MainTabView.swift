@@ -127,7 +127,7 @@ struct MainTabView: View {
     /// 已注册的各 tab navigationDestination(for: UserProfileRoute.self) 会自动接单。
     private var openUserProfileAction: OpenUserProfileAction {
         OpenUserProfileAction { userId in
-            guard permission.canProfileSocial else {
+            guard permission.canProfileViewing else {
                 AppToastCenter.shared.show(L10n.commonNoContent)
                 return
             }
@@ -730,6 +730,7 @@ struct MainTabView: View {
                         .navigationDestination(for: ProfileRoute.self) { route in
                             switch route {
                             case .settings:     SettingsView(path: $profilePath)
+                            case .deleteAccount: AccountDeletionView()
                             case .levelDetail:  LevelDetailView()
                             case .dataStatistics:
                                 if permission.canWorkDashboard {

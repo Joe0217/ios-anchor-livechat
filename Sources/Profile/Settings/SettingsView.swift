@@ -1,13 +1,13 @@
 import SwiftUI
 import UIKit
 
-/// 设置页：账号 / 通用 / 关于 / 退出登录。
+/// 设置页：账号 / 通用 / 关于 / 删除账号 / 退出登录。
 ///
 /// **对齐 H5 蓝本**（`anchor-livechat-h5/src/views/settings/config.js`）9 项内容，保留 iOS 4 section 分组：
 /// - Account: View Anchor Policy + Blocklist
 /// - General: Language + Feedback（占位 toast）+ Clear Cache
 /// - About: Version（rightText）+ Terms of Service + Privacy Policy（应用内安全 H5）
-/// - Logout: Sign Out
+/// - Account actions: Delete Account + Sign Out
 ///
 /// **交互统一**：iOS 16 List 内 `NavigationLink(value:)` 与祖先 destination 交互失效，
 /// 所有 push 均走 `path.append(ProfileRoute.xxx)` programmatic navigation（含 Blocklist）。
@@ -31,7 +31,7 @@ struct SettingsView: View {
                 DebugPermissionSection()
                 DebugCDNAssetUploadSection()
                 #endif
-                logoutSection
+                accountActionsSection
             }
             .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
@@ -113,22 +113,34 @@ struct SettingsView: View {
         .listRowBackground(Theme.Palette.cardFill.opacity(0.6))
     }
 
-    private var logoutSection: some View {
+    private var accountActionsSection: some View {
         Section {
+            Button {
+                path.append(ProfileRoute.deleteAccount)
+            } label: {
+                centeredDestructiveLabel(L10n.settingsDeleteAccount)
+            }
+            .buttonStyle(.plain)
+
             Button {
                 showLogoutConfirm = true
             } label: {
-                HStack {
-                    Spacer()
-                    Text(L10n.settingsLogout)
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.red.opacity(0.9))
-                    Spacer()
-                }
+                centeredDestructiveLabel(L10n.settingsLogout)
             }
             .buttonStyle(.plain)
         }
         .listRowBackground(Theme.Palette.cardFill.opacity(0.6))
+    }
+
+    private func centeredDestructiveLabel(_ title: String) -> some View {
+        HStack {
+            Spacer()
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(.red.opacity(0.9))
+            Spacer()
+        }
+        .contentShape(Rectangle())
     }
 
     // MARK: - Row builder
@@ -190,5 +202,169 @@ struct SettingsView: View {
         let v = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
         let b = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0"
         return "\(v) (\(b))"
+    }
+}
+
+// MARK: - Account deletion
+
+/// 后端接口确认后只需替换生产实现；View/状态/会话清理不依赖具体 endpoint。
+protocol AccountDeletionServiceProtocol {
+    func deleteAccount() async throws
+}
+
+enum AccountDeletionError: Error {
+    case notConfigured
+}
+
+final class AccountDeletionService: AccountDeletionServiceProtocol {
+    static let shared = AccountDeletionService()
+
+    private init() {}
+
+    func deleteAccount() async throws {
+        // 后端尚未提供 method/path/body。禁止把 logout 当删除成功，也禁止猜接口。
+        throw AccountDeletionError.notConfigured
+    }
+}
+
+@MainActor
+final class AccountDeletionStore: ObservableObject {
+    @Published private(set) var isDeleting = false
+    @Published private(set) var errorMessage: String?
+
+    private let service: AccountDeletionServiceProtocol
+
+    init(service: AccountDeletionServiceProtocol = AccountDeletionService.shared) {
+        self.service = service
+    }
+
+    func deleteAccount() async -> Bool {
+        guard !isDeleting else { return false }
+        isDeleting = true
+        errorMessage = nil
+        defer { isDeleting = false }
+
+        do {
+            try await service.deleteAccount()
+            return true
+        } catch AccountDeletionError.notConfigured {
+            errorMessage = L10n.settingsDeleteAccountUnavailable
+            return false
+        } catch {
+            errorMessage = L10n.settingsDeleteAccountFailed
+            return false
+        }
+    }
+}
+
+/// 原生永久删除入口。服务端确认成功后才清本地会话；失败时保留登录态供用户重试。
+struct AccountDeletionView: View {
+    @EnvironmentObject private var session: SessionStore
+    @StateObject private var store: AccountDeletionStore
+    @State private var showConfirmation = false
+
+    init(service: AccountDeletionServiceProtocol = AccountDeletionService.shared) {
+        _store = StateObject(wrappedValue: AccountDeletionStore(service: service))
+    }
+
+    var body: some View {
+        ZStack {
+            Theme.Palette.profileBackground.ignoresSafeArea()
+            ScrollView {
+                VStack(spacing: 24) {
+                    Image(systemName: "person.crop.circle.badge.xmark")
+                        .font(.system(size: 58, weight: .regular))
+                        .foregroundStyle(.red)
+                        .accessibilityHidden(true)
+
+                    VStack(spacing: 10) {
+                        Text(L10n.settingsDeleteAccountTitle)
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(.white)
+                        Text(L10n.settingsDeleteAccountDescription)
+                            .font(.system(size: 15))
+                            .foregroundStyle(.white.opacity(0.68))
+                            .multilineTextAlignment(.center)
+                    }
+
+                    VStack(alignment: .leading, spacing: 14) {
+                        consequenceRow(L10n.settingsDeleteAccountConsequenceProfile)
+                        consequenceRow(L10n.settingsDeleteAccountConsequenceContent)
+                        consequenceRow(L10n.settingsDeleteAccountConsequenceRecovery)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Theme.Palette.cardFill.opacity(0.6))
+                    )
+
+                    if let error = store.errorMessage {
+                        Text(error)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.red.opacity(0.9))
+                            .multilineTextAlignment(.center)
+                            .frame(maxWidth: .infinity)
+                            .accessibilityIdentifier("accountDeletionError")
+                    }
+
+                    Button {
+                        showConfirmation = true
+                    } label: {
+                        Group {
+                            if store.isDeleting {
+                                ProgressView().tint(.white)
+                            } else {
+                                Text(L10n.settingsDeleteAccountAction)
+                                    .font(.system(size: 16, weight: .semibold))
+                            }
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 50)
+                        .foregroundStyle(.white)
+                        .background(Color.red, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(store.isDeleting)
+                    .accessibilityIdentifier("deleteAccountButton")
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 28)
+                .padding(.bottom, 40)
+            }
+        }
+        .navigationTitle(L10n.settingsDeleteAccount)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Theme.Palette.profileBackground, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .confirmationDialog(
+            L10n.settingsDeleteAccountConfirmTitle,
+            isPresented: $showConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button(L10n.settingsDeleteAccountConfirmAction, role: .destructive) {
+                Task {
+                    if await store.deleteAccount() {
+                        session.logout()
+                    }
+                }
+            }
+            Button(L10n.settingsCancel, role: .cancel) {}
+        } message: {
+            Text(L10n.settingsDeleteAccountConfirmMessage)
+        }
+    }
+
+    private func consequenceRow(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundStyle(.red.opacity(0.9))
+                .font(.system(size: 15))
+            Text(text)
+                .font(.system(size: 14))
+                .foregroundStyle(.white.opacity(0.82))
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }

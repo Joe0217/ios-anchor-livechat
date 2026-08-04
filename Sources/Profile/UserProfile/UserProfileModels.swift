@@ -158,29 +158,37 @@ extension View {
         self
             .navigationDestination(for: UserProfileRoute.self) { route in
                 // 不套 .toolbar(.hidden) —— UserProfileView 依赖 system nav bar 承载 back/FOLLOW/menu
-                switch route {
-                case .userId(let uid):
-                    if !uid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        UserProfileView(userId: uid)
-                    } else {
-                        EmptyView()
+                if SelfPermissionBridge.shared.canProfileViewingSnapshot {
+                    switch route {
+                    case .userId(let uid):
+                        if !uid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            UserProfileView(userId: uid)
+                        } else {
+                            EmptyView()
+                        }
+                    case .userIdFromChat(let uid, let peer):
+                        if !uid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            UserProfileView(userId: uid, originPeerYxAccId: peer)
+                        } else {
+                            EmptyView()
+                        }
                     }
-                case .userIdFromChat(let uid, let peer):
-                    if !uid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        UserProfileView(userId: uid, originPeerYxAccId: peer)
-                    } else {
-                        EmptyView()
-                    }
+                } else {
+                    EmptyView()
                 }
             }
             .navigationDestination(for: ChatFromProfileRoute.self) { route in
-                let selfYxAccId = SessionStore.shared.user?.yxAccid ?? ""
-                ChatDetailContainer(
-                    peerYxAccId: route.peerYxAccId,
-                    selfYxAccId: selfYxAccId,
-                    originProfileUserId: route.sourceUserId
-                )
-                .toolbar(hidesSystemNavigationBar ? .hidden : .automatic, for: .navigationBar)
+                if SelfPermissionBridge.shared.canDirectMessagesSnapshot {
+                    let selfYxAccId = SessionStore.shared.user?.yxAccid ?? ""
+                    ChatDetailContainer(
+                        peerYxAccId: route.peerYxAccId,
+                        selfYxAccId: selfYxAccId,
+                        originProfileUserId: route.sourceUserId
+                    )
+                    .toolbar(hidesSystemNavigationBar ? .hidden : .automatic, for: .navigationBar)
+                } else {
+                    EmptyView()
+                }
             }
     }
 }
