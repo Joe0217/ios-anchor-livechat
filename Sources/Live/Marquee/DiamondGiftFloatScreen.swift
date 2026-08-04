@@ -62,7 +62,7 @@ struct DiamondGiftFloatScreen: View {
                 .font(.system(size: 13))
                 .foregroundColor(.white)
                 .padding(.trailing, 6)
-            Image("diamondGiftScreenIcon")
+            CDNAssetImage("diamondGiftScreenIcon")
                 .resizable().frame(width: 24, height: 24)
                 .accessibilityHidden(true)
                 .padding(.trailing, 4)
@@ -78,7 +78,7 @@ struct DiamondGiftFloatScreen: View {
             }
         }
         .frame(width: width, height: 74, alignment: .center)
-        .background(Image("diamondGiftFloatBackground").resizable().scaledToFill())
+        .background(CDNAssetImage("diamondGiftFloatBackground").resizable().scaledToFill())
         .clipShape(RoundedRectangle(cornerRadius: 22))
     }
 }
@@ -231,7 +231,7 @@ private struct DiamondGiftWinnersPopup: View {
             VStack(alignment: .leading, spacing: 2) {
                 if winner.isTopShare {
                     HStack(spacing: 3) {
-                        Image("diamondGiftMvp").resizable().scaledToFit().frame(width: 18, height: 18)
+                        CDNAssetImage("diamondGiftMvp").resizable().scaledToFit().frame(width: 18, height: 18)
                         Text(L10n.diamondGiftTopShare).font(.system(size: 11, weight: .bold))
                     }
                     .foregroundStyle(Color(hex: 0xFFCB47))
@@ -240,7 +240,7 @@ private struct DiamondGiftWinnersPopup: View {
                     .font(.system(size: 14)).foregroundStyle(.white).lineLimit(1)
             }
             Spacer(minLength: 0)
-            Image("diamondGiftDiamond").resizable().frame(width: 16, height: 16)
+            CDNAssetImage("diamondGiftDiamond").resizable().frame(width: 16, height: 16)
             Text("\(winner.diamonds)").font(.system(size: 14, weight: .bold)).foregroundStyle(Color(hex: 0xFF33D3))
         }
         .padding(.vertical, 9)

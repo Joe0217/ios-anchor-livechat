@@ -32,7 +32,7 @@ struct CommonGiftPanelConfig {
     var onTabChange: ((_ from: GiftPanelTab, _ to: GiftPanelTab) -> Void)?
     /// 背包入口实际展示后的旁路回调。当前仅 Party 使用，不影响面板加载。
     var onBackpackEntryShown: (() -> Void)?
-    /// F-spec 派对房私 call 场景：cell 内钻石图标用蓝色（对齐设计稿要求）。
+    /// F-spec 派对房私 call 场景：cell 内使用标准蓝色 Gems 图标。
     /// 默认 false 保持其他场景（callGate 黄 / partySend 紫）行为不变。
     var useBlueDiamond: Bool
 
@@ -226,7 +226,7 @@ extension CommonGiftPanelConfig {
     /// - Parameter minPrice: 门槛下限，展示层过滤
     /// - Parameter initialSelection: 之前选过的 gift；被 minPrice 过滤时静默 clear（对齐 H5）
     /// - Parameter onConfirm: 确认回调；nil 表示用户 confirm 但无选中（"移除"语义，对齐旧行为）
-    /// - Parameter useBlueDiamond: F-spec 派对房私 call 场景传 true 让 cell 钻石显示蓝色；默认 false（直播场景保持黄色）
+    /// - Parameter useBlueDiamond: F-spec 派对房私 call 场景传 true 让 cell 显示蓝色 Gems；默认 false（直播场景保持黄色）
     /// - Parameter confirmLabel: 自定义 confirm 按钮文案；nil 走默认（`L10n.giftPickerConfirm`）。F-spec 关闭态弹起时传 "Open private call"
     static func callGate(minPrice: Int64,
                          initialSelection: GiftListData?,

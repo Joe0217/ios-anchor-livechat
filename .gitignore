@@ -19,3 +19,7 @@ Pods/
 # Local environment configuration. Keep only redacted *.example templates in Git.
 Config/Config-*.xcconfig
 !Config/Config-*.xcconfig.example
+
+# Local CDN staging output and short-lived upload credentials.
+CDNAssets/
+*.oss-credential.json

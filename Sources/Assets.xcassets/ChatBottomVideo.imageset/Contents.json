@@ -1,8 +1,0 @@
-{
-  "images" : [
-    { "filename" : "ChatBottomVideo.png",    "idiom" : "universal", "scale" : "1x" },
-    { "filename" : "ChatBottomVideo@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "ChatBottomVideo@3x.png", "idiom" : "universal", "scale" : "3x" }
-  ],
-  "info" : { "author" : "xcode", "version" : 1 }
-}

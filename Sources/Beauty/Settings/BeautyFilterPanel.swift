@@ -23,7 +23,7 @@ struct BeautyFilterPanel: View {
         let selected = store.settings.filterName == item.key
         return VStack(spacing: 4) {
             // 需求 3（2026-07-02）：从 H5 assets 拷贝真图到 Assets.xcassets/BeautyFilterThumbnails
-            Image("BeautyFilterThumbnails/\(item.key)")
+            CDNAssetImage("BeautyFilterThumbnails/\(item.key)")
                 .resizable()
                 .scaledToFill()
                 .frame(width: 44, height: 44)

@@ -42,7 +42,7 @@ struct ContributionRankRow: View {
 
             VStack(alignment: .trailing, spacing: 2) {
                 HStack(spacing: 4) {
-                    Image("coins")
+                    CDNAssetImage("coins")
                         .resizable().frame(width: 12, height: 12)
                         .accessibilityHidden(true)
                     Text(formatDiamond(entry.thisLiveDiamond))
@@ -51,7 +51,7 @@ struct ContributionRankRow: View {
                 }
                 HStack(spacing: 3) {
                     Text(L10n.liveRoomContributionLast90d)
-                    Image("coins")
+                    CDNAssetImage("coins")
                         .resizable().frame(width: 12, height: 12)
                     Text(formatDiamond(entry.last90DaysDiamond))
                 }

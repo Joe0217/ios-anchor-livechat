@@ -6,7 +6,7 @@ import SwiftUI
 /// 标题（"N Matches Found!"）已删除（用户反馈）；描述文字由 MatchTabView 独立编排在头像下方。
 struct MatchHeroView: View {
     var body: some View {
-        Image("matchHeroVisual")
+        CDNAssetImage("matchHeroVisual")
             .resizable()
             .scaledToFit()
             .frame(maxWidth: .infinity)

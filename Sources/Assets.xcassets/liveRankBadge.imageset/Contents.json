@@ -1,8 +1,0 @@
-{
-  "images":[
-    {"idiom":"universal","filename":"liveRankBadge.png","scale":"1x"},
-    {"idiom":"universal","filename":"liveRankBadge@2x.png","scale":"2x"},
-    {"idiom":"universal","filename":"liveRankBadge@3x.png","scale":"3x"}
-  ],
-  "info":{"author":"xcode","version":1}
-}

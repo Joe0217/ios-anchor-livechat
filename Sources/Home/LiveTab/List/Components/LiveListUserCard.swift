@@ -85,7 +85,7 @@ struct LiveListUserCard: View {
             // 等级 / VIP 行：userLevel != "0" 才显示 Lv 徽章；vipExpireTime > 当前才显示 VIP 徽章
             HStack(spacing: 4) {
                 if anchor.hasLevelBadge {
-                    Image("liveListLevelIcon")
+                    CDNAssetImage("liveListLevelIcon")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 12, height: 12)
@@ -103,7 +103,7 @@ struct LiveListUserCard: View {
             // 位置行
             if let country = anchor.country, !country.isEmpty {
                 HStack(spacing: 4) {
-                    Image("liveListLocation")
+                    CDNAssetImage("liveListLocation")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 10, height: 10)

@@ -1,8 +1,0 @@
-{
-  "images" : [
-    { "filename" : "partyPkRedSeatAdd.png", "idiom" : "universal", "scale" : "1x" },
-    { "filename" : "partyPkRedSeatAdd@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "partyPkRedSeatAdd@3x.png", "idiom" : "universal", "scale" : "3x" }
-  ],
-  "info" : { "author" : "xcode", "version" : 1 }
-}

@@ -2041,11 +2041,6 @@ final class PartyStore: ObservableObject {
            !SelfPermissionBridge.shared.gate(.partyVideo, action: "partyToggleVideoMedia") {
             return
         }
-        // 视频位必须持续开麦。仅允许开启动作修复历史 `microphoneEnabled=0` 脏数据。
-        if type == 1, !enable, currentSeat.isVideoSeat {
-            AppLogger.party.notice("[PartyStore] updateMedia rejected: video seat cannot mute microphone")
-            return
-        }
         if enable {
             let requirement = mediaRequirement(forSeatType: currentSeat.seatType)
             guard await requireMediaAccess(requirement, retry: { [weak self] in

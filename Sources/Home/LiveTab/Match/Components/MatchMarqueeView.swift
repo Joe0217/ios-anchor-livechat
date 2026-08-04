@@ -59,7 +59,7 @@ struct MatchMarqueeView: View {
             AvatarView(urlString: record.receiverIcon,
                        size: Theme.Metric.matchMarqueeAvatarSize,
                        kind: .user)
-            Image("matchMarqueeCallIcon")
+            CDNAssetImage("matchMarqueeCallIcon")
                 .resizable()
                 .scaledToFit()
                 .frame(width: Theme.Metric.matchMarqueeCallIconWidth,

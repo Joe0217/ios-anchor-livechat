@@ -75,7 +75,7 @@ struct NewsRestrictedView: View {
                 NavigationLink(isActive: $showHomeRanking) {
                     HomeRankingView()
                 } label: {
-                    Image("liveRankBadge")
+                    CDNAssetImage("liveRankBadge")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 56, height: 28)
@@ -90,7 +90,7 @@ struct NewsRestrictedView: View {
         .frame(maxWidth: .infinity)
         .frame(height: 44)
         .background(alignment: .top) {
-            Image("restrictedNewsHeader")
+            CDNAssetImage("restrictedNewsHeader")
                 .resizable()
                 .scaledToFill()
                 .frame(maxWidth: .infinity)
@@ -566,7 +566,7 @@ private struct ReviewRankRow: View {
                 .lineLimit(1)
             Spacer()
             HStack(spacing: 4) {
-                Image("coins")
+                CDNAssetImage("coins")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 15, height: 15)

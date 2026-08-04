@@ -47,7 +47,7 @@ struct PKBattleProgressBar: View {
                 .clipShape(Capsule())
 
                 // 2) 装饰切图覆盖（斜纹装饰在渐变底之上）
-                Image("pkBattleProgressDecor")
+                CDNAssetImage("pkBattleProgressDecor")
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(width: w, height: barHeight)
@@ -58,7 +58,7 @@ struct PKBattleProgressBar: View {
                 // 3+5) badge + number 合并 HStack（2026-07-07 v4 用户反馈"badge 与数字要加间距"）
                 // spacing 6 = badge 与 number 之间 gap；padding.horizontal 8 = badge 距容器边缘留白
                 HStack(spacing: 6) {
-                    Image("pkBattleBadgeLeft")
+                    CDNAssetImage("pkBattleBadgeLeft")
                         .resizable().frame(width: badgeSize, height: badgeSize)
                     Text("\(myPkValue)")
                         .font(.system(size: 13, weight: .heavy))
@@ -69,7 +69,7 @@ struct PKBattleProgressBar: View {
                         .font(.system(size: 13, weight: .heavy))
                         .foregroundColor(Color(hex: 0xFFE600))
                         .shadow(color: .black.opacity(0.5), radius: 1, x: 0, y: 1)
-                    Image("pkBattleBadgeRight")
+                    CDNAssetImage("pkBattleBadgeRight")
                         .resizable().frame(width: badgeSize, height: badgeSize)
                 }
                 .padding(.horizontal, 8)

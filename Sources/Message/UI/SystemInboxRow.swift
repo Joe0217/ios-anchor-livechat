@@ -28,7 +28,7 @@ struct SystemInboxRow: View {
 
     private var iconView: some View {
         // 用切图 icon(对齐设计稿 消息列表-未读已读.png)——绿信封/紫铃铛/蓝耳机 3 色分色圆形头像
-        Image(iconAssetName)
+        CDNAssetImage(iconAssetName)
             .resizable()
             .scaledToFit()
             .frame(width: 48, height: 48)

@@ -189,7 +189,7 @@ struct PKMatchingCard: View {
 
     /// PK center icon（H5 pk-card-icon.webp 简化 —— iOS 无此切图，用 SF Symbol + 金橙色兜底）
     private var pkCenterIcon: some View {
-        Image("livePkIcon")
+        CDNAssetImage("livePkIcon")
             .resizable()
             .aspectRatio(contentMode: .fit)
             .frame(width: 60, height: 60)

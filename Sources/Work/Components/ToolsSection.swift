@@ -186,7 +186,7 @@ struct ToolsSection: View {
     // MARK: - 单个工具
     private func toolCell(icon: String, label: String) -> some View {
         VStack(spacing: 8) {
-            Image(icon)
+            CDNAssetImage(icon)
                 .resizable()
                 .scaledToFit()
                 .frame(width: Theme.Metric.toolTile, height: Theme.Metric.toolTile)

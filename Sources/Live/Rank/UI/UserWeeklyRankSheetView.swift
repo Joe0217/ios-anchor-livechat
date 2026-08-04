@@ -218,7 +218,7 @@ struct UserWeeklyRankSheetView: View {
             }
             Spacer(minLength: 8)
             HStack(spacing: 4) {
-                Image("coins")
+                CDNAssetImage("coins")
                     .resizable()
                     .frame(width: 14, height: 14)
                 Text(formatDiamond(entry.costNum))
@@ -360,7 +360,7 @@ private struct WeekTopThreeCards: View {
                 .lineLimit(1)
             // v18 Q4:直播间 weekly gift ranking + 观众排行榜统一 coins
             HStack(spacing: 3) {
-                Image("coins")
+                CDNAssetImage("coins")
                     .resizable()
                     .frame(width: 12, height: 12)
                 Text(formatDiamondCard(entry.costNum))

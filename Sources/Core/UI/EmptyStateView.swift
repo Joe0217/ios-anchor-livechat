@@ -22,7 +22,7 @@ struct EmptyStateView: View {
     var body: some View {
         VStack(spacing: 12) {
             if let size = iconSize {
-                Image("EmptyStatePlaceholder")
+                CDNAssetImage("EmptyStatePlaceholder")
                     .resizable()
                     .scaledToFit()
                     .frame(width: size, height: size)

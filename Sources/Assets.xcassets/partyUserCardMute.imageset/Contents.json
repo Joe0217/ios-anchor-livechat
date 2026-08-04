@@ -1,8 +1,0 @@
-{
-  "images" : [
-    { "filename" : "partyUserCardMute.png", "idiom" : "universal", "scale" : "1x" },
-    { "filename" : "partyUserCardMute@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "partyUserCardMute@3x.png", "idiom" : "universal", "scale" : "3x" }
-  ],
-  "info" : { "author" : "xcode", "version" : 1 }
-}

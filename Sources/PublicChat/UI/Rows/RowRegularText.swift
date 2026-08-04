@@ -117,7 +117,7 @@ struct RowRegularText: View {
         if let s = sender {
             HStack(spacing: 4) {
                 if s.guardianLevel > 0, theme.scene == .live {
-                    Image(GuardianArtwork.tabIcon(for: GuardianLevel.decoded(s.guardianLevel)))
+                    CDNAssetImage(GuardianArtwork.tabIcon(for: GuardianLevel.decoded(s.guardianLevel)))
                         .resizable()
                         .scaledToFit()
                         .frame(width: 14, height: 14)

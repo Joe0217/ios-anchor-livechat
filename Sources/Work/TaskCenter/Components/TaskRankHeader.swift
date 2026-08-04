@@ -13,7 +13,7 @@ struct TaskRankHeader: View {
         ZStack {
             // `.resizable()` + frame(height:) + frame(maxWidth: .infinity) 让图片水平拉伸铺满
             // 不用 aspectRatio(.fill) 避免按图片原比例撑大超出屏宽
-            Image("taskRankCardBg")
+            CDNAssetImage("taskRankCardBg")
                 .resizable()
                 .frame(height: 130)
                 .frame(maxWidth: .infinity)
@@ -42,7 +42,7 @@ struct TaskRankHeader: View {
             VStack(spacing: 4) {
                 // 奖杯切图 + 覆盖真数据数字(切图内 999 是占位,iOS 数据覆盖它)
                 ZStack {
-                    Image(icon)
+                    CDNAssetImage(icon)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(height: 82)

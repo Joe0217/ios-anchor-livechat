@@ -283,14 +283,14 @@ struct PartyRoomInputBar: View {
     @ViewBuilder
     private func iconImage(asset: String, tinted: Bool) -> some View {
         if tinted {
-            Image(asset)
+            CDNAssetImage(asset)
                 .resizable()
                 .renderingMode(.template)
                 .foregroundColor(.white)
                 .scaledToFit()
                 .padding(4)
         } else {
-            Image(asset)
+            CDNAssetImage(asset)
                 .resizable()
                 .scaledToFit()
                 .padding(2)

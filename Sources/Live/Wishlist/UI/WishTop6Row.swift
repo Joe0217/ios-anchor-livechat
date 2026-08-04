@@ -66,7 +66,7 @@ struct WishTop6Row: View {
                         .foregroundColor(.white.opacity(0.4))
                 } else {
                     HStack(spacing: 2) {
-                        Image("coins")
+                        CDNAssetImage("coins")
                             .resizable()
                             .frame(width: 8, height: 8)
                             .accessibilityHidden(true)

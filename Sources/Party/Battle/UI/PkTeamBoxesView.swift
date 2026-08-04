@@ -119,11 +119,11 @@ struct PkTeamBoxesView: View {
             } else {
                 // 切图提供的沙发 + 加号组合，和设计稿中的 PK 空位保持同一层次。
                 ZStack {
-                    Image(side == .red ? "partyPkRedSofa" : "partyPkBlueSofa")
+                    CDNAssetImage(side == .red ? "partyPkRedSofa" : "partyPkBlueSofa")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 38, height: 38)
-                    Image(side == .red ? "partyPkRedSeatAdd" : "partyPkBlueSeatAdd")
+                    CDNAssetImage(side == .red ? "partyPkRedSeatAdd" : "partyPkBlueSeatAdd")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 18, height: 18)
@@ -151,7 +151,7 @@ struct PkTeamBoxesView: View {
     private func gemsText(seat: PartyRoomSeat) -> some View {
         if seat.userId?.isEmpty == false {
             HStack(spacing: 1) {
-                Image("partyPkGem")
+                CDNAssetImage("partyPkGem")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 8, height: 8)
@@ -169,7 +169,7 @@ struct PkTeamBoxesView: View {
 
     @ViewBuilder
     private var vsIcon: some View {
-        Image("partyPkCenterLogo")
+        CDNAssetImage("partyPkCenterLogo")
             .resizable()
             .scaledToFit()
             .frame(width: 50, height: 50)

@@ -96,7 +96,7 @@ struct InviteView: View {
 
     private var background: some View {
         ZStack {
-            Image(store.audience == .user ? "inviteUserBackground" : "inviteAnchorBackground")
+            CDNAssetImage(store.audience == .user ? "inviteUserBackground" : "inviteAnchorBackground")
                 .resizable()
                 .scaledToFill()
             LinearGradient(
@@ -184,7 +184,7 @@ struct InviteView: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
         .background(
-            Image(store.audience == .user ? "inviteUserRewardBackground" : "inviteAnchorRewardBackground")
+            CDNAssetImage(store.audience == .user ? "inviteUserRewardBackground" : "inviteAnchorRewardBackground")
                 .resizable()
                 .scaledToFill()
         )
@@ -225,7 +225,7 @@ struct InviteView: View {
                 .padding(.horizontal, 14)
                 .frame(height: 32)
                 .background {
-                    Image("inviteLast7Days")
+                    CDNAssetImage("inviteLast7Days")
                         .resizable()
                         .scaledToFill()
                 }
@@ -409,7 +409,7 @@ private struct InviteMarquee: View {
             Text(L10n.Invite.got)
                 .foregroundStyle(.white)
             Spacer(minLength: 4)
-            Image("diamondYellow")
+            CDNAssetImage("diamondYellow")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 16, height: 16)
@@ -455,7 +455,7 @@ private struct InviteRankRow: View {
                     .lineLimit(1)
             } else {
                 HStack(spacing: 4) {
-                    Image("diamondYellow")
+                    CDNAssetImage("diamondYellow")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 16, height: 16)
@@ -544,7 +544,7 @@ private struct InviteShareSheet: View {
                 Text(L10n.Invite.saveAndShare)
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.white)
-                Image(payload.audience == .user ? "inviteStepUser" : "inviteStepHost")
+                CDNAssetImage(payload.audience == .user ? "inviteStepUser" : "inviteStepHost")
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: 323)
@@ -803,7 +803,7 @@ struct InviteDetailsView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Image("inviteNavBackground")
+            CDNAssetImage("inviteNavBackground")
                 .resizable()
                 .scaledToFill()
                 .frame(maxWidth: .infinity)
@@ -976,7 +976,7 @@ private struct InviteDetailListHeader: View {
         .padding(.horizontal, 14)
         .frame(height: 74)
         .background {
-            Image("inviteDashboardTableBackground")
+            CDNAssetImage("inviteDashboardTableBackground")
                 .resizable()
                 .scaledToFill()
         }
@@ -998,7 +998,7 @@ private struct InviteDetailRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 3) {
-                Image("diamondYellow").resizable().scaledToFit().frame(width: 12, height: 12)
+                CDNAssetImage("diamondYellow").resizable().scaledToFit().frame(width: 12, height: 12)
                 Text(item.amount)
             }
             .font(.system(size: 13, weight: .semibold))
@@ -1030,7 +1030,7 @@ private struct InviteUserAwardsView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Image("inviteNavBackground")
+            CDNAssetImage("inviteNavBackground")
                 .resizable()
                 .scaledToFill()
                 .frame(maxWidth: .infinity)
@@ -1069,7 +1069,7 @@ private struct InviteUserAwardsView: View {
                             .foregroundStyle(.white.opacity(0.6))
                             .frame(height: 74)
                             .background {
-                                Image("inviteDashboardTableBackground")
+                                CDNAssetImage("inviteDashboardTableBackground")
                                     .resizable()
                                     .scaledToFill()
                             }
@@ -1077,7 +1077,7 @@ private struct InviteUserAwardsView: View {
                                 ForEach(store.records) { item in
                                     HStack {
                                         HStack(spacing: 4) {
-                                            Image("diamondYellow").resizable().scaledToFit().frame(width: 14, height: 14)
+                                            CDNAssetImage("diamondYellow").resizable().scaledToFit().frame(width: 14, height: 14)
                                             Text(item.amount)
                                         }
                                         .foregroundStyle(Color(hex: 0xFFE600))
@@ -1117,7 +1117,7 @@ struct InviteAnchorDashboardView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Image("inviteDashboardBackground")
+            CDNAssetImage("inviteDashboardBackground")
                 .resizable()
                 .scaledToFill()
                 .frame(maxWidth: .infinity)
@@ -1237,7 +1237,7 @@ struct InviteAnchorDashboardView: View {
                 .padding(.horizontal, 10)
                 .frame(height: 74)
                 .background {
-                    Image("inviteDashboardTableBackground")
+                    CDNAssetImage("inviteDashboardTableBackground")
                         .resizable()
                         .scaledToFill()
                 }
@@ -1249,19 +1249,19 @@ struct InviteAnchorDashboardView: View {
                                 Text(item.uid).frame(width: 42, alignment: .center)
                                 Text(item.nickname).frame(maxWidth: .infinity, alignment: .center).lineLimit(1)
                                 HStack(spacing: 2) {
-                                    Image("diamondYellow").resizable().scaledToFit().frame(width: 10, height: 10)
+                                    CDNAssetImage("diamondYellow").resizable().scaledToFit().frame(width: 10, height: 10)
                                     Text(item.totalIncome)
                                 }
                                 .frame(width: 50, alignment: .center)
                                 .foregroundStyle(Color(hex: 0xFFE970))
                                 HStack(spacing: 2) {
-                                    Image("diamondYellow").resizable().scaledToFit().frame(width: 10, height: 10)
+                                    CDNAssetImage("diamondYellow").resizable().scaledToFit().frame(width: 10, height: 10)
                                     Text(item.giftIncome)
                                 }
                                 .frame(width: 50, alignment: .center)
                                 .foregroundStyle(Color(hex: 0xFFE970))
                                 HStack(spacing: 2) {
-                                    Image("diamondYellow").resizable().scaledToFit().frame(width: 10, height: 10)
+                                    CDNAssetImage("diamondYellow").resizable().scaledToFit().frame(width: 10, height: 10)
                                     Text(item.diamondIncome)
                                 }
                                 .frame(width: 50, alignment: .center)
@@ -1298,7 +1298,7 @@ private struct InviteDashboardIncomeCard: View {
         .frame(maxWidth: .infinity, minHeight: 124, alignment: .leading)
         .padding(.horizontal, 24)
         .background {
-            Image("inviteIncomeBackground")
+            CDNAssetImage("inviteIncomeBackground")
                 .resizable()
                 .scaledToFill()
         }
@@ -1313,7 +1313,7 @@ private struct InviteAnchorDetailView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Image("inviteNavBackground")
+            CDNAssetImage("inviteNavBackground")
                 .resizable()
                 .scaledToFill()
                 .frame(maxWidth: .infinity)
@@ -1408,7 +1408,7 @@ private struct InviteAnchorDetailView: View {
                 .stroke(border, lineWidth: 1)
         }
         .overlay(alignment: .topTrailing) {
-            Image(iconName)
+            CDNAssetImage(iconName)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 20, height: 20)

@@ -257,7 +257,7 @@ struct PartyRoomBigSeatCell: View {
         // 视频关闭不是空位：保留用户头像；关闭视频图标作为头像右上角的顶层状态标识。
         // 外环和头像同心；此状态明确不显示头像框。
         ZStack {
-            Image("partySeatRing")
+            CDNAssetImage("partySeatRing")
                 .resizable()
                 .scaledToFit()
                 .frame(width: centerSeatCircleSize, height: centerSeatCircleSize)
@@ -287,9 +287,7 @@ struct PartyRoomBigSeatCell: View {
     /// 空位/摄像头关 共用的环切图：优先 partyVideoSeatEmpty（上视频位.png）
     /// fallback 到 partySeatEmpty（Component 7(2)）→ partySeatRing 兜底
     private var emptyRingAssetName: String {
-        if UIImage(named: "partyVideoSeatEmpty") != nil { return "partyVideoSeatEmpty" }
-        if UIImage(named: "partySeatEmpty") != nil { return "partySeatEmpty" }
-        return "partySeatRing"
+        "partyVideoSeatEmpty"
     }
 
     @ViewBuilder
@@ -323,7 +321,7 @@ struct PartyRoomBigSeatCell: View {
 
     private var emptyRing: some View {
         // 锁位不显示空位切图中的沙发，只保留圆环与中心锁图标。
-        Image(isLockedEmptySeat ? "partySeatRing" : emptyRingAssetName)
+        CDNAssetImage(isLockedEmptySeat ? "partySeatRing" : emptyRingAssetName)
             .resizable()
             .scaledToFit()
             .frame(width: centerSeatCircleSize, height: centerSeatCircleSize)
@@ -363,7 +361,7 @@ struct PartyRoomBigSeatCell: View {
 
     /// 禁麦状态需要覆盖视频位与音频位，避免只有小麦位能看见该状态。
     private var microphoneMutedBadge: some View {
-        Image("partyIconMicMuted")
+        CDNAssetImage("partyIconMicMuted")
             .resizable()
             .scaledToFit()
             .frame(width: 18, height: 18)
@@ -393,7 +391,7 @@ struct PartyRoomBigSeatCell: View {
 
     private var gemsChip: some View {
         HStack(spacing: 3) {
-            Image("partyGems")
+            CDNAssetImage("partyGems")
                 .resizable().scaledToFit()
                 .frame(width: Theme.Metric.partyRoomGemsIconSize,
                        height: Theme.Metric.partyRoomGemsIconSize)

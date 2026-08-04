@@ -153,11 +153,11 @@ private struct PKRankRow: View {
     private var rankBadge: some View {
         switch rank {
         case 1:
-            Image("pkBattleMVP").resizable().frame(width: 24, height: 24)
+            CDNAssetImage("pkBattleMVP").resizable().frame(width: 24, height: 24)
         case 2:
-            Image("pkBattleRank2").resizable().frame(width: 24, height: 24)
+            CDNAssetImage("pkBattleRank2").resizable().frame(width: 24, height: 24)
         case 3:
-            Image("pkBattleRank3").resizable().frame(width: 24, height: 24)
+            CDNAssetImage("pkBattleRank3").resizable().frame(width: 24, height: 24)
         default:
             Text("\(rank)")
                 .font(.system(size: 15, weight: .medium))
@@ -191,7 +191,7 @@ private struct PKRankRow: View {
 
     private func countryChip(_ country: String) -> some View {
         HStack(spacing: 2) {
-            Image("liveListLocation")
+            CDNAssetImage("liveListLocation")
                 .resizable()
                 .frame(width: 12, height: 12)
                 .accessibilityHidden(true)
@@ -208,7 +208,7 @@ private struct PKRankRow: View {
         VStack(alignment: .trailing, spacing: 4) {
             // TODO 素材：H5 用 `livePk/pk-history-icon.webp`（金/紫奖章），iOS 暂用 `livePkIcon` 兜底
             // 待设计出对应切图后替换（PK 语义 vs 钻石语义 已修正）
-            Image("livePkIcon")
+            CDNAssetImage("livePkIcon")
                 .resizable()
                 .frame(width: 16, height: 16)
                 .accessibilityHidden(true)

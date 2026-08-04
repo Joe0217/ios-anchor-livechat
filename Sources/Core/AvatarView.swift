@@ -3,8 +3,8 @@ import SwiftUI
 /// 通用头像组件（对齐 H5 `c-avatar.vue` + `v-image.vue` 的 userImg 分流）。
 ///
 /// - 主播 / 用户默认头像不同：`kind` 分流本地兜底图
-///   - `.anchor` → `Image("defaultAvatar")`（H5 `assets/icon/head.png` 同源）
-///   - `.user`   → `Image("defaultUserAvatar")`（H5 `robotCall/user-default-avatar.webp` 转 PNG）
+///   - `.anchor` → `CDNAssetImage("defaultAvatar")`（H5 `assets/icon/head.png` 同源）
+///   - `.user`   → `CDNAssetImage("defaultUserAvatar")`（H5 `robotCall/user-default-avatar.webp` 转 PNG）
 /// - 支持头像框叠加（H 里程碑道具体系接入后传入 `headwearURL` 即可）
 /// - 附送在线小圆点（`showsOnlineDot`），对齐 LiveListUserCard 用法
 ///
@@ -185,11 +185,11 @@ struct AvatarView: View {
     private var defaultImage: some View {
         switch kind {
         case .anchor:
-            Image("defaultAvatar")
+            CDNAssetImage("defaultAvatar")
                 .resizable()
                 .scaledToFill()
         case .user:
-            Image("defaultUserAvatar")
+            CDNAssetImage("defaultUserAvatar")
                 .resizable()
                 .scaledToFill()
         }

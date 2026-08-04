@@ -80,7 +80,7 @@ struct LiveSettingBottomSheet: View {
     private func settingAssetCell(assetName: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                Image(assetName)
+                CDNAssetImage(assetName)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 32, height: 32)

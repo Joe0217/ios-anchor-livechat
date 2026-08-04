@@ -5,7 +5,7 @@ import os
 
 private let logger = Logger(subsystem: "com.anchor.livechat", category: "PKSVGAPlayerView")
 
-/// PK 场景 SVGA 动画 SwiftUI 包装（Bundle-local 资源，与 GiftEffect SVGA 播放器分离独占）。
+/// PK 场景 SVGA 动画 SwiftUI 包装（CDN-only）。
 ///
 /// **为什么不复用 `SVGAAnimationPlayer`**：那个基于 `GiftEffectItem.animationUrl` (远端 URL)
 /// + 单例复用 + 缓存池，PK 动画是本地 bundle 资源 + 短生命周期一次性播放，模型不同。
@@ -47,6 +47,8 @@ struct PKSVGAPlayerView: UIViewRepresentable {
     static func dismantleUIView(_ uiView: SVGAPlayer, coordinator: Coordinator) {
         uiView.stopAnimation()
         uiView.delegate = nil
+        coordinator.loadTask?.cancel()
+        coordinator.generation &+= 1
     }
 
     func makeCoordinator() -> Coordinator {
@@ -54,17 +56,48 @@ struct PKSVGAPlayerView: UIViewRepresentable {
     }
 
     private func loadAndPlay(player: SVGAPlayer, context: Context) {
-        guard let url = Bundle.main.url(forResource: resource, withExtension: "svga") else {
-            logger.warning("SVGA resource not found: \(resource, privacy: .public)")
-            onFinish?()
-            return
-        }
+        context.coordinator.loadTask?.cancel()
         context.coordinator.currentResource = resource
+        context.coordinator.generation &+= 1
+        let generation = context.coordinator.generation
+        let coordinator = context.coordinator
+
+        coordinator.loadTask = Task { [weak player] in
+            let cdnURL = CDNAssetURL.svgaURL(resource: resource)
+            let downloadedURL: URL?
+            if let cdnURL {
+                downloadedURL = try? await URLDiskCache.fetch(
+                    url: cdnURL,
+                    namespace: URLDiskCache.publicAssetNamespace,
+                    maximumCacheBytes: URLDiskCache.publicAssetCacheLimit
+                )
+            } else {
+                downloadedURL = nil
+            }
+            guard !Task.isCancelled, coordinator.generation == generation else { return }
+
+            guard let downloadedURL else {
+                logger.warning("SVGA CDN resource unavailable: \(resource, privacy: .public)")
+                coordinator.finishIfCurrent(generation)
+                return
+            }
+            Self.parse(downloadedURL, resource: resource, player: player, coordinator: coordinator, generation: generation)
+        }
+    }
+
+    private static func parse(
+        _ url: URL,
+        resource: String,
+        player: SVGAPlayer?,
+        coordinator: Coordinator,
+        generation: Int
+    ) {
         let parser = SVGAParser()
         parser.parse(with: url) { [weak player] videoItem in
             DispatchQueue.main.async {
-                guard let player, let videoItem else {
+                guard coordinator.generation == generation, let player, let videoItem else {
                     logger.warning("SVGA parse failed: \(resource, privacy: .public)")
+                    coordinator.finishIfCurrent(generation)
                     return
                 }
                 player.videoItem = videoItem
@@ -72,12 +105,17 @@ struct PKSVGAPlayerView: UIViewRepresentable {
             }
         } failureBlock: { error in
             logger.warning("SVGA parse error \(resource, privacy: .public): \(String(describing: error), privacy: .private)")
+            DispatchQueue.main.async {
+                coordinator.finishIfCurrent(generation)
+            }
         }
     }
 
     /// Delegate 承接 finish 回调（SVGAPlayerDelegate 是 OC protocol，需 NSObject 桥接）
     final class Coordinator: NSObject, SVGAPlayerDelegate {
         var currentResource: String = ""
+        var generation: Int = 0
+        var loadTask: Task<Void, Never>?
         let onFinish: (() -> Void)?
 
         init(onFinish: (() -> Void)?) {
@@ -87,5 +125,12 @@ struct PKSVGAPlayerView: UIViewRepresentable {
         func svgaPlayerDidFinishedAnimation(_ player: SVGAPlayer!) {
             onFinish?()
         }
+
+        func finishIfCurrent(_ generation: Int) {
+            guard self.generation == generation else { return }
+            onFinish?()
+        }
+
+        deinit { loadTask?.cancel() }
     }
 }

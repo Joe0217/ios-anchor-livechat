@@ -23,7 +23,7 @@ struct TaskCenterView: View {
             ZStack(alignment: .top) {
                 // 顶部粉紫渐变背景 —— `.resizable()` + 仅 height 拉伸铺满宽度,不用 aspectRatio(.fill)
                 // 避免图片按 aspect ratio 撑到超出屏宽 → ZStack 宽度被拉大 → VStack 内容溢出
-                Image("taskTopBg")
+                CDNAssetImage("taskTopBg")
                     .resizable()
                     .frame(height: 260)
                     .frame(maxWidth: .infinity)
@@ -181,7 +181,7 @@ struct TaskCenterView: View {
                 HStack(spacing: 6) {
                     Text("(\(task.curScore)/\(task.targetScore))")
                     if let effectiveTime = task.effectiveTime, !effectiveTime.isEmpty {
-                        Image("pinkClock")
+                        CDNAssetImage("pinkClock")
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .frame(width: 12, height: 12)
@@ -191,7 +191,7 @@ struct TaskCenterView: View {
                 .font(.system(size: 12))
                 .foregroundStyle(.white.opacity(0.5))
                 HStack(spacing: 4) {
-                    Image(task.rewardType == 2 ? "homeRankIntegral" : "diamondYellow")
+                    CDNAssetImage(task.rewardType == 2 ? "homeRankIntegral" : "diamondYellow")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 16, height: 16)

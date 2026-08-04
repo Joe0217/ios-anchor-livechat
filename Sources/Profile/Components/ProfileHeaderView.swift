@@ -45,7 +45,7 @@ struct ProfileHeaderView: View {
         HStack(spacing: 0) {
             Spacer()
             NavigationLink(value: ProfileRoute.settings) {
-                Image("profileSettingsIcon")
+                CDNAssetImage("profileSettingsIcon")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 22, height: 22)
@@ -86,7 +86,7 @@ struct ProfileHeaderView: View {
                         .font(Theme.Typography.profileName)
                         .foregroundColor(Theme.Palette.profileName)
                     NavigationLink(value: ProfileRoute.editProfile) {
-                        Image("profileEditIcon")
+                        CDNAssetImage("profileEditIcon")
                             .resizable()
                             .scaledToFit()
                             .frame(width: 16, height: 16)
@@ -106,7 +106,7 @@ struct ProfileHeaderView: View {
             if !vm.ageText.isEmpty || !vm.countryText.isEmpty {
                 HStack(spacing: 6) {
                     if !vm.ageText.isEmpty {
-                        Image("profileGenderIcon")
+                        CDNAssetImage("profileGenderIcon")
                             .resizable()
                             .scaledToFit()
                             .frame(width: 14, height: 14)
@@ -126,7 +126,7 @@ struct ProfileHeaderView: View {
                     }
 
                     if !vm.countryText.isEmpty {
-                        Image("profileLocationIcon")
+                        CDNAssetImage("profileLocationIcon")
                             .resizable()
                             .scaledToFit()
                             .frame(width: 14, height: 14)
@@ -150,7 +150,7 @@ struct ProfileHeaderView: View {
                             Text(vm.tierLabel)
                                 .font(Theme.Typography.profileTier)
                                 .foregroundColor(Theme.Palette.profileTier)
-                            Image("profileChevronRight")
+                            CDNAssetImage("profileChevronRight")
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 10, height: 10)

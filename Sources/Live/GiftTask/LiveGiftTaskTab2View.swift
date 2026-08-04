@@ -67,7 +67,7 @@ struct LiveGiftTaskTycoonRow: View {
                 Spacer()
                 if task.rewardAmount > 0 {
                     HStack(spacing: 2) {
-                        Image("coins")
+                        CDNAssetImage("coins")
                             .resizable()
                             .scaledToFit()
                             .frame(width: 14, height: 14)
@@ -85,7 +85,7 @@ struct LiveGiftTaskTycoonRow: View {
                 )
                 Spacer(minLength: 6)
                 HStack(spacing: 4) {
-                    Image("coins")
+                    CDNAssetImage("coins")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 12, height: 12)

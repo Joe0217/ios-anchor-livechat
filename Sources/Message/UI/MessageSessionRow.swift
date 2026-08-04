@@ -93,13 +93,13 @@ struct MessageSessionRow: View {
     private var readReceiptCheck: some View {
         switch session.lastMessageReadState {
         case .sent:
-            Image("messageReadCheckmarkGray")
+            CDNAssetImage("messageReadCheckmarkGray")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 10, height: 10)
                 .accessibilityHidden(true)
         case .read:
-            Image("messageReadCheckmarkGreen")
+            CDNAssetImage("messageReadCheckmarkGreen")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 10, height: 10)

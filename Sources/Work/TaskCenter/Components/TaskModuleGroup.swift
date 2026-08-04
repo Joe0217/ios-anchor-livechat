@@ -64,7 +64,7 @@ struct TaskModuleGroup: View {
 
     private var headerRow: some View {
         HStack(spacing: 12) {
-            Image(moduleIconName)
+            CDNAssetImage(moduleIconName)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 34, height: 34)

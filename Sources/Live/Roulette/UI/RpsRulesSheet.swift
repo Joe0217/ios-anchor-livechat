@@ -117,7 +117,7 @@ struct RpsRulesSheet: View {
             Text("·")
             Text(String(format: L10n.liveRoomRpsRulesPerChallengeFormat, config.price))
                 .fixedSize(horizontal: false, vertical: true)
-            Image("diamondYellow")
+            CDNAssetImage("diamondYellow")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 14, height: 14)

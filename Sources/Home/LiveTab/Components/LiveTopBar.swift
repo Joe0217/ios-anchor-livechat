@@ -39,7 +39,7 @@ struct LiveTopBar: View {
         HStack(spacing: Theme.Metric.liveTopActionGap) {
             // 排行榜徽章（金冠 + +100K）。显式约束宽度防 i18n（ar/tr）后右侧拥挤。
             Button(action: onRankTap) {
-                Image("liveRankBadge")
+                CDNAssetImage("liveRankBadge")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 56, height: 28)
@@ -51,7 +51,7 @@ struct LiveTopBar: View {
             Button {
                 onlineStatus.refreshOnline()
             } label: {
-                Image("liveRefresh")
+                CDNAssetImage("liveRefresh")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 28, height: 28)
@@ -128,7 +128,7 @@ struct LiveSubTabButton: View {
             .background {
                 // 光带：z 轴下方（background）+ 居中对齐 + 不参与父布局尺寸
                 if isSelected {
-                    Image("liveTabIndicator")
+                    CDNAssetImage("liveTabIndicator")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 60, height: 26)

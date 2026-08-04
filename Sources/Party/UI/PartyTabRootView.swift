@@ -63,8 +63,8 @@ struct PartyTabRootView: View {
                 onTapBannerRoom: { roomId, entryPath in
                     path.append(PartyRoute.room(id: roomId, password: nil, entryPath: entryPath))
                 },
-                onEnterTopRoomGuide: { roomId in
-                    enterTopRoomGuide(roomId)
+                onEnterTopRoomGuide: { guide, topRankLimit in
+                    enterTopRoomGuide(guide, topRankLimit: topRankLimit)
                 }
             )
             .navigationDestination(for: PartyRoute.self) { route in
@@ -84,13 +84,12 @@ struct PartyTabRootView: View {
                         }
                     )
                 case let .room(id, password, entryPath):
-                    PartyRoomView(roomId: id, password: password, entryPath: entryPath) { targetRoomId, targetEntryPath in
+                    PartyRoomView(roomId: id, password: password, entryPath: entryPath) { guide in
                         if !path.isEmpty { path.removeLast() }
-                        path.append(PartyRoute.room(
-                            id: targetRoomId,
-                            password: nil,
-                            entryPath: targetEntryPath
-                        ))
+                        enterTopRoomGuide(
+                            guide,
+                            topRankLimit: PartyHotRoomTaskStore.shared.topRankLimit
+                        )
                     }
                 case .search:
                     PartySearchView(onTapRoom: { room in
@@ -160,20 +159,82 @@ struct PartyTabRootView: View {
         }
     }
 
-    private func enterTopRoomGuide(_ roomId: String) {
+    /// Top 房引导不能直接按接口返回的单个 roomId 进房：该房可能已加密码。
+    /// 先从 TopX 列表挑选非密码房；只有全部加密时才落到密码输入校验流程。
+    private func enterTopRoomGuide(_ guide: PartyHotRoomGuide, topRankLimit: Int) {
         guard SelfPermissionBridge.shared.gate(.party, action: "enterTopRoomGuide"),
               SelfPermissionBridge.shared.gate(.partyActivities, action: "enterTopRoomGuide") else { return }
         if LiveStore.shared.state == .living {
             permissionDeniedToast = L10n.Party.mutexBlockedByLive
             return
         }
-        guard !roomId.isEmpty else { return }
-        path.append(PartyRoute.room(id: roomId, password: nil, entryPath: .topRoomGuide))
+        guard !guide.roomId.isEmpty else { return }
+
+        Task {
+            guard let target = await preferredTopRoomTarget(guide, topRankLimit: topRankLimit) else {
+                permissionDeniedToast = L10n.Party.errorNetworkLost
+                return
+            }
+            guard LiveStore.shared.state != .living else {
+                permissionDeniedToast = L10n.Party.mutexBlockedByLive
+                return
+            }
+            if target.requiresPassword {
+                pendingPasswordRoom = PasswordRoom(id: target.roomId, entryPath: .topRoomGuide)
+            } else {
+                path.append(PartyRoute.room(id: target.roomId, password: nil, entryPath: .topRoomGuide))
+            }
+        }
+    }
+
+    private func preferredTopRoomTarget(
+        _ guide: PartyHotRoomGuide,
+        topRankLimit: Int
+    ) async -> TopRoomEntryTarget? {
+        let rankLimit = max(1, topRankLimit)
+        do {
+            let rooms = try await PartyAPI.roomList(pageSize: max(20, rankLimit))
+            let rankedCandidates = rooms
+                .filter { room in
+                    guard let roomId = room.id, !roomId.isEmpty, room.roomStatus != 2,
+                          let rank = room.rangIndex else {
+                        return false
+                    }
+                    return (1...rankLimit).contains(rank)
+                }
+                .sorted { ($0.rangIndex ?? .max) < ($1.rangIndex ?? .max) }
+            // 少数列表回包没有 rangIndex 时，至少使用 availableSeat 接口指定的房间完成密码预检。
+            let candidates = rankedCandidates.isEmpty
+                ? rooms.filter { $0.id == guide.roomId && $0.roomStatus != 2 }
+                : rankedCandidates
+
+            if let selected = candidates.first(where: { !Self.isPasswordProtected($0) })
+                ?? candidates.first {
+                guard let roomId = selected.id else { return nil }
+                return TopRoomEntryTarget(roomId: roomId, requiresPassword: Self.isPasswordProtected(selected))
+            }
+        } catch {
+            AppLogger.party.notice("[PartyTopRoomGuide] top room password preflight failed: \(String(describing: error), privacy: .public)")
+        }
+
+        // 列表暂时未包含 TopX 时，仅在 availableSeat 接口明确下发锁房状态后才使用其目标；
+        // 未知状态绝不直接进入，避免密码错误后才被强制退回大厅。
+        guard let isPasswordProtected = guide.isPasswordProtected else { return nil }
+        return TopRoomEntryTarget(roomId: guide.roomId, requiresPassword: isPasswordProtected)
+    }
+
+    private static func isPasswordProtected(_ room: PartyRoomInfo) -> Bool {
+        room.lockFlag == 1 || room.needPassword == true
     }
 
     private struct PasswordRoom: Identifiable {
         let id: String
         let entryPath: PartyRoomEntryPath
+    }
+
+    private struct TopRoomEntryTarget {
+        let roomId: String
+        let requiresPassword: Bool
     }
 
     private func tapCreate() {

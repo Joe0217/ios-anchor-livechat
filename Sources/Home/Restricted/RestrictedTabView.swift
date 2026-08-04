@@ -75,7 +75,7 @@ struct RestrictedTabView: View {
             selection = tab
         } label: {
             VStack(spacing: 4) {
-                Image(isSelected ? activeIcon : icon)
+                CDNAssetImage(isSelected ? activeIcon : icon)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 26, height: 26)

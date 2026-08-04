@@ -24,8 +24,8 @@ struct PartyRoomView: View {
     var password: String? = nil
     /// 仅 `topRoomGuide` 来源可触发掉出 TOPX 后的换房提醒。
     var entryPath: PartyRoomEntryPath = .standard
-    /// 热门房引导确认后由 PartyTabRoot 替换当前路由，避免子页直接持有 NavigationPath。
-    var onSwitchToHotRoom: ((String, PartyRoomEntryPath) -> Void)? = nil
+    /// 热门房引导确认后由 PartyTabRoot 预检密码并替换当前路由，避免子页直接持有 NavigationPath。
+    var onSwitchToHotRoom: ((PartyHotRoomGuide) -> Void)? = nil
 
     @ObservedObject private var store = PartyStore.shared
     /// 107 Party-only 账号在保留房间基础互动时隐藏经济、随机玩法和私 call。
@@ -707,10 +707,10 @@ struct PartyRoomView: View {
     }
 
     /// 右下角插件队列：私 call → 活动 Banner → 游戏 Banner → 音乐小组件。
-    /// 所有项目处于同一纵向容器，统一向下、向右对齐，且各项目不可见时不产生占位。
+    /// 所有可见项目间保持 10pt，统一向下、向右对齐；不可见项目不产生占位。
     /// 底部随输入栏/键盘整体上移。
     private var partyPluginStack: some View {
-        VStack(alignment: .trailing, spacing: 0) {
+        VStack(alignment: .trailing, spacing: 10) {
             if canUsePartyPrivateCall && !store.partyPrivateCallHiddenForPK {
                 PartyRoomPrivateCallButton(
                     isOn: privateCallOn,
@@ -720,8 +720,6 @@ struct PartyRoomView: View {
                     onToggle: handlePartyCallToggle,
                     onTapGift: handlePartyCallGiftReselect
                 )
-                // 私 call 与 Banner 的间距独立固定为 4pt，不叠加容器间距。
-                .padding(.bottom, hasDisplayablePartyBanner ? 4 : 0)
             }
             if hasDisplayablePartyBanner, let banners = store.roomInfo?.bannerList {
                 PartyRoomBannerCarousel(
@@ -1001,7 +999,7 @@ struct PartyRoomView: View {
         }
     }
 
-    /// 子 sheet 只上报目标用户；由房间根容器关闭当前 sheet 后再展示名片卡。
+    /// 榜单 sheet 已完成自身 dismiss 后才上报目标用户；根容器在其 onDismiss 中展示名片卡。
     /// 这样自定义名片卡 overlay 位于已关闭 sheet 的上层，不会被 UIKit presentation 遮挡。
     private func queueUserCardAfterRankSheetDismissal(_ preview: UserCardPreview) {
         guard !preview.userId.isEmpty,
@@ -1010,14 +1008,24 @@ struct PartyRoomView: View {
         }
         pendingUserCardPresentation = UserCardPresentation(preview: preview)
         activeRankSheet = nil
+        // `onDisappear` 与 `.sheet(onDismiss:)` 的先后不应作为前提。若 onDismiss 已先
+        // 触发，本次异步调度会消费 pending；反之仍由 onDismiss 消费。两者均为幂等操作。
+        DispatchQueue.main.async {
+            self.presentPendingUserCardAfterRankSheetDismissal()
+        }
     }
 
-    /// `.sheet` 的 onDismiss 表示 UIKit 已完成关闭动画；这是后续 modal 的唯一呈现点。
+    /// 名片卡统一展示入口；优先由 `.sheet` 的 onDismiss 调用，生命周期顺序异常时由兜底调度调用。
     private func presentPendingUserCardAfterRankSheetDismissal() {
         guard let presentation = pendingUserCardPresentation else { return }
         pendingUserCardPresentation = nil
-        userCardPreview = presentation.preview
-        userCardForUserId = presentation.userId
+        // `onDismiss` 已表示 sheet 关闭完成，但 UIKit 的 presentation 容器会在当前
+        // run loop 末尾才从 window 移除。下一轮再挂 custom overlay，才能稳定高于原 sheet。
+        DispatchQueue.main.async {
+            guard activeRankSheet == nil else { return }
+            userCardPreview = presentation.preview
+            userCardForUserId = presentation.userId
+        }
     }
 
     private func presentPendingUserCardAfterWinnerActivityDismissal() {
@@ -1578,8 +1586,7 @@ struct PartyRoomView: View {
     }
 
     private var currentMicOn: Bool {
-        guard let me = store.selfSeat else { return false }
-        return (me.microphoneEnabled ?? 0) == 1 && (me.seatMicrophoneEnabled ?? 0) == 1
+        store.effectiveSelfMicrophoneEnabled
     }
 
     // MARK: - 视频邀请 alert
@@ -1801,7 +1808,7 @@ struct PartyRoomView: View {
             if store.roomState == .joined || store.roomState == .entering {
                 await store.leaveRoom()
             }
-            onSwitchToHotRoom?(guide.roomId, .topRoomGuide)
+            onSwitchToHotRoom?(guide)
         }
     }
 
@@ -2805,13 +2812,22 @@ struct PartyRoomView: View {
             if me.isSeatMicrophoneProhibited,
                (store.selfRole == .owner || store.selfRole == .admin) {
                 Task { await store.requestProhibitSeat(seatIndex: seatIndex, mute: false) }
-            } else if me.isUserMicrophoneMuted {
-                Task { await store.toggleSelfMedia(type: 1, enable: true) }
+            } else if !me.isSeatMicrophoneProhibited {
+                Task {
+                    await store.toggleSelfMedia(
+                        type: 1,
+                        enable: !store.effectiveSelfMicrophoneEnabled
+                    )
+                }
             }
             return
         }
-        let micOn = (me.microphoneEnabled ?? 0) == 1 && (me.seatMicrophoneEnabled ?? 0) == 1
-        Task { await store.toggleSelfMedia(type: 1, enable: !micOn) }
+        Task {
+            await store.toggleSelfMedia(
+                type: 1,
+                enable: !store.effectiveSelfMicrophoneEnabled
+            )
+        }
     }
     private func handleGameTap() {
         // v9：H5 主播端不显示此按钮（APP_USER_ROLE=2 v-if=hasGameCenter 拦截）；
@@ -3452,7 +3468,7 @@ private struct PartyRoomBackgroundView: View {
 
     private func staticImageView(urlStr: String) -> some View {
         CachedAsyncImage(url: URL(string: urlStr), contentMode: .fill, persistent: true) {
-            Image("partyRoomBg")
+            CDNAssetImage("partyRoomBg")
                 .resizable()
                 .scaledToFill()
                 .frame(width: size.width, height: size.height)
@@ -4433,7 +4449,7 @@ private struct PartyBackpackGiftSheet: View {
                     .lineLimit(1)
 
                 HStack(spacing: 2) {
-                    Image("partyGems")
+                    CDNAssetImage("partyGems")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 10, height: 10)

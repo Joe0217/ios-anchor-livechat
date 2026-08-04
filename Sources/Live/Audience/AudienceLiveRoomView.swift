@@ -240,7 +240,7 @@ struct AudienceLiveRoomView: View {
                 }
                 Spacer(minLength: 0)
                 Button(action: goLiveAfterLeavingRoom) {
-                    Image("homeFloatGoLive")
+                    CDNAssetImage("homeFloatGoLive")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 50, height: 50)
@@ -271,7 +271,7 @@ struct AudienceLiveRoomView: View {
                 .tint(.white)
             }
             Button(action: leaveRoom) {
-                Image("liveRoomCloseButton")
+                CDNAssetImage("liveRoomCloseButton")
                     .resizable()
                     .frame(width: Theme.Metric.liveRoomCloseSize,
                            height: Theme.Metric.liveRoomCloseSize)
@@ -661,7 +661,7 @@ private struct AudienceLiveRoomHeader: View {
                             .foregroundStyle(Theme.Palette.liveRoomAnchorName)
                             .lineLimit(1)
                         HStack(spacing: 3) {
-                            Image("liveRoomHotIcon")
+                            CDNAssetImage("liveRoomHotIcon")
                                 .resizable()
                                 .frame(width: 10, height: 10)
                             Text(info.hotScore, format: .number)
@@ -681,7 +681,7 @@ private struct AudienceLiveRoomHeader: View {
             topGifters
             Button(action: onAudienceTap) {
                 ZStack(alignment: .topTrailing) {
-                    Image("liveRoomViewerCountIcon")
+                    CDNAssetImage("liveRoomViewerCountIcon")
                         .resizable()
                         .frame(width: Theme.Metric.liveRoomViewerCountSize,
                                height: Theme.Metric.liveRoomViewerCountSize)
@@ -699,7 +699,7 @@ private struct AudienceLiveRoomHeader: View {
             .buttonStyle(.plain)
             .accessibilityLabel(Text(L10n.liveRoomViewerCountA11y))
             Button(action: onClose) {
-                Image("liveRoomCloseButton")
+                CDNAssetImage("liveRoomCloseButton")
                     .resizable()
                     .frame(width: Theme.Metric.liveRoomCloseSize,
                            height: Theme.Metric.liveRoomCloseSize)
@@ -747,7 +747,7 @@ private struct AudienceLiveRoomBadges: View {
         HStack(spacing: Theme.Metric.liveRoomBadgeGap) {
             if taskStore.isIconVisible {
                 Button(action: onTaskTap) {
-                    Image("liveRoomTaskBadge")
+                    CDNAssetImage("liveRoomTaskBadge")
                         .resizable()
                         .frame(width: Theme.Metric.liveRoomBadgeHeight,
                                height: Theme.Metric.liveRoomBadgeHeight)
@@ -757,7 +757,7 @@ private struct AudienceLiveRoomBadges: View {
             }
             Button(action: onContributionTap) {
                 HStack(spacing: 4) {
-                    Image("coins")
+                    CDNAssetImage("coins")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 20, height: 20)
@@ -774,7 +774,7 @@ private struct AudienceLiveRoomBadges: View {
             .accessibilityLabel(Text(L10n.liveRoomContributionA11y))
             Button(action: onRankTap) {
                 HStack(spacing: 4) {
-                    Image("liveRoomRankIcon")
+                    CDNAssetImage("liveRoomRankIcon")
                         .resizable()
                         .frame(width: 18, height: 18)
                     Text(anchorRankStore.displayText)

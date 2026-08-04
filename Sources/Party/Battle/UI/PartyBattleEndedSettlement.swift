@@ -58,7 +58,7 @@ struct PartyBattleEndedSettlement: View {
         .background(cardGradient)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .overlay(alignment: .top) {
-            Image("partyPkSettlementHero")
+            CDNAssetImage("partyPkSettlementHero")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 281, height: 122)
@@ -91,7 +91,7 @@ struct PartyBattleEndedSettlement: View {
     private var vsRow: some View {
         HStack(spacing: 6) {
             teamCard(color: .red, label: L10n.Party.Battle.redTeam, score: redScoreText, isWinner: winnerTeam == 1, isLoser: winnerTeam == 2)
-            Image("partyPkBattleMarker")
+            CDNAssetImage("partyPkBattleMarker")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 40, height: 40)
@@ -153,9 +153,13 @@ struct PartyBattleEndedSettlement: View {
                         .font(.subheadline).bold()
                         .foregroundColor(.white)
                         .lineLimit(1)
-                    // 以同一个 Text 流排版，金额与图标在溢出时会一起换到下一行，不能被截断。
-                    (Text(mvpMetaText(mvp: mvp, isReceive: isReceive))
-                        + Text(Image(isReceive ? "partyGems" : "diamonds")))
+                    HStack(spacing: 2) {
+                        Text(mvpMetaText(mvp: mvp, isReceive: isReceive))
+                        CDNAssetImage(isReceive ? "partyGems" : "diamonds")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 12, height: 12)
+                    }
                         .font(.caption2)
                         .foregroundColor(.white.opacity(0.75))
                         .fixedSize(horizontal: false, vertical: true)

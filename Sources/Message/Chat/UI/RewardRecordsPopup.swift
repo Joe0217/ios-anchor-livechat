@@ -78,7 +78,7 @@ struct RewardRecordsPopup: View {
                 .frame(maxWidth: .infinity)
             HStack(spacing: 2) {
                 Text("Reward")
-                Image("coins")
+                CDNAssetImage("coins")
                     .resizable()
                     .frame(width: 12, height: 12)
             }

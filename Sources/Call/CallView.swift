@@ -186,12 +186,12 @@ private struct CallWaitingView: View {
     private func waitingBackground(size: CGSize) -> some View {
         if let url = URL(string: store.current.remoteIcon), !store.current.remoteIcon.isEmpty {
             CachedAsyncImage(url: url, contentMode: .fill, persistent: false) {
-                Image("defaultAvatar").resizable().scaledToFill()
+                CDNAssetImage("defaultAvatar").resizable().scaledToFill()
             }
             .frame(width: size.width, height: size.height)
             .clipped()
         } else {
-            Image("defaultAvatar")
+            CDNAssetImage("defaultAvatar")
                 .resizable()
                 .scaledToFill()
                 .frame(width: size.width, height: size.height)
@@ -628,7 +628,7 @@ private struct CallFaceTimeView: View {
                 showHangupConfirm = true
             } label: {
                 // 同步直播间关闭图标（liveRoomCloseButton 切图：灰圆 + 白 X 一体）
-                Image("liveRoomCloseButton")
+                CDNAssetImage("liveRoomCloseButton")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 36, height: 36)
@@ -693,7 +693,7 @@ private struct CallFaceTimeView: View {
             let anchorLevel = store.current.remoteLevelName.trimmingCharacters(in: .whitespacesAndNewlines)
             let userLevel = remoteProfile?.userLevelName
             if anchorLevel.uppercased() == "SS" {
-                Image("CallAnchorBadgeSS")
+                CDNAssetImage("CallAnchorBadgeSS")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 18, height: 18)
@@ -812,7 +812,7 @@ private struct CallFaceTimeView: View {
     /// 收入胶囊：通话/礼物图标 16pt，数字 12pt，维持紧凑信息密度。
     private func incomeCapsule(iconAsset: String, value: Int, tint: Color) -> some View {
         HStack(spacing: 4) {
-            Image(iconAsset)
+            CDNAssetImage(iconAsset)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 16, height: 16)
@@ -820,7 +820,7 @@ private struct CallFaceTimeView: View {
             Text("\(value)")
                 .font(.system(size: 12, weight: .semibold)).monospacedDigit()
                 .foregroundStyle(.white)
-            Image("coins")
+            CDNAssetImage("coins")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 14, height: 14)
@@ -874,7 +874,7 @@ private struct CallFaceTimeView: View {
                 }
 
             Button(action: sendChatInput) {
-                Image("liveRoomSendButton")
+                CDNAssetImage("liveRoomSendButton")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 24, height: 24)
@@ -962,7 +962,7 @@ private struct CallFaceTimeView: View {
                 CallHaptics.impact(.medium)
                 action()
             } label: {
-                Image(asset)
+                CDNAssetImage(asset)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: size, height: size)

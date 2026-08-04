@@ -62,7 +62,7 @@ struct PartyBattleSelectingStartStrip: View {
             .frame(maxWidth: .infinity)
             .frame(height: 46)
             .background(
-                Image("partyPkStartButton")
+                CDNAssetImage("partyPkStartButton")
                     .resizable()
                     .scaledToFill()
             )

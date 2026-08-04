@@ -25,7 +25,7 @@ struct GuardianDetailView: View {
             )
             .ignoresSafeArea()
 
-            Image(GuardianArtwork.topGlow)
+            CDNAssetImage(GuardianArtwork.topGlow)
                 .resizable()
                 .scaledToFill()
                 .opacity(0.55)
@@ -186,7 +186,7 @@ struct GuardianDetailView: View {
                     selectedLevel = level
                 } label: {
                     HStack(spacing: 4) {
-                        Image(GuardianArtwork.tabIcon(for: level))
+                        CDNAssetImage(GuardianArtwork.tabIcon(for: level))
                             .resizable()
                             .scaledToFit()
                             .frame(width: 24, height: 24)
@@ -196,7 +196,7 @@ struct GuardianDetailView: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 34)
                     .background(
-                        Image(selectedLevel == level ? GuardianArtwork.tabSelected : GuardianArtwork.tabUnselected)
+                        CDNAssetImage(selectedLevel == level ? GuardianArtwork.tabSelected : GuardianArtwork.tabUnselected)
                             .resizable()
                             .scaledToFill()
                     )
@@ -312,12 +312,12 @@ private struct GuardianPrivilegeImage: View {
     var body: some View {
         if let remoteURL, let url = URL(string: remoteURL) {
             CachedAsyncImage(url: url, contentMode: .fit, persistent: true) {
-                Image(assetName)
+                CDNAssetImage(assetName)
                     .resizable()
                     .scaledToFit()
             }
         } else {
-            Image(assetName)
+            CDNAssetImage(assetName)
                 .resizable()
                 .scaledToFit()
         }
@@ -334,7 +334,7 @@ private struct GuardianPriceCard: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color(hex: 0x5E5A7F))
             HStack(spacing: 3) {
-                Image(GuardianArtwork.diamond)
+                CDNAssetImage(GuardianArtwork.diamond)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 13, height: 13)
@@ -375,7 +375,7 @@ struct GuardianAvatar: View {
     var body: some View {
         ZStack {
             CachedAsyncImage(url: urlString.flatMap(URL.init(string:)), contentMode: .fill, persistent: false) {
-                Image("defaultUserAvatar")
+                CDNAssetImage("defaultUserAvatar")
                     .resizable()
                     .scaledToFill()
             }
@@ -383,7 +383,7 @@ struct GuardianAvatar: View {
             .clipShape(Circle())
 
             if framed, let level {
-                Image(GuardianArtwork.topFrame(for: level))
+                CDNAssetImage(GuardianArtwork.topFrame(for: level))
                     .resizable()
                     .scaledToFit()
                     .frame(width: size * 1.7, height: size * 1.7)
@@ -547,7 +547,7 @@ struct LiveRoomGuardianEntry: View {
             onTap()
         } label: {
             ZStack(alignment: .bottom) {
-                Image("guardianShield")
+                CDNAssetImage("guardianShield")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 29, height: 29)

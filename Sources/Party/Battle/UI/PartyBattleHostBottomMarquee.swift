@@ -35,7 +35,7 @@ struct PartyBattleHostBottomMarquee: View {
             .frame(maxWidth: .infinity)
             .background(redStripBg)
 
-            Image("partyPkBattleMarker")
+            CDNAssetImage("partyPkBattleMarker")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 44, height: 44)

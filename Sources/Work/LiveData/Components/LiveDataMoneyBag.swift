@@ -52,13 +52,13 @@ struct LiveDataMoneyBag: View {
             // H5 .moneyBag { background: none !important; } —— 无任何背景圆，直接显示 3D webp。
             // Badge 是浮标底部胶囊状钻石数徽章，粉→紫渐变（H5 line 397-406）。
             VStack(spacing: -5) {
-                Image("moneyBag")
+                CDNAssetImage("moneyBag")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 50, height: 50)
 
                 HStack(spacing: 4) {
-                    Image("coins")
+                    CDNAssetImage("coins")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 14, height: 14)

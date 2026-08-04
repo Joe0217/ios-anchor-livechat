@@ -36,7 +36,7 @@ struct TaskCountdownBar: View {
                     .overlay(Color.black.opacity(0.4))
                     .padding(.vertical, 8)
                 HStack(spacing: 6) {
-                    Image("homeRankIntegral")
+                    CDNAssetImage("homeRankIntegral")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 18, height: 18)

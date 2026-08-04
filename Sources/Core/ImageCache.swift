@@ -10,10 +10,11 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "ImageCa
 /// - 切 tab / 切页时头像会"消失再加载"一遍。
 ///
 /// 设计：
-/// - `NSCache<NSURL, UIImage>` 线程安全的内存缓存，50MB 上限按图像像素估算
+/// - `NSCache<NSURL, UIImage>` 线程安全的内存缓存，150MB 上限按图像像素估算
 /// - `inflight` dict 去重：同一 URL 同时多次请求合并为单次下载
-/// - `actualFetch` 内部调 `URLSession.shared.data(from:)`，底层 `URLCache.shared`
-///   也会再缓一份（HilyApp 启动时配置了 100MB 磁盘容量）
+/// - 普通图片仍使用 `URLCache.shared`，以保持账号切换时可整体清理的既有语义
+/// - 礼物和运营图片等公共资源另走 `URLDiskCache`，不依赖 CDN 的缓存响应头，
+///   登出后仍可复用，且受统一容量上限控制
 /// - 不引第三方（Kingfisher/SDWebImage），符合工程纪律
 final class ImageCache {
 
@@ -27,9 +28,9 @@ final class ImageCache {
         return c
     }()
 
-    /// inflight 任务表（同 URL 多次请求合并）；用 lock 保护字典写入
-    private let lock = NSLock()
-    private var inflight: [URL: Task<UIImage?, Never>] = [:]
+    /// inflight 任务表（同 URL 多次请求合并）。锁封装在同步存储内，
+    /// 避免在 async 方法直接调用 NSLock 触发 Swift 6 并发告警。
+    private let inflightStore = InflightStore()
 
     private init() {}
 
@@ -39,12 +40,18 @@ final class ImageCache {
     }
 
     /// 全清：登出 / 切账号时调，确保下个账号看不到上个账号的图。
-    /// URLCache 磁盘层一并 removeAllCachedResponses。
+    /// 仅清账号相关图片；公共礼物/运营资源保留在独立文件缓存中。
     func clear() {
         memCache.removeAllObjects()
         URLCache.shared.removeAllCachedResponses()
-        lock.lock(); inflight.removeAll(); lock.unlock()
-        logger.info("clear all")
+        inflightStore.clear()
+        logger.info("clear session cache")
+    }
+
+    /// 用户在设置页主动清缓存时调用。公共资源默认跨账号复用，不能挂在 `clear()`。
+    func clearPublicAssets() {
+        URLDiskCache.clear(namespace: URLDiskCache.publicAssetNamespace)
+        logger.info("clear public assets")
     }
 
     /// 精准 invalidate 单 URL：下拉刷新时把"上次显示的图"踢出缓存，强制重拉。
@@ -62,24 +69,25 @@ final class ImageCache {
     /// 异步获取：先查内存 → 再走网络。失败返回 nil。
     func fetch(_ url: URL) async -> UIImage? {
         if let cached = cached(for: url) { return cached }
+        if let publicFile = URLDiskCache.cachedFile(
+            for: url,
+            namespace: URLDiskCache.publicAssetNamespace
+        ) {
+            if let image = decodePublicAsset(at: publicFile, sourceURL: url) {
+                return image
+            }
+            URLDiskCache.invalidate(url: url, namespace: URLDiskCache.publicAssetNamespace)
+        }
 
         // 同 URL 已有任务在跑：等同一个
-        lock.lock()
-        if let existing = inflight[url] {
-            lock.unlock()
-            return await existing.value
+        let task = inflightStore.task(for: url) { [weak self] in
+            Task<UIImage?, Never> {
+                await self?.actualFetch(url) ?? nil
+            }
         }
-        let task = Task<UIImage?, Never> { [weak self] in
-            await self?.actualFetch(url) ?? nil
-        }
-        inflight[url] = task
-        lock.unlock()
 
         let img = await task.value
-
-        lock.lock()
-        inflight[url] = nil
-        lock.unlock()
+        inflightStore.remove(url)
 
         return img
     }
@@ -95,6 +103,49 @@ final class ImageCache {
         } catch {
             return nil
         }
+    }
+
+    /// 获取可跨登录态长期复用的公共图片（礼物图、运营图等）。
+    ///
+    /// 文件缓存命中后不发网络请求；`Caches` 被系统回收或文件损坏时自动回落到重新下载。
+    func fetchPublicAsset(_ url: URL) async -> UIImage? {
+        if let cached = cached(for: url) { return cached }
+
+        do {
+            let fileURL = try await URLDiskCache.fetch(
+                url: url,
+                namespace: URLDiskCache.publicAssetNamespace,
+                maximumCacheBytes: URLDiskCache.publicAssetCacheLimit
+            )
+            if let image = decodePublicAsset(at: fileURL, sourceURL: url) {
+                return image
+            }
+
+            // 防止错误页或中途损坏文件永久占住缓存；删掉后本次再尝试一次。
+            URLDiskCache.invalidate(url: url, namespace: URLDiskCache.publicAssetNamespace)
+            let retryURL = try await URLDiskCache.fetch(
+                url: url,
+                namespace: URLDiskCache.publicAssetNamespace,
+                maximumCacheBytes: URLDiskCache.publicAssetCacheLimit
+            )
+            let image = decodePublicAsset(at: retryURL, sourceURL: url)
+            if image == nil {
+                URLDiskCache.invalidate(url: url, namespace: URLDiskCache.publicAssetNamespace)
+            }
+            return image
+        } catch {
+            logger.error("public asset fetch failed url=\(url.absoluteString, privacy: .public) err=\(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    /// 登录后预拉取公共图片，完成后由各图片 View 从本地文件缓存读取。
+    func prefetchPublicAssets(_ urls: [URL]) async {
+        await URLDiskCache.prefetch(
+            urls: urls,
+            namespace: URLDiskCache.publicAssetNamespace,
+            maximumCacheBytes: URLDiskCache.publicAssetCacheLimit
+        )
     }
 
     private func actualFetch(_ url: URL) async -> UIImage? {
@@ -115,6 +166,44 @@ final class ImageCache {
             let elapsed = Date().timeIntervalSince(start)
             logger.error("fetch failed url=\(url.absoluteString, privacy: .public) elapsed=\(String(format: "%.2f", elapsed))s err=\(String(describing: error))")
             return nil
+        }
+    }
+
+    private func decodePublicAsset(at fileURL: URL, sourceURL: URL) -> UIImage? {
+        guard let image = UIImage(contentsOfFile: fileURL.path) else {
+            logger.warning("public asset decode failed url=\(sourceURL.absoluteString, privacy: .public)")
+            return nil
+        }
+        memCache.setObject(image, forKey: sourceURL as NSURL, cost: Self.cost(of: image))
+        return image
+    }
+
+    private final class InflightStore: @unchecked Sendable {
+        private let lock = NSLock()
+        private var tasks: [URL: Task<UIImage?, Never>] = [:]
+
+        func task(
+            for url: URL,
+            make: () -> Task<UIImage?, Never>
+        ) -> Task<UIImage?, Never> {
+            lock.lock()
+            defer { lock.unlock() }
+            if let existing = tasks[url] { return existing }
+            let task = make()
+            tasks[url] = task
+            return task
+        }
+
+        func remove(_ url: URL) {
+            lock.lock()
+            tasks[url] = nil
+            lock.unlock()
+        }
+
+        func clear() {
+            lock.lock()
+            tasks.removeAll()
+            lock.unlock()
         }
     }
 

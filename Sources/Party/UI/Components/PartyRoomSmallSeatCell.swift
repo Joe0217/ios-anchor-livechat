@@ -51,9 +51,9 @@ struct PartyRoomSmallSeatCell: View {
         ZStack {
             // v2：空位用 Component 7 切图（`partySeatEmpty`）；占用状态继续用 partySeatRing 装饰环
             // 锁位不显示空位切图内的沙发，仅保留圆环和锁图标。
-            Image(seat.occupied || isLockedEmptySeat
+            CDNAssetImage(seat.occupied || isLockedEmptySeat
                   ? "partySeatRing"
-                  : (UIImage(named: "partySeatEmpty") != nil ? "partySeatEmpty" : "partySeatRing"))
+                  : "partySeatEmpty")
                 .resizable()
                 .scaledToFit()
                 .frame(width: avatarSize + 8,
@@ -116,7 +116,7 @@ struct PartyRoomSmallSeatCell: View {
         // 默认 ??1（假定开麦），避免后端漏字段时误显。
         .overlay(alignment: .bottomTrailing) {
             if !isLockedEmptySeat, seat.isMicrophoneMuted {
-                Image("partyIconMicMuted")
+                CDNAssetImage("partyIconMicMuted")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 16, height: 16)
@@ -172,7 +172,7 @@ struct PartyRoomSmallSeatCell: View {
                 }
                 if showsGiftValue {
                     HStack(spacing: 2) {
-                        Image("partyGems")
+                        CDNAssetImage("partyGems")
                             .resizable().scaledToFit()
                             .frame(width: 10, height: 10)
                         // PK 期 SELECTING 强制归零（对齐 H5 audio-wrap.vue :93-97 seatScore）

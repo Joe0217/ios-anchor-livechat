@@ -5,7 +5,7 @@ import SwiftUI
 /// **缩略图占位策略**（Q3 (a) 实施债）：
 /// 本期用 SF Symbol + brand color 作缩略图占位；生产真图由用户跑相芯 SDK 生成脚本
 /// 应用 filter 到 60×60 自拍图，一次性烘焙进 `Assets.xcassets/BeautyFilterThumbnails/`。
-/// 有真图后，UI 层从 SF Symbol 切到 `Image("BeautyFilterThumbnails/\(key)")`。
+/// 有真图后，UI 层从 SF Symbol 切到 `CDNAssetImage("BeautyFilterThumbnails/\(key)")`。
 enum BeautyFilterCatalog {
     struct Item: Identifiable {
         let id: String

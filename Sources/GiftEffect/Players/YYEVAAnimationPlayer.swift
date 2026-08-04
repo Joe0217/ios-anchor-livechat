@@ -1,6 +1,5 @@
 import UIKit
 import YYEVA
-import CryptoKit
 import os
 
 private let logger = Logger(subsystem: "com.anchor.livechat", category: "YYEVAAnimationPlayer")
@@ -15,7 +14,7 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "YYEVAAn
 ///
 /// **v24（2026-07-13）URL 下载缓存**：传 HTTPS URL 到 YYEva → `fileExistsAtPath` 判定失败 → 立即
 /// `NSURLErrorDomain code=1 (FileNotExits)` → 真机永远无法播出座驾 mp4。
-/// 修复：URL → 下载到 Caches/YYEVACache/{sha256}.mp4 → 传本地路径给 YYEva.play
+/// 修复：URL → `URLDiskCache` 下载到公共资源缓存 → 传本地路径给 YYEva.play
 /// - 命中缓存直接复用（避免同 URL 反复下载）
 /// - 下载失败 fireFinishOnce 推动 Center 队列继续
 /// - gen 计数器防止 stale download 迟到误播
@@ -27,7 +26,8 @@ final class YYEVAAnimationPlayer: NSObject, GiftAnimationPlayer, IYYEVAPlayerDel
     /// gen 计数：URL 下载是异步的，中途 stop 或 play(B) 会 &+= gen，
     /// 下载完成 callback 前对比 gen，不匹配则 drop
     private var currentGen: Int = 0
-    private var downloadTask: URLSessionDownloadTask?
+    private var cacheTask: Task<Void, Never>?
+    private var currentRemoteURL: URL?
 
     override init() { super.init() }
 
@@ -52,68 +52,51 @@ final class YYEVAAnimationPlayer: NSObject, GiftAnimationPlayer, IYYEVAPlayerDel
         let gen = currentGen
         currentFinish = onFinish
 
-        // 本地路径直接播（file:// scheme 或绝对路径）
+        // 本地路径直接播（file:// scheme）
         if url.isFileURL {
+            currentRemoteURL = nil
             playLocal(path: url.path, in: host)
             return
         }
+        currentRemoteURL = url
 
-        // 缓存命中直接播
-        let cachedPath = Self.cachePath(for: url)
-        if FileManager.default.fileExists(atPath: cachedPath) {
-            logger.debug("cache hit: \(url.absoluteString, privacy: .public) → \(cachedPath, privacy: .public)")
-            playLocal(path: cachedPath, in: host)
-            return
-        }
-
-        // 下载
-        logger.info("downloading: \(url.absoluteString, privacy: .public) → \(cachedPath, privacy: .public)")
-        downloadTask?.cancel()
-        let task = URLSession.shared.downloadTask(with: url) { [weak self, weak host] tempURL, response, error in
-            // 回主线程 + gen guard + host 存活检查
-            Task { @MainActor [weak self, weak host] in
-                guard let self = self else { return }
+        // `URLDiskCache` 在 URLSession completion 同步 move 临时文件，避免 tempURL 切回主线程后失效。
+        // 公共礼物/座驾动画与礼物图片共用 200MB LRU，登出后仍可复用。
+        cacheTask?.cancel()
+        cacheTask = Task { @MainActor [weak self, weak host] in
+            do {
+                // Hily OSS 为部分 MP4 返回 application/octet-stream；路由已按 .mp4
+                // 过滤，继续由 URLDiskCache 校验 HTTP 2xx，不能在这里强制 video/* MIME。
+                let localURL = try await URLDiskCache.fetch(
+                    url: url,
+                    namespace: URLDiskCache.publicAssetNamespace,
+                    maximumCacheBytes: URLDiskCache.publicAssetCacheLimit
+                )
+                guard let self else { return }
                 guard self.currentGen == gen else {
                     logger.info("YYEVA download stale gen (current=\(self.currentGen, privacy: .public) my=\(gen, privacy: .public)), drop")
                     return
                 }
-                guard let host = host else {
+                guard let host else {
                     logger.warning("YYEVA download host released, drop")
                     self.fireFinishOnce()
                     return
                 }
-                if let error = error {
-                    logger.warning("YYEVA download failed: \(error.localizedDescription, privacy: .public)")
-                    self.fireFinishOnce()
-                    return
-                }
-                guard let tempURL = tempURL else {
-                    logger.warning("YYEVA download tempURL nil")
-                    self.fireFinishOnce()
-                    return
-                }
-                // move 到 cache（overwrite 若已存在——并发同 URL 两个下载竞争的兜底）
-                let dest = URL(fileURLWithPath: cachedPath)
-                try? FileManager.default.removeItem(at: dest)
-                do {
-                    try FileManager.default.moveItem(at: tempURL, to: dest)
-                } catch {
-                    logger.warning("YYEVA cache move failed: \(error.localizedDescription, privacy: .public)")
-                    self.fireFinishOnce()
-                    return
-                }
-                self.playLocal(path: cachedPath, in: host)
+                self.playLocal(path: localURL.path, in: host)
+            } catch {
+                guard let self, self.currentGen == gen else { return }
+                logger.warning("YYEVA download failed: \(error.localizedDescription, privacy: .public)")
+                self.fireFinishOnce()
             }
         }
-        downloadTask = task
-        task.resume()
     }
 
     func stop() {
         player?.stopAnimation()
         currentGen &+= 1
-        downloadTask?.cancel()
-        downloadTask = nil
+        cacheTask?.cancel()
+        cacheTask = nil
+        currentRemoteURL = nil
         fireFinishOnce()
     }
 
@@ -122,9 +105,10 @@ final class YYEVAAnimationPlayer: NSObject, GiftAnimationPlayer, IYYEVAPlayerDel
         player?.removeFromSuperview()
         player = nil
         currentFinish = nil
+        currentRemoteURL = nil
         currentGen &+= 1
-        downloadTask?.cancel()
-        downloadTask = nil
+        cacheTask?.cancel()
+        cacheTask = nil
     }
 
     // MARK: - private
@@ -200,24 +184,6 @@ final class YYEVAAnimationPlayer: NSObject, GiftAnimationPlayer, IYYEVAPlayerDel
         f?()
     }
 
-    // MARK: - cache
-
-    /// 缓存目录：Caches/YYEVACache/{sha256}.mp4
-    /// Caches 由系统在空间告警时自动清理；未来可加 LRU 主动清理（首版依赖系统）
-    private static let cacheDirectory: URL = {
-        let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        let dir = base.appendingPathComponent("YYEVACache", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir
-    }()
-
-    private static func cachePath(for url: URL) -> String {
-        let hash = SHA256.hash(data: Data(url.absoluteString.utf8))
-        let hex = hash.map { String(format: "%02x", $0) }.joined()
-        let ext = url.pathExtension.isEmpty ? "mp4" : url.pathExtension
-        return cacheDirectory.appendingPathComponent("\(hex).\(ext)").path
-    }
-
     // MARK: - IYYEVAPlayerDelegate
 
     func evaPlayerDidCompleted(_ player: YYEVAPlayer) {
@@ -226,6 +192,12 @@ final class YYEVAAnimationPlayer: NSObject, GiftAnimationPlayer, IYYEVAPlayerDel
 
     func evaPlayer(_ player: YYEVAPlayer, playFail error: any Error) {
         logger.warning("YYEVA play fail: \(error.localizedDescription, privacy: .public)")
+        if let currentRemoteURL {
+            URLDiskCache.invalidate(
+                url: currentRemoteURL,
+                namespace: URLDiskCache.publicAssetNamespace
+            )
+        }
         fireFinishOnce()
     }
 }

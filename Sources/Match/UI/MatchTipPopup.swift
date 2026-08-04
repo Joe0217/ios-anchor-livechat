@@ -23,7 +23,7 @@ struct MatchTipPopup: View {
 
             ZStack(alignment: .topTrailing) {
                 VStack(spacing: 16) {
-                    Image("matchButtonOn")
+                    CDNAssetImage("matchButtonOn")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 60, height: 60)

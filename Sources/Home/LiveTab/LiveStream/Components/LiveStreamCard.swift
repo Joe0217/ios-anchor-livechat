@@ -62,7 +62,7 @@ struct LiveStreamCard: View {
             // 上排：左钻石盲盒 / 右周收入
             HStack {
                 if anchor.hasDiamondGift {
-                    Image("coins")
+                    CDNAssetImage("coins")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 22, height: 22)
@@ -95,7 +95,7 @@ struct LiveStreamCard: View {
 
     private func weekIncomeChip(_ income: String) -> some View {
         HStack(spacing: 2) {
-            Image("coins")
+            CDNAssetImage("coins")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 12, height: 12)
@@ -113,7 +113,7 @@ struct LiveStreamCard: View {
     }
 
     private var pkBadge: some View {
-        Image("livePkIcon")
+        CDNAssetImage("livePkIcon")
             .resizable()
             .scaledToFit()
             .frame(width: 28, height: 28)
@@ -122,7 +122,7 @@ struct LiveStreamCard: View {
 
     private var viewerCountInline: some View {
         HStack(spacing: 3) {
-            Image("liveViewerCount")
+            CDNAssetImage("liveViewerCount")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 12, height: 12)

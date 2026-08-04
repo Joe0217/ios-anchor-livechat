@@ -59,7 +59,7 @@ struct BlocklistRow: View {
             // 位置（仅当 countryId 非空）
             if let country = item.countryId, !country.isEmpty {
                 HStack(spacing: Theme.Metric.blocklistMetaIconGap) {
-                    Image("profileLocationIcon")
+                    CDNAssetImage("profileLocationIcon")
                         .resizable()
                         .scaledToFit()
                         .frame(width: Theme.Metric.blocklistMetaIconSize,
@@ -73,7 +73,7 @@ struct BlocklistRow: View {
             // 年龄（仅当 age > 0；spec R-12 nil/0 不显示）
             if let age = item.age, age > 0 {
                 HStack(spacing: Theme.Metric.blocklistMetaIconGap) {
-                    Image("profileAgeIcon")
+                    CDNAssetImage("profileAgeIcon")
                         .resizable()
                         .scaledToFit()
                         .frame(width: Theme.Metric.blocklistMetaIconSize,

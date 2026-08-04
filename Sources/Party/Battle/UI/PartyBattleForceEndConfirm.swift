@@ -72,7 +72,7 @@ struct PartyBattleForceEndConfirm: View {
     private var scoreRow: some View {
         HStack(spacing: 4) {
             teamScoreCard(color: redColor, label: L10n.Party.Battle.redTeam, score: redScore)
-            Image("partyPkBattleMarker")
+            CDNAssetImage("partyPkBattleMarker")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 32, height: 32)

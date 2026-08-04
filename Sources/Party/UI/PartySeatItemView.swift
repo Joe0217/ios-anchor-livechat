@@ -114,7 +114,7 @@ struct PartySeatItemView: View {
     }
 
     private var mutedBadge: some View {
-        Image("partyIconMicMuted")
+        CDNAssetImage("partyIconMicMuted")
             .resizable()
             .scaledToFit()
             .frame(width: 18, height: 18)

@@ -1,8 +1,0 @@
-{
-  "images" : [
-    { "filename" : "RewardRecord.png",    "idiom" : "universal", "scale" : "1x" },
-    { "filename" : "RewardRecord@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "RewardRecord@3x.png", "idiom" : "universal", "scale" : "3x" }
-  ],
-  "info" : { "author" : "xcode", "version" : 1 }
-}

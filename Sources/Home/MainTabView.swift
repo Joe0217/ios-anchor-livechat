@@ -861,7 +861,7 @@ struct MainTabView: View {
 
     private func tabItem(_ tab: MainTab, isSelected: Bool) -> some View {
         VStack(spacing: 4) {
-            Image(isSelected ? tab.activeIcon : tab.icon)
+            CDNAssetImage(isSelected ? tab.activeIcon : tab.icon)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 26, height: 26)

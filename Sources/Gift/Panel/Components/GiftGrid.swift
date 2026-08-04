@@ -29,8 +29,7 @@ struct GiftPanelGrid: View {
 
     private func cell(_ gift: GiftListData) -> some View {
         let isSelected = store.config.interaction == .selectable && store.selectedId == gift.id
-        // Party 场景（FooterMode.send）用紫色钻石 partyGems；其他场景（callGate/wishGift/liveDisplayOnly/imBind/callAskFor）
-        // 沿用黄色 SF Symbol diamond.fill（本地 fallback，未来可视觉统一时集中改）
+        // Party 送礼使用 partyGems；Party 私 call 使用标准 gems；其余场景使用 coins。
         let isPartySend: Bool = {
             if case .send = store.config.footer { return true }
             return false
@@ -56,18 +55,19 @@ struct GiftPanelGrid: View {
                 HStack(spacing: 2) {
                     if isPartySend {
                         // Party 房送礼场景：紫钻 partyGems
-                        Image("partyGems")
+                        CDNAssetImage("partyGems")
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .frame(width: 10, height: 10)
                     } else if store.config.useBlueDiamond {
-                        // F-spec 派对房私 call 场景：蓝色钻石（对齐设计稿）
-                        Image(systemName: "diamond.fill")
-                            .font(.system(size: 9))
-                            .foregroundColor(Color(hex: 0x4E9AFF))
+                        // Party 私 call 场景使用标准蓝色 Gems 资产。
+                        CDNAssetImage("gems")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 10, height: 10)
                     } else {
                         // 其他场景（wishGift / callGate / liveDisplayOnly / imBind / callAskFor）：coins 金币图标
-                        Image("coins")
+                        CDNAssetImage("coins")
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .frame(width: 10, height: 10)

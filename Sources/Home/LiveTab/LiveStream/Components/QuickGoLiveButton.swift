@@ -18,7 +18,7 @@ struct QuickGoLiveButton: View {
         Button {
             quickGoLive.perform()
         } label: {
-            Image("homeFloatGoLive")
+            CDNAssetImage("homeFloatGoLive")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 50, height: 50)

@@ -1,8 +1,0 @@
-{
-  "images" : [
-    { "filename" : "partyUserCardFollow.png", "idiom" : "universal", "scale" : "1x" },
-    { "filename" : "partyUserCardFollow@2x.png", "idiom" : "universal", "scale" : "2x" },
-    { "filename" : "partyUserCardFollow@3x.png", "idiom" : "universal", "scale" : "3x" }
-  ],
-  "info" : { "author" : "xcode", "version" : 1 }
-}

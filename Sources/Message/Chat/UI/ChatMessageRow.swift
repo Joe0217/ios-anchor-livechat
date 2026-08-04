@@ -56,7 +56,7 @@ struct ChatMessageRow: View {
         } else if isSystemSession, isSystemMessageContent(message.content) {
             // 系统会话消息:只对方(from = 系统账号)布局,固定 system-icon 头像,居左气泡
             HStack(alignment: .top, spacing: 8) {
-                Image("messageInboxNotification")
+                CDNAssetImage("messageInboxNotification")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 36, height: 36)

@@ -49,7 +49,7 @@ private struct StatCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Metric.statNumberToCaption) {
             // 图标独占顶行
-            Image(icon)
+            CDNAssetImage(icon)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 20, height: 20)

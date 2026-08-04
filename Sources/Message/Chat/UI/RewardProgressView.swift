@@ -78,7 +78,7 @@ struct RewardProgressView: View {
                     .animation(.easeOut(duration: 0.5), value: progressPercent)
 
                 // 起始位置金币 icon（切图 RewardBoxCoin 缩小版 —— 设计稿"私聊页切图位置.png"左边起点标注 `Coins`）
-                Image("RewardBoxCoin")
+                CDNAssetImage("RewardBoxCoin")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 20, height: 20)
@@ -98,7 +98,7 @@ struct RewardProgressView: View {
         VStack(spacing: 4) {
             // 宝箱图（切图 RewardBoxCoin —— 对齐设计稿 `消息列表_slices/Coins.png` 橙色金币宝箱）
             ZStack {
-                Image("RewardBoxCoin")
+                CDNAssetImage("RewardBoxCoin")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 32, height: 32)
@@ -142,7 +142,7 @@ struct RewardProgressView: View {
         } label: {
             // 切图 RewardRecord —— 设计稿 Frame 390 已含紫色圆角底 + 时钟 icon，整图 29x52 直接用
             // 修：原叠一层 RoundedRectangle 紫色底导致视觉双重底 + icon 显淡；直接用切图整图
-            Image("RewardRecord")
+            CDNAssetImage("RewardRecord")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 29, height: 52)

@@ -101,7 +101,7 @@ struct PartyDataSummaryCard: View {
                 onMicTimeTap?()
             } label: {
                 VStack(alignment: .leading, spacing: 8) {
-                    Image("pinkClock")
+                    CDNAssetImage("pinkClock")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 20, height: 20)
@@ -151,7 +151,7 @@ struct PartyDataSummaryCard: View {
                         value: String, valueColor: Color,
                         label: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(iconName)
+            CDNAssetImage(iconName)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 20, height: 20)
@@ -170,7 +170,7 @@ struct PartyDataSummaryCard: View {
     // MARK: breakdown panel（Party Room Gift + Partycall 合并）
     private var breakdownPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Image("blackTriangle")
+            CDNAssetImage("blackTriangle")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 18, height: 10)
@@ -193,7 +193,7 @@ struct PartyDataSummaryCard: View {
     private func breakdownItem(value: Int, label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
-                Image("gems")
+                CDNAssetImage("gems")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 14, height: 14)

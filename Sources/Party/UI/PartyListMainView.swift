@@ -59,7 +59,7 @@ struct PartyListMainView: View {
     /// H5 Party 首页 banner 的 clickType=3：进入指定 Party 房。
     let onTapBannerRoom: (String, PartyRoomEntryPath) -> Void
     /// 热门房奖励引导确认后，以 `top_room_guide` 来源进入目标房。
-    let onEnterTopRoomGuide: (String) -> Void
+    let onEnterTopRoomGuide: (PartyHotRoomGuide, Int) -> Void
 
     @State private var activeTab: Int = 0
     @StateObject private var homeBannerStore = PartyHomeBannerStore()
@@ -189,7 +189,7 @@ struct PartyListMainView: View {
                     onDismiss: topRoomGuideStore.dismiss,
                     onConfirm: {
                         topRoomGuideStore.confirmEnter(guide)
-                        onEnterTopRoomGuide(guide.roomId)
+                        onEnterTopRoomGuide(guide, topRoomGuideStore.topRankLimit)
                     }
                 )
             }
@@ -272,7 +272,7 @@ struct PartyListMainView: View {
                 }
                 onTapRanking()
             } label: {
-                Image("liveRankBadge")
+                CDNAssetImage("liveRankBadge")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 36, height: 36)
@@ -302,7 +302,7 @@ struct PartyListMainView: View {
                 .accessibilityLabel(L10n.Party.myRoom)
             } else if SelfPermissionBridge.shared.canParty {
                 Button(action: onTapCreate) {
-                    Image("partyCreatePlus")
+                    CDNAssetImage("partyCreatePlus")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 22, height: 22)
@@ -327,7 +327,7 @@ struct PartyListMainView: View {
                             .foregroundStyle(.white)
                             .accessibilityHidden(true)
                     } else {
-                        Image("partyCreatePlus")
+                        CDNAssetImage("partyCreatePlus")
                             .resizable()
                             .frame(width: 20, height: 20)
                             .accessibilityHidden(true)
@@ -844,7 +844,7 @@ struct PartyLobbyRankingView: View {
             ZStack(alignment: .top) {
                 Color(hex: kind == .partyRich ? 0x957654 : 0x3B5D45).ignoresSafeArea()
                 if kind == .partyRich {
-                    Image("homeRankCharmBackground")
+                    CDNAssetImage("homeRankCharmBackground")
                         .resizable()
                         .scaledToFill()
                         .frame(maxWidth: .infinity)
@@ -853,7 +853,7 @@ struct PartyLobbyRankingView: View {
                         .ignoresSafeArea(edges: .top)
                         .allowsHitTesting(false)
                 } else {
-                    Image("partyLobbyRoomBackground")
+                    CDNAssetImage("partyLobbyRoomBackground")
                         .resizable()
                         .scaledToFill()
                     .frame(maxWidth: .infinity)

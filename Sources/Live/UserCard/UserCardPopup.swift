@@ -670,7 +670,7 @@ struct UserCardPopup: View {
                     }
                     store.toggleFollow()
                 } label: {
-                    Image("partyUserCardFollow")
+                    CDNAssetImage("partyUserCardFollow")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 24, height: 24)
@@ -699,7 +699,7 @@ struct UserCardPopup: View {
                 AppToastCenter.shared.show(L10n.userCardUidCopiedToast)
             } label: {
                 // 换切图 `partyUserCardCopy`(对齐 H5 icon_copy.webp 视觉;fallback SF Symbol 若资源缺失)
-                Image("partyUserCardCopy")
+                CDNAssetImage("partyUserCardCopy")
                     .resizable()
                     .renderingMode(.template)
                     .aspectRatio(contentMode: .fit)
@@ -979,7 +979,7 @@ struct UserCardPopup: View {
                         onSendGiftTap(info)
                     } label: {
                         HStack(spacing: 8) {
-                            Image("partyUserCardSendGift")
+                            CDNAssetImage("partyUserCardSendGift")
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
                                 .frame(width: 24, height: 24)
@@ -1107,7 +1107,7 @@ struct UserCardPopup: View {
     private func partyAdminButton(imageName: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                Image(imageName)
+            CDNAssetImage(imageName)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 40, height: 40)

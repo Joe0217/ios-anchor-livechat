@@ -73,7 +73,7 @@ struct PartyBattleInitiatePopup: View {
     @ViewBuilder
     private var header: some View {
         HStack(spacing: 8) {
-            Image("partyPkLogo")
+            CDNAssetImage("partyPkLogo")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 24, height: 24)

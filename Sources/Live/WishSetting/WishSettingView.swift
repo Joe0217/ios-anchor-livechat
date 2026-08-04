@@ -224,7 +224,7 @@ struct WishSettingView: View {
             }
         } label: {
             VStack(spacing: 6) {
-                Image(iconAsset)
+                CDNAssetImage(iconAsset)
                     .resizable().scaledToFit()
                     .frame(width: 32, height: 32)
                 Text(titleKey)
@@ -406,7 +406,7 @@ struct WishSettingView: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 HStack(spacing: 3) {
-                    Image("coins")
+                    CDNAssetImage("coins")
                         .resizable()
                         .frame(width: 10, height: 10)
                     Text("\(g.giftPrice)")

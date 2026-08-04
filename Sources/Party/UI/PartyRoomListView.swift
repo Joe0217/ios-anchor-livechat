@@ -392,7 +392,7 @@ struct PartyRoomCardView: View {
                              contentMode: .fill,
                              persistent: true,
                              cdn: (.avatarLarge, .fill)) {
-                Image("partyRoomCover")
+                CDNAssetImage("partyRoomCover")
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             }
@@ -537,7 +537,7 @@ struct PartyRoomCardView: View {
         if showsRankVisuals,
            let rank = room.rangIndex,
            let assetName = rankBackgroundAssetName(for: rank) {
-            Image(assetName)
+            CDNAssetImage(assetName)
                 .resizable()
                 .scaledToFill()
             .scaleEffect(1.03)
@@ -573,12 +573,12 @@ struct PartyRoomCardView: View {
         HStack(spacing: 3) {
             // v5：PK 中房间标识（对齐 H5 roomList.vue L88-89 `pkStatus 1=选队 2=进行中`）
             if let p = room.pkStatus, p > 0 {
-                Image("livePkIcon")
+                CDNAssetImage("livePkIcon")
                     .resizable().scaledToFit()
                     .frame(width: 14, height: 14)
                     .accessibilityLabel("PK")
             }
-            Image("partyIconFire")
+            CDNAssetImage("partyIconFire")
                 .resizable()
                 .frame(width: 12, height: 12)
                 .accessibilityHidden(true)

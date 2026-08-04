@@ -33,6 +33,8 @@ final class AppPictureStore: ObservableObject {
 
     private let service: AppPictureServiceProtocol
     private var inflight: Task<Void, Never>?
+    private var inflightEpoch: UInt?
+    private var loadEpoch: UInt = 0
 
     init(service: AppPictureServiceProtocol = AppPictureService.shared) {
         self.service = service
@@ -60,6 +62,25 @@ final class AppPictureStore: ObservableObject {
         await performLoad(types: types)
     }
 
+    /// 完整主播账号登录后调用：预拉取服务端配置的运营图片。
+    ///
+    /// 这条链路只处理已经由服务端下发 URL 的 banner / 榜单 / 挂件等图片；
+    /// App 包内的基础图标仍保留为离线兜底，待资源 CDN manifest 就绪后再逐步迁出。
+    func preloadPublicAssets() async {
+        await loadIfNeeded(types: AppPictureType.allCases)
+        // 首页 Banner 当前按 w_800/fill 渲染，预下载同一个变体才能被图片组件直接命中。
+        // 其余类型保留原 URL，供后续接入页面按实际尺寸选择是否另下缩放变体。
+        let bannerURLs = (pictures[.banner] ?? [])
+            .compactMap(\.picURL)
+            .map { $0.cdnScaled(.custom(width: 800), mode: .fill) }
+        let otherURLs = pictures
+            .filter { $0.key != .banner }
+            .values
+            .flatMap { $0 }
+            .compactMap(\.picURL)
+        await ImageCache.shared.prefetchPublicAssets(bannerURLs + otherURLs)
+    }
+
     /// 按 type 取（消费方通常配合 filter 使用）。
     func items(of type: AppPictureType) -> [AppPictureItem] {
         pictures[type] ?? []
@@ -72,8 +93,10 @@ final class AppPictureStore: ObservableObject {
 
     /// 登出清空（对齐 SessionStore.logout 语义）。
     func clear() {
+        loadEpoch &+= 1
         inflight?.cancel()
         inflight = nil
+        inflightEpoch = nil
         pictures = [:]
         loadedTypes = []
     }
@@ -85,17 +108,28 @@ final class AppPictureStore: ObservableObject {
         // 对齐 AnchorInfoStore / LiveStreamViewModel / GiftMarqueeStore 同款模式，
         // 未来 J 里程碑下游 short-lived view 用 `.task { store.loadIfNeeded(...) }` 也不踩 -999
         // （202607031151 审查建议-3）。
+        let epoch = loadEpoch
         let task = Task.detached { @MainActor [self] in
-            await doLoad(types: types)
+            await doLoad(types: types, epoch: epoch)
         }
         inflight = task
+        inflightEpoch = epoch
         await task.value
-        inflight = nil
+        // logout → 新账号登录期间，旧 detached task 可能在新任务之后才结束；
+        // 只能清理自己对应的 inflight，不能把新账号的请求句柄误置 nil。
+        if inflightEpoch == epoch {
+            inflight = nil
+            inflightEpoch = nil
+        }
     }
 
-    private func doLoad(types: [AppPictureType]) async {
+    private func doLoad(types: [AppPictureType], epoch: UInt) async {
         do {
             let result = try await service.fetchPictures(types: types)
+            guard epoch == loadEpoch else {
+                logger.info("discard stale load epoch=\(epoch, privacy: .public)")
+                return
+            }
             // 只覆盖本次拉到的 type 桶，别的 type 保留
             for type in types {
                 pictures[type] = result[type] ?? []

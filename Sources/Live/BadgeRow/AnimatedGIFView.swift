@@ -17,15 +17,15 @@ struct AnimatedGIFView: UIViewRepresentable {
     let name: String
     /// 资源扩展名。默认 GIF，PK 进度图使用 H5 同源的 animated WebP。
     var fileExtension: String = "gif"
-    /// 动图资源不可用时的静态 asset 名，避免关键 UI 留空。
+    /// 已废弃，仅保留参数兼容现有调用点；CDN-only 模式不读取本地静态图。
     var fallbackImageName: String?
-    /// 本地 bundle 尚未包含资源时使用的远端地址。用于与 H5 同源的 animated WebP 灰度资源。
+    /// 未纳入公共 CDN 清单的服务端动图地址（公共资源优先尝试 CDN）。
     var remoteURL: URL?
     /// 每次循环时长（秒）；nil = 使用资源内嵌帧时长求和
     var explicitDuration: TimeInterval?
 
     private var resourceKey: String {
-        "\(name).\(fileExtension)|\(remoteURL?.absoluteString ?? "")"
+        "\(name).\(fileExtension)|\(remoteURL?.absoluteString ?? "")|\(explicitDuration ?? -1)"
     }
 
     final class Coordinator {
@@ -62,19 +62,21 @@ struct AnimatedGIFView: UIViewRepresentable {
 
     private func configure(_ imageView: UIImageView, coordinator: Coordinator) {
         coordinator.loadTask?.cancel()
-        let localImage = Self.animatedImage(name: name, fileExtension: fileExtension, duration: explicitDuration)
-
         imageView.stopAnimating()
-        imageView.image = localImage ?? fallbackImageName.flatMap(UIImage.init(named:))
+        imageView.image = nil
         imageView.accessibilityIdentifier = resourceKey
-        imageView.startAnimating()
 
-        // 正常包体优先使用本地资源。旧工程尚未收录新 WebP 时，直接使用 H5 同源动图，
-        // 期间保留静态 fallback，网络失败也不会出现空白。
-        guard localImage == nil, let remoteURL else { return }
+        let urls = [CDNAssetURL.animatedURL(name: name, fileExtension: fileExtension), remoteURL]
+            .compactMap { $0 }
+        guard !urls.isEmpty else { return }
         let expectedKey = resourceKey
         coordinator.loadTask = Task { [weak imageView] in
-            guard let remoteImage = await Self.remoteAnimatedImage(from: remoteURL), !Task.isCancelled else { return }
+            var remoteImage: UIImage?
+            for url in urls {
+                remoteImage = await Self.remoteAnimatedImage(from: url, duration: explicitDuration)
+                if remoteImage != nil { break }
+            }
+            guard let remoteImage, !Task.isCancelled else { return }
             await MainActor.run {
                 guard let imageView, imageView.accessibilityIdentifier == expectedKey else { return }
                 imageView.image = remoteImage
@@ -83,31 +85,17 @@ struct AnimatedGIFView: UIViewRepresentable {
         }
     }
 
-    /// 从 Sources/Assets/GIFs 加载 GIF / animated WebP 并拆帧。
-    static func animatedImage(name: String, fileExtension: String, duration: TimeInterval?) -> UIImage? {
-        let key = "\(name).\(fileExtension)|\(duration ?? -1)" as NSString
+    private static func remoteAnimatedImage(from url: URL, duration: TimeInterval?) async -> UIImage? {
+        let key = "remote|\(url.absoluteString)|\(duration ?? -1)" as NSString
         if let cached = cache.object(forKey: key) { return cached }
-
-        // Xcode 对 resource folder 的打包形态因构建设置而异：可能平铺在 bundle 根目录，
-        // 也可能保留 GIFs 子目录。两种路径都支持，避免真机取不到资源导致中心图空白。
-        let url = Bundle.main.url(forResource: name, withExtension: fileExtension)
-            ?? Bundle.main.url(forResource: name, withExtension: fileExtension, subdirectory: "GIFs")
-        guard let url,
-              let data = try? Data(contentsOf: url) else {
+        guard let localURL = try? await URLDiskCache.fetch(
+            url: url,
+            namespace: URLDiskCache.publicAssetNamespace,
+            maximumCacheBytes: URLDiskCache.publicAssetCacheLimit
+        ), let data = try? Data(contentsOf: localURL) else {
             return nil
         }
         return animatedImage(data: data, cacheKey: key, duration: duration)
-    }
-
-    private static func remoteAnimatedImage(from url: URL) async -> UIImage? {
-        let key = "remote|\(url.absoluteString)" as NSString
-        if let cached = cache.object(forKey: key) { return cached }
-        guard let (data, response) = try? await URLSession.shared.data(from: url),
-              let http = response as? HTTPURLResponse,
-              (200..<300).contains(http.statusCode) else {
-            return nil
-        }
-        return animatedImage(data: data, cacheKey: key, duration: nil)
     }
 
     private static func animatedImage(data: Data, cacheKey: NSString, duration: TimeInterval?) -> UIImage? {

@@ -439,7 +439,7 @@ struct PartyCreateRoomView: View {
                 Rectangle().fill(Theme.Palette.partyCreateTempFill).frame(width: 100)
             }
         } else if let asset = Self.assetNameForTemplate(temp) {
-            Image(asset).resizable().scaledToFit()
+            CDNAssetImage(asset).resizable().scaledToFit()
         } else {
             Image(systemName: "square.grid.2x2")
                 .resizable().scaledToFit()

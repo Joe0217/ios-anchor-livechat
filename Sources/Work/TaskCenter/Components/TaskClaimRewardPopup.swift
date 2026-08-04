@@ -79,14 +79,14 @@ struct TaskClaimRewardPopup: View {
     private var rewardIcon: some View {
         switch reward.rewardType {
         case 2:
-            Image("gems").resizable().aspectRatio(contentMode: .fit)
+            CDNAssetImage("gems").resizable().aspectRatio(contentMode: .fit)
         case 6:
             Image(systemName: "star.circle.fill")
                 .resizable().aspectRatio(contentMode: .fit)
                 .foregroundStyle(Color(hex: 0xFFCC00))
         default:
             // 1/3/4/5/未知 —— H5 全部 fallback 到钻石图(iOS 用 coins 切图)
-            Image("coins").resizable().aspectRatio(contentMode: .fit)
+            CDNAssetImage("coins").resizable().aspectRatio(contentMode: .fit)
         }
     }
 

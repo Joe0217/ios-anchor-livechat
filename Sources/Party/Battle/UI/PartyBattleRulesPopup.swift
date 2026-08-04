@@ -31,7 +31,7 @@ struct PartyBattleRulesPopup: View {
 
     @ViewBuilder
     private var heroIcon: some View {
-        Image("partyPkBattleMarker")
+        CDNAssetImage("partyPkBattleMarker")
             .resizable()
             .scaledToFit()
             .frame(width: 60, height: 60)

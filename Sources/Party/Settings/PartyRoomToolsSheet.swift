@@ -977,7 +977,7 @@ struct PartyRoomToolMenuSheet: View {
                     VStack(spacing: 8) {
                         ZStack {
                             // 与 H5 party-tool-menu.vue 使用同一张 50px Lucky Number 图标。
-                            Image("partyLuckyNumberIcon")
+                            CDNAssetImage("partyLuckyNumberIcon")
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 50, height: 50)
@@ -1052,7 +1052,7 @@ struct PartyRoomToolMenuSheet: View {
 
     private func toolGameCard(icon: String, title: String) -> some View {
         VStack(spacing: 8) {
-            Image(icon)
+            CDNAssetImage(icon)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 50, height: 50)
@@ -1419,7 +1419,7 @@ struct PartyLuckyNumberWinPopup: View {
 
             VStack(spacing: 0) {
                 ZStack(alignment: .bottom) {
-                    Image("partyLuckyNumberWinning")
+                    CDNAssetImage("partyLuckyNumberWinning")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 288, height: 130)
@@ -2073,7 +2073,7 @@ struct PartySuperWheelConfigSheet: View {
                     ForEach(wheelStore.entryFees, id: \.self) { fee in
                         Button { selectedFee = fee } label: {
                             HStack {
-                                Image("partyGems")
+                                CDNAssetImage("partyGems")
                                     .resizable()
                                     .scaledToFit()
                                     .frame(width: 18, height: 18)
@@ -2180,7 +2180,7 @@ struct PartySuperWheelPanel: View {
                         .frame(height: 218)
 
                     HStack(spacing: 5) {
-                        Image("partyGems")
+                        CDNAssetImage("partyGems")
                             .resizable()
                             .scaledToFit()
                             .frame(width: 18, height: 18)
@@ -2306,7 +2306,7 @@ struct PartySuperWheelPanel: View {
                     HStack(spacing: 6) {
                         Text(L10n.PartyRoom.superWheelJoin)
                         Text("· \(wheelStore.wheelState?.entryFee ?? 0)")
-                        Image("partyGems").resizable().scaledToFit().frame(width: 18, height: 18)
+                        CDNAssetImage("partyGems").resizable().scaledToFit().frame(width: 18, height: 18)
                     }
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(.white)
@@ -2355,7 +2355,7 @@ struct PartySuperWheelPanel: View {
         Button { Task { await wheelStore.bet(amount: amount) } } label: {
             HStack(spacing: 3) {
                 Text("+\(amount)")
-                Image("partyGems").resizable().scaledToFit().frame(width: 15, height: 15)
+                CDNAssetImage("partyGems").resizable().scaledToFit().frame(width: 15, height: 15)
             }
             .font(.system(size: 14, weight: .bold))
             .foregroundColor(.white)
@@ -2597,7 +2597,7 @@ struct PartySuperWheelResultOverlay: View {
                     .foregroundColor(.white)
                 HStack(spacing: 5) {
                     Text("+\(state.winnerAmount ?? 0)")
-                    Image("partyGems").resizable().scaledToFit().frame(width: 26, height: 26)
+                    CDNAssetImage("partyGems").resizable().scaledToFit().frame(width: 26, height: 26)
                 }
                 .font(.system(size: 24, weight: .heavy))
                 .foregroundColor(Color(hex: 0xFFFB00))

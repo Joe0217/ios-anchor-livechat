@@ -43,7 +43,7 @@ struct PartyRoomPrivateCallButton: View {
             }
             if let price = selectedGiftPrice, price > 0 {
                 HStack(spacing: 2) {
-                    Image("partyGems")
+                    CDNAssetImage("partyGems")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 11, height: 11)

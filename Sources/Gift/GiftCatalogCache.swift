@@ -62,9 +62,23 @@ final class GiftCatalogCache: @unchecked Sendable {
 
     /// 写缓存：loadGifts 成功拿到 API 结果时调
     func set(scene: Scene, groups: [GiftPanelGroup], userDiamond: Int64?) {
-        lock.lock(); defer { lock.unlock() }
+        lock.lock()
         cache[scene] = Entry(groups: groups, userDiamond: userDiamond, timestamp: Date())
+        lock.unlock()
         logger.info("[GiftCache] set scene=\(scene.rawValue, privacy: .public) groups=\(groups.count, privacy: .public) userDiamond=\(userDiamond ?? -1, privacy: .public)")
+
+        // 礼物架接口返回后立即后台预下载缩略图。UI 使用同一个 CDN 缩放 URL，
+        // 因此第一次打开面板也可直接命中本地文件，不必逐格发起请求。
+        let urls = groups
+            .flatMap(\.gifts)
+            .compactMap { gift -> URL? in
+                let raw = gift.giftSmallImg.isEmpty ? gift.giftImg : gift.giftSmallImg
+                guard let url = URL(string: raw) else { return nil }
+                return url.cdnScaled(.gift, mode: .fit)
+            }
+        Task {
+            await ImageCache.shared.prefetchPublicAssets(urls)
+        }
     }
 
     /// 仅更新余额（送礼成功后 sync；不重置 timestamp，避免延长 groups TTL）

@@ -39,28 +39,28 @@ struct LiveListActionButton: View {
     private var content: some View {
         switch action {
         case .chat:
-            Image("liveListChat")
+            CDNAssetImage("liveListChat")
                 .resizable()
                 .scaledToFit()
                 .frame(width: Theme.Metric.liveListActionSize, height: Theme.Metric.liveListActionSize)
         case .videoCall:
-            Image("liveListVideoCall")
+            CDNAssetImage("liveListVideoCall")
                 .resizable()
                 .scaledToFit()
                 .frame(width: Theme.Metric.liveListActionSize, height: Theme.Metric.liveListActionSize)
         case .liveAction:
-            Image("liveListLiveAction")
+            CDNAssetImage("liveListLiveAction")
                 .resizable()
                 .scaledToFit()
                 .frame(width: Theme.Metric.liveListActionSize + 4, height: Theme.Metric.liveListActionSize + 4)
         case .matchAction:
-            Image("liveListMatch")
+            CDNAssetImage("liveListMatch")
                 .resizable()
                 .scaledToFit()
                 .frame(width: Theme.Metric.liveListActionSize + 8, height: Theme.Metric.liveListActionSize + 8)
         case .offlineToggle:
             // 切图本身是横向胶囊（宽 ≈ 高 × 2.4），按宽度比例渲染
-            Image("liveListOfflineToggle")
+            CDNAssetImage("liveListOfflineToggle")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 78, height: 32)

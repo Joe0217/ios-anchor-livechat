@@ -132,7 +132,7 @@ struct LiveDataSummaryCard: View {
                         value: String, valueColor: Color,
                         label: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Image(iconName)
+            CDNAssetImage(iconName)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 20, height: 20)
@@ -152,7 +152,7 @@ struct LiveDataSummaryCard: View {
     private var breakdownPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
             // 尖角（对齐 H5 `blackTriangle.webp`）—— 用 asset 保 H5 视觉一致
-            Image("blackTriangle")
+            CDNAssetImage("blackTriangle")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 18, height: 10)
@@ -176,7 +176,7 @@ struct LiveDataSummaryCard: View {
     private func breakdownItem(value: Int, label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
-                Image("coins")
+                CDNAssetImage("coins")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 14, height: 14)

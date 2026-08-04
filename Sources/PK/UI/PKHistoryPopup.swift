@@ -358,7 +358,7 @@ private struct PKHistoryRow: View {
                     .frame(width: barWidth * CGFloat(myPct) / 100)
                 HStack {
                     HStack(spacing: 2) {
-                        Image("livePkIcon")
+                        CDNAssetImage("livePkIcon")
                             .resizable().frame(width: 12, height: 12)
                         Text("\(record.pkCounter)")
                             .font(.system(size: 12, weight: .semibold))
@@ -369,7 +369,7 @@ private struct PKHistoryRow: View {
                         Text("\(record.oppositePkCounter)")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Color(hex: 0xFFE600))
-                        Image("livePkIcon")
+                        CDNAssetImage("livePkIcon")
                             .resizable().frame(width: 12, height: 12)
                     }
                 }

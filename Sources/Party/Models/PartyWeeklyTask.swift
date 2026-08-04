@@ -247,6 +247,8 @@ struct PartyHotRoomGuide: Identifiable, Equatable {
     let roomName: String
     let rank: Int?
     let hasSeat: Bool
+    /// `top/availableSeat` 部分网关会直接带目标房锁房状态；缺失时由大厅列表二次确认。
+    let isPasswordProtected: Bool?
     let rewards: [PartyHotTaskRewardConfig]
 
     var id: String { roomId }
@@ -265,13 +267,33 @@ struct PartyHotRoomGuide: Identifiable, Equatable {
         ), !roomId.isEmpty else {
             return nil
         }
-        let roomName = PartyWeeklyTaskPage.firstString(in: payload, keys: ["roomName", "name", "title"]) ?? ""
+        let targetRoom = PartyWeeklyTaskPage.firstObject(
+            in: payload,
+            keys: ["targetRoom", "room", "roomInfo"]
+        )
+        let roomMetadata = targetRoom ?? payload
+        let lockFlag = PartyWeeklyTaskPage.firstInt(in: roomMetadata, keys: ["lockFlag", "lock"])
+            ?? PartyWeeklyTaskPage.firstInt(in: payload, keys: ["lockFlag", "lock"])
+        let needsPassword = PartyHotRoomTaskStatus.firstBool(
+            in: roomMetadata,
+            keys: ["needPassword", "isPasswordRoom", "hasPassword"]
+        ) ?? PartyHotRoomTaskStatus.firstBool(
+            in: payload,
+            keys: ["needPassword", "isPasswordRoom", "hasPassword"]
+        )
+        let isPasswordProtected: Bool? = lockFlag == nil && needsPassword == nil
+            ? nil
+            : lockFlag == 1 || needsPassword == true
+        let roomName = PartyWeeklyTaskPage.firstString(in: roomMetadata, keys: ["roomName", "name", "title"])
+            ?? PartyWeeklyTaskPage.firstString(in: payload, keys: ["roomName", "name", "title"])
+            ?? ""
         return PartyHotRoomGuide(
             roomId: roomId,
             roomName: roomName,
             rank: PartyWeeklyTaskPage.firstInt(in: payload, keys: ["rank"]),
             // 接口语义是“有空位的热门房”。旧网关未返回该字段时保持可跳转，避免误阻断有效入口。
             hasSeat: PartyHotRoomTaskStatus.firstBool(in: payload, keys: ["hasSeat", "hasAvailableSeat"]) ?? true,
+            isPasswordProtected: isPasswordProtected,
             rewards: PartyWeeklyTaskPage.firstArray(in: payload, keys: ["rewards", "anchorTasks"])
                 .compactMap(PartyHotTaskRewardConfig.init(dictionary:))
         )

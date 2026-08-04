@@ -28,7 +28,7 @@ struct PKEntryButton: View {
                 // 3 个「静默」态 - 使用 `liveRoomPKIcon` 切图（Frame 948 多彩 PK 字）
                 // 对齐 H5 pkEntryBtn.vue L82-104：default / IN_PK / PUNISHING 都用 pk-btn-living.webp
                 Button(action: handleTap) {
-                    Image("liveRoomPKIcon")
+                    CDNAssetImage("liveRoomPKIcon")
                         .resizable()
                         .frame(width: 40, height: 40)
                         .contentShape(Circle())

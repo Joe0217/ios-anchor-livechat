@@ -130,12 +130,12 @@ struct RouletteIntroPopup: View {
                 .frame(maxWidth: 323)
                 .frame(height: 473, alignment: .top)
                 .background(
-                    Image("rouletteIntroBackground")
+                    CDNAssetImage("rouletteIntroBackground")
                         .resizable()
                         .scaledToFill()
                 )
                 .overlay(alignment: .top) {
-                    Image("rouletteIntroGame")
+                    CDNAssetImage("rouletteIntroGame")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 93, height: 93)
@@ -246,7 +246,7 @@ struct RouletteIntroPopup: View {
     @ViewBuilder
     private func card(idx: Int) -> some View {
         VStack(spacing: 0) {
-            Image(icons[idx])
+            CDNAssetImage(icons[idx])
                 .resizable()
                 .scaledToFit()
                 .frame(width: 72, height: 72)

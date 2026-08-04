@@ -79,7 +79,7 @@ struct LiveResultView: View {
                 dismiss()
             } label: {
                 // 对齐 H5 liveEnds/index.vue:112 `<img src="live-end-back.webp" class="h-24 w-24">`
-                Image("liveResultBack")
+                CDNAssetImage("liveResultBack")
                     .renderingMode(.original)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
@@ -442,7 +442,7 @@ private struct TopGifterCell: View {
             if !item.followed {
                 Button(action: onFollow) {
                     // 对齐 H5 topGiftersItem.vue:24 `un-follower.webp`（heart + plus 组合切图 28x20pt）
-                    Image("liveResultUnfollow")
+                    CDNAssetImage("liveResultUnfollow")
                         .renderingMode(.original)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -498,7 +498,7 @@ private struct PrivateCallRow: View {
             if !item.followed {
                 Button(action: onFollow) {
                     // 对齐 H5 listItem.vue:52 `<img src="call-unfollower.webp" class="h-28 w-42">` 42x28pt 横版切图
-                    Image("liveResultCallUnfollow")
+                    CDNAssetImage("liveResultCallUnfollow")
                         .renderingMode(.original)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -541,7 +541,7 @@ private struct GifterFullRow: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 HStack(spacing: 3) {
-                    Image("coins")
+                    CDNAssetImage("coins")
                         .renderingMode(.original)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -557,7 +557,7 @@ private struct GifterFullRow: View {
             if !item.followed {
                 Button(action: onFollow) {
                     // 对齐 H5 listItem.vue:52 `<img src="call-unfollower.webp" class="h-28 w-42">` 42x28pt 横版切图
-                    Image("liveResultCallUnfollow")
+                    CDNAssetImage("liveResultCallUnfollow")
                         .renderingMode(.original)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
@@ -600,7 +600,7 @@ private func messageButton(enabled: Bool, onTap: @escaping () -> Void) -> some V
                 Text(L10n.liveResultMessage)
                     .font(.system(size: 12))
                     .foregroundStyle(.white)
-                Image("liveResultMessage")
+                CDNAssetImage("liveResultMessage")
                     .renderingMode(.original)
                     .resizable()
                     .aspectRatio(contentMode: .fit)

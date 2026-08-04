@@ -103,7 +103,7 @@ struct PartyBackgroundPickerSheet: View {
                     }
 
                     if selected {
-                        Image("partyTemplateSelected")
+                        CDNAssetImage("partyTemplateSelected")
                             .resizable()
                             .frame(width: 20, height: 20)
                             .padding(6)

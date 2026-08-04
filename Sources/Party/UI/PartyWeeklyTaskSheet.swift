@@ -70,7 +70,7 @@ struct PartyWeeklyTaskSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 HStack(spacing: 5) {
-                    Image("coins")
+                    CDNAssetImage("coins")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 16, height: 16)
@@ -91,7 +91,7 @@ struct PartyWeeklyTaskSheet: View {
                     .monospacedDigit()
                     .foregroundColor(.white)
                 Spacer()
-                Image("coins")
+                CDNAssetImage("coins")
                     .resizable().scaledToFit()
                     .frame(width: 18, height: 18)
             }
@@ -317,7 +317,7 @@ struct PartyHotRoomTaskSheet: View {
                     .fill(tint.opacity(0.2))
                     .frame(width: 30, height: 30)
                 if let imageName {
-                    Image(imageName)
+                    CDNAssetImage(imageName)
                         .resizable()
                         .renderingMode(.template)
                         .foregroundColor(tint)
@@ -405,11 +405,11 @@ struct PartyHotRoomTaskSheet: View {
     @ViewBuilder
     private func defaultRewardIcon(rewardType: Int?) -> some View {
         if rewardType == 3 {
-            Image("homeCpAvatarFrame")
+            CDNAssetImage("homeCpAvatarFrame")
                 .resizable()
                 .scaledToFit()
         } else {
-            Image("partyGems")
+            CDNAssetImage("partyGems")
                 .resizable()
                 .scaledToFit()
         }
@@ -552,7 +552,7 @@ struct PartyTopRoomBonusDialog: View {
 
     private func guideRewardIcon(name: String, title: String) -> some View {
         VStack(spacing: 5) {
-            Image(name)
+            CDNAssetImage(name)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 50, height: 50)
@@ -567,7 +567,7 @@ struct PartyTopRoomBonusDialog: View {
     private func guideRewardIcon(_ reward: PartyHotTaskRewardConfig) -> some View {
         VStack(spacing: 5) {
             if reward.rewardType == 0 {
-                Image("partyGems")
+                CDNAssetImage("partyGems")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 50, height: 50)
@@ -593,7 +593,7 @@ struct PartyTopRoomBonusDialog: View {
 
     @ViewBuilder
     private func guideDefaultRewardIcon(rewardType: Int?) -> some View {
-        Image(rewardType == 3 ? "homeCpAvatarFrame" : "partyGems")
+        CDNAssetImage(rewardType == 3 ? "homeCpAvatarFrame" : "partyGems")
             .resizable()
             .scaledToFit()
     }
@@ -602,26 +602,29 @@ struct PartyTopRoomBonusDialog: View {
 struct PartyHotTaskRewardSheet: View {
     let notification: PartyHotTaskRewardNotification
     let onDismiss: () -> Void
+    @State private var isClaiming = false
 
     var body: some View {
-        VStack(spacing: 18) {
+        VStack(spacing: 14) {
             rewardIcon(notification.rewards.first)
-                .frame(width: 72, height: 72)
+                .frame(width: 64, height: 64)
             Text(L10n.PartyRoom.hotTaskRewardTitle)
-                .font(.system(size: 20, weight: .bold)).foregroundColor(.white).multilineTextAlignment(.center)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.white)
+                .multilineTextAlignment(.center)
             ScrollView(showsIndicators: notification.rewards.count > 3) {
-                VStack(spacing: 12) {
+                VStack(spacing: 10) {
                     ForEach(Array(notification.rewards.enumerated()), id: \.offset) { _, reward in
                         HStack(spacing: 9) {
                             rewardIcon(reward)
-                                .frame(width: 28, height: 28)
+                                .frame(width: 26, height: 26)
                             Text(reward.name.isEmpty ? L10n.PartyRoom.weeklyTaskRewardFallback : reward.name)
-                                .font(.system(size: 15, weight: .semibold))
+                                .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.white)
                                 .lineLimit(1)
                             Spacer()
                             Text("+\(reward.amount)")
-                                .font(.system(size: 16, weight: .bold))
+                                .font(.system(size: 15, weight: .bold))
                                 .foregroundColor(Color(hex: 0xFFFFD35C))
                         }
                         if let effectiveHours = reward.effectiveHours, effectiveHours > 0 {
@@ -632,17 +635,35 @@ struct PartyHotTaskRewardSheet: View {
                     }
                 }
             }
-            .frame(maxHeight: 150)
-            Button(L10n.PartyRoom.hotTaskClaim) {
-                onDismiss()
-            }
-                .font(.system(size: 16, weight: .bold)).foregroundColor(.white)
-                .frame(maxWidth: .infinity, minHeight: 48)
+            .frame(maxHeight: 124)
+            Button(action: claimReward) {
+                Group {
+                    if isClaiming {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Text(L10n.PartyRoom.hotTaskClaim)
+                            .font(.system(size: 15, weight: .bold))
+                    }
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity, minHeight: 44)
                 .background(Color(hex: 0xFE00DE), in: RoundedRectangle(cornerRadius: 8))
-                .buttonStyle(.plain)
+                .contentShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .disabled(isClaiming)
         }
-        .frame(maxWidth: 340).padding(24)
+        .frame(maxWidth: 300)
+        .padding(20)
         .background(Color(hex: 0x1A0033), in: RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func claimReward() {
+        guard !isClaiming else { return }
+        isClaiming = true
+        // 1023 表示服务端已经发放奖励；Claim 仅确认当前通知并推进队列。
+        onDismiss()
     }
 
     @ViewBuilder
@@ -659,11 +680,11 @@ struct PartyHotTaskRewardSheet: View {
     @ViewBuilder
     private func defaultRewardIcon(rewardType: Int?) -> some View {
         if rewardType == 3 {
-            Image("homeCpAvatarFrame")
+            CDNAssetImage("homeCpAvatarFrame")
                 .resizable()
                 .scaledToFit()
         } else {
-            Image("partyGems")
+            CDNAssetImage("partyGems")
                 .resizable()
                 .scaledToFit()
         }
@@ -680,6 +701,7 @@ struct PartyHotTaskRewardOverlay: View {
             ZStack {
                 Color.black.opacity(0.62).ignoresSafeArea()
                 PartyHotTaskRewardSheet(notification: notification, onDismiss: onDismiss)
+                    .id(notification.id)
             }
             .zIndex(1_000)
         }
@@ -856,7 +878,7 @@ private struct PartyHotTaskGemBurst: View {
     @State private var animate = false
 
     var body: some View {
-        Image("partyGems")
+        CDNAssetImage("partyGems")
             .resizable().scaledToFit()
             .frame(width: size * 0.52, height: size * 0.52)
             .scaleEffect(animate ? 1.35 : 0.35)

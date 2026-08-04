@@ -76,7 +76,7 @@ struct ProfileMediaGrid: View {
 
                     // 视频播放角标
                     if isVideoGrid {
-                        Image("profileVideoPlay")
+                        CDNAssetImage("profileVideoPlay")
                             .resizable()
                             .scaledToFit()
                             .frame(width: 36, height: 36)

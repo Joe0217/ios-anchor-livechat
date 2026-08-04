@@ -172,7 +172,7 @@ struct PartyRoomAnchorBar: View {
         Button(action: onFollowTap) {
             // v3：已关注 → `partyFollowCheck`（勾）；未关注 → `partyFollowUnchecked`（Component-follow 切图）
             // Fallback：Component-follow asset 未导入时未关注态用 partyFollowCheck 兜底，避免 Image 空渲染让按钮消失
-            Image(followButtonAssetName)
+            CDNAssetImage(followButtonAssetName)
                 .resizable()
                 .scaledToFit()
                 .frame(width: Theme.Metric.partyRoomFollowSize,
@@ -185,7 +185,7 @@ struct PartyRoomAnchorBar: View {
 
     private var followButtonAssetName: String {
         if isFollowing { return "partyFollowCheck" }
-        return UIImage(named: "partyFollowUnchecked") != nil ? "partyFollowUnchecked" : "partyFollowCheck"
+        return "partyFollowUnchecked"
     }
 
     // MARK: - PK 入口（v12 对齐 H5 header-wrap.vue L167 `pk-room-top-icon.webp`）
@@ -193,7 +193,7 @@ struct PartyRoomAnchorBar: View {
     private var pkButton: some View {
         Button(action: onPkTap) {
             // 切图未提供，fallback 到 iOS 现有 `livePkIcon`（直播 PK icon）视觉近似；等 pk-room-top-icon asset 补齐后自动切换
-            Image(UIImage(named: "partyPkTopIcon") != nil ? "partyPkTopIcon" : "livePkIcon")
+            CDNAssetImage("livePkIcon")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 24, height: 24)
@@ -231,7 +231,7 @@ struct PartyRoomAnchorBar: View {
     private func iconButton(asset: String, label: String, badge: Int = 0, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             ZStack {
-                Image(asset)
+                CDNAssetImage(asset)
                     .resizable()
                     .renderingMode(.template)
                     .foregroundColor(Theme.Palette.partyRoomToolbarIcon)
@@ -314,7 +314,7 @@ struct PartyRoomAnchorBar: View {
             onRankTap(kind)
         } label: {
             HStack(spacing: 4) {
-                Image("partyTrophy")
+                CDNAssetImage("partyTrophy")
                     .resizable().scaledToFit()
                     .frame(width: Self.statIconSize, height: Self.statIconSize)
                 ZStack {
@@ -335,7 +335,7 @@ struct PartyRoomAnchorBar: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
                 .clipped()
-                Image("partyArrowYellow")
+                CDNAssetImage("partyArrowYellow")
                     .resizable().scaledToFit()
                     .frame(width: Self.statArrowSize, height: Self.statArrowSize)
             }
@@ -360,7 +360,7 @@ struct PartyRoomAnchorBar: View {
     private var viewerButton: some View {
         Button(action: onViewerTap) {
             HStack(spacing: 4) {
-                Image("partyIconViewer")
+                CDNAssetImage("partyIconViewer")
                     .resizable()
                     .renderingMode(.template)
                     .foregroundColor(Theme.Palette.partyRoomViewerCount)
@@ -368,7 +368,7 @@ struct PartyRoomAnchorBar: View {
                 Text(audienceCountText)
                     .font(Self.viewerNumberFont)
                     .foregroundColor(Theme.Palette.partyRoomViewerCount)
-                Image("partyArrowYellow")
+                CDNAssetImage("partyArrowYellow")
                     .resizable().scaledToFit()
                     .frame(width: Self.statArrowSize, height: Self.statArrowSize)
             }
@@ -394,7 +394,7 @@ struct PartyRoomAnchorBar: View {
     private var weeklyTaskButton: some View {
         Button(action: onWeeklyTaskTap) {
             HStack(spacing: 5) {
-                Image("coins")
+                CDNAssetImage("coins")
                     .resizable().scaledToFit()
                     .frame(width: 15, height: 15)
                 Text("\(weeklyTaskRewardQuantity)")
@@ -430,7 +430,7 @@ struct PartyRoomAnchorBar: View {
                             .minimumScaleFactor(0.7)
                         Spacer(minLength: 0)
                         HStack(spacing: 0) {
-                            Image("partyHotTaskChest")
+                            CDNAssetImage("partyHotTaskChest")
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 26, height: 25)

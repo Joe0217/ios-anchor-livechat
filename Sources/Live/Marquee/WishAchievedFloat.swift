@@ -442,7 +442,7 @@ struct LuckyGiftNoticeFloat: View {
             }
             .offset(y: -22)
 
-            Image("luckyGiftNoticeBadge")
+            CDNAssetImage("luckyGiftNoticeBadge")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 20, height: 20)
@@ -498,7 +498,7 @@ private struct LuckyGiftNoticeText: View {
                 Text("won")
                 Text("\(item.reward)")
                     .foregroundColor(Color(hex: 0xF2FF00))
-                Image("luckyGiftNoticeDiamond")
+                CDNAssetImage("luckyGiftNoticeDiamond")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 16, height: 16)

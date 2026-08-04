@@ -117,7 +117,7 @@ struct LiveNoticeBar: View {
 
     private func amountTag(_ amount: String) -> some View {
         HStack(spacing: 4) {
-            Image("coins")
+            CDNAssetImage("coins")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 16, height: 16)

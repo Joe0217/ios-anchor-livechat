@@ -22,7 +22,7 @@ struct VIPBadge: View {
     }
 
     var body: some View {
-        Image("liveListVipBadge")
+        CDNAssetImage("liveListVipBadge")
             .resizable()
             .aspectRatio(contentMode: .fit)
             .frame(height: size == .small ? 12 : 14)

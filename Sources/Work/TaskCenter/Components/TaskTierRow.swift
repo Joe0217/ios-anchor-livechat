@@ -177,7 +177,7 @@ struct TaskTierRow: View {
         case 6: iconName = "homeRankIntegral"
         default: iconName = "diamondYellow"
         }
-        return Image(iconName)
+        return CDNAssetImage(iconName)
             .resizable()
             .aspectRatio(contentMode: .fit)
             .frame(width: 16, height: 16)

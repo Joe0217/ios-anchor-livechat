@@ -18,7 +18,7 @@ struct GuardianRulesView: View {
             Color.white.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                Image("guardianRulesDecoration")
+                CDNAssetImage("guardianRulesDecoration")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 228, height: 21)
@@ -80,7 +80,7 @@ struct GuardianRulesView: View {
                 .font(.system(size: 12))
             ForEach(GuardianLevel.displayOrder) { level in
                 HStack(spacing: 6) {
-                    Image(GuardianArtwork.tabIcon(for: level))
+                    CDNAssetImage(GuardianArtwork.tabIcon(for: level))
                         .resizable()
                         .scaledToFit()
                         .frame(width: 24, height: 24)
@@ -101,7 +101,7 @@ struct GuardianRulesView: View {
                 .font(.system(size: 15, weight: .bold))
             Text(sections[3].body)
                 .font(.system(size: 12))
-            Image("guardianRulesPrivileges")
+            CDNAssetImage("guardianRulesPrivileges")
                 .resizable()
                 .scaledToFit()
                 .frame(maxWidth: .infinity)
@@ -263,7 +263,7 @@ private struct GuardianPrivilegeMediaView: View {
     }
 
     private var fallback: some View {
-        Image(context.privilege == .gift
+        CDNAssetImage(context.privilege == .gift
               ? GuardianArtwork.giftPreview(for: context.level)
               : GuardianArtwork.privilegeIcon(for: context.privilege, level: context.level, available: true))
             .resizable()

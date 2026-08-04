@@ -162,7 +162,7 @@ struct LiveTabView: View {
     private var backgroundLayer: some View {
         ZStack {
             Theme.Palette.liveBottomDark
-            Image("liveBackground")
+            CDNAssetImage("liveBackground")
                 .resizable()
                 .scaledToFill()
                 .opacity(0.95)

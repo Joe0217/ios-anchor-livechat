@@ -70,7 +70,7 @@ struct LoginView: View {
     private var backgroundLayer: some View {
         Theme.Palette.authBackgroundFallback
             .overlay {
-                Image("authLoginBackground")
+                CDNAssetImage("authLoginBackground")
                     .resizable()
                     .scaledToFill()
             }
@@ -78,7 +78,7 @@ struct LoginView: View {
     }
 
     private var logo: some View {
-        Image("authLogoHily")
+        CDNAssetImage("authLogoHily")
             .resizable()
             .scaledToFit()
             .frame(width: Theme.Metric.authLogoSize, height: Theme.Metric.authLogoSize)
@@ -86,7 +86,7 @@ struct LoginView: View {
     }
 
     private var titleImage: some View {
-        Image("authLoginTitle")
+        CDNAssetImage("authLoginTitle")
             .resizable()
             .scaledToFit()
             .frame(height: Theme.Metric.authTitleHeight)
@@ -167,7 +167,7 @@ struct LoginView: View {
         Button(action: togglePasswordVisibility) {
             // 不用 .renderingMode(.template) —— 切图设计为白色 glyph,
             // 保留原色可避免 template 模式对多色 icon 的意外抹平（reviewer F-1）
-            Image(isPasswordRevealed ? "authEyeOpen" : "authEyeClosed")
+            CDNAssetImage(isPasswordRevealed ? "authEyeOpen" : "authEyeClosed")
                 .resizable()
                 .scaledToFit()
                 .frame(

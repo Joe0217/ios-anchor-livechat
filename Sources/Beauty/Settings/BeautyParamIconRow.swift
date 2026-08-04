@@ -84,7 +84,7 @@ struct BeautyParamIconRow: View {
     @ViewBuilder
     private func paramIcon(_ p: BeautyParamEntry, color: Color) -> some View {
         if p.isAssetIcon {
-            Image(p.icon)
+            CDNAssetImage(p.icon)
                 .renderingMode(.template)
                 .resizable()
                 .scaledToFit()

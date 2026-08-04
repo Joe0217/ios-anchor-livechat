@@ -75,7 +75,7 @@ private struct OperateButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(imageName)
+            CDNAssetImage(imageName)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 40, height: 40)

@@ -59,7 +59,7 @@ struct PartyDataDateRow: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 4) {
-                    Image("gems")
+                    CDNAssetImage("gems")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 14, height: 14)
@@ -100,7 +100,7 @@ struct PartyDataDateRow: View {
     // MARK: breakdown
     private var breakdown: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Image("blackTriangle")
+            CDNAssetImage("blackTriangle")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 18, height: 10)
@@ -123,7 +123,7 @@ struct PartyDataDateRow: View {
     private func item(value: Int, label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
-                Image("gems")
+                CDNAssetImage("gems")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 14, height: 14)

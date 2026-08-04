@@ -124,7 +124,7 @@ struct PkSelectingVideoTripleView: View {
                     .background(Capsule().fill(Color.black.opacity(0.4)))
                 Spacer(minLength: 0)
                 if seat.isMicrophoneMuted {
-                    Image("partyIconMicMuted")
+                    CDNAssetImage("partyIconMicMuted")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 20, height: 20)
@@ -138,7 +138,7 @@ struct PkSelectingVideoTripleView: View {
 
     private var liveCard: some View {
         VStack(spacing: 4) {
-            Image("partyVideoSeatEmpty")
+            CDNAssetImage("partyVideoSeatEmpty")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 32, height: 32)

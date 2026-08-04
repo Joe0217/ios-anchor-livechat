@@ -7,7 +7,7 @@ struct PointsRankRewardTag: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Image("diamondYellow")
+            CDNAssetImage("diamondYellow")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 12, height: 12)

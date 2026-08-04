@@ -49,7 +49,7 @@ struct MessageListView: View {
                         Button {
                             messagesPath.append(MessageListView.callRecordsSentinel)
                         } label: {
-                            Image("messageNavHistory")
+                            CDNAssetImage("messageNavHistory")
                                 .resizable()
                                 .scaledToFit()
                                 .frame(width: 28, height: 28)
@@ -61,7 +61,7 @@ struct MessageListView: View {
                     Button {
                         showClearTabConfirm = true
                     } label: {
-                        Image("messageNavClear")
+                        CDNAssetImage("messageNavClear")
                             .resizable()
                             .scaledToFit()
                             .frame(width: 28, height: 28)
@@ -176,7 +176,7 @@ struct MessageListView: View {
     /// 与 Profile 首页共用顶部背景图、过渡高度和页面底色。
     private var profileBackgroundLayer: some View {
         VStack(spacing: 0) {
-            Image("profileTopBg")
+            CDNAssetImage("profileTopBg")
                 .resizable()
                 .scaledToFill()
                 .frame(maxWidth: .infinity)
@@ -482,7 +482,7 @@ struct MessageListView: View {
                 dismissMassTextingHint()
                 Task { await massTextingStore.open() }
             } label: {
-                Image("messageBadgeMassTexting")
+                CDNAssetImage("messageBadgeMassTexting")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 58, height: 58)

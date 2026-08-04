@@ -120,7 +120,7 @@ struct MineRestrictedView: View {
 
     private var restrictedBackground: some View {
         VStack(spacing: 0) {
-            Image("profileTopBg")
+            CDNAssetImage("profileTopBg")
                 .resizable()
                 .scaledToFill()
                 .frame(maxWidth: .infinity)

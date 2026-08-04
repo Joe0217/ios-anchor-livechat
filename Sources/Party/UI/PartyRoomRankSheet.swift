@@ -13,6 +13,9 @@ struct PartyRoomRankSheet: View {
     @StateObject private var store: PartyRankStore
     @ObservedObject private var permission = SelfPermissionBridge.shared
     @Environment(\.dismiss) private var dismiss
+    /// 点击用户后先关闭当前 UIKit sheet；只有 sheet 真正离场后才通知房间根视图展示名片卡。
+    /// 自定义名片卡 overlay 无法跨越仍在展示的 UIKit sheet 层级。
+    @State private var selectedUserCardPreview: UserCardPreview?
 
     init(
         initialMode: PartyRoomRankMode,
@@ -38,6 +41,7 @@ struct PartyRoomRankSheet: View {
             }
         }
         .onChange(of: canShowValueRankings, perform: handleValueRankingPermissionChange)
+        .onDisappear(perform: presentSelectedUserCardAfterDismissal)
     }
 
     private var rankSheetContent: some View {
@@ -309,6 +313,14 @@ struct PartyRoomRankSheet: View {
 
     private func openUserCard(_ preview: UserCardPreview) {
         guard !preview.userId.isEmpty else { return }
+        guard selectedUserCardPreview == nil else { return }
+        selectedUserCardPreview = preview
+        dismiss()
+    }
+
+    private func presentSelectedUserCardAfterDismissal() {
+        guard let preview = selectedUserCardPreview else { return }
+        selectedUserCardPreview = nil
         onUserTap(preview)
     }
 
@@ -350,7 +362,7 @@ struct PartyRoomRankSheet: View {
         case .contribution:
             if let value = entry.rankValue {
                 HStack(spacing: 4) {
-                    Image("coins")
+                    CDNAssetImage("coins")
                         .resizable()
                         .frame(width: 14, height: 14)
                     Text(PartyNumberFormat.compact(value))
@@ -361,8 +373,10 @@ struct PartyRoomRankSheet: View {
         case .honor:
             if let value = entry.rankValue {
                 HStack(spacing: 4) {
-                    Image(systemName: "diamond.fill")
-                        .font(.system(size: 12))
+                    CDNAssetImage("gems")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 12, height: 12)
                     Text(PartyNumberFormat.compact(value))
                         .font(.system(size: 13, weight: .semibold))
                 }
@@ -371,7 +385,7 @@ struct PartyRoomRankSheet: View {
         case .gameTask:
             if let value = entry.rankValueText, !value.isEmpty {
                 HStack(spacing: 4) {
-                    Image("coins")
+                    CDNAssetImage("coins")
                         .resizable()
                         .frame(width: 14, height: 14)
                     Text(value)

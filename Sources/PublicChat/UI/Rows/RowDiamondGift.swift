@@ -11,7 +11,7 @@ struct RowDiamondGift: View {
         switch subType {
         case .send(_, let senderId, let senderName, _, _):
             HStack(spacing: 6) {
-                Image("diamondGiftScreenIcon").resizable().frame(width: 26, height: 26)
+                CDNAssetImage("diamondGiftScreenIcon").resizable().frame(width: 26, height: 26)
                 Text(displayName(senderName, fallbackId: senderId)).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
                 Text(L10n.diamondGiftSendAction).font(.system(size: 12)).foregroundStyle(.white)
             }
@@ -42,7 +42,7 @@ struct RowDiamondGift: View {
                     settledNickname(displayName(topUserName, fallbackId: topUserId))
                     Spacer(minLength: 2)
                     Text("x\(diamonds)").font(.system(size: 13, weight: .bold)).foregroundStyle(Color(hex: 0xFF33D3))
-                    Image("diamondGiftPurpleDiamond").resizable().frame(width: 15, height: 15)
+                    CDNAssetImage("diamondGiftPurpleDiamond").resizable().frame(width: 15, height: 15)
                 }
                 HStack(spacing: 3) {
                     Text(L10n.diamondGiftViewDetails).font(.system(size: 11, weight: .medium))

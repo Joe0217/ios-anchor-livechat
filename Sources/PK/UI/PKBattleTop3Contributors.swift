@@ -129,17 +129,17 @@ struct PKBattleTop3Contributors: View {
     private func rankIcon(rank: Int) -> some View {
         switch rank {
         case 0:
-            Image("pkBattleMVP")
+            CDNAssetImage("pkBattleMVP")
                 .resizable()
                 .frame(width: rankIconSize, height: rankIconSize)
                 .accessibilityHidden(true)
         case 1:
-            Image("pkBattleRank2")
+            CDNAssetImage("pkBattleRank2")
                 .resizable()
                 .frame(width: rankIconSize, height: rankIconSize)
                 .accessibilityHidden(true)
         case 2:
-            Image("pkBattleRank3")
+            CDNAssetImage("pkBattleRank3")
                 .resizable()
                 .frame(width: rankIconSize, height: rankIconSize)
                 .accessibilityHidden(true)

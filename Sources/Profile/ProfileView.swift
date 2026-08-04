@@ -146,7 +146,7 @@ struct ProfileView: View {
     /// **不**扩到底部，避免覆盖 MainTabView 的 TabBar（对齐 LiveTabView 模式）。
     private var backgroundLayer: some View {
         VStack(spacing: 0) {
-            Image("profileTopBg")
+            CDNAssetImage("profileTopBg")
                 .resizable()
                 .scaledToFill()
                 .frame(maxWidth: .infinity)

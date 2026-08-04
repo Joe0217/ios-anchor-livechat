@@ -298,7 +298,7 @@ struct LiveSettingsView: View {
                 .lineLimit(1)
                 .frame(maxWidth: 66)
             HStack(spacing: 3) {
-                Image("coins")
+                CDNAssetImage("coins")
                     .resizable()
                     .frame(width: 9, height: 9)
                 Text("\(gift.giftPrice)")

@@ -55,7 +55,7 @@ struct PointsRankView: View {
         .coordinateSpace(name: pointsRankScrollCoordinateSpace)
         .scrollIndicators(.hidden)
         .background(
-            Image("homePointsBackground")
+            CDNAssetImage("homePointsBackground")
                 .resizable()
                 .ignoresSafeArea()
         )

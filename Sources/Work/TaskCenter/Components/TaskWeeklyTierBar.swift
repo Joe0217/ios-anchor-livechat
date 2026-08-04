@@ -90,7 +90,7 @@ struct TaskWeeklyTierBar: View {
                 ZStack(alignment: .leading) {
                     ForEach(Array(sortedTiers.enumerated()), id: \.element.tier) { i, t in
                         HStack(spacing: 3) {
-                            Image(rewardIconName(for: t))
+                            CDNAssetImage(rewardIconName(for: t))
                                 .resizable()
                                 .aspectRatio(contentMode: .fit)
                                 .frame(width: 12, height: 12)
@@ -118,7 +118,7 @@ struct TaskWeeklyTierBar: View {
             guard t.isClaimable else { return }
             onClaim(t.tier)
         } label: {
-            Image(imageName)
+            CDNAssetImage(imageName)
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 16, height: 16)

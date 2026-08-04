@@ -28,7 +28,7 @@ struct CGoMatchButton: View {
             Button {
                 handleTap()
             } label: {
-                Image(buttonImageName)
+                CDNAssetImage(buttonImageName)
                     .resizable()
                     .scaledToFit()
                     .frame(width: Theme.Metric.matchButtonSize,

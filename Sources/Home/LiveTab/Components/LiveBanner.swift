@@ -192,7 +192,13 @@ struct LiveBanner: View {
     }
 
     private func singleImage(_ item: AppPictureItem) -> some View {
-        CachedAsyncImage(url: item.picURL, contentMode: .fill, persistent: true, cdn: (.custom(width: 800), .fill)) {
+        CachedAsyncImage(
+            url: item.picURL,
+            contentMode: .fill,
+            persistent: true,
+            cdn: (.custom(width: 800), .fill),
+            publicAsset: true
+        ) {
             placeholderGradient
         }
         .frame(height: Theme.Metric.liveBannerHeight)

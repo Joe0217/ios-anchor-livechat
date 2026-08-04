@@ -20,7 +20,7 @@ struct TaskCollapsibleSection<Content: View>: View {
                 }
             } label: {
                 HStack(spacing: 12) {
-                    Image(iconAsset)
+                    CDNAssetImage(iconAsset)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 34, height: 34)

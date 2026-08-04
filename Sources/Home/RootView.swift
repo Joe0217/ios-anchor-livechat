@@ -433,7 +433,7 @@ private struct StartupStationMailPopup: View {
         HStack(spacing: 12) {
             Button(action: onMarkRead) {
                 HStack(spacing: 7) {
-                    Image("messageInboxStation")
+                    CDNAssetImage("messageInboxStation")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 24, height: 24)

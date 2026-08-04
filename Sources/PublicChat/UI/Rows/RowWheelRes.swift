@@ -14,7 +14,7 @@ struct RowWheelRes: View {
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
             // v22（2026-07-11）：真设计切图 liveRoomRouletteMsgIcon（用户提供 rouletteMsg 3x png）
-            Image("liveRoomRouletteMsgIcon")
+            CDNAssetImage("liveRoomRouletteMsgIcon")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 28, height: 28)

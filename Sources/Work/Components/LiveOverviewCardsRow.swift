@@ -99,7 +99,7 @@ private struct LiveOverviewCard: View {
         VStack(alignment: .leading, spacing: Theme.Metric.statNumberToCaption) {
             // 顶行：图标 + label 横排
             HStack(spacing: 6) {
-                Image(icon)
+                CDNAssetImage(icon)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 20, height: 20)

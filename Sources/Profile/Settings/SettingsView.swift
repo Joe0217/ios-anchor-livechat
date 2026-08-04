@@ -29,6 +29,7 @@ struct SettingsView: View {
                 aboutSection
                 #if DEBUG
                 DebugPermissionSection()
+                DebugCDNAssetUploadSection()
                 #endif
                 logoutSection
             }
@@ -157,10 +158,10 @@ struct SettingsView: View {
 
     // MARK: - Actions
 
-    /// 清缓存：内存 NSCache + URLCache 磁盘（H5 场景 iOS 天然不存在的 cacheVersion 语义已替换为清网络图缓存）。
+    /// 清缓存：账号图片缓存、URLCache 和公共礼物/运营资源文件缓存。
     private func clearCache() {
         ImageCache.shared.clear()
-        URLCache.shared.removeAllCachedResponses()
+        ImageCache.shared.clearPublicAssets()
         showToast(L10n.settingsClearCacheDone)
     }
 

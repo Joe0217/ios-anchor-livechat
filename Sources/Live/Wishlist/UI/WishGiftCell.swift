@@ -18,7 +18,7 @@ struct WishGiftCell: View {
                 .lineLimit(1)
 
             HStack(spacing: 2) {
-                Image("coins").resizable().frame(width: 10, height: 10)
+                CDNAssetImage("coins").resizable().frame(width: 10, height: 10)
                 Text("\(item.giftPrice)")
                     .font(.system(size: 10))
                     .foregroundColor(Color(hex: 0xFFE600))

@@ -38,7 +38,7 @@ struct LiveGiftTaskTab1View: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(.white)
                 Spacer()
-                Image("liveRoomTaskBadge")
+                CDNAssetImage("liveRoomTaskBadge")
                     .resizable()
                     .frame(width: 24, height: 24)
             }
@@ -48,7 +48,7 @@ struct LiveGiftTaskTab1View: View {
                                     initialAnimationDelayNanoseconds: 3_000_000_000)
                 Spacer(minLength: 8)
                 HStack(spacing: 5) {
-                    Image("coins")
+                    CDNAssetImage("coins")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 12, height: 12)

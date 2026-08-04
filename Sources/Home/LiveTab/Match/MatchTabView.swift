@@ -50,7 +50,7 @@ struct MatchTabView: View {
         // 背景切图作为背景层（用 `.background` modifier 而非 ZStack child，
         // 避免 scaledToFill + 无 height 约束时挤压 VStack layout）
         .background(
-            Image("matchBackgroundHigh")
+            CDNAssetImage("matchBackgroundHigh")
                 .resizable()
                 .scaledToFill()
                 .accessibilityHidden(true)
@@ -163,7 +163,7 @@ private struct MatchTabView_PreviewWrapper: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(
-            Image("matchBackgroundHigh")
+            CDNAssetImage("matchBackgroundHigh")
                 .resizable()
                 .scaledToFill()
         )

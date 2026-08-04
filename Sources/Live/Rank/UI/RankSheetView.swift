@@ -169,7 +169,7 @@ struct RankSheetView: View {
                         .foregroundColor(.white)
                         .lineLimit(1)
                     HStack(spacing: 4) {
-                        Image("coins")
+                        CDNAssetImage("coins")
                             .resizable()
                             .frame(width: 14, height: 14)
                         Text("\(page.anchorIncome)")
@@ -182,7 +182,7 @@ struct RankSheetView: View {
                     Text(L10n.liveRoomRankToNext)
                         .font(.system(size: 12))
                         .foregroundColor(.white)
-                    Image("coins")
+                    CDNAssetImage("coins")
                         .resizable()
                         .frame(width: 14, height: 14)
                     Text("\(max(0, page.diffToPrevious ?? 0))")

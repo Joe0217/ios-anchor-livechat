@@ -13,7 +13,7 @@ struct LiveDataCountdownRow: View {
     var body: some View {
         HStack {
             HStack(spacing: 4) {
-                Image("lightning")
+                CDNAssetImage("lightning")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 16, height: 16)

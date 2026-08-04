@@ -33,7 +33,7 @@ struct RankRow: View {
             Spacer(minLength: 8)
 
             HStack(spacing: 4) {
-                Image("coins")
+                CDNAssetImage("coins")
                     .resizable().frame(width: 14, height: 14)
                     .accessibilityHidden(true)
                 Text(formatDiamond(entry.diamond))

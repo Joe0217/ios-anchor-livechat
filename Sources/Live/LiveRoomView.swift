@@ -1508,7 +1508,7 @@ fileprivate struct LiveRoomAnchorPill: View {
                     .lineLimit(1)
                 HStack(spacing: 6) {
                     HStack(spacing: 3) {
-                        Image("liveRoomHotIcon")
+                        CDNAssetImage("liveRoomHotIcon")
                             .resizable().frame(width: 10, height: 10)
                             .accessibilityHidden(true)
                         // 走 FormatStyle 按 Locale.current 渲染（review 202607031955 P2-3，
@@ -1581,7 +1581,7 @@ fileprivate struct LiveRoomTopActions: View {
             //   对齐 H5 `v-if="!!audienceNum"`：0 不显示徽章数字
             Button(action: onAudienceTap) {
                 ZStack(alignment: .topTrailing) {
-                    Image("liveRoomViewerCountIcon")
+                    CDNAssetImage("liveRoomViewerCountIcon")
                         .resizable()
                         .frame(width: Theme.Metric.liveRoomViewerCountSize,
                                height: Theme.Metric.liveRoomViewerCountSize)
@@ -1608,7 +1608,7 @@ fileprivate struct LiveRoomTopActions: View {
 
             // 关闭 X
             Button(action: onClose) {
-                Image("liveRoomCloseButton")
+                CDNAssetImage("liveRoomCloseButton")
                     .resizable()
                     .frame(width: Theme.Metric.liveRoomCloseSize,
                            height: Theme.Metric.liveRoomCloseSize)
@@ -1679,7 +1679,7 @@ fileprivate struct LiveRoomBadgeRow: View {
         HStack(spacing: Theme.Metric.liveRoomBadgeGap) {
             if showsTask {
                 Button(action: onTaskTap) {
-                    Image("liveRoomTaskBadge")
+                    CDNAssetImage("liveRoomTaskBadge")
                         .resizable()
                         .frame(width: Theme.Metric.liveRoomBadgeHeight,
                                height: Theme.Metric.liveRoomBadgeHeight)
@@ -1709,7 +1709,7 @@ fileprivate struct LiveRoomBadgeRow: View {
 
             Button(action: onRankTap) {
                 HStack(spacing: 4) {
-                    Image("liveRoomRankIcon")
+                    CDNAssetImage("liveRoomRankIcon")
                         .resizable()
                         .frame(width: 18, height: 18)
                         .accessibilityHidden(true)
@@ -1944,7 +1944,7 @@ fileprivate struct LiveRoomWishlistCard: View {
             // 钻石价格（仅未完成态展示，对齐 H5 v-if="!isItemComplete"）
             if !item.isCompleted {
                 HStack(spacing: 2) {
-                    Image("coins")
+                    CDNAssetImage("coins")
                         .resizable().frame(width: 10, height: 10)
                         .accessibilityHidden(true)
                     Text("\(item.giftPrice)")
@@ -2124,7 +2124,7 @@ fileprivate struct LiveRoomHeroTopArea: View {
                 Spacer()
                 Button(action: onRouletteTap) {
                     // 对齐 H5 liveRoomTop.vue L264-267：rouletteStatus 切 rouletteOpen/rouletteClose 两态
-                    Image(isRouletteEnabled ? "rouletteOpen" : "rouletteClose")
+                    CDNAssetImage(isRouletteEnabled ? "rouletteOpen" : "rouletteClose")
                         .resizable()
                         .frame(width: 28, height: 32)
                         .contentShape(Rectangle())
@@ -2223,7 +2223,7 @@ fileprivate struct LiveRoomToolButton: View {
                         .background(Theme.Palette.liveRoomChipBackground, in: Circle())
                 } else if let img = imageName {
                     // Asset 切图：本身已含灰底+icon（对齐设计稿"编组 29/5/27"），**不**再套背景
-                    Image(img)
+                    CDNAssetImage(img)
                         .resizable()
                         .frame(width: Theme.Metric.liveRoomToolButtonSize,
                                height: Theme.Metric.liveRoomToolButtonSize)
@@ -2263,7 +2263,7 @@ fileprivate struct LiveRoomInputRow: View {
                 .padding(.leading, Theme.Metric.liveRoomInputHPadding)
                 .frame(height: Theme.Metric.liveRoomInputHeight)
             Button(action: onSend) {
-                Image("liveRoomSendButton")
+                CDNAssetImage("liveRoomSendButton")
                     .resizable()
                     .frame(width: 24, height: 24)
                     .opacity(isMuted ? 0.4 : 1.0)

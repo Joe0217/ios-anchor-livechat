@@ -428,8 +428,8 @@ struct UserProfileView: View {
 
     private func metaItem(iconName: String?, sfFallback: String, text: String) -> some View {
         HStack(spacing: Theme.Metric.userProfileMetaIconTextGap) {
-            if let n = iconName, UIImage(named: n) != nil {
-                Image(n)
+            if let n = iconName {
+                CDNAssetImage(n)
                     .resizable()
                     .scaledToFit()
                     .frame(width: Theme.Metric.userProfileMetaIconSize,

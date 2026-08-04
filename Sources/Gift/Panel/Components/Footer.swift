@@ -42,7 +42,7 @@ struct GiftPanelFooter: View {
             Task { await store.refreshBalance() }
         }) {
             HStack(spacing: 4) {
-                Image("giftPanelBalanceCoin")
+                CDNAssetImage("giftPanelBalanceCoin")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 16, height: 16)

@@ -177,6 +177,7 @@ final class SessionStore: ObservableObject {
         // H-3：AppConfigStore 横断基建（视频通话权限 / 翻译 key / 回复积分 config），
         // 挂 session-scoped rule 双入口之 login refresh；一次拉 4 key 逗号 join
         Task { await AppConfigStore.shared.activate() }
+        preloadPublicAssetsIfNeeded(for: result.userType)
         // 107 仅保留 Party chatroom，不能因登录完成而注册 P2P delegate。这里直接按 userType
         // 同步，不能读异步装配中的 PermissionBridge（启动期仍可能是 deny-by-default）。
         synchronizeGlobalP2PObserver(for: result.userType)
@@ -203,6 +204,19 @@ final class SessionStore: ObservableObject {
     private func synchronizeMessageSessionStore(for userType: Int?) {
         let isAllowed = !UserPermissionMapping.blocked(for: userType).contains(.directMessages)
         MessageSessionStore.updateSharedDirectMessagesCapability(isAllowed: isAllowed)
+    }
+
+    /// 登录或冷启动恢复后后台预拉取 CDN 应用资源。
+    /// 下载不阻塞登录；107 不拉取无权限的运营图片接口，但同样缓存其 CDN 基础资源。
+    private func preloadPublicAssetsIfNeeded(for userType: Int?) {
+        Task { @MainActor in
+            if userType == 107 {
+                AppPictureStore.shared.clear()
+            } else {
+                await AppPictureStore.shared.preloadPublicAssets()
+            }
+            await URLDiskCache.prefetch(urls: CDNAssetURL.publicAssetURLs)
+        }
     }
 
     func logout() {
@@ -257,6 +271,8 @@ final class SessionStore: ObservableObject {
         // H-3: AppConfigStore 横断基建（session-scoped rule 双入口之 logout clear）
         // 未清则 A 账号的 achorHideButton / 微软 key 残留到 B 首屏，通话按钮显隐 / 翻译走错 key
         AppConfigStore.shared.clear()
+        // 运营图片本身是公共文件缓存，但接口配置需按新账号重新拉取。
+        AppPictureStore.shared.clear()
         // H-5 v2: 礼物列表 in-memory 缓存（跨场景 party/live/call）— session-scoped rule 应用
         // 未清则 A 账号的礼物架数据/余额残留到 B 首屏面板（余额值尤其敏感 · session 隔离要求）
         GiftCatalogCache.shared.clear()
@@ -352,6 +368,7 @@ final class SessionStore: ObservableObject {
         save()
         synchronizeGlobalP2PObserver(for: updated.userType)
         synchronizeMessageSessionStore(for: updated.userType)
+        preloadPublicAssetsIfNeeded(for: updated.userType)
         AppLogger.auth.info("[Session] refreshAuditStatus OK userType=\(updated.userType ?? -1) valid=\(updated.valid ?? -1) onReview=\(updated.onReview == true) banAlways=\(updated.banAlways == true)")
     }
 
@@ -392,6 +409,7 @@ final class SessionStore: ObservableObject {
             // 冷启动恢复同样按账号能力决定是否注册 P2P observer，避免 107 在后台收到私聊事件。
             synchronizeGlobalP2PObserver(for: u.userType)
             synchronizeMessageSessionStore(for: u.userType)
+            preloadPublicAssetsIfNeeded(for: u.userType)
             // H-3: 冷启动 restore 时也 activate AppConfigStore(rule session-scoped-store-refresh 双入口)
             // 否则 microsoftTranslatorKey/Area 为 nil,翻译 tap 会 toast "Translation config missing"
             Task { await AppConfigStore.shared.activate() }
@@ -415,6 +433,7 @@ final class SessionStore: ObservableObject {
             // v1 迁移路径与 Keychain 恢复保持相同权限语义。
             synchronizeGlobalP2PObserver(for: u.userType)
             synchronizeMessageSessionStore(for: u.userType)
+            preloadPublicAssetsIfNeeded(for: u.userType)
             // H-3: 同 v2 路径,冷启动 restore 后 activate AppConfigStore
             Task { await AppConfigStore.shared.activate() }
             // 2026-07-17:v1 迁移路径同步 hydrate(与 v2 分支对称)

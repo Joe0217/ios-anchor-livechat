@@ -585,7 +585,7 @@ private struct RowPartyBattle: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
-            Image("partyPkLogo")
+            CDNAssetImage("partyPkLogo")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 24, height: 24)
@@ -720,7 +720,7 @@ private struct PartyNicknameRow: View {
             // 房管图标（对齐 H5 chat-list.vue L161 `h16 w16` · icon_lv_${role}.png）
             // v4:owner (role=1) → partyOwnerCrown / manager (role=2) → partyManagerBadge
             if let role = sender?.role {
-                Image(role == .owner ? "partyOwnerCrown" : "partyManagerBadge")
+                CDNAssetImage(role == .owner ? "partyOwnerCrown" : "partyManagerBadge")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 16, height: 16)

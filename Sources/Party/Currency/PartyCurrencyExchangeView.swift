@@ -84,7 +84,7 @@ struct PartyCurrencyExchangeView: View {
     private func balanceRow(value: String, imageName: String) -> some View {
         HStack(spacing: 12) {
             HStack(spacing: 8) {
-                Image(imageName)
+                CDNAssetImage(imageName)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 24, height: 24)
@@ -221,7 +221,7 @@ struct PartyCurrencyExchangeView: View {
             store.select(target: target)
         } label: {
             HStack(spacing: 6) {
-                Image(imageName)
+                CDNAssetImage(imageName)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 18, height: 18)

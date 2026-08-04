@@ -53,7 +53,7 @@ struct PartyBattleRunningHud: View {
                 .foregroundColor(.white)
             if let onRuleTap = onRuleTap {
                 Button(action: onRuleTap) {
-                    Image("partyPkRule")
+                    CDNAssetImage("partyPkRule")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 20, height: 20)
@@ -144,7 +144,7 @@ struct PartyBattleRunningHud: View {
             Capsule().stroke(Color.white.opacity(0.22), lineWidth: 1)
         }
         .overlay {
-            Image("partyPkProgressOverlay")
+            CDNAssetImage("partyPkProgressOverlay")
                 .resizable()
                 .scaledToFill()
                 .clipShape(Capsule())
@@ -164,7 +164,7 @@ struct PartyBattleRunningHud: View {
     }
 
     private var pkLogo: some View {
-        Image("partyPkLogo")
+        CDNAssetImage("partyPkLogo")
             .resizable()
             .scaledToFit()
             .frame(width: 20, height: 20)

@@ -274,7 +274,7 @@ struct PartyRoomTemplatePickerSheet: View {
                             Rectangle().fill(Theme.Palette.partyCreateTempFill)
                         }
                     } else if let asset = temp.fallbackAssetName {
-                        Image(asset).resizable().scaledToFill()
+                        CDNAssetImage(asset).resizable().scaledToFill()
                     } else {
                         Image(systemName: "square.grid.2x2")
                             .resizable().scaledToFit()
@@ -285,7 +285,7 @@ struct PartyRoomTemplatePickerSheet: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 if selected {
-                    Image("partyTemplateSelected")
+                    CDNAssetImage("partyTemplateSelected")
                         .resizable()
                         .frame(width: 22, height: 22)
                         .padding(6)

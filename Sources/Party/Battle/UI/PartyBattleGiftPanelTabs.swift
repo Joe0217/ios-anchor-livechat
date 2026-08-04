@@ -33,7 +33,7 @@ struct PartyBattleGiftPanelTabs: View {
         } label: {
             ZStack {
                 // 素材按原比例显示，不再作为裁切、铺满的按钮背景；周围露出礼物面板底色。
-                Image(image)
+                CDNAssetImage(image)
                     .resizable()
                     .scaledToFit()
                     .frame(maxWidth: .infinity, maxHeight: 54)

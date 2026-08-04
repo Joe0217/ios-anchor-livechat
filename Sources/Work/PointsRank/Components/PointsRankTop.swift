@@ -16,7 +16,7 @@ struct PointsRankTop: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Image("homePointsPodium")
+            CDNAssetImage("homePointsPodium")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 375)
@@ -42,7 +42,7 @@ struct PointsRankTop: View {
             AvatarView(url: URL(string: item?.icon ?? ""), size: 60, kind: .user, disablesTap: true)
                 .overlay(Circle().stroke(Color.red, lineWidth: 2))
 
-            Image(crown)
+            CDNAssetImage(crown)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 44, height: 44)
@@ -57,7 +57,7 @@ struct PointsRankTop: View {
                     .foregroundStyle(.white)
                     .lineLimit(1)
                 HStack(spacing: 2) {
-                    Image("homeRankIntegral").resizable().scaledToFit().frame(width: 16, height: 16)
+                    CDNAssetImage("homeRankIntegral").resizable().scaledToFit().frame(width: 16, height: 16)
                     Text("\(item?.integralAmount ?? 0)")
                 }
                 .font(.system(size: 12))

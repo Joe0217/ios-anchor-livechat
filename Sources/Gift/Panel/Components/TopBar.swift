@@ -32,7 +32,7 @@ struct GiftPanelTopBar: View {
             // 右：Backpack icon（切图 pink 圆形已烘 alpha 通道，不用 template render）
             if case .visible = store.config.backpack {
                 Button(action: { store.triggerBackpack() }) {
-                    Image("ic_backpack")
+                    CDNAssetImage("ic_backpack")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 22, height: 22)

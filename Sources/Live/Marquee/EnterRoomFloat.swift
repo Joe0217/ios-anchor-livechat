@@ -78,7 +78,7 @@ struct EnterRoomFloat: View {
     @ViewBuilder
     private func background(for item: EnterRoomFloatQueue.Item) -> some View {
         if item.isActiveTycoon, item.guardianLevel == 0 {
-            Image("liveUserTycoonEntrance")
+            CDNAssetImage("liveUserTycoonEntrance")
                 .resizable()
                 .scaledToFill()
         } else if let url = backgroundURL(for: item) {

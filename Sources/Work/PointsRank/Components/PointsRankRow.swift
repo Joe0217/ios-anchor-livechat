@@ -31,7 +31,7 @@ struct PointsRankRow: View {
                     .lineLimit(1)
                 if let country = item.countryId, !country.isEmpty {
                     HStack(spacing: 4) {
-                        Image("liveListLocation")
+                        CDNAssetImage("liveListLocation")
                             .resizable()
                             .scaledToFit()
                             .frame(width: 12, height: 12)
@@ -48,7 +48,7 @@ struct PointsRankRow: View {
             // 右侧:integral + reward tag
             VStack(alignment: .trailing, spacing: 4) {
                 HStack(spacing: 4) {
-                    Image("homeRankIntegral")
+                    CDNAssetImage("homeRankIntegral")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 16, height: 16)

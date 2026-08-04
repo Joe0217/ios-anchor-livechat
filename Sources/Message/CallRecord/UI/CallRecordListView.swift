@@ -31,7 +31,7 @@ struct CallRecordListView: View {
             .background {
                 ZStack {
                     Color(hex: 0x1A0F2E)
-                    Image("messageListBackground")
+                    CDNAssetImage("messageListBackground")
                         .resizable()
                         .scaledToFill()
                         .allowsHitTesting(false)

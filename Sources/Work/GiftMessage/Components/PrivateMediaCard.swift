@@ -57,7 +57,7 @@ struct PrivateMediaCard: View {
     /// 底部礼物价值 pill：coins + 数字（主播视角看用户送来的礼物价值,非 Party 收益）
     private func giftPricePill(price: Int) -> some View {
         HStack(spacing: 3) {
-            Image("coins")
+            CDNAssetImage("coins")
                 .resizable()
                 .frame(width: 10, height: 10)
             Text("\(price)")

@@ -22,7 +22,7 @@ struct GuardianListView: View {
         ZStack {
             Color(hex: 0xEFE6FB).ignoresSafeArea()
 
-            Image(GuardianArtwork.topGlow)
+            CDNAssetImage(GuardianArtwork.topGlow)
                 .resizable()
                 .scaledToFill()
                 .opacity(0.55)
@@ -152,7 +152,7 @@ private struct GuardianTopRankHero: View {
                 ZStack {
                     GuardianAvatar(urlString: item.avatarURL, size: 48, level: nil, framed: false)
                         .offset(y: -1)
-                    Image(GuardianArtwork.topFrame(for: .gold))
+                    CDNAssetImage(GuardianArtwork.topFrame(for: .gold))
                         .resizable()
                         .scaledToFit()
                         .frame(width: 94, height: 94)
@@ -171,7 +171,7 @@ private struct GuardianTopRankHero: View {
                     .padding(.top, 6)
 
                 HStack(spacing: 4) {
-                    Image(GuardianArtwork.tabIcon(for: item.level))
+                    CDNAssetImage(GuardianArtwork.tabIcon(for: item.level))
                         .resizable()
                         .scaledToFit()
                         .frame(width: 18, height: 18)
@@ -218,7 +218,7 @@ private struct GuardianListRow: View {
                 Spacer(minLength: 8)
 
                 HStack(spacing: 4) {
-                    Image(GuardianArtwork.tabIcon(for: item.level))
+                    CDNAssetImage(GuardianArtwork.tabIcon(for: item.level))
                         .resizable()
                         .scaledToFit()
                         .frame(width: 20, height: 20)
@@ -284,7 +284,7 @@ private struct GuardianUserLevelPill: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            Image("guardianShield")
+            CDNAssetImage("guardianShield")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 12, height: 12)
@@ -319,7 +319,7 @@ private struct GuardianListEmptyState: View {
                 .foregroundStyle(.white)
                 .frame(width: 260, height: 78)
                 .background(
-                    Image("guardianEmpty")
+                    CDNAssetImage("guardianEmpty")
                         .resizable()
                         .scaledToFill()
                 )
@@ -353,7 +353,7 @@ private struct GuardianEmptyPlaceholderRow: View {
                 .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(Color(hex: 0xC4B5D2))
                 .frame(width: 28)
-            Image("defaultUserAvatar")
+            CDNAssetImage("defaultUserAvatar")
                 .resizable()
                 .scaledToFill()
                 .frame(width: 40, height: 40)
@@ -379,7 +379,7 @@ struct UserGuardianCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 7) {
-                Image("guardianShield")
+                CDNAssetImage("guardianShield")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 19, height: 19)
@@ -434,7 +434,7 @@ private struct GuardianProfileAnchorCell: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)
             HStack(spacing: 3) {
-                Image(GuardianArtwork.tabIcon(for: rankLevel))
+                CDNAssetImage(GuardianArtwork.tabIcon(for: rankLevel))
                     .resizable()
                     .scaledToFit()
                     .frame(width: 15, height: 15)

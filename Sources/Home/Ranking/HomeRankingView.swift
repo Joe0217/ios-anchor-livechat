@@ -141,21 +141,21 @@ struct HomeRankingView: View {
             ZStack(alignment: .top) {
                 Color(hex: category == .wealth ? 0xD761A9 : category == .charm ? 0x957654 : 0xA6107A)
                 if category == .wealth {
-                    Image("homeRankWealthBackground")
+                    CDNAssetImage("homeRankWealthBackground")
                         .resizable()
                         .scaledToFill()
                         .frame(maxWidth: .infinity)
                         .frame(height: backgroundHeight(topSafeArea: proxy.safeAreaInsets.top), alignment: .top)
                         .clipped()
                 } else if category == .charm {
-                    Image("homeRankCharmBackground")
+                    CDNAssetImage("homeRankCharmBackground")
                         .resizable()
                         .scaledToFill()
                         .frame(maxWidth: .infinity)
                         .frame(height: backgroundHeight(topSafeArea: proxy.safeAreaInsets.top), alignment: .top)
                         .clipped()
                 } else {
-                    Image("homeCpBackground")
+                    CDNAssetImage("homeCpBackground")
                         .resizable()
                         .frame(maxWidth: .infinity)
                         .frame(height: 400, alignment: .top)
@@ -356,7 +356,7 @@ private struct HomeRankingPodiumCell: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Image(assetName)
+            CDNAssetImage(assetName)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 112, height: rank == 2 ? 192 : height)
@@ -382,7 +382,7 @@ private struct HomeRankingPodiumCell: View {
 
                 if let reward = member?.reward, !reward.isEmpty {
                     HStack(spacing: 3) {
-                        Image("homeRankRewardDiamond")
+                        CDNAssetImage("homeRankRewardDiamond")
                             .resizable()
                             .scaledToFit()
                             .frame(width: 12, height: 12)
@@ -407,7 +407,7 @@ private struct HomeRankingPodiumCell: View {
         if category == .charm {
             if let country = member?.countryId, !country.isEmpty {
                 HStack(spacing: 2) {
-                    Image("liveListLocation")
+                    CDNAssetImage("liveListLocation")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 10, height: 10)
@@ -533,7 +533,7 @@ private struct HomeRankingMemberRow: View {
                                 Text("\(age)")
                             }
                             if let country = member.countryId, !country.isEmpty {
-                                Image("liveListLocation")
+                                CDNAssetImage("liveListLocation")
                                     .resizable()
                                     .scaledToFit()
                                     .frame(width: 12, height: 12)
@@ -559,7 +559,7 @@ private struct HomeRankingMemberRow: View {
                     if let reward = member.reward, !reward.isEmpty {
                         HStack(spacing: 3) {
                             if category == .charm {
-                                Image("coins")
+                                CDNAssetImage("coins")
                                     .resizable()
                                     .scaledToFit()
                                     .frame(width: 12, height: 12)
@@ -588,9 +588,9 @@ private struct HomeRankingMemberRow: View {
     @ViewBuilder
     private var rankBadge: some View {
         switch rank {
-        case 1: Image("pkBattleMVP").resizable().scaledToFit().frame(width: 26, height: 26)
-        case 2: Image("pkBattleRank2").resizable().scaledToFit().frame(width: 26, height: 26)
-        case 3: Image("pkBattleRank3").resizable().scaledToFit().frame(width: 26, height: 26)
+        case 1: CDNAssetImage("pkBattleMVP").resizable().scaledToFit().frame(width: 26, height: 26)
+        case 2: CDNAssetImage("pkBattleRank2").resizable().scaledToFit().frame(width: 26, height: 26)
+        case 3: CDNAssetImage("pkBattleRank3").resizable().scaledToFit().frame(width: 26, height: 26)
         default:
             Text("\(rank)")
                 .font(.system(size: 15, weight: .semibold))
@@ -649,7 +649,7 @@ private struct HomeRankingValue: View {
 
     var body: some View {
         HStack(spacing: 3) {
-            Image(imageName)
+            CDNAssetImage(imageName)
                 .resizable()
                 .scaledToFit()
                 .frame(width: fontSize, height: fontSize)
@@ -680,7 +680,7 @@ private struct HomeCoupleRewardSheet: View {
     var body: some View {
         ZStack(alignment: .top) {
             VStack(spacing: -1) {
-                Image("homeCpRewardTop")
+                CDNAssetImage("homeCpRewardTop")
                     .resizable()
                     .scaledToFill()
                     .frame(height: 94)
@@ -699,7 +699,7 @@ private struct HomeCoupleRewardSheet: View {
                                             VStack(spacing: 4) {
                                                 ZStack(alignment: item.isAnchor ? .topLeading : .topTrailing) {
                                                     HomeCoupleRewardIcon(reward: item.reward, size: 60)
-                                                    Image(item.isAnchor ? "homeCpRewardHost" : "homeCpRewardUser")
+                                                    CDNAssetImage(item.isAnchor ? "homeCpRewardHost" : "homeCpRewardUser")
                                                         .resizable()
                                                         .scaledToFit()
                                                         .frame(width: 45, height: 18)
@@ -725,11 +725,11 @@ private struct HomeCoupleRewardSheet: View {
                 }
                 .frame(maxWidth: .infinity)
                 .background(
-                    Image("homeCpRewardCenter")
+                    CDNAssetImage("homeCpRewardCenter")
                         .resizable()
                         .scaledToFill()
                 )
-                Image("homeCpRewardBottom")
+                CDNAssetImage("homeCpRewardBottom")
                     .resizable()
                     .scaledToFill()
                     .frame(height: 65)
@@ -852,7 +852,7 @@ private struct H5CouplePeriodTabs: View {
 
     private func tab(_ value: HomeRankingPeriod, active: String, inactive: String) -> some View {
         Button { period = value } label: {
-            Image(period == value ? active : inactive)
+            CDNAssetImage(period == value ? active : inactive)
                 .resizable()
                 .scaledToFit()
                 .frame(maxWidth: .infinity, minHeight: 63.5, maxHeight: 63.5)
@@ -869,13 +869,13 @@ private struct H5CoupleTopCard: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Image("homeCpTopCard")
+            CDNAssetImage("homeCpTopCard")
                 .resizable()
                 .scaledToFill()
                 .frame(maxWidth: .infinity, minHeight: 476, maxHeight: 476)
                 .clipped()
 
-            Image("homeCpCardTopOrnament")
+            CDNAssetImage("homeCpCardTopOrnament")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 200, height: 30)
@@ -888,7 +888,7 @@ private struct H5CoupleTopCard: View {
                     H5CoupleMiniCard(member: member(at: 2), rank: 3, onTap: onTap, onRewards: onRewards)
                 }
                 .padding(.horizontal, 6)
-                Image("homeCpCardBottomOrnament")
+                CDNAssetImage("homeCpCardBottomOrnament")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 180, height: 20)
@@ -912,7 +912,7 @@ private struct H5CoupleTopOne: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Image("homeCpTop1Badge")
+            CDNAssetImage("homeCpTop1Badge")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 141, height: 78)
@@ -925,7 +925,7 @@ private struct H5CoupleTopOne: View {
             )
             .offset(y: 48)
 
-            Image("homeCpRoseLarge")
+            CDNAssetImage("homeCpRoseLarge")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 42, height: 42)
@@ -958,7 +958,7 @@ private struct H5CoupleMiniCard: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            Image(badge)
+            CDNAssetImage(badge)
                 .resizable()
                 .scaledToFit()
                 .frame(width: 100, height: 55)
@@ -966,7 +966,7 @@ private struct H5CoupleMiniCard: View {
             H5CoupleAvatarPair(member: member, large: false, onTap: onTap)
                 .offset(y: 28)
 
-            Image("homeCpRoseSmall")
+            CDNAssetImage("homeCpRoseSmall")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 30, height: 30)
@@ -1000,12 +1000,12 @@ private struct H5CoupleAvatarPair: View {
 
     var body: some View {
         ZStack {
-            Image("homeCpWingLeft")
+            CDNAssetImage("homeCpWingLeft")
                 .resizable()
                 .scaledToFit()
                 .frame(width: large ? 105 : 44, height: large ? 150 : 63)
                 .offset(x: large ? -94 : -54, y: large ? -15 : 4)
-            Image("homeCpWingRight")
+            CDNAssetImage("homeCpWingRight")
                 .resizable()
                 .scaledToFit()
                 .frame(width: large ? 105 : 44, height: large ? 150 : 63)
@@ -1023,7 +1023,7 @@ private struct H5CoupleAvatarPair: View {
         Button { onTap(id) } label: {
             ZStack {
                 if icon == nil {
-                    Image("homeCpDefaultUser")
+                    CDNAssetImage("homeCpDefaultUser")
                         .resizable()
                         .scaledToFill()
                         .frame(width: avatarSize, height: avatarSize)
@@ -1031,7 +1031,7 @@ private struct H5CoupleAvatarPair: View {
                 } else {
                     AvatarView(urlString: icon, size: avatarSize, kind: .user, disablesTap: true)
                 }
-                Image(large ? (pink ? "homeCpTop1FramePink" : "homeCpTop1FrameBlue") : (pink ? "homeCpWreathPink" : "homeCpWreathBlue"))
+            CDNAssetImage(large ? (pink ? "homeCpTop1FramePink" : "homeCpTop1FrameBlue") : (pink ? "homeCpWreathPink" : "homeCpWreathBlue"))
                     .resizable()
                     .scaledToFit()
                     .frame(width: frameSize, height: frameSize)
@@ -1050,7 +1050,7 @@ private struct H5CoupleNamePair: View {
             Text(member?.anchorNickname ?? L10n.homeRankHostPlaceholder)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)
-            Image("homeCpHeartGlow")
+            CDNAssetImage("homeCpHeartGlow")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 38, height: 38)
@@ -1062,7 +1062,7 @@ private struct H5CoupleNamePair: View {
         .foregroundStyle(.white)
         .padding(.horizontal, compact ? 8 : 16)
         .background {
-            Image("homeCpNameDivider")
+            CDNAssetImage("homeCpNameDivider")
                 .resizable()
                 .scaledToFill()
         }
@@ -1078,7 +1078,7 @@ private struct H5CoupleRewardStrip: View {
             HStack(spacing: 0) {
                 ForEach(rewards) { reward in
                     ZStack {
-                        Image("homeCpRewardDot")
+                        CDNAssetImage("homeCpRewardDot")
                             .resizable()
                             .scaledToFit()
                         HomeCoupleRewardIcon(reward: reward, size: 20)
@@ -1107,7 +1107,7 @@ private struct H5CoupleList: View {
                 }
             } else if members.isEmpty {
                 VStack(spacing: 8) {
-                    Image("homeCpDefaultUser")
+                    CDNAssetImage("homeCpDefaultUser")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 120, height: 120)
@@ -1140,7 +1140,7 @@ private struct H5CoupleListRow: View {
 
     var body: some View {
         ZStack {
-            Image(isMine ? "homeCpSelfRank" : "homeCpListItem")
+            CDNAssetImage(isMine ? "homeCpSelfRank" : "homeCpListItem")
                 .resizable()
                 .scaledToFill()
 
@@ -1152,7 +1152,7 @@ private struct H5CoupleListRow: View {
                 H5CoupleSmallPair(member: member, onTap: onTap)
                 VStack(alignment: .leading, spacing: -8) {
                     Text(member.anchorNickname)
-                    Image("homeCpHeartDivider")
+                    CDNAssetImage("homeCpHeartDivider")
                         .resizable()
                         .scaledToFit()
                         .frame(width: 37, height: 37)
@@ -1180,7 +1180,7 @@ private struct H5CoupleSmallPair: View {
                 .offset(x: -27)
             pairAvatar(icon: member.isMysteryUser ? nil : member.userIcon, id: member.userId)
                 .offset(x: 27)
-            Image("homeCpRoseSmall")
+            CDNAssetImage("homeCpRoseSmall")
                 .resizable()
                 .scaledToFit()
                 .frame(width: 28, height: 39)
@@ -1193,7 +1193,7 @@ private struct H5CoupleSmallPair: View {
         Button { onTap(id) } label: {
             ZStack {
                 if icon == nil {
-                    Image("homeCpDefaultUser")
+                    CDNAssetImage("homeCpDefaultUser")
                         .resizable()
                         .scaledToFill()
                         .frame(width: 45, height: 45)
@@ -1201,7 +1201,7 @@ private struct H5CoupleSmallPair: View {
                 } else {
                     AvatarView(urlString: icon, size: 45, kind: .user, disablesTap: true)
                 }
-                Image("homeCpAvatarFrame")
+                CDNAssetImage("homeCpAvatarFrame")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 45, height: 45)
@@ -1221,12 +1221,12 @@ private struct H5CoupleMineRow: View {
                 H5CoupleListRow(member: member, rank: member.rank ?? 0, onTap: onTap, isMine: true)
             } else {
                 ZStack {
-                    Image("homeCpSelfRank")
+                    CDNAssetImage("homeCpSelfRank")
                         .resizable()
                         .scaledToFill()
                 HStack(spacing: 12) {
                     Text("-").font(.system(size: 15, weight: .bold)).frame(width: 22)
-                    Image("homeCpDefaultUser")
+                    CDNAssetImage("homeCpDefaultUser")
                         .resizable().scaledToFit().frame(width: 44, height: 44)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(L10n.homeRankNotOnListYet).font(.system(size: 13, weight: .bold))

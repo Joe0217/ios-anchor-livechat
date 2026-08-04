@@ -35,12 +35,6 @@ targets:
       # iOS 17+ 提审：声明使用到的必备 API（UserDefaults）+ 采集数据类别
       - path: Sources/PrivacyInfo.xcprivacy
         buildPhase: resources
-      # v17: GIF 动图资源（钻石收益等 —— Assets.xcassets imageset 不支持 gif，走 bundle resource）
-      - path: Sources/Assets/GIFs
-        buildPhase: resources
-      # 2026-07-11 PK 动画：H5 6 个 SVGA 拷入 iOS（preparing/matching/last5s/result win/loss/draw）
-      - path: Sources/Assets/SVGA
-        buildPhase: resources
       - Vendor/FaceUnity/FUManager.h
       - Vendor/FaceUnity/FUManager.m
       - Vendor/FaceUnity/FUBeautyRenderer.swift
