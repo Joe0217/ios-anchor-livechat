@@ -40,6 +40,7 @@ final class SelfPermissionBridgeTests: XCTestCase {
         XCTAssertFalse(bridge.canCallSnapshot, "loaded=false 时 deny-by-default")
         XCTAssertFalse(bridge.canLiveSnapshot)
         XCTAssertFalse(bridge.canPartySnapshot)
+        XCTAssertNil(bridge.effectiveUserTypeSnapshot)
     }
 
     // MARK: - F-1 ~ F-3: 合法 userType
@@ -124,6 +125,7 @@ final class SelfPermissionBridgeTests: XCTestCase {
         XCTAssertFalse(bridge.canCallSnapshot)
         XCTAssertFalse(bridge.canLiveSnapshot)
         XCTAssertTrue(bridge.canPartySnapshot)
+        XCTAssertEqual(bridge.effectiveUserTypeSnapshot, 107)
         XCTAssertFalse(bridge.canGiftSendingSnapshot)
         XCTAssertFalse(bridge.canWalletSnapshot)
         XCTAssertFalse(bridge.canWithdrawalSnapshot)
@@ -141,6 +143,12 @@ final class SelfPermissionBridgeTests: XCTestCase {
         XCTAssertFalse(bridge.canSystemAnnouncementsSnapshot)
         XCTAssertFalse(bridge.canPartyVideoSnapshot)
         XCTAssertTrue(bridge.canProfileViewingSnapshot)
+        XCTAssertTrue(bridge.canRelationshipViewingSnapshot)
+        XCTAssertTrue(bridge.canRelationshipActionsSnapshot)
+        XCTAssertTrue(bridge.canSupportMessagingSnapshot)
+        XCTAssertTrue(bridge.canBeautyStudioSnapshot)
+        XCTAssertTrue(bridge.canProfileAlbumSnapshot)
+        XCTAssertFalse(bridge.canPartyMusicSnapshot)
     }
 
     func test_userTypes_101To106_keepNewSensitiveCapabilitiesEnabled() {
@@ -165,6 +173,12 @@ final class SelfPermissionBridgeTests: XCTestCase {
             XCTAssertTrue(bridge.canSystemAnnouncementsSnapshot, "userType \(userType) must retain announcement permission")
             XCTAssertTrue(bridge.canPartyVideoSnapshot, "userType \(userType) must retain Party video permission")
             XCTAssertTrue(bridge.canProfileViewingSnapshot, "userType \(userType) must retain profile viewing permission")
+            XCTAssertTrue(bridge.canRelationshipViewingSnapshot, "userType \(userType) must retain relationship viewing")
+            XCTAssertTrue(bridge.canRelationshipActionsSnapshot, "userType \(userType) must retain relationship actions")
+            XCTAssertTrue(bridge.canSupportMessagingSnapshot, "userType \(userType) must retain support messaging")
+            XCTAssertTrue(bridge.canBeautyStudioSnapshot, "userType \(userType) must retain beauty studio")
+            XCTAssertTrue(bridge.canProfileAlbumSnapshot, "userType \(userType) must retain profile Album")
+            XCTAssertTrue(bridge.canPartyMusicSnapshot, "userType \(userType) must retain Party music")
         }
     }
 
@@ -176,6 +190,8 @@ final class SelfPermissionBridgeTests: XCTestCase {
         XCTAssertFalse(bridge.canCallSnapshot)
 
         session.send(.loggedOut)
+
+        XCTAssertNil(bridge.effectiveUserTypeSnapshot)
 
         // Store snapshot is synchronous, so logout cannot expose the old two-relay
         // intermediate state: `blocked=[] + loaded=true`.
@@ -190,6 +206,7 @@ final class SelfPermissionBridgeTests: XCTestCase {
             XCTAssertFalse(bridge.canParty)
             XCTAssertFalse(bridge.canDirectMessages)
             XCTAssertFalse(bridge.canProfileViewing)
+            XCTAssertNil(bridge.effectiveUserType)
         }
     }
 
@@ -216,6 +233,7 @@ final class SelfPermissionBridgeTests: XCTestCase {
         // RTC 会话收敛为纯语音，不能等待 SwiftUI 的下一帧 onChange。
         sendSession(userType: 107, to: session)
 
+        XCTAssertEqual(bridge.effectiveUserTypeSnapshot, 107)
         XCTAssertTrue(bridge.canPartySnapshot)
         XCTAssertFalse(bridge.canPartyVideoSnapshot)
         XCTAssertFalse(bridge.canPartyLuckyNumberSnapshot)
@@ -254,6 +272,7 @@ final class SelfPermissionBridgeTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         await MainActor.run {
+            XCTAssertEqual(bridge.effectiveUserType, bridge.effectiveUserTypeSnapshot)
             XCTAssertEqual(bridge.canCall, bridge.canCallSnapshot)
             XCTAssertEqual(bridge.canLive, bridge.canLiveSnapshot)
             XCTAssertEqual(bridge.canParty, bridge.canPartySnapshot)
@@ -274,6 +293,12 @@ final class SelfPermissionBridgeTests: XCTestCase {
             XCTAssertEqual(bridge.canPartyLuckyNumber, bridge.canPartyLuckyNumberSnapshot)
             XCTAssertEqual(bridge.canPartyFreeGames, bridge.canPartyFreeGamesSnapshot)
             XCTAssertEqual(bridge.canProfileViewing, bridge.canProfileViewingSnapshot)
+            XCTAssertEqual(bridge.canRelationshipViewing, bridge.canRelationshipViewingSnapshot)
+            XCTAssertEqual(bridge.canRelationshipActions, bridge.canRelationshipActionsSnapshot)
+            XCTAssertEqual(bridge.canSupportMessaging, bridge.canSupportMessagingSnapshot)
+            XCTAssertEqual(bridge.canBeautyStudio, bridge.canBeautyStudioSnapshot)
+            XCTAssertEqual(bridge.canProfileAlbum, bridge.canProfileAlbumSnapshot)
+            XCTAssertEqual(bridge.canPartyMusic, bridge.canPartyMusicSnapshot)
         }
     }
 

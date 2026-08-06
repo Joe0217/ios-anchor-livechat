@@ -1,5 +1,10 @@
 import Foundation
 
+enum RegisterFeatureAvailability {
+    /// 107 提审包暂不开放邀请码输入；恢复时只需打开此开关。
+    static let isInvitationCodeEnabled = false
+}
+
 // MARK: - 导航路由
 
 /// LoginView 顶层 NavigationStack 分派目标（对齐 spec §3.2 v3 + plan v2 MINOR-N4）

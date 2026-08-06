@@ -174,6 +174,12 @@ struct PartyRoomView: View {
         permission.canVirtualItems && permission.canGiftSending
     }
 
+    private var isPartyOnlyMode: Bool {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.isLoggedIn)
+        return UserTypeExperience.isPartyOnly(effectiveUserType)
+    }
+
     private enum ToolMenuPresentation {
         case pk
         case superWheel
@@ -237,10 +243,14 @@ struct PartyRoomView: View {
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showMusicSheet) {
-                PartyMusicManagementSheet(store: store)
-                    .giftPanelSheetBackground()
-                    .presentationDetents([.fraction(0.75), .large])
-                    .presentationDragIndicator(.visible)
+                if permission.canPartyMusic {
+                    PartyMusicManagementSheet(store: store)
+                        .giftPanelSheetBackground()
+                        .presentationDetents([.fraction(0.75), .large])
+                        .presentationDragIndicator(.visible)
+                } else {
+                    EmptyView()
+                }
             }
             .sheet(isPresented: $showShareInviteSheet) { shareInviteSheet.giftPanelSheetBackground() }
             .sheet(item: $activeCornerBannerPage) { presentation in
@@ -271,7 +281,8 @@ struct PartyRoomView: View {
             .sheet(item: $activePartyGame, onDismiss: {
                 H5ActivityBridge.refreshTask()
             }) { presentation in
-                if canPresentPartyGame(presentation.game) {
+                if PartyHalfScreenGameAvailability.isEnabled,
+                   canPresentPartyGame(presentation.game) {
                     PartyHalfScreenGameSheet(presentation: presentation)
                         .presentationDetents([.height(presentation.preferredHeight)])
                         .presentationDragIndicator(.visible)
@@ -281,7 +292,7 @@ struct PartyRoomView: View {
             }
             // v8.1 房间工具 sheet（单一挂点，enum 切换 tools / settings 内嵌 push）
             .sheet(item: $activeRoomTool, onDismiss: presentPendingRoomToolPresentation) { kind in
-                if kind == .roomMode {
+                if kind == .roomMode || kind == .tools || kind == .roomModeConfirm {
                     roomToolContent(kind: kind)
                         .giftPanelSheetBackground()
                 } else {
@@ -309,7 +320,7 @@ struct PartyRoomView: View {
             }
             // 顶栏 Rank / Viewers sheet（对齐 H5 room-rank.vue 单 sheet 3 mode 切换）
             .sheet(item: $activeRankSheet, onDismiss: presentPendingUserCardAfterRankSheetDismissal) { mode in
-                if canShowValueRankings {
+                if mode == .viewers || canShowValueRankings {
                     PartyRoomRankSheet(
                         initialMode: mode,
                         roomId: store.roomInfo?.id ?? roomId,
@@ -383,7 +394,9 @@ struct PartyRoomView: View {
                     store.giftEffects.reset()
                     store.firstGiftFloatQueue.clear()
                     GiftEffectCenter.shared.reset()
-                    activeRankSheet = nil
+                    if activeRankSheet != .viewers {
+                        activeRankSheet = nil
+                    }
                     if activeRoomTool == .privateCall {
                         activeRoomTool = nil
                     }
@@ -407,9 +420,17 @@ struct PartyRoomView: View {
                 }
             }
             .onChange(of: permission.canPartyVideo, perform: handlePartyVideoPermissionChange)
+            .onChange(of: permission.canPartyMusic) { allowed in
+                if !allowed {
+                    showMusicSheet = false
+                    store.disableRoomMusicForPermissionRevocation()
+                }
+            }
             .onChange(of: permission.canVirtualItems) { canUseVirtualItems in
                 if !canUseVirtualItems {
-                    activeRankSheet = nil
+                    if activeRankSheet != .viewers {
+                        activeRankSheet = nil
+                    }
                     EnterEffectCenter.shared.reset()
                     store.clearEnterFloatingEffects()
                 }
@@ -728,7 +749,8 @@ struct PartyRoomView: View {
                     onPageDisplayed: reportPartyBannerView
                 )
             }
-            if !visiblePartyBannerGames.isEmpty {
+            if PartyHalfScreenGameAvailability.isEnabled,
+               !visiblePartyBannerGames.isEmpty {
                 PartyGameBannerCarousel(
                     games: visiblePartyBannerGames,
                     onTap: handlePartyGameTap
@@ -742,17 +764,19 @@ struct PartyRoomView: View {
                     trackSuperWheelIcon("b_wheel_icon_view")
                 }
             }
-            PartyMusicMiniWidget(
-                settings: store.roomMusicSettings,
-                isAudible: store.isRoomMusicAudible,
-                onTap: {
-                    if store.selfRole == .owner || store.selfRole == .admin {
-                        showMusicSheet = true
-                    } else {
-                        store.toggleRoomMusicAudible()
+            if permission.canPartyMusic {
+                PartyMusicMiniWidget(
+                    settings: store.roomMusicSettings,
+                    isAudible: store.isRoomMusicAudible,
+                    onTap: {
+                        if store.selfRole == .owner || store.selfRole == .admin {
+                            showMusicSheet = true
+                        } else {
+                            store.toggleRoomMusicAudible()
+                        }
                     }
-                }
-            )
+                )
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
         .padding(.trailing, Theme.Metric.partyRoomScreenH)
@@ -805,7 +829,8 @@ struct PartyRoomView: View {
             PartyRoomBackgroundView(
                 bigImgURL: bigURL,
                 placeholderURL: placeholderURL,
-                size: screenSize
+                size: screenSize,
+                usesProfileBackgroundFallback: isPartyOnlyMode
             )
             .ignoresSafeArea()
 
@@ -888,7 +913,7 @@ struct PartyRoomView: View {
                 ? store.roomInfo?.cornerBannerList?.first
                 : nil,
             isFollowing: store.isFollowingAnchor,
-            showsFollow: permission.canProfileSocial,
+            showsFollow: permission.canRelationshipActions,
             showsShare: permission.canDirectMessages && permission.canProfileSocial,
             // 用 isSelfRoomOwner（ownerId==myUserId）而非 selfRole == .owner：
             // 平台超管在他人房 selfRole 已被提权为 .owner（管理权限用），但**关注按钮显隐**
@@ -1488,7 +1513,8 @@ struct PartyRoomView: View {
             showsPartyGameContent: permission.canPartyGames,
             showsFreePartyGameContent: permission.canPartyFreeGames,
             showsActivityContent: permission.canPartyActivities,
-            showsVirtualItemContent: permission.canVirtualItems
+            showsVirtualItemContent: permission.canVirtualItems,
+            usesPlainSenderStyle: permission.isLoaded && !permission.canProfileSocial
         )
         .padding(.top, 6)
     }
@@ -1547,10 +1573,13 @@ struct PartyRoomView: View {
             showGameButton: false,
             showGiftButton: permission.canGiftSending,
             showMessageButton: permission.canDirectMessages,
+            showToolMenuButton: !isPartyOnlyMode,
             // v12：消息未读徽章（对齐 H5 useUnreadMessageCount + van-badge）
             unreadCount: unreadBridge.totalUnread,
             // 对齐安卓 §1 checkMicApplicationVisible：房主/房管 + 排麦开关开时显示快捷入口
-            showMicApplicationButton: (store.selfRole == .owner || store.selfRole == .admin) && store.micApplicationSwitchOn,
+            showMicApplicationButton: !isPartyOnlyMode
+                && (store.selfRole == .owner || store.selfRole == .admin)
+                && store.micApplicationSwitchOn,
             // 排麦队列红角标（对齐安卓 tvMicApplicationNum）
             micApplicationBadge: store.queueSeatNum,
             quickPhrases: quickPhrases,
@@ -1661,7 +1690,9 @@ struct PartyRoomView: View {
         properties["user_id"] = SessionStore.shared.user?.userId.map(String.init) ?? ""
         properties["host_id"] = invite.fromUserId ?? ""
         properties["seat_index"] = invite.seatIndex
-        properties["user_identity"] = SessionStore.shared.user?.userType == 2 ? "Anchor" : "User"
+        properties["user_identity"] = UserTypeExperience.hasFullHostRealtimeCapability(
+            SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+        ) ? "Anchor" : "User"
         PartyAnalytics.track("b_video_invite_show", properties: properties)
     }
 
@@ -1929,7 +1960,9 @@ struct PartyRoomView: View {
         )
         properties["user_id"] = SessionStore.shared.user?.userId.map(String.init) ?? ""
         properties["seat_index"] = seatIndex
-        properties["user_identity"] = SessionStore.shared.user?.userType == 2 ? "Anchor" : "User"
+        properties["user_identity"] = UserTypeExperience.hasFullHostRealtimeCapability(
+            SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+        ) ? "Anchor" : "User"
         properties["blocked_count_in_session"] = videoSeatBlockedCount
         PartyAnalytics.track("b_video_seat_blocked", properties: properties)
     }
@@ -2150,7 +2183,7 @@ struct PartyRoomView: View {
     /// 本 view 不再本地弹（避免与全局 toast 重复展示）。
     /// 进房关注态由 room/enter 接口 `isFollowOwner` 字段初始化，退出重进保持一致。
     private func handleFollowTap() {
-        guard SelfPermissionBridge.shared.gate(.profileSocial, action: "partyFollowAnchor") else {
+        guard SelfPermissionBridge.shared.gate(.relationshipActions, action: "partyFollowAnchor") else {
             return
         }
         // 用 isSelfRoomOwner 而非 selfRole == .owner：
@@ -2273,6 +2306,7 @@ struct PartyRoomView: View {
     }
 
     private func handlePartyGameTap(_ game: PartyBannerGame) {
+        guard PartyHalfScreenGameAvailability.isEnabled else { return }
         guard canLaunchPartyGame(game) else { return }
         guard activePartyGame == nil, game.isLaunchable,
               let roomId = store.roomInfo?.id, !roomId.isEmpty else { return }
@@ -2298,7 +2332,8 @@ struct PartyRoomView: View {
 
     /// Store 在请求回包时先过滤一次；View 再按实时权限过滤缓存，覆盖房内动态撤权。
     private var visiblePartyBannerGames: [PartyBannerGame] {
-        store.partyBannerGames.filter {
+        guard PartyHalfScreenGameAvailability.isEnabled else { return [] }
+        return store.partyBannerGames.filter {
             permission.canPartyGames
                 || (permission.canPartyFreeGames && $0.isFreePartyInteraction)
         }
@@ -2406,7 +2441,6 @@ struct PartyRoomView: View {
                     + MessageSessionStore.shared.sessions(in: .stranger),
                 onInviteCompleted: { showShareInviteSheet = false }
             )
-            .presentationDetents([.fraction(0.5), .fraction(0.8)])
             .presentationDragIndicator(.visible)
         } else {
             EmptyView().onAppear { showShareInviteSheet = false }
@@ -2436,6 +2470,7 @@ struct PartyRoomView: View {
                 // 平台超管在 selfRole 层已提权为 .owner（PartyStore.selfRole 首判 isPlatformAdmin），此参数保留
                 // 为语义冗余安全网 —— MC Seat `if isOwner || isPlatformAdmin` 条件下双重命中
                 isPlatformAdmin: store.roomInfo?.isPlatformAdmin ?? false,
+                showsAdvancedManagementTools: !isPartyOnlyMode,
                 onTrackToolTap: trackRoomToolTap,
                 onTapSettings: {
                     transitionRoomTool(to: .settings)
@@ -2458,7 +2493,8 @@ struct PartyRoomView: View {
                 },
                 isRoomLocked: store.roomInfo?.lockFlag == 1,
                 isMicApplicationOn: store.micApplicationSwitchOn,
-                isMusicAvailable: store.roomInfo?.isRoomMusicAvailable ?? false,
+                isMusicAvailable: permission.canPartyMusic
+                    && (store.roomInfo?.isRoomMusicAvailable ?? false),
                 isMusicEnabled: store.isRoomMusicEnabled,
                 isMCSeatEnabled: store.seatList.contains { $0.isMCSeat },
                 onTapMusic: {
@@ -2481,7 +2517,6 @@ struct PartyRoomView: View {
                     }
                 }
             )
-            .presentationDetents([.fraction(0.5), .fraction(0.8)])
         case .settings:
             NavigationStack {
                 PartyRoomSettingsView(
@@ -2698,11 +2733,6 @@ struct PartyRoomView: View {
         activeRankSheet = .contribution
     }
     private func handleViewerTap() {
-        guard SelfPermissionBridge.shared.gate(.virtualItems, action: "partyViewerRank"),
-              SelfPermissionBridge.shared.gate(.giftSending, action: "partyViewerRank") else {
-            activeRankSheet = nil
-            return
-        }
         // 对齐 H5 header-wrap.vue: userRank tap → showRankPopupType='onlineUser'（apiGetPartyOnlineList）
         activeRankSheet = .viewers
     }
@@ -3189,6 +3219,7 @@ struct PartyRoomView: View {
                         && store.roomInfo?.roomTempIdInt == 1,
                     showSuperWheel: permission.canLottery && (store.selfRole == .owner || store.selfRole == .admin),
                     showsLuckyNumber: permission.canPartyLuckyNumber,
+                    showsBasicTools: !isPartyOnlyMode,
                     isRoomMuted: store.isRoomMuted,
                     onStartPk: {
                         pendingToolMenuPresentation = .pk
@@ -3418,42 +3449,68 @@ private struct PartyRoomBackgroundView: View {
     let bigImgURL: String?
     let placeholderURL: String?
     let size: CGSize
+    let usesProfileBackgroundFallback: Bool
 
     /// H5 `DEFAULT_BG`（`room-bg.vue:17`）。bigImgUrl / placeholderURL 都空时最终兜底。
     private static let defaultBG = "https://img.hnhily.link/mstatic/party/bg_party.png"
 
     @State private var dynamicReady = false
 
-    private var effectiveURL: String {
+    private var effectiveURL: String? {
         if let s = bigImgURL, !s.isEmpty { return s }
         if let s = placeholderURL, !s.isEmpty { return s }
-        return Self.defaultBG
+        return usesProfileBackgroundFallback ? nil : Self.defaultBG
     }
 
-    private var effectivePlaceholder: String {
+    private var effectivePlaceholder: String? {
         if let s = placeholderURL, !s.isEmpty { return s }
-        return Self.defaultBG
+        return usesProfileBackgroundFallback ? nil : Self.defaultBG
     }
 
     var body: some View {
-        let url = effectiveURL
-        let kind = MediaAssetKind(urlString: url)
         return ZStack {
-            mainContent(kind: kind, url: url)
+            if let url = effectiveURL {
+                let kind = MediaAssetKind(urlString: url)
+                mainContent(kind: kind, url: url)
 
-            // 动态资源加载中的静态覆盖（就绪后 0.3s opacity 淡出）
-            if kind != .image, !dynamicReady {
-                staticImageView(urlStr: effectivePlaceholder)
-                    .transition(.opacity)
+                // 动态资源加载中的静态覆盖（就绪后 0.3s opacity 淡出）
+                if kind != .image, !dynamicReady {
+                    backgroundPlaceholder
+                        .transition(.opacity)
+                }
+            } else {
+                defaultBackgroundView
             }
         }
         .frame(width: size.width, height: size.height)
         .animation(.easeOut(duration: 0.3), value: dynamicReady)
         .onAppear {
-            AppLogger.party.info("[PartyRoom] bg url=\(url, privacy: .public) kind=\(String(describing: kind), privacy: .public)")
+            AppLogger.party.info("[PartyRoom] bg url=\(effectiveURL ?? "<default-color>", privacy: .public)")
         }
-        .onChange(of: url) { _ in
+        .onChange(of: effectiveURL) { _ in
             dynamicReady = false
+        }
+    }
+
+    @ViewBuilder
+    private var backgroundPlaceholder: some View {
+        if let url = effectivePlaceholder {
+            staticImageView(urlStr: url)
+        } else {
+            defaultBackgroundView
+        }
+    }
+
+    @ViewBuilder
+    private var defaultBackgroundView: some View {
+        if usesProfileBackgroundFallback {
+            CDNAssetImage("profileTopBg")
+                .resizable()
+                .scaledToFill()
+                .frame(width: size.width, height: size.height)
+                .clipped()
+        } else {
+            Theme.Palette.partyRoomBackground
         }
     }
 
@@ -3482,11 +3539,19 @@ private struct PartyRoomBackgroundView: View {
 
     private func staticImageView(urlStr: String) -> some View {
         CachedAsyncImage(url: URL(string: urlStr), contentMode: .fill, persistent: true) {
-            CDNAssetImage("partyRoomBg")
-                .resizable()
-                .scaledToFill()
-                .frame(width: size.width, height: size.height)
-                .clipped()
+            if usesProfileBackgroundFallback {
+                CDNAssetImage("profileTopBg")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size.width, height: size.height)
+                    .clipped()
+            } else {
+                CDNAssetImage("partyRoomBg")
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size.width, height: size.height)
+                    .clipped()
+            }
         }
         .frame(width: size.width, height: size.height)
         .clipped()

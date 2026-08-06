@@ -525,4 +525,35 @@ final class MessageSessionStoreTests: XCTestCase {
         XCTAssertEqual(final.count, 250, "全 10 天前不清（规则 A 不命中 + 规则 B 因最旧 <15d skip）")
         XCTAssertTrue(provider.deleteCalls.isEmpty, "无 SDK delete 调用")
     }
+
+    func test_stationService_deniedAccessDoesNotInvokeLatestFetcher() async throws {
+        var fetchCount = 0
+        let service = StationListService(
+            fetcher: {
+                fetchCount += 1
+                return [StationMail(id: "mail-1", mailTitle: "Notice", effectiveDate: "")]
+            },
+            accessGate: { false }
+        )
+
+        let latest = await service.fetchLatest()
+        let list = try await service.fetchList(page: 1)
+        XCTAssertNil(latest)
+        XCTAssertEqual(fetchCount, 0)
+        XCTAssertEqual(list, [])
+    }
+
+    func test_stationService_dropsLatestResultWhenAccessIsRevokedInFlight() async {
+        var isAllowed = true
+        let service = StationListService(
+            fetcher: {
+                isAllowed = false
+                return [StationMail(id: "mail-1", mailTitle: "Notice", effectiveDate: "")]
+            },
+            accessGate: { isAllowed }
+        )
+
+        let latest = await service.fetchLatest()
+        XCTAssertNil(latest)
+    }
 }

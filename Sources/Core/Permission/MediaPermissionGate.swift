@@ -1,5 +1,6 @@
 import AVFoundation
 import Combine
+import Photos
 import SwiftUI
 import UIKit
 
@@ -12,6 +13,7 @@ enum MediaPermissionGate {
         case camera
         case microphone
         case liveStream
+        case photoLibraryAdd
     }
 
     /// 请求满足指定功能所需的系统授权。已拒绝时不会重复弹系统弹窗，直接返回 `false`。
@@ -24,6 +26,8 @@ enum MediaPermissionGate {
         case .liveStream:
             guard await requestAccess(for: .video) else { return false }
             return await requestAccess(for: .audio)
+        case .photoLibraryAdd:
+            return await requestPhotoLibraryAddAccess()
         }
     }
 
@@ -37,6 +41,9 @@ enum MediaPermissionGate {
         case .liveStream:
             return AVCaptureDevice.authorizationStatus(for: .video) == .authorized
                 && AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
+        case .photoLibraryAdd:
+            let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
+            return status == .authorized || status == .limited
         }
     }
 
@@ -48,6 +55,8 @@ enum MediaPermissionGate {
             return L10n.mediaPermissionMicrophoneRequired
         case .liveStream:
             return L10n.mediaPermissionLiveRequired
+        case .photoLibraryAdd:
+            return L10n.mediaPermissionPhotoLibraryAddRequired
         }
     }
 
@@ -64,6 +73,24 @@ enum MediaPermissionGate {
             return true
         case .notDetermined:
             return await AVCaptureDevice.requestAccess(for: mediaType)
+        case .denied, .restricted:
+            return false
+        @unknown default:
+            return false
+        }
+    }
+
+    private static func requestPhotoLibraryAddAccess() async -> Bool {
+        switch PHPhotoLibrary.authorizationStatus(for: .addOnly) {
+        case .authorized, .limited:
+            return true
+        case .notDetermined:
+            let status = await withCheckedContinuation { continuation in
+                PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
+                    continuation.resume(returning: status)
+                }
+            }
+            return status == .authorized || status == .limited
         case .denied, .restricted:
             return false
         @unknown default:

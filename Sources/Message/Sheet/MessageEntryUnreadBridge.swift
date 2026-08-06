@@ -20,15 +20,48 @@ import Foundation
 final class MessageEntryUnreadBridge: ObservableObject {
 
     @Published private(set) var totalUnread: Int = 0
+    private var sourceCancellable: AnyCancellable?
+    private var permissionCancellable: AnyCancellable?
 
-    init(source: MessageSessionStore = .shared) {
+    /// 生产默认不立即求值 `MessageSessionStore.shared`。只有普通私信权限真正开启后才创建并订阅，
+    /// 因此 107 构造 PartyRoomView 时不会注册全量 NIM 会话 delegate。
+    /// 测试显式注入 source 时直接绑定，不依赖全局权限桥。
+    init(source: MessageSessionStore? = nil) {
+        if let source {
+            activate(source)
+            return
+        }
+
+        permissionCancellable = SelfPermissionBridge.shared.$canDirectMessages
+            .removeDuplicates()
+            .sink { [weak self] isAllowed in
+                guard let self else { return }
+                if isAllowed {
+                    self.activate(MessageSessionStore.shared)
+                } else {
+                    self.deactivate()
+                }
+            }
+    }
+
+    private func activate(_ source: MessageSessionStore) {
+        guard sourceCancellable == nil else { return }
         // 订阅 $state：sessions 数组变化（含 unreadCount 变化）会重新赋值 `.loaded([...])` 触发 publish。
         // conversationProfiles / primeUidSet 等无关字段变化时，state 不变 → publish 但 totalUnread compute
         // 结果相同 → removeDuplicates 拦截 → 不通知 view。
-        source.$state
+        totalUnread = Self.compute(source)
+        sourceCancellable = source.$state
             .map { _ in MessageEntryUnreadBridge.compute(source) }
             .removeDuplicates()
-            .assign(to: &$totalUnread)
+            .sink { [weak self] value in
+                self?.totalUnread = value
+            }
+    }
+
+    private func deactivate() {
+        sourceCancellable?.cancel()
+        sourceCancellable = nil
+        totalUnread = 0
     }
 
     private static func compute(_ store: MessageSessionStore) -> Int {

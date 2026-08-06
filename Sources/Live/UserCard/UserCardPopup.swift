@@ -138,8 +138,8 @@ struct UserCardPopup: View {
     var partyAdminContext: PartyAdminContext? = nil
 
     @StateObject private var store: UserCardStore
-    /// Party-only 账号仍可查看房内成员的基础身份与执行房间管理；
-    /// 私聊、关系链和虚拟道具内容必须随账户权限立即收起。
+    /// Party-only 账号仍可查看房内成员的基础身份、执行房间管理与关注操作；
+    /// 私聊和虚拟道具内容必须随账户权限立即收起。
     @ObservedObject private var permission = SelfPermissionBridge.shared
     /// Party-only 保留 UGC 安全处置，不依赖被关闭的用户资料页。
     @State private var showingReportSheet = false
@@ -663,9 +663,9 @@ struct UserCardPopup: View {
                 .foregroundColor(.white)
                 .lineLimit(1)
 
-            if permission.canProfileSocial, !info.isFollowed {
+            if permission.canRelationshipActions, !info.isFollowed {
                 Button {
-                    guard SelfPermissionBridge.shared.gate(.profileSocial, action: "userCardFollow") else {
+                    guard SelfPermissionBridge.shared.gate(.relationshipActions, action: "userCardFollow") else {
                         return
                     }
                     store.toggleFollow()

@@ -6,10 +6,27 @@ import SwiftUI
 /// 顶部 segment 切换 / 列表分页 / 下拉刷新（iOS 16 .refreshable）/ 触底加载下一页。
 struct FollowListView: View {
     @StateObject private var vm: FollowListViewModel
-    @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var permission = SelfPermissionBridge.shared
+    @ObservedObject private var customerStore = CustomerServiceIdStore.shared
+    @Environment(\.openUserProfile) private var openUserProfile
+    @State private var isOpeningSupport = false
+    @State private var isShowingServices = false
 
-    init(initialSegment: FollowSegment = .following) {
+    private let isConnectionsRoot: Bool
+    private let onOpenSupport: ((String) -> Void)?
+    private let onOpenBlocklist: (() -> Void)?
+    private let onOpenFeedback: (() -> Void)?
+
+    init(initialSegment: FollowSegment = .following,
+         isConnectionsRoot: Bool = false,
+         onOpenSupport: ((String) -> Void)? = nil,
+         onOpenBlocklist: (() -> Void)? = nil,
+         onOpenFeedback: (() -> Void)? = nil) {
         _vm = StateObject(wrappedValue: FollowListViewModel(initial: initialSegment))
+        self.isConnectionsRoot = isConnectionsRoot
+        self.onOpenSupport = onOpenSupport
+        self.onOpenBlocklist = onOpenBlocklist
+        self.onOpenFeedback = onOpenFeedback
     }
 
     var body: some View {
@@ -22,7 +39,7 @@ struct FollowListView: View {
                 content
             }
         }
-        .navigationTitle("")
+        .navigationTitle(isConnectionsRoot ? L10n.tabConnections : "")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Theme.Palette.profileBackground, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
@@ -33,19 +50,119 @@ struct FollowListView: View {
                 await vm.loadFirstPage()
             }
         }
+        .task {
+            guard isConnectionsRoot, permission.canSupportMessaging else { return }
+            await customerStore.refreshIfNeeded()
+        }
+    }
+
+    private var supportRow: some View {
+        serviceRow(
+            icon: "headphones",
+            title: L10n.connectionsSupport,
+            subtitle: L10n.connectionsSupportSubtitle,
+            isLoading: isOpeningSupport,
+            isEnabled: permission.canSupportMessaging,
+            action: openSupport
+        )
+    }
+
+    private var blocklistRow: some View {
+        serviceRow(
+            icon: "person.crop.circle.badge.xmark",
+            title: L10n.settingsBlocklist,
+            action: { onOpenBlocklist?() }
+        )
+    }
+
+    private var feedbackRow: some View {
+        serviceRow(
+            icon: "envelope",
+            title: L10n.settingsFeedback,
+            action: { onOpenFeedback?() }
+        )
+    }
+
+    private func serviceRow(icon: String,
+                            title: String,
+                            subtitle: String? = nil,
+                            isLoading: Bool = false,
+                            isEnabled: Bool = true,
+                            action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 42, height: 42)
+                    .background(Color.white.opacity(0.1), in: Circle())
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.white.opacity(0.55))
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                if isLoading {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Image(systemName: "chevron.forward")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.45))
+                }
+            }
+            .padding(.horizontal, 20)
+            .frame(height: 66)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isLoading || !isEnabled)
+        .opacity(isEnabled ? 1 : 0.55)
+        .accessibilityLabel(title)
+    }
+
+    private func openSupport() {
+        guard permission.canSupportMessaging, !isOpeningSupport else { return }
+        isOpeningSupport = true
+        Task { @MainActor in
+            defer { isOpeningSupport = false }
+            await customerStore.refreshIfNeeded()
+            guard permission.canSupportMessaging,
+                  let peer = customerStore.customerYxAccId,
+                  !peer.isEmpty else {
+                AppToastCenter.shared.show(L10n.connectionsSupportUnavailable)
+                return
+            }
+            onOpenSupport?(peer)
+        }
     }
 
     private var segmentBar: some View {
         HStack(spacing: 0) {
             ForEach(FollowSegment.allCases) { segment in
-                let selected = vm.selectedSegment == segment
+                let selected = !isShowingServices && vm.selectedSegment == segment
                 Button {
+                    isShowingServices = false
                     vm.selectedSegment = segment
                 } label: {
                     VStack(spacing: 6) {
                         Text(segment.title)
-                            .font(.system(size: 15, weight: selected ? .semibold : .regular))
+                            .font(.system(size: isConnectionsRoot ? 13 : 15,
+                                          weight: selected ? .semibold : .regular))
                             .foregroundColor(selected ? Theme.Palette.brandYellow : .white.opacity(0.7))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
                         Capsule()
                             .fill(Theme.Palette.brandYellow)
                             .frame(width: 22, height: 2)
@@ -57,6 +174,10 @@ struct FollowListView: View {
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             }
+
+            if isConnectionsRoot {
+                servicesTabButton
+            }
         }
         .padding(.top, 12)
         .padding(.bottom, 8)
@@ -65,6 +186,49 @@ struct FollowListView: View {
 
     @ViewBuilder
     private var content: some View {
+        if isConnectionsRoot, isShowingServices {
+            servicesContent
+        } else {
+            relationshipContent
+        }
+    }
+
+    private var servicesTabButton: some View {
+        let selected = isShowingServices
+        return Button {
+            isShowingServices = true
+        } label: {
+            VStack(spacing: 6) {
+                Text(L10n.connectionsServices)
+                    .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                    .foregroundColor(selected ? Theme.Palette.brandYellow : .white.opacity(0.7))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                Capsule()
+                    .fill(Theme.Palette.brandYellow)
+                    .frame(width: 22, height: 2)
+                    .opacity(selected ? 1 : 0)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var servicesContent: some View {
+        VStack(spacing: 0) {
+            supportRow
+            Divider().background(Color.white.opacity(0.06)).padding(.leading, 74)
+            blocklistRow
+            Divider().background(Color.white.opacity(0.06)).padding(.leading, 74)
+            feedbackRow
+            Spacer(minLength: 0)
+        }
+    }
+
+    @ViewBuilder
+    private var relationshipContent: some View {
         let state = vm.currentState
 
         if state.users.isEmpty {
@@ -87,9 +251,12 @@ struct FollowListView: View {
                 FollowUserRow(
                     user: user,
                     isPending: user.userId.map { vm.pendingFollowUserIds.contains($0) } ?? false,
-                    onToggleFollow: {
-                        Task { await vm.toggleFollow(user: user) }
-                    }
+                    onOpenProfile: user.userId.map { userID in
+                        { openUserProfile.perform(String(userID)) }
+                    },
+                    onToggleFollow: permission.canRelationshipActions
+                        ? { Task { await vm.toggleFollow(user: user, sourceSegment: vm.selectedSegment) } }
+                        : nil
                 )
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)

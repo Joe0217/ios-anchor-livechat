@@ -37,6 +37,8 @@ struct PartyRoomToolsSheet: View {
     let isOwner: Bool
     /// 平台管理员（非房主）判定（MC Seat 也允许）
     let isPlatformAdmin: Bool
+    /// 107 审核模式隐藏锁房、排麦申请和 MC Seat 管理入口。
+    let showsAdvancedManagementTools: Bool
     /// 工具点击仅用于埋点；由父层 fire-and-forget 处理，绝不参与工具的业务分支。
     let onTrackToolTap: (String) -> Void
     let onTapSettings: () -> Void
@@ -59,43 +61,43 @@ struct PartyRoomToolsSheet: View {
     private let columns: [GridItem] = Array(repeating: GridItem(.flexible(), spacing: 20), count: 3)
 
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                Text(L10n.Party.settingsToolsTitle)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.top, 4)
+        VStack(spacing: 0) {
+            Text(L10n.Party.settingsToolsTitle)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.top, 24)
                 .padding(.bottom, 12)
-                LazyVGrid(columns: columns, spacing: 24) {
-                    if isOwner {
-                        toolItem(
-                            icon: isRoomLocked ? "lock.fill" : "lock.open.fill",
-                            label: L10n.Party.toolLockRoom,
-                            isOn: isRoomLocked
-                        ) {
-                            onTrackToolTap("lockRoom")
-                            onTapLockRoom()
-                        }
+            LazyVGrid(columns: columns, spacing: 24) {
+                if showsAdvancedManagementTools && isOwner {
+                    toolItem(
+                        icon: isRoomLocked ? "lock.fill" : "lock.open.fill",
+                        label: L10n.Party.toolLockRoom,
+                        isOn: isRoomLocked
+                    ) {
+                        onTrackToolTap("lockRoom")
+                        onTapLockRoom()
                     }
-                    if isMusicAvailable {
-                        toolItem(
-                            icon: "music.note",
-                            label: L10n.Party.toolMusic,
-                            isOn: isMusicEnabled
-                        ) {
-                            onTrackToolTap("music")
-                            onTapMusic()
-                        }
+                }
+                if isMusicAvailable {
+                    toolItem(
+                        icon: "music.note",
+                        label: L10n.Party.toolMusic,
+                        isOn: isMusicEnabled
+                    ) {
+                        onTrackToolTap("music")
+                        onTapMusic()
                     }
-                    // Settings 仅房主可见（对齐文档 A §1"修改房间信息/背景/公告 · 仅房主"；房管禁止改房间信息）
-                    // android 亦通过入口 gate（PartyRoomSettingActivity.kt），非在 view 内自持角色
-                    if isOwner {
-                        toolItem(icon: "gearshape.fill", label: L10n.Party.toolSettings, isPrimary: true) {
-                            onTrackToolTap("settings")
-                            onTapSettings()
-                        }
+                }
+                // Settings 仅房主可见（对齐文档 A §1"修改房间信息/背景/公告 · 仅房主"；房管禁止改房间信息）
+                // android 亦通过入口 gate（PartyRoomSettingActivity.kt），非在 view 内自持角色
+                if isOwner {
+                    toolItem(icon: "gearshape.fill", label: L10n.Party.toolSettings) {
+                        onTrackToolTap("settings")
+                        onTapSettings()
                     }
-                    // H5 关闭态仍显示该入口，并以 OFF 告知房主可直接开启。
+                }
+                // H5 关闭态仍显示该入口，并以 OFF 告知房主可直接开启。
+                if showsAdvancedManagementTools {
                     toolItem(
                         icon: isMicApplicationOn ? "hand.raised.fill" : "hand.raised.slash.fill",
                         label: L10n.Party.toolMicApplication,
@@ -104,38 +106,66 @@ struct PartyRoomToolsSheet: View {
                         onTrackToolTap("micApplication")
                         onTapMicApplication()
                     }
-                    if isOwner {
-                        toolItem(icon: "square.grid.2x2.fill", label: L10n.Party.toolRoomMode) {
-                            onTrackToolTap("roomMode")
-                            onTapRoomMode()
-                        }
-                    }
-                    toolItem(icon: "person.crop.circle.badge.minus", label: L10n.Party.toolBlocklist) {
-                        onTrackToolTap("blocklist")
-                        onTapBlocklist()
-                    }
-                    if isOwner || isPlatformAdmin {
-                        toolItem(
-                            icon: isMCSeatEnabled ? "mic.fill" : "mic.slash.fill",
-                            label: L10n.Party.toolMCSeat,
-                            isOn: isMCSeatEnabled
-                        ) {
-                            onTrackToolTap("mcSeat")
-                            onTapMCSeat()
-                        }
-                    }
-                    // F-spec Party Call：入口在派对房主 view 浮动按钮（非 tools sheet），此处不放 icon
                 }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 12)
+                if isOwner {
+                    toolItem(icon: "square.grid.2x2.fill", label: L10n.Party.toolRoomMode) {
+                        onTrackToolTap("roomMode")
+                        onTapRoomMode()
+                    }
+                }
+                toolItem(icon: "person.crop.circle.badge.minus", label: L10n.Party.toolBlocklist) {
+                    onTrackToolTap("blocklist")
+                    onTapBlocklist()
+                }
+                if showsAdvancedManagementTools && (isOwner || isPlatformAdmin) {
+                    toolItem(
+                        icon: isMCSeatEnabled ? "mic.fill" : "mic.slash.fill",
+                        label: L10n.Party.toolMCSeat,
+                        isOn: isMCSeatEnabled
+                    ) {
+                        onTrackToolTap("mcSeat")
+                        onTapMCSeat()
+                    }
+                }
+                // F-spec Party Call：入口在派对房主 view 浮动按钮（非 tools sheet），此处不放 icon
             }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 12)
         }
+        // The tools sheet is mounted without a fixed detent by PartyRoomView.
+        // Derive its height from the visible grid rows so role changes do not
+        // leave an oversized sheet or make GeometryReader measure the parent.
+        .presentationDetents([.height(toolsSheetHeight)])
+        .presentationDragIndicator(.visible)
+    }
+
+    private var visibleToolCount: Int {
+        var count = 0
+        if showsAdvancedManagementTools && isOwner { count += 1 } // Lock Room
+        if isMusicAvailable { count += 1 }
+        if isOwner { count += 1 } // Settings
+        if showsAdvancedManagementTools { count += 1 } // Mic Application
+        if isOwner { count += 1 } // Room Mode
+        count += 1 // Blocklist
+        if showsAdvancedManagementTools && (isOwner || isPlatformAdmin) { count += 1 } // MC Seat
+        return count
+    }
+
+    private var toolsSheetHeight: CGFloat {
+        let rowCount = max(1, (visibleToolCount + 2) / 3)
+        let headerHeight: CGFloat = 61 // title + top/bottom padding
+        let cellHeight: CGFloat = 68 // 48pt icon + label + spacing
+        let rowSpacing = CGFloat(max(0, rowCount - 1)) * 24
+        let contentHeight = headerHeight
+            + CGFloat(rowCount) * cellHeight
+            + rowSpacing
+            + 12 // grid bottom padding
+        return min(420, max(100, contentHeight))
     }
 
     private func toolItem(
         icon: String,
         label: String,
-        isPrimary: Bool = false,
         isOn: Bool? = nil,
         action: @escaping () -> Void
     ) -> some View {
@@ -143,14 +173,7 @@ struct PartyRoomToolsSheet: View {
             VStack(spacing: 6) {
                 ZStack {
                     Circle()
-                        .fill(
-                            isPrimary
-                            ? AnyShapeStyle(LinearGradient(
-                                colors: [Theme.Palette.partyCreateBtnA, Theme.Palette.partyCreateBtnB],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            ))
-                            : AnyShapeStyle(Color.white.opacity(0.08))
-                        )
+                        .fill(Color.white.opacity(0.08))
                         .frame(width: 48, height: 48)
                     Image(systemName: icon)
                         .font(.system(size: 20, weight: .medium))
@@ -888,6 +911,7 @@ struct PartyRoomToolMenuSheet: View {
     let showPk: Bool
     let showSuperWheel: Bool
     let showsLuckyNumber: Bool
+    let showsBasicTools: Bool
     let isRoomMuted: Bool
     let onStartPk: () -> Void
     let onOpenSuperWheel: () -> Void
@@ -900,7 +924,9 @@ struct PartyRoomToolMenuSheet: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 interactiveGames
-                basicTools
+                if showsBasicTools {
+                    basicTools
+                }
             }
             .padding(.horizontal, 18)
             .padding(.top, 16)

@@ -185,7 +185,9 @@ final class RobotCallStore: ObservableObject {
             logger.info("drop incoming: app inactive")
             return false
         }
-        guard SessionStore.shared.user?.userType == 2 else {
+        guard UserTypeExperience.hasFullHostRealtimeCapability(
+            SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+        ) else {
             logger.info("drop incoming: user is not approved host")
             return false
         }
@@ -221,7 +223,9 @@ final class RobotCallStore: ObservableObject {
     private var canPresentReward: Bool {
         guard state == .idle,
               UIApplication.shared.applicationState == .active,
-              SessionStore.shared.user?.userType == 2,
+              UserTypeExperience.hasFullHostRealtimeCapability(
+                  SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+              ),
               !CallStore.shared.blocksRobotCall,
               MatchStore.shared.state == .ended,
               PartyStore.shared.roomState == .idle || PartyStore.shared.roomState == .ended,

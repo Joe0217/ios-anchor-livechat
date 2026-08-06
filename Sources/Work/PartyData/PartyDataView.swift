@@ -1,3 +1,5 @@
+// Party Data 页面暂时停用。保留完整实现，后续恢复入口时移除 #if false / #endif。
+#if false
 import SwiftUI
 
 /// Party Data 主看板 —— 对齐安卓 [PartyRoomDataActivity]（analysis §3.1）。
@@ -295,3 +297,4 @@ struct MicTimeDetailContext: Identifiable {
     let dateType: PartyDataDateType
     let statDate: String?
 }
+#endif

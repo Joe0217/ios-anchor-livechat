@@ -9,6 +9,8 @@ import os
 @MainActor
 final class RegisterStore: ObservableObject {
     static let shared = RegisterStore()
+    /// 107 提审包暂不采集注册审核视频；服务端必填字段统一使用公共占位资源。
+    private static let placeholderReviewVideoURL = "https://img.hnhily.link/00000000/20260806/8c2bc4a182a8483e92c38c06518d1d87.mp4"
     private init() {}
 
     private let logger = Logger(subsystem: "com.anchor.livechat", category: "RegisterStore")
@@ -191,10 +193,10 @@ final class RegisterStore: ObservableObject {
             nickname: nickname,
             birthday: birthday,
             countryId: countryName ?? (countryCode ?? ""),   // Bug fix 2026-07-08：优先用 countryName (en 名 "Spain")，对齐 H5 registerForm.vue:110 `formData.countryId = item.text`（en 名）；locale fallback 兜底
-            inviteCode: inviteCode,
+            inviteCode: RegisterFeatureAvailability.isInvitationCodeEnabled ? inviteCode : "",
             language: languages.joined(separator: ","),
             picList: picUrls,
-            videos: [videoUrl].compactMap { $0 },
+            videos: [Self.placeholderReviewVideoURL],
             gender: gender,
             deviceId: DeviceInfo.deviceId,
             phone: phone
@@ -224,7 +226,9 @@ final class RegisterStore: ObservableObject {
             // 2026-07-12 修：APIError code=-1 是 iOS 内部客户端错误（envelope 解析失败——服务端空 body / 非 JSON / gateway 崩溃）
             // 而非后端业务码；e.message 是内部化文案 "Server response error"，用户看到不 actionable
             // 换成友好 retry 文案，对齐 H5 拦截器 line 133-152 error 分支的 status-mapped 友好文案精神
-            if e.code == "-1" {
+            if e.code == "1076" {
+                submitError = L10n.Register.errorInvalidInvitationCode
+            } else if e.code == "-1" {
                 submitError = L10n.Register.errorServerTemporary
             } else {
                 submitError = e.message   // 后端业务 message 原文（如 1076 → "invite.code.not.exist"，对齐 H5 line 124-130）

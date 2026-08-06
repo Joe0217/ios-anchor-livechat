@@ -6,7 +6,6 @@ struct RegisterRequiredView: View {
     @EnvironmentObject var pathHolder: RegisterPathHolder
 
     @State private var showLanguagePicker = false
-    @State private var showVideoGuide = false
     @State private var toastMsg: String? = nil
 
     private let validator = RegisterFormValidator()
@@ -33,13 +32,8 @@ struct RegisterRequiredView: View {
                     }
 
                     // Photos
-                    section(title: L10n.Register.fieldYourPhotos(6)) {
+                    section(title: L10n.Register.fieldYourPhotos(requiredProfilePhotoCount)) {
                         RegisterPhotosGrid(store: store)
-                    }
-
-                    // Video
-                    section(title: L10n.Register.fieldTakeVideo) {
-                        VideoSlotView(store: store) { showVideoGuide = true }
                     }
 
                     Spacer(minLength: 80)
@@ -87,12 +81,6 @@ struct RegisterRequiredView: View {
         .sheet(isPresented: $showLanguagePicker) {
             LanguagePickerSheet(isPresented: $showLanguagePicker, selected: $store.languages)
                 .giftPanelSheetBackground()
-        }
-        .sheet(isPresented: $showVideoGuide) {
-            VideoGuideSheet(isPresented: $showVideoGuide) {
-                pathHolder.path.append(RegisterRoute.videoRecord)
-            }
-            .giftPanelSheetBackground()
         }
     }
 
@@ -143,7 +131,7 @@ struct RegisterRequiredView: View {
             let requiredResult = validator.validatePage2(
                 languages: store.languages,
                 picUrls: store.picUrls,
-                videoUrl: store.videoUrl
+                inviteCode: effectiveInviteCode
             )
             switch requiredResult {
             case .ok:
@@ -152,8 +140,7 @@ struct RegisterRequiredView: View {
                     await store.submit()
                 }
             case .missingLanguage: showToast(L10n.Register.errorLanguageRequired)
-            case .missingPhotos: showToast(L10n.Register.errorPhotosMin(6))
-            case .missingVideo: showToast(L10n.Register.errorVideoRequired)
+            case .missingPhotos: showToast(L10n.Register.errorPhotosMin(requiredProfilePhotoCount))
             default: break
             }
         } label: {
@@ -173,6 +160,14 @@ struct RegisterRequiredView: View {
             )
         }
         .disabled(store.isSubmitting)
+    }
+
+    private var requiredProfilePhotoCount: Int {
+        validator.requiredProfilePhotoCount(inviteCode: effectiveInviteCode)
+    }
+
+    private var effectiveInviteCode: String {
+        RegisterFeatureAvailability.isInvitationCodeEnabled ? store.inviteCode : ""
     }
 
     private func showToast(_ msg: String) {

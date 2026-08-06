@@ -41,8 +41,8 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
     private var reconnectTask: Task<Void, Never>?
     private var loginUuid: String = ""
     private var disposed = true
-    /// 107 仅在 Party 房内建立的最小心跳连接。该模式仍携带 roomId 刷新 Party TTL，
-    /// 但固定上报 offline，不能把审核账号标为可被通话的正常在线主播。
+    /// 107 的最小常驻心跳连接。进入 Party 后额外携带 roomId 刷新 Party TTL，
+    /// 但无论是否在房内都固定保持空闲在线状态。
     private var isPartyOnlyConnection = false
 
     /// 累计重连尝试次数（日志诊断用）。didOpen 成功时重置为 0。
@@ -88,18 +88,20 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
 
     /// 完整主播登录后调用。重复调用安全；若当前是 Party-only 连接则切回完整主播语义。
     func start(loginUuid: String) {
-        guard SessionStore.shared.user?.userType == 2 else {
+        let userType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.user != nil)
+        guard UserTypeExperience.hasFullHostRealtimeCapability(userType) else {
             AppLogger.heartbeat.notice("[WS] full-host start rejected for non-host session")
             return
         }
         start(loginUuid: loginUuid, partyOnly: false)
     }
 
-    /// 107 在 Party 房进入后调用。该模式只为 `partyRoomHeartbeat()` 刷新 25s TTL：
-    /// 同一条 type=1 消息带 roomId/seatIndex，但 onlineStatus 固定为 offline，避免恢复
-    /// 通话/发现页所依赖的主播在线态。
+    /// 107 登录后即调用；进入 Party 后同一心跳再携带 roomId/seatIndex 刷新 25s TTL。
     func startPartyOnly(loginUuid: String) {
-        guard SessionStore.shared.user?.userType == 107 else {
+        let userType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.user != nil)
+        guard UserTypeExperience.isPartyOnly(userType) else {
             AppLogger.heartbeat.notice("[WS] party-only start rejected for non-107 session")
             return
         }
@@ -114,7 +116,7 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
         }
         self.loginUuid = loginUuid
         isPartyOnlyConnection = partyOnly
-        currentStatus = partyOnly ? .offline : .callEnd
+        currentStatus = .callEnd
         disposed = false
         connect()
     }
@@ -309,12 +311,7 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
         partyRoomId = ""
         partySeatIndex = -1
         AppLogger.heartbeat.notice("📡 [WS] partyContext cleared")
-        if isPartyOnlyConnection {
-            // 107 离开 Party 后不保留任何 WS 常驻能力。
-            stop()
-        } else {
-            sendStatus(currentStatus)
-        }
+        sendStatus(currentStatus)
     }
 
     // MARK: - 计时器
@@ -373,8 +370,14 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
 
     @objc private func onBackground() {
         guard !disposed else { return }
-        cancelPing()
-        sendStatus(.background)  // 后台一次性补 BACKGROUND，不修改 currentStatus
+        if isPartyOnlyConnection {
+            // 固定 107 模式不切换为 BACKGROUND/OFFLINE，并尽可能保留周期心跳；
+            // iOS 挂起进程时由前台恢复路径负责立即补发。
+            sendStatus(currentStatus)
+        } else {
+            cancelPing()
+            sendStatus(.background)
+        }
     }
 
     // MARK: - D 联动入口（LiveStore.pauseForCall / resumeCall 调用）

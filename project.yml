@@ -90,16 +90,18 @@ targets:
           - en
           - ar
           - tr
-        # 摄像头权限说明（美颜/直播/提现身份核验）；文案改走 InfoPlist.strings 本地化，此处英文兜底
-        NSCameraUsageDescription: Used for beauty preview, live streaming, and withdrawal identity verification
-        # 麦克风权限（声网通话音频必需）
-        NSMicrophoneUsageDescription: Used for real-time audio/video calls
-        # 相册读取权限（A-2 注册流程：头像 + 6 张 profile photos 走 PhotosPicker）
-        NSPhotoLibraryUsageDescription: Access to your photo library is required to upload your avatar and profile photos during registration.
+        # 摄像头权限说明（107 美颜预览/拍照）；文案改走 InfoPlist.strings 本地化，此处英文兜底
+        NSCameraUsageDescription: Used for beauty previews and taking photos.
+        # 麦克风权限（107 Party 语音房发言）
+        NSMicrophoneUsageDescription: Used when you speak in Party voice rooms.
+        # 相册读取权限（107 当前注册流程：头像 + 至少 1 张 profile photo）
+        NSPhotoLibraryUsageDescription: Used to upload the avatar and profile photos required during registration.
+        # 相册仅添加权限（美颜相机拍照后自动保存，不读取用户相册）
+        NSPhotoLibraryAddUsageDescription: Allow photo access to save pictures taken with the beauty camera.
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        UIStatusBarHidden: true
+        UIStatusBarHidden: false
         UIViewControllerBasedStatusBarAppearance: false
         # —— 多环境密钥占位（值由 Config/Config-*.xcconfig 注入）——
         # 注：xcodegen 字面写入 plist；Xcode build 期做 $(VAR) → xcconfig 值替换。

@@ -21,6 +21,8 @@ struct PartyRoomInputBar: View {
     let showGiftButton: Bool
     /// Party-only 账号不进入 P2P 会话中心。
     let showMessageButton: Bool
+    /// 107 审核模式下隐藏底栏 Basic Tools 入口。
+    let showToolMenuButton: Bool
     /// 消息按钮未读徽章数（对齐 H5 useUnreadMessageCount + van-badge，>99 显 99+）
     let unreadCount: Int
     /// 对齐安卓 §1 checkMicApplicationVisible：`onSeatApplySwitch && (owner||admin||平台管理员)` 才显示
@@ -74,7 +76,7 @@ struct PartyRoomInputBar: View {
                     micButton
                 }
                 if showGameButton { gameButton }
-                toolMenuButton
+                if showToolMenuButton { toolMenuButton }
                 if showGiftButton { giftButton }
             }
         }
@@ -155,6 +157,19 @@ struct PartyRoomInputBar: View {
             .focused(focus)
             .submitLabel(.send)
             .onSubmit(onSubmit)
+
+            Button(action: onSubmit) {
+                CDNAssetImage("liveRoomSendButton")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 24, height: 24)
+                    .opacity(canSubmit ? 1 : 0.4)
+                    .frame(width: 32, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canSubmit)
+            .accessibilityLabel(L10n.chatInputSend)
         }
         .padding(.horizontal, Theme.Metric.partyRoomInputHPadding)
         .frame(height: Theme.Metric.partyRoomInputHeight)
@@ -167,6 +182,10 @@ struct PartyRoomInputBar: View {
                         .stroke(Theme.Palette.partyRoomInputBorder, lineWidth: 0.5)
                 )
         )
+    }
+
+    private var canSubmit: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     // MARK: - 工具按钮

@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 /// 私聊页真轨接线容器（H-2 spec §6.2 step 2）。
@@ -30,7 +31,6 @@ struct ChatDetailContainer: View {
     let sheetDetent: Binding<PresentationDetent>?
 
     @StateObject private var store: P2PChatStore
-    @ObservedObject private var sessionStore: MessageSessionStore = .shared
     @ObservedObject private var anchorInfoStore: AnchorInfoStore = .shared
     // H-3 spec §1.5.13：客服/系统会话动态判定 chatType；订阅 customerServiceIdStore 变化
     @ObservedObject private var customerIdStore: CustomerServiceIdStore = .shared
@@ -48,6 +48,8 @@ struct ChatDetailContainer: View {
     @State private var privateCache: [AnchorMediaItem] = []
     @State private var privateLoadState: MediaLoadState = .idle
     @ObservedObject private var sessionAuthStore: SessionStore = .shared
+    /// 创建时已由类型化客服路由解析出的单 peer 范围；Store 内仍会动态重复校验。
+    private let isSupportPeerAtCreation: Bool
 
     private enum MediaLoadState { case idle, loading, loaded, failed }
 
@@ -56,6 +58,11 @@ struct ChatDetailContainer: View {
         self.onClose = onClose
         self.originProfileUserId = originProfileUserId
         self.sheetDetent = sheetDetent
+        let permission = SelfPermissionBridge.shared
+        let customerStore = CustomerServiceIdStore.shared
+        let isSupportPeer = !peerYxAccId.isEmpty
+            && customerStore.customerYxAccId == peerYxAccId
+        self.isSupportPeerAtCreation = isSupportPeer
         let adapter = NIMChatAdapter(peerYxAccId: peerYxAccId, selfYxAccId: selfYxAccId)
         // Batch 6.2a：预组装 4 tip L10n 文案传给 P2PChatStore → 让 store 内部结算路径能 append stimulate tip
         let tipTexts = ReplyPointsTipTexts(
@@ -64,26 +71,66 @@ struct ChatDetailContainer: View {
             replyPointGuide: L10n.chatReplyFastTip,
             replyRemind: L10n.chatReplyRemindTip
         )
+        let accessPublisher = Publishers.CombineLatest3(
+            permission.$canDirectMessages,
+            permission.$canSupportMessaging,
+            customerStore.$customerYxAccId
+        )
+        .map { canDirectMessages, canSupportMessaging, customerID in
+            canDirectMessages || (
+                canSupportMessaging
+                    && !peerYxAccId.isEmpty
+                    && customerID == peerYxAccId
+            )
+        }
+        .eraseToAnyPublisher()
         _store = StateObject(wrappedValue: P2PChatStore(
             peerYxAccId: peerYxAccId,
             selfYxAccId: selfYxAccId,
             provider: adapter,
             sendPrivateInfoService: SendPrivateInfoHTTPService.shared,
-            replyPointsTipTexts: tipTexts
+            replyPointsTipTexts: isSupportPeer ? nil : tipTexts,
+            propagatesToSessionStore: !isSupportPeer,
+            directMessagesGate: { _ in
+                permission.canDirectMessagesSnapshot || (
+                    permission.canSupportMessagingSnapshot
+                        && !peerYxAccId.isEmpty
+                        && customerStore.customerYxAccId == peerYxAccId
+                )
+            },
+            isDirectMessagesPermissionResolved: { permission.isLoaded },
+            directMessagesPublisher: accessPublisher,
+            directMessagesLoadedPublisher: permission.$isLoaded.eraseToAnyPublisher()
         ))
     }
 
     var body: some View {
         Group {
-            if permission.canDirectMessages {
-                chatDetail
+            if isAllowedSupportPeer {
+                chatDetail(
+                    peerNickname: L10n.messageSystemInboxAdmin,
+                    peerAvatarURL: nil,
+                    peerUserId: nil
+                )
+            } else if permission.canDirectMessages {
+                RegularChatMetadataHost(peerYxAccId: peerYxAccId) { profile in
+                    chatDetail(
+                        peerNickname: regularPeerNickname(profile),
+                        peerAvatarURL: profile?.icon.flatMap(URL.init(string:)),
+                        peerUserId: profile?.userId
+                    )
+                }
             } else {
                 EmptyView()
             }
         }
     }
 
-    private var chatDetail: some View {
+    private func chatDetail(
+        peerNickname: String,
+        peerAvatarURL: URL?,
+        peerUserId: Int?
+    ) -> some View {
         ChatDetailView(
             store: store,
             peerNickname: peerNickname,
@@ -106,9 +153,11 @@ struct ChatDetailContainer: View {
         )
         // 普通相册不涉及经济能力，可与主聊天加载并行；私密相册、回复奖励均等权限桥完成后再启动。
         .task {
-            await loadMyAlbum()
-            // 保留原有 AnchorInfoStore.loadIfNeeded（给头像等其他字段兜底）
-            await anchorInfoStore.loadIfNeeded()
+            if chatType == .regular {
+                await loadMyAlbum()
+                // 保留原有 AnchorInfoStore.loadIfNeeded（给头像等其他字段兜底）
+                await anchorInfoStore.loadIfNeeded()
+            }
         }
         .task(id: canUsePrivateMedia) {
             guard canUsePrivateMedia else {
@@ -210,6 +259,13 @@ struct ChatDetailContainer: View {
         return .regular
     }
 
+    private var isAllowedSupportPeer: Bool {
+        permission.canSupportMessaging
+            && isSupportPeerAtCreation
+            && !peerYxAccId.isEmpty
+            && customerIdStore.customerYxAccId == peerYxAccId
+    }
+
     /// 私密媒体会创建礼物定价私信，107 需同时关闭礼物与虚拟道具能力。
     private var canUsePrivateMedia: Bool {
         permission.canGiftSending && permission.canVirtualItems
@@ -260,25 +316,36 @@ struct ChatDetailContainer: View {
     // MARK: - 派生数据
 
     /// 系统/客服会话走 i18n title（不显示云信 id）
-    private var peerNickname: String {
-        switch chatType {
-        case .system:   return L10n.messageSystemInboxNotification
-        case .customer: return L10n.messageSystemInboxAdmin
-        case .regular:  return sessionStore.profile(for: peerYxAccId)?.nickname ?? peerYxAccId
+    private func regularPeerNickname(_ profile: ConversationProfile?) -> String {
+        if peerYxAccId == AppConfig.notificationYxAccId {
+            return L10n.messageSystemInboxNotification
         }
-    }
-
-    private var peerAvatarURL: URL? {
-        sessionStore.profile(for: peerYxAccId)?.icon.flatMap { URL(string: $0) }
-    }
-
-    private var peerUserId: Int? {
-        sessionStore.profile(for: peerYxAccId)?.userId
+        return profile?.nickname ?? peerYxAccId
     }
 
     /// 我的头像 —— 走 AnchorInfoStore.iconURL 完整回退链（info → mine → SessionStore.user）
     /// 避免 mine 未拉齐时头像空白（Batch 3.7 修）
     private var myAvatarURL: URL? {
         anchorInfoStore.iconURL
+    }
+}
+
+/// 普通私信才创建全量会话 Store。客服分支不会构造本 View，因此不会注册普通会话 delegate。
+private struct RegularChatMetadataHost<Content: View>: View {
+    let peerYxAccId: String
+    let content: (ConversationProfile?) -> Content
+
+    @ObservedObject private var sessionStore = MessageSessionStore.shared
+
+    init(
+        peerYxAccId: String,
+        @ViewBuilder content: @escaping (ConversationProfile?) -> Content
+    ) {
+        self.peerYxAccId = peerYxAccId
+        self.content = content
+    }
+
+    var body: some View {
+        content(sessionStore.profile(for: peerYxAccId))
     }
 }

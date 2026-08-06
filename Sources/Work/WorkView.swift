@@ -211,7 +211,7 @@ private struct OfflineConfirmDialog: View {
 /// - `.firstLiveRule`：首次开播规则阅读页（对齐 H5 `/liveRule?type=3`，10s 倒计时）
 /// - `.liveSettings`：开播设置页（B-spec-开播设置页）
 /// - `.wishSetting`：愿望单设置页（L-spec-愿望单设置页）
-/// - `.beautySettings`：美颜设置页（K-spec-美颜设置页）
+/// - `.beautySettings(mode:)`：复用美颜设置页；`settings` 为参数设置，`camera` 为拍照模式
 /// - `.giftMessage`：私密媒体解锁（H-2）
 /// - `.profileEdit`：编辑个人资料（复用 EditProfileView；Work tools 入口对齐 H5 `/profile`）
 /// - `.liveData` / `.task` / `.pointsRank`：Work tools 入口，B-F 阶段替换 ComingSoon 占位
@@ -221,7 +221,7 @@ enum WorkRoute: Hashable {
     case firstLiveRule
     case liveSettings
     case wishSetting
-    case beautySettings
+    case beautySettings(mode: BeautySettingsView.Mode)
     case giftMessage        // H-2 私密媒体解锁
     case profileEdit        // Phase A：接 EditProfileView（I 里程碑已实现）
     case liveData           // Phase B：Live Data 页

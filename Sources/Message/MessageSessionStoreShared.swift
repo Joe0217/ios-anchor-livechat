@@ -20,6 +20,11 @@ extension MessageSessionStore {
             provider: NIMSessionAdapter(),
             primeProvider: PrimeLevelService.shared
         )
+        // shared 可能在登录后才被陈旧导航或未读 bridge 首次访问。
+        // 创建当下立即套用权限，避免 107 的延迟实例以默认开启态拉取 P2P/Station。
+        store.setDirectMessagesCapabilityEnabled(
+            SelfPermissionBridge.shared.canDirectMessagesSnapshot
+        )
         // v5.5 空闲清理机制：shared 一被访问就完整挂上 AutoOfflineMonitor sink，
         // 避免遗漏 wiring 造成清理机制沉默失效
         store.attachAutoOfflineObserver()

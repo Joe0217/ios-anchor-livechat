@@ -1,6 +1,7 @@
 /* Info.plist 权限弹窗文案本地化（en）
  * iOS 弹相机/麦克风权限时显示这里的文案，覆盖 project.yml 里的 Info.plist 兜底值
  */
-"NSCameraUsageDescription"     = "Used for beauty preview, live streaming, and withdrawal identity verification";
-"NSMicrophoneUsageDescription" = "Used for real-time audio/video calls";
-"NSPhotoLibraryUsageDescription" = "Access to your photo library is required to upload your avatar and profile photos during registration.";
+"NSCameraUsageDescription"     = "Used for beauty previews and taking photos.";
+"NSMicrophoneUsageDescription" = "Used when you speak in Party voice rooms.";
+"NSPhotoLibraryUsageDescription" = "Used to upload the avatar and profile photos required during registration.";
+"NSPhotoLibraryAddUsageDescription" = "Allow photo access to save pictures taken with the beauty camera.";

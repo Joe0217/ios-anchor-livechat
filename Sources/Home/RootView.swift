@@ -19,7 +19,7 @@ struct RootView: View {
 
     var body: some View {
         // 2026-07-17 tap-fix diagnostic:确认用户实际进入的分支(RestrictedTabView vs MainTabView vs LoginView)
-        let _ = AppLogger.auth.info("[RootView] body eval: isLoggedIn=\(session.isLoggedIn, privacy: .public) isRestricted=\(self.isRestricted, privacy: .public) userType=\(session.user?.userType ?? -999, privacy: .public)")
+        let _ = AppLogger.auth.info("[RootView] body eval: isLoggedIn=\(session.isLoggedIn, privacy: .public) isRestricted=\(self.isRestricted, privacy: .public) effectiveUserType=\(self.effectiveUserType ?? -999, privacy: .public)")
         return ZStack {
             if !session.isLoggedIn {
                 LoginView()
@@ -29,7 +29,7 @@ struct RootView: View {
                 // 缺失角色字段时 fail-closed，防止不完整登录响应放行未审核账号。
                 RestrictedTabView()
             } else {
-                MainTabView(initialSelection: session.user?.userType == 107 ? .party : .home)
+                MainTabView(initialSelection: UserTypeExperience.isPartyOnly(effectiveUserType) ? .party : .home)
             }
 
             // 直播私 call 由 LiveRoomView 持有的 CallView 展示，并注入直播相机。
@@ -167,19 +167,24 @@ struct RootView: View {
         .appLocaleEnvironment()
     }
 
-    /// 完整主播和 Party-only 角色可进入主界面。
-    private var canEnterMainApp: Bool {
-        let userType = session.user?.userType
-        return userType == 2 || userType == 107
+    /// 当前包固定为 107；权限桥尚未发布首帧时也不回退读取真实 userType。
+    private var effectiveUserType: Int? {
+        permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(isAuthenticated: session.isLoggedIn)
     }
 
-    /// 仅完整主播允许启动 RTM、WS、匹配、直播、机器人通话等完整实时能力。
+    /// 完整主播、权限矩阵账号和 Party-only 角色可进入主界面。
+    private var canEnterMainApp: Bool {
+        UserTypeExperience.canEnterMainApp(effectiveUserType)
+    }
+
+    /// 正式主播与 101-106 权限矩阵账号启动完整实时基建；具体功能仍由各 canX 二次 gate。
     private var hasFullHostRealtimeCapability: Bool {
-        session.user?.userType == 2
+        UserTypeExperience.hasFullHostRealtimeCapability(effectiveUserType)
     }
 
     private var isAgency: Bool {
-        session.user?.userType == 9
+        effectiveUserType == 9
     }
 
     /// 已登录却缺少角色字段时保持受限，避免不完整响应绕过审核页。
@@ -190,13 +195,14 @@ struct RootView: View {
     /// 角色能力变化时也要重新同步主播能力。
     private var sessionCapabilityKey: String {
         let user = session.user
-        return "\(session.isLoggedIn)-\(user?.userId ?? -1)-\(user?.userType ?? -1)"
+        return "\(session.isLoggedIn)-\(user?.userId ?? -1)-\(effectiveUserType ?? -1)"
     }
 
     /// 登录态连接同步：NIM 保留给受限页客服聊天和 Party-only 会话；
     /// 只有完整主播角色才启动主播专属实时能力。
     private func syncSessionDependent() async {
         if session.isLoggedIn, let user = session.user {
+            session.synchronizePermissionScopedServices()
             // 受限页仍需 NIM 联系管理员、接收 attachType=58；但其他主播实时能力全部关闭。
             guard hasFullHostRealtimeCapability else {
                 if let account = user.yxAccid, !account.isEmpty,
@@ -215,6 +221,12 @@ struct RootView: View {
                     // PartyRoomView 在小窗态已经卸载，不能依赖其 onChange 撤销已有 RTC 视频订阅。
                     // 角色从完整主播动态降为 Party-only 时，在根级同步中收敛为纯语音 Party 会话。
                     PartyStore.shared.refreshPartyVideoCapability()
+                    // 固定 107 模式登录期间持续维持空闲在线；Party 房上下文由 PartyStore 另行补入。
+                    if UserTypeExperience.isPartyOnly(effectiveUserType),
+                       let loginUuid = user.loginUuid,
+                       !loginUuid.isEmpty {
+                        WSHeartbeat.shared.startPartyOnly(loginUuid: loginUuid)
+                    }
                     PartyStore.shared.resumePartyOnlyHeartbeatIfNeeded()
                 }
                 return
@@ -349,8 +361,15 @@ private final class StartupStationMailStore: ObservableObject {
               requestedUserId == userId,
               SessionStore.shared.isLoggedIn,
               SessionStore.shared.user?.userId == userId,
+              SelfPermissionBridge.shared.canSystemAnnouncementsSnapshot else {
+            return
+        }
+        guard let latest = await service.fetchLatest() else { return }
+        guard !Task.isCancelled,
+              requestedUserId == userId,
+              SessionStore.shared.isLoggedIn,
+              SessionStore.shared.user?.userId == userId,
               SelfPermissionBridge.shared.canSystemAnnouncementsSnapshot,
-              let latest = await service.fetchLatest(),
               latest.id != UserDefaults.standard.string(forKey: Self.readMailIdKey) else {
             return
         }

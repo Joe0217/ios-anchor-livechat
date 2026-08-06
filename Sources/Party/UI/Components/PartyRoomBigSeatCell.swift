@@ -93,6 +93,8 @@ struct PartyRoomBigSeatCell: View {
             .padding(.top, 2)
             // v10：overlayMicIndicator 移除，mic 图标已迁到 nameChip 名字后面（用户 2026-07-13 requirement）
         }
+        // 视频位的渲染层是 UIKit view；点击应由外层麦位 cell 统一分流到菜单/名片卡。
+        .contentShape(Rectangle())
     }
 
     /// v17：MC 装饰双侧翅膀显示条件 —— 空位 or (占用 + 麦关)（对齐 H5 main-wrap.vue L264 v-if）
@@ -243,10 +245,12 @@ struct PartyRoomBigSeatCell: View {
                 CameraPreview(camera: cm, agora: nil, scalingMode: .aspectFill)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
+                    .allowsHitTesting(false)
             } else if allowsVideo, !isSelf, let idx = seat.seatIndex, (seat.cameraEnabled ?? 0) == 1 {
                 PartyRemoteVideoView(seatIndex: idx, engine: engine)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .clipped()
+                    .allowsHitTesting(false)
             } else {
                 cameraOffPlaceholder
             }

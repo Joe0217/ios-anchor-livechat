@@ -113,6 +113,7 @@
 "work.tool.match"            = "مطابقة";
 "work.tool.task"             = "مهمة";
 "work.tool.beauty"           = "الفلتر";
+"work.tool.beautyCamera"     = "كاميرا التجميل";
 "work.tool.points"           = "النقاط";
 "work.tool.giftMessage"      = "رسالة هدية";
 "work.tool.profileUpdate"    = "تحديث الملف";
@@ -185,6 +186,8 @@
 "tab.home"                   = "الرئيسية";
 "tab.messages"               = "الرسائل";
 "tab.party"                  = "حفلة";
+"tab.connections"            = "العلاقات";
+"tab.beauty"                 = "التجميل";
 "tab.work"                   = "العمل";
 "tab.profile"                = "ملفي";
 
@@ -274,6 +277,12 @@
 "followList.action.block"      = "حظر";
 "followList.end"               = "لا مزيد";
 "followList.empty"             = "لا يوجد مستخدمون بعد";
+"connections.support"                   = "دعم العملاء";
+"connections.support.subtitle"          = "احصل على مساعدة بشأن حسابك";
+"connections.support.unavailable"       = "دعم العملاء غير متاح حاليًا. حاول مرة أخرى.";
+"connections.services"                  = "الخدمات";
+"beautyStudio.settings"                 = "إعدادات التجميل";
+"beautyStudio.camera"                   = "كاميرا التجميل";
 "profile.media.reviewing"      = "قيد المراجعة";
 "profile.media.rejected"       = "مرفوض";
 "mediaPreview.close"           = "إغلاق";
@@ -317,6 +326,49 @@
 "settings.selectLanguage"      = "اختر اللغة";
 "settings.feedbackComingSoon"  = "قريباً";
 
+// MARK: - Native 107 Party documents
+"settings.document.anchorPolicy.introduction" = "تنطبق إرشادات المجتمع هذه على تجربة الحفلات المتاحة في Hily.";
+"settings.document.anchorPolicy.respect.title" = "الاحترام في غرف الحفلات";
+"settings.document.anchorPolicy.respect.body" = "استخدم الدردشة العامة والملصقات والتفاعلات المجانية باحترام. لا تضايق أو تهدد أو تتنمر أو تميّز ضد أي شخص أو تستهدفه جنسيًا.";
+"settings.document.anchorPolicy.content.title" = "محتوى وملفات شخصية آمنة";
+"settings.document.anchorPolicy.content.body" = "استخدم معلومات حساب دقيقة ومحتوى مناسبًا. لا تنتحل شخصية الآخرين أو تكشف معلومات شخصية أو تنشر مواد غير قانونية أو عنيفة أو صريحة جنسيًا أو استغلالية.";
+"settings.document.anchorPolicy.commercial.title" = "لا للمقامرة أو الاستغلال التجاري";
+"settings.document.anchorPolicy.commercial.body" = "لا تستخدم غرف الحفلات أو النرد أو حجر-ورق-مقص أو أي تفاعل مجاني للمراهنات أو الجوائز أو المدفوعات أو الاستدراج أو الاحتيال أو أي نشاط تجاري آخر.";
+"settings.document.anchorPolicy.safety.title" = "حافظ على أمان الغرفة";
+"settings.document.anchorPolicy.safety.body" = "لا تُشرك القاصرين في محتوى للبالغين، ولا تطلب التواصل خارج التطبيق بغرض الاستغلال، ولا تشارك تفاصيل الاتصال أو الهوية أو الموقع الخاصة من دون موافقة.";
+"settings.document.anchorPolicy.moderation.title" = "الإشراف";
+"settings.document.anchorPolicy.moderation.body" = "قد نزيل المحتوى أو نقيّد المشاركة في الحفلات أو نحد من الحساب عند مخالفة هذه الإرشادات أو القانون المعمول به. استخدم الإعدادات لحظر حساب غير مرغوب فيه أو لإرسال ملاحظات.";
+
+"settings.document.agreement.introduction" = "تغطي هذه الاتفاقية تجربة Hily التي تركز على الحفلات والمتاحة حاليًا في هذا التطبيق.";
+"settings.document.agreement.acceptance.title" = "القبول";
+"settings.document.agreement.acceptance.body" = "بتسجيل الدخول إلى Hily أو استخدامه، توافق على هذه الاتفاقية وإرشادات المجتمع والقانون المعمول به. لا تستخدم الخدمة عندما لا تكون مخولًا قانونيًا لاستخدامها.";
+"settings.document.agreement.scope.title" = "الميزات المتاحة";
+"settings.document.agreement.scope.body" = "أثناء التسجيل، يطلب Hily صورة رمزية وصورة واحدة على الأقل للملف الشخصي. رموز الدعوة وتسجيل فيديو المراجعة غير متاحين في مسار التسجيل الحالي. بعد التسجيل، يمكن لحسابك استخدام غرف الحفلات والدردشة العامة والملصقات والتفاعلات المجانية البسيطة. لا تتوفر في هذه التجربة ميزة البث المباشر أو المكالمات أو الرسائل الخاصة أو الهدايا أو العملة الافتراضية أو المحفظة أو السحب أو السحوبات أو فيديو الحفلات أو الأنشطة أو الألعاب نصف الشاشة.";
+"settings.document.agreement.use.title" = "استخدام الخدمة";
+"settings.document.agreement.use.body" = "استخدم Hily للترفيه الشخصي المشروع فقط. لا تحاول تجاوز ضوابط الوصول أو تعطيل غرف الحفلات أو أتمتة التفاعلات أو استخدام الخدمة لإيذاء الآخرين.";
+"settings.document.agreement.content.title" = "المحتوى الخاص بك";
+"settings.document.agreement.content.body" = "أنت مسؤول عن معلومات الملف والرسائل والملصقات والتفاعلات المجانية التي ترسلها. يجب أن تملك الحقوق اللازمة لمشاركتها وأن تلتزم بإرشادات المجتمع.";
+"settings.document.agreement.service.title" = "توفر الخدمة وتنفيذ القواعد";
+"settings.document.agreement.service.body" = "قد نقوم بصيانة ميزات الحفلات أو تغييرها أو تعليقها أو إزالتها عند الحاجة للسلامة أو الأمان أو الامتثال القانوني أو تشغيل الخدمة. قد تؤدي المخالفات إلى إزالة المحتوى أو تقييد المشاركة أو فرض قيود على الحساب.";
+"settings.document.agreement.account.title" = "الحساب والملاحظات";
+"settings.document.agreement.account.body" = "حافظ على سرية بيانات دخول حسابك وأبلغنا عن أي استخدام غير مصرح به مشتبه به. تتوفر خيارات الحساب والملاحظات في الإعدادات للطلبات أو المخاوف.";
+"settings.document.agreement.changes.title" = "تغييرات هذه الاتفاقية";
+"settings.document.agreement.changes.body" = "قد نحدّث هذه الاتفاقية مع تغير الخدمة أو المتطلبات القانونية. استمرارك في الاستخدام بعد التحديث يعني قبولك للاتفاقية المحدثة.";
+
+"settings.document.privacy.introduction" = "توضح هذه السياسة كيفية معالجة تجربة Hily التي تركز على الحفلات للمعلومات.";
+"settings.document.privacy.data.title" = "المعلومات التي نعالجها";
+"settings.document.privacy.data.body" = "نعالج بيانات الحساب ومعلومات الملف المطلوبة أثناء التسجيل، بما في ذلك البريد الإلكتروني والاسم المستعار وتاريخ الميلاد والبلد واللغات والصورة الرمزية وصورة واحدة على الأقل للملف الشخصي. لا تُستخدم رموز الدعوة أو تسجيل فيديو المراجعة في مسار التسجيل الحالي. كما نعالج المشاركة في غرف الحفلات ورسائل الغرف العامة والملصقات وأحداث التفاعل المجاني ومعلومات الجهاز أو التشخيص اللازمة لتشغيل الخدمة وتأمينها.";
+"settings.document.privacy.use.title" = "كيفية استخدام المعلومات";
+"settings.document.privacy.use.body" = "نستخدم المعلومات لمصادقة حسابك وتقديم غرف الحفلات والتفاعلات العامة والاستجابة للملاحظات ومنع الإساءة ومعالجة المشكلات والوفاء بالالتزامات القانونية.";
+"settings.document.privacy.visibility.title" = "ما يمكن للمشاركين الآخرين رؤيته";
+"settings.document.privacy.visibility.body" = "قد تكون الرسائل والملصقات والتفاعلات المجانية المرسلة في غرفة حفلات مرئية للمشاركين الآخرين في تلك الغرفة. لا تشارك معلومات الاتصال أو الهوية أو الموقع الخاصة أو أي معلومات حساسة أخرى علنًا.";
+"settings.document.privacy.sharing.title" = "مقدمو الخدمة والإفصاح";
+"settings.document.privacy.sharing.body" = "قد نستخدم مزودين يساعدون في تشغيل الاتصالات والاستضافة والسلامة وخدمات الدعم. وقد نفصح عن المعلومات عندما يقتضي القانون ذلك أو لحماية المستخدمين أو الخدمة أو الجمهور.";
+"settings.document.privacy.security.title" = "الاحتفاظ والأمان";
+"settings.document.privacy.security.body" = "نحتفظ بالمعلومات فقط طالما يلزم للأغراض الموضحة هنا والالتزامات المعمول بها. نستخدم وسائل حماية معقولة، لكن لا يمكن لأي خدمة عبر الإنترنت ضمان الأمان المطلق.";
+"settings.document.privacy.choices.title" = "اختياراتك وطلباتك";
+"settings.document.privacy.choices.body" = "يمكنك إدارة خيارات الحساب المتاحة وقائمة الحظر في الإعدادات. لأسئلة الخصوصية أو طلبات الوصول إلى المعلومات أو تصحيحها أو حذفها، أرسل ملاحظات من الإعدادات.";
+
 // MARK: - Feedback 反馈表单页
 "feedback.type.appError"       = "خطأ في التطبيق";
 "feedback.type.accountError"   = "خطأ في الحساب";
@@ -342,6 +394,7 @@
 "publish.charCountFormat"    = "%d/500";
 "publish.posting"            = "جارٍ النشر...";
 "publish.addImage"           = "إضافة صورة";
+"publish.mediaSource.photoLibrary" = "مكتبة الصور";
 "publish.removeImage"        = "إزالة الصورة";
 "publish.fabLabel"           = "إنشاء منشور";
 "publish.discard.title"      = "تجاهل المنشور؟";
@@ -351,6 +404,7 @@
 "publish.toast.textEmpty"    = "يرجى إدخال المحتوى";
 "publish.toast.noImages"     = "يرجى إضافة صورة واحدة على الأقل";
 "publish.toast.imageTooLarge" = "الصورة كبيرة جدًا (>10MB)";
+"publish.toast.photoLoadFailed" = "تعذر تحميل الصورة المحددة. حاول مجددًا";
 "publish.toast.credentialFailed" = "فشل في الحصول على بيانات الاعتماد";
 "publish.toast.uploadFailed" = "فشل التحميل، حاول مجددًا";
 "publish.toast.createFailed" = "فشل النشر";
@@ -366,6 +420,11 @@
 "auth.loggingIn"             = "جاري تسجيل الدخول...";
 "auth.forgetPassword"        = "نسيت كلمة المرور؟";
 "auth.togglePasswordA11y"    = "إظهار كلمة المرور أو إخفاؤها";
+"auth.consent.prefix"        = "قرأت وأوافق على";
+"auth.consent.and"           = "و";
+"auth.consent.toggleA11y"    = "الموافقة على اتفاقية المستخدم وسياسة الخصوصية";
+"auth.clearEmailA11y"        = "مسح البريد الإلكتروني";
+"auth.clearPasswordA11y"     = "مسح كلمة المرور";
 
 // MARK: - LivePrepare 开播准备
 "livePrepare.navTitle"       = "تجربة البث";
@@ -526,6 +585,7 @@
 "mediaPermission.cameraRequired" = "يلزم السماح بالوصول إلى الكاميرا. فعّلها في الإعدادات، ثم أعد تشغيل Hily للمتابعة.";
 "mediaPermission.microphoneRequired" = "يلزم السماح بالوصول إلى الميكروفون. فعّله في الإعدادات، ثم أعد تشغيل Hily للمتابعة.";
 "mediaPermission.liveRequired" = "يلزم السماح بالوصول إلى الكاميرا والميكروفون. فعّلهما في الإعدادات، ثم أعد تشغيل Hily للمتابعة.";
+"mediaPermission.photoLibraryAddRequired" = "يلزم السماح بإضافة الصور لحفظ صور كاميرا التجميل. فعّل الإذن في الإعدادات للمتابعة.";
 "mediaPermission.alertTitle" = "الأذونات مطلوبة";
 "liveRoom.statusLiveFormat"  = "بث %@";
 "liveRoom.statusConnecting"  = "جاري الاتصال...";
@@ -1676,6 +1736,9 @@
 
 // Save 成功 toast（2026-07-03 对齐 H5 index.vue:155；ar 待 J 期翻译，暂 English fallback）
 "beautySettings.saveSuccess.toast"                          = "Save success!";
+"beautyCamera.capturePhoto"                                 = "التقاط صورة";
+"beautyCamera.captureFailed"                                = "تعذر حفظ الصورة. يرجى المحاولة مرة أخرى.";
+"beautyCamera.captureNoFrame"                               = "الكاميرا قيد التجهيز. يرجى المحاولة مرة أخرى.";
 
 // MARK: - Match tab（L 里程碑）
 "match.marquee.callStarted"      = "بدأت مكالمة الفيديو.";

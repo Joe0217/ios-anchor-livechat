@@ -20,31 +20,19 @@ extension SelfPermissionBridge {
             sessionPublisher: sessionRelay.eraseToAnyPublisher()
         )
 
-        // 异步派发到 MainActor 绑定 SessionStore（+ DEBUG 通道叠加）
+        // 异步派发到 MainActor 绑定登录态。当前包固定为 107，不读取真实 userType，
+        // DEBUG override 同样不再改变有效角色，避免提审结构被本地状态漂移。
         Task { @MainActor in
             let session = SessionStore.shared
-
-            #if DEBUG
-            // DEBUG：优先取 override；nil 时 fallback 到 SessionStore
-            DebugPermissionOverride.shared.publisher
-                .combineLatest(session.$user)
-                .sink { override, user in
-                    sessionRelay.send(PermissionSessionState(
-                        userType: override ?? user?.userType,
-                        isAuthenticated: user != nil
-                    ))
-                }
-                .store(in: &sharedBindCancellables)
-            #else
             session.$user
                 .sink { user in
+                    let isAuthenticated = user != nil
                     sessionRelay.send(PermissionSessionState(
-                        userType: user?.userType,
-                        isAuthenticated: user != nil
+                        userType: UserTypeExperience.effectiveUserType(isAuthenticated: isAuthenticated),
+                        isAuthenticated: isAuthenticated
                     ))
                 }
                 .store(in: &sharedBindCancellables)
-            #endif
         }
 
         return bridge

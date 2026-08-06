@@ -113,6 +113,7 @@
 "work.tool.match"            = "Eşleş";
 "work.tool.task"             = "Görev";
 "work.tool.beauty"           = "Güzellik";
+"work.tool.beautyCamera"     = "Güzellik Kamerası";
 "work.tool.points"           = "Puan";
 "work.tool.giftMessage"      = "Hediye Mesajı";
 "work.tool.profileUpdate"    = "Profili Güncelle";
@@ -185,6 +186,8 @@
 "tab.home"                   = "Ana Sayfa";
 "tab.messages"               = "Mesajlar";
 "tab.party"                  = "Parti";
+"tab.connections"            = "Bağlantılar";
+"tab.beauty"                 = "Güzellik";
 "tab.work"                   = "İş";
 "tab.profile"                = "Profil";
 
@@ -274,6 +277,12 @@
 "followList.action.block"      = "Engelle";
 "followList.end"               = "Daha fazla yok";
 "followList.empty"             = "Henüz kullanıcı yok";
+"connections.support"                   = "Müşteri Desteği";
+"connections.support.subtitle"          = "Hesabınız için yardım alın";
+"connections.support.unavailable"       = "Müşteri desteği kullanılamıyor. Lütfen tekrar deneyin.";
+"connections.services"                  = "Hizmetler";
+"beautyStudio.settings"                 = "Güzellik Ayarları";
+"beautyStudio.camera"                   = "Güzellik Kamerası";
 "profile.media.reviewing"      = "İnceleniyor";
 "profile.media.rejected"       = "Reddedildi";
 "mediaPreview.close"           = "Kapat";
@@ -317,6 +326,49 @@
 "settings.selectLanguage"      = "Dil Seçin";
 "settings.feedbackComingSoon"  = "Yakında";
 
+// MARK: - Native 107 Party documents
+"settings.document.anchorPolicy.introduction" = "Bu Topluluk Kuralları, Hily'de kullanılabilen Parti deneyimi için geçerlidir.";
+"settings.document.anchorPolicy.respect.title" = "Parti Odalarında Saygı";
+"settings.document.anchorPolicy.respect.body" = "Herkese açık sohbeti, ifadeleri ve ücretsiz etkileşimleri saygılı kullanın. Kimseyi taciz etmeyin, tehdit etmeyin, zorbalık yapmayın, ayrımcılığa uğratmayın veya cinsel olarak hedef almayın.";
+"settings.document.anchorPolicy.content.title" = "Güvenli İçerik ve Profiller";
+"settings.document.anchorPolicy.content.body" = "Doğru hesap bilgileri ve uygun içerik kullanın. Başkalarını taklit etmeyin, kişisel bilgileri ifşa etmeyin veya yasa dışı, şiddet içeren, açık cinsel ya da istismar içeren materyal paylaşmayın.";
+"settings.document.anchorPolicy.commercial.title" = "Kumar ve Ticari Kötüye Kullanım Yasaktır";
+"settings.document.anchorPolicy.commercial.body" = "Parti odalarını, zarı, taş-kağıt-makası veya ücretsiz etkileşimleri bahis, ödül, ödeme, talep, dolandırıcılık ya da başka ticari faaliyetler için kullanmayın.";
+"settings.document.anchorPolicy.safety.title" = "Odayı Güvenli Tutun";
+"settings.document.anchorPolicy.safety.body" = "Küçükleri yetişkin içeriklere dahil etmeyin, istismar amacıyla uygulama dışı iletişim istemeyin veya izin olmadan özel iletişim, kimlik ya da konum bilgilerini paylaşmayın.";
+"settings.document.anchorPolicy.moderation.title" = "Moderasyon";
+"settings.document.anchorPolicy.moderation.body" = "Bu kurallar veya geçerli hukuk ihlal edildiğinde içerikleri kaldırabilir, Parti katılımını kısıtlayabilir ya da hesabı sınırlayabiliriz. İstenmeyen bir hesabı engellemek veya geri bildirim göndermek için Ayarlar'ı kullanın.";
+
+"settings.document.agreement.introduction" = "Bu sözleşme, uygulamada şu anda kullanılabilen Parti odaklı Hily deneyimini kapsar.";
+"settings.document.agreement.acceptance.title" = "Kabul";
+"settings.document.agreement.acceptance.body" = "Hily'de oturum açarak veya Hily'yi kullanarak bu sözleşmeyi, Topluluk Kurallarını ve geçerli hukuku kabul edersiniz. Hizmeti kullanmaya yasal olarak yetkili olmadığınız yerlerde kullanmayın.";
+"settings.document.agreement.scope.title" = "Kullanılabilir Özellikler";
+"settings.document.agreement.scope.body" = "Kayıt sırasında Hily bir avatar ve en az 1 profil fotoğrafı ister. Davet kodları ve inceleme videosu kaydı mevcut kayıt akışında sunulmaz. Kayıttan sonra hesabınız Parti odalarını, herkese açık oda sohbetini, ifadeleri ve basit ücretsiz etkileşimleri kullanabilir. Canlı yayın, aramalar, doğrudan mesajlar, sanal hediyeler veya para birimi, cüzdan, para çekme, çekilişler, Parti videosu, etkinlikler ve yarım ekran oyunları bu deneyimde sunulmaz.";
+"settings.document.agreement.use.title" = "Hizmeti Kullanma";
+"settings.document.agreement.use.body" = "Hily'yi yalnızca yasal, kişisel eğlence için kullanın. Erişim kontrollerini aşmaya, Parti odalarını bozmaya, etkileşimleri otomatikleştirmeye veya hizmeti başkalarına zarar vermek için kullanmaya çalışmayın.";
+"settings.document.agreement.content.title" = "İçeriğiniz";
+"settings.document.agreement.content.body" = "Gönderdiğiniz profil bilgileri, mesajlar, ifadeler ve ücretsiz etkileşimlerden siz sorumlusunuz. Bunları paylaşmak için gerekli haklara sahip olmalı ve Topluluk Kurallarına uymalısınız.";
+"settings.document.agreement.service.title" = "Hizmet Kullanılabilirliği ve Uygulama";
+"settings.document.agreement.service.body" = "Güvenlik, emniyet, yasal uyumluluk veya hizmetin işletilmesi gerektiğinde Parti özelliklerini sürdürebilir, değiştirebilir, askıya alabilir veya kaldırabiliriz. İhlaller içeriğin kaldırılmasına, katılımın kısıtlanmasına veya hesap sınırlarına yol açabilir.";
+"settings.document.agreement.account.title" = "Hesap ve Geri Bildirim";
+"settings.document.agreement.account.body" = "Hesap bilgilerinizi gizli tutun ve şüpheli yetkisiz kullanımı bize bildirin. İstekleriniz veya endişeleriniz için hesap seçenekleri ve Geri Bildirim Ayarlar'da bulunur.";
+"settings.document.agreement.changes.title" = "Bu Sözleşmedeki Değişiklikler";
+"settings.document.agreement.changes.body" = "Hizmet veya yasal gereklilikler değiştikçe bu sözleşmeyi güncelleyebiliriz. Güncellemeden sonra kullanıma devam etmeniz güncellenmiş sözleşmeyi kabul ettiğiniz anlamına gelir.";
+
+"settings.document.privacy.introduction" = "Bu politika, Parti odaklı Hily deneyiminin bilgileri nasıl işlediğini açıklar.";
+"settings.document.privacy.data.title" = "İşlediğimiz Bilgiler";
+"settings.document.privacy.data.body" = "Kayıt sırasında gerekli olan e-posta, kullanıcı adı, doğum tarihi, ülke, diller, avatar ve en az 1 profil fotoğrafı dahil hesap ve profil verilerini işleriz. Davet kodları ve inceleme videosu kaydı mevcut kayıt akışında kullanılmaz. Ayrıca hizmeti işletmek ve güvenceye almak için Parti odası katılımını, herkese açık oda mesajlarını, ifadeleri, ücretsiz etkileşim olaylarını ve cihaz ya da tanılama bilgilerini işleriz.";
+"settings.document.privacy.use.title" = "Bilgileri Nasıl Kullanırız";
+"settings.document.privacy.use.body" = "Bilgileri hesabınızı doğrulamak, Parti odalarını ve herkese açık etkileşimleri sağlamak, geri bildirimlere yanıt vermek, kötüye kullanımı önlemek, sorunları gidermek ve yasal yükümlülükleri yerine getirmek için kullanırız.";
+"settings.document.privacy.visibility.title" = "Diğer Katılımcıların Görebilecekleri";
+"settings.document.privacy.visibility.body" = "Bir Parti odasında gönderilen mesajlar, ifadeler ve ücretsiz etkileşimler o odadaki diğer katılımcılar tarafından görülebilir. Özel iletişim, kimlik, konum veya diğer hassas bilgileri herkese açık olarak paylaşmayın.";
+"settings.document.privacy.sharing.title" = "Hizmet Sağlayıcılar ve Açıklama";
+"settings.document.privacy.sharing.body" = "İletişim, barındırma, güvenlik ve destek hizmetlerini yürütmeye yardımcı olan sağlayıcıları kullanabiliriz. Ayrıca yasaların gerektirdiği durumlarda veya kullanıcıları, hizmeti ya da kamuyu korumak için bilgi açıklayabiliriz.";
+"settings.document.privacy.security.title" = "Saklama ve Güvenlik";
+"settings.document.privacy.security.body" = "Bilgileri yalnızca burada açıklanan amaçlar ve geçerli yükümlülükler için gerektiği kadar saklarız. Makul önlemler kullanırız ancak hiçbir çevrimiçi hizmet mutlak güvenliği garanti edemez.";
+"settings.document.privacy.choices.title" = "Seçimleriniz ve Talepleriniz";
+"settings.document.privacy.choices.body" = "Kullanılabilir hesap seçeneklerini ve engelleme listenizi Ayarlar'dan yönetebilirsiniz. Gizlilik soruları veya bilgilere erişme, düzeltme ya da silme talepleri için Ayarlar'dan Geri Bildirim gönderin.";
+
 // MARK: - Feedback 反馈表单页
 "feedback.type.appError"       = "Uygulama Hatası";
 "feedback.type.accountError"   = "Hesap Hatası";
@@ -342,6 +394,7 @@
 "publish.charCountFormat"    = "%d/500";
 "publish.posting"            = "Yayınlanıyor...";
 "publish.addImage"           = "Resim ekle";
+"publish.mediaSource.photoLibrary" = "Fotoğraf Kitaplığı";
 "publish.removeImage"        = "Resmi kaldır";
 "publish.fabLabel"           = "Gönderi oluştur";
 "publish.discard.title"      = "Gönderi iptal edilsin mi?";
@@ -351,6 +404,7 @@
 "publish.toast.textEmpty"    = "Lütfen içerik girin";
 "publish.toast.noImages"     = "Lütfen en az 1 resim ekleyin";
 "publish.toast.imageTooLarge" = "Resim çok büyük (>10MB)";
+"publish.toast.photoLoadFailed" = "Seçilen fotoğraf yüklenemedi. Lütfen tekrar deneyin";
 "publish.toast.credentialFailed" = "Yükleme bilgileri alınamadı";
 "publish.toast.uploadFailed" = "Yükleme başarısız, tekrar deneyin";
 "publish.toast.createFailed" = "Yayınlama başarısız";
@@ -366,6 +420,11 @@
 "auth.loggingIn"             = "Giriş yapılıyor...";
 "auth.forgetPassword"        = "Şifreni mi unuttun?";
 "auth.togglePasswordA11y"    = "Şifreyi göster veya gizle";
+"auth.consent.prefix"        = "Okudum ve kabul ediyorum:";
+"auth.consent.and"           = "ve";
+"auth.consent.toggleA11y"    = "Kullanıcı Sözleşmesi ve Gizlilik Politikasını kabul et";
+"auth.clearEmailA11y"        = "E-postayı temizle";
+"auth.clearPasswordA11y"     = "Şifreyi temizle";
 
 // MARK: - LivePrepare 开播准备
 "livePrepare.navTitle"       = "Yayın Demo";
@@ -526,6 +585,7 @@
 "mediaPermission.cameraRequired" = "Kamera erişimi gerekli. Ayarlar'dan etkinleştirin, ardından devam etmek için Hily'yi yeniden başlatın.";
 "mediaPermission.microphoneRequired" = "Mikrofon erişimi gerekli. Ayarlar'dan etkinleştirin, ardından devam etmek için Hily'yi yeniden başlatın.";
 "mediaPermission.liveRequired" = "Kamera ve mikrofon erişimi gerekli. Ayarlar'dan etkinleştirin, ardından devam etmek için Hily'yi yeniden başlatın.";
+"mediaPermission.photoLibraryAddRequired" = "Güzellik kamerası fotoğraflarını kaydetmek için Fotoğraflar'a ekleme izni gerekli. Ayarlar'dan etkinleştirin.";
 "mediaPermission.alertTitle" = "İzinler Gerekli";
 "liveRoom.statusLiveFormat"  = "Canlı %@";
 "liveRoom.statusConnecting"  = "Bağlanılıyor...";
@@ -1676,6 +1736,9 @@
 
 // Save 成功 toast（2026-07-03 对齐 H5 index.vue:155；tr 待 J 期翻译，暂 English fallback）
 "beautySettings.saveSuccess.toast"                          = "Save success!";
+"beautyCamera.capturePhoto"                                 = "Fotoğraf çek";
+"beautyCamera.captureFailed"                                = "Fotoğraf kaydedilemedi. Lütfen tekrar deneyin.";
+"beautyCamera.captureNoFrame"                               = "Kamera hazırlanıyor. Lütfen tekrar deneyin.";
 
 // MARK: - Match tab（L 里程碑）
 "match.marquee.callStarted"      = "Görüntülü Arama Başladı.";

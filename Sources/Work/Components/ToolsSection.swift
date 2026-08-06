@@ -20,9 +20,10 @@ struct ToolsSection: View {
     /// cell 显隐同步更新（原直接读 shared.canX 无订阅，权限翻转后 cell stale）。
     @ObservedObject private var permission = SelfPermissionBridge.shared
     @State private var showBeautyPermissionAlert = false
+    @State private var pendingBeautyMode: BeautySettingsView.Mode?
 
     /// 工具项（图标资源名 + 标签）。顺序与 H5 workspaceItems 对齐；My Guardian 为主播只读列表。
-    /// Party Data 是 iOS 新增入口，放在 H5 Live Data 后、Newbie 前。
+    /// Party Data 入口暂时隐藏，页面实现保留待后续恢复。
     private var tools: [(icon: String, label: String)] {
         var arr: [(icon: String, label: String)] = [
             ("toolWorkingGuide", L10n.toolWorkingGuide),
@@ -30,6 +31,7 @@ struct ToolsSection: View {
             ("toolMatch", L10n.toolMatch),
             ("toolTask", L10n.toolTask),
             ("toolBeauty", L10n.toolBeauty),
+            ("toolBeautyCamera", L10n.toolBeautyCamera),
             ("toolPoints", L10n.toolPoints),
             ("toolGiftMessage", L10n.toolGiftMessage),
             ("toolProfileUpdate", L10n.toolProfileUpdate),
@@ -38,7 +40,6 @@ struct ToolsSection: View {
             ("toolLiveData", L10n.toolLiveData),
             // H5 Work 页使用 guardian.myGuardians（复数），与入口所展示的守护者列表一致。
             ("toolMyGuardian", L10n.guardianMyGuardians),
-            ("toolPartyData", L10n.toolPartyData),
         ]
         // 107 Party-only 账号不应通过工作台看到私密付费内容、虚拟道具或守护者权益。
         if !permission.canVirtualItems || !permission.canGiftSending {
@@ -87,7 +88,15 @@ struct ToolsSection: View {
                     // Beauty → 美颜设置页（K-spec-美颜设置页 §0.4 Q1；生产入口）
                     } else if tools[i].icon == "toolBeauty" {
                         Button {
-                            openBeautySettings()
+                            openBeautyPage(mode: .settings)
+                        } label: {
+                            cell
+                        }
+                            .buttonStyle(.plain)
+                    // Beauty Camera -> the same beauty controls with a live capture action.
+                    } else if tools[i].icon == "toolBeautyCamera" {
+                        Button {
+                            openBeautyPage(mode: .camera)
                         } label: {
                             cell
                         }
@@ -119,13 +128,7 @@ struct ToolsSection: View {
                             NavigationLink(value: WorkRoute.liveData) { cell }
                                 .buttonStyle(.plain)
                         }
-                    // Party Data → 占位（H5 蓝本无此入口，Downloads UI 新增；未来落地页替换 ComingSoon）
-                    // P 项目权限管理 v2：canParty=false 时不渲染入口
-                    } else if tools[i].icon == "toolPartyData" {
-                        if permission.canParty {
-                            NavigationLink(value: WorkRoute.partyData) { cell }
-                                .buttonStyle(.plain)
-                        }
+                    // Party Data 暂时隐藏：入口和页面均保留注释，后续恢复时接回 WorkRoute.partyData。
                     // My Guardian → 主播自己的守护者全屏榜单（只读，无购买链路）
                     } else if tools[i].icon == "toolMyGuardian" {
                         NavigationLink(value: WorkRoute.myGuardian) { cell }
@@ -155,20 +158,25 @@ struct ToolsSection: View {
             if showBeautyPermissionAlert {
                 MediaPermissionDialog(
                     requirement: .camera,
-                    onCancel: { showBeautyPermissionAlert = false },
+                    onCancel: {
+                        showBeautyPermissionAlert = false
+                        pendingBeautyMode = nil
+                    },
                     onConfirm: retryBeautyCameraPermission
                 )
             }
         }
     }
 
-    private func openBeautySettings() {
+    private func openBeautyPage(mode: BeautySettingsView.Mode) {
+        pendingBeautyMode = mode
         Task { @MainActor in
             guard await MediaPermissionGate.requestAccess(for: .camera) else {
                 showBeautyPermissionAlert = true
                 return
             }
-            path.append(WorkRoute.beautySettings)
+            pendingBeautyMode = nil
+            path.append(WorkRoute.beautySettings(mode: mode))
         }
     }
 
@@ -179,18 +187,24 @@ struct ToolsSection: View {
                 return
             }
             showBeautyPermissionAlert = false
-            path.append(WorkRoute.beautySettings)
+            let mode = pendingBeautyMode ?? .settings
+            pendingBeautyMode = nil
+            path.append(WorkRoute.beautySettings(mode: mode))
         }
     }
 
     // MARK: - 单个工具
     private func toolCell(icon: String, label: String) -> some View {
         VStack(spacing: 8) {
-            CDNAssetImage(icon)
-                .resizable()
-                .scaledToFit()
-                .frame(width: Theme.Metric.toolTile, height: Theme.Metric.toolTile)
-                .accessibilityHidden(true)
+            if icon == "toolBeautyCamera" {
+                beautyCameraToolIcon
+            } else {
+                CDNAssetImage(icon)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: Theme.Metric.toolTile, height: Theme.Metric.toolTile)
+                    .accessibilityHidden(true)
+            }
             Text(label)
                 .font(Theme.Typography.toolLabel)
                 .foregroundStyle(.white)
@@ -206,6 +220,24 @@ struct ToolsSection: View {
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+
+    /// The camera symbol is an iOS 16 SF Symbol already used elsewhere in the app;
+    /// keeping it local avoids depending on a CDN asset that may not exist yet.
+    private var beautyCameraToolIcon: some View {
+        Image(systemName: "camera.fill")
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: Theme.Metric.toolTile, height: Theme.Metric.toolTile)
+            .background(
+                LinearGradient(
+                    colors: [Color(hex: 0x8515FF), Color(hex: 0xE40132)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+            )
+            .accessibilityHidden(true)
     }
 
     /// H5 style: linear-gradient(90deg,#F8A72E 0%,#FF4343 100%)，7pt 字，圆角 5，46×13

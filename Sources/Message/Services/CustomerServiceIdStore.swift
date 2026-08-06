@@ -38,7 +38,9 @@ final class CustomerServiceIdStore: ObservableObject, CustomerServiceIdProviderP
     }
 
     private let fetcher: Fetcher
-    private var isFetching = false
+    /// 并发入口共享同一个请求；后来的调用会等待结果，而不是提前返回并误判客服不可用。
+    private var refreshTask: Task<Void, Never>?
+    private var refreshGeneration: UInt = 0
     private let logger = Logger(subsystem: "com.anchor.livechat", category: "CustomerServiceIdStore")
 
     /// 生产默认：调 `/api/im/getCustomerServiceList`。
@@ -58,24 +60,41 @@ final class CustomerServiceIdStore: ObservableObject, CustomerServiceIdProviderP
 
     /// 幂等拉取：已有值直接返；正在拉不重入；成功后写 `@Published`。
     func refreshIfNeeded() async {
-        if customerYxAccId != nil || isFetching { return }
-        isFetching = true
-        defer { isFetching = false }
-        do {
-            let list = try await fetcher()
-            guard let first = list.first, let imId = first.imId, !imId.isEmpty else {
-                logger.notice("[CustomerService] list 为空 or imId 缺失")
-                return
+        if customerYxAccId != nil { return }
+        if let refreshTask {
+            await refreshTask.value
+            return
+        }
+
+        let generation = refreshGeneration
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let list = try await self.fetcher()
+                guard !Task.isCancelled, generation == self.refreshGeneration else { return }
+                guard let first = list.first, let imId = first.imId, !imId.isEmpty else {
+                    self.logger.notice("[CustomerService] list 为空 or imId 缺失")
+                    return
+                }
+                self.customerYxAccId = imId
+                self.logger.info("🟣 [CustomerService] fetched customerYxAccId=\(imId, privacy: .private)")
+            } catch {
+                guard !Task.isCancelled, generation == self.refreshGeneration else { return }
+                self.logger.error("[CustomerService] fetch failed \(String(describing: error), privacy: .private)")
             }
-            customerYxAccId = imId
-            logger.info("🟣 [CustomerService] fetched customerYxAccId=\(imId, privacy: .private)")
-        } catch {
-            logger.error("[CustomerService] fetch failed \(String(describing: error), privacy: .private)")
+        }
+        refreshTask = task
+        await task.value
+        if generation == refreshGeneration {
+            refreshTask = nil
         }
     }
 
     /// 登出清空。
     func clear() {
+        refreshGeneration &+= 1
+        refreshTask?.cancel()
+        refreshTask = nil
         customerYxAccId = nil
     }
 }

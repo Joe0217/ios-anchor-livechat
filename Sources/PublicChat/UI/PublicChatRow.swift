@@ -61,6 +61,8 @@ struct PublicChatRow: View {
     var onWinnerActivity: ((String) -> Void)? = nil
     /// 钻石福袋结算卡点击，主播端据此打开获奖名单。
     var onTapDiamondGiftSettled: ((Int64) -> Void)? = nil
+    /// Party 审核账号的极简公屏发送者样式。
+    var usesPlainPartySenderStyle: Bool = false
 
     var body: some View {
         Group {
@@ -89,7 +91,8 @@ struct PublicChatRow: View {
                     translation: translation, replyToNick: replyToNick,
                     onTapTranslate: showTranslate ? { onTapTranslate?(message) } : nil,
                     isTranslating: isTranslating,
-                    onTapNickname: senderCardAction
+                    onTapNickname: senderCardAction,
+                    usesPlainSenderStyle: usesPlainPartySenderStyle
                 )
             } else {
                 RowRegularText(
@@ -236,8 +239,17 @@ private struct RowPartyRegularText: View {
     let onTapTranslate: (() -> Void)?
     let isTranslating: Bool
     let onTapNickname: (() -> Void)?
+    let usesPlainSenderStyle: Bool
 
     var body: some View {
+        if usesPlainSenderStyle {
+            plainBody
+        } else {
+            decoratedBody
+        }
+    }
+
+    private var decoratedBody: some View {
         HStack(alignment: .top, spacing: 8) {
             // v4 动态尺寸：无头像框时头像充满 32pt（否则头像内 24pt 视觉过小）；有头像框时头像 24pt 框外扩 32pt
             PartyAvatarWithFrame(
@@ -250,6 +262,45 @@ private struct RowPartyRegularText: View {
                 bubbleBody
             }
         }
+    }
+
+    /// 107 公屏：普通头像 + 昵称 + 正文。保留昵称点击打开名片卡，但不加载头像框或其他装饰资源。
+    @ViewBuilder
+    private var plainBody: some View {
+        HStack(alignment: .top, spacing: 8) {
+            AvatarView(
+                urlString: sender?.avatarURL,
+                size: 32,
+                kind: .user,
+                userId: sender?.userId
+            )
+            .frame(width: 32, height: 32)
+            .accessibilityHidden(true)
+
+            if let onTapNickname {
+                Button(action: onTapNickname) {
+                    plainText
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(sender?.nickname ?? ""))
+            } else {
+                plainText
+            }
+        }
+    }
+
+    private var plainText: Text {
+        var result = Text("\(sender?.nickname ?? ""): ")
+            .font(.system(size: 13, weight: .medium))
+            .foregroundColor(.white)
+        if let mention = mentions.first {
+            result = result + Text("@\(mention.userName) ")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white)
+        }
+        return result + Text(content)
+            .font(.system(size: 13))
+            .foregroundColor(.white)
     }
 
     private var bubbleBody: some View {

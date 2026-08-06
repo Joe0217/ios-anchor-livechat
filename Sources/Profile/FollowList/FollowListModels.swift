@@ -37,7 +37,15 @@ struct FollowUser: Codable, Identifiable, Hashable {
     let level: Int?
     let levelName: String?
     let signature: String?
-    let followFlag: Int?       // 1=已关注 0=未关注；L5 关注/取关按钮的初值来源
+    /// `/api/user/v2/userFriend` 当前契约字段。
+    let followed: Bool?
+    /// 历史响应/本地关系变更字段：1=已关注，0=未关注。
+    let followFlag: Int?
+
+    var isFollowing: Bool {
+        if let followFlag { return followFlag == 1 }
+        return followed == true
+    }
 
     /// SwiftUI ForEach 主键：用 userId 兜底，全空时 fallback 到 nickname+icon 组合
     var id: String { "\(userId ?? -1)-\(nickname ?? "")" }
@@ -51,6 +59,7 @@ extension FollowUser {
             userId: userId, nickname: nickname, icon: icon,
             sex: sex, age: age, countryCode: countryCode,
             level: level, levelName: levelName, signature: signature,
+            followed: flag == 1,
             followFlag: flag
         )
     }

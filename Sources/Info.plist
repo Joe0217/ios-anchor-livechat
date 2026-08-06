@@ -74,15 +74,17 @@
 		<false/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Used for beauty preview, live streaming, and withdrawal identity verification</string>
+	<string>Used for beauty previews and taking photos.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Used for real-time audio/video calls</string>
+	<string>Used when you speak in Party voice rooms.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Access to your photo library is required to upload your avatar and profile photos during registration.</string>
+	<string>Used to upload the avatar and profile photos required during registration.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Allow photo access to save pictures taken with the beauty camera.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIStatusBarHidden</key>
-	<true/>
+	<false/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

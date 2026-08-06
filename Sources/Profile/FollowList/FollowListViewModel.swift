@@ -92,11 +92,16 @@ final class FollowListViewModel: ObservableObject {
     // MARK: - 关注 / 取关
     /// 切换关注态：1↔0。乐观更新 UI，失败回滚 + 广播 `followRelationChanged`。
     /// 同一 userId 操作期间禁止并发（按钮 disabled 由 pendingFollowUserIds 控制）。
-    func toggleFollow(user: FollowUser) async {
+    func toggleFollow(user: FollowUser, sourceSegment: FollowSegment) async {
+        guard SelfPermissionBridge.shared.gate(
+            .relationshipActions,
+            action: "relationshipListToggleFollow"
+        ) else { return }
         guard let uid = user.userId else { return }
         if pendingFollowUserIds.contains(uid) { return }
 
-        let wasFollowing = user.followFlag == 1
+        // 按该条数据的实际关注态决定操作，不用所在 segment 覆盖。
+        let wasFollowing = user.isFollowing
         let newFlag = wasFollowing ? 0 : 1
         let followType = wasFollowing ? 2 : 1   // 1=关注 2=取关
 
@@ -112,6 +117,9 @@ final class FollowListViewModel: ObservableObject {
                 object: self,    // object=self 便于自身忽略自己发的通知
                 userInfo: ["userId": uid, "followFlag": newFlag]
             )
+            if wasFollowing, sourceSegment == .following {
+                removeUser(userId: uid, from: .following)
+            }
             logger.info("toggleFollow uid=\(uid) newFlag=\(newFlag) ok")
         } catch let e as APIError {
             // 失败回滚
@@ -146,6 +154,12 @@ final class FollowListViewModel: ObservableObject {
         }
     }
 
+    private func removeUser(userId: Int, from segment: FollowSegment) {
+        guard var state = states[segment] else { return }
+        state.users.removeAll { $0.userId == userId }
+        states[segment] = state
+    }
+
     private func load(reset: Bool) async {
         let segment = selectedSegment
         var state = states[segment] ?? SegmentState()
@@ -161,15 +175,16 @@ final class FollowListViewModel: ObservableObject {
                 pageSize: pageSize,
                 currentPage: nextPage
             )
-            // 加载期间若 segment 已切换，丢弃过期结果（防止并发覆盖）
-            guard segment == selectedSegment else {
-                logger.info("load result discarded: segment changed \(segment.rawValue) -> \(self.selectedSegment.rawValue)")
-                return
-            }
+            // 每个 segment 有独立状态；切页后仍写回原 segment 缓存，避免它永久停在 loading。
+            // 保留服务端每条数据的显式 followFlag，让 Following / Followers / Friends
+            // 都按实际关注态展示。Following 仅在字段缺失时按列表语义兜底为已关注。
+            let users = segment == .following
+                ? page.users.map { $0.followFlag == nil && $0.followed == nil ? $0.withFollowFlag(1) : $0 }
+                : page.users
             if reset {
-                state.users = page.users
+                state.users = users
             } else {
-                state.users.append(contentsOf: page.users)
+                state.users.append(contentsOf: users)
             }
             state.currentPage = nextPage
             state.hasMore = page.hasMore

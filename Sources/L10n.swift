@@ -64,6 +64,9 @@ enum L10n {
     static var mediaPermissionLiveRequired: String {
         localize("mediaPermission.liveRequired", comment: "直播需要相机和麦克风权限")
     }
+    static var mediaPermissionPhotoLibraryAddRequired: String {
+        localize("mediaPermission.photoLibraryAddRequired", comment: "保存拍照结果需要相册添加权限")
+    }
     static var mediaPermissionAlertTitle: String {
         localize("mediaPermission.alertTitle", comment: "媒体权限弹窗标题")
     }
@@ -872,6 +875,7 @@ enum L10n {
     static var toolMatch: String { localize("work.tool.match", comment: "匹配") }
     static var toolTask: String { localize("work.tool.task", comment: "任务") }
     static var toolBeauty: String { localize("work.tool.beauty", comment: "美颜") }
+    static var toolBeautyCamera: String { localize("work.tool.beautyCamera", comment: "美颜相机") }
     static var toolPoints: String { localize("work.tool.points", comment: "积分") }
     static var toolGiftMessage: String { localize("work.tool.giftMessage", comment: "礼物消息") }
     static var toolProfileUpdate: String { localize("work.tool.profileUpdate", comment: "资料更新") }
@@ -973,6 +977,8 @@ enum L10n {
     static var tabHome: String { localize("tab.home", comment: "首页") }
     static var tabMessages: String { localize("tab.messages", comment: "消息") }
     static var tabParty: String { localize("tab.party", comment: "派对") }
+    static var tabConnections: String { localize("tab.connections", comment: "关系") }
+    static var tabBeauty: String { localize("tab.beauty", comment: "美颜") }
     static var tabWork: String { localize("tab.work", comment: "工作台") }
     static var tabProfile: String { localize("tab.profile", comment: "我的") }
 
@@ -1089,6 +1095,12 @@ enum L10n {
     static var followActionBlock: String    { localize("followList.action.block", comment: "拉黑按钮") }
     static var followListEnd: String        { localize("followList.end", comment: "列表已到底") }
     static var followListEmpty: String      { localize("followList.empty", comment: "列表无数据") }
+    static var connectionsSupport: String { localize("connections.support", comment: "Connections 客服入口") }
+    static var connectionsSupportSubtitle: String { localize("connections.support.subtitle", comment: "客服入口副标题") }
+    static var connectionsSupportUnavailable: String { localize("connections.support.unavailable", comment: "客服暂不可用") }
+    static var connectionsServices: String { localize("connections.services", comment: "Connections 服务 tab") }
+    static var beautyStudioSettings: String { localize("beautyStudio.settings", comment: "美颜设置入口") }
+    static var beautyStudioCamera: String { localize("beautyStudio.camera", comment: "美颜相机入口") }
 
     /// 相册/视频审核态徽章
     static var profileMediaReviewing: String { localize("profile.media.reviewing", comment: "审核中徽章") }
@@ -1140,6 +1152,49 @@ enum L10n {
     static var settingsClearCacheDone: String  { localize("settings.clearCacheDone", comment: "清除缓存完成 toast") }
     static var settingsSelectLanguage: String  { localize("settings.selectLanguage", comment: "语言选择页标题") }
     static var settingsFeedbackComingSoon: String { localize("settings.feedbackComingSoon", comment: "反馈占位 toast（保留兼容，本轮已启用真反馈页）") }
+
+    // MARK: - Settings 107 Party 原生说明页
+    static var settingsDocumentAnchorPolicyIntroduction: String { localize("settings.document.anchorPolicy.introduction", comment: "107 主播规范页引言") }
+    static var settingsDocumentAnchorPolicyRespectTitle: String { localize("settings.document.anchorPolicy.respect.title", comment: "107 主播规范：房间礼仪标题") }
+    static var settingsDocumentAnchorPolicyRespectBody: String { localize("settings.document.anchorPolicy.respect.body", comment: "107 主播规范：房间礼仪正文") }
+    static var settingsDocumentAnchorPolicyContentTitle: String { localize("settings.document.anchorPolicy.content.title", comment: "107 主播规范：内容与资料标题") }
+    static var settingsDocumentAnchorPolicyContentBody: String { localize("settings.document.anchorPolicy.content.body", comment: "107 主播规范：内容与资料正文") }
+    static var settingsDocumentAnchorPolicyCommercialTitle: String { localize("settings.document.anchorPolicy.commercial.title", comment: "107 主播规范：商业和赌博标题") }
+    static var settingsDocumentAnchorPolicyCommercialBody: String { localize("settings.document.anchorPolicy.commercial.body", comment: "107 主播规范：商业和赌博正文") }
+    static var settingsDocumentAnchorPolicySafetyTitle: String { localize("settings.document.anchorPolicy.safety.title", comment: "107 主播规范：安全标题") }
+    static var settingsDocumentAnchorPolicySafetyBody: String { localize("settings.document.anchorPolicy.safety.body", comment: "107 主播规范：安全正文") }
+    static var settingsDocumentAnchorPolicyModerationTitle: String { localize("settings.document.anchorPolicy.moderation.title", comment: "107 主播规范：处置标题") }
+    static var settingsDocumentAnchorPolicyModerationBody: String { localize("settings.document.anchorPolicy.moderation.body", comment: "107 主播规范：处置正文") }
+
+    static var settingsDocumentAgreementIntroduction: String { localize("settings.document.agreement.introduction", comment: "107 用户协议引言") }
+    static var settingsDocumentAgreementAcceptanceTitle: String { localize("settings.document.agreement.acceptance.title", comment: "107 用户协议：接受条款标题") }
+    static var settingsDocumentAgreementAcceptanceBody: String { localize("settings.document.agreement.acceptance.body", comment: "107 用户协议：接受条款正文") }
+    static var settingsDocumentAgreementScopeTitle: String { localize("settings.document.agreement.scope.title", comment: "107 用户协议：功能范围标题") }
+    static var settingsDocumentAgreementScopeBody: String { localize("settings.document.agreement.scope.body", comment: "107 用户协议：功能范围正文") }
+    static var settingsDocumentAgreementUseTitle: String { localize("settings.document.agreement.use.title", comment: "107 用户协议：服务使用标题") }
+    static var settingsDocumentAgreementUseBody: String { localize("settings.document.agreement.use.body", comment: "107 用户协议：服务使用正文") }
+    static var settingsDocumentAgreementContentTitle: String { localize("settings.document.agreement.content.title", comment: "107 用户协议：用户内容标题") }
+    static var settingsDocumentAgreementContentBody: String { localize("settings.document.agreement.content.body", comment: "107 用户协议：用户内容正文") }
+    static var settingsDocumentAgreementServiceTitle: String { localize("settings.document.agreement.service.title", comment: "107 用户协议：服务可用性标题") }
+    static var settingsDocumentAgreementServiceBody: String { localize("settings.document.agreement.service.body", comment: "107 用户协议：服务可用性正文") }
+    static var settingsDocumentAgreementAccountTitle: String { localize("settings.document.agreement.account.title", comment: "107 用户协议：账号与反馈标题") }
+    static var settingsDocumentAgreementAccountBody: String { localize("settings.document.agreement.account.body", comment: "107 用户协议：账号与反馈正文") }
+    static var settingsDocumentAgreementChangesTitle: String { localize("settings.document.agreement.changes.title", comment: "107 用户协议：更新标题") }
+    static var settingsDocumentAgreementChangesBody: String { localize("settings.document.agreement.changes.body", comment: "107 用户协议：更新正文") }
+
+    static var settingsDocumentPrivacyIntroduction: String { localize("settings.document.privacy.introduction", comment: "107 隐私政策引言") }
+    static var settingsDocumentPrivacyDataTitle: String { localize("settings.document.privacy.data.title", comment: "107 隐私政策：处理的数据标题") }
+    static var settingsDocumentPrivacyDataBody: String { localize("settings.document.privacy.data.body", comment: "107 隐私政策：处理的数据正文") }
+    static var settingsDocumentPrivacyUseTitle: String { localize("settings.document.privacy.use.title", comment: "107 隐私政策：用途标题") }
+    static var settingsDocumentPrivacyUseBody: String { localize("settings.document.privacy.use.body", comment: "107 隐私政策：用途正文") }
+    static var settingsDocumentPrivacyVisibilityTitle: String { localize("settings.document.privacy.visibility.title", comment: "107 隐私政策：可见性标题") }
+    static var settingsDocumentPrivacyVisibilityBody: String { localize("settings.document.privacy.visibility.body", comment: "107 隐私政策：可见性正文") }
+    static var settingsDocumentPrivacySharingTitle: String { localize("settings.document.privacy.sharing.title", comment: "107 隐私政策：共享标题") }
+    static var settingsDocumentPrivacySharingBody: String { localize("settings.document.privacy.sharing.body", comment: "107 隐私政策：共享正文") }
+    static var settingsDocumentPrivacySecurityTitle: String { localize("settings.document.privacy.security.title", comment: "107 隐私政策：留存与安全标题") }
+    static var settingsDocumentPrivacySecurityBody: String { localize("settings.document.privacy.security.body", comment: "107 隐私政策：留存与安全正文") }
+    static var settingsDocumentPrivacyChoicesTitle: String { localize("settings.document.privacy.choices.title", comment: "107 隐私政策：用户选择标题") }
+    static var settingsDocumentPrivacyChoicesBody: String { localize("settings.document.privacy.choices.body", comment: "107 隐私政策：用户选择正文") }
 
     // MARK: - Feedback 反馈表单页
     static var feedbackTypeAppError: String     { localize("feedback.type.appError", comment: "App Error 类型") }
@@ -1402,6 +1457,7 @@ enum L10n {
         static var charCountFormat: String { localize("publish.charCountFormat", comment: "字数计数 %d/500") }
         static var posting: String         { localize("publish.posting", comment: "上传遮罩文案") }
         static var addImage: String        { localize("publish.addImage", comment: "选图按钮 a11y") }
+        static var mediaSourcePhotoLibrary: String { localize("publish.mediaSource.photoLibrary", comment: "媒体来源：相册") }
         static var removeImage: String     { localize("publish.removeImage", comment: "移除单张图 a11y") }
         static var fabLabel: String        { localize("publish.fabLabel", comment: "Circle 容器内 FAB a11y") }
         // 确认 dialog
@@ -1413,6 +1469,7 @@ enum L10n {
         static var textEmpty: String         { localize("publish.toast.textEmpty", comment: "请输入内容") }
         static var noImages: String          { localize("publish.toast.noImages", comment: "至少 1 张图") }
         static var imageTooLarge: String     { localize("publish.toast.imageTooLarge", comment: "图片过大 (>10MB)") }
+        static var photoLoadFailed: String   { localize("publish.toast.photoLoadFailed", comment: "相册图片读取失败") }
         static var credentialFailed: String  { localize("publish.toast.credentialFailed", comment: "凭证获取失败") }
         static var uploadFailed: String      { localize("publish.toast.uploadFailed", comment: "上传失败") }
         static var createFailed: String      { localize("publish.toast.createFailed", comment: "发布失败兜底") }
@@ -1429,6 +1486,11 @@ enum L10n {
     static var authLoggingIn: String { localize("auth.loggingIn", comment: "登录中 loading 文案") }
     static var authForgetPassword: String { localize("auth.forgetPassword", comment: "Forget Password? 链接") }
     static var authTogglePasswordA11y: String { localize("auth.togglePasswordA11y", comment: "密码可见性切换按钮 a11y label") }
+    static var authConsentPrefix: String { localize("auth.consent.prefix", comment: "登录页协议同意前缀") }
+    static var authConsentAnd: String { localize("auth.consent.and", comment: "登录页协议连接词") }
+    static var authConsentToggleA11y: String { localize("auth.consent.toggleA11y", comment: "登录页协议复选框无障碍文案") }
+    static var authClearEmailA11y: String { localize("auth.clearEmailA11y", comment: "清空邮箱输入框无障碍文案") }
+    static var authClearPasswordA11y: String { localize("auth.clearPasswordA11y", comment: "清空密码输入框无障碍文案") }
 
     // MARK: - LivePrepare 开播准备
     static var livePrepareNavTitle: String { localize("livePrepare.navTitle", comment: "开播 Demo 导航标题") }
@@ -2328,6 +2390,9 @@ enum L10n {
         // H5 对齐 2026-07-02：icon row 首位 Recover + 顶部 Save
         static var recover: String          { localize("beautySettings.recover", comment: "参数图标行第一位：恢复默认") }
         static var save: String             { localize("beautySettings.save", comment: "顶部保存按钮") }
+        static var capturePhoto: String     { localize("beautyCamera.capturePhoto", comment: "美颜相机拍照按钮无障碍文案") }
+        static var captureFailed: String    { localize("beautyCamera.captureFailed", comment: "照片保存失败提示") }
+        static var captureNoFrame: String   { localize("beautyCamera.captureNoFrame", comment: "相机首帧尚未就绪提示") }
 
         // Recover 确认弹窗（2026-07-02 需求 2）
         static var recoverConfirmTitle: String   { localize("beautySettings.recoverConfirm.title", comment: "Recover 确认弹窗标题") }
@@ -2601,7 +2666,7 @@ enum L10n {
         static var fieldYourLanguage: String { localize("register.field.yourLanguage", comment: "Page 2 语言标题") }
         static var fieldSelectLanguage: String { localize("register.field.selectLanguage", comment: "语言 field placeholder") }
         static func fieldYourPhotos(_ minCount: Int) -> String {
-            String(format: localize("register.field.yourPhotos", comment: "Photos 标题带 min N"), minCount)
+            String(format: localize("register.field.yourPhotos", comment: "资料照片标题带最低数量"), minCount)
         }
         static var fieldTakeVideo: String { localize("register.field.takeVideo", comment: "视频卡片标题") }
         // 操作按钮
@@ -2639,6 +2704,7 @@ enum L10n {
         static func errorImageTooLarge(_ maxMB: Int) -> String {
             String(format: localize("register.error.imageTooLarge", comment: "图片超原图硬顶 %d MB"), maxMB)
         }
+        static var errorInvalidInvitationCode: String { localize("register.error.invalidInvitationCode", comment: "邀请码错误") }
         static var errorServerTemporary: String { localize("register.error.serverTemporary", comment: "服务端临时错误（空 body / 非 JSON / 5xx），提示用户重试") }
     }
 

@@ -111,6 +111,7 @@
 "work.tool.match"            = "Match";
 "work.tool.task"             = "Task";
 "work.tool.beauty"           = "Beauty";
+"work.tool.beautyCamera"     = "Beauty Camera";
 "work.tool.points"           = "Points";
 "work.tool.giftMessage"      = "Gift Message";
 "work.tool.profileUpdate"    = "Profile Update";
@@ -183,6 +184,8 @@
 "tab.home"                   = "Home";
 "tab.messages"               = "Messages";
 "tab.party"                  = "Party";
+"tab.connections"            = "Connections";
+"tab.beauty"                 = "Beauty";
 "tab.work"                   = "Work";
 "tab.profile"                = "Profile";
 
@@ -272,6 +275,12 @@
 "followList.action.block"      = "Block";
 "followList.end"               = "No more";
 "followList.empty"             = "No users yet";
+"connections.support"                   = "Customer Support";
+"connections.support.subtitle"          = "Get help with your account";
+"connections.support.unavailable"       = "Customer support is unavailable. Please try again.";
+"connections.services"                  = "Services";
+"beautyStudio.settings"                 = "Beauty Settings";
+"beautyStudio.camera"                   = "Beauty Camera";
 "profile.media.reviewing"      = "Reviewing";
 "profile.media.rejected"       = "Rejected";
 "mediaPreview.close"           = "Close";
@@ -315,6 +324,49 @@
 "settings.selectLanguage"      = "Select Language";
 "settings.feedbackComingSoon"  = "Coming soon";
 
+// MARK: - Native 107 Party documents
+"settings.document.anchorPolicy.introduction" = "These Community Guidelines apply to the Party experience available in Hily.";
+"settings.document.anchorPolicy.respect.title" = "Respect in Party Rooms";
+"settings.document.anchorPolicy.respect.body" = "Use public chat, expressions and free interactions respectfully. Do not harass, threaten, bully, discriminate against, or sexually target anyone.";
+"settings.document.anchorPolicy.content.title" = "Safe Content and Profiles";
+"settings.document.anchorPolicy.content.body" = "Use accurate account information and appropriate content. Do not impersonate others, expose personal information, or post unlawful, violent, sexually explicit, or exploitative material.";
+"settings.document.anchorPolicy.commercial.title" = "No Gambling or Commercial Abuse";
+"settings.document.anchorPolicy.commercial.body" = "Do not use Party rooms, dice, rock-paper-scissors, or any free interaction for wagers, prizes, payments, solicitation, fraud, or other commercial activity.";
+"settings.document.anchorPolicy.safety.title" = "Keep the Room Safe";
+"settings.document.anchorPolicy.safety.body" = "Do not involve minors in adult content, seek off-platform contact for exploitation, or share private contact, identity, or location details without consent.";
+"settings.document.anchorPolicy.moderation.title" = "Moderation";
+"settings.document.anchorPolicy.moderation.body" = "We may remove content, restrict Party participation, or limit an account when these guidelines or applicable law are violated. Use Settings to block an unwanted account or send feedback.";
+
+"settings.document.agreement.introduction" = "This agreement covers the Party-focused Hily experience currently available in this app.";
+"settings.document.agreement.acceptance.title" = "Acceptance";
+"settings.document.agreement.acceptance.body" = "By signing in or using Hily, you agree to this agreement, the Community Guidelines, and applicable law. Do not use the service where you are not legally permitted to do so.";
+"settings.document.agreement.scope.title" = "Available Functions";
+"settings.document.agreement.scope.body" = "During sign-up, Hily requires an avatar and at least one profile photo. Invitation codes and review-video recording are not offered in the current registration flow. Your account can then use Party rooms, public room chat, expressions and simple free interactions. Live broadcasting, calls, direct messages, virtual gifts or currency, wallet, withdrawal, lotteries, Party video, activities, and half-screen games are not offered in this experience.";
+"settings.document.agreement.use.title" = "Using the Service";
+"settings.document.agreement.use.body" = "Use Hily only for lawful, personal entertainment. Do not attempt to bypass access controls, disrupt Party rooms, automate interactions, or use the service to harm others.";
+"settings.document.agreement.content.title" = "Your Content";
+"settings.document.agreement.content.body" = "You are responsible for the profile information, messages, expressions, and free interactions you send. You must have the rights needed to share them, and they must follow the Community Guidelines.";
+"settings.document.agreement.service.title" = "Service Availability and Enforcement";
+"settings.document.agreement.service.body" = "We may maintain, change, suspend, or remove Party features when needed for safety, security, legal compliance, or service operation. Violations may lead to content removal, restricted participation, or account limits.";
+"settings.document.agreement.account.title" = "Account and Feedback";
+"settings.document.agreement.account.body" = "Keep your account credentials confidential and tell us about suspected unauthorized use. Account options and Feedback are available in Settings for requests or concerns.";
+"settings.document.agreement.changes.title" = "Changes to This Agreement";
+"settings.document.agreement.changes.body" = "We may update this agreement as the service or legal requirements change. Continued use after an update means you accept the updated agreement.";
+
+"settings.document.privacy.introduction" = "This policy explains how the Party-focused Hily experience processes information.";
+"settings.document.privacy.data.title" = "Information We Process";
+"settings.document.privacy.data.body" = "We process account details and profile data required during sign-up, including email, nickname, birthday, country, languages, avatar and at least one profile photo. Invitation codes and review-video recording are not used in the current registration flow. We also process Party room participation, public room messages, expressions, free interaction events, and device or diagnostic information needed to operate and secure the service.";
+"settings.document.privacy.use.title" = "How We Use Information";
+"settings.document.privacy.use.body" = "We use information to authenticate your account, provide Party rooms and public interactions, respond to feedback, prevent abuse, troubleshoot issues, and meet legal obligations.";
+"settings.document.privacy.visibility.title" = "What Other Participants Can See";
+"settings.document.privacy.visibility.body" = "Messages, expressions, and free interactions sent in a Party room may be visible to other participants in that room. Do not share private contact, identity, location, or other sensitive information publicly.";
+"settings.document.privacy.sharing.title" = "Service Providers and Disclosure";
+"settings.document.privacy.sharing.body" = "We may use providers that help operate communications, hosting, safety, and support services. We may also disclose information when required by law or to protect users, the service, or the public.";
+"settings.document.privacy.security.title" = "Retention and Security";
+"settings.document.privacy.security.body" = "We retain information only as needed for the purposes described here and applicable obligations. We use reasonable safeguards, but no online service can guarantee absolute security.";
+"settings.document.privacy.choices.title" = "Your Choices and Requests";
+"settings.document.privacy.choices.body" = "You can manage available account options and your blocklist in Settings. For privacy questions or requests to access, correct, or delete information, submit Feedback from Settings.";
+
 // MARK: - Feedback 反馈表单页
 "feedback.type.appError"       = "App Error";
 "feedback.type.accountError"   = "Account Error";
@@ -340,6 +392,7 @@
 "publish.charCountFormat"    = "%d/500";
 "publish.posting"            = "Posting...";
 "publish.addImage"           = "Add image";
+"publish.mediaSource.photoLibrary" = "Photo Library";
 "publish.removeImage"        = "Remove image";
 "publish.fabLabel"           = "Create post";
 "publish.discard.title"      = "Discard post?";
@@ -349,6 +402,7 @@
 "publish.toast.textEmpty"    = "Please enter content";
 "publish.toast.noImages"     = "Please add at least 1 image";
 "publish.toast.imageTooLarge" = "Image too large (>10MB)";
+"publish.toast.photoLoadFailed" = "Unable to load the selected photo. Please try again";
 "publish.toast.credentialFailed" = "Failed to get upload credential";
 "publish.toast.uploadFailed" = "Upload failed, please retry";
 "publish.toast.createFailed" = "Publish failed";
@@ -364,6 +418,11 @@
 "auth.loggingIn"             = "Logging in...";
 "auth.forgetPassword"        = "Forget Password?";
 "auth.togglePasswordA11y"    = "Show or hide password";
+"auth.consent.prefix"        = "I have read and agree to";
+"auth.consent.and"           = "and";
+"auth.consent.toggleA11y"    = "Agree to the User Agreement and Privacy Policy";
+"auth.clearEmailA11y"        = "Clear email";
+"auth.clearPasswordA11y"     = "Clear password";
 
 // MARK: - LivePrepare 开播准备
 "livePrepare.navTitle"       = "Go Live Demo";
@@ -482,6 +541,7 @@
 "mediaPermission.cameraRequired" = "Camera access is required. Enable it in Settings, then restart Hily to continue.";
 "mediaPermission.microphoneRequired" = "Microphone access is required. Enable it in Settings, then restart Hily to continue.";
 "mediaPermission.liveRequired" = "Camera and microphone access are required. Enable them in Settings, then restart Hily to continue.";
+"mediaPermission.photoLibraryAddRequired" = "Photo access is required to save beauty camera photos. Enable it in Settings to continue.";
 "mediaPermission.alertTitle" = "Permissions Required";
 "liveRoom.statusLiveFormat"  = "Live %@";
 "liveRoom.statusConnecting"  = "Connecting...";
@@ -1634,6 +1694,9 @@
 
 // Save 成功 toast（2026-07-03 对齐 H5 index.vue:155）
 "beautySettings.saveSuccess.toast"                          = "Save success!";
+"beautyCamera.capturePhoto"                                 = "Take photo";
+"beautyCamera.captureFailed"                                = "Unable to save photo. Please try again.";
+"beautyCamera.captureNoFrame"                               = "Camera is getting ready. Please try again.";
 
 // MARK: - Match tab（L 里程碑）
 
@@ -1789,28 +1852,28 @@
 "editProfile.toast.networkError"                   = "Network error, please try again";
 
 // MARK: - A-2 新主播注册流程一期（en；ar/tr Step 4 by /i18n translate）
-"register.title.basicInfo"                          = "Complete your basic profile";
-"register.title.required"                           = "Required fields";
-"register.title.videoGuide"                         = "Take a Review Video";
+"register.title.basicInfo"                          = "Set up your profile";
+"register.title.required"                           = "Complete your Party profile";
+"register.title.videoGuide"                         = "Profile Review";
 "register.field.nickname"                           = "Nickname";
 "register.field.birthday"                           = "Birthday";
 "register.field.country"                            = "Country";
 "register.field.inviteCode"                         = "Invitation code";
 "register.field.inviteCodeOptional"                 = "optional";
-"register.field.requiredFields"                     = "Required fields";
-"register.field.yourLanguage"                       = "Your Language (Multi-select allowed)";
-"register.field.selectLanguage"                     = "Select your working language";
-"register.field.yourPhotos"                         = "Your Profile Photos (At least %d)";
-"register.field.takeVideo"                          = "Take a Review Video";
-"register.action.signUp"                            = "Sign Up";
-"register.action.upload"                            = "Upload";
+"register.field.requiredFields"                     = "Complete your Party profile";
+"register.field.yourLanguage"                       = "Languages used in Party rooms (Select up to 4)";
+"register.field.selectLanguage"                     = "Select Party room languages";
+"register.field.yourPhotos"                         = "Profile Photos (At least %d)";
+"register.field.takeVideo"                          = "Profile review video";
+"register.action.signUp"                            = "Continue";
+"register.action.upload"                            = "Submit";
 "register.action.edit"                              = "Edit";
 "register.action.rerecord"                          = "Re-record";
 "register.action.goToRecord"                        = "Go to Record";
 "register.action.confirmN"                          = "Confirm ( %d )";
 "register.action.cancel"                            = "Cancel";
 "register.action.languageTitle"                     = "Language";
-"register.video.guideBody"                          = "You're shooting a video for residency approval here. The video will only be provided for official review and will not be shown to clients. We will protect your privacy, so feel at ease.\n\nYou need to record a %ds video. You can greetus up or introduce anything you like. Please make sure to clearly show your face. Thank you for your cooperation.";
+"register.video.guideBody"                          = "A review video is not required during registration at this time. If additional account verification is needed later, Hily will explain the purpose before requesting a %d-second recording.";
 "register.video.discardConfirm"                     = "Discard recording? Recording will be lost.";
 "register.error.avatarRequired"                     = "Please upload your avatar";
 "register.error.nicknameRequired"                   = "Please enter your nickname";
@@ -1819,13 +1882,14 @@
 "register.error.languageRequired"                   = "Please select your language";
 "register.error.languageMax"                        = "You can only choose four";
 "register.error.photosMin"                          = "Please upload at least %d profile photos";
-"register.error.videoRequired"                      = "Please upload your video.";
+"register.error.videoRequired"                      = "A review video is not required at this time.";
 "register.error.cameraDenied"                       = "Camera access required. Please enable it in Settings.";
 "register.error.micDenied"                          = "Microphone access required. Please enable it in Settings.";
 "register.error.recordInterrupted"                  = "Recording interrupted. Please retry.";
 "register.error.compressFailed"                     = "Video processing failed. Please re-record.";
 "register.error.uploadFailed"                       = "Upload failed. Please retry.";
 "register.error.imageTooLarge"                      = "The image is too large (max %dMB). Please choose a smaller one.";
+"register.error.invalidInvitationCode"              = "Invalid invitation code.";
 "register.error.serverTemporary"                    = "Server temporarily unavailable. Please try again.";
 
 /* MARK: - PartyRoom 房间内 UI (AnchorBar / ChatTabStrip / InputBar) */

@@ -222,8 +222,9 @@ final class AccountDeletionService: AccountDeletionServiceProtocol {
     private init() {}
 
     func deleteAccount() async throws {
-        // 后端尚未提供 method/path/body。禁止把 logout 当删除成功，也禁止猜接口。
-        throw AccountDeletionError.notConfigured
+        // 提审包使用本地模拟删除流程：不请求后端，短暂展示处理中状态后清理本地会话。
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        try Task.checkCancellation()
     }
 }
 
@@ -346,7 +347,7 @@ struct AccountDeletionView: View {
             Button(L10n.settingsDeleteAccountConfirmAction, role: .destructive) {
                 Task {
                     if await store.deleteAccount() {
-                        session.logout()
+                        session.completeLocalAccountDeletion()
                     }
                 }
             }

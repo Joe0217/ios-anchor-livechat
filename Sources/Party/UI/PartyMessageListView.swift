@@ -28,6 +28,8 @@ struct PartyMessageListView: View {
     var showsFreePartyGameMessages: Bool = true
     var showsActivityMessages: Bool = true
     var showsVirtualItemMessages: Bool = true
+    /// 审核账号使用简化发送者样式，避免公屏承载头像框、VIP、等级和聊天气泡。
+    var usesPlainSenderStyle: Bool = false
     /// 防重入 map:正在翻译中的 msgId
     @State private var pendingTranslateIds: Set<UUID> = []
     @State private var deleteActionMessage: UnifiedPublicChatMessage?
@@ -100,10 +102,11 @@ struct PartyMessageListView: View {
                         PublicChatRow(
                             message: msg,
                             theme: .party,
-                            onTapTranslate: { m in handleTapTranslate(msg: m) },
-                            isTranslating: pendingTranslateIds.contains(msg.id),
+                            onTapTranslate: usesPlainSenderStyle ? nil : { m in handleTapTranslate(msg: m) },
+                            isTranslating: !usesPlainSenderStyle && pendingTranslateIds.contains(msg.id),
                             onTapUserCard: userCardPresenter,
-                            onWinnerActivity: onWinnerActivity
+                            onWinnerActivity: onWinnerActivity,
+                            usesPlainPartySenderStyle: usesPlainSenderStyle
                         )
                         .id(msg.id)
                         .onLongPressGesture(minimumDuration: 0.5) {

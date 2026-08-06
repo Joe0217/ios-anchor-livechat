@@ -54,11 +54,17 @@ struct ProfileView: View {
         // NavigationLink(value:) 自动沿 stack 找匹配 destination，无需在此再注册。
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
-                ProfileHeaderView(vm: vm, showsSocial: permission.canProfileSocial)
+                ProfileHeaderView(
+                    vm: vm,
+                    showsRelationships: permission.canRelationshipViewing,
+                    showsCompletionHint: permission.canProfileSocial
+                )
 
-                if permission.canProfileSocial {
-                    ProfileBioView(bio: vm.bio)
+                ProfileBioView(bio: vm.bio)
 
+                if showsAlbumContentWithoutTab {
+                    albumContent
+                } else if !visibleTabs.isEmpty {
                     ProfileTabBar(selected: $vm.selectedTab, tabs: visibleTabs)
                         .padding(.top, 4)
 
@@ -90,6 +96,11 @@ struct ProfileView: View {
             }
         }
         .onChange(of: permission.canProfileSocial) { allowed in
+            if !allowed, vm.selectedTab == .moment {
+                vm.selectedTab = .album
+            }
+        }
+        .onChange(of: permission.canProfileAlbum) { allowed in
             if !allowed {
                 galleryContext = nil
             }
@@ -171,19 +182,8 @@ struct ProfileView: View {
     private var contentForSelectedTab: some View {
         switch vm.selectedTab {
         case .album:
-            VStack(spacing: Theme.Metric.profileGridSectionGap) {
-                ProfileMediaGrid(
-                    title: String(format: L10n.profilePhotosFormat, vm.photos.count, vm.photosTotal),
-                    items: vm.photos,
-                    isVideoGrid: false,
-                    onTap: { asset in openGallery(with: vm.photos, target: asset) }
-                )
-                ProfileMediaGrid(
-                    title: String(format: L10n.profileVideosFormat, vm.videos.count, vm.videosTotal),
-                    items: vm.videos,
-                    isVideoGrid: true,
-                    onTap: { asset in openGallery(with: vm.videos, target: asset) }
-                )
+            if permission.canProfileAlbum {
+                albumContent
             }
         case .gifts:
             if permission.canVirtualItems {
@@ -192,14 +192,65 @@ struct ProfileView: View {
                 EmptyView()
             }
         case .moment:
-            // onMediaPreview 上传 galleryContext → 复用本 view 顶层 fullScreenCover 的公共 MediaGalleryView
-            // 见 [swiftui-fullscreencover-hoist.md](../../.claude/rules/swiftui-fullscreencover-hoist.md)：modal 挂唯一容器层
-            MomentTabView(onMediaPreview: { galleryContext = $0 })
+            if permission.canProfileSocial {
+                // onMediaPreview 上传 galleryContext → 复用本 view 顶层 fullScreenCover 的公共 MediaGalleryView
+                // 见 [swiftui-fullscreencover-hoist.md](../../.claude/rules/swiftui-fullscreencover-hoist.md)：modal 挂唯一容器层
+                MomentTabView(onMediaPreview: { galleryContext = $0 })
+            }
         }
     }
 
     private var visibleTabs: [ProfileTab] {
-        permission.canVirtualItems ? ProfileTab.allCases : [.album, .moment]
+        var tabs: [ProfileTab] = []
+        // 107 资料页仅保留基础资料和关系数据，不展示 Album 内容入口。
+        if permission.canProfileAlbum, permission.canProfileSocial { tabs.append(.album) }
+        if permission.canProfileSocial, permission.canVirtualItems { tabs.append(.gifts) }
+        if permission.canProfileSocial { tabs.append(.moment) }
+        return tabs
+    }
+
+    /// 107 不展示 Album tab，但资料页仍直接展示照片。
+    private var showsAlbumContentWithoutTab: Bool {
+        permission.canProfileAlbum && !permission.canProfileSocial
+    }
+
+    private var isPartyOnlyMode: Bool {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.isLoggedIn)
+        return UserTypeExperience.isPartyOnly(effectiveUserType)
+    }
+
+    private var albumContent: some View {
+        VStack(spacing: Theme.Metric.profileGridSectionGap) {
+            ProfileMediaGrid(
+                title: String(format: L10n.profilePhotosFormat, albumPhotos.count, albumPhotos.count),
+                items: albumPhotos,
+                isVideoGrid: false,
+                onTap: { asset in openGallery(with: albumPhotos, target: asset) }
+            )
+            if !isPartyOnlyMode {
+                ProfileMediaGrid(
+                    title: String(format: L10n.profileVideosFormat, albumVideos.count, albumVideos.count),
+                    items: albumVideos,
+                    isVideoGrid: true,
+                    onTap: { asset in openGallery(with: albumVideos, target: asset) }
+                )
+            }
+        }
+    }
+
+    /// 107 不具备资料媒体编辑能力，但 Profile 需展示已通过和审核中的照片。
+    /// 被拒绝和审核状态未知的内容继续按 fail-closed 隐藏。
+    private var albumPhotos: [MediaAsset] {
+        permission.canProfileSocial ? vm.photos : vm.photos.filter(Self.isReviewVisible)
+    }
+
+    private var albumVideos: [MediaAsset] {
+        permission.canProfileSocial ? vm.videos : vm.videos.filter(Self.isReviewVisible)
+    }
+
+    private static func isReviewVisible(_ asset: MediaAsset) -> Bool {
+        asset.vaild == 1 || asset.vaild == 2
     }
 
     private var emptyPlaceholder: some View {
@@ -209,7 +260,7 @@ struct ProfileView: View {
     }
 
     /// 打开图库预览：取当前 section 全量 URL 列表 + 点击项 index。
-    /// vaild=3 的被拒项由 `ProfileMediaGrid` 已 `.disabled` 拦截，此处不会走到。
+    /// 普通账号的 vaild=3 被拒项由 `ProfileMediaGrid` 禁用；107 在进入网格前只保留 vaild=1/2。
     private func openGallery(with items: [MediaAsset], target: MediaAsset) {
         let urls = items.compactMap { $0.url }
         guard !urls.isEmpty else { return }

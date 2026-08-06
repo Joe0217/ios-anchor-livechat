@@ -294,6 +294,7 @@ struct ChatDetailView: View {
         .onChange(of: isStateEmpty) { isEmpty in
             guard isEmpty, !didCheckHistoryExpired else { return }
             didCheckHistoryExpired = true
+            guard chatType == .regular else { return }
             // 会话在 MessageSessionStore 中存在 = 老会话(H5 sessionStore.orderedSessions.some)
             let existed = MessageSessionStore.shared.session(byPeerId: store.peerYxAccId) != nil
             if existed {
@@ -1306,6 +1307,7 @@ struct ChatDetailView: View {
     /// - `AnchorOnlineStatus.isOnlineForCall(status) == false` → toast "is not online"
     /// - 其余（在线 / 匹配态 / 通话结束）→ 走 CallStore.callOut
     private func handleTapCall() {
+        guard chatType == .regular else { return }
         guard let uid = peerUserId else { return }
         // 若正在通话中直接忽略（避免重复呼出）
         guard CallStore.shared.state == .idle else { return }

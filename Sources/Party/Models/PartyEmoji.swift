@@ -1,5 +1,20 @@
 import Foundation
 
+enum PartyExpressionAvailability {
+    /// 107 仅放开表情协议，不连带开放半屏游戏、抽奖或其他 Party 游戏入口。
+    static var canUsePlayEmoji: Bool {
+        #if HILY_TESTS
+        return true
+        #else
+        if SelfPermissionBridge.shared.canPartyGamesSnapshot { return true }
+        let isAuthenticated = AuthToken.value.map { !$0.isEmpty } ?? false
+        let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(isAuthenticated: isAuthenticated)
+        return UserTypeExperience.isPartyOnly(effectiveUserType)
+        #endif
+    }
+}
+
 /// 派对房表情面板数据模型（F 里程碑 · 对齐 H5 蓝本 `party-expression-popup.vue` +
 /// `livechat-h5/src/api/pay/index.ts:4-20` `PartyEmojiClassification` / `PartyEmojiItem`）。
 ///

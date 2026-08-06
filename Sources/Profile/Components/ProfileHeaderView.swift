@@ -6,8 +6,10 @@ import SwiftUI
 /// 本视图只画 content；ScrollView content 顶在 safe area 下方，状态栏区已由背景图覆盖。
 struct ProfileHeaderView: View {
     @ObservedObject var vm: ProfileViewModel
-    /// 107 保留账户设置与基础资料，移除关注关系等非 Party 社交内容。
-    var showsSocial: Bool = true
+    /// 关注关系独立于朋友圈、分享和私信等宽泛社交能力。
+    var showsRelationships: Bool = true
+    /// 完成度提示只对可编辑资料的账号展示。
+    var showsCompletionHint: Bool = true
     @ObservedObject private var permission = SelfPermissionBridge.shared
 
     var body: some View {
@@ -28,15 +30,17 @@ struct ProfileHeaderView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 24)
 
-            if showsSocial {
+            if showsRelationships {
                 statsRow
                     .padding(.horizontal, 24)
                     .padding(.bottom, 18)
             }
 
-            profileCompletionHint
-                .padding(.horizontal, 20)
-                .padding(.bottom, 4)
+            if showsCompletionHint {
+                profileCompletionHint
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 4)
+            }
         }
     }
 
@@ -85,14 +89,16 @@ struct ProfileHeaderView: View {
                     Text(vm.displayName)
                         .font(Theme.Typography.profileName)
                         .foregroundColor(Theme.Palette.profileName)
-                    NavigationLink(value: ProfileRoute.editProfile) {
-                        CDNAssetImage("profileEditIcon")
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: 16, height: 16)
+                    if permission.canProfileSocial {
+                        NavigationLink(value: ProfileRoute.editProfile) {
+                            CDNAssetImage("profileEditIcon")
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 16, height: 16)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(L10n.profileEditName)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(L10n.profileEditName)
                 }
             }
 

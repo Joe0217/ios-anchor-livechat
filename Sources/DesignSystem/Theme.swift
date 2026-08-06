@@ -422,8 +422,8 @@ enum Theme {
         static let authForgetText         = Color(hex: 0x9E97AE)
         /// 错误提示红(复用 iOS system red)
         static let authErrorText          = Color(hex: 0xFF453A)
-        /// 背景兜底色(切图加载失败时的近黑紫)
-        static let authBackgroundFallback = Color(hex: 0x2A1F44)
+        /// 登录页纯色背景，与 Party 房间默认背景保持一致。
+        static let authBackgroundFallback = partyRoomBackground
     }
 
     // MARK: - 间距

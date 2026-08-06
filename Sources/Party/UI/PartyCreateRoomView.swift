@@ -23,13 +23,14 @@ struct PartyCreateRoomView: View {
     @Environment(\.dismiss) private var dismiss
 
     /// 默认构造 —— 提供给 PartyTabRootView 用（Live service 内部构造）
-    init(defaultName: String = "", defaultTagline: String = "Let's chat and have fun together.", defaultAvatarUrl: String? = nil, userLevel: Int = 0, onCreated: @escaping (String) -> Void = { _ in }) {
+    init(defaultName: String = "", defaultTagline: String = "Let's chat and have fun together.", defaultAvatarUrl: String? = nil, userLevel: Int = 0, taglineLengthLimit: Int = PartyCreateStore.maxTaglineLength, onCreated: @escaping (String) -> Void = { _ in }) {
         _store = StateObject(wrappedValue: PartyCreateStore(
             service: PartyCreateServiceLive(),
             defaultName: defaultName,
             defaultTagline: defaultTagline,
             defaultAvatarUrl: defaultAvatarUrl,
-            userLevel: userLevel
+            userLevel: userLevel,
+            taglineLengthLimit: taglineLengthLimit
         ))
         self.onCreated = onCreated
     }
@@ -218,7 +219,7 @@ struct PartyCreateRoomView: View {
                     .foregroundColor(Theme.Palette.partyCreateInputText)
                     .tint(Theme.Palette.partyCreateChevron)
                 Spacer()
-                Text("\(store.roomTagline.count)/\(PartyCreateStore.maxTaglineLength)")
+                Text("\(store.roomTagline.count)/\(store.taglineLengthLimit)")
                     .font(.system(size: 12))
                     .foregroundColor(Theme.Palette.partyCreateInputCounter)
             }

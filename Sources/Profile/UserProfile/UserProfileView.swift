@@ -33,7 +33,7 @@ struct UserProfileView: View {
             service: svc,
             isLiveProvider: { 0 },   // step 2 接 LiveStore.state == .living 派生
             canFollowProvider: {
-                SelfPermissionBridge.shared.canProfileSocialSnapshot
+                SelfPermissionBridge.shared.canRelationshipActionsSnapshot
             },
             networkErrorFallback: L10n.userProfileNetworkError,
             badUserIdFallback: L10n.userProfileBadUserId
@@ -127,7 +127,7 @@ struct UserProfileView: View {
         // 不显示昵称在 NavBar（H5 行为，标题为空）
         ToolbarItemGroup(placement: .topBarTrailing) {
             if permission.canProfileViewing, vm.detail != nil {
-                if permission.canProfileSocial {
+                if permission.canRelationshipActions {
                     followButton
                 }
                 Button {

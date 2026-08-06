@@ -11,7 +11,18 @@ import Foundation
 /// - `updateMedia.enable` 用 Int 1/0 而非 Bool（兼容后端常见编码；M5 实测后端反馈再调）
 enum PartyAPI {
     private static let pathPrefix = "/sapi/weidou/v1/client/party"
+    private static let auditCreateRoomPath = "/sapi/weidou/v1/client/party/audit/room/create"
+    private static let auditRoomListPath = "/sapi/weidou/v1/client/party/audit/room/list"
     private static let decoder = JSONDecoder()
+
+    /// 当前提审包的有效角色。权限桥尚未发布首帧时，以已存在的登录 token
+    /// 判定认证态，仍然回退到固定 107，不读取服务端 userType。
+    private static var usesAuditRoomEndpoints: Bool {
+        let isAuthenticated = AuthToken.value.map { !$0.isEmpty } ?? false
+        let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(isAuthenticated: isAuthenticated)
+        return UserTypeExperience.isPartyOnly(effectiveUserType)
+    }
 
     /// 房间/座位类接口业务码 opt-out：PartyRoomErrorMapper 已识别、业务侧独立处理（自动重拉对账 /
     /// 密码 sheet 内联 / 封禁弹窗等），不弹全局 banner 避免与业务 UI 双弹。
@@ -93,6 +104,8 @@ enum PartyAPI {
     /// 主播端 Party 半屏游戏资源。必须使用 anchor 游戏池，不能复用用户端
     /// `/half/geme/v2/list`，否则服务端会按用户角色返回错误的游戏集合。
     static func anchorPartyBannerGames() async throws -> [PartyBannerGame] {
+        // 全局停用时 API 层也必须 fail closed，避免未来新增调用点绕过 Store 守卫发出网络请求。
+        guard PartyHalfScreenGameAvailability.isEnabled else { return [] }
         let data = try await APIClient.shared.post("/api/half/geme/anchor/list", body: [:])
         #if DEBUG
         let raw = String(data: data, encoding: .utf8) ?? "<binary>"
@@ -554,7 +567,7 @@ enum PartyAPI {
         )
     }
 
-    /// 创建房间。MVP 仅传 roomName + roomTempId；其他可选字段 F 期补 UI。
+    /// 创建房间。107 走 audit 端点，其他角色保持原端点；请求参数不变。
     static func createRoom(
         roomName: String,
         roomAvatar: String? = nil,
@@ -571,7 +584,10 @@ enum PartyAPI {
         if let v = greetingMessage { body["greetingMessage"] = v }
         if let v = roomLanguage { body["roomLanguage"] = v }
         if let v = bgImgId { body["bgImgId"] = v }
-        let data = try await PartyAPIClient.shared.post("\(pathPrefix)/room/create", body: body)
+        let path = usesAuditRoomEndpoints
+            ? auditCreateRoomPath
+            : "\(pathPrefix)/room/create"
+        let data = try await PartyAPIClient.shared.post(path, body: body)
         return try decodeObject(data, as: PartyRoomInfo.self)
     }
 
@@ -599,12 +615,15 @@ enum PartyAPI {
         if let v = snapshotId { body["snapshotId"] = v }
         if let v = offset { body["offset"] = v }
         if let v = queryParam { body["queryParam"] = v }
-        let data = try await PartyAPIClient.shared.post("\(pathPrefix)\(kind.endpointSuffix)", body: body)
+        let path = usesAuditRoomEndpoints && kind == .party
+            ? auditRoomListPath
+            : "\(pathPrefix)\(kind.endpointSuffix)"
+        let data = try await PartyAPIClient.shared.post(path, body: body)
         let rooms = try decodeArrayOrEmpty(data, as: PartyRoomInfo.self)
         // v7 诊断（2026-07-14）：后端可能对主播端账号返 [] —— 打 log 让真机能确认到底是 rooms=[] 还是 decode 失败
         // rawPreview 是 AES 解密后明文；Release 打脱敏
         let rawPreview = String(data: data, encoding: .utf8) ?? "<binary>"
-        AppLogger.party.info("[PartyAPI] roomList kind=\(kind.endpointSuffix, privacy: .public) count=\(rooms.count) raw=\(rawPreview, privacy: .private)")
+        AppLogger.party.info("[PartyAPI] roomList path=\(path, privacy: .public) count=\(rooms.count) raw=\(rawPreview, privacy: .private)")
         return rooms
     }
 

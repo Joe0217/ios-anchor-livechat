@@ -114,6 +114,16 @@ struct PartyRoomListContent<Store: PartyRoomListLike>: View {
         permission.canVirtualItems && permission.canGiftSending
     }
 
+    private var showsLockIndicators: Bool {
+        !isPartyOnlyMode
+    }
+
+    private var isPartyOnlyMode: Bool {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.isLoggedIn)
+        return UserTypeExperience.isPartyOnly(effectiveUserType)
+    }
+
     var body: some View {
         contentArea
     }
@@ -130,9 +140,9 @@ struct PartyRoomListContent<Store: PartyRoomListLike>: View {
                 if comingSoonOnEmpty { comingSoonView } else { loadingView }
             }
         case .loaded(let rooms, let hasMore):
-            if rooms.isEmpty {
+            if rooms.isEmpty, comingSoonOnEmpty {
                 scrollWrap {
-                    if comingSoonOnEmpty { comingSoonView } else { emptyView }
+                    comingSoonView
                 }
             } else {
                 roomList(rooms: rooms, hasMore: hasMore, showBottomLoader: false, pageErrorMessage: nil)
@@ -147,15 +157,30 @@ struct PartyRoomListContent<Store: PartyRoomListLike>: View {
                     if comingSoonOnEmpty { comingSoonView } else { loadingView }
                 }
             } else {
-                roomList(rooms: rooms, hasMore: true, showBottomLoader: false, pageErrorMessage: nil)
+                roomList(
+                    rooms: rooms,
+                    hasMore: true,
+                    showBottomLoader: false,
+                    pageErrorMessage: nil
+                )
             }
         case .loadingMore(let rooms):
-            roomList(rooms: rooms, hasMore: true, showBottomLoader: true, pageErrorMessage: nil)
+            roomList(
+                rooms: rooms,
+                hasMore: true,
+                showBottomLoader: true,
+                pageErrorMessage: nil
+            )
         case .error(let message, _):
             // v7：error 态也用 scrollWrap 让用户能下拉重试（原来的 Retry Button 保留）
             scrollWrap { errorView(message: message) }
         case .pageError(let rooms, let message):
-            roomList(rooms: rooms, hasMore: true, showBottomLoader: false, pageErrorMessage: message)
+            roomList(
+                rooms: rooms,
+                hasMore: true,
+                showBottomLoader: false,
+                pageErrorMessage: message
+            )
         }
     }
 
@@ -233,21 +258,28 @@ struct PartyRoomListContent<Store: PartyRoomListLike>: View {
     private func roomList(rooms: [PartyRoomInfo], hasMore: Bool, showBottomLoader: Bool, pageErrorMessage: String?) -> some View {
         ScrollView {
             LazyVStack(spacing: 8) {
-                ForEach(rooms, id: \.stableListId) { room in
-                    Button {
-                        onTapRoom(room)
-                    } label: {
-                        PartyRoomCardView(
-                            room: room,
-                            languageName: languageName(for: room.roomLanguage),
-                            isMyRoom: room.id == myRoomID,
-                            showsRankVisuals: showsRankVisuals
-                        )
-                        // Top3 背景的装饰边框会越出卡片底部，预留下方空间避免覆盖下一行。
-                        .padding(.bottom, hasDecorativeRankBorder(room) ? 8 : 0)
+                if rooms.isEmpty {
+                    emptyView
+                        .frame(maxWidth: .infinity, minHeight: 400)
+                } else {
+                    ForEach(rooms, id: \.stableListId) { room in
+                        Button {
+                            onTapRoom(room)
+                        } label: {
+                            PartyRoomCardView(
+                                room: room,
+                                languageName: languageName(for: room.roomLanguage),
+                                isMyRoom: room.id == myRoomID,
+                                showsRankVisuals: showsRankVisuals,
+                                showsLockIndicator: showsLockIndicators,
+                                showsRoomTypeLabel: !isPartyOnlyMode
+                            )
+                            // Top3 背景的装饰边框会越出卡片底部，预留下方空间避免覆盖下一行。
+                            .padding(.bottom, hasDecorativeRankBorder(room) ? 8 : 0)
+                        }
+                        .buttonStyle(.plain)
+                        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
-                    .buttonStyle(.plain)
-                    .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
 
                 if hasMore {
@@ -317,6 +349,10 @@ struct PartyRoomCardView: View {
     let isMyRoom: Bool
     /// 107 Party-only 账号不展示房间周榜、Top3 背景或排行榜奖励箱。
     var showsRankVisuals: Bool = true
+    /// 107 审核模式仍可进入密码房，但列表不展示锁房标识。
+    var showsLockIndicator: Bool = true
+    /// 107 审核模式隐藏 Voice / Live+Voice 房型标签，但不筛除对应房间。
+    var showsRoomTypeLabel: Bool = true
 
     var body: some View {
         ZStack {
@@ -343,7 +379,7 @@ struct PartyRoomCardView: View {
                 )
         }
         .overlay(alignment: .topTrailing) {
-            if room.lockFlag == 1 {
+            if showsLockIndicator, room.lockFlag == 1 {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white.opacity(0.85))
@@ -434,7 +470,9 @@ struct PartyRoomCardView: View {
                 .padding(.vertical, 2)
 
             HStack(spacing: 4) {
-                roomTypePill
+                if showsRoomTypeLabel {
+                    roomTypePill
+                }
                 pill(text: languageName, color: Color(hex: 0x5924EB), textColor: Color(hex: 0xC5BAFF))
                 rankTag
             }

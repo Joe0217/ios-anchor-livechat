@@ -82,9 +82,9 @@ struct PartyListMainView: View {
         permission.canVirtualItems && permission.canGiftSending
     }
 
-    /// Follow 房间依赖账号关注关系；107 只保留 Party 大厅和自身最近访问的 Party 房。
+    /// Follow 房间只依赖关系查看能力，不应连带开放朋友圈或分享。
     private var visibleTabIndices: [Int] {
-        permission.canProfileSocial ? [0, 1, 2] : [0, 2]
+        permission.canRelationshipViewing ? [0, 1, 2] : [0, 2]
     }
 
     /// `TabView(.page)` 在动态移除 tag=1 时不能保留一个失效 selection。
@@ -179,7 +179,7 @@ struct PartyListMainView: View {
                 Task { await loadPartyHomeBannersIfAllowed() }
             }
         }
-        .onChange(of: permission.canProfileSocial, perform: handleProfileSocialPermissionChange)
+        .onChange(of: permission.canRelationshipViewing, perform: handleProfileSocialPermissionChange)
         .overlay {
             if permission.canPartyActivities, isLobbyVisible, let guide = topRoomGuideStore.guide {
                 PartyTopRoomBonusDialog(
@@ -250,16 +250,19 @@ struct PartyListMainView: View {
         .buttonStyle(.plain)
     }
 
+    @ViewBuilder
     private var searchIcon: some View {
-        Button(action: onTapSearch) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(.white.opacity(0.85))
-                .frame(width: 36, height: 36)
-                .contentShape(Rectangle())
+        if permission.canPartyVideo {
+            Button(action: onTapSearch) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.85))
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.Party.searchPlaceholder)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.Party.searchPlaceholder)
     }
 
     @ViewBuilder
@@ -496,7 +499,7 @@ struct PartyListMainView: View {
                     _ = await (a, b, c)
                 }
                 .tag(0)
-            if permission.canProfileSocial {
+            if permission.canRelationshipViewing {
                 PartyRoomListContent(
                     store: followStore,
                     languages: listStore.languages,
@@ -519,7 +522,7 @@ struct PartyListMainView: View {
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         // Follow 页本身不保留给 107；切换身份时重建 pager，避免 UIKit pager 缓存已移除的 tag=1。
-        .id(permission.canProfileSocial)
+        .id(permission.canRelationshipViewing)
         // 横滑手势/按钮点击切 tab 时首次触发对应 store 拉数据（真接口，替换 v1 占位空态）
         // v7：.idle **和** .error 都触发拉取 —— 首次失败后切走再回可自愈（对齐 Party tab .task 逻辑）
         .onChange(of: activeTab) { newValue in
@@ -528,7 +531,7 @@ struct PartyListMainView: View {
             Task { @MainActor in
                 switch newValue {
                 case 1:
-                    guard permission.canProfileSocial else {
+                    guard permission.canRelationshipViewing else {
                         activeTab = 0
                         return
                     }

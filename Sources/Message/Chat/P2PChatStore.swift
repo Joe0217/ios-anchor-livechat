@@ -47,6 +47,8 @@ final class P2PChatStore: ObservableObject {
     /// Batch 6.2a：回复积分 4 tip L10n 文案（caller 传入,Store 转发给 ReplyPointsStore.onReceiveUserMsg 触发 stimulate tip）
     /// nil = 不触发回复积分接线（HilyTests / customer / system 会话场景兼容）
     private let replyPointsTipTexts: ReplyPointsTipTexts?
+    /// 客服专用会话不创建或更新普通会话列表 Store。
+    private let propagatesToSessionStore: Bool
     /// P2P 的总权限闸门。生产默认接 `SelfPermissionBridge`；测试可注入 fake。
     private let directMessagesGate: (String) -> Bool
     /// `false` 在权限桥启动绑定前仅代表未知，不应把正常账号的 Store 永久撤销。
@@ -74,6 +76,7 @@ final class P2PChatStore: ObservableObject {
          sendPrivateInfoService: SendPrivateInfoServiceProtocol? = nil,
          pageSize: Int = 20,
          replyPointsTipTexts: ReplyPointsTipTexts? = nil,
+         propagatesToSessionStore: Bool = true,
          directMessagesGate: ((String) -> Bool)? = nil,
          isDirectMessagesPermissionResolved: (() -> Bool)? = nil,
          directMessagesPublisher: AnyPublisher<Bool, Never>? = nil,
@@ -98,6 +101,7 @@ final class P2PChatStore: ObservableObject {
         self.sendPrivateInfoService = sendPrivateInfoService
         self.pageSize = pageSize
         self.replyPointsTipTexts = replyPointsTipTexts
+        self.propagatesToSessionStore = propagatesToSessionStore
         self.directMessagesGate = resolvedGate
         self.isDirectMessagesPermissionResolved = resolvedPermissionState
 
@@ -775,6 +779,7 @@ final class P2PChatStore: ObservableObject {
     /// **P1-1 修**：msgType 参数**改为不传** —— H5 `message.js:1108` 传的是**用户上一条消息**的 pay/free 属性，
     /// 不是主播这次回复的媒介类型。ReplyPointsStore.onSendAnchorMsg 内部现从 lastUserMsgInfo.msgType 派生。
     private func triggerSettleReplyPoints(for sent: ChatMessage) {
+        guard replyPointsTipTexts != nil else { return }
         switch sent.content {
         case .text, .image, .video, .audio: break
         default: return   // 私密 / 礼物 / 系统消息不参与结算
@@ -790,6 +795,7 @@ final class P2PChatStore: ObservableObject {
     /// `ChatMessageContent.previewText` 不可见（前者依赖 NIMSessionAdapter；
     /// 后者依赖 L10n）。走条件编译在 test 下变 no-op，主 target 逻辑不变。
     private func propagateSentToSessionStore(_ msg: ChatMessage) {
+        guard propagatesToSessionStore else { return }
         #if !HILY_TESTS
         guard let existing = MessageSessionStore.shared.session(byPeerId: peerYxAccId) else { return }
         let updated = MessageSession(

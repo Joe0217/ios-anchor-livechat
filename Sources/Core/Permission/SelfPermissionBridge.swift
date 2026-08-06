@@ -28,7 +28,8 @@ struct BlockedFeatures: OptionSet {
     static let partyActivities = BlockedFeatures(rawValue: 1 << 12)
     /// 仅 107 使用：关闭 P2P 消息、群发和私密媒体链路；Party 房公屏不受此位影响。
     static let directMessages = BlockedFeatures(rawValue: 1 << 13)
-    /// 仅 107 使用：关闭关注关系、相册、动态和分享等非 Party 社交内容。
+    /// 仅 107 使用：关闭朋友圈、分享、资料媒体编辑等宽泛社交能力。
+    /// 关注关系与只读 Album 已拆成更窄的独立能力，不再复用此位。
     static let profileSocial = BlockedFeatures(rawValue: 1 << 14)
     /// 仅 107 使用：不展示非 Party 的启动站内公告。
     static let systemAnnouncements = BlockedFeatures(rawValue: 1 << 15)
@@ -40,6 +41,18 @@ struct BlockedFeatures: OptionSet {
     static let partyFreeGames = BlockedFeatures(rawValue: 1 << 18)
     /// 他人基础资料的只读查看及举报/拉黑安全处置；与关注、私聊等社交动作分离。
     static let profileViewing = BlockedFeatures(rawValue: 1 << 19)
+    /// Following / Followers / Friends 数字和列表的只读查看。
+    static let relationshipViewing = BlockedFeatures(rawValue: 1 << 20)
+    /// 关注和取关写操作；不包含私信、朋友圈、分享等社交能力。
+    static let relationshipActions = BlockedFeatures(rawValue: 1 << 21)
+    /// 仅允许与服务端返回的客服 IM 账号建立 P2P 会话。
+    static let supportMessaging = BlockedFeatures(rawValue: 1 << 22)
+    /// 本地美颜设置、相机预览和拍照保存；不包含直播、通话或 Party 视频。
+    static let beautyStudio = BlockedFeatures(rawValue: 1 << 23)
+    /// 本人资料页 Album 的只读展示；媒体编辑仍由 profileSocial 管理。
+    static let profileAlbum = BlockedFeatures(rawValue: 1 << 24)
+    /// Party 房音乐列表、管理入口和本地收听。
+    static let partyMusic = BlockedFeatures(rawValue: 1 << 25)
 }
 
 /// 认证态与 userType 必须作为同一条事件传给权限桥。
@@ -51,6 +64,31 @@ struct PermissionSessionState: Equatable {
     let isAuthenticated: Bool
 
     static let loggedOut = PermissionSessionState(userType: nil, isAuthenticated: false)
+}
+
+/// 权限桥输出的有效 userType 对应哪种主界面运行形态。
+/// DEBUG 权限覆盖与真实账号必须复用本判定，避免 UI 权限已切到 107、根路由仍停在未审核页。
+enum UserTypeExperience {
+    /// 当前提审包固定使用 107 能力集合；暂不消费登录响应中的真实 userType。
+    static let fixedUserType = 107
+
+    static func effectiveUserType(isAuthenticated: Bool) -> Int? {
+        isAuthenticated ? fixedUserType : nil
+    }
+
+    static func canEnterMainApp(_ userType: Int?) -> Bool {
+        guard let userType else { return false }
+        return userType == 2 || (101...107).contains(userType)
+    }
+
+    static func hasFullHostRealtimeCapability(_ userType: Int?) -> Bool {
+        guard let userType else { return false }
+        return userType == 2 || (101...106).contains(userType)
+    }
+
+    static func isPartyOnly(_ userType: Int?) -> Bool {
+        userType == 107
+    }
 }
 
 // MARK: - UserPermissionMapping
@@ -77,7 +115,7 @@ enum UserPermissionMapping {
                 .lottery, .partyGames, .virtualItems,
                 .homeDiscovery, .workDashboard, .partyActivities,
                 .directMessages, .profileSocial, .systemAnnouncements,
-                .partyVideo, .partyLuckyNumber
+                .partyVideo, .partyLuckyNumber, .partyMusic
             ]
         default:  return []
         }
@@ -108,6 +146,12 @@ enum PermissionFeature: CaseIterable {
     case partyLuckyNumber
     case partyFreeGames
     case profileViewing
+    case relationshipViewing
+    case relationshipActions
+    case supportMessaging
+    case beautyStudio
+    case profileAlbum
+    case partyMusic
 
     fileprivate var blockedFeature: BlockedFeatures {
         switch self {
@@ -131,6 +175,12 @@ enum PermissionFeature: CaseIterable {
         case .partyLuckyNumber: return .partyLuckyNumber
         case .partyFreeGames: return .partyFreeGames
         case .profileViewing: return .profileViewing
+        case .relationshipViewing: return .relationshipViewing
+        case .relationshipActions: return .relationshipActions
+        case .supportMessaging: return .supportMessaging
+        case .beautyStudio: return .beautyStudio
+        case .profileAlbum: return .profileAlbum
+        case .partyMusic: return .partyMusic
         }
     }
 }
@@ -149,6 +199,8 @@ enum PermissionFeature: CaseIterable {
 final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
 
     // MARK: UI 层订阅（@MainActor + @Published）
+    /// 当前包登录后固定为 107；服务端返回的真实 userType 不参与路由和权限。
+    @MainActor @Published private(set) var effectiveUserType: Int? = nil
     @MainActor @Published private(set) var canCall: Bool = false
     @MainActor @Published private(set) var canLive: Bool = false
     @MainActor @Published private(set) var canParty: Bool = false
@@ -169,12 +221,25 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
     @MainActor @Published private(set) var canPartyLuckyNumber: Bool = false
     @MainActor @Published private(set) var canPartyFreeGames: Bool = false
     @MainActor @Published private(set) var canProfileViewing: Bool = false
+    @MainActor @Published private(set) var canRelationshipViewing: Bool = false
+    @MainActor @Published private(set) var canRelationshipActions: Bool = false
+    @MainActor @Published private(set) var canSupportMessaging: Bool = false
+    @MainActor @Published private(set) var canBeautyStudio: Bool = false
+    @MainActor @Published private(set) var canProfileAlbum: Bool = false
+    @MainActor @Published private(set) var canPartyMusic: Bool = false
     @MainActor @Published private(set) var isLoaded: Bool = false
 
     // MARK: Store 层 nonisolated snapshot（原子读，避免 @MainActor hop）
     private let snapshotLock = NSLock()
     private var _snapshot: BlockedFeatures = []
     private var _snapshotLoaded: Bool = false
+    private var _effectiveUserTypeSnapshot: Int?
+
+    /// Store/连接层读取的有效账号类型；登出或权限桥未加载时恒为 nil。
+    nonisolated var effectiveUserTypeSnapshot: Int? {
+        snapshotLock.lock(); defer { snapshotLock.unlock() }
+        return _snapshotLoaded ? _effectiveUserTypeSnapshot : nil
+    }
 
     /// **Store guard 专用**：nonisolated 原子快照读；从任意 actor 调都安全。
     /// UI 层继续读 `$canCall @MainActor @Published`（Bridge 内部同步双写）。
@@ -207,6 +272,12 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
     nonisolated var canPartyLuckyNumberSnapshot: Bool { canUseSnapshot(.partyLuckyNumber) }
     nonisolated var canPartyFreeGamesSnapshot: Bool { canUseSnapshot(.partyFreeGames) }
     nonisolated var canProfileViewingSnapshot: Bool { canUseSnapshot(.profileViewing) }
+    nonisolated var canRelationshipViewingSnapshot: Bool { canUseSnapshot(.relationshipViewing) }
+    nonisolated var canRelationshipActionsSnapshot: Bool { canUseSnapshot(.relationshipActions) }
+    nonisolated var canSupportMessagingSnapshot: Bool { canUseSnapshot(.supportMessaging) }
+    nonisolated var canBeautyStudioSnapshot: Bool { canUseSnapshot(.beautyStudio) }
+    nonisolated var canProfileAlbumSnapshot: Bool { canUseSnapshot(.profileAlbum) }
+    nonisolated var canPartyMusicSnapshot: Bool { canUseSnapshot(.partyMusic) }
 
     /// 任意 actor 可读的能力快照。业务入口必须用它或 `gate`，不能只依赖 UI 显隐。
     nonisolated func canUseSnapshot(_ feature: PermissionFeature) -> Bool {
@@ -246,6 +317,7 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
             .removeDuplicates()
             .sink { [weak self] session in
                 self?.applyPermissions(
+                    userType: session.userType,
                     blocked: UserPermissionMapping.blocked(for: session.userType),
                     loaded: session.isAuthenticated
                 )
@@ -256,11 +328,12 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
     /// sink 消费：Step 1 同步 snapshot lock；Step 2 派发 @MainActor 更新 @Published。
     /// UI task 不捕获本次入参，而是在执行时重读最新 snapshot，避免快速切换时较早 task
     /// 反向覆盖较新的登出/撤权结果。
-    private func applyPermissions(blocked: BlockedFeatures, loaded: Bool) {
+    private func applyPermissions(userType: Int?, blocked: BlockedFeatures, loaded: Bool) {
         // Step 1: 同步更新 snapshot lock 保护态（Store 层立即可见）
         snapshotLock.lock()
         _snapshot = blocked
         _snapshotLoaded = loaded
+        _effectiveUserTypeSnapshot = loaded ? userType : nil
         snapshotLock.unlock()
         // Step 2: 异步派发到 MainActor 更新 @Published（UI 订阅响应）
         Task { @MainActor [weak self] in
@@ -273,8 +346,10 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
         snapshotLock.lock()
         let blocked = _snapshot
         let loaded = _snapshotLoaded
+        let userType = _effectiveUserTypeSnapshot
         snapshotLock.unlock()
 
+        effectiveUserType = loaded ? userType : nil
         canCall  = loaded && !blocked.contains(.call)
         canLive  = loaded && !blocked.contains(.live)
         canParty = loaded && !blocked.contains(.party)
@@ -295,6 +370,12 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
         canPartyLuckyNumber = loaded && !blocked.contains(.partyLuckyNumber)
         canPartyFreeGames = loaded && !blocked.contains(.partyFreeGames)
         canProfileViewing = loaded && !blocked.contains(.profileViewing)
+        canRelationshipViewing = loaded && !blocked.contains(.relationshipViewing)
+        canRelationshipActions = loaded && !blocked.contains(.relationshipActions)
+        canSupportMessaging = loaded && !blocked.contains(.supportMessaging)
+        canBeautyStudio = loaded && !blocked.contains(.beautyStudio)
+        canProfileAlbum = loaded && !blocked.contains(.profileAlbum)
+        canPartyMusic = loaded && !blocked.contains(.partyMusic)
         isLoaded = loaded
     }
 }

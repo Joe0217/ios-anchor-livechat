@@ -1,4 +1,6 @@
+import Combine
 import SwiftUI
+import UIKit
 
 /// 登录页（邮箱 + 密码，对应 H5 /views/login）+ A-2 注册流程分派入口
 ///
@@ -12,8 +14,8 @@ struct LoginView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var isPasswordRevealed = false
-    // 眼睛切换后恢复密码框焦点，避免 TextField ↔ SecureField dismantle 导致的键盘收起
-    @FocusState private var passwordFocused: Bool
+    @State private var hasAcceptedLegalTerms = false
+    @FocusState private var focusedField: LoginFocusField?
 
     var body: some View {
         NavigationStack(path: $pathHolder.path) {
@@ -39,29 +41,47 @@ struct LoginView: View {
                     .environmentObject(registerStore)
                     .environmentObject(pathHolder)
                 }
+                .navigationDestination(for: LoginLegalRoute.self) { route in
+                    switch route {
+                    case .userAgreement: UserAgreementView()
+                    case .privacyPolicy: PrivacyPolicyView()
+                    }
+                }
         }
     }
 
     private var loginContent: some View {
         ZStack {
             backgroundLayer
-            VStack(spacing: 0) {
-                Spacer().frame(height: Theme.Metric.authLogoTopGap)
-                logo
-                Spacer().frame(height: Theme.Metric.authLogoToTitleGap)
-                titleImage
-                Spacer().frame(height: Theme.Metric.authTitleToEmailGap)
-                emailField
-                Spacer().frame(height: Theme.Metric.authInputGap)
-                passwordField
-                errorLine
-                Spacer().frame(height: Theme.Metric.authPasswordToLoginGap)
-                loginButton
-                Spacer().frame(height: Theme.Metric.authLoginToForgetGap)
-                forgetButton
-                Spacer()
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        Spacer().frame(height: formTopSpacing)
+                        titleImage
+                        Spacer().frame(height: Theme.Metric.authTitleToEmailGap)
+                        emailField
+                        Spacer().frame(height: Theme.Metric.authInputGap)
+                        passwordField
+                        errorLine
+                        legalConsent
+                        Spacer().frame(height: 24)
+                        loginButton
+                            .id(LoginScrollTarget.loginButton)
+                        Spacer(minLength: 24)
+                    }
+                    .padding(.horizontal, Theme.Metric.authScreenHPadding)
+                    .frame(maxWidth: .infinity)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .onChange(of: focusedField) { field in
+                    guard field != nil else { return }
+                    scrollLoginButtonIntoView(proxy)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+                    guard focusedField != nil else { return }
+                    scrollLoginButtonIntoView(proxy)
+                }
             }
-            .padding(.horizontal, Theme.Metric.authScreenHPadding)
         }
     }
 
@@ -69,20 +89,18 @@ struct LoginView: View {
 
     private var backgroundLayer: some View {
         Theme.Palette.authBackgroundFallback
-            .overlay {
-                CDNAssetImage("authLoginBackground")
-                    .resizable()
-                    .scaledToFill()
-            }
             .ignoresSafeArea()
     }
 
-    private var logo: some View {
-        CDNAssetImage("authLogoHily")
-            .resizable()
-            .scaledToFit()
-            .frame(width: Theme.Metric.authLogoSize, height: Theme.Metric.authLogoSize)
-            .accessibilityHidden(true)
+    /// 原标题位置 = 顶部间距 + logo 高度 + logo 到标题间距；去掉 logo 后仍按要求整体上移 100pt。
+    private var formTopSpacing: CGFloat {
+        max(
+            24,
+            Theme.Metric.authLogoTopGap
+                + Theme.Metric.authLogoSize
+                + Theme.Metric.authLogoToTitleGap
+                - 100
+        )
     }
 
     private var titleImage: some View {
@@ -94,19 +112,26 @@ struct LoginView: View {
     }
 
     private var emailField: some View {
-        TextField(
-            "",
-            text: $email,
-            prompt: Text(L10n.authEmail)
-                .foregroundColor(Theme.Palette.authInputPlaceholder)
-                .font(Theme.Typography.authInputPlaceh)
-        )
-        .textInputAutocapitalization(.never)
-        .keyboardType(.emailAddress)
-        .autocorrectionDisabled()
-        .textContentType(.emailAddress)
-        .foregroundColor(Theme.Palette.authInputText)
-        .font(Theme.Typography.authInputText)
+        HStack(spacing: 10) {
+            TextField(
+                "",
+                text: $email,
+                prompt: Text(L10n.authEmail)
+                    .foregroundColor(Theme.Palette.authInputPlaceholder)
+                    .font(Theme.Typography.authInputPlaceh)
+            )
+            .textInputAutocapitalization(.never)
+            .keyboardType(.emailAddress)
+            .autocorrectionDisabled()
+            .textContentType(.emailAddress)
+            .foregroundColor(Theme.Palette.authInputText)
+            .font(Theme.Typography.authInputText)
+            .focused($focusedField, equals: .email)
+
+            if !email.isEmpty {
+                clearButton(text: $email, accessibilityLabel: L10n.authClearEmailA11y)
+            }
+        }
         .padding(.horizontal, Theme.Metric.authInputHPadding)
         .frame(height: Theme.Metric.authInputHeight)
         .background(
@@ -118,6 +143,9 @@ struct LoginView: View {
     private var passwordField: some View {
         HStack(spacing: 12) {
             passwordInput
+            if !password.isEmpty {
+                clearButton(text: $password, accessibilityLabel: L10n.authClearPasswordA11y)
+            }
             eyeToggleButton
         }
         .padding(.horizontal, Theme.Metric.authInputHPadding)
@@ -145,7 +173,7 @@ struct LoginView: View {
             .autocorrectionDisabled()
             .foregroundColor(Theme.Palette.authInputText)
             .font(Theme.Typography.authInputText)
-            .focused($passwordFocused)
+            .focused($focusedField, equals: .password)
         } else {
             SecureField(
                 "",
@@ -159,8 +187,22 @@ struct LoginView: View {
             .textContentType(.password)
             .foregroundColor(Theme.Palette.authInputText)
             .font(Theme.Typography.authInputText)
-            .focused($passwordFocused)
+            .focused($focusedField, equals: .password)
         }
+    }
+
+    private func clearButton(text: Binding<String>, accessibilityLabel: String) -> some View {
+        Button {
+            text.wrappedValue = ""
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(Theme.Palette.authInputIconTint)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var eyeToggleButton: some View {
@@ -213,11 +255,54 @@ struct LoginView: View {
         .disabled(!loginButtonEnabled)
     }
 
-    private var forgetButton: some View {
-        Button(action: handleForget) {
-            Text(L10n.authForgetPassword)
-                .font(Theme.Typography.authForget)
-                .foregroundColor(Theme.Palette.authForgetText)
+    private var legalConsent: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Button {
+                hasAcceptedLegalTerms.toggle()
+            } label: {
+                Image(systemName: hasAcceptedLegalTerms ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(hasAcceptedLegalTerms ? Theme.Palette.authLoginButton : .white.opacity(0.7))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(L10n.authConsentToggleA11y)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(L10n.authConsentPrefix)
+                    .font(.system(size: 12))
+                    .foregroundStyle(.white.opacity(0.7))
+
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 5) {
+                        legalLink(L10n.settingsTermsOfService, route: .userAgreement)
+                        Text(L10n.authConsentAnd)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.white.opacity(0.7))
+                        legalLink(L10n.settingsPrivacyPolicy, route: .privacyPolicy)
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        legalLink(L10n.settingsTermsOfService, route: .userAgreement)
+                        legalLink(L10n.settingsPrivacyPolicy, route: .privacyPolicy)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 12)
+    }
+
+    private func legalLink(_ title: String, route: LoginLegalRoute) -> some View {
+        Button {
+            pathHolder.path.append(route)
+        } label: {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Theme.Palette.authLoginButton)
+                .underline()
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -229,17 +314,21 @@ struct LoginView: View {
         Task { await session.login(email: email, password: password) }
     }
 
-    private func handleForget() {
-        // TODO: 忘记密码路由(未来对齐 H5 /views/forgetPwd)
-    }
-
     private func togglePasswordVisibility() {
         // 记录切换前的 focus 状态；若正在编辑,切换后异步恢复,避免键盘收起
-        let wasFocused = passwordFocused
+        let wasFocused = focusedField == .password
         isPasswordRevealed.toggle()
         if wasFocused {
             DispatchQueue.main.async {
-                passwordFocused = true
+                focusedField = .password
+            }
+        }
+    }
+
+    private func scrollLoginButtonIntoView(_ proxy: ScrollViewProxy) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            withAnimation(.easeOut(duration: 0.22)) {
+                proxy.scrollTo(LoginScrollTarget.loginButton, anchor: .bottom)
             }
         }
     }
@@ -247,8 +336,22 @@ struct LoginView: View {
     // MARK: - 派生
 
     private var loginButtonEnabled: Bool {
-        !session.isLoading && !email.isEmpty && !password.isEmpty
+        !session.isLoading && !email.isEmpty && !password.isEmpty && hasAcceptedLegalTerms
     }
+}
+
+private enum LoginLegalRoute: Hashable {
+    case userAgreement
+    case privacyPolicy
+}
+
+private enum LoginFocusField: Hashable {
+    case email
+    case password
+}
+
+private enum LoginScrollTarget: Hashable {
+    case loginButton
 }
 
 #if DEBUG

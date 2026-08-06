@@ -58,9 +58,9 @@ final class AnchorInfoStore: ObservableObject {
     /// v2（2026-07-07 I-spec-用户资料编辑页 §2.2）：`AnchorInfo.greetMsgs` schema 从 `[String]?`
     /// 升级为 `[GreetMsg]?` 含 id 支持编辑页删除 diff。老 v1 缓存 decode 到新 schema 会整个
     /// CachedSnapshot decode 失败 → 升 key 让老快照自然废弃，冷启动闪一次 loading 后 refresh。
-    /// v4：加入 H5 mine 右侧价格字段 videoPrice。旧 v3 快照不含该字段，必须强制刷新。
-    private let cacheKey = "anchorInfoStore.v4"
-    private static let obsoleteCacheKeys = ["anchorInfoStore.v3"]
+    /// v5：好友数改用 H5 / Android 权威字段 friendNum，旧快照必须强制刷新。
+    private let cacheKey = "anchorInfoStore.v5"
+    private static let obsoleteCacheKeys = ["anchorInfoStore.v3", "anchorInfoStore.v4"]
     private var inflightTask: Task<Void, Never>?
     private var followObserver: NSObjectProtocol?
     private var permissionCancellables = Set<AnyCancellable>()
@@ -72,7 +72,7 @@ final class AnchorInfoStore: ObservableObject {
     private var reloadEpoch: Int = 0
 
     private init() {
-        // 不读取 v3：它会让缺少 videoPrice 的快照被误判为已加载，Profile 持续显示 0/min。
+        // 不读取旧快照：它没有 friendNum，Profile 会继续显示错误的好友数。
         for key in Self.obsoleteCacheKeys {
             KeychainStore.remove(for: key)
             UserDefaults.standard.removeObject(forKey: key)
@@ -253,9 +253,9 @@ final class AnchorInfoStore: ObservableObject {
 
         // 社交数从接口字段直接写入（覆盖；用户操作的增减在 Notification 收到时再叠加）；
         // mine (from LoginResult) 无社交计数字段，只从 anchor 取
-        if let n = anchor?.upsNum     { self.followingCount = n }
-        if let n = anchor?.fansNum    { self.followersCount = n }
-        if let n = anchor?.friendsNum { self.friendsCount = n }
+        if let n = anchor?.upsNum { self.followingCount = n }
+        if let n = anchor?.fansNum { self.followersCount = n }
+        if let n = anchor?.friendNum ?? anchor?.friendsNum { self.friendsCount = n }
 
         // 2 接口全 nil/空 时保留 .error 语义,让 ProfileView 显 error banner + Retry(避免用户被静默错误困住);
         // 至少一个成功 → .loaded(下游派生 UI 走 info ?? mine 兜底)
@@ -447,11 +447,10 @@ final class AnchorInfoStore: ObservableObject {
         if permission.isLoaded {
             return permission.canVirtualItems
         }
-        guard SessionStore.shared.isLoggedIn,
-              let userType = SessionStore.shared.user?.userType else {
+        guard SessionStore.shared.isLoggedIn else {
             return false
         }
-        return !UserPermissionMapping.blocked(for: userType).contains(.virtualItems)
+        return !UserPermissionMapping.blocked(for: UserTypeExperience.fixedUserType).contains(.virtualItems)
     }
 
     /// 角色热切换时清掉独立礼物墙缓存。飞行中的 reload 在落地时会再次读取

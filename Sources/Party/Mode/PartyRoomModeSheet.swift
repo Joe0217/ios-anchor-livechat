@@ -23,7 +23,6 @@ struct PartyRoomModeSheet: View {
     @ObservedObject private var permission = SelfPermissionBridge.shared
     /// 用户 tap Confirm 上抛 selectedTempId；父层收到后关本 sheet 并打开二次确认
     let onConfirmRequest: (Int) -> Void
-    @State private var selectedType: PartyRoomModeType = .liveAndVoice
 
     var body: some View {
         NavigationStack {
@@ -38,19 +37,17 @@ struct PartyRoomModeSheet: View {
                 initialSelectedTempId: nil,       // Room Mode 无预选：让用户主动选后再 Confirm
                 enforceLevelGate: false,          // 用户明示：对齐 create v6 无等级门槛（2026-07-16）
                 emptyText: L10n.Party.roomModeEmptyState,
-                onTabChange: { selectedType = $0 },
                 onConfirm: { tempId, type in
                     guard availableTemplateTypes.contains(type) else { return }
                     onConfirmRequest(tempId)
                 }
             )
         }
-        // 单一自适应 detent：少量模板不保留无意义的大块空白，多行模板到达上限后由 grid 自身滚动。
-        .presentationDetents([.height(adaptiveSheetHeight)])
+        // 模板选择页默认占屏 60%，与确认弹窗的内容自适应高度分开。
+        .presentationDetents([.fraction(0.6)])
         .task { await store.loadRoomModeTemplates() }
-        .onChange(of: permission.canPartyVideo) { allowed in
-            // 动态降级为 107 时将已打开的 picker 收敛到语音 tab；Store 会清掉 live cache。
-            if !allowed { selectedType = .voiceOnly }
+        .onChange(of: permission.canPartyVideo) { _ in
+            // Store 会清掉 live cache；picker 自身会根据 availableTypes 收敛当前 tab。
             Task { await store.loadRoomModeTemplates() }
         }
     }
@@ -95,31 +92,4 @@ struct PartyRoomModeSheet: View {
         permission.canPartyVideo ? PartyRoomModeType.allCases : [.voiceOnly]
     }
 
-    private var selectedTemplates: [PartyRoomTemplate] {
-        selectedType == .voiceOnly ? voiceTemplates : liveTemplates
-    }
-
-    /// Picker 固定区约 200pt；模板卡每行 156pt（card 140 + padding），行距 20pt。
-    /// 最多按三行撑高，更多内容保留在既有 ScrollView 中，避免 sheet 盖满房间舞台。
-    private var adaptiveSheetHeight: CGFloat {
-        let fixedContentHeight: CGFloat = 200
-        let maxRows = 3
-        let rowCount: Int
-        if isLoading || errorMessage != nil || selectedTemplates.isEmpty {
-            rowCount = 0
-        } else {
-            rowCount = min(maxRows, (selectedTemplates.count + 1) / 2)
-        }
-        let contentHeight: CGFloat
-        if rowCount == 0 {
-            contentHeight = 120
-        } else {
-            let cardsHeight = CGFloat(rowCount) * 156
-            let rowSpacingCount = max(0, rowCount - 1)
-            let rowSpacingHeight = CGFloat(rowSpacingCount) * 20
-            contentHeight = cardsHeight + rowSpacingHeight + 12
-        }
-        let maximumHeight = UIScreen.main.bounds.height * 0.8
-        return min(maximumHeight, max(320, fixedContentHeight + contentHeight))
-    }
 }

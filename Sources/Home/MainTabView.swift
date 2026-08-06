@@ -37,6 +37,10 @@ struct MainTabView: View {
     @State private var workPath: NavigationPath = NavigationPath()
     /// H-2 spec §4.1：Messages tab 加 NavigationStack path 支持 push ChatDetailView（对齐 homePath 模式）
     @State private var messagesPath: NavigationPath = NavigationPath()
+    /// 107 的 Connections 独立栈：关系列表、用户资料和客服会话均在本栈内完成。
+    @State private var connectionsPath: NavigationPath = NavigationPath()
+    /// 107 的 Beauty 独立栈：根页提供设置和相机两个入口。
+    @State private var beautyPath: NavigationPath = NavigationPath()
     /// E-spec §0.2：Party tab 独立 NavigationPath（消除 v1 借宿 workPath 技术债）
     @State private var partyPath: NavigationPath = NavigationPath()
     @State private var profilePath: NavigationPath = NavigationPath()
@@ -135,6 +139,8 @@ struct MainTabView: View {
             switch selection {
             case .home:     homePath.append(route)
             case .messages: messagesPath.append(route)
+            case .connections: connectionsPath.append(route)
+            case .beauty: beautyPath.append(route)
             case .work:     workPath.append(route)
             case .party:    partyPath.append(route)
             case .profile:  profilePath.append(route)
@@ -175,6 +181,8 @@ struct MainTabView: View {
         case .home:     return !homePath.isEmpty    // H-0：用户详情页等多入口共享 UserProfileRoute
         case .work:     return !workPath.isEmpty
         case .messages: return !messagesPath.isEmpty   // H-2：私聊页 push 后隐藏 tabbar 避免遮挡输入栏
+        case .connections: return !connectionsPath.isEmpty
+        case .beauty: return !beautyPath.isEmpty
         case .party:    return !partyPath.isEmpty   // E-spec：Party tab push PartyRoomView / PartyCreateRoomView 时隐藏 tabbar
         case .profile:  return !profilePath.isEmpty
         }
@@ -224,6 +232,8 @@ struct MainTabView: View {
             homePath = NavigationPath()
             workPath = NavigationPath()
             messagesPath = NavigationPath()   // H-2：Messages tab 切走时也回根页
+            connectionsPath = NavigationPath()
+            beautyPath = NavigationPath()
             partyPath = NavigationPath()      // E-spec：Party tab 同款清 path
             profilePath = NavigationPath()
             // E-spec §0.2 F-16：Party 主 tab gate（大厅根页 + 子页都抑制 match tip 弹窗）
@@ -283,6 +293,14 @@ struct MainTabView: View {
             enforceVisibleSelection()
         }
         .onChange(of: permission.canWorkDashboard) { _ in enforceVisibleSelection() }
+        .onChange(of: permission.canRelationshipViewing) { allowed in
+            if !allowed { connectionsPath = NavigationPath() }
+            enforceVisibleSelection()
+        }
+        .onChange(of: permission.canBeautyStudio) { allowed in
+            if !allowed { beautyPath = NavigationPath() }
+            enforceVisibleSelection()
+        }
         .onChange(of: permission.canDirectMessages) { allowed in
             if !allowed {
                 messagesPath = NavigationPath()
@@ -474,7 +492,7 @@ struct MainTabView: View {
                         case .firstLiveRule:  FirstLiveRuleView(path: $homePath)
                         case .liveSettings:   LiveSettingsView()
                         case .wishSetting:    WishSettingView()
-                        case .beautySettings: BeautySettingsView()
+                        case .beautySettings(let mode): BeautySettingsView(mode: mode)
                         case .giftMessage:    GiftMessageView()
                         case .profileEdit:    EditProfileView(service: EditProfileService.shared)
                         case .liveData:       LiveDataView()
@@ -506,7 +524,9 @@ struct MainTabView: View {
                         case .pointsRank:     PointsRankView()
                         case .anchorGuide:
                             H5EmbeddedFeatureContainerView(feature: .anchorGuide, title: L10n.toolWorkingGuide)
-                        case .partyData:      PartyDataView()
+                        case .partyData:
+                            // Party Data 暂时隐藏，保留 WorkRoute 以便后续恢复页面。
+                            EmptyView()
                         case .myGuardian:
                             GuardianListView(anchorId: Int64(SessionStore.shared.user?.userId ?? 0)) { uid in
                                 guard (Int64(uid.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0) > 0 else { return }
@@ -579,7 +599,11 @@ struct MainTabView: View {
                         .navigationDestination(for: String.self) { pathValue in
                             // Batch 3.8：sentinel `__station_list__` → StationListView（独立 HTTP 列表页）
                             if pathValue == MessageListView.stationSentinel {
-                                StationListView()
+                                if permission.canSystemAnnouncements {
+                                    StationListView()
+                                } else {
+                                    EmptyView()
+                                }
                             } else if pathValue == MessageListView.callRecordsSentinel {
                                 // 通话历史记录页（对齐 H5 `/communication?from=news&active=0`）
                                 if permission.canCall {
@@ -614,6 +638,64 @@ struct MainTabView: View {
                 .allowsHitTesting(selection == .party)
                 .accessibilityHidden(selection != .party)
 
+            // —— Connections：107 专用关系页，不挂载普通消息列表 ——
+            if selection == .connections {
+                NavigationStack(path: $connectionsPath) {
+                    FollowListView(
+                        isConnectionsRoot: true,
+                        onOpenSupport: { peerYxAccId in
+                            guard permission.canSupportMessaging,
+                                  CustomerServiceIdStore.shared.customerYxAccId == peerYxAccId else {
+                                AppToastCenter.shared.show(L10n.connectionsSupportUnavailable)
+                                return
+                            }
+                            connectionsPath.append(ConnectionsRoute.support)
+                        },
+                        onOpenBlocklist: {
+                            connectionsPath.append(ConnectionsRoute.blocklist)
+                        },
+                        onOpenFeedback: {
+                            connectionsPath.append(ConnectionsRoute.feedback)
+                        }
+                    )
+                    .navigationDestination(for: ConnectionsRoute.self) { route in
+                        switch route {
+                        case .support:
+                            if permission.canSupportMessaging,
+                               let peer = CustomerServiceIdStore.shared.customerYxAccId,
+                               !peer.isEmpty {
+                                ChatDetailContainer(
+                                    peerYxAccId: peer,
+                                    selfYxAccId: session.user?.yxAccid ?? ""
+                                )
+                            } else {
+                                EmptyView()
+                            }
+                        case .blocklist:
+                            BlocklistView()
+                        case .feedback:
+                            FeedbackView(path: $connectionsPath)
+                        }
+                    }
+                    .userProfileAndChatDestinations()
+                    .environment(\.openUserProfile, openUserProfileAction)
+                }
+            }
+
+            // —— Beauty：107 专用本地工具页，不初始化直播、通话或 Party 视频 ——
+            if selection == .beauty {
+                NavigationStack(path: $beautyPath) {
+                    BeautyStudioRootView()
+                        .navigationDestination(for: BeautyStudioRoute.self) { route in
+                            if permission.canBeautyStudio {
+                                BeautySettingsView(mode: route.mode)
+                            } else {
+                                EmptyView()
+                            }
+                        }
+                }
+            }
+
             // —— Work / Profile：if 切换销毁重建 ——
             // 用户接受重新加载；不长持 NavigationStack + WorkView/ProfileView 内的资源。
             if selection == .work {
@@ -631,8 +713,8 @@ struct MainTabView: View {
                                 LiveSettingsView()
                             case .wishSetting:
                                 WishSettingView()
-                            case .beautySettings:
-                                BeautySettingsView()
+                            case .beautySettings(let mode):
+                                BeautySettingsView(mode: mode)
                             case .giftMessage:
                                 GiftMessageView()
                             case .profileEdit:
@@ -670,7 +752,8 @@ struct MainTabView: View {
                             case .anchorGuide:
                                 H5EmbeddedFeatureContainerView(feature: .anchorGuide, title: L10n.toolWorkingGuide)
                             case .partyData:
-                                PartyDataView()
+                                // Party Data 暂时隐藏，保留 WorkRoute 以便后续恢复页面。
+                                EmptyView()
                             case .myGuardian:
                                 GuardianListView(anchorId: Int64(SessionStore.shared.user?.userId ?? 0)) { uid in
                                     // H5 `onClickUser` 对 0 不跳转；列表接口的 userId 是数值，iOS 适配为 String 后保留同一约束。
@@ -721,7 +804,7 @@ struct MainTabView: View {
                 NavigationStack(path: $profilePath) {
                     ProfileView(path: $profilePath)
                         .navigationDestination(for: FollowSegment.self) { segment in
-                            if permission.canProfileSocial {
+                            if permission.canRelationshipViewing {
                                 FollowListView(initialSegment: segment)
                             } else {
                                 EmptyView()
@@ -739,14 +822,17 @@ struct MainTabView: View {
                                     EmptyView()
                                 }
                             case .blocklist:    BlocklistView()
-                            case .editProfile:  EditProfileView(service: EditProfileService.shared)
+                            case .editProfile:
+                                if permission.canProfileSocial {
+                                    EditProfileView(service: EditProfileService.shared)
+                                } else {
+                                    EmptyView()
+                                }
                             case .anchorPolicy: AnchorPolicyView()
                             case .language:     LanguageView()
                             case .feedback:     FeedbackView(path: $profilePath)
-                            case .userAgreement:
-                                H5WebContainerView(page: H5Page(url: URL(string: AppConfig.termsOfServiceURL)!, title: L10n.settingsTermsOfService))
-                            case .privacyPolicy:
-                                H5WebContainerView(page: H5Page(url: URL(string: AppConfig.privacyPolicyURL)!, title: L10n.settingsPrivacyPolicy))
+                            case .userAgreement: UserAgreementView()
+                            case .privacyPolicy: PrivacyPolicyView()
                             }
                         }
                         // 详情↔聊天互跳所有 destination + 头像 tap 详情 pusher
@@ -808,6 +894,10 @@ struct MainTabView: View {
         MainTab.allCases.filter { tab in
             switch tab {
             case .party: return permission.canParty
+            case .connections:
+                return uses107TabStructure && permission.canRelationshipViewing
+            case .beauty:
+                return uses107TabStructure && permission.canBeautyStudio
             case .home: return permission.canHomeDiscovery
             case .work: return permission.canWorkDashboard
             case .messages: return permission.canDirectMessages
@@ -816,13 +906,23 @@ struct MainTabView: View {
         }
     }
 
+    /// 以权限组合识别 107 的提审结构，保证 DEBUG userType override 与真实账号走同一条 QA 路径。
+    /// 当前映射里只有 107 同时保留 Party、关闭 Home/Messages/Work。
+    private var uses107TabStructure: Bool {
+        permission.isLoaded
+            && permission.canParty
+            && !permission.canHomeDiscovery
+            && !permission.canDirectMessages
+            && !permission.canWorkDashboard
+    }
+
     /// 结构性挂载不能只等 Bridge 的异步 `@Published` 更新：普通账号的首页应保持原有首帧行为，
     /// 但 107 在 Bridge 尚未装配时也绝不能短暂构造 Home 子树。会话已存在时复用同一映射同步判定；
     /// 无会话则保守不挂载。
     private var shouldMountHomeContent: Bool {
         if permission.isLoaded { return permission.canHomeDiscovery }
-        guard let userType = session.user?.userType else { return false }
-        return !UserPermissionMapping.blocked(for: userType).contains(.homeDiscovery)
+        guard session.user != nil else { return false }
+        return !UserPermissionMapping.blocked(for: UserTypeExperience.fixedUserType).contains(.homeDiscovery)
     }
 
     /// 107 在会话权限加载后从默认 Home 收敛到 Party；其他账号类型仍沿用既有 tab 行为。
@@ -833,6 +933,8 @@ struct MainTabView: View {
         case .work: workPath = NavigationPath()
         case .party: partyPath = NavigationPath()
         case .messages: messagesPath = NavigationPath()
+        case .connections: connectionsPath = NavigationPath()
+        case .beauty: beautyPath = NavigationPath()
         case .profile: break
         }
         selection = fallbackVisibleTab()
@@ -840,6 +942,8 @@ struct MainTabView: View {
 
     private func fallbackVisibleTab() -> MainTab {
         if permission.canParty { return .party }
+        if uses107TabStructure, permission.canRelationshipViewing { return .connections }
+        if uses107TabStructure, permission.canBeautyStudio { return .beauty }
         if permission.canHomeDiscovery { return .home }
         if permission.canDirectMessages { return .messages }
         return .profile
@@ -862,11 +966,19 @@ struct MainTabView: View {
 
     private func tabItem(_ tab: MainTab, isSelected: Bool) -> some View {
         VStack(spacing: 4) {
-            CDNAssetImage(isSelected ? tab.activeIcon : tab.icon)
-                .resizable()
-                .scaledToFit()
-                .frame(width: 26, height: 26)
-                .accessibilityHidden(true)
+            if let symbols = tab.systemIcons {
+                Image(systemName: isSelected ? symbols.active : symbols.inactive)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(isSelected ? Theme.Palette.tabActive : Theme.Palette.tabInactiveLabel)
+                    .frame(width: 26, height: 26)
+                    .accessibilityHidden(true)
+            } else {
+                CDNAssetImage(isSelected ? tab.activeIcon : tab.icon)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 26, height: 26)
+                    .accessibilityHidden(true)
+            }
             Text(tab.label)
                 .font(Theme.Typography.tabLabel)
                 .foregroundStyle(isSelected ? Theme.Palette.tabActive : Theme.Palette.tabInactiveLabel)
@@ -1263,7 +1375,7 @@ private struct PartyFloatingGIFView: View {
 /// 声明顺序 = allCases = tabbar 渲染顺序：home / messages / **party** / work / profile
 /// （E-spec §6B v3：party 插第 3 位，居中焦点 tab，对齐主流直播 App"发现/派对"tab 中心突出模式）
 enum MainTab: CaseIterable {
-    case home, messages, party, work, profile
+    case home, messages, party, connections, beauty, work, profile
 
     /// 未选中态切图（浅紫静态色调）
     var icon: String {
@@ -1271,6 +1383,7 @@ enum MainTab: CaseIterable {
         case .home:     return "tabHome"
         case .messages: return "tabMessages"
         case .party:    return "tabParty"
+        case .connections, .beauty: return ""
         case .work:     return "tabWork"
         case .profile:  return "tabProfile"
         }
@@ -1282,6 +1395,7 @@ enum MainTab: CaseIterable {
         case .home:     return "tabHomeActive"
         case .messages: return "tabMessagesActive"
         case .party:    return "tabPartyActive"
+        case .connections, .beauty: return ""
         case .work:     return "tabWorkActive"
         case .profile:  return "tabProfileActive"
         }
@@ -1292,10 +1406,26 @@ enum MainTab: CaseIterable {
         case .home:     return L10n.tabHome
         case .messages: return L10n.tabMessages
         case .party:    return L10n.tabParty
+        case .connections: return L10n.tabConnections
+        case .beauty: return L10n.tabBeauty
         case .work:     return L10n.tabWork
         case .profile:  return L10n.tabProfile
         }
     }
+
+    var systemIcons: (inactive: String, active: String)? {
+        switch self {
+        case .connections: return ("person.2", "person.2.fill")
+        case .beauty: return ("camera", "camera.fill")
+        default: return nil
+        }
+    }
+}
+
+enum ConnectionsRoute: Hashable {
+    case support
+    case blocklist
+    case feedback
 }
 
 // MARK: - EnvironmentKey

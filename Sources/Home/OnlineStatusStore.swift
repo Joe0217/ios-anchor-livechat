@@ -47,6 +47,7 @@ final class OnlineStatusStore: ObservableObject {
 
     /// 顶部圆点最终颜色。
     var derivedDot: DotStatus {
+        if isFixedPartyOnlySession { return .online }
         if forcedBusy { return .forcedBusy }
         if !userSetOnline { return .offline }
         return wsConnected ? .online : .offline
@@ -94,11 +95,24 @@ final class OnlineStatusStore: ObservableObject {
 
     // MARK: - Public API
 
+    private var isFixedPartyOnlySession: Bool {
+        let userType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(
+                isAuthenticated: SessionStore.shared.user != nil
+            )
+        return UserTypeExperience.isPartyOnly(userType)
+    }
+
     /// Work 悬浮开关手动切换在线。false 触发时通常先弹确认（Work 层管弹窗），确认后调本方法。
     ///
     /// **立即 WS 上报**：不等下一次 15s ping tick，让服务端 <1s 感知新态；
     /// 否则最坏 15s 窗口内新的 P2P 呼叫仍派发给已下线主播。
     func setUserSetOnline(_ value: Bool) {
+        if isFixedPartyOnlySession {
+            userSetOnline = true
+            WSHeartbeat.shared.reportManualOnlineStatus(isOnline: true)
+            return
+        }
         userSetOnline = value
         WSHeartbeat.shared.reportManualOnlineStatus(isOnline: value)
     }
@@ -166,6 +180,12 @@ final class OnlineStatusStore: ObservableObject {
     /// **取消守卫**（必修-1 同款审视）：API 返回后所有 @Published 赋值前统一 checkCancellation，
     /// 避免老 Task 的迟到结果覆盖新 Task 已经更新的状态。
     func checkForcedBusy(showToast: Bool, doAction: Bool) async {
+        if isFixedPartyOnlySession {
+            forcedBusy = false
+            userSetOnline = true
+            showSetToBusyDialog = false
+            return
+        }
         do {
             let data = try await APIClient.shared.post("/api/anchor/hasExceededCallLimit", body: [:])
             // API 返回后立即自检取消：老 Task 网络请求慢 + 用户双击时，此处丢弃老 Task 结果
@@ -203,7 +223,11 @@ final class OnlineStatusStore: ObservableObject {
                 if let uuid = user.loginUuid, !uuid.isEmpty, !WSHeartbeat.shared.connected {
                     logger.info("[OnlineStatus] WSHeartbeat 断开，触发重连")
                     WSHeartbeat.shared.stop()
-                    WSHeartbeat.shared.start(loginUuid: uuid)
+                    if isFixedPartyOnlySession {
+                        WSHeartbeat.shared.startPartyOnly(loginUuid: uuid)
+                    } else {
+                        WSHeartbeat.shared.start(loginUuid: uuid)
+                    }
                 }
 
                 // 3) 触发 NIM 长连（IM 消息通道，对齐安卓"发布 NIM 前台事件"）

@@ -696,7 +696,7 @@ final class PartyStore: ObservableObject {
         Task { [weak self] in await self?.loadCurrentRoomBackground() }
         // H5 也在进房后单独拉 music/settings；roomMusicSwitc 只控制入口可见性。
         Task { [weak self] in await self?.loadRoomMusicSettings() }
-        // 清理上一房间的游戏资源；RTC + Chat 双 ready 后再请求当前房间可用游戏。
+        // 清理上一房间的游戏资源；RTC + Chat 双 ready 后再按账号权限请求当前房间可用游戏。
         partyBannerGamesEpoch &+= 1
         partyBannerGames = []
         roomState = .entering
@@ -1169,6 +1169,10 @@ final class PartyStore: ObservableObject {
     }
 
     private func loadPartyBannerGames() async {
+        guard PartyHalfScreenGameAvailability.isEnabled else {
+            partyBannerGames = []
+            return
+        }
         let roomId = roomInfo?.id
         guard let roomId, !roomId.isEmpty else { return }
         let epoch = partyBannerGamesEpoch
@@ -1257,7 +1261,7 @@ final class PartyStore: ObservableObject {
         }
         // Store 第二层防护：UI 隐藏不能替代业务入口 gate；权限在点击与发送之间变化时 fail closed。
         if item.isPlayEmoji,
-           !SelfPermissionBridge.shared.gate(.partyGames, action: "partyPlayEmojiSend") {
+           !PartyExpressionAvailability.canUsePlayEmoji {
             return
         }
         // 玩法 -11 门槛：仅上麦者可发（对齐 H5 `usePartyHooks.js:1783` `inPartyRole > 0`）
@@ -1515,7 +1519,7 @@ final class PartyStore: ObservableObject {
     /// `willFollow` 反映**成功后的目标状态**（true=已关注 / false=已取关），View 层据此决定 toast 文案。
     @discardableResult
     func toggleFollowAnchor() async -> (success: Bool, willFollow: Bool)? {
-        guard SelfPermissionBridge.shared.gate(.profileSocial, action: "partyToggleFollowAnchor") else {
+        guard SelfPermissionBridge.shared.gate(.relationshipActions, action: "partyToggleFollowAnchor") else {
             return nil
         }
         guard !isTogglingFollow else { return nil }
@@ -1554,7 +1558,9 @@ final class PartyStore: ObservableObject {
         guard isJoinedChannel, imAlive else { return }
         roomState = .joined
         partyJoinedAt = Date()
-        Task { [weak self] in await self?.loadPartyBannerGames() }
+        if PartyHalfScreenGameAvailability.isEnabled {
+            Task { [weak self] in await self?.loadPartyBannerGames() }
+        }
         if let info = roomInfo {
             var properties = PartyAnalytics.roomProperties(
                 roomId: info.id,
@@ -2415,10 +2421,12 @@ final class PartyStore: ObservableObject {
         isLocalCameraDisabled = false
     }
 
-    /// 107 不在登录时常驻主播 WS；进入 Party 后才建立仅刷新房间 TTL 的连接。
-    /// 完整主播已经由 RootView 在登录时启动常驻 WS，此处只补 roomId/seatIndex 上下文。
+    /// 固定 107 在登录期常驻最小 WS；进入 Party 后此处补 roomId/seatIndex
+    /// 上下文，同一心跳同时刷新房间 TTL。
     private func updatePartyHeartbeatContext(roomId: String, seatIndex: Int) {
-        if SessionStore.shared.user?.userType == 107,
+        let userType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.user != nil)
+        if UserTypeExperience.isPartyOnly(userType),
            let loginUuid = SessionStore.shared.user?.loginUuid,
            !loginUuid.isEmpty {
             WSHeartbeat.shared.startPartyOnly(loginUuid: loginUuid)
@@ -3011,6 +3019,10 @@ final class PartyStore: ObservableObject {
 
     /// 拉取房间音乐的实际 ON/OFF 状态。进房时调用；仅在音乐功能对当前房开放时请求。
     func loadRoomMusicSettings() async {
+        guard canUseRoomMusic else {
+            disableRoomMusicForPermissionRevocation()
+            return
+        }
         guard let info = roomInfo,
               let roomId = info.id,
               !roomId.isEmpty,
@@ -3036,6 +3048,10 @@ final class PartyStore: ObservableObject {
 
     /// 房主/房管切换房间音乐。成功后乐观回写，与 H5 `switchEnableMusic` 一致。
     func toggleRoomMusic() async {
+        guard SelfPermissionBridge.shared.gate(
+            .partyMusic,
+            action: "partyToggleRoomMusic"
+        ) else { return }
         guard selfRole == .owner || selfRole == .admin else {
             AppLogger.party.notice("[PartyStore] toggleRoomMusic rejected: not room manager")
             return
@@ -3072,7 +3088,8 @@ final class PartyStore: ObservableObject {
 
     /// 普通用户只控制自己的音乐流收听；房主/房管打开的是管理面板，不调用本方法。
     func toggleRoomMusicAudible() {
-        guard roomState == .joined,
+        guard canUseRoomMusic,
+              roomState == .joined,
               roomMusicSettings.isEnabled,
               roomMusicSettings.playStatus == 1,
               let roomId = roomInfo?.id,
@@ -3086,7 +3103,8 @@ final class PartyStore: ObservableObject {
 
     /// 管理员从音乐面板选中歌曲。与 H5 一致，先乐观更新，接口失败再回滚。
     func playRoomMusic(_ item: PartyMusicItem) async {
-        guard let info = roomInfo,
+        guard canUseRoomMusic,
+              let info = roomInfo,
               let roomId = info.id,
               !roomId.isEmpty,
               roomState == .joined,
@@ -3140,7 +3158,8 @@ final class PartyStore: ObservableObject {
     /// 本地音乐上传：校验格式/大小，上传 OSS 后写入 Party 音乐库。
     @discardableResult
     func uploadLocalRoomMusic(fileURL: URL) async -> Bool {
-        guard isRoomManager,
+        guard canUseRoomMusic,
+              isRoomManager,
               let roomId = roomInfo?.id,
               !roomId.isEmpty,
               !isUploadingRoomMusic else { return false }
@@ -3188,7 +3207,8 @@ final class PartyStore: ObservableObject {
     }
 
     func deleteLocalRoomMusic(ids: [String]) async -> Bool {
-        guard isRoomManager,
+        guard canUseRoomMusic,
+              isRoomManager,
               let roomId = roomInfo?.id,
               !roomId.isEmpty,
               !ids.isEmpty else { return false }
@@ -3204,12 +3224,20 @@ final class PartyStore: ObservableObject {
     }
 
     func applyRoomMusicUpdate(_ payload: [String: Any], switchOnly: Bool) {
+        guard canUseRoomMusic else {
+            disableRoomMusicForPermissionRevocation()
+            return
+        }
         let next = roomMusicSettings.applying(payload: payload)
         applyRoomMusicSettings(next)
         AppLogger.party.info("[PartyStore] music IM switchOnly=\(switchOnly, privacy: .public) enabled=\(next.isEnabled, privacy: .public) play=\(next.playStatus, privacy: .public)")
     }
 
     func applyRoomMusicAvailability(_ payload: [String: Any]) {
+        guard canUseRoomMusic else {
+            disableRoomMusicForPermissionRevocation()
+            return
+        }
         guard let enabled = PartyValueNormalizer.intify(payload["roomMusicSwitch"] ?? payload["roomMusicSwitc"]),
               let info = roomInfo else { return }
         roomInfo = info.withUpdated(roomMusicSwitc: enabled)
@@ -3222,8 +3250,23 @@ final class PartyStore: ObservableObject {
         selfRole == .owner || selfRole == .admin
     }
 
+    private var canUseRoomMusic: Bool {
+        SelfPermissionBridge.shared.canPartyMusicSnapshot
+    }
+
+    /// 权限撤销或 107 进房时的统一收口：清空 UI 状态并强制静音房间音乐流。
+    func disableRoomMusicForPermissionRevocation() {
+        isRoomMusicEnabled = false
+        roomMusicSettings = .empty
+        isRoomMusicAudible = false
+        if let agoraUID = roomMusicAgoraUID {
+            rtc.setRemoteAudio(uid: agoraUID, enabled: false)
+        }
+    }
+
     private func updateRoomMusicPlayback(songId: String, actionType: Int) async {
-        guard let info = roomInfo,
+        guard canUseRoomMusic,
+              let info = roomInfo,
               let roomId = info.id,
               !roomId.isEmpty,
               roomState == .joined,
@@ -3252,7 +3295,8 @@ final class PartyStore: ObservableObject {
     }
 
     private func updateRoomMusicConfiguration(volume: Int? = nil, playMode: Int? = nil) async {
-        guard let info = roomInfo,
+        guard canUseRoomMusic,
+              let info = roomInfo,
               let roomId = info.id,
               !roomId.isEmpty,
               let songId = roomMusicSettings.currentSongId,
@@ -3282,6 +3326,10 @@ final class PartyStore: ObservableObject {
     }
 
     private func applyRoomMusicSettings(_ settings: PartyMusicSettings) {
+        guard canUseRoomMusic else {
+            disableRoomMusicForPermissionRevocation()
+            return
+        }
         roomMusicSettings = settings
         isRoomMusicEnabled = settings.isEnabled
         if (!settings.isEnabled || settings.playStatus != 1), let agoraUID = roomMusicAgoraUID {
@@ -4416,7 +4464,7 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         _ = raw
         // Router 已提前拒绝；Store 再守一次，避免未来新增入口绕过消息路由层。
         if isPlay,
-           !SelfPermissionBridge.shared.gate(.partyGames, action: "partyPlayEmojiReceiveStore") {
+           !PartyExpressionAvailability.canUsePlayEmoji {
             return
         }
         guard !isMinimized else { return }

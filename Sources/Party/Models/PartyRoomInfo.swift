@@ -356,6 +356,12 @@ struct PartyRoomBanner: Codable, Equatable {
     }
 }
 
+/// 半屏游戏全局总开关。提审期间所有账号均禁用，避免进房触发 `/api/half/geme/anchor/list`
+/// 及其关联 Banner、H5 sheet 和跳转链路；恢复时需单独验证接口契约后再开启。
+enum PartyHalfScreenGameAvailability {
+    static let isEnabled = false
+}
+
 /// 主播端 Party 房右下角半屏游戏资源。
 ///
 /// 数据来自 `/half/geme/anchor/list`；与用户端 `v2/list` 的游戏池不同。接口字段尚需首轮

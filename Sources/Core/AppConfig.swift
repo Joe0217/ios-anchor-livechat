@@ -90,14 +90,6 @@ enum AppConfig {
         return url
     }
 
-    // MARK: - Settings 外链 & 静态资源（H5 config.js 蓝本一致）
-    /// 主播规范图（View anchor policy 页显示的远程 png）
-    static let anchorPolicyImageURL = "https://img.hnhily.link/default/anchor.png"
-    /// 用户协议外链
-    static let termsOfServiceURL    = "https://h5.livehot.site/#/agreement"
-    /// 隐私政策外链
-    static let privacyPolicyURL     = "https://h5.livehot.site/#/privacy"
-
     /// F 期便利功能：派对房 ShareLink 深链前缀（2026-07-17）。
     /// 完整格式：`\(partyShareBaseURL)\(roomId)`；由用户端 h5ui 承接跳转，主播端只做**站外分享出口**，
     /// 不承接进入侧 deep link（主播不会通过分享链回自己房）。

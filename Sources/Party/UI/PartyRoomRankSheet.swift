@@ -32,9 +32,13 @@ struct PartyRoomRankSheet: View {
         permission.canVirtualItems && permission.canGiftSending
     }
 
+    private var canShowCurrentMode: Bool {
+        store.mode == .viewers || canShowValueRankings
+    }
+
     var body: some View {
         Group {
-            if canShowValueRankings {
+            if canShowCurrentMode {
                 rankSheetContent
             } else {
                 Color.clear.onAppear(perform: dismissIfValueRankingsAreDisabled)
@@ -65,12 +69,12 @@ struct PartyRoomRankSheet: View {
     }
 
     private func handleValueRankingPermissionChange(_ allowed: Bool) {
-        guard !allowed else { return }
+        guard !allowed, store.mode != .viewers else { return }
         dismissIfValueRankingsAreDisabled()
     }
 
     private func dismissIfValueRankingsAreDisabled() {
-        guard !canShowValueRankings else { return }
+        guard store.mode != .viewers, !canShowValueRankings else { return }
         store.clearForDisabledValueRankings()
         dismiss()
     }
@@ -470,6 +474,10 @@ final class PartyRankStore: ObservableObject {
         SelfPermissionBridge.shared.canVirtualItems && SelfPermissionBridge.shared.canGiftSending
     }
 
+    private var canUseCurrentMode: Bool {
+        mode == .viewers || canUseValueRankings
+    }
+
     init(initialMode: PartyRoomRankMode, roomId: String) {
         self.mode = initialMode
         self.roomId = roomId
@@ -531,7 +539,7 @@ final class PartyRankStore: ObservableObject {
     }
 
     func loadNextPage() {
-        guard canUseValueRankings else {
+        guard canUseCurrentMode else {
             clearForDisabledValueRankings()
             return
         }
@@ -541,7 +549,7 @@ final class PartyRankStore: ObservableObject {
 
     /// 对权限撤销的统一收口：取消旧响应资格，并移除已经缓存的榜单/个人名次。
     func clearForDisabledValueRankings() {
-        guard !canUseValueRankings else { return }
+        guard mode != .viewers, !canUseValueRankings else { return }
         resetContent()
     }
 
@@ -558,7 +566,7 @@ final class PartyRankStore: ObservableObject {
     }
 
     private func fetch(reset: Bool) async {
-        guard canUseValueRankings else {
+        guard canUseCurrentMode else {
             clearForDisabledValueRankings()
             return
         }
@@ -641,7 +649,7 @@ final class PartyRankStore: ObservableObject {
             }
         } catch {
             guard currentSeq == loadSeq else { return }
-            guard canUseValueRankings else {
+            guard canUseCurrentMode else {
                 clearForDisabledValueRankings()
                 return
             }
@@ -657,7 +665,7 @@ final class PartyRankStore: ObservableObject {
         }
 
         guard currentSeq == loadSeq else { return }
-        guard canUseValueRankings else {
+        guard canUseCurrentMode else {
             clearForDisabledValueRankings()
             return
         }
@@ -667,7 +675,7 @@ final class PartyRankStore: ObservableObject {
 
     private func isCurrentRequest(_ sequence: Int) -> Bool {
         guard sequence == loadSeq else { return false }
-        guard canUseValueRankings else {
+        guard canUseCurrentMode else {
             clearForDisabledValueRankings()
             return false
         }

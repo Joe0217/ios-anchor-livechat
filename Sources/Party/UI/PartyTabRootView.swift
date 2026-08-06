@@ -34,9 +34,20 @@ struct PartyTabRootView: View {
 
     // 密码房前置 sheet：H5 限制 4 位数字，校验接口成功后才创建房间路由。
     @State private var pendingPasswordRoom: PasswordRoom?
+    @State private var autoEnteringPasswordRoomID: String?
 
     private var canShowValueRankings: Bool {
         permission.canVirtualItems && permission.canGiftSending
+    }
+
+    private var bypassesCreateRoomPermissionCheck: Bool {
+        isPartyOnlyMode
+    }
+
+    private var isPartyOnlyMode: Bool {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.isLoggedIn)
+        return UserTypeExperience.isPartyOnly(effectiveUserType)
     }
 
     var body: some View {
@@ -74,8 +85,12 @@ struct PartyTabRootView: View {
                     // 提交成功后 replace path 到 PartyRoomView（不留 create 页在栈上）
                     PartyCreateRoomView(
                         defaultName: makeDefaultRoomName(),
+                        defaultTagline: isPartyOnlyMode
+                            ? "Let's chat and have fun."
+                            : "Let's chat and have fun together.",
                         defaultAvatarUrl: makeDefaultAvatarUrl(),
                         userLevel: AnchorInfoStore.shared.mine?.level ?? 0,
+                        taglineLengthLimit: isPartyOnlyMode ? 24 : PartyCreateStore.maxTaglineLength,
                         onCreated: { roomId in
                             path.removeLast()
                             path.append(PartyRoute.room(id: roomId, password: nil, entryPath: .myRoom))
@@ -153,7 +168,7 @@ struct PartyTabRootView: View {
         guard let rid = room.id, !rid.isEmpty else { return }
         let isLocked = (room.lockFlag == 1) || (room.needPassword == true)
         if isLocked {
-            pendingPasswordRoom = PasswordRoom(id: rid, entryPath: entryPath)
+            enterPasswordProtectedRoom(id: rid, entryPath: entryPath)
         } else {
             path.append(PartyRoute.room(id: rid, password: nil, entryPath: entryPath))
         }
@@ -180,7 +195,7 @@ struct PartyTabRootView: View {
                 return
             }
             if target.requiresPassword {
-                pendingPasswordRoom = PasswordRoom(id: target.roomId, entryPath: .topRoomGuide)
+                enterPasswordProtectedRoom(id: target.roomId, entryPath: .topRoomGuide)
             } else {
                 path.append(PartyRoute.room(id: target.roomId, password: nil, entryPath: .topRoomGuide))
             }
@@ -227,6 +242,24 @@ struct PartyTabRootView: View {
         room.lockFlag == 1 || room.needPassword == true
     }
 
+    private func enterPasswordProtectedRoom(id: String, entryPath: PartyRoomEntryPath) {
+        guard isPartyOnlyMode else {
+            pendingPasswordRoom = PasswordRoom(id: id, entryPath: entryPath)
+            return
+        }
+        guard autoEnteringPasswordRoomID == nil else { return }
+        autoEnteringPasswordRoomID = id
+        Task { @MainActor in
+            let error = await PartyStore.shared.validateRoomEntryPassword(roomId: id, password: "0000")
+            autoEnteringPasswordRoomID = nil
+            guard error == nil else {
+                pendingPasswordRoom = PasswordRoom(id: id, entryPath: entryPath)
+                return
+            }
+            path.append(PartyRoute.room(id: id, password: nil, entryPath: entryPath))
+        }
+    }
+
     private struct PasswordRoom: Identifiable {
         let id: String
         let entryPath: PartyRoomEntryPath
@@ -243,6 +276,12 @@ struct PartyTabRootView: View {
         // F 期 Live↔Party 互斥：直播中禁止创房（同 handleTapRoom 语义）
         if LiveStore.shared.state == .living {
             permissionDeniedToast = L10n.Party.mutexBlockedByLive
+            return
+        }
+        // 107 使用审核专用创房接口，服务端不要求通用创房资格预检。
+        guard !bypassesCreateRoomPermissionCheck else {
+            AppLogger.party.info("[PartyTab] 107 bypass create-room permission check")
+            path.append(PartyRoute.create)
             return
         }
         AppLogger.party.info("[PartyTab] tapCreate begin checking=\(self.checkingPermission, privacy: .public)")

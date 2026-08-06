@@ -107,7 +107,7 @@ struct LiveSettingsView: View {
             }
         }
         .navigationDestination(isPresented: $showBeautySettings) {
-            BeautySettingsView()
+            BeautySettingsView(mode: .settings)
         }
         .task { await store.load() }
         .onAppear {

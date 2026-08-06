@@ -1,4 +1,98 @@
+import Photos
 import SwiftUI
+import os
+
+private let beautyCameraLogger = Logger(subsystem: "com.anchor.livechat", category: "BeautyCamera")
+
+enum BeautyStudioRoute: Hashable {
+    case settings
+    case camera
+
+    var mode: BeautySettingsView.Mode {
+        switch self {
+        case .settings: return .settings
+        case .camera: return .camera
+        }
+    }
+}
+
+/// 107 的 Beauty 一级页。这里只展示两个本地工具入口，进入工具后才申请相机权限。
+struct BeautyStudioRootView: View {
+    @ObservedObject private var permission = SelfPermissionBridge.shared
+
+    var body: some View {
+        VStack(spacing: 0) {
+            beautyEntry(
+                route: .settings,
+                title: L10n.beautyStudioSettings
+            ) {
+                CDNAssetImage("toolBeauty")
+                    .resizable()
+                    .scaledToFit()
+            }
+            Divider().background(Color.white.opacity(0.08))
+            beautyEntry(
+                route: .camera,
+                title: L10n.beautyStudioCamera
+            ) {
+                workBeautyCameraIcon
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 16)
+        .background(Theme.Palette.profileBackground.ignoresSafeArea())
+        .navigationTitle(L10n.tabBeauty)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Theme.Palette.profileBackground, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+    }
+
+    private func beautyEntry<Icon: View>(
+        route: BeautyStudioRoute,
+        title: String,
+        @ViewBuilder icon: () -> Icon
+    ) -> some View {
+        NavigationLink(value: route) {
+            HStack(spacing: 14) {
+                icon()
+                    .frame(width: 44, height: 44)
+
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(.white)
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.forward")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+            .frame(height: 68)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!permission.canBeautyStudio)
+    }
+
+    /// 与 Work 页 `toolBeautyCamera` 保持同一套 iOS 图标与渐变，不新增素材。
+    private var workBeautyCameraIcon: some View {
+        Image(systemName: "camera.fill")
+            .font(.system(size: 17, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 44, height: 44)
+            .background(
+                LinearGradient(
+                    colors: [Color(hex: 0x8515FF), Color(hex: 0xE40132)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+            )
+            .accessibilityHidden(true)
+    }
+}
 
 /// K spec H5 对齐版（2026-07-02）：美颜设置页根 View。
 ///
@@ -25,6 +119,17 @@ struct BeautySettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
 
+    enum Mode: Hashable {
+        case settings
+        case camera
+
+        var isCamera: Bool { self == .camera }
+    }
+
+    let mode: Mode
+    /// 拍照模式保存成功后把 JPEG 回传给调用方（例如朋友圈草稿），设置模式不需要回调。
+    let onPhotoCaptured: ((Data) -> Void)?
+
     @StateObject private var camera = CameraManager()
     @ObservedObject private var sharer: BeautyPipelineSharer
     @ObservedObject private var store: BeautySettingsStore
@@ -43,6 +148,15 @@ struct BeautySettingsView: View {
     @State private var isCameraAuthorized: Bool = false
     /// 系统授权弹窗异步返回时，页面可能已经被 pop；必须在真离页时取消，避免重新启动相机。
     @State private var authorizationTask: Task<Void, Never>?
+    /// 拍照期间锁住按钮，避免重复创建 Photos 写入请求。
+    @State private var isCapturingPhoto = false
+    /// 模拟系统相机快门：仅覆盖预览画面，不遮挡顶部/底部控件。
+    @State private var showCaptureFlash = false
+    @State private var captureFlashTask: Task<Void, Never>?
+    /// 拍照失败改用 alert，成功不再显示 toast。
+    @State private var captureErrorMessage: String?
+    /// 相册添加权限被拒绝后的应用内提示。
+    @State private var showPhotoPermissionAlert = false
 
     enum Tab: Int, Hashable, CaseIterable {
         case skin = 0, shape, filter, sticker
@@ -63,9 +177,13 @@ struct BeautySettingsView: View {
         var id: String { self == .skin ? "skin" : "shape" }
     }
 
-    init(sharer: BeautyPipelineSharer = .shared) {
+    init(mode: Mode,
+         sharer: BeautyPipelineSharer = .shared,
+         onPhotoCaptured: ((Data) -> Void)? = nil) {
+        self.mode = mode
         self.sharer = sharer
         self.store = sharer.store
+        self.onPhotoCaptured = onPhotoCaptured
     }
 
     var body: some View {
@@ -75,7 +193,14 @@ struct BeautySettingsView: View {
                 BeautyPreviewPanel(camera: camera, sharer: sharer)
                     .ignoresSafeArea()
 
-                // 顶部悬浮：X + Save
+                if showCaptureFlash {
+                    Color.black.opacity(0.8)
+                        .ignoresSafeArea()
+                        .allowsHitTesting(false)
+                        .transition(.opacity)
+                }
+
+                // 顶部悬浮：设置模式显示 X + Save；拍照模式只保留 X
                 VStack {
                     topBar
                         .padding(.horizontal, 16)
@@ -90,6 +215,9 @@ struct BeautySettingsView: View {
                         .padding(.horizontal, 16)
                         .padding(.bottom, 10)
                     sheetContent
+                    if mode.isCamera {
+                        captureControl
+                    }
                 }
             } else {
                 // 授权弹窗返回前仍提供退出路径；拒绝后会自动返回上一页再展示权限提示。
@@ -122,6 +250,9 @@ struct BeautySettingsView: View {
             requestCameraPermission()
         }
         .onDisappear {
+            captureFlashTask?.cancel()
+            captureFlashTask = nil
+            showCaptureFlash = false
             // v5.3.3 双守卫：切后台 SwiftUI 也会调 onDisappear（snapshot 用），仅在真 dismount 时清理
             guard scenePhase != .background else { return }
             authorizationTask?.cancel()
@@ -139,6 +270,16 @@ struct BeautySettingsView: View {
         ) { _ in
             if isCameraAuthorized {
                 camera.renderer.apply(store.settings)
+            }
+        }
+        .overlay {
+            if showPhotoPermissionAlert {
+                MediaPermissionDialog(
+                    requirement: .photoLibraryAdd,
+                    onCancel: { showPhotoPermissionAlert = false },
+                    onConfirm: retryPhotoLibraryPermission
+                )
+                .zIndex(100)
             }
         }
         // 需求 2: Recover 二次确认弹窗
@@ -182,6 +323,21 @@ struct BeautySettingsView: View {
                 Text(String(describing: error))
             }
         }
+        .alert(
+            L10n.commonKindReminder,
+            isPresented: Binding(
+                get: { captureErrorMessage != nil },
+                set: { if !$0 { captureErrorMessage = nil } }
+            )
+        ) {
+            Button(L10n.commonConfirm) {
+                captureErrorMessage = nil
+            }
+        } message: {
+            if let captureErrorMessage {
+                Text(captureErrorMessage)
+            }
+        }
     }
 
     private func requestCameraPermission() {
@@ -211,8 +367,11 @@ struct BeautySettingsView: View {
     private var topBar: some View {
         HStack {
             Button {
-                // 保存语义：dirty 时弹 exitConfirm；无修改则直接 dismiss（onDisappear 内 revert 是幂等 no-op）
-                if store.isDirty {
+                // 拍照模式没有 Save，退出时直接丢弃本次临时调整。
+                if mode.isCamera {
+                    dismiss()
+                } else if store.isDirty {
+                    // 设置模式保留原有未保存确认。
                     showExitConfirm = true
                 } else {
                     dismiss()
@@ -229,31 +388,139 @@ struct BeautySettingsView: View {
 
             Spacer()
 
-            Button {
-                // Save 语义：显式检查写盘错误，避免用户改动因磁盘写失败被静默丢弃
-                // （store.lastPersistenceError 由 flushIfDirty catch 分支设置，成功清 nil）
-                _ = store.flushIfDirty()
-                if store.lastPersistenceError != nil {
-                    showSaveError = true   // 停在页面，让用户看到失败反馈
-                } else {
-                    dismiss()
+            if !mode.isCamera {
+                Button {
+                    // Save 语义：显式检查写盘错误，避免用户改动因磁盘写失败被静默丢弃
+                    // （store.lastPersistenceError 由 flushIfDirty catch 分支设置，成功清 nil）
+                    _ = store.flushIfDirty()
+                    if store.lastPersistenceError != nil {
+                        showSaveError = true   // 停在页面，让用户看到失败反馈
+                    } else {
+                        dismiss()
+                    }
+                } label: {
+                    Text(L10n.BeautySettings.save)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 8)
+                        .background(
+                            LinearGradient(
+                                colors: [Color(hex: 0x8515FF), Color(hex: 0xE40132)],
+                                startPoint: .leading, endPoint: .trailing
+                            ),
+                            in: Capsule()
+                        )
                 }
-            } label: {
-                Text(L10n.BeautySettings.save)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 8)
-                    .background(
-                        LinearGradient(
-                            colors: [Color(hex: 0x8515FF), Color(hex: 0xE40132)],
-                            startPoint: .leading, endPoint: .trailing
-                        ),
-                        in: Capsule()
-                    )
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
+    }
+
+    // MARK: - 拍照
+
+    private var captureControl: some View {
+        Button(action: capturePhoto) {
+            ZStack {
+                Circle()
+                    .fill(.white)
+                    .frame(width: 58, height: 58)
+
+                if isCapturingPhoto {
+                    ProgressView()
+                        .tint(.black)
+                }
+            }
+            .frame(width: 70, height: 70)
+            .overlay {
+                Circle()
+                    .stroke(.white, lineWidth: 3)
+                    .frame(width: 68, height: 68)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(isCapturingPhoto)
+        .accessibilityLabel(L10n.BeautySettings.capturePhoto)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 6)
+        .padding(.bottom, 4)
+        .background(Color(hex: 0x2D1B4E).opacity(0.76))
+    }
+
+    private func capturePhoto() {
+        guard mode.isCamera, !isCapturingPhoto else { return }
+        isCapturingPhoto = true
+
+        Task { @MainActor in
+            defer { isCapturingPhoto = false }
+            guard await MediaPermissionGate.requestAccess(for: .photoLibraryAdd) else {
+                showPhotoPermissionAlert = true
+                return
+            }
+            guard let jpegData = await camera.latestFrameJPEGData(maximumAge: 2) else {
+                captureErrorMessage = L10n.BeautySettings.captureNoFrame
+                return
+            }
+            triggerCaptureFlash()
+
+            do {
+                try await savePhotoToLibrary(jpegData)
+                onPhotoCaptured?(jpegData)
+            } catch {
+                beautyCameraLogger.error("Saving beauty camera photo failed: \(String(describing: error), privacy: .public)")
+                captureErrorMessage = L10n.BeautySettings.captureFailed
+            }
+        }
+    }
+
+    private func triggerCaptureFlash() {
+        captureFlashTask?.cancel()
+        withAnimation(.easeOut(duration: 0.04)) {
+            showCaptureFlash = true
+        }
+        captureFlashTask = Task { @MainActor in
+            do {
+                try await Task.sleep(nanoseconds: 100_000_000)
+            } catch {
+                return
+            }
+            withAnimation(.easeIn(duration: 0.18)) {
+                showCaptureFlash = false
+            }
+            captureFlashTask = nil
+        }
+    }
+
+    private func retryPhotoLibraryPermission() {
+        Task { @MainActor in
+            guard await MediaPermissionGate.requestAccess(for: .photoLibraryAdd) else {
+                MediaPermissionGate.openAppSettings()
+                return
+            }
+            showPhotoPermissionAlert = false
+            capturePhoto()
+        }
+    }
+
+    private func savePhotoToLibrary(_ data: Data) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            PHPhotoLibrary.shared().performChanges({
+                let request = PHAssetCreationRequest.forAsset()
+                request.addResource(with: .photo, data: data, options: nil)
+            }) { success, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else if success {
+                    continuation.resume()
+                } else {
+                    continuation.resume(throwing: PhotoCaptureError.saveFailed)
+                }
+            }
+        }
+    }
+
+    private enum PhotoCaptureError: Error {
+        case saveFailed
     }
 
     // MARK: - Toggle + 单 Slider（悬浮在 sheet 上方）
@@ -335,8 +602,8 @@ struct BeautySettingsView: View {
         VStack(spacing: 0) {
             tabBar
                 .padding(.horizontal, 20)
-                .padding(.top, 16)
-                .padding(.bottom, 4)
+                .padding(.top, 12)
+                .padding(.bottom, -8)
 
             // 参数图标行 or 滤镜缩略图 or 贴纸（switch 保持 identity，切 tab 不重建）
             ZStack {
@@ -360,10 +627,10 @@ struct BeautySettingsView: View {
                     .opacity(selectedTab == .sticker ? 1 : 0)
                     .allowsHitTesting(selectedTab == .sticker)
             }
-            .frame(height: 110)
+            .frame(height: 100)
         }
         .background(
-            Color(hex: 0x2D1B4E).opacity(0.96)
+            Color(hex: 0x2D1B4E).opacity(0.76)
                 .clipShape(TopRoundedShape(radius: 20))
                 .ignoresSafeArea(edges: .bottom)
         )
@@ -445,7 +712,7 @@ private struct TopRoundedShape: Shape {
 private struct BeautySettingsViewPreviewWrapper: View {
     let sharer: BeautyPipelineSharer
     var body: some View {
-        NavigationStack { BeautySettingsView(sharer: sharer) }
+        NavigationStack { BeautySettingsView(mode: .settings, sharer: sharer) }
     }
 }
 

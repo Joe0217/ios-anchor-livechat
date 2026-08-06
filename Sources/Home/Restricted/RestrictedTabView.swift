@@ -2,7 +2,7 @@ import SwiftUI
 
 /// 未审核账号受限首屏容器:底部只两个 tab(消息 + 我的),对齐 H5 [tabList.ts:38-53](../../../anchor-livechat-h5/src/config/tabList.ts) `tabListRestricted`。
 ///
-/// RootView 分流入口:`session.user?.userType != 2 && != 9` 时使用本 view 替代 MainTabView,
+/// 历史审核态页。当前包固定 107，RootView 不再根据服务端 userType 进入本页；
 /// 让未审核/审核中/被拒/封禁账号看到受限界面而非完整主界面。
 ///
 /// 独立实现不复用 MainTabView 内部组件(按 .claude/rules/cross-scene-component-reuse-preflight.md

@@ -7,21 +7,34 @@ import SwiftUI
 struct FollowUserRow: View {
     let user: FollowUser
     var isPending: Bool = false
+    var onOpenProfile: (() -> Void)? = nil
     var onToggleFollow: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: 12) {
-            avatar
-            VStack(alignment: .leading, spacing: 4) {
-                Text(user.nickname ?? "—")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                metaLine
-                    .lineLimit(1)
+            Button {
+                onOpenProfile?()
+            } label: {
+                HStack(spacing: 12) {
+                    avatar
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(user.nickname ?? "—")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        metaLine
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
             }
-            Spacer(minLength: 8)
-            followButton
+            .buttonStyle(.plain)
+            .disabled(onOpenProfile == nil)
+
+            if onToggleFollow != nil {
+                followButton
+            }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
@@ -57,11 +70,11 @@ struct FollowUserRow: View {
         }
     }
 
-    /// 关注按钮：followFlag=1 灰胶囊「Following」/ 0 黄胶囊「Follow」；点击触发 onToggleFollow。
+    /// 关注按钮：followFlag=1 灰胶囊「Unfollow」/ 0 黄胶囊「Follow」；点击触发 onToggleFollow。
     /// 操作中（isPending）按钮 disabled + 替换为 ProgressView。
     private var followButton: some View {
-        let isFollowing = user.followFlag == 1
-        let title = isFollowing ? L10n.followActionFollowing : L10n.followActionFollow
+        let isFollowing = user.isFollowing
+        let title = isFollowing ? L10n.followActionUnfollow : L10n.followActionFollow
 
         return Button {
             onToggleFollow?()
@@ -87,7 +100,7 @@ struct FollowUserRow: View {
             )
         }
         .buttonStyle(.plain)
-        .disabled(isPending || onToggleFollow == nil)
+        .disabled(isPending)
         .accessibilityLabel(title)
     }
 }

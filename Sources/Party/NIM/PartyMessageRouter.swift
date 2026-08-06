@@ -235,7 +235,7 @@ final class PartyMessageRouter: MessageRouter {
             AppLogger.party.info("[PartyRouter] \(attachType.rawValue, privacy: .public) payloadKeys=\(Array(payload.keys), privacy: .public)")
             let isPlayEmoji = attachType == .emojiPlay
             if isPlayEmoji,
-               !SelfPermissionBridge.shared.gate(.partyGames, action: "partyPlayEmojiReceiveRouter") {
+               !PartyExpressionAvailability.canUsePlayEmoji {
                 return
             }
             guard let emojiPayload = PartyEmojiPayload.from(payload: payload) else {

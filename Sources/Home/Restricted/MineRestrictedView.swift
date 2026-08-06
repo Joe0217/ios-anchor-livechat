@@ -53,10 +53,8 @@ struct MineRestrictedView: View {
                     case .levelDetail:  LevelDetailView()
                     case .dataStatistics: DataStatisticsView()
                     case .editProfile:  EditProfileView(service: EditProfileService.shared)
-                    case .userAgreement:
-                        H5WebContainerView(page: H5Page(url: URL(string: AppConfig.termsOfServiceURL)!, title: L10n.settingsTermsOfService))
-                    case .privacyPolicy:
-                        H5WebContainerView(page: H5Page(url: URL(string: AppConfig.privacyPolicyURL)!, title: L10n.settingsPrivacyPolicy))
+                    case .userAgreement: UserAgreementView()
+                    case .privacyPolicy: PrivacyPolicyView()
                     }
                 }
         }

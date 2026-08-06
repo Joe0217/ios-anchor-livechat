@@ -1,6 +1,7 @@
 /* Info.plist 权限弹窗文案本地化（tr）
  * iOS 弹相机/麦克风权限时显示这里的文案，覆盖 project.yml 里的 Info.plist 兜底值
  */
-"NSCameraUsageDescription"     = "Guzellestirme onizlemesi, canli yayin ve para cekme kimlik dogrulamasi icin kullanilir";
-"NSMicrophoneUsageDescription" = "Gerçek zamanlı sesli/görüntülü aramalar için kullanılır";
-"NSPhotoLibraryUsageDescription" = "Kayıt sırasında profil resminizi ve profil fotoğraflarınızı yüklemek için fotoğraf kitaplığına erişim gereklidir.";
+"NSCameraUsageDescription"     = "Güzellik önizlemeleri ve fotoğraf çekmek için kullanılır.";
+"NSMicrophoneUsageDescription" = "Parti sesli odalarında konuştuğunuzda kullanılır.";
+"NSPhotoLibraryUsageDescription" = "Kayıt sırasında gerekli avatarı ve profil fotoğraflarını yüklemek için kullanılır.";
+"NSPhotoLibraryAddUsageDescription" = "Güzellik kamerasıyla çekilen fotoğrafları kaydetmek için Fotoğraflar'a ekleme izni verin.";

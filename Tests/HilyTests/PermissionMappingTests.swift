@@ -20,6 +20,34 @@ final class PermissionMappingTests: XCTestCase {
         XCTAssertEqual(UserPermissionMapping.blocked(for: nil), [])
     }
 
+    func test_userTypeExperience_routesPermissionAccountsToMainApp() {
+        XCTAssertTrue(UserTypeExperience.canEnterMainApp(2))
+        for userType in 101...107 {
+            XCTAssertTrue(UserTypeExperience.canEnterMainApp(userType))
+        }
+        XCTAssertFalse(UserTypeExperience.canEnterMainApp(nil))
+        XCTAssertFalse(UserTypeExperience.canEnterMainApp(1))
+        XCTAssertFalse(UserTypeExperience.canEnterMainApp(3))
+        XCTAssertFalse(UserTypeExperience.canEnterMainApp(9))
+    }
+
+    func test_userTypeExperience_isFixedTo107ForEveryAuthenticatedSession() {
+        XCTAssertEqual(UserTypeExperience.fixedUserType, 107)
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(isAuthenticated: true), 107)
+        XCTAssertNil(UserTypeExperience.effectiveUserType(isAuthenticated: false))
+    }
+
+    func test_userTypeExperience_separatesPartyOnlyFromFullHostRealtime() {
+        XCTAssertTrue(UserTypeExperience.hasFullHostRealtimeCapability(2))
+        for userType in 101...106 {
+            XCTAssertTrue(UserTypeExperience.hasFullHostRealtimeCapability(userType))
+        }
+        XCTAssertFalse(UserTypeExperience.hasFullHostRealtimeCapability(107))
+        XCTAssertTrue(UserTypeExperience.isPartyOnly(107))
+        XCTAssertFalse(UserTypeExperience.isPartyOnly(2))
+        XCTAssertFalse(UserTypeExperience.isPartyOnly(nil))
+    }
+
     // MARK: - F-4 ~ F-9: 六种黑名单 userType 矩阵
 
     func test_userType_101_blocksCallOnly() {
@@ -52,7 +80,7 @@ final class PermissionMappingTests: XCTestCase {
             .lottery, .partyGames, .virtualItems,
             .homeDiscovery, .workDashboard, .partyActivities,
             .directMessages, .profileSocial, .systemAnnouncements,
-            .partyVideo, .partyLuckyNumber
+            .partyVideo, .partyLuckyNumber, .partyMusic
         ]
 
         for userType in 101...106 {
@@ -85,8 +113,14 @@ final class PermissionMappingTests: XCTestCase {
         XCTAssertTrue(blocked.contains(.systemAnnouncements))
         XCTAssertTrue(blocked.contains(.partyVideo))
         XCTAssertTrue(blocked.contains(.partyLuckyNumber))
+        XCTAssertTrue(blocked.contains(.partyMusic))
         XCTAssertFalse(blocked.contains(.partyFreeGames))
         XCTAssertFalse(blocked.contains(.profileViewing))
+        XCTAssertFalse(blocked.contains(.relationshipViewing))
+        XCTAssertFalse(blocked.contains(.relationshipActions))
+        XCTAssertFalse(blocked.contains(.supportMessaging))
+        XCTAssertFalse(blocked.contains(.beautyStudio))
+        XCTAssertFalse(blocked.contains(.profileAlbum))
     }
 
     // MARK: - R-3: 未知 userType 视为不受限

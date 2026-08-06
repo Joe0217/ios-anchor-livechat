@@ -32,7 +32,8 @@ struct AnchorInfo: Codable {
     // 社交数
     let upsNum: Int?           // 关注数 Following
     let fansNum: Int?          // 粉丝数 Followers
-    let friendsNum: Int?       // 朋友数 Friends
+    let friendNum: Int?        // H5 / Android 朋友数 Friends
+    let friendsNum: Int?       // 旧字段兼容
 
     // 相册视频（先按数组接，待真机校验元素结构）
     // ⚠️ 真接口返 picList 单一数组（mediaType 1=图 2=视频），这两个字段实测**永远为 nil**；
@@ -102,9 +103,10 @@ struct AnchorInfo: Codable {
         self.userLevel = c.decodeFlexibleString(forKey: .userLevel)
         self.callPrice = try c.decodeIfPresent(Int.self, forKey: .callPrice)
         self.videoPrice = c.decodeFlexibleInt(forKey: .videoPrice)
-        self.upsNum = try c.decodeIfPresent(Int.self, forKey: .upsNum)
-        self.fansNum = try c.decodeIfPresent(Int.self, forKey: .fansNum)
-        self.friendsNum = try c.decodeIfPresent(Int.self, forKey: .friendsNum)
+        self.upsNum = c.decodeFlexibleInt(forKey: .upsNum)
+        self.fansNum = c.decodeFlexibleInt(forKey: .fansNum)
+        self.friendNum = c.decodeFlexibleInt(forKey: .friendNum)
+        self.friendsNum = c.decodeFlexibleInt(forKey: .friendsNum)
         self.pictures = try c.decodeIfPresent([MediaAsset].self, forKey: .pictures)
         self.videos = try c.decodeIfPresent([MediaAsset].self, forKey: .videos)
         self.picList = try c.decodeIfPresent([AnchorPicItem].self, forKey: .picList)
@@ -138,7 +140,7 @@ struct AnchorInfo: Codable {
          countryCode: String?, signature: String?, signatureVaild: Int?,
          level: Int?, levelName: String?, userLevel: String? = nil, callPrice: Int?,
          videoPrice: Int? = nil,
-         upsNum: Int?, fansNum: Int?, friendsNum: Int?,
+         upsNum: Int?, fansNum: Int?, friendsNum: Int?, friendNum: Int? = nil,
          pictures: [MediaAsset]?, videos: [MediaAsset]?, picList: [AnchorPicItem]? = nil,
          greetMsgs: [GreetMsg]?,
          callVideoUrl: String?, giftList: [GiftItem]?,
@@ -152,7 +154,8 @@ struct AnchorInfo: Codable {
         self.countryCode = countryCode; self.signature = signature; self.signatureVaild = signatureVaild
         self.level = level; self.levelName = levelName; self.userLevel = userLevel
         self.callPrice = callPrice; self.videoPrice = videoPrice
-        self.upsNum = upsNum; self.fansNum = fansNum; self.friendsNum = friendsNum
+        self.upsNum = upsNum; self.fansNum = fansNum
+        self.friendNum = friendNum; self.friendsNum = friendsNum
         self.pictures = pictures; self.videos = videos; self.picList = picList
         self.greetMsgs = greetMsgs
         self.callVideoUrl = callVideoUrl; self.giftList = giftList

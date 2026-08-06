@@ -81,12 +81,12 @@ final class LiveSettingsStore: ObservableObject {
     /// F 期 Live↔Party 互斥守卫（对齐安卓 isLiveing||isPartying toast，2026-07-17）：
     /// 派对房活跃态时任何入口 push 到本页都被拦回（Work tab 的 NavigationLink 无法拦，此处兜底）。
     func load() async {
-        guard let user = session.user else {
+        guard session.user != nil else {
             showErrorAndDismiss(L10n.livePrepareGuardUnverified)
             return
         }
-        if user.userType != 2 {
-            showErrorAndDismiss(user.userType == 9 ? L10n.livePrepareGuardAgent : L10n.livePrepareGuardUnverified)
+        if !SelfPermissionBridge.shared.canLiveSnapshot {
+            showErrorAndDismiss(L10n.livePrepareGuardUnverified)
             return
         }
         if PartyStore.shared.roomState == .joined {

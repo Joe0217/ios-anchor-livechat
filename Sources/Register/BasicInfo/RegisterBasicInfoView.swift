@@ -111,20 +111,21 @@ struct RegisterBasicInfoView: View {
                 pathHolder.path.append(RegisterRoute.required)
             }
 
-            // Invite code (optional)
-            Text(L10n.Register.fieldInviteCode)
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.5))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 4)
-            TextField(
-                "",
-                text: $store.inviteCode,
-                prompt: Text(L10n.Register.fieldInviteCodeOptional).foregroundColor(.white.opacity(0.5))
-            )
-            .foregroundStyle(.white)
-            .padding(.horizontal, 14).frame(height: 44)
-            .background(Color(red: 0.17, green: 0.13, blue: 0.24), in: RoundedRectangle(cornerRadius: 22))
+            if RegisterFeatureAvailability.isInvitationCodeEnabled {
+                Text(L10n.Register.fieldInviteCode)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.5))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 4)
+                TextField(
+                    "",
+                    text: $store.inviteCode,
+                    prompt: Text(L10n.Register.fieldInviteCodeOptional).foregroundColor(.white.opacity(0.5))
+                )
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14).frame(height: 44)
+                .background(Color(red: 0.17, green: 0.13, blue: 0.24), in: RoundedRectangle(cornerRadius: 22))
+            }
         }
     }
 

@@ -177,11 +177,7 @@ final class SessionStore: ObservableObject {
         // H-3：AppConfigStore 横断基建（视频通话权限 / 翻译 key / 回复积分 config），
         // 挂 session-scoped rule 双入口之 login refresh；一次拉 4 key 逗号 join
         Task { await AppConfigStore.shared.activate() }
-        preloadPublicAssetsIfNeeded(for: result.userType)
-        // 107 仅保留 Party chatroom，不能因登录完成而注册 P2P delegate。这里直接按 userType
-        // 同步，不能读异步装配中的 PermissionBridge（启动期仍可能是 deny-by-default）。
-        synchronizeGlobalP2PObserver(for: result.userType)
-        synchronizeMessageSessionStore(for: result.userType)
+        synchronizePermissionScopedServices()
         // sapi（vvi 派对房/背包等链路）token 主动预取，对齐 H5 login/index.vue:86 `await getBagShopToken()`
         // forceRefresh=true 保证换账号后不复用上个账号残留（虽 logout 已 clear，双保险）
         Task { try? await SapiTokenStore.shared.ensureValid(forceRefresh: true) }
@@ -204,6 +200,16 @@ final class SessionStore: ObservableObject {
     private func synchronizeMessageSessionStore(for userType: Int?) {
         let isAllowed = !UserPermissionMapping.blocked(for: userType).contains(.directMessages)
         MessageSessionStore.updateSharedDirectMessagesCapability(isAllowed: isAllowed)
+    }
+
+    /// 当前包固定按 107 同步非 UI 资源：关闭普通 P2P observer/session store，
+    /// 并停止拉取该角色不可见的运营资源。真实账号 userType 不参与此判定。
+    func synchronizePermissionScopedServices() {
+        guard user != nil else { return }
+        let userType = UserTypeExperience.fixedUserType
+        synchronizeGlobalP2PObserver(for: userType)
+        synchronizeMessageSessionStore(for: userType)
+        preloadPublicAssetsIfNeeded(for: userType)
     }
 
     /// 登录或冷启动恢复后后台预拉取 CDN 应用资源。
@@ -294,6 +300,11 @@ final class SessionStore: ObservableObject {
         RegisterPathHolder.shared.reset()
     }
 
+    /// 模拟删除成功后的本地收口必须与退出登录完全一致，避免残留账号缓存或认证信息。
+    func completeLocalAccountDeletion() {
+        logout()
+    }
+
     // MARK: - H M4：sysMsg 通道入口（spec §3.1 / H 校验清单 §1.1.2 A 表）
 
     /// sysMsg -4：被关注通知。仅累加 @Published 计数，UI 订阅做 Toast / Badge。
@@ -310,6 +321,12 @@ final class SessionStore: ObservableObject {
     ///
     /// P1-6（2026-07-14）从原"仅落 @Published 字段"扩展为 UI 联动 + logout 联动。
     func handleAuditStatus(applyStatus: Int, content: String) {
+        guard !UserTypeExperience.isPartyOnly(
+            UserTypeExperience.effectiveUserType(isAuthenticated: user != nil)
+        ) else {
+            AppLogger.auth.notice("[Session] audit status ignored in fixed 107 mode")
+            return
+        }
         lastAuditStatus = (applyStatus, content)
         AppLogger.auth.notice("[Session] audit status=\(applyStatus, privacy: .public) content=\(content, privacy: .public)")
 
@@ -338,6 +355,12 @@ final class SessionStore: ObservableObject {
     /// 失败静默:refresh 内部已 non-fatal(anchor/mine/gift 3 接口任一失败不 throw),info 可能仍为 nil;此时不覆盖 user,
     /// 保持首次登录的审核态快照(用户重新登录时会拿到新的 LoginResult 覆盖)。
     func refreshAuditStatus() async {
+        guard !UserTypeExperience.isPartyOnly(
+            UserTypeExperience.effectiveUserType(isAuthenticated: user != nil)
+        ) else {
+            AppLogger.auth.notice("[Session] refreshAuditStatus skipped in fixed 107 mode")
+            return
+        }
         await AnchorInfoStore.shared.refresh()
         guard let current = user, let info = AnchorInfoStore.shared.info else {
             AppLogger.auth.notice("[Session] refreshAuditStatus skip: user or anchorInfo nil")
@@ -366,9 +389,7 @@ final class SessionStore: ObservableObject {
         )
         user = updated
         save()
-        synchronizeGlobalP2PObserver(for: updated.userType)
-        synchronizeMessageSessionStore(for: updated.userType)
-        preloadPublicAssetsIfNeeded(for: updated.userType)
+        synchronizePermissionScopedServices()
         AppLogger.auth.info("[Session] refreshAuditStatus OK userType=\(updated.userType ?? -1) valid=\(updated.valid ?? -1) onReview=\(updated.onReview == true) banAlways=\(updated.banAlways == true)")
     }
 
@@ -407,9 +428,7 @@ final class SessionStore: ObservableObject {
             AnalyticsTracker.login(userId: u.userId)
             CrashReporter.setUser(userID: u.userId)
             // 冷启动恢复同样按账号能力决定是否注册 P2P observer，避免 107 在后台收到私聊事件。
-            synchronizeGlobalP2PObserver(for: u.userType)
-            synchronizeMessageSessionStore(for: u.userType)
-            preloadPublicAssetsIfNeeded(for: u.userType)
+            synchronizePermissionScopedServices()
             // H-3: 冷启动 restore 时也 activate AppConfigStore(rule session-scoped-store-refresh 双入口)
             // 否则 microsoftTranslatorKey/Area 为 nil,翻译 tap 会 toast "Translation config missing"
             Task { await AppConfigStore.shared.activate() }
@@ -431,9 +450,7 @@ final class SessionStore: ObservableObject {
             AnalyticsTracker.login(userId: u.userId)
             CrashReporter.setUser(userID: u.userId)
             // v1 迁移路径与 Keychain 恢复保持相同权限语义。
-            synchronizeGlobalP2PObserver(for: u.userType)
-            synchronizeMessageSessionStore(for: u.userType)
-            preloadPublicAssetsIfNeeded(for: u.userType)
+            synchronizePermissionScopedServices()
             // H-3: 同 v2 路径,冷启动 restore 后 activate AppConfigStore
             Task { await AppConfigStore.shared.activate() }
             // 2026-07-17:v1 迁移路径同步 hydrate(与 v2 分支对称)

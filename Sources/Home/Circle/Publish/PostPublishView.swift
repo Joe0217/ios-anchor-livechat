@@ -5,7 +5,7 @@ import PhotosUI
 ///
 /// **结构**：
 /// - NavigationStack：title "Post" / 左 Cancel / 右 Release（条件 enable）
-/// - 编辑区：TextEditor + 字数计数（实时）+ 图片网格（≤9 张，PhotosPicker 触发选图）
+/// - 编辑区：TextEditor + 字数计数（实时）+ 图片网格（≤9 张，美颜相机/系统相册菜单）
 /// - 上传遮罩：覆盖编辑区禁交互 + 居中 ProgressView + "Posting..."（对齐 H5，spec v3 Q10）
 /// - Toast：复用 [BlocklistView 模式](../../Profile/Settings/Blocklist/BlocklistView.swift#L201-L226)
 ///   `.overlay + .task(id: msg)` + 2s 自动消失
@@ -19,6 +19,10 @@ struct PostPublishView: View {
 
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var showDiscardConfirm: Bool = false
+    @State private var showMediaSourceMenu = false
+    @State private var showPhotoLibrary = false
+    @State private var showBeautyCamera = false
+    @State private var showCameraPermissionAlert = false
     /// 本地图预览挂载点（Int? 不满足 Identifiable，用简单 wrapper）
     @State private var localPreview: LocalPreviewContext?
 
@@ -62,6 +66,43 @@ struct PostPublishView: View {
         } message: {
             Text(L10n.Publish.discardMessage)
         }
+        .confirmationDialog(
+            L10n.Publish.addImage,
+            isPresented: $showMediaSourceMenu,
+            titleVisibility: .visible
+        ) {
+            Button {
+                DispatchQueue.main.async {
+                    openBeautyCamera()
+                }
+            } label: {
+                Label(L10n.beautyStudioCamera, systemImage: "camera.fill")
+            }
+            Button {
+                DispatchQueue.main.async {
+                    showPhotoLibrary = true
+                }
+            } label: {
+                Label(L10n.Publish.mediaSourcePhotoLibrary, systemImage: "photo")
+            }
+            Button(L10n.Publish.cancel, role: .cancel) {}
+        }
+        .photosPicker(
+            isPresented: $showPhotoLibrary,
+            selection: $pickerItems,
+            maxSelectionCount: PostPublishLimits.maxImageCount - viewModel.imageDataList.count,
+            matching: .images
+        )
+        .overlay {
+            if showCameraPermissionAlert {
+                MediaPermissionDialog(
+                    requirement: .camera,
+                    onCancel: { showCameraPermissionAlert = false },
+                    onConfirm: retryBeautyCameraPermission
+                )
+                .zIndex(100)
+            }
+        }
         // 自动 dismiss：发布成功
         .onChange(of: viewModel.state) { newState in
             if case .success = newState {
@@ -75,6 +116,12 @@ struct PostPublishView: View {
         // 同步 PhotosPicker 选图回流
         .onChange(of: pickerItems) { newItems in
             handlePickerItems(newItems)
+        }
+        .fullScreenCover(isPresented: $showBeautyCamera) {
+            BeautySettingsView(mode: .camera) { data in
+                viewModel.appendImage(rawData: data)
+                showBeautyCamera = false
+            }
         }
         // toast 复用 BlocklistView 模式：`.overlay + .task(id:)`，2s 自动消失
         .overlay(alignment: .top) {
@@ -200,9 +247,9 @@ struct PostPublishView: View {
     }
 
     private var addImageButton: some View {
-        PhotosPicker(selection: $pickerItems,
-                     maxSelectionCount: PostPublishLimits.maxImageCount - viewModel.imageDataList.count,
-                     matching: .images) {
+        Button {
+            showMediaSourceMenu = true
+        } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 6)
                     .fill(Color.white.opacity(0.08))
@@ -214,6 +261,7 @@ struct PostPublishView: View {
             .frame(maxWidth: .infinity)
         }
         .disabled(isInProgress)
+        .buttonStyle(.plain)
         .accessibilityLabel(L10n.Publish.addImage)
     }
 
@@ -296,15 +344,46 @@ struct PostPublishView: View {
         }
     }
 
+    private func openBeautyCamera() {
+        Task { @MainActor in
+            guard await MediaPermissionGate.requestAccess(for: .camera) else {
+                showCameraPermissionAlert = true
+                return
+            }
+            showBeautyCamera = true
+        }
+    }
+
+    private func retryBeautyCameraPermission() {
+        Task { @MainActor in
+            guard await MediaPermissionGate.requestAccess(for: .camera) else {
+                MediaPermissionGate.openAppSettings()
+                return
+            }
+            showCameraPermissionAlert = false
+            showBeautyCamera = true
+        }
+    }
+
     /// PhotosPicker 选图回流：加载 Data + 喂给 ViewModel
     private func handlePickerItems(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
         let captured = items
         Task {
             for item in captured {
-                if let data = try? await item.loadTransferable(type: Data.self) {
+                do {
+                    guard let data = try await item.loadTransferable(type: Data.self) else {
+                        await MainActor.run {
+                            viewModel.transientError = L10n.Publish.photoLoadFailed
+                        }
+                        continue
+                    }
                     await MainActor.run {
                         viewModel.appendImage(rawData: data)
+                    }
+                } catch {
+                    await MainActor.run {
+                        viewModel.transientError = L10n.Publish.photoLoadFailed
                     }
                 }
             }

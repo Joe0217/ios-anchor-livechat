@@ -21,6 +21,8 @@ struct PartyRoomChatArea: View {
     var showsFreePartyGameContent: Bool = true
     var showsActivityContent: Bool = true
     var showsVirtualItemContent: Bool = true
+    /// 107 的 Party 公屏保留普通头像、昵称与正文，不展示头像框、VIP、等级或聊天气泡。
+    var usesPlainSenderStyle: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -64,6 +66,7 @@ struct PartyRoomChatArea: View {
             showsFreePartyGameMessages: showsFreePartyGameContent,
             showsActivityMessages: showsActivityContent,
             showsVirtualItemMessages: showsVirtualItemContent,
+            usesPlainSenderStyle: usesPlainSenderStyle,
             canDeleteTextMessages: canDeleteTextMessages,
             onDeleteTextMessage: onDeleteTextMessage,
             onWinnerActivity: onWinnerActivity

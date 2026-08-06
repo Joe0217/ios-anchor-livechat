@@ -11,58 +11,54 @@ struct PartyRoomModeConfirmSheet: View {
     let onConfirm: () -> Void
 
     var body: some View {
-        ZStack {
-            VStack(spacing: 16) {
-                Text(L10n.Party.roomModeConfirmTitle)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.top, 20)
+        VStack(spacing: 16) {
+            Text(L10n.Party.roomModeConfirmTitle)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.white)
+                .padding(.top, 20)
 
-                Text(L10n.Party.roomModeConfirmBody)
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundColor(.white.opacity(0.8))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
+            Text(L10n.Party.roomModeConfirmBody)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundColor(.white.opacity(0.8))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 24)
 
-                Spacer(minLength: 0)
+            HStack(spacing: 12) {
+                Button(action: onCancel) {
+                    Text(L10n.Party.roomModeConfirmCancel)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(
+                            Capsule().fill(Color.white.opacity(0.12))
+                        )
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
 
-                HStack(spacing: 12) {
-                    Button(action: onCancel) {
-                        Text(L10n.Party.roomModeConfirmCancel)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 44)
-                            .background(
-                                Capsule().fill(Color.white.opacity(0.12))
-                            )
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: onConfirm) {
-                        Text(L10n.Party.roomModeConfirmSwitch)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 44)
-                            .background(
-                                Capsule().fill(
-                                    LinearGradient(
-                                        colors: [Theme.Palette.partyCreateBtnA, Theme.Palette.partyCreateBtnB],
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
+                Button(action: onConfirm) {
+                    Text(L10n.Party.roomModeConfirmSwitch)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(
+                            Capsule().fill(
+                                LinearGradient(
+                                    colors: [Theme.Palette.partyCreateBtnA, Theme.Palette.partyCreateBtnB],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
                                 )
                             )
-                            .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
+                        )
+                        .contentShape(Capsule())
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
+                .buttonStyle(.plain)
             }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
         }
-        .presentationDetents([.height(200)])
+        .selfSizingSheetHeight(minHeight: 100, maxHeight: 300)
     }
 }

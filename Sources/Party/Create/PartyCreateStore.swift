@@ -106,6 +106,8 @@ final class PartyCreateStore: ObservableObject {
     private let partyVideoCapabilityProvider: @MainActor () -> Bool
     private var isApplyingPartyVideoRestriction = false
 
+    let taglineLengthLimit: Int
+
     var canUseVideoTemplates: Bool { canUsePartyVideo }
 
     private var canUsePartyVideo: Bool { partyVideoCapabilityProvider() }
@@ -118,12 +120,14 @@ final class PartyCreateStore: ObservableObject {
         defaultTagline: String = "",
         defaultAvatarUrl: String? = nil,
         userLevel: Int = 0,
+        taglineLengthLimit: Int = PartyCreateStore.maxTaglineLength,
         partyVideoCapabilityProvider: (@MainActor () -> Bool)? = nil
     ) {
         self.service = service
         // Default arguments are evaluated outside this actor; resolve the production provider here instead.
         self.partyVideoCapabilityProvider = partyVideoCapabilityProvider ?? Self.defaultCanUsePartyVideo
         self.userLevel = userLevel
+        self.taglineLengthLimit = taglineLengthLimit
         self.defaultAvatarUrl = defaultAvatarUrl
         self.roomName = defaultName
         self.roomTagline = defaultTagline
@@ -411,8 +415,8 @@ final class PartyCreateStore: ObservableObject {
     }
 
     func trimTaglineIfNeeded() {
-        if roomTagline.count > Self.maxTaglineLength {
-            roomTagline = String(roomTagline.prefix(Self.maxTaglineLength))
+        if roomTagline.count > taglineLengthLimit {
+            roomTagline = String(roomTagline.prefix(taglineLengthLimit))
         }
     }
 
@@ -478,10 +482,9 @@ final class PartyCreateStore: ObservableObject {
         if permission.isLoaded {
             return permission.canPartyVideoSnapshot
         }
-        // Bridge 的 Session 订阅在一个 MainActor Task 中装配。创房页先于该 Task 创建时，
-        // 用已存在会话的 userType 同步推导，避免普通账号被永久初始化为语音模式；无会话仍 deny。
-        guard let userType = SessionStore.shared.user?.userType else { return false }
-        return !UserPermissionMapping.blocked(for: userType).contains(.partyVideo)
+        // Bridge 的 Session 订阅在一个 MainActor Task 中装配；首帧同样固定按 107 推导。
+        guard SessionStore.shared.user != nil else { return false }
+        return !UserPermissionMapping.blocked(for: UserTypeExperience.fixedUserType).contains(.partyVideo)
         #endif
     }
 }
