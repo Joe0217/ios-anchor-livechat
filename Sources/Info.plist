@@ -74,9 +74,9 @@
 		<false/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Used for beauty previews and taking photos.</string>
+	<string>Used for beauty previews, taking photos, live streaming, calls, and withdrawal identity verification.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Used when you speak in Party voice rooms.</string>
+	<string>Used for real-time audio/video calls, live streaming, and Party voice rooms.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Used to upload the avatar and profile photos required during registration.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>

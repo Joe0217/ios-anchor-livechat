@@ -91,9 +91,9 @@ targets:
           - ar
           - tr
         # 摄像头权限说明（107 美颜预览/拍照）；文案改走 InfoPlist.strings 本地化，此处英文兜底
-        NSCameraUsageDescription: Used for beauty previews and taking photos.
-        # 麦克风权限（107 Party 语音房发言）
-        NSMicrophoneUsageDescription: Used when you speak in Party voice rooms.
+        NSCameraUsageDescription: Used for beauty previews, taking photos, live streaming, calls, and withdrawal identity verification.
+        # 麦克风权限（声网通话、直播和 107 Party 语音房发言）
+        NSMicrophoneUsageDescription: Used for real-time audio/video calls, live streaming, and Party voice rooms.
         # 相册读取权限（107 当前注册流程：头像 + 至少 1 张 profile photo）
         NSPhotoLibraryUsageDescription: Used to upload the avatar and profile photos required during registration.
         # 相册仅添加权限（美颜相机拍照后自动保存，不读取用户相册）
