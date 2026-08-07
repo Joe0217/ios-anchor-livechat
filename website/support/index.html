@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="HiFunny support and account help.">
+  <title>HiFunny Support</title>
+  <style>
+    :root { color-scheme: light; --ink: #20212a; --muted: #686b78; --line: #e7e8ed; --accent: #635bff; --wash: #f7f7fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; color: var(--ink); background: var(--wash); }
+    header { padding: 56px 24px 72px; color: #fff; background: linear-gradient(135deg, #635bff, #9a72ff); }
+    .wrap { width: min(920px, calc(100% - 48px)); margin: 0 auto; }
+    .brand { font-size: 18px; font-weight: 700; letter-spacing: .2px; }
+    h1 { margin: 42px 0 8px; font-size: clamp(34px, 6vw, 56px); line-height: 1.08; }
+    .intro { max-width: 600px; margin: 0; font-size: 19px; color: rgba(255,255,255,.9); }
+    main { padding: 32px 0 72px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    section { padding: 26px; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+    section.wide { grid-column: 1 / -1; }
+    h2 { margin: 0 0 10px; font-size: 21px; }
+    p { margin: 0 0 12px; }
+    p:last-child { margin-bottom: 0; }
+    a { color: var(--accent); font-weight: 600; }
+    .contact { display: inline-block; margin-top: 6px; padding: 10px 16px; border-radius: 6px; color: #fff; background: var(--accent); text-decoration: none; }
+    .panel { display: none; }
+    .panel:target { display: block; }
+    body:has(.panel:target) .overview { display: none; }
+    .back { display: inline-block; margin-bottom: 18px; font-size: 14px; }
+    li { margin: 7px 0; }
+    footer { padding: 24px; color: var(--muted); text-align: center; font-size: 14px; }
+    @media (max-width: 640px) { .wrap { width: min(100% - 32px, 920px); } header { padding: 38px 16px 52px; } main { padding-top: 20px; } .grid { grid-template-columns: 1fr; } section.wide { grid-column: auto; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">HiFunny</div>
+      <h1>How can we help?</h1>
+      <p class="intro">Find answers about your account, connections, voice rooms, and beauty tools.</p>
+    </div>
+  </header>
+  <main>
+    <div class="wrap grid">
+      <div class="overview grid" style="grid-column: 1 / -1;">
+      <section>
+        <h2>Contact support</h2>
+        <p>Tell us what happened and include your HiFunny user ID, device model, and app version when relevant.</p>
+        <!-- Replace this address with the monitored support mailbox before publishing. -->
+        <a class="contact" href="mailto:hifunny01@gmail.com">Email support</a>
+      </section>
+      <section>
+        <h2>Account deletion</h2>
+        <p>Open <strong>Profile</strong>, go to <strong>Settings</strong>, and choose <strong>Delete account</strong> to clear your local session. To request deletion of account data stored on our services, email support.</p>
+      </section>
+      <section>
+        <h2>Safety and reporting</h2>
+        <p>You can unfollow or block users from their profile. Use Feedback in Connections to report a problem or unsafe behavior.</p>
+      </section>
+      <section>
+        <h2>Privacy and terms</h2>
+        <p><a href="#privacy">Privacy Policy</a><br><a href="#terms">Terms of Use</a></p>
+      </section>
+      <section class="wide">
+        <h2>About HiFunny</h2>
+        <p>HiFunny is a social app for friendly voice conversations, discovering people, managing connections, and expressing yourself with beauty tools and effects.</p>
+      </section>
+      </div>
+      <section id="privacy" class="panel wide">
+        <a class="back" href="#">&#8592; Back to support</a>
+        <h2>Privacy Policy</h2>
+        <p><strong>Effective date: August 7, 2026</strong></p>
+        <p>HiFunny is intended for people aged 13 and older. We do not knowingly collect personal information from children under 13. HiFunny helps people connect through voice rooms, profiles, public room chat, and creative beauty tools. This policy explains what information we collect, why we use it, and the choices available to you.</p>
+        <h3>Information we collect</h3>
+        <ul>
+          <li><strong>Contact and account information:</strong> email address, name or nickname, account and user ID, birthday, country, languages, and profile details.</li>
+          <li><strong>Connections:</strong> Following, Followers, Friends, blocked accounts, profile views, and other social-graph information needed to provide connections.</li>
+          <li><strong>User content:</strong> profile photos and videos, public room text messages and expressions, voice or audio used in a Party room, customer-support requests, and other content you choose to submit.</li>
+          <li><strong>Device and technical data:</strong> device ID, device model, operating system, app version, product interactions, crash reports, performance data, and security information.</li>
+          <li><strong>Camera and microphone:</strong> only when you use the beauty camera or join a Party room that requires them. Camera effects are processed on the device. We do not access these sensors in the background.</li>
+        </ul>
+        <h3>How we use information</h3>
+        <p>We use information for account authentication, profiles, Party rooms, public chat, connections, support, safety and abuse prevention, service security, and legal compliance. We use product interaction data for analytics and use crash and performance data to diagnose and improve the app. We do not sell personal information or use it for cross-app advertising.</p>
+        <h3>Sharing and retention</h3>
+        <p>We use service providers that help operate the app: Agora for Party voice and real-time media, NIM for room messaging, ThinkingData for product analytics, Sentry for crash and performance diagnostics, and hosting/CDN providers for submitted media and support attachments. We may disclose information when required by law or to protect users, the service, or the public. We retain information only as long as needed for the purposes described here and applicable obligations.</p>
+        <h3>Your choices</h3>
+        <p>You can update profile information, follow or unfollow users, manage your block list, manage camera, microphone, and photo permissions in iOS Settings, and sign out from the app. <strong>Profile &gt; Settings &gt; Delete account</strong> clears the local session immediately. To request deletion of account data stored on our services, contact support at the address below. Contact us for access, correction, deletion, or other privacy questions.</p>
+        <p><a href="mailto:hifunny01@gmail.com">hifunny01@gmail.com</a></p>
+      </section>
+      <section id="terms" class="panel wide">
+        <a class="back" href="#">&#8592; Back to support</a>
+        <h2>Terms of Use</h2>
+        <p><strong>Effective date: August 7, 2026</strong></p>
+        <p>By using HiFunny, you agree to these terms. If you do not agree, do not use the app. HiFunny is intended for users aged 13 and older.</p>
+        <h3>Using HiFunny</h3>
+        <p>You must provide accurate information, keep your account secure, and use HiFunny only for lawful, respectful social interaction. You are responsible for activity performed through your account.</p>
+        <h3>Community standards</h3>
+        <p>Do not harass, threaten, impersonate, defraud, exploit, or share illegal, hateful, sexually explicit, or infringing content. Do not attempt to disrupt the service, scrape data, or bypass access controls. We may remove content or restrict accounts that violate these rules.</p>
+        <h3>User content</h3>
+        <p>You keep ownership of content you submit. You give HiFunny permission to host and display it as needed to provide the features you use. Only share content you have the right to use and that you are comfortable showing to other users.</p>
+        <h3>Account termination</h3>
+        <p>You may clear your local session from Profile &gt; Settings &gt; Delete account and request deletion of account data stored on our services by contacting support. We may suspend or terminate access for violations, security reasons, or legal requirements.</p>
+        <h3>Disclaimer</h3>
+        <p>HiFunny is provided as available. We do not guarantee uninterrupted service or that every user interaction will be safe. Report concerns through Connections &gt; Feedback or contact support.</p>
+        <p><a href="mailto:hifunny01@gmail.com">hifunny01@gmail.com</a></p>
+      </section>
+    </div>
+  </main>
+  <footer>© 2026 HiFunny. All rights reserved.</footer>
+</body>
+</html>

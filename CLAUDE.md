@@ -26,7 +26,7 @@ open Hily.xcworkspace             # 3. 必须用 workspace，否则云信找不�
 - 真机运行：Signing 选个人 Apple ID（免费团队）；美颜/相机必须真机（模拟器无摄像头）
 
 ## 不可触碰的约束
-- **bundleId 必须保持 `com.anchor.livechat`**：相芯 authpack 授权证书绑定它，改了美颜直接失效
+- **bundleId 必须与 FaceUnity authpack 保持一致**：切换 Bundle ID 时必须同步申请并替换对应授权证书，否则美颜会失效
 - **声网包版本号必须精确写全 `4.5.2.9.BASIC`**：`.BASIC` 被 CocoaPods 当 prerelease，用 `~>` 或省略命不中
 - `Vendor/FaceUnity/` 的 `FURenderKit.framework` / `authpack.h` / `bundles/` 是商业授权，**禁止入库**（已 gitignore）
 - `Pods/`、`.spm/` 是可再生缓存，禁止入库（`Podfile.lock` 已锁版本）

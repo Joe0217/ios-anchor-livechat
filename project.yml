@@ -1,6 +1,6 @@
 name: Hily
 options:
-  bundleIdPrefix: com.anchor
+  bundleIdPrefix: com.hifunny
   deploymentTarget:
     iOS: "16.0"
   createIntermediateGroups: true
@@ -19,7 +19,7 @@ configs:
 settings:
   base:
     MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "1"
+    CURRENT_PROJECT_VERSION: "3"
     SWIFT_VERSION: "5.0"
     # 真机签名：个人免费团队（joe0217@sohu.com）。8J6JP98FM3 是证书 OU 里的真实 Team ID
     CODE_SIGN_STYLE: Automatic
@@ -30,6 +30,8 @@ targets:
   Hily:
     type: application
     platform: iOS
+    entitlements:
+      path: Hily.entitlements
     sources:
       - Sources
       # iOS 17+ 提审：声明使用到的必备 API（UserDefaults）+ 采集数据类别
@@ -65,8 +67,9 @@ targets:
       Release-Dev: Config/Config-Dev-Archive.xcconfig
     settings:
       base:
-        # 相芯授权证书 authpack 绑定的就是这个包名，给相芯时必须原样一致
-        PRODUCT_BUNDLE_IDENTIFIER: com.anchor.livechat
+        # 必须与当前 FaceUnity authpack 申请的 Bundle ID 一致。
+        PRODUCT_BUNDLE_IDENTIFIER: com.hifunny.party
+        PRODUCT_NAME: HiFunny
         GENERATE_INFOPLIST_FILE: NO
         # 相芯美颜：OC 桥接头 + authpack.h/FUManager.h 所在目录
         SWIFT_OBJC_BRIDGING_HEADER: Vendor/FaceUnity/Hily-Bridging-Header.h
@@ -74,9 +77,9 @@ targets:
     info:
       path: Sources/Info.plist
       properties:
-        CFBundleDisplayName: Hily
+        CFBundleDisplayName: HiFunny
         CFBundleShortVersionString: "1.0.0"
-        CFBundleVersion: "1"
+        CFBundleVersion: "3"
         # 提审：本 app 仅使用 iOS 内置加密（HTTPS/系统 API），无自研专有加密 → 走加密豁免（5D992）
         ITSAppUsesNonExemptEncryption: false
         # ATS 显式锁死：AppConfig 全 https/wss 默认即可，显式声明避免依赖 SDK（声网/云信/未来三方）
@@ -435,7 +438,7 @@ targets:
       - path: Sources/Party/Battle/Services/PartyBattleGlobalConfigParser.swift
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.anchor.livechat.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.hifunny.party.tests
         GENERATE_INFOPLIST_FILE: YES
         # logic test bundle：无宿主 app，xcodebuild test 直接在模拟器跑
         CODE_SIGNING_ALLOWED: NO

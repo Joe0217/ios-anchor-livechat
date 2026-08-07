@@ -1,7 +1,7 @@
 # Hily — 原生 iOS 主播端
 
 H5 主播端（`anchor-livechat-h5`：1v1 通话、直播、PK、美颜、礼物收益）的 Swift 原生重建。
-工程名 `ios-anchor-livechat`，App 显示名 **Hily**，bundleId `com.anchor.livechat`（相芯 authpack 绑定，不可改）。
+工程名 `ios-anchor-livechat`，App 显示名 **HiFunny**，bundleId `com.hifunny.party`（必须与相芯 authpack 绑定的 Bundle ID 一致）。
 
 > 本工程由验证级 POC 升级而来，已真机跑通核心链路；正在按里程碑演进为生产应用。
 

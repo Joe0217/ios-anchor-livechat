@@ -254,7 +254,7 @@ struct NewsRestrictedView: View {
                     .background(Circle().fill(Color.green.opacity(0.15)))
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Administrator: Hily")
+                    Text("Administrator: HiFunny")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(.white)
                     HStack(spacing: 4) {

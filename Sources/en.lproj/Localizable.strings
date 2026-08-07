@@ -1,4 +1,4 @@
-/* Hily 主播端本地化 stub（en 默认值）
+/* HiFunny 主播端本地化 stub（en 默认值）
 
    B 里程碑 spec §13 i18n 声明：B 阶段用 en 默认值占位；ar/tr 翻译由 J 里程碑收尾。
    key 命名约定：模块.场景（lowerCamelCase 拼接）
@@ -305,13 +305,13 @@
 "settings.logoutConfirm"       = "Log out of this account?";
 "settings.deleteAccount"       = "Delete Account";
 "settings.deleteAccount.title" = "Permanently delete your account";
-"settings.deleteAccount.description" = "Deleting your account permanently removes your account and associated data.";
-"settings.deleteAccount.consequence.profile" = "Your profile and account information will be removed.";
-"settings.deleteAccount.consequence.content" = "Your rooms and associated content will no longer be available.";
-"settings.deleteAccount.consequence.recovery" = "This action cannot be undone and the account cannot be recovered.";
+"settings.deleteAccount.description" = "Deleting your account clears this device's session. Contact support to request deletion of account data stored on our services.";
+"settings.deleteAccount.consequence.profile" = "Your local session and account information on this device will be cleared.";
+"settings.deleteAccount.consequence.content" = "Contact support to request removal of account content stored on our services.";
+"settings.deleteAccount.consequence.recovery" = "You will be signed out on this device. Contact support if you need help with account data deletion.";
 "settings.deleteAccount.action" = "Delete Account";
 "settings.deleteAccount.confirm.title" = "Delete account permanently?";
-"settings.deleteAccount.confirm.message" = "This action is permanent. Your account cannot be recovered after deletion.";
+"settings.deleteAccount.confirm.message" = "This clears the local session on this device. To request deletion of account data stored on our services, contact support.";
 "settings.deleteAccount.confirm.action" = "Delete Permanently";
 "settings.deleteAccount.unavailable" = "Account deletion is not available yet. Please try again later.";
 "settings.deleteAccount.failed" = "Unable to delete the account. Please try again.";
@@ -325,7 +325,7 @@
 "settings.feedbackComingSoon"  = "Coming soon";
 
 // MARK: - Native 107 Party documents
-"settings.document.anchorPolicy.introduction" = "These Community Guidelines apply to the Party experience available in Hily.";
+"settings.document.anchorPolicy.introduction" = "These Community Guidelines apply to the Party experience available in HiFunny.";
 "settings.document.anchorPolicy.respect.title" = "Respect in Party Rooms";
 "settings.document.anchorPolicy.respect.body" = "Use public chat, expressions and free interactions respectfully. Do not harass, threaten, bully, discriminate against, or sexually target anyone.";
 "settings.document.anchorPolicy.content.title" = "Safe Content and Profiles";
@@ -337,35 +337,35 @@
 "settings.document.anchorPolicy.moderation.title" = "Moderation";
 "settings.document.anchorPolicy.moderation.body" = "We may remove content, restrict Party participation, or limit an account when these guidelines or applicable law are violated. Use Settings to block an unwanted account or send feedback.";
 
-"settings.document.agreement.introduction" = "This agreement covers the Party-focused Hily experience currently available in this app.";
+"settings.document.agreement.introduction" = "This agreement covers the Party-focused HiFunny experience currently available in this app.";
 "settings.document.agreement.acceptance.title" = "Acceptance";
-"settings.document.agreement.acceptance.body" = "By signing in or using Hily, you agree to this agreement, the Community Guidelines, and applicable law. Do not use the service where you are not legally permitted to do so.";
+"settings.document.agreement.acceptance.body" = "By signing in or using HiFunny, you agree to this agreement, the Community Guidelines, and applicable law. Do not use the service where you are not legally permitted to do so.";
 "settings.document.agreement.scope.title" = "Available Functions";
-"settings.document.agreement.scope.body" = "During sign-up, Hily requires an avatar and at least one profile photo. Invitation codes and review-video recording are not offered in the current registration flow. Your account can use Party rooms, public room chat, expressions, free dice and rock-paper-scissors, profile viewing and follow relationships, customer support, and on-device beauty tools. Live broadcasting, calls, person-to-person direct messages, virtual gifts or currency, wallet, withdrawal, lotteries, Party video, activities, and half-screen games are not offered in this experience.";
+"settings.document.agreement.scope.body" = "During sign-up, HiFunny requires an avatar and at least one profile photo. Invitation codes and review-video recording are not offered in the current registration flow. Your account can use Party rooms, public room chat, expressions, free dice and rock-paper-scissors, profile viewing and follow relationships, customer support, and on-device beauty tools. Live broadcasting, calls, person-to-person direct messages, virtual gifts or currency, wallet, withdrawal, lotteries, Party video, activities, and half-screen games are not offered in this experience.";
 "settings.document.agreement.use.title" = "Using the Service";
-"settings.document.agreement.use.body" = "Use Hily only for lawful, personal entertainment. Do not attempt to bypass access controls, disrupt Party rooms, automate interactions, or use the service to harm others.";
+"settings.document.agreement.use.body" = "Use HiFunny only for lawful, personal entertainment. Do not attempt to bypass access controls, disrupt Party rooms, automate interactions, or use the service to harm others.";
 "settings.document.agreement.content.title" = "Your Content";
 "settings.document.agreement.content.body" = "You are responsible for the profile information, messages, expressions, and free interactions you send. You must have the rights needed to share them, and they must follow the Community Guidelines.";
 "settings.document.agreement.service.title" = "Service Availability and Enforcement";
 "settings.document.agreement.service.body" = "We may maintain, change, suspend, or remove Party features when needed for safety, security, legal compliance, or service operation. Violations may lead to content removal, restricted participation, or account limits.";
 "settings.document.agreement.account.title" = "Account and Feedback";
-"settings.document.agreement.account.body" = "Keep your account credentials confidential and tell us about suspected unauthorized use. Account options and Feedback are available in Settings for requests or concerns.";
+"settings.document.agreement.account.body" = "Keep your account credentials confidential and tell us about suspected unauthorized use. Account options and Feedback are available in Settings for requests or concerns. Profile > Settings > Delete account clears the local session; contact support to request deletion of account data stored on our services.";
 "settings.document.agreement.changes.title" = "Changes to This Agreement";
 "settings.document.agreement.changes.body" = "We may update this agreement as the service or legal requirements change. Continued use after an update means you accept the updated agreement.";
 
-"settings.document.privacy.introduction" = "This policy explains how the Party-focused Hily experience processes information.";
+"settings.document.privacy.introduction" = "This policy explains how the Party-focused HiFunny experience processes information. HiFunny is intended for people aged 13 and older, and we do not knowingly collect personal information from children under 13.";
 "settings.document.privacy.data.title" = "Information We Process";
-"settings.document.privacy.data.body" = "We process account details and profile data required during sign-up, including email, nickname, birthday, country, languages, avatar and at least one profile photo. Invitation codes and review-video recording are not used in the current registration flow. We also process Party room participation, public room messages, expressions, free interaction events, profile views and follow relationships, customer support messages, and device or diagnostic information needed to operate and secure the service. Beauty settings and beauty-camera photos are processed on your device; a captured photo is saved only when you choose to add it to your photo library.";
+"settings.document.privacy.data.body" = "We process account details and profile data required during sign-up, including email, name or nickname, birthday, country, languages, avatar and at least one profile photo. We process user and device IDs, Following/Followers/Friends and blocked-account relationships, Party room participation, public room text messages and expressions, voice or audio used in a Party room, customer support requests, and product interaction, crash, performance, and security information. Photos and videos you submit are user content. Beauty settings and beauty-camera effects are processed on your device; a captured photo is saved only when you choose to add it to your photo library. Invitation codes and review-video recording are not used in the current registration flow.";
 "settings.document.privacy.use.title" = "How We Use Information";
-"settings.document.privacy.use.body" = "We use information to authenticate your account, provide Party rooms and public interactions, respond to feedback, prevent abuse, troubleshoot issues, and meet legal obligations.";
+"settings.document.privacy.use.body" = "We use information to authenticate your account, provide profiles, Party rooms, public chat, connections and customer support, prevent abuse, secure the service, troubleshoot issues, perform product analytics, diagnose crashes and performance problems, and meet legal obligations. We do not sell personal information or use it for cross-app advertising.";
 "settings.document.privacy.visibility.title" = "What Other Participants Can See";
 "settings.document.privacy.visibility.body" = "Messages, expressions, and free interactions sent in a Party room may be visible to other participants in that room. Do not share private contact, identity, location, or other sensitive information publicly.";
 "settings.document.privacy.sharing.title" = "Service Providers and Disclosure";
-"settings.document.privacy.sharing.body" = "We may use providers that help operate communications, hosting, safety, and support services. We may also disclose information when required by law or to protect users, the service, or the public.";
+"settings.document.privacy.sharing.body" = "We use service providers that help operate the app, including Agora for Party voice and real-time media, NIM for room messaging, ThinkingData for product analytics, Sentry for crash and performance diagnostics, and hosting/CDN providers for submitted media and support attachments. We may disclose information when required by law or to protect users, the service, or the public.";
 "settings.document.privacy.security.title" = "Retention and Security";
 "settings.document.privacy.security.body" = "We retain information only as needed for the purposes described here and applicable obligations. We use reasonable safeguards, but no online service can guarantee absolute security.";
 "settings.document.privacy.choices.title" = "Your Choices and Requests";
-"settings.document.privacy.choices.body" = "You can manage available account options and your blocklist in Settings. For privacy questions or requests to access, correct, or delete information, submit Feedback from Settings.";
+"settings.document.privacy.choices.body" = "You can update your profile, follow or unfollow users, manage your blocklist, and manage camera, microphone, and photo permissions in iOS Settings. Profile > Settings > Delete account clears your local session. Contact support to request deletion of account data stored on our services. For privacy questions or requests to access, correct, or delete information, submit Feedback from Settings.";
 
 // MARK: - Feedback 反馈表单页
 "feedback.type.appError"       = "App Error";
@@ -537,10 +537,10 @@
 // MARK: - LiveRoom 直播间
 "liveRoom.permissionAlertTitle" = "Camera Permission Required";
 "liveRoom.permissionAlertOK" = "OK";
-"liveRoom.permissionAlertMessage" = "Please enable Camera access in Settings → Hily → Camera";
-"mediaPermission.cameraRequired" = "Camera access is required. Enable it in Settings, then restart Hily to continue.";
-"mediaPermission.microphoneRequired" = "Microphone access is required. Enable it in Settings, then restart Hily to continue.";
-"mediaPermission.liveRequired" = "Camera and microphone access are required. Enable them in Settings, then restart Hily to continue.";
+"liveRoom.permissionAlertMessage" = "Please enable Camera access in Settings → HiFunny → Camera";
+"mediaPermission.cameraRequired" = "Camera access is required. Enable it in Settings, then restart HiFunny to continue.";
+"mediaPermission.microphoneRequired" = "Microphone access is required. Enable it in Settings, then restart HiFunny to continue.";
+"mediaPermission.liveRequired" = "Camera and microphone access are required. Enable them in Settings, then restart HiFunny to continue.";
 "mediaPermission.photoLibraryAddRequired" = "Photo access is required to save beauty camera photos. Enable it in Settings to continue.";
 "mediaPermission.alertTitle" = "Permissions Required";
 "liveRoom.statusLiveFormat"  = "Live %@";
@@ -1875,7 +1875,7 @@
 "register.action.confirmN"                          = "Confirm ( %d )";
 "register.action.cancel"                            = "Cancel";
 "register.action.languageTitle"                     = "Language";
-"register.video.guideBody"                          = "A review video is not required during registration at this time. If additional account verification is needed later, Hily will explain the purpose before requesting a %d-second recording.";
+"register.video.guideBody"                          = "A review video is not required during registration at this time. If additional account verification is needed later, HiFunny will explain the purpose before requesting a %d-second recording.";
 "register.video.discardConfirm"                     = "Discard recording? Recording will be lost.";
 "register.error.avatarRequired"                     = "Please upload your avatar";
 "register.error.nicknameRequired"                   = "Please enter your nickname";

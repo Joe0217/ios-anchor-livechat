@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Hily</string>
+	<string>HiFunny</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -25,7 +25,7 @@
 	<key>CFBundleShortVersionString</key>
 	<string>1.0.0</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>3</string>
 	<key>HilyAESIV</key>
 	<string>$(HILY_AES_IV)</string>
 	<key>HilyAESKey</key>
@@ -77,10 +77,10 @@
 	<string>Used for beauty previews, taking photos, live streaming, calls, and withdrawal identity verification.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Used for real-time audio/video calls, live streaming, and Party voice rooms.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Used to upload the avatar and profile photos required during registration.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Allow photo access to save pictures taken with the beauty camera.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Used to upload the avatar and profile photos required during registration.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIStatusBarHidden</key>
