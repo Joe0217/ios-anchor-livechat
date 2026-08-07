@@ -16,6 +16,7 @@ import PhotosUI
 struct PostPublishView: View {
     @ObservedObject var viewModel: PostPublishViewModel
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var showDiscardConfirm: Bool = false
@@ -71,12 +72,14 @@ struct PostPublishView: View {
             isPresented: $showMediaSourceMenu,
             titleVisibility: .visible
         ) {
-            Button {
-                DispatchQueue.main.async {
-                    openBeautyCamera()
+            if permission.canBeautyStudio {
+                Button {
+                    DispatchQueue.main.async {
+                        openBeautyCamera()
+                    }
+                } label: {
+                    Label(L10n.beautyStudioCamera, systemImage: "camera.fill")
                 }
-            } label: {
-                Label(L10n.beautyStudioCamera, systemImage: "camera.fill")
             }
             Button {
                 DispatchQueue.main.async {
@@ -346,6 +349,7 @@ struct PostPublishView: View {
 
     private func openBeautyCamera() {
         Task { @MainActor in
+            guard permission.canBeautyStudio else { return }
             guard await MediaPermissionGate.requestAccess(for: .camera) else {
                 showCameraPermissionAlert = true
                 return

@@ -87,20 +87,24 @@ struct ToolsSection: View {
                             .buttonStyle(.plain)
                     // Beauty → 美颜设置页（K-spec-美颜设置页 §0.4 Q1；生产入口）
                     } else if tools[i].icon == "toolBeauty" {
-                        Button {
-                            openBeautyPage(mode: .settings)
-                        } label: {
-                            cell
-                        }
+                        if permission.canBeautyStudio {
+                            Button {
+                                openBeautyPage(mode: .settings)
+                            } label: {
+                                cell
+                            }
                             .buttonStyle(.plain)
+                        }
                     // Beauty Camera -> the same beauty controls with a live capture action.
                     } else if tools[i].icon == "toolBeautyCamera" {
-                        Button {
-                            openBeautyPage(mode: .camera)
-                        } label: {
-                            cell
-                        }
+                        if permission.canBeautyStudio {
+                            Button {
+                                openBeautyPage(mode: .camera)
+                            } label: {
+                                cell
+                            }
                             .buttonStyle(.plain)
+                        }
                     // Points → Phase E 占位
                     } else if tools[i].icon == "toolPoints" {
                         NavigationLink(value: WorkRoute.pointsRank) { cell }
@@ -169,6 +173,7 @@ struct ToolsSection: View {
     }
 
     private func openBeautyPage(mode: BeautySettingsView.Mode) {
+        guard permission.canBeautyStudio else { return }
         pendingBeautyMode = mode
         Task { @MainActor in
             guard await MediaPermissionGate.requestAccess(for: .camera) else {
