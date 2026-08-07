@@ -157,7 +157,14 @@ struct CDNAssetImage: View {
 }
 
 enum CDNAssetURL {
-    private static let baseURL = "https://file.lovetravel.link/iosAnchor/assets/v20260804"
+    private static let rootURL = "https://file.lovetravel.link/iosAnchor/assets"
+    private static let defaultVersion = "v20260804"
+    private static let recoveredVersion = "v20260807"
+    private static var baseURL: String { "\(rootURL)/\(defaultVersion)" }
+    private static let recoveredImageNames: Set<String> = [
+        "ic_backpack", "luckyGiftNoticeBadge", "luckyGiftNoticeDiamond",
+        "restrictedNewsHeader", "pinkClock",
+    ]
     private static let beautyNames: Set<String> = [
         "bailiang1", "fennen1", "gexing1", "heibai1", "lengsediao1", "mitao1",
         "nuansediao1", "origin", "xiaoqingxin1", "zhiganhui1", "ziran1",
@@ -169,7 +176,8 @@ enum CDNAssetURL {
         let path = module == "common"
             ? "common/\(resourceName).png"
             : "common/\(module)/\(resourceName).png"
-        return URL(string: "\(baseURL)/\(path)")
+        let version = recoveredImageNames.contains(resourceName) ? recoveredVersion : defaultVersion
+        return URL(string: "\(rootURL)/\(version)/\(path)")
     }
 
     /// GIF / WebP 使用上传时保留的原始文件名，和静态图片目录分开。
@@ -184,11 +192,19 @@ enum CDNAssetURL {
         return URL(string: "\(baseURL)/svga/\(subdirectory)/\(resource).svga")
     }
 
-    static var publicAssetURLs: [URL] {
-        bundledImageNames.compactMap(url(for:))
+    static func publicAssetURLs(isPartyOnly: Bool) -> [URL] {
+        let imageNames = isPartyOnly
+            ? bundledImageNames.filter { !nonPartyOnlyImageNames.contains($0) }
+            : bundledImageNames
+        return imageNames.compactMap(url(for:))
             + bundledAnimationResources.compactMap { animatedURL(name: $0.name, fileExtension: $0.extension) }
             + bundledSVGAResources.compactMap { svgaURL(resource: $0) }
     }
+
+    private static let nonPartyOnlyImageNames: Set<String> = [
+        "ic_backpack", "luckyGiftNoticeBadge", "luckyGiftNoticeDiamond",
+        "restrictedNewsHeader", "pinkClock",
+    ]
 
     private static func normalizedName(_ name: String) -> String {
         let prefix = "BeautyFilterThumbnails/"

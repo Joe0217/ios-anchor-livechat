@@ -221,7 +221,9 @@ final class SessionStore: ObservableObject {
             } else {
                 await AppPictureStore.shared.preloadPublicAssets()
             }
-            await URLDiskCache.prefetch(urls: CDNAssetURL.publicAssetURLs)
+            await URLDiskCache.prefetch(
+                urls: CDNAssetURL.publicAssetURLs(isPartyOnly: userType == 107)
+            )
         }
     }
 
