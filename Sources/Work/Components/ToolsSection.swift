@@ -187,6 +187,11 @@ struct ToolsSection: View {
 
     private func retryBeautyCameraPermission() {
         Task { @MainActor in
+            guard permission.canBeautyStudio else {
+                showBeautyPermissionAlert = false
+                pendingBeautyMode = nil
+                return
+            }
             guard await MediaPermissionGate.requestAccess(for: .camera) else {
                 MediaPermissionGate.openAppSettings()
                 return

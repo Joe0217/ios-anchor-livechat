@@ -360,6 +360,10 @@ struct PostPublishView: View {
 
     private func retryBeautyCameraPermission() {
         Task { @MainActor in
+            guard permission.canBeautyStudio else {
+                showCameraPermissionAlert = false
+                return
+            }
             guard await MediaPermissionGate.requestAccess(for: .camera) else {
                 MediaPermissionGate.openAppSettings()
                 return
