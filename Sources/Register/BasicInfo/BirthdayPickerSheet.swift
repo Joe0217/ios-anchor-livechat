@@ -27,7 +27,7 @@ struct BirthdayPickerSheet: View {
                 Spacer()
                 Text(L10n.Register.fieldBirthday).font(.headline)
                 Spacer()
-                Button("OK") {
+                Button(L10n.commonConfirm) {
                     birthday = formatter.string(from: date)
                     isPresented = false
                 }

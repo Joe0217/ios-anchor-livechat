@@ -45,6 +45,11 @@ final class PartyAttachTypeTests: XCTestCase {
         XCTAssertEqual(PartyAttachType.giftCompressed.rawValue, 2049)
     }
 
+    func test_freeGameResult_roundTrip() {
+        XCTAssertEqual(PartyAttachType.from(rawValue: 144), .freeGameResult)
+        XCTAssertEqual(PartyAttachType.freeGameResult.rawValue, 144)
+    }
+
     // MARK: - 2. 视频位邀请 9 类 1040-1048 round-trip
 
     func test_inviteVideoSeat_range_1040_1048_allMapped() {
@@ -127,7 +132,7 @@ final class PartyAttachTypeTests: XCTestCase {
 
     // MARK: - 5. v3：codes 与 enum 不相交
 
-    /// v3 收敛后 `codes` 只保留**未加 case** 的项：{45, 144, 195, 1002, 1010}。
+    /// v3 收敛后 `codes` 只保留**未加 case** 的项；144 已由免费互动链路接管。
     /// 单测锁定：任一 codes 内的 rawValue **必须** `from(rawValue:)` 返回 nil。
     func test_v3_codes_disjoint_from_enum() {
         for raw in PartyKnownButUnhandledAttachType.codes {
@@ -136,9 +141,9 @@ final class PartyAttachTypeTests: XCTestCase {
         }
     }
 
-    /// codes 现内容锁定（v3 收敛后）：{45, 144, 195, 1002, 1010}
+    /// codes 现内容锁定（v3 收敛后）：{45, 195, 1002, 1010}
     func test_v3_codes_current_content() {
-        let expected: Set<Int> = [45, 144, 195, 1002, 1010]
+        let expected: Set<Int> = [45, 195, 1002, 1010]
         XCTAssertEqual(PartyKnownButUnhandledAttachType.codes, expected,
                        "v3 codes 应只保留未加 case 的 Android 独有 + 值冲突 45")
     }

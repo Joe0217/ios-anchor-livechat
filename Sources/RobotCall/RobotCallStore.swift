@@ -107,6 +107,12 @@ final class RobotCallStore: ObservableObject {
 
     /// 处理 attachType=132。结算消息可在通话 UI 已关闭后异步到达，因此不依赖当前状态。
     func receiveReward(_ incoming: RobotCallReward) {
+        guard UserTypeExperience.hasFullHostRealtimeCapability(
+            SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+        ) else {
+            logger.info("drop reward record=\(incoming.recordId, privacy: .private): realtime capability disabled")
+            return
+        }
         if canPresentReward {
             reward = incoming
         } else {

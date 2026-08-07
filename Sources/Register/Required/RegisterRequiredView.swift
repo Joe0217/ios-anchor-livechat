@@ -58,7 +58,7 @@ struct RegisterRequiredView: View {
         }
         .onChange(of: store.submitError) { err in
             // 2026-07-12 同步 H5：原红色 banner 常驻 → 改 toast 2s 自动消失（对齐 H5 showNotify 交互 duration 1500ms）
-            // 内容保持后端 message 原文（H5 拦截器 line 124-130 也是直显后端 message 字面，如 1076 → "invite.code.not.exist"）
+            // Store 已将业务错误映射为面向用户的本地化文案，避免展示后端内部 message key。
             if let err {
                 showToast(err)
                 store.submitError = nil   // 立即清掉，避免下一次 onChange 或 view rebuild 重复

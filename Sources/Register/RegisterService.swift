@@ -26,4 +26,17 @@ enum RegisterService {
         let data = try await APIClient.shared.post("/api/login/reSubmitView", body: body.toDict())
         return try JSONDecoder().decode(LoginResult.self, from: data)
     }
+
+    /// 本地模拟删除账号完成资料流程后，直接恢复原服务端账号登录，不重复创建账号。
+    static func loginDeletedAccount(email: String, password: String) async throws -> LoginResult {
+        let data = try await APIClient.shared.post(
+            "/api/login/v4/login",
+            body: [
+                "email": email,
+                "password": CryptoUtil.loginPassword(password),
+            ],
+            suppressCodes: ["1005"]
+        )
+        return try JSONDecoder().decode(LoginResult.self, from: data)
+    }
 }

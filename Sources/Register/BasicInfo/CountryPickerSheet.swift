@@ -17,7 +17,7 @@ struct CountryPickerSheet: View {
                 } else if let err = loadError {
                     VStack(spacing: 12) {
                         Text(err).foregroundStyle(.red)
-                        Button("Retry") { Task { await fetch() } }
+                        Button(L10n.commonRetry) { Task { await fetch() } }
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -55,7 +55,7 @@ struct CountryPickerSheet: View {
         do {
             countries = try await RegisterService.fetchCountryList()
         } catch {
-            loadError = error.localizedDescription
+            loadError = L10n.commonNetworkError
         }
     }
 }

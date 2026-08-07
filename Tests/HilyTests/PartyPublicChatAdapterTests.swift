@@ -11,6 +11,30 @@ import XCTest
 /// **不覆盖** `adaptText(nim:)` —— 依赖 NIMMessage，属 +NIM.swift 层，走真机集成测试。
 final class PartyPublicChatAdapterTests: XCTestCase {
 
+    func test_freeGameResult_mapsLuckyDiceAndSender() {
+        let msg = PartyPublicChatAdapter.freeGameResult(
+            payload: [
+                "gameType": "LUCKY_DICE",
+                "nickname": "Alice",
+                "sendUserId": 42,
+                "medalUrl": "https://cdn/medal.png",
+                "grantedHours": "2.5",
+            ],
+            fallbackNickname: nil,
+            myUserId: "42"
+        )
+
+        XCTAssertEqual(msg.sender?.userId, "42")
+        XCTAssertEqual(msg.sender?.nickname, "Alice")
+        XCTAssertTrue(msg.sender?.isSelf ?? false)
+        guard case .rpsWin(let medalURL, let hours, let gameType) = msg.variant else {
+            XCTFail("expected .rpsWin"); return
+        }
+        XCTAssertEqual(medalURL, "https://cdn/medal.png")
+        XCTAssertEqual(hours, 2.5)
+        XCTAssertEqual(gameType, .luckyDice)
+    }
+
     // MARK: - 系统消息 4 类 kind
 
     func test_systemMode_producesPartyModeSwitchVariant() {

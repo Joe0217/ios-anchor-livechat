@@ -5,7 +5,7 @@ import SwiftUI
 /// **对齐 H5 蓝本** `livechat-h5/src/components/party/components/party-expression-popup.vue`：
 /// - `van-popup position="bottom"` 底部半屏 sheet · min-h 50%（iOS 用 `.fraction(0.5)`）
 /// - 上部 `v-swiper` 分类 × 分页拍平 · 每页固定 **4×3 = 12** 格
-/// - 分类和表情按服务端返回内容完整展示，不按账号权限过滤
+/// - 分类和表情按服务端返回顺序完整展示，不过滤、不重排
 /// - 底部 tab bar 横向可滚 · 每 tab 圆形 24×24 · 激活 opacity 0.16 底色
 /// - 单分类多页时展示自绘小圆点 indicator
 ///
@@ -45,7 +45,8 @@ struct PartyExpressionPanel: View {
                 )
             )
             await store.loadExpressionList()
-            selectDefaultExpressionTab()
+            selectedClassIndex = 0
+            selectedPageIndex = 0
         }
         .presentationDetents([.height(panelSheetHeight)])
         .overlay(alignment: .top) {
@@ -71,17 +72,11 @@ struct PartyExpressionPanel: View {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .tint(.white)
-        case .error(let msg):
+        case .error:
             VStack(spacing: 12) {
                 Text(L10n.PartyRoom.emojiLoadFailed)
                     .font(.system(size: 14))
                     .foregroundColor(.white.opacity(0.7))
-                Text(msg)
-                    .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.4))
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
                 Button {
                     Task { await store.loadExpressionList() }
                 } label: {
@@ -227,8 +222,8 @@ struct PartyExpressionPanel: View {
     // MARK: - Pick handler
 
     private func handleEmojiPick(_ item: PartyEmojiItem) {
-        // 107 审核模式开放完整表情协议，但不改变其他 Party 游戏权限。
-        if item.isPlayEmoji, !canUsePlayEmoji {
+        // Store 仍保留二次 gate，防止权限动态变化时绕过业务层。
+        if item.isPlayEmoji, !canSendPlayEmoji {
             showToast(L10n.PartyRoom.emojiPlayError)
             return
         }
@@ -257,31 +252,8 @@ struct PartyExpressionPanel: View {
         }
     }
 
-    private var canUsePlayEmoji: Bool {
-        PartyExpressionAvailability.canUsePlayEmoji
-    }
-
-    private func expressionClassificationIndex(in classifications: [PartyEmojiClassification]) -> Int? {
-        if let index = classifications.firstIndex(where: { classification in
-            !classification.emojisList.isEmpty
-                && classification.emojisList.allSatisfy { !$0.isPlayEmoji }
-        }) {
-            return index
-        }
-        return classifications.firstIndex(where: { classification in
-            classification.emojisList.contains { !$0.isPlayEmoji }
-        })
-    }
-
-    /// 面板每次拉起按内容语义选中普通表情，不依赖服务端原始下标。
-    private func selectDefaultExpressionTab() {
-        selectedPageIndex = 0
-        guard case .loaded(let classifications) = store.expressionListState,
-              let expressionIndex = expressionClassificationIndex(in: classifications) else {
-            selectedClassIndex = 0
-            return
-        }
-        selectedClassIndex = expressionIndex
+    private var canSendPlayEmoji: Bool {
+        PartyExpressionAvailability.canSendPlayEmoji
     }
 
     private func selectAdjacentTab(delta: Int, count: Int) {

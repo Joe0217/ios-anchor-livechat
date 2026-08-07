@@ -86,7 +86,7 @@ struct RegisterVideoRecordView: View {
             recorder.suspend()
         }
         .alert(L10n.Register.videoDiscardConfirm, isPresented: $showBackConfirm) {
-            Button("Discard", role: .destructive) {
+            Button(L10n.commonDiscard, role: .destructive) {
                 isDiscarding = true       // 立即 set 防 onChange 尝试 push preview
                 recorder.stopRecording()
                 // Finding #6 修：guard path 非空

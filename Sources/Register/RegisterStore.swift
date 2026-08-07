@@ -203,12 +203,30 @@ final class RegisterStore: ObservableObject {
         )
 
         do {
-            let result = try await (isResubmit
-                ? RegisterService.reSubmitView(body: body)
-                : RegisterService.registerV2(body: body))
+            let isDeletedAccount = DeletedAccountRegistry.contains(email)
+            let result: LoginResult
+            if isDeletedAccount {
+                result = try await RegisterService.loginDeletedAccount(email: email, password: password)
+            } else {
+                result = try await (isResubmit
+                    ? RegisterService.reSubmitView(body: body)
+                    : RegisterService.registerV2(body: body))
+            }
+
+            if isDeletedAccount {
+                guard let token = result.token, !token.isEmpty else {
+                    submitError = L10n.authErrorNoToken
+                    return
+                }
+                guard DeletedAccountRegistry.remove(email) else {
+                    submitError = L10n.authErrorRequestFailed
+                    logger.error("[RegisterStore] failed to clear restored deleted-account record")
+                    return
+                }
+            }
 
             // v3 NEW-6: applyLogin 返 Bool；false 表示 token 缺失
-            guard await SessionStore.shared.applyLogin(result) else {
+            guard await SessionStore.shared.applyLogin(result, email: email) else {
                 submitError = L10n.authErrorNoToken
                 return
             }
@@ -231,7 +249,7 @@ final class RegisterStore: ObservableObject {
             } else if e.code == "-1" {
                 submitError = L10n.Register.errorServerTemporary
             } else {
-                submitError = e.message   // 后端业务 message 原文（如 1076 → "invite.code.not.exist"，对齐 H5 line 124-130）
+                submitError = L10n.authErrorRequestFailed
             }
             logger.error("[RegisterStore] submit APIError code=\(e.code, privacy: .public) msg=\(e.message, privacy: .public)")
         } catch {

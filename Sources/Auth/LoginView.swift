@@ -88,7 +88,7 @@ struct LoginView: View {
     // MARK: - 组件
 
     private var backgroundLayer: some View {
-        Theme.Palette.authBackgroundFallback
+        Theme.Gradients.partyRoomDefaultBackground
             .ignoresSafeArea()
     }
 

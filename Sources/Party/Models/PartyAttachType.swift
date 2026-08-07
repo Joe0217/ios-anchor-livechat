@@ -26,6 +26,8 @@ enum PartyAttachType: Int {
     case pkSmallPrize = 138
     /// 140 活动中奖公屏广播（含 worldcup 世界杯活动卡）
     case winnerBroadcastGlobal = 140
+    /// 144 免费小游戏结果（猜拳 / 幸运骰子）
+    case freeGameResult = 144
     /// 197 首礼时刻公屏与顶部飘屏（与直播房使用同一 payload）。
     case firstGiftMoment = 197
 
@@ -190,7 +192,6 @@ enum PartyKnownButUnhandledAttachType {
         // 值冲突（spec §1.0.2）—— 1029 已由 privateCallNotify 接管
         45,
         // Android 直播场景（非派对房）
-        144,        // LIVE_SMALL_GAME_WIN_NOTICE
         195,        // LIVE_ROOM_ANNOUNCEMENT
         // Android 独有派对房但主播端暂不实装
         1002,       // INVITE_JOIN_PARTY_ROOM（P2P 邀请卡）

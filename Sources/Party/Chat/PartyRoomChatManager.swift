@@ -645,6 +645,9 @@ protocol PartyRoomChatManagerDelegate: AnyObject {
     /// 138 PK 小奖 / Party 房游戏小奖（本房，字段同 136）。
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceivePkSmallPrize payload: [String: Any], raw: NIMMessage)
 
+    /// 144 猜拳 / 幸运骰子结果。107 保留该免费互动公屏消息。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveFreeGameResult payload: [String: Any], raw: NIMMessage)
+
     /// 140 活动中奖公屏广播（含 worldcup 世界杯活动卡）。
     /// payload 期望 `{ activityName, quantity, imageURL, joinCTA, avatar, cardType, ... }` —— 真机 preflight。
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveWinnerBroadcast payload: [String: Any], raw: NIMMessage)

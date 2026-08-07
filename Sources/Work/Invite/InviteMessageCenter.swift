@@ -128,6 +128,11 @@ extension InviteMessageRouter {
         case .sysMsg, .syncSysMsg: break
         default: return
         }
+        guard SelfPermissionBridge.shared.canWorkDashboardSnapshot,
+              SelfPermissionBridge.shared.canDirectMessagesSnapshot else {
+            InviteMessageCenter.shared.clear()
+            return
+        }
         let rawType: Int
         switch attachType {
         case .userBindAfterRecharged: rawType = 103

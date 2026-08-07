@@ -59,7 +59,7 @@ targets:
     #   - Release-Dev  → Dev release 型（Hily-Dev scheme Archive 日常测试分发，anchor.cphub.link）
     # 打包切环境：Xcode 顶部 Scheme 三选一 → Product → Archive，不改本文件
     configFiles:
-      Debug: Config/Config-Dev.xcconfig
+      Debug: Config/Config-Prod.xcconfig
       Release: Config/Config-Prod.xcconfig
       Release-Test: Config/Config-Test.xcconfig
       Release-Dev: Config/Config-Dev-Archive.xcconfig

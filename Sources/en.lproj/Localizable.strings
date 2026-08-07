@@ -317,7 +317,7 @@
 "settings.deleteAccount.failed" = "Unable to delete the account. Please try again.";
 "settings.cancel"              = "Cancel";
 "settings.confirm"             = "Confirm";
-"settings.anchorPolicy"        = "View Anchor Policy";
+"settings.anchorPolicy"        = "Community Guidelines";
 "settings.clearCache"          = "Clear Cache";
 "settings.clearCacheConfirm"   = "Are you sure to clear cache?";
 "settings.clearCacheDone"      = "Cache cleared";
@@ -341,7 +341,7 @@
 "settings.document.agreement.acceptance.title" = "Acceptance";
 "settings.document.agreement.acceptance.body" = "By signing in or using Hily, you agree to this agreement, the Community Guidelines, and applicable law. Do not use the service where you are not legally permitted to do so.";
 "settings.document.agreement.scope.title" = "Available Functions";
-"settings.document.agreement.scope.body" = "During sign-up, Hily requires an avatar and at least one profile photo. Invitation codes and review-video recording are not offered in the current registration flow. Your account can then use Party rooms, public room chat, expressions and simple free interactions. Live broadcasting, calls, direct messages, virtual gifts or currency, wallet, withdrawal, lotteries, Party video, activities, and half-screen games are not offered in this experience.";
+"settings.document.agreement.scope.body" = "During sign-up, Hily requires an avatar and at least one profile photo. Invitation codes and review-video recording are not offered in the current registration flow. Your account can use Party rooms, public room chat, expressions, free dice and rock-paper-scissors, profile viewing and follow relationships, customer support, and on-device beauty tools. Live broadcasting, calls, person-to-person direct messages, virtual gifts or currency, wallet, withdrawal, lotteries, Party video, activities, and half-screen games are not offered in this experience.";
 "settings.document.agreement.use.title" = "Using the Service";
 "settings.document.agreement.use.body" = "Use Hily only for lawful, personal entertainment. Do not attempt to bypass access controls, disrupt Party rooms, automate interactions, or use the service to harm others.";
 "settings.document.agreement.content.title" = "Your Content";
@@ -355,7 +355,7 @@
 
 "settings.document.privacy.introduction" = "This policy explains how the Party-focused Hily experience processes information.";
 "settings.document.privacy.data.title" = "Information We Process";
-"settings.document.privacy.data.body" = "We process account details and profile data required during sign-up, including email, nickname, birthday, country, languages, avatar and at least one profile photo. Invitation codes and review-video recording are not used in the current registration flow. We also process Party room participation, public room messages, expressions, free interaction events, and device or diagnostic information needed to operate and secure the service.";
+"settings.document.privacy.data.body" = "We process account details and profile data required during sign-up, including email, nickname, birthday, country, languages, avatar and at least one profile photo. Invitation codes and review-video recording are not used in the current registration flow. We also process Party room participation, public room messages, expressions, free interaction events, profile views and follow relationships, customer support messages, and device or diagnostic information needed to operate and secure the service. Beauty settings and beauty-camera photos are processed on your device; a captured photo is saved only when you choose to add it to your photo library.";
 "settings.document.privacy.use.title" = "How We Use Information";
 "settings.document.privacy.use.body" = "We use information to authenticate your account, provide Party rooms and public interactions, respond to feedback, prevent abuse, troubleshoot issues, and meet legal obligations.";
 "settings.document.privacy.visibility.title" = "What Other Participants Can See";
@@ -889,7 +889,8 @@
 "liveRoom.returnCountdownFormat" = "Returning to live in %ds";
 
 // MARK: - 服务层错误（被 View 显示）
-"auth.error.noToken"         = "Login failed: server returned no token";
+"auth.error.noToken"         = "Unable to sign in. Please try again.";
+"auth.error.requestFailed"   = "Unable to continue. Please check your information and try again.";
 "auth.error.networkFormat"   = "Network error: %@";
 "auth.error.sessionInvalidated" = "Your session has expired or your account was signed in elsewhere. Please log in again.";
 "live.error.noCover"         = "No live cover set yet. Please configure a cover on the main app first.";
@@ -1505,6 +1506,7 @@
 // P1-6 (2026-07-14) 主播审核弹窗
 "common.kindReminder"                    = "Kind reminder";
 "common.confirm"                         = "Confirm";
+"common.discard"                         = "Discard";
 "common.close"                           = "Close";
 "audit.passed.message"                   = "Congratulations, your review has been approved. Please log in to the APP again.";
 "audit.rejected.fallback"                = "Your review was rejected.";

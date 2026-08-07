@@ -409,6 +409,14 @@ final class PartyStore: ObservableObject {
         SelfPermissionBridge.shared.canPartyVideoSnapshot
     }
 
+    /// 107 只保留基础房间管理。即使旧页面状态或异步回调仍持有入口，也不能继续请求
+    /// 锁房、排麦申请或 MC Seat 接口。
+    private var canUseAdvancedRoomManagement: Bool {
+        let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.user != nil)
+        return !UserTypeExperience.isPartyOnly(effectiveUserType)
+    }
+
     private func mediaRequirement(forSeatType seatType: Int?) -> MediaPermissionGate.Requirement {
         // RTC 语音位仅发布 microphone track；只有视频位会启用相机采集和自定义视频轨。
         // Party-only 账号即使被服务端安排到视频位，也只按语音能力运行，不请求相机权限。
@@ -1261,7 +1269,7 @@ final class PartyStore: ObservableObject {
         }
         // Store 第二层防护：UI 隐藏不能替代业务入口 gate；权限在点击与发送之间变化时 fail closed。
         if item.isPlayEmoji,
-           !PartyExpressionAvailability.canUsePlayEmoji {
+           !PartyExpressionAvailability.canSendPlayEmoji {
             return
         }
         // 玩法 -11 门槛：仅上麦者可发（对齐 H5 `usePartyHooks.js:1783` `inPartyRole > 0`）
@@ -1602,13 +1610,20 @@ final class PartyStore: ObservableObject {
         let rid = roomInfo?.id ?? ""
         Task { [weak self] in
             guard let self else { return }
-            await PartyBattleStore.shared.loadGlobalConfig()
-            if !rid.isEmpty {
+            if SelfPermissionBridge.shared.canPartyGamesSnapshot {
+                await PartyBattleStore.shared.loadGlobalConfig()
+            } else {
+                PartyBattleStore.shared.reset()
+            }
+            if !rid.isEmpty, SelfPermissionBridge.shared.canPartyGamesSnapshot {
                 await PartyBattleStore.shared.refreshIfNeeded(roomId: rid)
-                if SelfPermissionBridge.shared.gate(.lottery, action: "partySuperWheelTracking") {
-                    PartySuperWheelStore.shared.beginTracking(roomId: rid)
-                    await PartySuperWheelStore.shared.loadState(roomId: rid, presentWhenActive: true)
-                }
+            }
+            if !rid.isEmpty,
+               SelfPermissionBridge.shared.gate(.lottery, action: "partySuperWheelTracking") {
+                PartySuperWheelStore.shared.beginTracking(roomId: rid)
+                await PartySuperWheelStore.shared.loadState(roomId: rid, presentWhenActive: true)
+            } else {
+                PartySuperWheelStore.shared.reset()
             }
             await self.loadPartyBaseConfigIfNeeded()
         }
@@ -2738,6 +2753,11 @@ final class PartyStore: ObservableObject {
     /// - `.initial`：首次开面板 → `.loading`
     /// - `.refresh`：下拉刷新 / 1018 op=1 触发 → 保留旧 items 视觉走 `.refreshing(items)`
     func loadMicApplications(reason: PartyMicApplicationsLoadReason) async {
+        guard canUseAdvancedRoomManagement else {
+            micApplicationsState = .empty
+            queueSeatNum = 0
+            return
+        }
         guard let info = roomInfo, roomState == .joined else { return }
 
         // list-refresh-preserve-items rule：refresh 时保留视觉
@@ -2779,6 +2799,7 @@ final class PartyStore: ObservableObject {
 
     /// 观众端申请上麦（spec §2 观众端）。30s 冷却 + 5min 超时兜底。
     func applyMic(seatIndex: Int) async {
+        guard canUseAdvancedRoomManagement else { return }
         // spec §0 throttle：防 spam 双 tap 发重复 onSeat
         guard !isBusyApplyMic else {
             AppLogger.party.notice("[PartyStore] applyMic skip: busy")
@@ -2846,6 +2867,7 @@ final class PartyStore: ObservableObject {
 
     /// 观众端放弃排麦（spec §2）。成功后本地清 inIndex + 停超时 Task。
     func cancelMyMicApplication() async {
+        guard canUseAdvancedRoomManagement else { return }
         guard !isBusyCancelMyMicApplication else {
             AppLogger.party.notice("[PartyStore] cancelMyMicApplication skip: busy")
             return
@@ -2880,6 +2902,7 @@ final class PartyStore: ObservableObject {
     /// 房主/房管批准申请（spec §2）。seatIndex nil 时挑首空位（排除 pendingApproveSeatIndex 防并发冲突）。
     /// 无可用位 → toast + 不调接口（spec §2 R7）。
     func agreeMicApplication(userId: String, seatIndex: Int?) async {
+        guard canUseAdvancedRoomManagement else { return }
         guard selfRole == .owner || selfRole == .admin else {
             AppLogger.party.notice("[PartyStore] agreeMic rejected: not owner/admin")
             return
@@ -2955,6 +2978,7 @@ final class PartyStore: ObservableObject {
     /// 房主/房管拒绝申请（spec §2）。服务端下发 1018 op=3 → 被拒者本地设 rejectedAt 冷却。
     /// 幂等 per-userId：同 userId 快速连点只发一次；不同 userId 允许并发（对齐 approve 路径）
     func refuseMicApplication(userId: String) async {
+        guard canUseAdvancedRoomManagement else { return }
         guard selfRole == .owner || selfRole == .admin else {
             AppLogger.party.notice("[PartyStore] refuseMic rejected: not owner/admin")
             return
@@ -2983,6 +3007,7 @@ final class PartyStore: ObservableObject {
     /// UI 层负责前置协议弹窗（首次切换时基于 autoEnter{On,Off}Application flag 判断）。
     /// 成功后立即回写本地状态（对齐 H5），1021 广播作为跨端最终同步。
     func toggleMicApplicationSwitch(enable: Bool) async {
+        guard canUseAdvancedRoomManagement else { return }
         guard selfRole == .owner || selfRole == .admin else {
             AppLogger.party.notice("[PartyStore] toggleMicApplicationSwitch rejected: not room manager")
             return
@@ -3522,6 +3547,7 @@ final class PartyStore: ObservableObject {
     /// - 无 IM 广播：加锁瞬间已在房观众不 kick（对齐 H5）；跨端一致靠 `enterRoom` 拦截返 10006
     /// - 失败 sheet 层需保持打开让用户可重试 → 错误通过 `lastError` 上抛让 view 层 toast
     func lockRoom(password: String) async {
+        guard canUseAdvancedRoomManagement else { return }
         guard selfRole == .owner else {
             AppLogger.party.notice("[PartyStore] lockRoom rejected: not owner/platformAdmin")
             return
@@ -3565,6 +3591,7 @@ final class PartyStore: ObservableObject {
     /// - 无二次确认：tap Lock Room 已锁态 → 直接调（对齐 H5 无二次确认弹窗）
     /// - 无密码字段：对齐 H5 `feachLockRoom({ lockFlag: 0 })` payload 省略 password
     func unlockRoom() async {
+        guard canUseAdvancedRoomManagement else { return }
         guard selfRole == .owner else {
             AppLogger.party.notice("[PartyStore] unlockRoom rejected: not owner/platformAdmin")
             return
@@ -3680,6 +3707,7 @@ final class PartyStore: ObservableObject {
     ///   不再 lastError.localizedDescription diff（同错误消息连续两次会误判成功）
     @discardableResult
     func setMCSeat(seatIndex: Int) async -> Bool {
+        guard canUseAdvancedRoomManagement else { return false }
         guard selfRole == .owner else {
             AppLogger.party.notice("[PartyStore] setMCSeat rejected: not owner/platformAdmin")
             return false
@@ -3727,6 +3755,7 @@ final class PartyStore: ObservableObject {
     /// - **返回 Bool 明示成功/失败**（verify P0 fix）
     @discardableResult
     func closeMCSeat() async -> Bool {
+        guard canUseAdvancedRoomManagement else { return false }
         guard selfRole == .owner else {
             AppLogger.party.notice("[PartyStore] closeMCSeat rejected: not owner/platformAdmin")
             return false
@@ -3940,8 +3969,11 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         let roomId = roomInfo?.id ?? ""
         Task { [weak self] in
             await self?.reloadSeatListFromServer()
-            if !roomId.isEmpty {
+            if !roomId.isEmpty,
+               SelfPermissionBridge.shared.canLotterySnapshot {
                 await PartySuperWheelStore.shared.loadState(roomId: roomId, presentWhenActive: false)
+            } else {
+                PartySuperWheelStore.shared.reset()
             }
         }
     }
@@ -4464,7 +4496,7 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         _ = raw
         // Router 已提前拒绝；Store 再守一次，避免未来新增入口绕过消息路由层。
         if isPlay,
-           !PartyExpressionAvailability.canUsePlayEmoji {
+           !PartyExpressionAvailability.canReceivePlayEmoji(payload) {
             return
         }
         guard !isMinimized else { return }
@@ -4528,6 +4560,11 @@ extension PartyStore: PartyRoomChatManagerDelegate {
     /// 1018 排麦通知（spec §2）。4 分支：1=申请 / 2=同意 / 3=拒绝 / 4=放弃
     func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveQueueSeatUpdate payload: [String: Any], raw: NIMMessage) {
         _ = raw
+        guard canUseAdvancedRoomManagement else {
+            micApplicationsState = .empty
+            queueSeatNum = 0
+            return
+        }
         // 对齐安卓 §3.4「data 含 roomId」+ 项目 1049 handler pattern：payload.roomId 校验防跨房错乱
         let payloadRoomId = PartyValueNormalizer.stringify(payload["roomId"]) ?? ""
         if !payloadRoomId.isEmpty, let current = roomInfo?.id, current != payloadRoomId {
@@ -4603,6 +4640,15 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         let on = (enable == 1)
         micApplicationSwitchOn = on
         AppLogger.party.info("[PartyStore] 1021 micApplicationSwitch enable=\(enable, privacy: .public)")
+
+        guard canUseAdvancedRoomManagement else {
+            micApplicationsState = .empty
+            queueSeatNum = 0
+            myApplyInfo = .init()
+            applyingTimeoutTask?.cancel()
+            applyingTimeoutTask = nil
+            return
+        }
 
         // 关时顺手关面板旧列表（避免观众端卡在旧数据）
         // 对齐安卓 PartyRoomVM:646 `enable==0 → queueSeatNum=0, setIsApplyMic(false)`：
@@ -4805,6 +4851,19 @@ extension PartyStore: PartyRoomChatManagerDelegate {
         guard canUseGameBroadcast(payload, action: "partyPkSmallPrize") else { return }
         AppLogger.party.info("[PartyStore] 138 pkSmallPrize payloadKeys=\(Array(payload.keys), privacy: .public)")
         appendGameWinDeduped(payload: payload, raw: raw, chat: chat, prefix: "138")
+    }
+
+    /// 144 猜拳 / 幸运骰子结果。完整账号走 Party Games，107 走免费互动能力。
+    func partyRoomChat(_ chat: PartyRoomChatManager, didReceiveFreeGameResult payload: [String: Any], raw: NIMMessage) {
+        if !SelfPermissionBridge.shared.canPartyGamesSnapshot {
+            guard SelfPermissionBridge.shared.gate(.partyFreeGames, action: "partyFreeGameResult") else { return }
+        }
+        let message = PartyPublicChatAdapter.freeGameResult(
+            payload: payload,
+            fallbackNickname: raw.senderName,
+            myUserId: myUserIdString
+        )
+        chat.appendMessage(message)
     }
 
     /// 140 活动中奖公屏广播

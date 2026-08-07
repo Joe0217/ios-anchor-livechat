@@ -319,7 +319,7 @@
 "settings.deleteAccount.failed" = "Hesap silinemedi. Lütfen tekrar deneyin.";
 "settings.cancel"              = "İptal";
 "settings.confirm"             = "Onayla";
-"settings.anchorPolicy"        = "Yayıncı Politikasını Görüntüle";
+"settings.anchorPolicy"        = "Topluluk Kuralları";
 "settings.clearCache"          = "Önbelleği Temizle";
 "settings.clearCacheConfirm"   = "Önbelleği temizlemek istediğinize emin misiniz?";
 "settings.clearCacheDone"      = "Önbellek temizlendi";
@@ -343,7 +343,7 @@
 "settings.document.agreement.acceptance.title" = "Kabul";
 "settings.document.agreement.acceptance.body" = "Hily'de oturum açarak veya Hily'yi kullanarak bu sözleşmeyi, Topluluk Kurallarını ve geçerli hukuku kabul edersiniz. Hizmeti kullanmaya yasal olarak yetkili olmadığınız yerlerde kullanmayın.";
 "settings.document.agreement.scope.title" = "Kullanılabilir Özellikler";
-"settings.document.agreement.scope.body" = "Kayıt sırasında Hily bir avatar ve en az 1 profil fotoğrafı ister. Davet kodları ve inceleme videosu kaydı mevcut kayıt akışında sunulmaz. Kayıttan sonra hesabınız Parti odalarını, herkese açık oda sohbetini, ifadeleri ve basit ücretsiz etkileşimleri kullanabilir. Canlı yayın, aramalar, doğrudan mesajlar, sanal hediyeler veya para birimi, cüzdan, para çekme, çekilişler, Parti videosu, etkinlikler ve yarım ekran oyunları bu deneyimde sunulmaz.";
+"settings.document.agreement.scope.body" = "Kayıt sırasında Hily bir avatar ve en az 1 profil fotoğrafı ister. Davet kodları ve inceleme videosu kaydı mevcut kayıt akışında sunulmaz. Hesabınız Parti odalarını, herkese açık oda sohbetini, ifadeleri, ücretsiz zar ve taş-kağıt-makas etkileşimlerini, profil görüntüleme ve takip ilişkilerini, müşteri desteğini ve cihazdaki güzellik araçlarını kullanabilir. Canlı yayın, aramalar, kullanıcılar arası doğrudan mesajlar, sanal hediyeler veya para birimi, cüzdan, para çekme, çekilişler, Parti videosu, etkinlikler ve yarım ekran oyunları bu deneyimde sunulmaz.";
 "settings.document.agreement.use.title" = "Hizmeti Kullanma";
 "settings.document.agreement.use.body" = "Hily'yi yalnızca yasal, kişisel eğlence için kullanın. Erişim kontrollerini aşmaya, Parti odalarını bozmaya, etkileşimleri otomatikleştirmeye veya hizmeti başkalarına zarar vermek için kullanmaya çalışmayın.";
 "settings.document.agreement.content.title" = "İçeriğiniz";
@@ -357,7 +357,7 @@
 
 "settings.document.privacy.introduction" = "Bu politika, Parti odaklı Hily deneyiminin bilgileri nasıl işlediğini açıklar.";
 "settings.document.privacy.data.title" = "İşlediğimiz Bilgiler";
-"settings.document.privacy.data.body" = "Kayıt sırasında gerekli olan e-posta, kullanıcı adı, doğum tarihi, ülke, diller, avatar ve en az 1 profil fotoğrafı dahil hesap ve profil verilerini işleriz. Davet kodları ve inceleme videosu kaydı mevcut kayıt akışında kullanılmaz. Ayrıca hizmeti işletmek ve güvenceye almak için Parti odası katılımını, herkese açık oda mesajlarını, ifadeleri, ücretsiz etkileşim olaylarını ve cihaz ya da tanılama bilgilerini işleriz.";
+"settings.document.privacy.data.body" = "Kayıt sırasında gerekli olan e-posta, kullanıcı adı, doğum tarihi, ülke, diller, avatar ve en az 1 profil fotoğrafı dahil hesap ve profil verilerini işleriz. Davet kodları ve inceleme videosu kaydı mevcut kayıt akışında kullanılmaz. Ayrıca hizmeti işletmek ve güvenceye almak için Parti odası katılımını, herkese açık oda mesajlarını, ifadeleri, ücretsiz etkileşim olaylarını, profil görüntülemelerini ve takip ilişkilerini, müşteri desteği mesajlarını ve cihaz ya da tanılama bilgilerini işleriz. Güzellik ayarları ve güzellik kamerası fotoğrafları cihazınızda işlenir; çekilen fotoğraf yalnızca fotoğraf arşivinize eklemeyi seçtiğinizde kaydedilir.";
 "settings.document.privacy.use.title" = "Bilgileri Nasıl Kullanırız";
 "settings.document.privacy.use.body" = "Bilgileri hesabınızı doğrulamak, Parti odalarını ve herkese açık etkileşimleri sağlamak, geri bildirimlere yanıt vermek, kötüye kullanımı önlemek, sorunları gidermek ve yasal yükümlülükleri yerine getirmek için kullanırız.";
 "settings.document.privacy.visibility.title" = "Diğer Katılımcıların Görebilecekleri";
@@ -932,7 +932,8 @@
 "liveRoom.returnCountdownFormat" = "%d saniye içinde yayına dönülüyor";
 
 // MARK: - 服务层错误（被 View 显示）
-"auth.error.noToken"         = "Giriş başarısız: sunucu token döndürmedi";
+"auth.error.noToken"         = "Giriş yapılamadı. Lütfen tekrar deneyin.";
+"auth.error.requestFailed"   = "Devam edilemiyor. Bilgilerinizi kontrol edip tekrar deneyin.";
 "auth.error.networkFormat"   = "Ağ hatası: %@";
 "auth.error.sessionInvalidated" = "Oturumunuz sona erdi veya hesabınız başka bir yerden açıldı. Lütfen yeniden giriş yapın.";
 "live.error.noCover"         = "Henüz yayın kapağı ayarlanmadı. Lütfen önce ana uygulamadan kapak yapılandırın.";
@@ -1547,6 +1548,7 @@
 // P1-6 (2026-07-14) 主播审核弹窗
 "common.kindReminder"                    = "Uyarı";
 "common.confirm"                         = "Onayla";
+"common.discard"                         = "Vazgeç";
 "common.close"                           = "Kapat";
 "audit.passed.message"                   = "Tebrikler, incelemeniz onaylandı. Lütfen uygulamaya tekrar giriş yapın.";
 "audit.rejected.fallback"                = "İncelemeniz reddedildi.";

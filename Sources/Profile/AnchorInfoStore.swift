@@ -247,7 +247,11 @@ final class AnchorInfoStore: ObservableObject {
             return
         }
 
-        self.info = anchor
+        // stale-while-revalidate：只有拿到服务端新值才覆盖冷启动已恢复的旧资料。
+        // 请求失败时 anchor=nil，保留旧 info 供 UI 继续使用。
+        if let anchor {
+            self.info = anchor
+        }
         self.giftWallList = canAccessVirtualItems ? giftWall : []
         // `mine` 保留 hydrateFromLogin 注入值，不在此重写
 

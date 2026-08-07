@@ -133,9 +133,7 @@ final class PartyAPIClient {
         if http.statusCode == 401 {
             if isRetry {
                 AppLogger.party.error("[PartyAPI] retry still 401, give up")
-                // 二次 401 = session 失效但不走 1004/1005（sapi 走独立 auth 通道），
-                // 用 session 专用文案，不用"服务错误"文案避免误导用户以为是服务器问题
-                GlobalErrorBannerNotify.post(message: L10n.apiSessionExpired, path: path, status: 401)
+                notifySessionInvalidated(message: "SAPI request still unauthorized after token exchange")
                 throw PartyAPIError.tokenExchangeFailed
             }
             AppLogger.party.notice("[PartyAPI] 401 → exchange token + retry")
@@ -144,7 +142,8 @@ final class PartyAPIClient {
             } catch {
                 // Task cancel：直接向上抛
                 if GlobalErrorBannerNotify.isCancellation(error) { throw error }
-                // ensureValid 内部已按错误点 post banner；这里只需向上抛
+                // SAPI token 无法续接时，主会话也不再可用；复用 1004 的统一登出链路。
+                notifySessionInvalidated(message: "SAPI token exchange failed")
                 throw PartyAPIError.tokenExchangeFailed
             }
             return try await send(method: method, path: path, body: body, query: query, isRetry: true, suppressCodes: suppressCodes)
@@ -194,6 +193,16 @@ final class PartyAPIClient {
             return (try? JSONSerialization.data(withJSONObject: raw)) ?? Data("null".utf8)
         }
         return Data("null".utf8)
+    }
+
+    /// SAPI 401 自动续接失败与主接口 1004 共用会话失效处理：
+    /// SessionStore 负责提示、审核弹窗闸门与完整登出清理。
+    private func notifySessionInvalidated(message: String) {
+        NotificationCenter.default.post(
+            name: .apiSessionInvalidated,
+            object: nil,
+            userInfo: ["code": "1004", "message": message]
+        )
     }
 }
 

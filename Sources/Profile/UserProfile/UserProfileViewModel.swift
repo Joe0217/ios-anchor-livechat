@@ -69,11 +69,11 @@ final class UserProfileViewModel: ObservableObject {
             loadState = .loaded
         } catch let e as APIError {
             guard snapshot == loadGeneration else { return }
-            loadState = .error(e.message)
+            loadState = .error(networkErrorFallback)
             logger.error("loadDetail uid=\(self.userId, privacy: .private) APIError code=\(e.code): \(e.message)")
         } catch {
             guard snapshot == loadGeneration else { return }
-            loadState = .error(error.localizedDescription)
+            loadState = .error(networkErrorFallback)
             logger.error("loadDetail uid=\(self.userId, privacy: .private) error: \(String(describing: error), privacy: .private)")
         }
     }

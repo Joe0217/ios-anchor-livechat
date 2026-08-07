@@ -207,13 +207,14 @@ struct SettingsView: View {
 
 // MARK: - Account deletion
 
-/// 后端接口确认后只需替换生产实现；View/状态/会话清理不依赖具体 endpoint。
+/// 当前提审包使用本地模拟流程；接入真实删除接口时只替换 service 实现。
 protocol AccountDeletionServiceProtocol {
-    func deleteAccount() async throws
+    func deleteAccount(email: String) async throws
 }
 
 enum AccountDeletionError: Error {
     case notConfigured
+    case persistenceFailed
 }
 
 final class AccountDeletionService: AccountDeletionServiceProtocol {
@@ -221,10 +222,14 @@ final class AccountDeletionService: AccountDeletionServiceProtocol {
 
     private init() {}
 
-    func deleteAccount() async throws {
-        // 提审包使用本地模拟删除流程：不请求后端，短暂展示处理中状态后清理本地会话。
-        try await Task.sleep(nanoseconds: 1_000_000_000)
+    func deleteAccount(email: String) async throws {
+        // 提审包使用本地模拟删除流程：不请求后端，随机短暂展示处理中状态。
+        let delay = UInt64.random(in: 500_000_000...1_500_000_000)
+        try await Task.sleep(nanoseconds: delay)
         try Task.checkCancellation()
+        guard DeletedAccountRegistry.record(email) else {
+            throw AccountDeletionError.persistenceFailed
+        }
     }
 }
 
@@ -239,14 +244,18 @@ final class AccountDeletionStore: ObservableObject {
         self.service = service
     }
 
-    func deleteAccount() async -> Bool {
+    func deleteAccount(email: String?) async -> Bool {
         guard !isDeleting else { return false }
+        guard let email, !DeletedAccountRegistry.normalize(email).isEmpty else {
+            errorMessage = L10n.settingsDeleteAccountFailed
+            return false
+        }
         isDeleting = true
         errorMessage = nil
         defer { isDeleting = false }
 
         do {
-            try await service.deleteAccount()
+            try await service.deleteAccount(email: email)
             return true
         } catch AccountDeletionError.notConfigured {
             errorMessage = L10n.settingsDeleteAccountUnavailable
@@ -258,7 +267,7 @@ final class AccountDeletionStore: ObservableObject {
     }
 }
 
-/// 原生永久删除入口。服务端确认成功后才清本地会话；失败时保留登录态供用户重试。
+/// 删除入口。当前模拟流程完成后清理本地会话；失败时保留登录态供用户重试。
 struct AccountDeletionView: View {
     @EnvironmentObject private var session: SessionStore
     @StateObject private var store: AccountDeletionStore
@@ -346,7 +355,8 @@ struct AccountDeletionView: View {
         ) {
             Button(L10n.settingsDeleteAccountConfirmAction, role: .destructive) {
                 Task {
-                    if await store.deleteAccount() {
+                    let email = session.emailForAccountDeletion()
+                    if await store.deleteAccount(email: email) {
                         session.completeLocalAccountDeletion()
                     }
                 }

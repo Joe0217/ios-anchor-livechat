@@ -187,10 +187,10 @@ final class BlocklistViewModel: ObservableObject {
             loadState = .loaded
         } catch let e as APIError {
             guard snapshotGen == loadGeneration else { return }
-            loadState = .error(e.message)
+            loadState = .error(L10n.blocklistLoadErrorRetry)
         } catch {
             guard snapshotGen == loadGeneration else { return }
-            loadState = .error(error.localizedDescription)
+            loadState = .error(L10n.blocklistLoadErrorRetry)
         }
     }
 }

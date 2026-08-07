@@ -82,9 +82,16 @@ struct PartyListMainView: View {
         permission.canVirtualItems && permission.canGiftSending
     }
 
-    /// Follow 房间只依赖关系查看能力，不应连带开放朋友圈或分享。
+    private var isPartyOnlyMode: Bool {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.isLoggedIn)
+        return UserTypeExperience.isPartyOnly(effectiveUserType)
+    }
+
+    /// 107 仅展示审核主列表，不能通过 Follow/Recent 进入普通房间列表接口。
     private var visibleTabIndices: [Int] {
-        permission.canRelationshipViewing ? [0, 1, 2] : [0, 2]
+        if isPartyOnlyMode { return [0] }
+        return permission.canRelationshipViewing ? [0, 1, 2] : [0, 2]
     }
 
     /// `TabView(.page)` 在动态移除 tag=1 时不能保留一个失效 selection。
@@ -499,7 +506,7 @@ struct PartyListMainView: View {
                     _ = await (a, b, c)
                 }
                 .tag(0)
-            if permission.canRelationshipViewing {
+            if !isPartyOnlyMode, permission.canRelationshipViewing {
                 PartyRoomListContent(
                     store: followStore,
                     languages: listStore.languages,
@@ -510,19 +517,21 @@ struct PartyListMainView: View {
                     .refreshable { await followStore.refreshAsync() }
                     .tag(1)
             }
-            PartyRoomListContent(
-                store: recentStore,
-                languages: listStore.languages,
-                myRoomID: listStore.myRoom?.id,
-                onTapRoom: { onTapRoom($0, .partyRecent) },
-                comingSoonOnEmpty: false
-            )
-                .refreshable { await recentStore.refreshAsync() }
-                .tag(2)
+            if !isPartyOnlyMode {
+                PartyRoomListContent(
+                    store: recentStore,
+                    languages: listStore.languages,
+                    myRoomID: listStore.myRoom?.id,
+                    onTapRoom: { onTapRoom($0, .partyRecent) },
+                    comingSoonOnEmpty: false
+                )
+                    .refreshable { await recentStore.refreshAsync() }
+                    .tag(2)
+            }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
-        // Follow 页本身不保留给 107；切换身份时重建 pager，避免 UIKit pager 缓存已移除的 tag=1。
-        .id(permission.canRelationshipViewing)
+        // 动态收窄为 107 时重建 pager，避免 UIKit 继续缓存已移除的 Follow/Recent 页面。
+        .id("\(isPartyOnlyMode)-\(permission.canRelationshipViewing)")
         // 横滑手势/按钮点击切 tab 时首次触发对应 store 拉数据（真接口，替换 v1 占位空态）
         // v7：.idle **和** .error 都触发拉取 —— 首次失败后切走再回可自愈（对齐 Party tab .task 逻辑）
         .onChange(of: activeTab) { newValue in
@@ -531,7 +540,7 @@ struct PartyListMainView: View {
             Task { @MainActor in
                 switch newValue {
                 case 1:
-                    guard permission.canRelationshipViewing else {
+                    guard !isPartyOnlyMode, permission.canRelationshipViewing else {
                         activeTab = 0
                         return
                     }
@@ -540,6 +549,10 @@ struct PartyListMainView: View {
                     default: break
                     }
                 case 2:
+                    guard !isPartyOnlyMode else {
+                        activeTab = 0
+                        return
+                    }
                     switch recentStore.state {
                     case .idle, .loading, .error: await recentStore.refreshAsync()
                     default: break
@@ -552,6 +565,9 @@ struct PartyListMainView: View {
                 }
                 reportLobbyTabExposure(for: newValue, sessionID: sessionID)
             }
+        }
+        .onChange(of: permission.effectiveUserType) { _ in
+            activeTab = normalizedTabIndex(activeTab)
         }
     }
 

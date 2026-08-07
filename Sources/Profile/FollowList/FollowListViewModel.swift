@@ -30,7 +30,7 @@ final class FollowListViewModel: ObservableObject {
     /// 单次操作 toast 文案（关注失败回滚时用），UI 在 banner 区显示
     @Published var transientError: String?
     /// 正在切换关注态的 userId 集合（按钮 disabled + 防止并发同 user 操作）
-    @Published private(set) var pendingFollowUserIds: Set<Int> = []
+    @Published private(set) var pendingFollowUserIds: Set<String> = []
 
     private let pageSize: Int
     private var notificationObserver: NSObjectProtocol?
@@ -47,7 +47,8 @@ final class FollowListViewModel: ObservableObject {
         ) { [weak self] note in
             guard
                 let info = note.userInfo,
-                let uid = info["userId"] as? Int,
+                let uid = (info["userId"] as? String)
+                    ?? (info["userId"] as? Int).map(String.init),
                 let flag = info["followFlag"] as? Int
             else { return }
             Task { @MainActor in
@@ -97,7 +98,7 @@ final class FollowListViewModel: ObservableObject {
             .relationshipActions,
             action: "relationshipListToggleFollow"
         ) else { return }
-        guard let uid = user.userId else { return }
+        guard let uid = user.userId, let numericUID = Int(uid) else { return }
         if pendingFollowUserIds.contains(uid) { return }
 
         // 按该条数据的实际关注态决定操作，不用所在 segment 覆盖。
@@ -110,12 +111,12 @@ final class FollowListViewModel: ObservableObject {
         updateFollowFlag(userId: uid, to: newFlag)
 
         do {
-            try await FollowListService.followUser(followUserId: uid, followType: followType)
+            try await FollowListService.followUser(followUserId: numericUID, followType: followType)
             // 广播：其他 VM 实例（包括 ProfileViewModel）同步该 userId 的 followFlag
             NotificationCenter.default.post(
                 name: .followRelationChanged,
                 object: self,    // object=self 便于自身忽略自己发的通知
-                userInfo: ["userId": uid, "followFlag": newFlag]
+                userInfo: ["userId": numericUID, "followFlag": newFlag]
             )
             if wasFollowing, sourceSegment == .following {
                 removeUser(userId: uid, from: .following)
@@ -124,11 +125,11 @@ final class FollowListViewModel: ObservableObject {
         } catch let e as APIError {
             // 失败回滚
             updateFollowFlag(userId: uid, to: wasFollowing ? 1 : 0)
-            transientError = e.message
+            transientError = L10n.userProfileNetworkError
             logger.error("toggleFollow uid=\(uid) APIError code=\(e.code): \(e.message)")
         } catch {
             updateFollowFlag(userId: uid, to: wasFollowing ? 1 : 0)
-            transientError = error.localizedDescription
+            transientError = L10n.userProfileNetworkError
             logger.error("toggleFollow uid=\(uid) error: \(String(describing: error))")
         }
         pendingFollowUserIds.remove(uid)
@@ -136,13 +137,13 @@ final class FollowListViewModel: ObservableObject {
 
     /// 跨页同步：其他 VM 发出 .followRelationChanged 时，更新本 VM 内同 userId 的 followFlag。
     /// 自己发的通知（object === self）忽略。
-    private func syncFollowFlagFromExternal(userId: Int, newFlag: Int) {
+    private func syncFollowFlagFromExternal(userId: String, newFlag: Int) {
         updateFollowFlag(userId: userId, to: newFlag)
     }
 
     /// 把本 VM 所有 segment 内匹配 userId 的 user 的 followFlag 替换为 newFlag。
     /// 不区分 segment：Following / Followers / Friends 都可能含同一个 userId。
-    private func updateFollowFlag(userId: Int, to newFlag: Int) {
+    private func updateFollowFlag(userId: String, to newFlag: Int) {
         for segment in FollowSegment.allCases {
             guard var state = states[segment] else { continue }
             var changed = false
@@ -154,7 +155,7 @@ final class FollowListViewModel: ObservableObject {
         }
     }
 
-    private func removeUser(userId: Int, from segment: FollowSegment) {
+    private func removeUser(userId: String, from segment: FollowSegment) {
         guard var state = states[segment] else { return }
         state.users.removeAll { $0.userId == userId }
         states[segment] = state
@@ -177,9 +178,10 @@ final class FollowListViewModel: ObservableObject {
             )
             // 每个 segment 有独立状态；切页后仍写回原 segment 缓存，避免它永久停在 loading。
             // 保留服务端每条数据的显式 followFlag，让 Following / Followers / Friends
-            // 都按实际关注态展示。Following 仅在字段缺失时按列表语义兜底为已关注。
-            let users = segment == .following
-                ? page.users.map { $0.followFlag == nil && $0.followed == nil ? $0.withFollowFlag(1) : $0 }
+            // 都按实际关注态展示。Following/Friends 在字段缺失时可由列表语义确定为已关注。
+            let defaultsToFollowing = segment == .following || segment == .friends
+            let users = defaultsToFollowing
+                ? page.users.map { $0.hasExplicitFollowState ? $0 : $0.withFollowFlag(1) }
                 : page.users
             if reset {
                 state.users = users
@@ -191,11 +193,11 @@ final class FollowListViewModel: ObservableObject {
             state.loadState = .loaded
             states[segment] = state
         } catch let e as APIError {
-            state.loadState = .error(e.message)
+            state.loadState = .error(String(format: L10n.profileLoadFailedFormat, L10n.commonNetworkError))
             states[segment] = state
             logger.error("load segment=\(segment.rawValue) APIError code=\(e.code) message=\(e.message)")
         } catch {
-            let msg = String(format: L10n.profileLoadFailedFormat, error.localizedDescription)
+            let msg = String(format: L10n.profileLoadFailedFormat, L10n.commonNetworkError)
             state.loadState = .error(msg)
             states[segment] = state
             logger.error("load segment=\(segment.rawValue) error: \(String(describing: error))")

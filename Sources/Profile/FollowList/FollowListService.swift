@@ -53,27 +53,68 @@ enum FollowListService {
     static func decodeUsers(from data: Data) throws -> [FollowUser] {
         let decoder = JSONDecoder()
 
-        if let users = try? decoder.decode([FollowUser].self, from: data) {
-            return users
+        let object = try JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
+        guard let items = findUserItems(in: object) else {
+            logger.error("decodeUsers: response has no supported user array")
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: [], debugDescription: "userFriend response has no supported user array")
+            )
         }
 
-        let obj = try JSONSerialization.jsonObject(with: data)
-        if let dict = obj as? [String: Any] {
-            for key in ["friendData", "list", "records", "rows", "data", "items"] {
-                guard let nested = dict[key] else { continue }
-                guard JSONSerialization.isValidJSONObject(nested) else {
-                    throw DecodingError.dataCorrupted(
-                        .init(codingPath: [], debugDescription: "userFriend.\(key) is not a JSON array")
-                    )
-                }
-                let nestedData = try JSONSerialization.data(withJSONObject: nested)
-                return try decoder.decode([FollowUser].self, from: nestedData)
+        var users: [FollowUser] = []
+        var firstDecodeError: Error?
+        var skippedCount = 0
+        users.reserveCapacity(items.count)
+
+        // 单条脏数据不能拖垮整页；但整页均不可解时仍 fail-loud，避免伪装成空列表。
+        for item in items {
+            guard JSONSerialization.isValidJSONObject(item) else {
+                skippedCount += 1
+                continue
+            }
+            do {
+                let itemData = try JSONSerialization.data(withJSONObject: item)
+                users.append(try decoder.decode(FollowUser.self, from: itemData))
+            } catch {
+                firstDecodeError = firstDecodeError ?? error
+                skippedCount += 1
             }
         }
 
-        logger.error("decodeUsers: response has no supported user array")
-        throw DecodingError.dataCorrupted(
-            .init(codingPath: [], debugDescription: "userFriend response has no friendData array")
-        )
+        if users.isEmpty, !items.isEmpty, let firstDecodeError {
+            throw firstDecodeError
+        }
+        if users.isEmpty, !items.isEmpty, skippedCount == items.count {
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: [], debugDescription: "userFriend array contains no user objects")
+            )
+        }
+        if skippedCount > 0 {
+            logger.notice("decodeUsers skipped malformedItems=\(skippedCount) decodedUsers=\(users.count)")
+        }
+        return users
+    }
+
+    /// 支持接口直返数组、`friendData` 契约，以及历史分页/网关包装层。
+    private static func findUserItems(in object: Any) -> [Any]? {
+        if object is NSNull { return [] }
+        if let items = object as? [Any] { return items }
+        guard let dictionary = object as? [String: Any] else { return nil }
+
+        var sawNullList = false
+        for key in ["friendData", "list", "records", "rows", "items"] {
+            guard let nested = dictionary[key] else { continue }
+            if nested is NSNull {
+                sawNullList = true
+            } else if let items = nested as? [Any] {
+                return items
+            }
+        }
+
+        for key in ["data", "result", "content", "page"] {
+            guard let nested = dictionary[key] else { continue }
+            if let items = findUserItems(in: nested) { return items }
+        }
+        return sawNullList ? [] : nil
     }
 }

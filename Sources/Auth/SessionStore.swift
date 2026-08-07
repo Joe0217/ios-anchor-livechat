@@ -7,6 +7,7 @@ final class SessionStore: ObservableObject {
 
     @Published private(set) var isLoggedIn = false
     @Published private(set) var user: LoginResult?
+    private(set) var authenticatedEmail: String?
     @Published var isLoading = false
     @Published var errorMessage = ""
 
@@ -59,6 +60,19 @@ final class SessionStore: ObservableObject {
     /// 当前登录 token，供需要鉴权的接口使用
     var token: String? { user?.token }
 
+    /// 新版本登录会直接保存邮箱；升级前已存在的登录态则从本人资料缓存回填一次。
+    func emailForAccountDeletion() -> String? {
+        let candidate = authenticatedEmail
+            ?? AnchorInfoStore.shared.info?.email
+            ?? AnchorInfoStore.shared.mine?.email
+        guard let candidate else { return nil }
+        let normalizedEmail = DeletedAccountRegistry.normalize(candidate)
+        guard !normalizedEmail.isEmpty else { return nil }
+        authenticatedEmail = normalizedEmail
+        _ = KeychainStore.setString(normalizedEmail, for: KeychainKey.authenticatedEmail)
+        return normalizedEmail
+    }
+
     /// A 收尾：APIClient 抛 1004/1005 时通过 NotificationCenter 集中通知，这里挂 observer。
     /// observer 闭包持 weak self，避免循环引用；deinit 显式移除（双保险）。
     private var sessionInvalidatedObserver: NSObjectProtocol?
@@ -83,9 +97,7 @@ final class SessionStore: ObservableObject {
     }
 
     /// 1004 挤下线 / 1005 token 失效：清会话 + UI 统一提示。
-    /// 后端原始 message 放 userInfo["message"]，非空时拼到统一文案之后供排查。
-    /// 错误码拼到文案末尾 `[xxxx]` 形式，让用户/客服可区分 1004 vs 1005。
-    /// 同时通过 AppLogger.auth.error 打日志，供生产排查会话失效频率/触发码。
+    /// 后端原始 message 和错误码只写隐私日志，不进入用户可见文案。
     private func handleSessionInvalidated(userInfo: [AnyHashable: Any]?) {
         let code = (userInfo?["code"] as? String) ?? ""
         let backend = (userInfo?["message"] as? String) ?? ""
@@ -94,10 +106,7 @@ final class SessionStore: ObservableObject {
         // 用户可感知反馈（GlobalErrorBanner）**独立于闸门**触发 —— 对齐 H5 `request/index.ts:96-108`：
         // showNotify 弹 toast 与 logOut() 分开调用，闸门 `reviewPassedDialogShowing` 只跳过 logOut，
         // 用户仍能看到 "session expired" 提示。
-        let codeSuffix = code.isEmpty ? "" : " [\(code)]"
-        errorMessage = backend.isEmpty
-            ? "\(L10n.authErrorSessionInvalidated)\(codeSuffix)"
-            : "\(L10n.authErrorSessionInvalidated)\(codeSuffix) (\(backend))"
+        errorMessage = L10n.authErrorSessionInvalidated
 
         // P1-6 闸门：审核通过弹窗展示期间跳过 logout（对齐 H5 `logOut()` helper 内 return）
         // 防审核通过后旧 token 立即失效弹窗盖掉审核弹窗
@@ -112,6 +121,12 @@ final class SessionStore: ObservableObject {
         isLoading = true
         errorMessage = ""
         defer { isLoading = false }
+
+        if DeletedAccountRegistry.contains(email) {
+            pendingRegister = PendingRegister(email: email, password: password)
+            RegisterAnalytics.report(.signUp)
+            return
+        }
 
         let pwd = CryptoUtil.loginPassword(password)
         do {
@@ -135,7 +150,7 @@ final class SessionStore: ObservableObject {
             // logout 时清此 Keychain(既有逻辑 line 269 已实现)。
             _ = KeychainStore.setString(password, for: KeychainKey.pendingRegisterPassword)
 
-            guard await applyLogin(result) else {
+            guard await applyLogin(result, email: email) else {
                 errorMessage = L10n.authErrorNoToken
                 return
             }
@@ -144,7 +159,8 @@ final class SessionStore: ObservableObject {
             pendingRegister = PendingRegister(email: email, password: password)
             RegisterAnalytics.report(.signUp)
         } catch let e as APIError {
-            errorMessage = e.message
+            AppLogger.auth.error("login APIError code=\(e.code, privacy: .public) message=\(e.message, privacy: .private)")
+            errorMessage = L10n.authErrorRequestFailed
         } catch {
             errorMessage = String(format: L10n.authErrorNetworkFormat, error.localizedDescription)
         }
@@ -162,9 +178,13 @@ final class SessionStore: ObservableObject {
     /// 副作用：**不设** errorMessage（成功路径）；**不清** pendingRegister（由 View 层消费清）
     /// - returns: true = 登录状态已建立；false = token 缺失，调用方决定文案
     @discardableResult
-    func applyLogin(_ result: LoginResult) async -> Bool {
+    func applyLogin(_ result: LoginResult, email: String) async -> Bool {
         guard let token = result.token, !token.isEmpty else { return false }
+        let normalizedEmail = DeletedAccountRegistry.normalize(email)
+        guard !normalizedEmail.isEmpty else { return false }
         user = result
+        authenticatedEmail = normalizedEmail
+        _ = KeychainStore.setString(normalizedEmail, for: KeychainKey.authenticatedEmail)
         isLoggedIn = true
         save()   // 内部会 AuthToken.value = token
         AnalyticsTracker.login(userId: result.userId)
@@ -232,6 +252,8 @@ final class SessionStore: ObservableObject {
         // （当前链 confirmAuditAlert 已先手清 auditDialogShowing；这里是防御式绑生命周期）
         auditAlert = nil
         auditDialogShowing = false
+        followIncrementCount = 0
+        lastAuditStatus = nil
         AnalyticsTracker.logout()
         CrashReporter.clearUser()
         // Phase C：任务中心页折叠态 per-user 清理(session-scoped rule 双入口之 logout clear)
@@ -248,9 +270,11 @@ final class SessionStore: ObservableObject {
             }
         }
         user = nil
+        authenticatedEmail = nil
         isLoggedIn = false
         errorMessage = ""
         KeychainStore.remove(for: storeKey)
+        KeychainStore.remove(for: KeychainKey.authenticatedEmail)
         defaults.removeObject(forKey: legacyStoreKey)   // 清掉历史残留
         AuthToken.value = nil
         // 轻量 WebView 与通用 H5 都使用默认 website data store。登出时清除，避免
@@ -270,6 +294,8 @@ final class SessionStore: ObservableObject {
         // v5.4 缓存审计补漏（logout 清理漏斗完整性）：
         // G1: station 已读态跨账号串扰 — 若 A 已读 mail id=X，B 收到同 id 会误判已读永远漏红点
         UserDefaults.standard.removeObject(forKey: "hily.station.lastReadId")
+        // 启动弹窗使用独立已读键；同样必须按会话清理，避免下一账号继承上一账号的已读状态。
+        UserDefaults.standard.removeObject(forKey: "hily.station.launchPopup.readId")
         // G2: 客服 yxAccId 缓存 — clear() 方法早已存在但 logout 从未调用，导致 A 客服 imId 泄漏到 B
         CustomerServiceIdStore.shared.clear()
         // G3: 在线状态 store — 未清则 A 的 forcedBusy=true / userSetOnline=false 残留到 B 首屏
@@ -346,7 +372,8 @@ final class SessionStore: ObservableObject {
         }
     }
 
-    /// 2026-07-16:受限首屏进入时刷新审核态,对齐 H5 App.vue.isLogin() 每次冷启动拉 getAnchorInfo → setMineInfo 覆盖 valid/onReview/banAlways/... 字段。
+    /// 已登录冷启动 / 受限首屏刷新用户信息，对齐 H5 App.vue.isLogin()
+    /// 每次启动拉 getAnchorInfo → setMineInfo 覆盖用户资料及 valid/onReview/banAlways/... 字段。
     ///
     /// iOS 侧 LoginResult 是首次登录快照,若审核态在服务端变化(通过/被拒/临时封禁)本地不知情。sysMsg 58 push 只在
     /// App 在线时能收到;冷启动或长时间离线的账号必须主动拉一次审核态确认。
@@ -357,12 +384,6 @@ final class SessionStore: ObservableObject {
     /// 失败静默:refresh 内部已 non-fatal(anchor/mine/gift 3 接口任一失败不 throw),info 可能仍为 nil;此时不覆盖 user,
     /// 保持首次登录的审核态快照(用户重新登录时会拿到新的 LoginResult 覆盖)。
     func refreshAuditStatus() async {
-        guard !UserTypeExperience.isPartyOnly(
-            UserTypeExperience.effectiveUserType(isAuthenticated: user != nil)
-        ) else {
-            AppLogger.auth.notice("[Session] refreshAuditStatus skipped in fixed 107 mode")
-            return
-        }
         await AnchorInfoStore.shared.refresh()
         guard let current = user, let info = AnchorInfoStore.shared.info else {
             AppLogger.auth.notice("[Session] refreshAuditStatus skip: user or anchorInfo nil")
@@ -420,6 +441,9 @@ final class SessionStore: ObservableObject {
     }
 
     private func load() {
+        authenticatedEmail = KeychainStore.getString(for: KeychainKey.authenticatedEmail)
+            .map(DeletedAccountRegistry.normalize)
+            .flatMap { $0.isEmpty ? nil : $0 }
         // v2 路径：Keychain
         if let data = KeychainStore.getData(for: storeKey),
            let u = try? JSONDecoder().decode(LoginResult.self, from: data),
@@ -438,6 +462,8 @@ final class SessionStore: ObservableObject {
             // 若不注入,mine 恒 nil,派生 UI 字段(displayName/userId/iconURL 等)只能靠 info 或 SessionStore.user 兜底;
             // 未审核账号 info 拉取可能失败(non-fatal),mine 缺失会让派生链断层。
             AnchorInfoStore.shared.hydrateFromLogin(u)
+            // stale-while-revalidate：旧值已同步可见，后台强制拉取最新用户信息并回写会话。
+            Task { await self.refreshAuditStatus() }
             return
         }
         // v1 迁移：UserDefaults 残留 → Keychain，迁完清旧
@@ -457,6 +483,8 @@ final class SessionStore: ObservableObject {
             Task { await AppConfigStore.shared.activate() }
             // 2026-07-17:v1 迁移路径同步 hydrate(与 v2 分支对称)
             AnchorInfoStore.shared.hydrateFromLogin(u)
+            // v1 迁移同样先展示旧值，再后台刷新。
+            Task { await self.refreshAuditStatus() }
         }
     }
 }

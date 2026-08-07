@@ -47,7 +47,7 @@ struct RegisterPhotosGrid: View {
                             Image(systemName: "arrow.clockwise.circle.fill")
                                 .font(.title2)
                                 .foregroundStyle(.orange)
-                            Text("Retry").font(.caption2).foregroundStyle(.white)
+                            Text(L10n.commonRetry).font(.caption2).foregroundStyle(.white)
                         }
                     }
                 }
@@ -115,7 +115,7 @@ struct RegisterPhotosGrid: View {
             let msg = L10n.Register.errorImageTooLarge(maxMB > 0 ? maxMB : 5)
             await MainActor.run { store.setPicFailed(id: id, error: msg) }
         } catch {
-            await MainActor.run { store.setPicFailed(id: id, error: error.localizedDescription) }
+            await MainActor.run { store.setPicFailed(id: id, error: L10n.Register.errorUploadFailed) }
         }
     }
 }

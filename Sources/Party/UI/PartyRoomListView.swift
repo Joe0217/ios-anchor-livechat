@@ -228,12 +228,12 @@ struct PartyRoomListContent<Store: PartyRoomListLike>: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func errorView(message: String) -> some View {
+    private func errorView(message _: String) -> some View {
         VStack(spacing: 14) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.system(size: 40))
                 .foregroundColor(.orange)
-            Text(message)
+            Text(L10n.commonNetworkError)
                 .font(.system(size: 13))
                 .foregroundColor(Theme.Palette.partyGreeting)
                 .multilineTextAlignment(.center)
@@ -307,8 +307,8 @@ struct PartyRoomListContent<Store: PartyRoomListLike>: View {
 
     private func loadMoreSentinel(showLoader: Bool, pageErrorMessage: String?) -> some View {
         VStack(spacing: 6) {
-            if let msg = pageErrorMessage {
-                Text(msg)
+            if pageErrorMessage != nil {
+                Text(L10n.commonNetworkError)
                     .font(.system(size: 12))
                     .foregroundColor(.orange)
                 Button {

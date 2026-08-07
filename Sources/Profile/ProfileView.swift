@@ -126,11 +126,11 @@ struct ProfileView: View {
         switch vm.loadState {
         case .idle, .loaded, .loading:
             EmptyView()
-        case .error(let msg):
+        case .error:
             HStack(spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(.yellow)
-                Text(msg)
+                Text(String(format: L10n.profileLoadFailedFormat, L10n.commonNetworkError))
                     .font(.system(size: 12, weight: .regular))
                     .foregroundStyle(.white)
                     .lineLimit(2)

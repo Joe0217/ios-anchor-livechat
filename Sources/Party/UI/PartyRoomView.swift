@@ -292,7 +292,13 @@ struct PartyRoomView: View {
             }
             // v8.1 房间工具 sheet（单一挂点，enum 切换 tools / settings 内嵌 push）
             .sheet(item: $activeRoomTool, onDismiss: presentPendingRoomToolPresentation) { kind in
-                if kind == .roomMode || kind == .tools || kind == .roomModeConfirm {
+                if isPartyOnlyMode && isAdvancedRoomTool(kind) {
+                    Color.clear.onAppear {
+                        pendingApplySeatIndex = nil
+                        approveSeatPickerCandidate = nil
+                        activeRoomTool = nil
+                    }
+                } else if kind == .roomMode || kind == .tools || kind == .roomModeConfirm {
                     roomToolContent(kind: kind)
                         .giftPanelSheetBackground()
                 } else {
@@ -908,7 +914,9 @@ struct PartyRoomView: View {
             honorText: PartyNumberFormat.compact(store.roomInfo?.honorDailyTotalInt ?? 0),
             showsRank: canShowValueRankings,
             audienceCountText: "\(chat.onlineCount)",
-            showsViewerEntry: chat.onlineCount > 0,
+            // 107 的观众列表是明确开放功能。即使云信计数暂时为 0，也保留入口并展示空态，
+            // 避免计数同步晚于列表接口时用户完全无法进入。
+            showsViewerEntry: isPartyOnlyMode || chat.onlineCount > 0,
             cornerBanner: permission.canPartyActivities
                 ? store.roomInfo?.cornerBannerList?.first
                 : nil,
@@ -958,7 +966,7 @@ struct PartyRoomView: View {
                 }
             },
             // 对齐安卓 tvMicApplicationNum：queueSeatNum>0 时管理按钮显示红角标（房主/房管专属）
-            managementBadge: store.queueSeatNum
+            managementBadge: isPartyOnlyMode ? 0 : store.queueSeatNum
         )
     }
 
@@ -1942,6 +1950,10 @@ struct PartyRoomView: View {
         // 打开 Sheet + 保存待申请 seatIndex，等用户在 Sheet 内 tap CTA "申请上麦"才发 API
         // （给用户查看队列 + 主动放弃的完整入口；对齐安卓弹窗内 tvConfirm 手动提交语义）
         if store.micApplicationSwitchOn {
+            guard !isPartyOnlyMode else {
+                roomActionToast = L10n.commonNoContent
+                return
+            }
             pendingApplySeatIndex = idx
             Task { @MainActor in
                 activeRoomTool = .micApplicationList
@@ -2101,7 +2113,7 @@ struct PartyRoomView: View {
             }
             // H5 `changeMC`：从空 MC 位的管理菜单打开 MC 设置页，而不是直接改当前位。
             // 当前 iOS 的 MC API 权限与顶部工具入口一致，仅房主/平台超管可配置。
-            if seat.isMCSeat, store.selfRole == .owner {
+            if !isPartyOnlyMode, seat.isMCSeat, store.selfRole == .owner {
                 Button(L10n.Party.mcSeatChange) {
                     adminSeatActionsTarget = nil
                     // 与邀请页相同，确认框消失后由房间根容器呈现下一级 sheet。
@@ -2690,6 +2702,16 @@ struct PartyRoomView: View {
             ))
             .presentationDetents([.fraction(0.5), .fraction(0.8)])
             .preferredColorScheme(.dark)
+        }
+    }
+
+    private func isAdvancedRoomTool(_ kind: PartyRoomToolSheetKind) -> Bool {
+        switch kind {
+        case .micApplicationList, .micApplicationSwitchConfirm, .approveSeatPicker,
+             .lockRoom, .mcSeat:
+            return true
+        default:
+            return false
         }
     }
 

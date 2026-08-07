@@ -1,12 +1,31 @@
 import Foundation
 
 enum PartyExpressionAvailability {
-    /// 107 仅放开表情协议，不连带开放半屏游戏、抽奖或其他 Party 游戏入口。
-    static var canUsePlayEmoji: Bool {
+    /// 表情面板是 107 明确保留的基础互动。它与 Party PK、半屏游戏等能力分开，
+    /// 因此固定 107 也允许发送服务端下发的玩法表情。
+    static var canSendPlayEmoji: Bool {
         #if HILY_TESTS
         return true
         #else
-        if SelfPermissionBridge.shared.canPartyGamesSnapshot { return true }
+        return SelfPermissionBridge.shared.canPartyGamesSnapshot || isPartyOnlySession
+        #endif
+    }
+
+    /// 接收端与发送端保持一致，避免 107 能发送却看不到自己或他人的表情结果。
+    static func canReceivePlayEmoji(_ payload: PartyEmojiPayload) -> Bool {
+        _ = payload
+        #if HILY_TESTS
+        return true
+        #else
+        return SelfPermissionBridge.shared.canPartyGamesSnapshot || isPartyOnlySession
+        #endif
+    }
+
+    /// 面板布局用账号形态。权限桥首帧尚未发布时仍按固定 107 fail closed。
+    static var isPartyOnlySession: Bool {
+        #if HILY_TESTS
+        return false
+        #else
         let isAuthenticated = AuthToken.value.map { !$0.isEmpty } ?? false
         let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
             ?? UserTypeExperience.effectiveUserType(isAuthenticated: isAuthenticated)

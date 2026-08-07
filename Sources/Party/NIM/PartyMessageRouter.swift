@@ -167,6 +167,9 @@ final class PartyMessageRouter: MessageRouter {
             // 140 活动中奖公屏广播（含 worldcup）
             AppLogger.party.info("[PartyRouter] 140 payloadKeys=\(Array(payload.keys), privacy: .public)")
             delegate?.partyRoomChat(chat, didReceiveWinnerBroadcast: payload, raw: m)
+        case .freeGameResult:
+            // 144 仅承载猜拳 / 幸运骰子结果；Store 仍按 Party 免费互动权限二次 gate。
+            delegate?.partyRoomChat(chat, didReceiveFreeGameResult: payload, raw: m)
         case .firstGiftMoment:
             AppLogger.party.info("[PartyRouter] 197 payloadKeys=\(Array(payload.keys), privacy: .public)")
             delegate?.partyRoomChat(chat, didReceiveFirstGiftMoment: payload, raw: m)
@@ -234,12 +237,12 @@ final class PartyMessageRouter: MessageRouter {
             // 3. 派发到 Store 队列 → 麦位 SVGA player 消费
             AppLogger.party.info("[PartyRouter] \(attachType.rawValue, privacy: .public) payloadKeys=\(Array(payload.keys), privacy: .public)")
             let isPlayEmoji = attachType == .emojiPlay
-            if isPlayEmoji,
-               !PartyExpressionAvailability.canUsePlayEmoji {
-                return
-            }
             guard let emojiPayload = PartyEmojiPayload.from(payload: payload) else {
                 AppLogger.party.notice("[PartyRouter] \(attachType.rawValue, privacy: .public) emoji payload missing required fields (emojiId/playUrl/sendUserId); drop")
+                return
+            }
+            if isPlayEmoji,
+               !PartyExpressionAvailability.canReceivePlayEmoji(emojiPayload) {
                 return
             }
             // self-echo skip：sendUserId == 自己 → 已由本地发送时 append 过（sendEmoji 本地立即入队）· 避免双入队

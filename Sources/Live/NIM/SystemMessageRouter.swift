@@ -75,6 +75,7 @@ final class SystemMessageRouter: MessageRouter {
                          context: MessageContext) -> Bool {
         switch action {
         case .forceEndLive(let sub):
+            guard SelfPermissionBridge.shared.canLiveSnapshot else { return true }
             // 后台守卫 + 回前台 5s 冷却：sysMsg 推送下播独立于 HeartbeatController，必须自带防御。
             // 对齐 HeartbeatController.tick:46-50 + NetworkQualityMonitor cooldown 模式。
             guard UIApplication.shared.applicationState != .background else {
@@ -89,6 +90,7 @@ final class SystemMessageRouter: MessageRouter {
                 await self?.liveStore?.forceEnd(reason: .disconnected, subSource: sub)
             }
         case .banned(let sub):
+            guard SelfPermissionBridge.shared.canLiveSnapshot else { return true }
             guard UIApplication.shared.applicationState != .background else {
                 logger.info("[SysMsgRouter] banned deferred: app in background sub=\(sub, privacy: .public)")
                 return true
@@ -101,21 +103,31 @@ final class SystemMessageRouter: MessageRouter {
                 await self?.liveStore?.forceEnd(reason: .banned, subSource: sub)
             }
         case .complianceWarning(let text):
+            guard SelfPermissionBridge.shared.canLiveSnapshot else { return true }
             // payload 缺 content 时 decide 返空串；这里兜底为 L10n 默认文案
             liveStore?.warn(message: text.isEmpty ? L10n.complianceWarningDefault : text)
         case .markBoostingExposure(let on):
+            guard SelfPermissionBridge.shared.canLiveSnapshot else { return true }
             liveStore?.markBoostingExposure(on)
         case .callRemoteText(let text, let chatBubble, let sender):
+            guard SelfPermissionBridge.shared.canCallSnapshot else { return true }
             callStore?.handleRemoteText(text, chatBubble: chatBubble, sender: sender)
         case .callWaitState(let type):
+            guard SelfPermissionBridge.shared.canCallSnapshot else { return true }
             callStore?.updateWaitState(type: type)
         case .callIncome(let delta):
+            guard SelfPermissionBridge.shared.canCallSnapshot else { return true }
             callStore?.appendCallIncome(num: delta)
         case .callGiftIncome(let delta):
+            guard SelfPermissionBridge.shared.canCallSnapshot,
+                  SelfPermissionBridge.shared.canGiftSendingSnapshot else { return true }
             callStore?.appendGiftIncome(num: delta)
         case .callRechargeReward(let delta):
+            guard SelfPermissionBridge.shared.canCallSnapshot,
+                  SelfPermissionBridge.shared.canVirtualItemsSnapshot else { return true }
             callStore?.appendWaitBonus(num: delta)
         case .callNimSignal(let type, let channelId, let sender):
+            guard SelfPermissionBridge.shared.canCallSnapshot else { return true }
             callStore?.handleNimCallSignal(type: type, channelId: channelId, sender: sender)
         case .robotCallIncoming(let invite):
             guard let invite else {
@@ -138,6 +150,8 @@ final class SystemMessageRouter: MessageRouter {
             // 走 triggerCheckForcedBusy 统一到 activeCheckTask 串行化（审查报告-202607061550 必修-2）
             OnlineStatusStore.shared.triggerCheckForcedBusy(showToast: false, doAction: true)
         case .privateCallSwitchChange(let open):
+            guard SelfPermissionBridge.shared.canLiveSnapshot,
+                  SelfPermissionBridge.shared.canCallSnapshot else { return true }
             liveStore?.setPrivateCallOpen(open)
             logger.info("[SysMsgRouter] privateCallSwitchChange → LiveStore.privateCallOpen=\(open, privacy: .public)")
         case .passThrough:

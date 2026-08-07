@@ -91,6 +91,33 @@ enum PartyPublicChatAdapter {
         )
     }
 
+    /// 144 免费小游戏结果。字段解析复用直播公屏已验证的兼容模型。
+    static func freeGameResult(
+        payload: [String: Any],
+        fallbackNickname: String?,
+        myUserId: String?
+    ) -> UnifiedPublicChatMessage {
+        let result = RpsWinNotificationPayload(data: payload, fallbackNickname: fallbackNickname)
+        let userId = PartyValueNormalizer.stringify(
+            payload["userId"] ?? payload["sendUserId"] ?? payload["winnerUserId"]
+        )
+        var senderPayload = payload
+        senderPayload["userId"] = userId
+        senderPayload["nickname"] = result.nickname
+        return UnifiedPublicChatMessage(
+            sender: makeSender(
+                from: senderPayload,
+                fallbackNickname: result.nickname,
+                isSelf: userId != nil && userId == myUserId
+            ),
+            variant: .rpsWin(
+                medalUrl: result.medalURL,
+                medalHours: result.medalHours,
+                gameType: result.gameType
+            )
+        )
+    }
+
     /// 1050 / 1051 幸运数字公屏：对齐 H5 `chat-list.vue`，使用普通 Party 用户头部而不是房间公告。
     /// payload 已在 `PartyLuckyNumberPayload` 中处理 `data` 包裹与别名字段。
     static func luckyNumberPublic(payload: [String: Any], didWin: Bool) -> UnifiedPublicChatMessage? {
@@ -246,7 +273,7 @@ enum PartyPublicChatAdapter {
     }
 
     /// 140 活动中奖公屏广播（含 worldcup 世界杯活动卡）。
-    static func winnerBroadcast(payload: [String: Any], myUserId: String?) -> UnifiedPublicChatMessage? {
+    static func winnerBroadcast(payload: [String: Any], myUserId: String? = nil) -> UnifiedPublicChatMessage? {
         // H5 Party 只展示派对房(userType=1 / roomType=1)的广播，避免把 Live 广播混入当前列表。
         guard PartyValueNormalizer.intify(payload["userType"]) == 1,
               PartyValueNormalizer.intify(payload["roomType"]) == 1 else {

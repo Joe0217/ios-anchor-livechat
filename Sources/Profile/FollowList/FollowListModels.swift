@@ -27,8 +27,9 @@ enum FollowSegment: Int, CaseIterable, Hashable, Identifiable {
 ///
 /// 字段全部 Optional 与 AnchorInfo 同策略：H5/安卓蓝本未明列出 `/api/user/v2/userFriend`
 /// 返回字段清单，先列出渲染所需核心字段，真机响应有偏差时迭代调整。
-struct FollowUser: Codable, Identifiable, Hashable {
-    let userId: Int?
+struct FollowUser: Decodable, Identifiable, Hashable {
+    /// 接口存在 String/Int 混发，统一保存为 String，避免整页因单条 ID 类型变化解码失败。
+    let userId: String?
     let nickname: String?
     let icon: String?
     let sex: Int?              // 1=男 2=女
@@ -47,11 +48,39 @@ struct FollowUser: Codable, Identifiable, Hashable {
         return followed == true
     }
 
+    var hasExplicitFollowState: Bool {
+        followFlag != nil || followed != nil
+    }
+
     /// SwiftUI ForEach 主键：用 userId 兜底，全空时 fallback 到 nickname+icon 组合
-    var id: String { "\(userId ?? -1)-\(nickname ?? "")" }
+    var id: String { "\(userId ?? "unknown")-\(nickname ?? "")-\(icon ?? "")" }
+
+    private enum CodingKeys: String, CodingKey {
+        case userId, nickname, icon, sex, age, countryCode, countryId
+        case level, levelName, userLevel, userLevelName
+        case signature, followed, followFlag
+    }
 }
 
 extension FollowUser {
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        userId = Self.decodeString(c, forKey: .userId)
+        nickname = try? c.decode(String.self, forKey: .nickname)
+        icon = try? c.decode(String.self, forKey: .icon)
+        sex = Self.decodeInt(c, forKey: .sex)
+        age = Self.decodeInt(c, forKey: .age)
+        countryCode = Self.decodeString(c, forKey: .countryCode)
+            ?? Self.decodeString(c, forKey: .countryId)
+        level = Self.decodeInt(c, forKey: .userLevel)
+            ?? Self.decodeInt(c, forKey: .level)
+        levelName = Self.decodeString(c, forKey: .userLevelName)
+            ?? Self.decodeString(c, forKey: .levelName)
+        signature = try? c.decode(String.self, forKey: .signature)
+        followed = Self.decodeBool(c, forKey: .followed)
+        followFlag = Self.decodeBool(c, forKey: .followFlag).map { $0 ? 1 : 0 }
+    }
+
     /// 返回 followFlag 被替换的副本（FollowUser 是 immutable struct，必须重建）。
     /// 用于乐观更新/回滚时更换关注状态而保留其他字段。
     func withFollowFlag(_ flag: Int) -> FollowUser {
@@ -62,6 +91,46 @@ extension FollowUser {
             followed: flag == 1,
             followFlag: flag
         )
+    }
+
+    private static func decodeString(
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) -> String? {
+        if let value = try? container.decode(String.self, forKey: key), !value.isEmpty {
+            return value
+        }
+        if let value = try? container.decode(Int64.self, forKey: key) {
+            return String(value)
+        }
+        return nil
+    }
+
+    private static func decodeInt(
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) -> Int? {
+        if let value = try? container.decode(Int.self, forKey: key) { return value }
+        if let value = try? container.decode(String.self, forKey: key) { return Int(value) }
+        return nil
+    }
+
+    private static func decodeBool(
+        _ container: KeyedDecodingContainer<CodingKeys>,
+        forKey key: CodingKeys
+    ) -> Bool? {
+        if let value = try? container.decode(Bool.self, forKey: key) { return value }
+        if let value = try? container.decode(Int.self, forKey: key), value == 0 || value == 1 {
+            return value == 1
+        }
+        if let value = try? container.decode(String.self, forKey: key) {
+            switch value.lowercased() {
+            case "true", "1": return true
+            case "false", "0": return false
+            default: return nil
+            }
+        }
+        return nil
     }
 }
 

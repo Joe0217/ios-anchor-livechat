@@ -2180,6 +2180,7 @@ enum L10n {
 
     // MARK: - 服务层错误（被 View 显示）
     static var authErrorNoToken: String { localize("auth.error.noToken", comment: "登录失败：服务未返回 token") }
+    static var authErrorRequestFailed: String { localize("auth.error.requestFailed", comment: "登录或注册请求失败通用提示") }
     static var authErrorNetworkFormat: String { localize("auth.error.networkFormat", comment: "登录失败：网络错误（%@ 为系统错误描述）") }
     static var authErrorSessionInvalidated: String { localize("auth.error.sessionInvalidated", comment: "1004 挤下线 / 1005 token 失效统一文案") }
     static var liveErrorNoCover: String { localize("live.error.noCover", comment: "开播失败：账号还没有直播封面") }
@@ -2237,6 +2238,7 @@ enum L10n {
     // P1-6（2026-07-14）主播审核弹窗
     static var commonKindReminder: String           { localize("common.kindReminder", comment: "通用弹窗提示 title（对齐 H5 Vant showDialog 默认）") }
     static var commonConfirm: String                { localize("common.confirm", comment: "通用 Confirm 按钮") }
+    static var commonDiscard: String                { localize("common.discard", comment: "通用放弃按钮") }
     static var commonClose: String                  { localize("common.close", comment: "通用关闭按钮 accessibility label") }
     static var auditPassedMessage: String           { localize("audit.passed.message", comment: "主播审核通过 alert 文案（H5 固定英文原文）") }
     static var auditRejectedFallback: String        { localize("audit.rejected.fallback", comment: "主播审核拒绝 payload.content 空时 fallback") }

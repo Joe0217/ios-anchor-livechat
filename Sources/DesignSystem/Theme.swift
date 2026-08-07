@@ -410,8 +410,8 @@ enum Theme {
         static let authLoginButton        = Color(hex: 0xFF55CC)
         /// 登录按钮文字白
         static let authLoginButtonText    = Color.white
-        /// 输入框填充(暗紫半透明,盖在 blur bg 上)
-        static let authInputFill          = Color(hex: 0x2E1A4F, opacity: 0.45)
+        /// 输入框填充：15% 透明白，与紫色渐变背景拉开层次。
+        static let authInputFill          = Color.white.opacity(0.15)
         /// 输入框主文本(用户输入)白
         static let authInputText          = Color.white
         /// 输入框 placeholder 白 55%
@@ -1082,6 +1082,18 @@ enum Theme {
         /// Live 页整页背景：顶部紫→中段深紫→底部近黑（与切图"背景填图"作底配合）
         static let livePageBackground = LinearGradient(
             colors: [Palette.liveTopPurple, Palette.liveMidPurple, Palette.liveBottomDark],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+
+        /// 107 Party 房默认背景 `profileTopBg` 经房间 35% 暗色遮罩后的原生渐变近似。
+        /// 登录页复用该渐变，避免重新引入背景图片。
+        static let partyRoomDefaultBackground = LinearGradient(
+            colors: [
+                Color(hex: 0x350F55),
+                Color(hex: 0x1F083E),
+                Color(hex: 0x07010C),
+            ],
             startPoint: .top,
             endPoint: .bottom
         )

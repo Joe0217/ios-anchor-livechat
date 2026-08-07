@@ -119,7 +119,7 @@ struct PartyCreateRoomView: View {
         // submitError toast overlay（对齐安卓失败 toast，让用户看到错误原因）
         .overlay(alignment: .top) {
             if !store.submitError.isEmpty {
-                Text(store.submitError)
+                Text(L10n.commonNetworkError)
                     .toastStyle()
                     .transition(Toast.transition)
                     .task(id: store.submitError) {
@@ -481,7 +481,7 @@ struct PartyCreateModePickerSheet: View {
             liveTemplates: validTemplates(mode: PartyCreateStore.modeLiveVoice),
             availableTypes: availableTemplateTypes,
             isLoading: store.templatesLoading && store.templates.isEmpty,
-            errorMessage: store.templatesError.isEmpty ? nil : store.templatesError,
+            errorMessage: store.templatesError.isEmpty ? nil : L10n.commonNetworkError,
             onRetry: { Task { await store.loadTemplates(for: store.mode) } },
             initialType: initialType,
             initialSelectedTempId: store.selectedTemplate?.id,
