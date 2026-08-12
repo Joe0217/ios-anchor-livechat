@@ -9,7 +9,7 @@ import Foundation
 /// - `roomName` (36 char cap) / `roomTagline` (36 char cap，H5 后端字段名 `greetingMessage`)
 /// - `selectedLanguage`: 从 `languages` 中选；默认 `languages[0]`（H5 create.vue:44）
 /// - `selectedTemplate`: 从 `templates` 选；默认 `templates.first`（Unlock 态才可选）；Lock 态 tap 弹 toast
-/// - `mode`: 1=Voice / 2=Live+Voice（H5 apiGetRoomTempList type 参数）
+/// - `mode`: 1=Voice / 2=Live+Voice / 3=Video（H5 apiGetRoomTempList type 参数）
 /// - `userLevel`: 用户当前段位（判 Lock/Unlock）；MVP 从外部注入，本 Store 不管持久化
 @MainActor
 final class PartyCreateStore: ObservableObject {
@@ -35,20 +35,20 @@ final class PartyCreateStore: ObservableObject {
 
     // MARK: - Mode picker 状态
 
-    /// 1=Voice / 2=Live+Voice（对齐 H5 type 参数）
+    /// 1=Voice / 2=Live+Voice / 3=Video（对齐 H5 type 参数）
     /// v6.1：切换 tab **只切 UI 不重拉**（两 mode list 同 loadInitial 一次性并发拉），
     /// 直接从 `templatesByMode` 缓存读取 + 切 selectedTemplate 到该 mode 下第一张
     @Published private(set) var mode: Int = 2 {
         didSet {
             guard mode != oldValue else { return }
-            guard mode == Self.modeVoice || mode == Self.modeLiveVoice else {
+            guard Self.supportedModes.contains(mode) else {
                 AppLogger.party.notice("[PartyCreate] ignored unknown template mode=\(self.mode, privacy: .public)")
                 mode = canUsePartyVideo ? oldValue : Self.modeVoice
                 return
             }
             guard !isApplyingPartyVideoRestriction else { return }
-            guard canUsePartyVideo || mode != Self.modeLiveVoice else {
-                AppLogger.party.notice("[PartyCreate] rejected live+voice mode for Party-only account")
+            guard canUsePartyVideo || mode == Self.modeVoice else {
+                AppLogger.party.notice("[PartyCreate] rejected video template mode for Party-only account")
                 enforceVoiceOnlyMode()
                 return
             }
@@ -97,6 +97,8 @@ final class PartyCreateStore: ObservableObject {
     static let maxTaglineLength = 36
     static let modeVoice = 1
     static let modeLiveVoice = 2
+    static let modeVideo = 3
+    static let supportedModes = [modeVoice, modeLiveVoice, modeVideo]
 
     // MARK: - 依赖
 
@@ -151,9 +153,10 @@ final class PartyCreateStore: ObservableObject {
         }
         async let voice: () = loadTemplates(for: Self.modeVoice)
         async let liveVoice: () = loadTemplates(for: Self.modeLiveVoice)
+        async let video: () = loadTemplates(for: Self.modeVideo)
         async let l: () = loadLanguages()
         async let b: () = loadBackgrounds()
-        _ = await (voice, liveVoice, l, b)
+        _ = await (voice, liveVoice, video, l, b)
     }
 
     /// 拉背景图列表（安卓 loadData 第 3 项，首张自动选中）
@@ -188,12 +191,12 @@ final class PartyCreateStore: ObservableObject {
 
     /// 拉某个 mode 的模板；缓存到 `templatesByMode[mode]`；仅切到当前 mode 时更新 selectedTemplate
     func loadTemplates(for targetMode: Int) async {
-        guard targetMode == Self.modeVoice || targetMode == Self.modeLiveVoice else {
+        guard Self.supportedModes.contains(targetMode) else {
             AppLogger.party.notice("[PartyCreate] ignored template request for unknown mode=\(targetMode, privacy: .public)")
             return
         }
-        guard targetMode != Self.modeLiveVoice || canUsePartyVideo else {
-            AppLogger.party.notice("[PartyCreate] skipped live+voice template request for Party-only account")
+        guard canUsePartyVideo || targetMode == Self.modeVoice else {
+            AppLogger.party.notice("[PartyCreate] skipped video template request for Party-only account")
             enforceVoiceOnlyMode(loadVoiceTemplateIfNeeded: false)
             return
         }
@@ -209,8 +212,8 @@ final class PartyCreateStore: ObservableObject {
         do {
             let list = try await service.fetchTemplates(type: targetMode)
             // 请求在飞期间权限可被服务端改为 107；此时不得把已返回的视频模板写入缓存。
-            guard targetMode != Self.modeLiveVoice || canUsePartyVideo else {
-                AppLogger.party.notice("[PartyCreate] dropped live+voice templates after Party-only permission change")
+            guard canUsePartyVideo || targetMode == Self.modeVoice else {
+                AppLogger.party.notice("[PartyCreate] dropped video templates after Party-only permission change")
                 enforceVoiceOnlyMode(loadVoiceTemplateIfNeeded: false)
                 return
             }
@@ -265,19 +268,22 @@ final class PartyCreateStore: ObservableObject {
             enforceVoiceOnlyMode()
             return
         }
-        guard templatesByMode[Self.modeLiveVoice] == nil else { return }
-        Task { await loadTemplates(for: Self.modeLiveVoice) }
+        guard templatesByMode[Self.modeLiveVoice] == nil || templatesByMode[Self.modeVideo] == nil else { return }
+        Task {
+            await loadTemplates(for: Self.modeLiveVoice)
+            await loadTemplates(for: Self.modeVideo)
+        }
     }
 
     /// View 不直接写 mode，避免通过 Binding 或 sheet 回调绕开 Party-only 限制。
     @discardableResult
     func selectMode(_ targetMode: Int) -> Bool {
-        guard targetMode == Self.modeVoice || targetMode == Self.modeLiveVoice else {
+        guard Self.supportedModes.contains(targetMode) else {
             AppLogger.party.notice("[PartyCreate] rejected unknown template mode=\(targetMode, privacy: .public)")
             return false
         }
-        guard canUsePartyVideo || targetMode != Self.modeLiveVoice else {
-            AppLogger.party.notice("[PartyCreate] rejected live+voice mode for Party-only account")
+        guard canUsePartyVideo || targetMode == Self.modeVoice else {
+            AppLogger.party.notice("[PartyCreate] rejected video template mode for Party-only account")
             enforceVoiceOnlyMode()
             return false
         }
@@ -440,7 +446,7 @@ final class PartyCreateStore: ObservableObject {
 
     /// 给 View 层和 mode 切换复用的可见模板集合，避免从原始 cache 直接读到 107 禁止的内容。
     func visibleTemplates(for targetMode: Int) -> [PartyRoomTemplate] {
-        guard targetMode == Self.modeVoice || targetMode == Self.modeLiveVoice,
+        guard Self.supportedModes.contains(targetMode),
               canUsePartyVideo || targetMode == Self.modeVoice else {
             return []
         }
@@ -453,6 +459,7 @@ final class PartyCreateStore: ObservableObject {
     private func enforceVoiceOnlyMode(loadVoiceTemplateIfNeeded: Bool = true) {
         guard !canUsePartyVideo else { return }
         templatesByMode.removeValue(forKey: Self.modeLiveVoice)
+        templatesByMode.removeValue(forKey: Self.modeVideo)
         if mode != Self.modeVoice {
             isApplyingPartyVideoRestriction = true
             mode = Self.modeVoice

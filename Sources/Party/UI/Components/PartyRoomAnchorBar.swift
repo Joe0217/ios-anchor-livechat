@@ -84,7 +84,8 @@ struct PartyRoomAnchorBar: View {
                     anchorAvatarBlock
                 }
                 .buttonStyle(.plain)
-                .padding(.horizontal, 4)
+                // 顶栏其他内容保留统一 12pt 页面边距，头像单独贴齐屏幕左缘。
+                .padding(.leading, -Theme.Metric.partyRoomScreenH)
                 anchorTextBlock
                 // Component 11 关注按钮紧贴房间信息（房名/ID 右侧）；自己房间不显示（isSelfRoom）
                 if showsFollow, !isSelfRoom {

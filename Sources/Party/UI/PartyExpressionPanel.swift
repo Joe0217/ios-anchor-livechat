@@ -49,6 +49,9 @@ struct PartyExpressionPanel: View {
             selectedClassIndex = 0
             selectedPageIndex = 0
         }
+        .onChange(of: selectedClassIndex) { _ in
+            selectedPageIndex = 0
+        }
         .presentationDetents([.height(panelSheetHeight)])
         .overlay(alignment: .top) {
             if let msg = toastMessage {
@@ -95,17 +98,27 @@ struct PartyExpressionPanel: View {
             if classifications.isEmpty {
                 Color.clear
             } else {
-                grid(for: classifications)
+                classificationPager(classifications)
             }
         }
     }
 
+    // MARK: - Classification pager
+
+    private func classificationPager(_ classifications: [PartyEmojiClassification]) -> some View {
+        TabView(selection: $selectedClassIndex) {
+            ForEach(classifications.indices, id: \.self) { index in
+                grid(for: classifications[index])
+                    .tag(index)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+    }
+
     // MARK: - Grid（当前分类 × 当前分页）
 
-    private func grid(for classifications: [PartyEmojiClassification]) -> some View {
-        let idx = min(max(selectedClassIndex, 0), classifications.count - 1)
-        let current = classifications[idx]
-        let pages = paginate(current.emojisList, size: panelPageSize)
+    private func grid(for classification: PartyEmojiClassification) -> some View {
+        let pages = paginate(classification.emojisList, size: panelPageSize)
         let pageIdx = min(max(selectedPageIndex, 0), max(pages.count - 1, 0))
 
         return VStack(spacing: 8) {
@@ -117,14 +130,6 @@ struct PartyExpressionPanel: View {
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
             .frame(height: panelGridHeight)
-            .highPriorityGesture(
-                DragGesture(minimumDistance: 24)
-                    .onEnded { value in
-                        guard abs(value.translation.width) > abs(value.translation.height) else { return }
-                        let delta = value.translation.width < 0 ? 1 : -1
-                        selectAdjacentTab(delta: delta, count: classifications.count)
-                    }
-            )
 
             // 分类页数 > 1 时展示 dot indicator
             if pages.count > 1 {
@@ -180,17 +185,7 @@ struct PartyExpressionPanel: View {
                             tabItem(classifications[i], selected: i == selectedClassIndex)
                                 .onTapGesture {
                                     if selectedClassIndex != i {
-                                        selectedClassIndex = i
-                                        selectedPageIndex = 0
-                                        let name = classifications[i].classType
-                                        PartyAnalytics.track(
-                                            "b_emoji_tab_switch",
-                                            properties: [
-                                                "tabname": name,
-                                                "tabIndex": i,
-                                                "classType": name,
-                                            ]
-                                        )
+                                        selectClassification(i, classifications: classifications)
                                     }
                                 }
                         }
@@ -248,11 +243,23 @@ struct PartyExpressionPanel: View {
         }
     }
 
-    private func selectAdjacentTab(delta: Int, count: Int) {
-        let next = selectedClassIndex + delta
-        guard count > 0, next >= 0, next < count else { return }
-        selectedClassIndex = next
-        selectedPageIndex = 0
+    private func selectClassification(
+        _ index: Int,
+        classifications: [PartyEmojiClassification]
+    ) {
+        guard classifications.indices.contains(index) else { return }
+        let name = classifications[index].classType
+        withAnimation(.easeInOut(duration: 0.28)) {
+            selectedClassIndex = index
+        }
+        PartyAnalytics.track(
+            "b_emoji_tab_switch",
+            properties: [
+                "tabname": name,
+                "tabIndex": index,
+                "classType": name,
+            ]
+        )
     }
 
     /// 按 pageSize 切页（每分类拍平为 N 页固定 4×3 grid）

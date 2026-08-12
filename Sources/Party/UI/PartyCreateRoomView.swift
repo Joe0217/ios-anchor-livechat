@@ -477,8 +477,9 @@ struct PartyCreateModePickerSheet: View {
 
     var body: some View {
         PartyRoomTemplatePickerSheet(
-            voiceTemplates: validTemplates(mode: PartyCreateStore.modeVoice),
-            liveTemplates: validTemplates(mode: PartyCreateStore.modeLiveVoice),
+            templatesByType: PartyRoomModeType.allCases.reduce(into: [:]) { result, type in
+                result[type] = validTemplates(mode: type.rawValue)
+            },
             availableTypes: availableTemplateTypes,
             isLoading: store.templatesLoading && store.templates.isEmpty,
             errorMessage: store.templatesError.isEmpty ? nil : L10n.commonNetworkError,
@@ -502,13 +503,20 @@ struct PartyCreateModePickerSheet: View {
         )
     }
 
-    /// PartyRoomModeType.rawValue 1=voice / 2=liveAndVoice；转 store.mode 索引
+    /// PartyRoomModeType.rawValue 1=voice / 2=liveAndVoice / 3=video；转 store.mode 索引
     private var initialType: PartyRoomModeType {
-        store.mode == PartyCreateStore.modeVoice ? .voiceOnly : .liveAndVoice
+        switch store.mode {
+        case PartyCreateStore.modeVoice: return .voiceOnly
+        case PartyCreateStore.modeVideo: return .videoOnly
+        default: return .liveAndVoice
+        }
     }
 
     private var availableTemplateTypes: [PartyRoomModeType] {
-        store.canUseVideoTemplates ? PartyRoomModeType.allCases : [.voiceOnly]
+        guard store.canUseVideoTemplates else { return [.voiceOnly] }
+        if store.templatesLoading { return PartyRoomModeType.allCases }
+        let returned = PartyRoomModeType.allCases.filter { !validTemplates(mode: $0.rawValue).isEmpty }
+        return returned.isEmpty ? PartyRoomModeType.allCases : returned
     }
 
     /// filter valid（对齐 PartyCreateStore.templates computed 的 filter 规则）

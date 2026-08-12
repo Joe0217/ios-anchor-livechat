@@ -27,8 +27,7 @@ struct PartyRoomModeSheet: View {
     var body: some View {
         NavigationStack {
             PartyRoomTemplatePickerSheet(
-                voiceTemplates: voiceTemplates,
-                liveTemplates: liveTemplates,
+                templatesByType: templatesByType,
                 availableTypes: availableTemplateTypes,
                 isLoading: isLoading,
                 errorMessage: errorMessage,
@@ -52,23 +51,30 @@ struct PartyRoomModeSheet: View {
         }
     }
 
-    // MARK: - 数据桥（PartyStore.roomModeTemplatesState → voice/live 两数组 + isLoading + error）
+    // MARK: - 数据桥（PartyStore.roomModeTemplatesState → type→模板数组 + isLoading + error）
 
-    private var voiceTemplates: [PartyRoomTemplate] {
+    private var templatesByType: [PartyRoomModeType: [PartyRoomTemplate]] {
         switch store.roomModeTemplatesState {
-        case .loaded(let v, _): return v
-        case .partialLoaded(let v, _): return v ?? []
-        default: return []
+        case .loaded(let voice, let live, let video):
+            return filteredTemplates([.voiceOnly: voice, .liveAndVoice: live, .videoOnly: video])
+        case .partialLoaded(let voice, let live, let video):
+            return filteredTemplates([
+                .voiceOnly: voice,
+                .liveAndVoice: live,
+                .videoOnly: video
+            ].compactMapValues { $0 })
+        default:
+            return [:]
         }
     }
 
-    private var liveTemplates: [PartyRoomTemplate] {
-        guard permission.canPartyVideo else { return [] }
-        switch store.roomModeTemplatesState {
-        case .loaded(_, let l): return l
-        case .partialLoaded(_, let l): return l ?? []
-        default: return []
+    private func filteredTemplates(
+        _ templates: [PartyRoomModeType: [PartyRoomTemplate]]
+    ) -> [PartyRoomModeType: [PartyRoomTemplate]] {
+        guard permission.canPartyVideo else {
+            return [.voiceOnly: templates[.voiceOnly] ?? []]
         }
+        return templates
     }
 
     private var isLoading: Bool {
@@ -89,7 +95,11 @@ struct PartyRoomModeSheet: View {
     }
 
     private var availableTemplateTypes: [PartyRoomModeType] {
-        permission.canPartyVideo ? PartyRoomModeType.allCases : [.voiceOnly]
+        guard permission.canPartyVideo else { return [.voiceOnly] }
+        // 展示当前接口实际返回的类型，避免为空的预设 tab；加载期间保留全部类型以稳定骨架屏。
+        if isLoading { return PartyRoomModeType.allCases }
+        let returned = PartyRoomModeType.allCases.filter { !(templatesByType[$0] ?? []).isEmpty }
+        return returned.isEmpty ? PartyRoomModeType.allCases : returned
     }
 
 }

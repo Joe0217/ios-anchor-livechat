@@ -469,6 +469,7 @@ enum L10n {
         static var roomModeSheetTitle: String { localize("party.roomMode.sheetTitle", comment: "Room Mode sheet 标题") }
         static var roomModeLiveAndVoiceTab: String { localize("party.roomMode.liveAndVoiceTab", comment: "Room Mode Live+Voice tab") }
         static var roomModeVoiceOnlyTab: String { localize("party.roomMode.voiceOnlyTab", comment: "Room Mode Voice-only tab") }
+        static var roomModeVideoOnlyTab: String { localize("party.roomMode.videoOnlyTab", comment: "Room Mode Video-only tab") }
         static var roomModeConfirmTitle: String { localize("party.roomMode.confirmTitle", comment: "Room Mode 切换二次确认标题") }
         static var roomModeConfirmBody: String { localize("party.roomMode.confirmBody", comment: "Room Mode 切换二次确认正文（所有用户会下麦）") }
         static var roomModeConfirmSwitch: String { localize("party.roomMode.confirmSwitch", comment: "Room Mode 确认切换按钮") }

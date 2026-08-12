@@ -1441,6 +1441,7 @@
 "party.roomMode.sheetTitle"              = "Room Mode";
 "party.roomMode.liveAndVoiceTab"         = "Live+Voice";
 "party.roomMode.voiceOnlyTab"            = "Voice";
+"party.roomMode.videoOnlyTab"            = "Video";
 "party.roomMode.confirmTitle"            = "Switch Room Mode?";
 "party.roomMode.confirmBody"             = "All users will be moved off seats.";
 "party.roomMode.confirmSwitch"           = "Switch";

@@ -1482,6 +1482,7 @@
 "party.roomMode.sheetTitle"              = "Oda Modu";
 "party.roomMode.liveAndVoiceTab"         = "Canlı+Ses";
 "party.roomMode.voiceOnlyTab"            = "Ses";
+"party.roomMode.videoOnlyTab"            = "Video";
 "party.roomMode.confirmTitle"            = "Oda Modu Değiştir?";
 "party.roomMode.confirmBody"             = "Tüm kullanıcılar koltuklarından kaldırılacak.";
 "party.roomMode.confirmSwitch"           = "Değiştir";

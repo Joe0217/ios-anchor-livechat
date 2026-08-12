@@ -1482,6 +1482,7 @@
 "party.roomMode.sheetTitle"              = "وضع الغرفة";
 "party.roomMode.liveAndVoiceTab"         = "بث مباشر+صوت";
 "party.roomMode.voiceOnlyTab"            = "صوت";
+"party.roomMode.videoOnlyTab"            = "فيديو";
 "party.roomMode.confirmTitle"            = "تبديل وضع الغرفة؟";
 "party.roomMode.confirmBody"             = "سيتم نقل جميع المستخدمين من مقاعدهم.";
 "party.roomMode.confirmSwitch"           = "تبديل";

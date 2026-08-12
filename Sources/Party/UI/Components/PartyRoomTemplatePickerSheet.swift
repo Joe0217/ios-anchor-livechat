@@ -17,13 +17,12 @@ import SwiftUI
 ///   store.selectedTemplate；Room Mode 侧弹二次确认）
 ///
 /// **数据源**：`voiceTemplates` + `liveTemplates` 由父层从 store 拆分传入（create 侧从
-/// `templatesByMode[1/2]`；Room Mode 侧从 `roomModeTemplatesState` 拆 voice/live 两个数组）。
+/// `templatesByMode[type]`；Room Mode 侧从 `roomModeTemplatesState` 直接传 type→模板数组）。
 /// 组件不订阅 store，纯 UI + 本地 @State。
 struct PartyRoomTemplatePickerSheet: View {
     // MARK: - 数据
 
-    let voiceTemplates: [PartyRoomTemplate]
-    let liveTemplates: [PartyRoomTemplate]
+    let templatesByType: [PartyRoomModeType: [PartyRoomTemplate]]
     /// 107 Party-only 账号只允许语音模板。默认保留既有两种房型，避免影响普通账号。
     let availableTypes: [PartyRoomModeType]
     let isLoading: Bool
@@ -59,8 +58,7 @@ struct PartyRoomTemplatePickerSheet: View {
     @State private var toast: String? = nil
 
     init(
-        voiceTemplates: [PartyRoomTemplate],
-        liveTemplates: [PartyRoomTemplate],
+        templatesByType: [PartyRoomModeType: [PartyRoomTemplate]],
         availableTypes: [PartyRoomModeType] = PartyRoomModeType.allCases,
         isLoading: Bool,
         errorMessage: String?,
@@ -73,8 +71,7 @@ struct PartyRoomTemplatePickerSheet: View {
         onTabChange: ((PartyRoomModeType) -> Void)? = nil,
         onConfirm: @escaping (Int, PartyRoomModeType) -> Void
     ) {
-        self.voiceTemplates = voiceTemplates
-        self.liveTemplates = liveTemplates
+        self.templatesByType = templatesByType
         let resolvedTypes = availableTypes.isEmpty ? [.voiceOnly] : availableTypes
         self.availableTypes = resolvedTypes
         self.isLoading = isLoading
@@ -204,7 +201,7 @@ struct PartyRoomTemplatePickerSheet: View {
     }
 
     private var currentTemplates: [PartyRoomTemplate] {
-        selectedType == .voiceOnly ? voiceTemplates : liveTemplates
+        templatesByType[selectedType] ?? []
     }
 
     private var loadingView: some View {

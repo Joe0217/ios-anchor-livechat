@@ -37,6 +37,11 @@ struct PartyRoomSmallSeatCell: View {
         sizeVariant == .sm ? 35 : Theme.Metric.partyRoomSmallSeatAvatar
     }
 
+    /// 麦位容器固定预留头像框及最大声纹扩散尺寸，避免占用后重新布局。
+    private var reservedAvatarDiameter: CGFloat {
+        avatarSize + (sizeVariant == .sm ? 24 : 28)
+    }
+
     var body: some View {
         VStack(spacing: Theme.Metric.partyRoomSmallSeatVGap) {
             avatarStack
@@ -109,8 +114,8 @@ struct PartyRoomSmallSeatCell: View {
             // v13：badgeCorner (partyBadgeBubble 右上角泡泡) 去掉（用户 2026-07-13 requirement）
             // v10：mic 图标移到 footer 名字后面（去掉 bottom-left corner overlay）
         }
-        .frame(width: avatarSize + 12,
-               height: avatarSize + 12)
+        .frame(width: reservedAvatarDiameter,
+               height: reservedAvatarDiameter)
         // v17：禁麦/自身关麦时右下角显示禁麦图标（对齐 H5 `audio-wrap.vue:167`
         // `(!microphoneEnabled && userId) || !seatMicrophoneEnabled` 语义）。
         // 默认 ??1（假定开麦），避免后端漏字段时误显。

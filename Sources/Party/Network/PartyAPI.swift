@@ -131,6 +131,7 @@ enum PartyAPI {
     /// **对齐 H5 用户端 `apiGetRoomTempList({type})`**（`livechat-h5/src/api/party/index.ts:36`）：
     /// - `type: 1` = Voice（纯语聊）
     /// - `type: 2` = Live+Voice（视频+语聊混合）
+    /// - `type: 3` = Video（纯视频）
     /// - `type: 0` = MVP 兜底（当调用方未明示 mode 时用）
     static func roomTempList(type: Int = 0) async throws -> [PartyRoomTemplate] {
         let data = try await PartyAPIClient.shared.post(

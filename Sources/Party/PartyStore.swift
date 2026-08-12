@@ -2558,10 +2558,11 @@ final class PartyStore: ObservableObject {
             await loadVoiceOnlyRoomModeTemplates()
             return
         }
-        // 若两 tab 都已缓存则直接切到 loaded 态（enterRoom 后二次打开面板时命中）
+        // 若三 tab 都已缓存则直接切到 loaded 态（enterRoom 后二次打开面板时命中）
         if let voice = roomModeTemplates[.voiceOnly],
-           let live = roomModeTemplates[.liveAndVoice] {
-            roomModeTemplatesState = .loaded(voice: voice, live: live)
+           let live = roomModeTemplates[.liveAndVoice],
+           let video = roomModeTemplates[.videoOnly] {
+            roomModeTemplatesState = .loaded(voice: voice, live: live, video: video)
             return
         }
         roomModeTemplatesState = .loading
@@ -2569,8 +2570,10 @@ final class PartyStore: ObservableObject {
         // 并发 Promise.allSettled 语义
         async let voiceResult: [PartyRoomTemplate]? = fetchRoomTempListSafely(type: PartyRoomModeType.voiceOnly.rawValue)
         async let liveResult: [PartyRoomTemplate]? = fetchRoomTempListSafely(type: PartyRoomModeType.liveAndVoice.rawValue)
+        async let videoResult: [PartyRoomTemplate]? = fetchRoomTempListSafely(type: PartyRoomModeType.videoOnly.rawValue)
         let voice = await voiceResult
         let live = await liveResult
+        let video = await videoResult
 
         // 请求在飞期间账号可被动态降为 107。此时仅保留语音结果，不能把 live 写回 cache。
         guard canUsePartyVideo else {
@@ -2579,28 +2582,30 @@ final class PartyStore: ObservableObject {
         }
         if let v = voice { roomModeTemplates[.voiceOnly] = v }
         if let l = live { roomModeTemplates[.liveAndVoice] = l }
+        if let p = video { roomModeTemplates[.videoOnly] = p }
 
-        switch (voice, live) {
-        case (let v?, let l?):
-            roomModeTemplatesState = .loaded(voice: v, live: l)
-            AppLogger.party.info("[PartyStore] roomMode templates loaded voice=\(v.count, privacy: .public) live=\(l.count, privacy: .public)")
-        case (nil, nil):
+        switch (voice, live, video) {
+        case (let v?, let l?, let p?):
+            roomModeTemplatesState = .loaded(voice: v, live: l, video: p)
+            AppLogger.party.info("[PartyStore] roomMode templates loaded voice=\(v.count, privacy: .public) live=\(l.count, privacy: .public) video=\(p.count, privacy: .public)")
+        case (nil, nil, nil):
             // 两 tab 都失败 → error（依赖 APIClient 全局 toast；本地只落状态机）
             roomModeTemplatesState = .error(L10n.Party.roomModeLoadError)
             AppLogger.party.error("[PartyStore] roomMode templates all failed")
         default:
             // 单 tab 失败 → partialLoaded
-            roomModeTemplatesState = .partialLoaded(voice: voice, live: live)
-            AppLogger.party.notice("[PartyStore] roomMode templates partial voiceOk=\(voice != nil, privacy: .public) liveOk=\(live != nil, privacy: .public)")
+            roomModeTemplatesState = .partialLoaded(voice: voice, live: live, video: video)
+            AppLogger.party.notice("[PartyStore] roomMode templates partial voiceOk=\(voice != nil, privacy: .public) liveOk=\(live != nil, privacy: .public) videoOk=\(video != nil, privacy: .public)")
         }
     }
 
-    /// 107 专用加载路径：live 模板不请求、不保留；只要语音 tab 成功即为完整 loaded 状态，
+    /// 107 专用加载路径：视频相关模板不请求、不保留；只要语音 tab 成功即为完整 loaded 状态，
     /// 不能把“刻意关闭的视频 tab”误标为 partial failure。
     private func loadVoiceOnlyRoomModeTemplates() async {
         roomModeTemplates.removeValue(forKey: .liveAndVoice)
+        roomModeTemplates.removeValue(forKey: .videoOnly)
         if let voice = roomModeTemplates[.voiceOnly] {
-            roomModeTemplatesState = .loaded(voice: voice, live: [])
+            roomModeTemplatesState = .loaded(voice: voice, live: [], video: [])
             return
         }
 
@@ -2618,13 +2623,14 @@ final class PartyStore: ObservableObject {
 
     private func applyVoiceOnlyRoomModeTemplates(_ voice: [PartyRoomTemplate]?) {
         roomModeTemplates.removeValue(forKey: .liveAndVoice)
+        roomModeTemplates.removeValue(forKey: .videoOnly)
         guard let voice else {
             roomModeTemplatesState = .error(L10n.Party.roomModeLoadError)
             AppLogger.party.error("[PartyStore] roomMode voice templates failed for Party-only account")
             return
         }
         roomModeTemplates[.voiceOnly] = voice
-        roomModeTemplatesState = .loaded(voice: voice, live: [])
+        roomModeTemplatesState = .loaded(voice: voice, live: [], video: [])
         AppLogger.party.info("[PartyStore] roomMode voice-only templates loaded count=\(voice.count, privacy: .public)")
     }
 

@@ -14,7 +14,7 @@ import Foundation
 struct PartyRoomTemplate: Decodable, Equatable, Identifiable {
     let id: Int
     let name: String?
-    /// 安卓字段名 `modeType`；H5 用户端字段名 `type`（1=Voice / 2=Live+Voice）
+    /// 安卓字段名 `modeType`；H5 用户端字段名 `type`（1=Voice / 2=Live+Voice / 3=Video）
     let modeType: Int?
     /// 总麦位数（真机字段 `totalSeatNum`）
     let seatCount: Int?
@@ -86,6 +86,8 @@ struct PartyRoomTemplate: Decodable, Equatable, Identifiable {
             case 1: return "partyTemplate1Video"
             case 2: return "partyTemplate2Video"
             case 3: return "partyTemplate3Video"
+            // 6 视频位模板暂无本地缩略图时仍允许展示服务端封面；无封面则由 picker 使用通用占位。
+            case 6: return nil
             default: return nil
             }
         }
@@ -102,12 +104,13 @@ struct PartyRoomTemplate: Decodable, Equatable, Identifiable {
         return nil
     }
 
-    /// 有效模板：id>0 且 有 coverImage URL 或 fallback asset 可命中。
-    /// 过滤后端返 tempId=0 / 4 视频位 / 8 语聊位等 iOS bundle 无 asset 的空占位。
+    /// 有效模板：id>0 且有服务端封面、本地缩略图，或已知的新 6 视频位布局。
+    /// 新模板可没有本地缩略图，picker 会使用通用占位。
     var hasValidDisplay: Bool {
         guard id > 0 else { return false }
         if let cover = coverImage, !cover.isEmpty { return true }
-        return fallbackAssetName != nil
+        if fallbackAssetName != nil { return true }
+        return videoSeatCount == 6
     }
 }
 
@@ -115,6 +118,7 @@ struct PartyRoomTemplate: Decodable, Equatable, Identifiable {
 enum PartyRoomModeType: Int, CaseIterable, Identifiable {
     case liveAndVoice = 2
     case voiceOnly = 1
+    case videoOnly = 3
 
     var id: Int { rawValue }
 
@@ -122,6 +126,7 @@ enum PartyRoomModeType: Int, CaseIterable, Identifiable {
         switch self {
         case .liveAndVoice: return L10n.Party.roomModeLiveAndVoiceTab
         case .voiceOnly:    return L10n.Party.roomModeVoiceOnlyTab
+        case .videoOnly:    return L10n.Party.roomModeVideoOnlyTab
         }
     }
 }
@@ -133,7 +138,7 @@ enum PartyRoomModeType: Int, CaseIterable, Identifiable {
 enum PartyRoomModeTemplatesState: Equatable {
     case idle
     case loading
-    case loaded(voice: [PartyRoomTemplate], live: [PartyRoomTemplate])
-    case partialLoaded(voice: [PartyRoomTemplate]?, live: [PartyRoomTemplate]?)
+    case loaded(voice: [PartyRoomTemplate], live: [PartyRoomTemplate], video: [PartyRoomTemplate])
+    case partialLoaded(voice: [PartyRoomTemplate]?, live: [PartyRoomTemplate]?, video: [PartyRoomTemplate]?)
     case error(String)
 }

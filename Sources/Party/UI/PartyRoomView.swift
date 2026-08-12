@@ -1199,7 +1199,7 @@ struct PartyRoomView: View {
     }
 
     /// 6 视频位模板 —— 3 列 × 2 行 grid。
-    /// 网格总高与 3 视频位模板一致，避免新增 6 视频位模板挤压聊天和底部操作区。
+    /// 每个视频位高度与 3 视频位模板的单行高度一致，避免两行网格被压扁。
     private var sixBigSeatGrid: some View {
         let total = bigSeats.count
         return LazyVGrid(columns: sixBigSeatColumns, spacing: 2) {
@@ -1232,16 +1232,15 @@ struct PartyRoomView: View {
         Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
     }
 
-    /// 6 位模板与 3 位模板共用舞台高度；每个 cell 平分两行高度。
+    /// 6 位模板每个 cell 与 3 位模板单行高度一致；总高度为两行加行间距。
     private var sixBigSeatGridHeight: CGFloat {
-        multiBigSeatRowHeight
+        multiBigSeatRowHeight * 2 + 2
     }
 
     private var sixBigSeatCellAspectRatio: CGFloat {
         let screenW = UIScreen.main.bounds.width
         let cellW = (screenW - 12) / 3   // 12 = 2*4 padding + 2*2 col spacing
-        let cellH = max(1, (sixBigSeatGridHeight - 2) / 2)
-        return cellW / cellH
+        return cellW / max(1, multiBigSeatRowHeight)
     }
 
     /// 对齐 H5 `main-wrap.vue`：2/3/其他视频位共用 `video-wrap h-180`，横向均分。
@@ -3075,8 +3074,8 @@ struct PartyRoomView: View {
                 EmptyView().onAppear { showPartyBackpack = false }
             }
         }
-        // RUNNING 期 tab +54pt → fraction 从 0.4 上调到 0.5 容纳；非 PK 期沿用 0.4
-        .presentationDetents(battleStore.isRunning ? [.fraction(0.5)] : [.fraction(0.4)])
+        // 礼物架固定占屏 45%；PK 分类栏包含在该高度内。
+        .presentationDetents([.fraction(0.45)])
         .preferredColorScheme(.dark)
     }
 
