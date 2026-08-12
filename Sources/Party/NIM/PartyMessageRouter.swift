@@ -241,10 +241,6 @@ final class PartyMessageRouter: MessageRouter {
                 AppLogger.party.notice("[PartyRouter] \(attachType.rawValue, privacy: .public) emoji payload missing required fields (emojiId/playUrl/sendUserId); drop")
                 return
             }
-            if isPlayEmoji,
-               !PartyExpressionAvailability.canReceivePlayEmoji(emojiPayload) {
-                return
-            }
             // self-echo skip：sendUserId == 自己 → 已由本地发送时 append 过（sendEmoji 本地立即入队）· 避免双入队
             if let myUserId = SessionStore.shared.user?.userId.map(String.init),
                emojiPayload.sendUserId == myUserId {

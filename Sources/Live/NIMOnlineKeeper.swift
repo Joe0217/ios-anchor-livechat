@@ -1,5 +1,4 @@
 import Foundation
-import NIMSDK
 import os
 
 /// 云信 NIM 长连接保活，专门用来上报"主播在线"。
@@ -22,14 +21,9 @@ final class NIMOnlineKeeper {
 
     private init() {}
 
-    /// 登录后调用。重复调用安全：已登录直接返回。
+    /// 登录后调用。重复调用安全，同账号快路径由串行队列内的 NIMService 处理。
     func start(account: String, token: String) {
         NIMService.setupOnce()
-        if NIMSDK.shared().loginManager.isLogined() {
-            AppLogger.im.info("🟢 [NIMOnline] 已登录，跳过")
-            isLogined = true
-            return
-        }
         AppLogger.im.debug("🟢 [NIMOnline] 开始登录 account=\(account, privacy: .private) tokenLen=\(token.count, privacy: .private)")
         let prior = pendingTask
         pendingTask = Task { @MainActor [weak self] in

@@ -9,6 +9,22 @@ import Foundation
 /// - T1c.8 e2e 真接口若返 `code=1111`（method 错）或 `code!='0000'`（body 字段错）→ 立即回查 H5 store 层调用
 enum RegisterService {
 
+    /// 注册前校验 6 位邀请码。1076 或网络/解析异常由上层按“无有效邀请码”处理，不阻断注册。
+    static func checkInviteCode(_ inviteCode: String) async throws -> Bool {
+        do {
+            _ = try await APIClient.shared.post(
+                "/api/user/checkApplyInfo",
+                body: ["type": "inviteCode", "strValue": inviteCode],
+                // APIClient 的 nil 会回退读取 AuthToken；显式空串确保注册前校验不携带登录 Token。
+                token: "",
+                suppressCodes: ["1076"]
+            )
+            return true
+        } catch let error as APIError where error.code == "1076" {
+            return false
+        }
+    }
+
     /// A1: 国家列表（H5 `api/user/index.ts:20` `/api/index/getCountryList`）
     static func fetchCountryList() async throws -> [Country] {
         let data = try await APIClient.shared.post("/api/index/getCountryList", body: nil)
@@ -18,13 +34,13 @@ enum RegisterService {
     /// A2: 首次注册（H5 `api/user/index.ts:122` `/api/login/register`）
     static func registerV2(body: RegisterSubmitBody) async throws -> LoginResult {
         let data = try await APIClient.shared.post("/api/login/register", body: body.toDict())
-        return try JSONDecoder().decode(LoginResult.self, from: data)
+        return try LoginResult.decodeNetworkResponse(from: data, source: "register")
     }
 
     /// A3: 被拒重录（H5 `api/user/index.ts:124` `/api/login/reSubmitView`）
     static func reSubmitView(body: RegisterSubmitBody) async throws -> LoginResult {
         let data = try await APIClient.shared.post("/api/login/reSubmitView", body: body.toDict())
-        return try JSONDecoder().decode(LoginResult.self, from: data)
+        return try LoginResult.decodeNetworkResponse(from: data, source: "resubmit")
     }
 
     /// 本地模拟删除账号完成资料流程后，直接恢复原服务端账号登录，不重复创建账号。
@@ -37,6 +53,6 @@ enum RegisterService {
             ],
             suppressCodes: ["1005"]
         )
-        return try JSONDecoder().decode(LoginResult.self, from: data)
+        return try LoginResult.decodeNetworkResponse(from: data, source: "deleted-account-login")
     }
 }

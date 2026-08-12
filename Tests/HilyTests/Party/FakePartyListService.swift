@@ -12,6 +12,8 @@ final class FakePartyListService: PartyListService, @unchecked Sendable {
     enum Response {
         case success([PartyRoomInfo])
         case delayThenSuccess([PartyRoomInfo], delayNanos: UInt64)
+        /// 模拟底层请求不响应父 Task 取消；Store 仍必须靠取消检查/数据代际丢弃迟到结果。
+        case uncancellableDelayThenSuccess([PartyRoomInfo], delayNanos: UInt64)
         case throwing(Error)
     }
 
@@ -66,8 +68,43 @@ final class FakePartyListService: PartyListService, @unchecked Sendable {
             try await Task.sleep(nanoseconds: delay)
             try Task.checkCancellation()
             return rooms
+        case .uncancellableDelayThenSuccess(let rooms, let delay):
+            let task = Task.detached {
+                try? await Task.sleep(nanoseconds: delay)
+                return rooms
+            }
+            return await task.value
         case .throwing(let error):
             throw error
+        }
+    }
+}
+
+actor FakePartyMyRoomProvider {
+    enum Response {
+        case value(PartyMyRoomInfoWrapper?)
+        case uncancellableDelayThenValue(PartyMyRoomInfoWrapper?, delayNanos: UInt64)
+    }
+
+    private var responses: [Response]
+    private(set) var callCount = 0
+
+    init(responses: [Response]) {
+        self.responses = responses
+    }
+
+    func fetch() async -> PartyMyRoomInfoWrapper? {
+        let index = min(callCount, max(0, responses.count - 1))
+        callCount += 1
+        guard !responses.isEmpty else { return nil }
+        switch responses[index] {
+        case .value(let value):
+            return value
+        case .uncancellableDelayThenValue(let value, let delayNanos):
+            return await Task.detached {
+                try? await Task.sleep(nanoseconds: delayNanos)
+                return value
+            }.value
         }
     }
 }

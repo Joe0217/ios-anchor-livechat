@@ -245,7 +245,7 @@ extension LiveStore {
         state = .ended
         endType = 1
         endTimestamp = Int64(Date().timeIntervalSince1970 * 1000)   // 结果页 spec §2.4
-        UserDefaults.standard.set(Date(), forKey: LastEndLiveTracker.key)  // §8.3 用
+        LastEndLiveTracker.recordEnd(for: SessionStore.shared.user?.userId)
     }
 
     /// 重置状态（LiveResultView back 时调用，切 Home Tab 前清干净）。
@@ -290,7 +290,7 @@ extension LiveStore {
         state = .ended
         endType = reason.code
         endTimestamp = Int64(Date().timeIntervalSince1970 * 1000)   // 结果页 spec §2.4
-        UserDefaults.standard.set(Date(), forKey: LastEndLiveTracker.key)  // 60s 冷却对齐 endLive（LiveSettings §1.3）
+        LastEndLiveTracker.recordEnd(for: SessionStore.shared.user?.userId)
     }
 
     private func tryEnterForceEnding(_ reason: ForceEndReason) -> Bool {

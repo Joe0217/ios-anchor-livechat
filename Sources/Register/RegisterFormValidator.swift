@@ -15,10 +15,14 @@ struct RegisterFormValidator {
         return .ok
     }
 
-    /// 有邀请码时至少 6 张资料照片，否则至少 1 张；审核视频不阻断注册。
-    func validatePage2(languages: [String], picUrls: [String], inviteCode: String) -> RegisterValidationResult {
+    /// 有效邀请码模式要求 6 张资料照片和真实审核视频；普通注册只要求 1 张照片。
+    func validatePage2(languages: [String], picUrls: [String], inviteCode: String, videoUrl: String?) -> RegisterValidationResult {
         if languages.isEmpty { return .missingLanguage }
         if picUrls.count < requiredProfilePhotoCount(inviteCode: inviteCode) { return .missingPhotos }
+        if !inviteCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           (videoUrl ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return .missingVideo
+        }
         return .ok
     }
 
@@ -42,4 +46,5 @@ enum RegisterValidationResult: Equatable {
     case missingCountry
     case missingLanguage
     case missingPhotos
+    case missingVideo
 }

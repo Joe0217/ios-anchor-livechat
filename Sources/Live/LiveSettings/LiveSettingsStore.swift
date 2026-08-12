@@ -321,12 +321,14 @@ final class LiveSettingsStore: ObservableObject {
     /// 用户 Agree 心愿承诺规范：调后端 clickAgreement + 本地持久化标志 + 关 modal + 递归调 startTapped 继续主流程
     /// 后端调用失败静默（对齐 H5 wishlist-rule-modal.vue:19 `catch { silent }`）
     func onWishRuleAgree() async {
+        let sharedGeneration = WishSettingSharedStore.shared.generationToken
         // fire-and-forget 后端记录（失败不阻塞用户开播）
         do {
             try await LiveService.clickWishAgreement()
         } catch {
             logger.warning("clickWishAgreement failed (silent per H5): \(String(describing: error))")
         }
+        guard WishSettingSharedStore.shared.isCurrent(generation: sharedGeneration) else { return }
         UserDefaults.standard.set(true, forKey: wishRuleAgreedKey)
         showWishRuleModal = false
         // 递归调 startTapped 继续开播主流程（此时 wishRuleAgreed=true，跳过 modal 分支）
@@ -401,7 +403,7 @@ final class LiveSettingsStore: ObservableObject {
             return L10n.prepareCoverEmpty
         }
         // 3. 距上次下播 ≥60s
-        if let secs = LastEndLiveTracker.secondsSinceLast, secs < 60 {
+        if let secs = LastEndLiveTracker.secondsSinceLast(for: SessionStore.shared.user?.userId), secs < 60 {
             return L10n.prepareCooldown
         }
         // 4. IM 在线

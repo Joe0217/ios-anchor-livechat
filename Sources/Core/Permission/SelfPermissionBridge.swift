@@ -53,6 +53,8 @@ struct BlockedFeatures: OptionSet {
     static let profileAlbum = BlockedFeatures(rawValue: 1 << 24)
     /// Party 房音乐列表、管理入口和本地收听。
     static let partyMusic = BlockedFeatures(rawValue: 1 << 25)
+    /// 本人基础资料、头像和照片编辑；视频、朋友圈及问候语仍由 profileSocial 管理。
+    static let profileEditing = BlockedFeatures(rawValue: 1 << 26)
 }
 
 /// 认证态与 userType 必须作为同一条事件传给权限桥。
@@ -66,14 +68,56 @@ struct PermissionSessionState: Equatable {
     static let loggedOut = PermissionSessionState(userType: nil, isAuthenticated: false)
 }
 
-/// 权限桥输出的有效 userType 对应哪种主界面运行形态。
-/// DEBUG 权限覆盖与真实账号必须复用本判定，避免 UI 权限已切到 107、根路由仍停在未审核页。
-enum UserTypeExperience {
-    /// 当前提审包固定使用 107 能力集合；暂不消费登录响应中的真实 userType。
-    static let fixedUserType = 107
+/// 用户对象、userId 或当前媒体证据缺失时保持 107。认证建立时可使用同一 userId 的
+/// 版本化模式缓存补足缺失媒体；本次登录响应中的明确媒体始终优先于缓存。
+enum ReviewAccountModePolicy {
+    static let placeholderReviewVideoURL = "https://img.hnhily.link/00000000/20260806/8c2bc4a182a8483e92c38c06518d1d87.mp4"
+    /// v1 曾把“登录响应无媒体”持久化为已确认的全功能。升级版本后旧 false 证据失效，
+    /// 防止覆盖安装继续沿用错误权限。
+    static let currentEvidenceVersion = 2
+    /// v5 双向模式缓存来源标记。登录响应缺媒体时可直接恢复 107 或全开放首帧，
+    /// 资料刷新只更新下次认证所用缓存，不再热切当前会话。
+    static let cachedModeEvidenceVersion = 5
 
-    static func effectiveUserType(isAuthenticated: Bool) -> Int? {
-        isAuthenticated ? fixedUserType : nil
+    static func effectiveUserType(
+        isAuthenticated: Bool,
+        hasUserInfo: Bool,
+        videoURLs: [String],
+        rawPlaceholderMatched: Bool? = nil,
+        mediaInfoResolved: Bool = true
+    ) -> Int? {
+        guard isAuthenticated else { return nil }
+        guard hasUserInfo else { return 107 }
+        guard mediaInfoResolved else { return 107 }
+        let hasPlaceholderVideo = rawPlaceholderMatched == true || videoURLs.contains { url in
+            url.trimmingCharacters(in: .whitespacesAndNewlines) == placeholderReviewVideoURL
+        }
+        return hasPlaceholderVideo ? 107 : 2
+    }
+
+    static func isPlaceholderVideoURL(_ rawURL: String) -> Bool {
+        rawURL.trimmingCharacters(in: .whitespacesAndNewlines) == placeholderReviewVideoURL
+    }
+
+    static func effectiveUserType(userInfo: LoginResult?) -> Int? {
+        // App 启动、登出完成以及 Keychain 无可恢复用户时都保持审核模式。认证状态由
+        // PermissionSessionState.isAuthenticated 单独控制，因此这里返回 107 不会在登录前放行能力。
+        guard let userInfo else { return 107 }
+        return effectiveUserType(
+            isAuthenticated: true,
+            hasUserInfo: userInfo.userId.map { $0 > 0 } == true,
+            videoURLs: userInfo.permissionModeMediaURLs,
+            rawPlaceholderMatched: userInfo.resolvedReviewPlaceholderMatch,
+            mediaInfoResolved: userInfo.isReviewModeResolved
+        )
+    }
+}
+
+/// 权限桥输出的有效模式对应哪种主界面运行形态。
+enum UserTypeExperience {
+    /// UI 与服务层首帧都直接读取当前会话快照，不能等待权限 Bridge 的异步发布。
+    static func effectiveUserType(userInfo: LoginResult?) -> Int? {
+        ReviewAccountModePolicy.effectiveUserType(userInfo: userInfo)
     }
 
     static func canEnterMainApp(_ userType: Int?) -> Bool {
@@ -152,6 +196,7 @@ enum PermissionFeature: CaseIterable {
     case beautyStudio
     case profileAlbum
     case partyMusic
+    case profileEditing
 
     fileprivate var blockedFeature: BlockedFeatures {
         switch self {
@@ -181,6 +226,7 @@ enum PermissionFeature: CaseIterable {
         case .beautyStudio: return .beautyStudio
         case .profileAlbum: return .profileAlbum
         case .partyMusic: return .partyMusic
+        case .profileEditing: return .profileEditing
         }
     }
 }
@@ -199,7 +245,7 @@ enum PermissionFeature: CaseIterable {
 final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
 
     // MARK: UI 层订阅（@MainActor + @Published）
-    /// 当前包登录后固定为 107；服务端返回的真实 userType 不参与路由和权限。
+    /// 根据当前用户资料派生的有效账号模式（107 或 2）。
     @MainActor @Published private(set) var effectiveUserType: Int? = nil
     @MainActor @Published private(set) var canCall: Bool = false
     @MainActor @Published private(set) var canLive: Bool = false
@@ -227,6 +273,7 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
     @MainActor @Published private(set) var canBeautyStudio: Bool = false
     @MainActor @Published private(set) var canProfileAlbum: Bool = false
     @MainActor @Published private(set) var canPartyMusic: Bool = false
+    @MainActor @Published private(set) var canProfileEditing: Bool = false
     @MainActor @Published private(set) var isLoaded: Bool = false
 
     // MARK: Store 层 nonisolated snapshot（原子读，避免 @MainActor hop）
@@ -278,6 +325,7 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
     nonisolated var canBeautyStudioSnapshot: Bool { canUseSnapshot(.beautyStudio) }
     nonisolated var canProfileAlbumSnapshot: Bool { canUseSnapshot(.profileAlbum) }
     nonisolated var canPartyMusicSnapshot: Bool { canUseSnapshot(.partyMusic) }
+    nonisolated var canProfileEditingSnapshot: Bool { canUseSnapshot(.profileEditing) }
 
     /// 任意 actor 可读的能力快照。业务入口必须用它或 `gate`，不能只依赖 UI 显隐。
     nonisolated func canUseSnapshot(_ feature: PermissionFeature) -> Bool {
@@ -288,8 +336,8 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
     /// Store/View 层统一 gate helper（回应 code-review Finding 4/8）。
     ///
     /// 命中 = true 放行；不命中 = log warning + false。**不 assertionFailure** ——
-    /// Bridge 双写 race window（微秒级 UI/Store 短暂不一致，见 §doc 承认）+ DebugPermissionOverride
-    /// 热切换 + 后端 userType revoke 都会让"UI 上一帧 canCall=true 用户 tap → Store snapshot=false"
+    /// Bridge 双写 race window（微秒级 UI/Store 短暂不一致，见 §doc 承认）+ 资料模式热切换
+    /// 都会让"UI 上一帧 canCall=true 用户 tap → Store snapshot=false"
     /// 成为**合法并发**，不是 invariant 违反。原 v1 各 Store 层 `#if DEBUG assertionFailure` 会
     /// 崩 Debug build（v1 spec §3.2 遗留问题）。改用 log warning + return false，caller 早退。
     ///
@@ -316,25 +364,57 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
         sessionPublisher
             .removeDuplicates()
             .sink { [weak self] session in
-                self?.applyPermissions(
-                    userType: session.userType,
-                    blocked: UserPermissionMapping.blocked(for: session.userType),
-                    loaded: session.isAuthenticated
-                )
+                self?.synchronize(session)
             }
             .store(in: &cancellables)
+    }
+
+    /// SessionStore 在建立/结束认证会话时同步调用，确保 SwiftUI 重建新账号页面前，Store 快照
+    /// 已经切到同一账号。生产 publisher 仍保留，负责冷启动绑定和后续状态观察。
+    nonisolated func synchronize(_ session: PermissionSessionState) {
+        applyPermissions(
+            userType: session.userType,
+            blocked: UserPermissionMapping.blocked(for: session.userType),
+            loaded: session.isAuthenticated
+        )
+    }
+
+    /// 登录/登出都发生在 MainActor。这里在发布新页面代际前同步更新 Store 快照和 SwiftUI
+    /// `@Published` 权限，避免热切账号时新页面首帧读到上一账号的能力。
+    @MainActor
+    func synchronizeImmediately(_ session: PermissionSessionState) {
+        applyPermissions(
+            userType: session.userType,
+            blocked: UserPermissionMapping.blocked(for: session.userType),
+            loaded: session.isAuthenticated,
+            schedulesMainActorPublish: false
+        )
+        publishCurrentSnapshot()
     }
 
     /// sink 消费：Step 1 同步 snapshot lock；Step 2 派发 @MainActor 更新 @Published。
     /// UI task 不捕获本次入参，而是在执行时重读最新 snapshot，避免快速切换时较早 task
     /// 反向覆盖较新的登出/撤权结果。
-    private func applyPermissions(userType: Int?, blocked: BlockedFeatures, loaded: Bool) {
+    private func applyPermissions(
+        userType: Int?,
+        blocked: BlockedFeatures,
+        loaded: Bool,
+        schedulesMainActorPublish: Bool = true
+    ) {
         // Step 1: 同步更新 snapshot lock 保护态（Store 层立即可见）
         snapshotLock.lock()
         _snapshot = blocked
         _snapshotLoaded = loaded
         _effectiveUserTypeSnapshot = loaded ? userType : nil
         snapshotLock.unlock()
+
+        #if DEBUG
+        AppLogger.auth.info(
+            "[PermissionBridgeSnapshot] authenticated=\(loaded, privacy: .public) effectiveUserType=\(loaded ? (userType ?? -1) : -1, privacy: .public) blockedMask=\(blocked.rawValue, privacy: .public) call=\(loaded && !blocked.contains(.call), privacy: .public) party=\(loaded && !blocked.contains(.party), privacy: .public) home=\(loaded && !blocked.contains(.homeDiscovery), privacy: .public) messages=\(loaded && !blocked.contains(.directMessages), privacy: .public) partyVideo=\(loaded && !blocked.contains(.partyVideo), privacy: .public)"
+        )
+        #endif
+
+        guard schedulesMainActorPublish else { return }
         // Step 2: 异步派发到 MainActor 更新 @Published（UI 订阅响应）
         Task { @MainActor [weak self] in
             self?.publishCurrentSnapshot()
@@ -376,6 +456,13 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
         canBeautyStudio = loaded && !blocked.contains(.beautyStudio)
         canProfileAlbum = loaded && !blocked.contains(.profileAlbum)
         canPartyMusic = loaded && !blocked.contains(.partyMusic)
+        canProfileEditing = loaded && !blocked.contains(.profileEditing)
         isLoaded = loaded
+
+        #if DEBUG
+        AppLogger.auth.info(
+            "[PermissionBridgePublished] loaded=\(self.isLoaded, privacy: .public) effectiveUserType=\(self.effectiveUserType ?? -1, privacy: .public) call=\(self.canCall, privacy: .public) party=\(self.canParty, privacy: .public) home=\(self.canHomeDiscovery, privacy: .public) messages=\(self.canDirectMessages, privacy: .public) partyVideo=\(self.canPartyVideo, privacy: .public)"
+        )
+        #endif
     }
 }

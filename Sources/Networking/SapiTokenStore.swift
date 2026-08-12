@@ -24,6 +24,8 @@ final class SapiTokenStore {
 
     /// 续接进行中的 Task（用于合并并发 401）
     private var inflightExchange: Task<String, Error>?
+    /// `clear()` 会递增。URLSession 取消并不保证服务端回包不会迟到，所有持久化写入都需复核代际。
+    private var exchangeGeneration = 0
 
     /// P2-10：exchange 请求专用 ephemeral session，避免：
     /// - URLCache 默认按 URL 缓存响应（含 sapi tokenValue 即便加密也会落 Cache.db）
@@ -73,6 +75,7 @@ final class SapiTokenStore {
 
     /// 登出时清（SessionStore.logout 内调用）
     func clear() {
+        exchangeGeneration &+= 1
         inflightExchange?.cancel()
         inflightExchange = nil
         KeychainStore.remove(for: Self.tokenKey)
@@ -85,20 +88,30 @@ final class SapiTokenStore {
         if let task = inflightExchange {
             return try await task.value
         }
-        let task = Task { try await self.performExchange() }
+        let generation = exchangeGeneration
+        let task = Task { try await self.performExchange(generation: generation) }
         inflightExchange = task
-        defer { inflightExchange = nil }
+        defer {
+            // A 的旧任务不得在 B 已启动 exchange 后清掉 B 的任务引用。
+            if generation == exchangeGeneration, inflightExchange == task {
+                inflightExchange = nil
+            }
+        }
         return try await task.value
     }
 
     // MARK: - exchangeToken 接口调用（独立 URLSession，绕过 PartyAPIClient）
 
-    private func performExchange() async throws -> String {
+    private func performExchange(generation: Int) async throws -> String {
+        try ensureCurrent(generation)
         guard let loginUuid = SessionStore.shared.user?.loginUuid, !loginUuid.isEmpty else {
             throw SapiTokenError.missingLoginUuid
         }
+        // 请求身份必须与 loginUuid 同一时刻快照，不能在 await 后读取新账号 token。
+        let loginToken = AuthToken.value
         // 首次冷启动前等到系统「允许使用无线数据」权限对话框通过再发请求(10s 超时兜底走原错误路径)
         await NetworkReachability.shared.waitUntilReachable()
+        try ensureCurrent(generation)
         AppLogger.party.info("[SapiTokenStore] exchange begin")
 
         guard let url = URL(string: AppConfig.sapiBaseURL + "/sapi/auth/v1/client/auth/exchangeToken") else {
@@ -110,7 +123,7 @@ final class SapiTokenStore {
 
         // 头：与 PartyAPIClient.sapiHeaders 保持一致，authToken=nil（exchange 接口本身不带 auth_token），
         //     主播端仍带 loginToken / anchorToken，用于保持服务端的主播身份判定。
-        let headers = Self.sapiHeaders(authToken: nil, loginToken: AuthToken.value)
+        let headers = Self.sapiHeaders(authToken: nil, loginToken: loginToken)
         for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
 
         // body: { token: loginUuid } → AES(sapi key/iv) → Base64 → JSON string（与 H5 Axios 线协议一致）
@@ -127,12 +140,14 @@ final class SapiTokenStore {
         do {
             (data, response) = try await Self.exchangeSession.data(for: req)
         } catch {
+            try ensureCurrent(generation)
             // Task cancel / URLError.cancelled：logout / view teardown 主动打断 inflight，不弹 banner
             if GlobalErrorBannerNotify.isCancellation(error) { throw error }
             AppLogger.party.error("[SapiTokenStore] exchange network error: \(String(describing: error), privacy: .public)")
             GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: exchangePath)
             throw SapiTokenError.networkError
         }
+        try ensureCurrent(generation)
         guard let http = response as? HTTPURLResponse else {
             GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: exchangePath)
             throw SapiTokenError.networkError
@@ -170,11 +185,18 @@ final class SapiTokenStore {
         let tokenTimeoutSec = (result["tokenTimeout"] as? Int) ?? 3600  // 兜底 1 小时
         let expireAtMs = Int64(Date().timeIntervalSince1970 * 1000) + Int64(tokenTimeoutSec) * 1000
 
+        try ensureCurrent(generation)
         KeychainStore.setString(tokenValue, for: Self.tokenKey)
         KeychainStore.setString(String(expireAtMs), for: Self.expireKey)
 
         AppLogger.party.info("[SapiTokenStore] exchange success expireAtMs=\(expireAtMs, privacy: .public) timeoutSec=\(tokenTimeoutSec, privacy: .public)")
         return tokenValue
+    }
+
+    private func ensureCurrent(_ generation: Int) throws {
+        guard generation == exchangeGeneration, !Task.isCancelled else {
+            throw CancellationError()
+        }
     }
 
     // MARK: - sapi 公共头（PartyAPIClient 共用）

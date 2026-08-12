@@ -59,6 +59,13 @@ final class ReplyPointsStore: ObservableObject {
 
     private let service: ReplyPointsServiceProtocol
     private let configBridge: ReplyPointsConfigBridging
+    private var dataGeneration = 0
+    private var peerGenerations: [String: Int] = [:]
+
+    private struct AsyncContext {
+        let dataGeneration: Int
+        let peerGeneration: Int
+    }
 
     init(service: ReplyPointsServiceProtocol, configBridge: ReplyPointsConfigBridging) {
         self.service = service
@@ -101,8 +108,10 @@ final class ReplyPointsStore: ObservableObject {
             endSession(peer: peer)
             return
         }
+        let context = beginPeerContext(peer: peer)
         do {
             let list = try await service.fetchMessageBoxList(userYxAccid: peer)
+            guard isCurrent(context, peer: peer) else { return }
             guard Self.messageRewardsAvailable else {
                 endSession(peer: peer)
                 return
@@ -115,7 +124,8 @@ final class ReplyPointsStore: ObservableObject {
             sessions[peer] = state
 
             // Critical-6：auto-claim 时机在 fetchMessageBoxList 时按 status==2 触发（非本地进度到点）
-            await autoClaimIfNeeded(peer: peer)
+            await autoClaimIfNeeded(peer: peer, context: context)
+            guard isCurrent(context, peer: peer) else { return }
 
             // Tip 注入判定
             if isOpenPaidMessage(peer: peer) {
@@ -124,6 +134,7 @@ final class ReplyPointsStore: ObservableObject {
                 tryInjectReplyRemindTip(peer: peer, text: tipTexts.replyRemind, now: now)
             }
         } catch {
+            guard isCurrent(context, peer: peer), !Task.isCancelled else { return }
             logger.warning("[ReplyPoints] beginSession fetch failed peer=\(peer, privacy: .private): \(String(describing: error), privacy: .public)")
             // 失败兜底：留空 sessions[peer]（isOpenPaidMessage=false，全流程跳过）
         }
@@ -131,15 +142,19 @@ final class ReplyPointsStore: ObservableObject {
 
     /// 离开 chat 页时调用（对齐 spec §Q7 "pop 即清"）。跨会话字段（count / lastGuideTipAt）保留。
     func endSession(peer: String) {
+        peerGenerations[peer] = (peerGenerations[peer] ?? 0) &+ 1
         sessions[peer] = nil
     }
 
     /// logout 时调用（挂 session-scoped rule）。全清含跨会话字段。
     func clear() {
+        dataGeneration &+= 1
+        peerGenerations.removeAll()
         currentUserSendPaidMessageCount = 0
         lastGuideTipAt = nil
         sessions.removeAll()
         pendingSettleResult = nil
+        pendingClaimDiamond = nil
     }
 
     // MARK: - 用户消息累加
@@ -204,7 +219,8 @@ final class ReplyPointsStore: ObservableObject {
     /// 内部从 `last.msgType` 派生传给后端。
     func onSendAnchorMsg(peer: String) async {
         guard var state = sessions[peer],
-              let last = state.lastUserMsgInfo
+              let last = state.lastUserMsgInfo,
+              let context = currentContext(peer: peer)
         else { return }
 
         guard Self.messageRewardsAvailable else {
@@ -222,9 +238,10 @@ final class ReplyPointsStore: ObservableObject {
 
         // defer 兜底：无论 try 内如何返回都清 lastUserMsgInfo（Critical-5）
         defer {
-            var s = sessions[peer] ?? state
-            s.lastUserMsgInfo = nil
-            sessions[peer] = s
+            if isCurrent(context, peer: peer), var current = sessions[peer] {
+                current.lastUserMsgInfo = nil
+                sessions[peer] = current
+            }
         }
 
         do {
@@ -233,7 +250,7 @@ final class ReplyPointsStore: ObservableObject {
                 userMsgId: last.msgId,
                 msgType: last.msgType   // P1-1：传用户消息的 pay/free（对齐 H5 line 1108 lastMsg.msgType），已在 onReceiveUserMsg 里 ?? "pay" 兜底
             )
-            guard Self.messageRewardsAvailable else { return }
+            guard isCurrent(context, peer: peer), Self.messageRewardsAvailable else { return }
             if res.settled {
                 // M-7:整块回写 stale state 会覆盖并发的 autoClaimIfNeeded / checkReplyRemindTrigger 修改
                 // (settle 挂起窗口内 messageBoxList 可能被 auto-claim 改成 .claimed / tips 追加 replyRemind)
@@ -247,11 +264,12 @@ final class ReplyPointsStore: ObservableObject {
                 logger.info("[ReplyPoints] settle success peer=\(peer, privacy: .private) points=\(res.points) total=\(res.currentTotalPoints)")
                 // P1-4：settle 成功后重新拉 messageBoxList 检查跨节点变 claimable → auto-claim
                 // 对齐 H5 rewardProgress.vue:81-89 watch(currentProgress) → handleGetMessageBox → getAnchorMessageBox
-                await refreshMessageBoxAndAutoClaim(peer: peer)
+                await refreshMessageBoxAndAutoClaim(peer: peer, context: context)
             } else {
                 logger.info("[ReplyPoints] settle returned settled=false (isGift/未开付费) peer=\(peer, privacy: .private)")
             }
         } catch {
+            guard isCurrent(context, peer: peer), !Task.isCancelled else { return }
             logger.warning("[ReplyPoints] settle failed peer=\(peer, privacy: .private): \(String(describing: error), privacy: .public)")
             // 失败静默；lastUserMsgInfo 仍在 defer 里清（防重放）
         }
@@ -261,15 +279,15 @@ final class ReplyPointsStore: ObservableObject {
 
     /// 拉 messageBoxList 完成后，对所有 `.claimable` 节点依次调 apiTreasurePointBox。
     /// 失败 → toast + node status 不变（下次进页重试）；view 层订阅 sessions 感知领奖弹窗时机。
-    private func autoClaimIfNeeded(peer: String) async {
-        guard Self.messageRewardsAvailable else { return }
+    private func autoClaimIfNeeded(peer: String, context: AsyncContext) async {
+        guard isCurrent(context, peer: peer), Self.messageRewardsAvailable else { return }
         guard let items = sessions[peer]?.messageBoxList else { return }
         var totalClaimedDiamond = 0
         for (idx, item) in items.enumerated() where item.status == .claimable {
-            guard Self.messageRewardsAvailable else { return }
+            guard isCurrent(context, peer: peer), Self.messageRewardsAvailable else { return }
             do {
                 let diamond = try await service.claimTreasureBox(userYxAccid: peer)
-                guard Self.messageRewardsAvailable else { return }
+                guard isCurrent(context, peer: peer), Self.messageRewardsAvailable else { return }
                 logger.info("[ReplyPoints] auto-claim ok peer=\(peer, privacy: .private) idx=\(idx) diamond=\(diamond)")
                 // 更新本地 status → .claimed（避免下次 onReceive 时误重复触发）
                 if var list = sessions[peer]?.messageBoxList, idx < list.count {
@@ -278,11 +296,12 @@ final class ReplyPointsStore: ObservableObject {
                 }
                 totalClaimedDiamond += diamond
             } catch {
+                guard isCurrent(context, peer: peer), !Task.isCancelled else { return }
                 logger.warning("[ReplyPoints] auto-claim failed peer=\(peer, privacy: .private) idx=\(idx): \(String(describing: error), privacy: .public)")
             }
         }
         // Batch 6.3.1：所有 claim 完累加显示；多次 claim 累加到同一弹窗（用户 tap Get 后 view 清 nil）
-        if totalClaimedDiamond > 0 {
+        if totalClaimedDiamond > 0, isCurrent(context, peer: peer) {
             pendingClaimDiamond = (pendingClaimDiamond ?? 0) + totalClaimedDiamond
         }
     }
@@ -347,19 +366,37 @@ final class ReplyPointsStore: ObservableObject {
     /// 对齐 H5 `rewardProgress.vue:81-89 watch(currentProgress) → handleGetMessageBox → getAnchorMessageBox`。
     ///
     /// 失败静默：下次 settle 再重试；网络错也不打断主结算成功日志。
-    private func refreshMessageBoxAndAutoClaim(peer: String) async {
-        guard Self.messageRewardsAvailable else { return }
+    private func refreshMessageBoxAndAutoClaim(peer: String, context: AsyncContext) async {
+        guard isCurrent(context, peer: peer), Self.messageRewardsAvailable else { return }
         do {
             let list = try await service.fetchMessageBoxList(userYxAccid: peer)
-            guard Self.messageRewardsAvailable else { return }
+            guard isCurrent(context, peer: peer), Self.messageRewardsAvailable else { return }
             guard var state = sessions[peer] else { return }
             // 只更新 messageBoxList,currentProgress 已由 settle 权威覆盖不动
             state.messageBoxList = list.pointInfoList
             sessions[peer] = state
-            await autoClaimIfNeeded(peer: peer)
+            await autoClaimIfNeeded(peer: peer, context: context)
         } catch {
+            guard isCurrent(context, peer: peer), !Task.isCancelled else { return }
             logger.warning("[ReplyPoints] refreshMessageBox failed peer=\(peer, privacy: .private): \(String(describing: error), privacy: .public)")
         }
+    }
+
+    private func beginPeerContext(peer: String) -> AsyncContext {
+        let next = (peerGenerations[peer] ?? 0) &+ 1
+        peerGenerations[peer] = next
+        sessions[peer] = nil
+        return AsyncContext(dataGeneration: dataGeneration, peerGeneration: next)
+    }
+
+    private func currentContext(peer: String) -> AsyncContext? {
+        guard let peerGeneration = peerGenerations[peer] else { return nil }
+        return AsyncContext(dataGeneration: dataGeneration, peerGeneration: peerGeneration)
+    }
+
+    private func isCurrent(_ context: AsyncContext, peer: String) -> Bool {
+        context.dataGeneration == dataGeneration
+            && context.peerGeneration == peerGenerations[peer]
     }
 
     // MARK: - 15min timer（Minor-4：用 Date 差值判定，不用 Timer.fire）

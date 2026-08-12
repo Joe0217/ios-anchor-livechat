@@ -6,6 +6,8 @@ struct RegisterRequiredView: View {
     @EnvironmentObject var pathHolder: RegisterPathHolder
 
     @State private var showLanguagePicker = false
+    @State private var showBeautySettings = false
+    @State private var showVideoGuide = false
     @State private var toastMsg: String? = nil
 
     private let validator = RegisterFormValidator()
@@ -34,6 +36,14 @@ struct RegisterRequiredView: View {
                     // Photos
                     section(title: L10n.Register.fieldYourPhotos(requiredProfilePhotoCount)) {
                         RegisterPhotosGrid(store: store)
+                    }
+
+                    if store.isInviteCodeValid {
+                        section(title: L10n.Register.fieldTakeVideo) {
+                            VideoSlotView(store: store) {
+                                showVideoGuide = true
+                            }
+                        }
                     }
 
                     Spacer(minLength: 80)
@@ -77,10 +87,27 @@ struct RegisterRequiredView: View {
                     Image(systemName: "chevron.left").foregroundStyle(.white)
                 }
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showBeautySettings = true
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                        .foregroundStyle(.white)
+                }
+                .accessibilityLabel(L10n.beautyStudioSettings)
+            }
         }
         .sheet(isPresented: $showLanguagePicker) {
             LanguagePickerSheet(isPresented: $showLanguagePicker, selected: $store.languages)
                 .giftPanelSheetBackground()
+        }
+        .fullScreenCover(isPresented: $showBeautySettings) {
+            BeautySettingsView(mode: .settings)
+        }
+        .sheet(isPresented: $showVideoGuide) {
+            VideoGuideSheet(isPresented: $showVideoGuide) {
+                pathHolder.path.append(RegisterRoute.videoRecord)
+            }
         }
     }
 
@@ -131,7 +158,8 @@ struct RegisterRequiredView: View {
             let requiredResult = validator.validatePage2(
                 languages: store.languages,
                 picUrls: store.picUrls,
-                inviteCode: effectiveInviteCode
+                inviteCode: effectiveInviteCode,
+                videoUrl: store.videoUrl
             )
             switch requiredResult {
             case .ok:
@@ -141,6 +169,7 @@ struct RegisterRequiredView: View {
                 }
             case .missingLanguage: showToast(L10n.Register.errorLanguageRequired)
             case .missingPhotos: showToast(L10n.Register.errorPhotosMin(requiredProfilePhotoCount))
+            case .missingVideo: showToast(L10n.Register.errorVideoRequired)
             default: break
             }
         } label: {
@@ -167,7 +196,7 @@ struct RegisterRequiredView: View {
     }
 
     private var effectiveInviteCode: String {
-        RegisterFeatureAvailability.isInvitationCodeEnabled ? store.inviteCode : ""
+        RegisterFeatureAvailability.isInvitationCodeEnabled && store.isInviteCodeValid ? store.inviteCode : ""
     }
 
     private func showToast(_ msg: String) {

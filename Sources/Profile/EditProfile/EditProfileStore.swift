@@ -394,7 +394,7 @@ final class EditProfileStore: ObservableObject {
     @discardableResult
     func addPhotoPlaceholder(localId: String = UUID().uuidString) -> String? {
         guard phase == .editing,
-              Self.gateProfileSocialConfiguration(action: "editProfileAddPhoto") else { return nil }
+              Self.gateProfileEditing(action: "editProfileAddPhoto") else { return nil }
         // spec N-9: 相册满 9 张不允许再加
         guard draft.photos.count < EditProfileLimits.photosMaxCount else {
             transientToast = .photosLimit
@@ -406,7 +406,7 @@ final class EditProfileStore: ObservableObject {
     }
 
     func markPhotoUploaded(id: String, url: String) {
-        guard Self.canConfigureProfileSocial else { return }
+        guard Self.canConfigureProfileEditing else { return }
         updateMediaItem(id: id, in: \.photos) { item in
             item.url = url
             item.uploadState = .idle
@@ -414,19 +414,19 @@ final class EditProfileStore: ObservableObject {
     }
 
     func markPhotoFailed(id: String, message: String) {
-        guard Self.canConfigureProfileSocial else { return }
+        guard Self.canConfigureProfileEditing else { return }
         updateMediaItem(id: id, in: \.photos) { $0.uploadState = .failed(message: message) }
     }
 
     func removePhoto(id: String) {
         guard phase == .editing,
-              Self.gateProfileSocialConfiguration(action: "editProfileRemovePhoto") else { return }
+              Self.gateProfileEditing(action: "editProfileRemovePhoto") else { return }
         draft.photos.removeAll { $0.id == id }
     }
 
     func retryPhoto(id: String) {
         guard phase == .editing,
-              Self.gateProfileSocialConfiguration(action: "editProfileRetryPhoto"),
+              Self.gateProfileEditing(action: "editProfileRetryPhoto"),
               let idx = draft.photos.firstIndex(where: { $0.id == id })
         else { return }
         // 重试：state 转 uploading（真上传 task 由 Step 1c 外部触发）
@@ -553,14 +553,14 @@ final class EditProfileStore: ObservableObject {
     }
 
     var hasUploadingTile: Bool {
-        (Self.canConfigureProfileSocial && (draft.photos.contains { if case .uploading = $0.uploadState { return true }; return false }
-            || draft.videos.contains { if case .uploading = $0.uploadState { return true }; return false }))
+        (Self.canConfigureProfileEditing && draft.photos.contains { if case .uploading = $0.uploadState { return true }; return false })
+            || (Self.canConfigureProfileSocial && draft.videos.contains { if case .uploading = $0.uploadState { return true }; return false })
             || (Self.canConfigureCallVideo && (draft.callVideo.map { if case .uploading = $0.uploadState { return true }; return false } ?? false))
     }
 
     var hasFailedTile: Bool {
-        (Self.canConfigureProfileSocial && (draft.photos.contains { if case .failed = $0.uploadState { return true }; return false }
-            || draft.videos.contains { if case .failed = $0.uploadState { return true }; return false }))
+        (Self.canConfigureProfileEditing && draft.photos.contains { if case .failed = $0.uploadState { return true }; return false })
+            || (Self.canConfigureProfileSocial && draft.videos.contains { if case .failed = $0.uploadState { return true }; return false })
             || (Self.canConfigureCallVideo && (draft.callVideo.map { if case .failed = $0.uploadState { return true }; return false } ?? false))
     }
 
@@ -710,7 +710,7 @@ final class EditProfileStore: ObservableObject {
     /// 相册照片上传：先 addPhotoPlaceholder → 拿到 id → 上传成功后 markPhotoUploaded
     func uploadPhoto(data: Data) async {
         guard phase == .editing,
-              Self.gateProfileSocialConfiguration(action: "editProfileUploadPhoto") else { return }
+              Self.gateProfileEditing(action: "editProfileUploadPhoto") else { return }
         guard data.count <= EditProfileLimits.imageMaxSizeBytes else {
             transientToast = .imageTooLarge
             return
@@ -719,13 +719,13 @@ final class EditProfileStore: ObservableObject {
         let epoch = beginUpload()
         do {
             let url = try await service.uploadImage(data: data, preset: .moment)
-            guard Self.canConfigureProfileSocial,
+            guard Self.canConfigureProfileEditing,
                   isUploadCurrent(epoch: epoch),
                   draft.photos.contains(where: { $0.id == tileId })
             else { return }
             markPhotoUploaded(id: tileId, url: url)
         } catch {
-            guard Self.canConfigureProfileSocial,
+            guard Self.canConfigureProfileEditing,
                   isUploadCurrent(epoch: epoch),
                   draft.photos.contains(where: { $0.id == tileId })
             else { return }
@@ -826,8 +826,7 @@ final class EditProfileStore: ObservableObject {
             req.signature = draft.signature
         }
 
-        // Photos / videos 属于资料社交能力。107 保存基础资料时不夹带历史媒体的新增或删除 diff。
-        if Self.canConfigureProfileSocial {
+        if Self.canConfigureProfileEditing {
             let newPhotoUrls = draft.photos
                 .filter { $0.serverId == nil }
                 .map(\.url)
@@ -841,7 +840,10 @@ final class EditProfileStore: ObservableObject {
 
             if !newPhotoUrls.isEmpty { req.pics = newPhotoUrls }
             if !picsDel.isEmpty { req.picsDel = picsDel }
+        }
 
+        // 视频仍属于宽泛资料社交能力；107 不提交任何视频差异。
+        if Self.canConfigureProfileSocial {
             let newVideoUrls = draft.videos
                 .filter { $0.serverId == nil }
                 .map(\.url)
@@ -911,6 +913,22 @@ final class EditProfileStore: ObservableObject {
         return true
         #else
         return SelfPermissionBridge.shared.canProfileSocialSnapshot
+        #endif
+    }
+
+    private static var canConfigureProfileEditing: Bool {
+        #if HILY_TESTS
+        return true
+        #else
+        return SelfPermissionBridge.shared.canProfileEditingSnapshot
+        #endif
+    }
+
+    private static func gateProfileEditing(action: String) -> Bool {
+        #if HILY_TESTS
+        return true
+        #else
+        return SelfPermissionBridge.shared.gate(.profileEditing, action: action)
         #endif
     }
 

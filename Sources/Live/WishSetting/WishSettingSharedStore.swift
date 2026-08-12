@@ -34,6 +34,14 @@ final class WishSettingSharedStore: ObservableObject {
     private var didLoadCommon: Bool = false
     private var didLoadPrivate: Bool = false
     private var didLoadWishGiftMaxNum: Bool = false
+    /// 登出重置代际。调用方 Task 即使继续执行，旧账号结果也不能写回共享状态。
+    private var dataGeneration = 0
+
+    var generationToken: Int { dataGeneration }
+
+    func isCurrent(generation: Int) -> Bool {
+        generation == dataGeneration
+    }
 
     private let key = "wishSetting.state.v1"
 
@@ -47,13 +55,21 @@ final class WishSettingSharedStore: ObservableObject {
     /// 失败保持 didLoadCommon=false，下次 tap 可重试。
     func ensureCommonTemplates() async {
         guard !loadingCommonTemplates, !didLoadCommon else { return }
+        let generation = dataGeneration
         loadingCommonTemplates = true
-        defer { loadingCommonTemplates = false }
+        defer {
+            if generation == dataGeneration {
+                loadingCommonTemplates = false
+            }
+        }
         do {
-            commonTemplates = try await WishSettingService.getTemplateList()
+            let templates = try await WishSettingService.getTemplateList()
+            guard generation == dataGeneration, !Task.isCancelled else { return }
+            commonTemplates = templates
             didLoadCommon = true
             logger.info("ensureCommonTemplates ok count=\(self.commonTemplates.count)")
         } catch {
+            guard generation == dataGeneration, !Task.isCancelled else { return }
             logger.warning("ensureCommonTemplates failed: \(String(describing: error))")
         }
     }
@@ -62,13 +78,21 @@ final class WishSettingSharedStore: ObservableObject {
     /// —— 后端返回空数组时也算成功，不重拉；避免空态 cache 失效导致每次切 Private chip 都重复请求
     func ensurePrivateTemplates() async {
         guard !loadingPrivateTemplates, !didLoadPrivate else { return }
+        let generation = dataGeneration
         loadingPrivateTemplates = true
-        defer { loadingPrivateTemplates = false }
+        defer {
+            if generation == dataGeneration {
+                loadingPrivateTemplates = false
+            }
+        }
         do {
-            privateTemplates = try await WishSettingService.getPromisePool()
+            let templates = try await WishSettingService.getPromisePool()
+            guard generation == dataGeneration, !Task.isCancelled else { return }
+            privateTemplates = templates
             didLoadPrivate = true
             logger.info("ensurePrivateTemplates ok count=\(self.privateTemplates.count)")
         } catch {
+            guard generation == dataGeneration, !Task.isCancelled else { return }
             logger.warning("ensurePrivateTemplates failed: \(String(describing: error))")
         }
     }
@@ -76,11 +100,15 @@ final class WishSettingSharedStore: ObservableObject {
     /// wishGiftMaxNum 后端配置项，App 生命周期内至多拉 1 次。失败保留默认 3 + 不阻塞下次重试
     func ensureWishGiftMaxNum() async {
         guard !didLoadWishGiftMaxNum else { return }
+        let generation = dataGeneration
         do {
-            wishGiftMaxNum = try await WishSettingService.getWishGiftMaxNum()
+            let maxNum = try await WishSettingService.getWishGiftMaxNum()
+            guard generation == dataGeneration, !Task.isCancelled else { return }
+            wishGiftMaxNum = maxNum
             didLoadWishGiftMaxNum = true
             logger.info("ensureWishGiftMaxNum ok = \(self.wishGiftMaxNum)")
         } catch {
+            guard generation == dataGeneration, !Task.isCancelled else { return }
             // 保留默认 3，允许下次重试
             logger.warning("ensureWishGiftMaxNum failed: \(String(describing: error))")
         }
@@ -129,6 +157,7 @@ final class WishSettingSharedStore: ObservableObject {
     /// P1-1 加固：账号切换（logout → 新登录）语义 —— 除持久化字段外，也清 App 级 template cache
     /// + didLoad 标志，避免上个账号的 privateTemplates / commonTemplates 遗留到新账号
     func reset() {
+        dataGeneration &+= 1
         wishlist = []
         promiseType = .none
         promiseTemplateId = 0
@@ -138,10 +167,13 @@ final class WishSettingSharedStore: ObservableObject {
         commonTemplates = []
         privateTemplates = []
         wishGiftMaxNum = 3
+        loadingCommonTemplates = false
+        loadingPrivateTemplates = false
         didLoadCommon = false
         didLoadPrivate = false
         didLoadWishGiftMaxNum = false
         UserDefaults.standard.removeObject(forKey: key)
+        UserDefaults.standard.removeObject(forKey: "wishRuleAgreed")
     }
 
     private func persist() {

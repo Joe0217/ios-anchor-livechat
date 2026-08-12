@@ -31,10 +31,319 @@ final class PermissionMappingTests: XCTestCase {
         XCTAssertFalse(UserTypeExperience.canEnterMainApp(9))
     }
 
-    func test_userTypeExperience_isFixedTo107ForEveryAuthenticatedSession() {
-        XCTAssertEqual(UserTypeExperience.fixedUserType, 107)
-        XCTAssertEqual(UserTypeExperience.effectiveUserType(isAuthenticated: true), 107)
-        XCTAssertNil(UserTypeExperience.effectiveUserType(isAuthenticated: false))
+    func test_userTypeExperience_usesLoginMediaInsteadOfRawUserType() {
+        let placeholderUser = makeLoginResult(
+            userType: 2,
+            videos: [ReviewAccountModePolicy.placeholderReviewVideoURL]
+        )
+        let regularUser = makeLoginResult(
+            userType: 107,
+            videos: ["https://cdn.example.com/real-review.mp4"]
+        )
+
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: placeholderUser), 107)
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: regularUser), 2)
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: nil), 107)
+    }
+
+    func test_userTypeExperience_missingMediaFieldsStays107UntilResolved() {
+        let unknownUser = makeLoginResult(userType: 2, videos: nil)
+        let knownEmptyUser = makeLoginResult(userType: 107, videos: [])
+
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: unknownUser), 107)
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: knownEmptyUser), 2)
+    }
+
+    func test_userTypeExperience_usesPersistedRawPlaceholderEvidence() {
+        let user = LoginResult(
+            userId: 7,
+            token: "token",
+            loginUuid: nil,
+            yxAccid: nil,
+            imToken: nil,
+            userType: 2,
+            nickname: nil,
+            icon: nil,
+            reviewPlaceholderVideoMatched: true
+        )
+
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: user), 107)
+    }
+
+    func test_userTypeExperience_missingUserIdentityFailsClosedTo107() {
+        let missingIdentity = LoginResult(
+            userId: nil,
+            token: "token",
+            loginUuid: nil,
+            yxAccid: nil,
+            imToken: nil,
+            userType: 2,
+            nickname: nil,
+            icon: nil,
+            videos: ["https://cdn.example.com/real-review.mp4"]
+        )
+
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: missingIdentity), 107)
+
+        let invalidIdentity = LoginResult(
+            userId: 0,
+            token: "token",
+            loginUuid: nil,
+            yxAccid: nil,
+            imToken: nil,
+            userType: 2,
+            nickname: nil,
+            icon: nil,
+            videos: []
+        )
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: invalidIdentity), 107)
+    }
+
+    func test_userTypeExperience_usesCurrentVersionResolvedFullMode() {
+        let reviewUser = makeLoginResult(
+            userType: 2,
+            videos: [ReviewAccountModePolicy.placeholderReviewVideoURL]
+        )
+        let regularUser = makeLoginResult(userType: 2, videos: nil)
+            .resolvingPermissionVideoURLs(["https://cdn.example.com/real-review.mp4"])
+
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: reviewUser), 107)
+        XCTAssertTrue(regularUser.isReviewModeResolved)
+        XCTAssertEqual(
+            regularUser.reviewModeEvidenceVersion,
+            ReviewAccountModePolicy.currentEvidenceVersion
+        )
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: regularUser), 2)
+    }
+
+    func test_initialPermissionMode_usesVersionedCacheAndProfileEvidence() {
+        let unresolved = makeLoginResult(userType: 2, videos: nil)
+
+        let currentReviewMediaWins = makeLoginResult(
+            userType: 2,
+            videos: [ReviewAccountModePolicy.placeholderReviewVideoURL]
+        ).resolvingInitialPermissionMode(
+            cachedPermissionVideoURLs: ["https://cdn.example.com/stale-real.mp4"],
+            cachedPlaceholderMatched: false
+        )
+        XCTAssertEqual(currentReviewMediaWins.source, "session-media")
+        XCTAssertEqual(
+            UserTypeExperience.effectiveUserType(userInfo: currentReviewMediaWins.user),
+            107
+        )
+
+        let currentRealMediaWins = makeLoginResult(
+            userType: 107,
+            videos: ["https://cdn.example.com/current-real.mp4"]
+        ).resolvingInitialPermissionMode(
+            cachedPermissionVideoURLs: [ReviewAccountModePolicy.placeholderReviewVideoURL],
+            cachedPlaceholderMatched: true
+        )
+        XCTAssertEqual(currentRealMediaWins.source, "session-media")
+        XCTAssertEqual(
+            UserTypeExperience.effectiveUserType(userInfo: currentRealMediaWins.user),
+            2
+        )
+
+        let confirmedFullCache = unresolved.resolvingInitialPermissionMode(
+            cachedPermissionVideoURLs: nil,
+            cachedPlaceholderMatched: false
+        )
+        XCTAssertEqual(confirmedFullCache.source, "mode-cache-full")
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: confirmedFullCache.user), 2)
+
+        let confirmedReviewCache = unresolved.resolvingInitialPermissionMode(
+            cachedPermissionVideoURLs: nil,
+            cachedPlaceholderMatched: true
+        )
+        XCTAssertEqual(confirmedReviewCache.source, "mode-cache-review")
+        XCTAssertEqual(
+            UserTypeExperience.effectiveUserType(userInfo: confirmedReviewCache.user),
+            107
+        )
+        XCTAssertEqual(
+            confirmedReviewCache.user.reviewModeEvidenceVersion,
+            ReviewAccountModePolicy.cachedModeEvidenceVersion
+        )
+
+        let cachedRealMedia = unresolved.resolvingInitialPermissionMode(
+            cachedPermissionVideoURLs: ["https://cdn.example.com/real-review.mp4"],
+            cachedPlaceholderMatched: nil
+        )
+        XCTAssertEqual(cachedRealMedia.source, "profile-cache-full")
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: cachedRealMedia.user), 2)
+
+        let restrictiveModeCacheWinsConflict = unresolved.resolvingInitialPermissionMode(
+            cachedPermissionVideoURLs: [],
+            cachedPlaceholderMatched: true
+        )
+        XCTAssertEqual(restrictiveModeCacheWinsConflict.source, "mode-cache-review")
+        XCTAssertEqual(
+            UserTypeExperience.effectiveUserType(userInfo: restrictiveModeCacheWinsConflict.user),
+            107
+        )
+
+        let restrictiveProfileCacheWinsConflict = unresolved.resolvingInitialPermissionMode(
+            cachedPermissionVideoURLs: [ReviewAccountModePolicy.placeholderReviewVideoURL],
+            cachedPlaceholderMatched: false
+        )
+        XCTAssertEqual(restrictiveProfileCacheWinsConflict.source, "profile-cache-review")
+        XCTAssertEqual(
+            UserTypeExperience.effectiveUserType(userInfo: restrictiveProfileCacheWinsConflict.user),
+            107
+        )
+
+        let noEvidence = unresolved.resolvingInitialPermissionMode(
+            cachedPermissionVideoURLs: nil,
+            cachedPlaceholderMatched: nil
+        )
+        XCTAssertEqual(noEvidence.source, "unresolved")
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: noEvidence.user), 107)
+    }
+
+    func test_reloginFullAccountUsesItsOwnCachedModeAfterReviewAccount() {
+        let reviewAccount = makeLoginResult(userID: 107_001, userType: 2, videos: nil)
+            .resolvingInitialPermissionMode(
+                cachedPermissionVideoURLs: nil,
+                cachedPlaceholderMatched: true
+            )
+        let fullAccount = makeLoginResult(userID: 2_001, userType: 2, videos: nil)
+            .resolvingInitialPermissionMode(
+                cachedPermissionVideoURLs: nil,
+                cachedPlaceholderMatched: false
+            )
+
+        XCTAssertNotEqual(reviewAccount.user.userId, fullAccount.user.userId)
+        XCTAssertEqual(reviewAccount.source, "mode-cache-review")
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: reviewAccount.user), 107)
+        XCTAssertEqual(fullAccount.source, "mode-cache-full")
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: fullAccount.user), 2)
+    }
+
+    func test_cachedModeEvidencePreservesBothModesAcrossRestore() {
+        let cachedReview = makeLoginResult(userType: 2, videos: nil)
+            .applyingCachedReviewPlaceholderMatch(true)
+        let cachedFull = makeLoginResult(userType: 2, videos: nil)
+            .applyingCachedReviewPlaceholderMatch(false)
+
+        XCTAssertEqual(cachedReview.reviewModeEvidenceVersion, ReviewAccountModePolicy.cachedModeEvidenceVersion)
+        XCTAssertEqual(cachedFull.reviewModeEvidenceVersion, ReviewAccountModePolicy.cachedModeEvidenceVersion)
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: cachedReview), 107)
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: cachedFull), 2)
+    }
+
+    func test_previousCachedModeEvidenceCannotOpenFullModeWithoutMedia() {
+        let staleFullMode = LoginResult(
+            userId: 7,
+            token: "token",
+            loginUuid: nil,
+            yxAccid: nil,
+            imToken: nil,
+            userType: 2,
+            nickname: nil,
+            icon: nil,
+            reviewPlaceholderVideoMatched: false,
+            reviewModeResolved: true,
+            reviewModeEvidenceVersion: 4
+        )
+
+        XCTAssertFalse(staleFullMode.isReviewModeResolved)
+        XCTAssertNil(staleFullMode.resolvedReviewPlaceholderMatch)
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: staleFullMode), 107)
+    }
+
+    func test_reviewModeRegistryMigratesOnlyRestrictiveLegacyEvidence() throws {
+        let currentKey = KeychainKey.reviewModeByUserID
+        let legacyKeys = KeychainKey.obsoleteReviewModeByUserID
+        let originalCurrentData = KeychainStore.getData(for: currentKey)
+        let originalLegacyData = Dictionary(uniqueKeysWithValues: legacyKeys.map {
+            ($0, KeychainStore.getData(for: $0))
+        })
+        defer {
+            if let originalCurrentData {
+                _ = KeychainStore.setData(originalCurrentData, for: currentKey)
+            } else {
+                _ = KeychainStore.remove(for: currentKey)
+            }
+            for key in legacyKeys {
+                if let originalData = originalLegacyData[key] ?? nil {
+                    _ = KeychainStore.setData(originalData, for: key)
+                } else {
+                    _ = KeychainStore.remove(for: key)
+                }
+            }
+        }
+
+        _ = KeychainStore.remove(for: currentKey)
+        for key in legacyKeys {
+            _ = KeychainStore.remove(for: key)
+        }
+        let legacyKey = try XCTUnwrap(legacyKeys.last)
+        let legacyValues = ["991107": true, "991002": false]
+        XCTAssertTrue(KeychainStore.setData(
+            try JSONEncoder().encode(legacyValues),
+            for: legacyKey
+        ))
+
+        XCTAssertEqual(ReviewAccountModeRegistry.placeholderMatched(for: 991_107), true)
+        XCTAssertNil(ReviewAccountModeRegistry.placeholderMatched(for: 991_002))
+        XCTAssertNil(KeychainStore.getData(for: legacyKey))
+    }
+
+    func test_reviewModeRegistryRecoversFromCorruptedStorage() {
+        let key = KeychainKey.reviewModeByUserID
+        let originalData = KeychainStore.getData(for: key)
+        defer {
+            if let originalData {
+                _ = KeychainStore.setData(originalData, for: key)
+            } else {
+                _ = KeychainStore.remove(for: key)
+            }
+        }
+
+        XCTAssertTrue(KeychainStore.setData(Data("not-json".utf8), for: key))
+        XCTAssertNil(ReviewAccountModeRegistry.placeholderMatched(for: 991_107))
+        XCTAssertTrue(ReviewAccountModeRegistry.record(userID: 991_107, placeholderMatched: true))
+        XCTAssertEqual(ReviewAccountModeRegistry.placeholderMatched(for: 991_107), true)
+        XCTAssertTrue(ReviewAccountModeRegistry.record(userID: 991_107, placeholderMatched: false))
+        XCTAssertEqual(ReviewAccountModeRegistry.placeholderMatched(for: 991_107), false)
+    }
+
+    func test_reviewAccountModePolicy_defaultsTo107WithoutCurrentUserInfo() {
+        XCTAssertEqual(ReviewAccountModePolicy.effectiveUserType(
+            isAuthenticated: true,
+            hasUserInfo: false,
+            videoURLs: []
+        ), 107)
+        XCTAssertNil(ReviewAccountModePolicy.effectiveUserType(
+            isAuthenticated: false,
+            hasUserInfo: false,
+            videoURLs: []
+        ))
+    }
+
+    func test_reviewAccountModePolicy_uses107OnlyForPlaceholderVideo() {
+        XCTAssertEqual(ReviewAccountModePolicy.effectiveUserType(
+            isAuthenticated: true,
+            hasUserInfo: true,
+            videoURLs: ["  \(ReviewAccountModePolicy.placeholderReviewVideoURL)  "]
+        ), 107)
+        XCTAssertEqual(ReviewAccountModePolicy.effectiveUserType(
+            isAuthenticated: true,
+            hasUserInfo: true,
+            videoURLs: ["https://cdn.example.com/real-review.mp4"]
+        ), 2)
+        XCTAssertEqual(ReviewAccountModePolicy.effectiveUserType(
+            isAuthenticated: true,
+            hasUserInfo: true,
+            videoURLs: []
+        ), 2)
+        XCTAssertEqual(ReviewAccountModePolicy.effectiveUserType(
+            isAuthenticated: true,
+            hasUserInfo: true,
+            videoURLs: [],
+            mediaInfoResolved: false
+        ), 107)
     }
 
     func test_userTypeExperience_separatesPartyOnlyFromFullHostRealtime() {
@@ -46,6 +355,24 @@ final class PermissionMappingTests: XCTestCase {
         XCTAssertTrue(UserTypeExperience.isPartyOnly(107))
         XCTAssertFalse(UserTypeExperience.isPartyOnly(2))
         XCTAssertFalse(UserTypeExperience.isPartyOnly(nil))
+    }
+
+    private func makeLoginResult(
+        userID: Int = 7,
+        userType: Int?,
+        videos: [String]?
+    ) -> LoginResult {
+        LoginResult(
+            userId: userID,
+            token: "token",
+            loginUuid: nil,
+            yxAccid: nil,
+            imToken: nil,
+            userType: userType,
+            nickname: nil,
+            icon: nil,
+            videos: videos
+        )
     }
 
     // MARK: - F-4 ~ F-9: 六种黑名单 userType 矩阵
@@ -121,6 +448,7 @@ final class PermissionMappingTests: XCTestCase {
         XCTAssertFalse(blocked.contains(.supportMessaging))
         XCTAssertFalse(blocked.contains(.beautyStudio))
         XCTAssertFalse(blocked.contains(.profileAlbum))
+        XCTAssertFalse(blocked.contains(.profileEditing))
     }
 
     // MARK: - R-3: 未知 userType 视为不受限

@@ -1,11 +1,10 @@
 import SwiftUI
-import PhotosUI
 
 /// 头像编辑组件（I-spec §2.6 / §6B.2 / §7.2）。
 ///
 /// 审核态 UX 严格照 spec v2：**条件分支渲染**而非 PhotosPicker + overlay。
 /// - 审核中：裸 `Button { toast() }` label 是头像图 + In Review overlay
-/// - 非审核：`PhotosPicker` label 是头像图 + 底部小铅笔提示
+/// - 非审核：点击头像后由父页面展示“美颜相机 / 相册”来源菜单
 ///
 /// 关键（对齐 rule swiftui-button-plain-hitarea.md）：Button 用 `.buttonStyle(.plain)`
 /// + label 加 `.contentShape(Rectangle())` 确保头像圆形边界内完整可点。
@@ -22,22 +21,20 @@ struct AvatarEditView: View {
     /// 头像被拒（vaild=3）—— 编辑允许（用户可换新的），但显示"Rejected"徽章告知
     /// 用户产品需求 2026-07-07：H5 index.vue:79-86 三态视觉，iOS 补齐 P1 gap
     let isRejected: Bool
-    let onPick: (PhotosPickerItem) -> Void
+    let onEditTap: () -> Void
     let onReviewingTap: () -> Void
-
-    @State private var pickerItem: PhotosPickerItem?
 
     private let size: CGFloat = 80
 
     init(avatarUrl: String,
          isReviewing: Bool,
          isRejected: Bool = false,
-         onPick: @escaping (PhotosPickerItem) -> Void,
+         onEditTap: @escaping () -> Void,
          onReviewingTap: @escaping () -> Void) {
         self.avatarUrl = avatarUrl
         self.isReviewing = isReviewing
         self.isRejected = isRejected
-        self.onPick = onPick
+        self.onEditTap = onEditTap
         self.onReviewingTap = onReviewingTap
     }
 
@@ -56,9 +53,9 @@ struct AvatarEditView: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                // 正常 / 被拒：均允许 PhotosPicker（拒绝态用户可换新的）
+                // 正常 / 被拒：均允许重新选择来源（拒绝态用户可换新的）
                 // 拒绝态额外显示 Rejected 徽章告知用户
-                PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
+                Button(action: onEditTap) {
                     avatarContent
                         .overlay(
                             editBadge
@@ -72,12 +69,7 @@ struct AvatarEditView: View {
                         }
                         .contentShape(Circle())
                 }
-                .onChange(of: pickerItem) { newItem in
-                    if let newItem {
-                        onPick(newItem)
-                        pickerItem = nil
-                    }
-                }
+                .buttonStyle(.plain)
             }
         }
         .frame(width: size, height: size)
@@ -119,13 +111,13 @@ struct AvatarEditView: View {
         AvatarEditView(
             avatarUrl: "",
             isReviewing: false,
-            onPick: { _ in },
+            onEditTap: {},
             onReviewingTap: {}
         )
         AvatarEditView(
             avatarUrl: "",
             isReviewing: true,
-            onPick: { _ in },
+            onEditTap: {},
             onReviewingTap: {}
         )
     }

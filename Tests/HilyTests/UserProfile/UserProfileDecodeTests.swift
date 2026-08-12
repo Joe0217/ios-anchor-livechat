@@ -350,6 +350,69 @@ final class UserProfileDecodeTests: XCTestCase {
         XCTAssertEqual(guardians?.last?.iconURL, "https://example.com/silver.png")
     }
 
+    // MARK: - picList 相册解析
+
+    func test_decodeDetail_picListAbsent_returnsEmptyArray() {
+        let json = #"{"userId":"1","nickname":"A"}"#
+        XCTAssertEqual(UserProfileService.decodeDetail(from: Data(json.utf8))?.picList, [])
+    }
+
+    func test_decodeDetail_picList_decodesPhotoAndVideoFields() {
+        let json = """
+        {"userId":"1","picList":[
+          {"id":10,"mediaUrl":"https://example.com/a.jpg","mediaType":1,"vaild":1},
+          {"id":"11","mediaUrl":"https://example.com/b.mp4","videoCover":"https://example.com/b.jpg","mediaType":2,"vaild":1}
+        ]}
+        """
+        let media = UserProfileService.decodeDetail(from: Data(json.utf8))?.picList ?? []
+        XCTAssertEqual(media.count, 2)
+        XCTAssertEqual(media[0].assetId, 10)
+        XCTAssertEqual(media[0].mediaType, 1)
+        XCTAssertEqual(media[1].assetId, 11)
+        XCTAssertEqual(media[1].videoCover, "https://example.com/b.jpg")
+    }
+
+    func test_decodeDetail_picList_acceptsStringMediaTypeAndValidity() {
+        let json = """
+        {"userId":"1","picList":[
+          {"id":" 12 ","mediaUrl":"https://example.com/a.jpg","mediaType":"1","vaild":"1"}
+        ]}
+        """
+        let media = UserProfileService.decodeDetail(from: Data(json.utf8))?.picList ?? []
+
+        XCTAssertEqual(media.count, 1)
+        XCTAssertEqual(media[0].assetId, 12)
+        XCTAssertEqual(media[0].mediaType, 1)
+        XCTAssertEqual(media[0].vaild, 1)
+    }
+
+    func test_decodeDetail_picList_skipsMissingOrEmptyMediaUrl() {
+        let json = """
+        {"userId":"1","picList":[
+          {"id":10,"mediaType":1,"vaild":1},
+          {"id":11,"mediaUrl":"   ","mediaType":1,"vaild":1},
+          {"id":12,"mediaUrl":"https://example.com/valid.jpg","mediaType":1,"vaild":1}
+        ]}
+        """
+        let media = UserProfileService.decodeDetail(from: Data(json.utf8))?.picList ?? []
+        XCTAssertEqual(media.map(\.assetId), [12])
+    }
+
+    func test_decodeDetail_picList_skipsNonObjectItemsWithoutDroppingValidMedia() {
+        let json = """
+        {"userId":"1","picList":[
+          null,
+          "invalid",
+          {"id":12,"mediaUrl":"  https://example.com/valid.jpg  ","mediaType":"1","vaild":"1"}
+        ]}
+        """
+        let media = UserProfileService.decodeDetail(from: Data(json.utf8))?.picList ?? []
+
+        XCTAssertEqual(media.count, 1)
+        XCTAssertEqual(media[0].assetId, 12)
+        XCTAssertEqual(media[0].mediaUrl, "https://example.com/valid.jpg")
+    }
+
     // MARK: - connRate 类型宽松收 String
 
     func test_decodeDetail_connRateAsString() {

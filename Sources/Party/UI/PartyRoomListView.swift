@@ -120,7 +120,7 @@ struct PartyRoomListContent<Store: PartyRoomListLike>: View {
 
     private var isPartyOnlyMode: Bool {
         let effectiveUserType = permission.effectiveUserTypeSnapshot
-            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.isLoggedIn)
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
         return UserTypeExperience.isPartyOnly(effectiveUserType)
     }
 

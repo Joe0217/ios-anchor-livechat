@@ -156,6 +156,133 @@ final class LiveListViewModelTests: XCTestCase {
         XCTAssertEqual(vm.items.first?.id, "1")
         XCTAssertEqual(vm.loadState, .loaded)
     }
+
+    // MARK: - 登录会话隔离
+
+    func test_prepareForSession_resetsCachedSegmentsAndPaging() async {
+        let fake = FakeLiveListService(pagesByKeyword: [
+            1: [.mock(id: "old-online")],
+            2: [.mock(id: "old-prime")],
+        ])
+        let vm = LiveListViewModel(service: fake, pageSize: 20)
+
+        let oldSession = UUID()
+        XCTAssertTrue(vm.prepareForSession(oldSession))
+        await vm.loadFirstPage()
+        vm.segment = .prime
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertEqual(vm.items.map(\.id), ["old-prime"])
+
+        XCTAssertFalse(vm.prepareForSession(oldSession), "同一会话不应重置 keep-alive 数据")
+        XCTAssertTrue(vm.prepareForSession(UUID()))
+        XCTAssertEqual(vm.segment, .online)
+        XCTAssertEqual(vm.items, [])
+        XCTAssertEqual(vm.loadState, .idle)
+        XCTAssertTrue(vm.hasMore)
+    }
+
+    func test_oldSessionResponse_afterContextSwitch_isDiscarded() async {
+        let fake = ControlledLiveListService()
+        let vm = LiveListViewModel(service: fake, pageSize: 20)
+
+        vm.prepareForSession(UUID())
+        let oldRequest = Task { await vm.loadFirstPage() }
+        await fake.waitForRequestCount(1)
+        vm.prepareForSession(UUID())
+        await fake.completeFirst(with: [.mock(id: "stale")])
+        await oldRequest.value
+
+        XCTAssertEqual(vm.items, [])
+        XCTAssertEqual(vm.loadState, .idle)
+    }
+
+    func test_newSessionCanLoadWhileOldSessionRequestFinishesLate() async {
+        let fake = ControlledLiveListService()
+        let vm = LiveListViewModel(service: fake, pageSize: 20)
+
+        vm.prepareForSession(UUID())
+        let oldRequest = Task { await vm.loadFirstPage() }
+        await fake.waitForRequestCount(1)
+
+        vm.prepareForSession(UUID())
+        let newRequest = Task { await vm.loadFirstPage() }
+        await fake.waitForRequestCount(2)
+        await fake.complete(at: 1, with: [.mock(id: "current")])
+        await newRequest.value
+
+        await fake.completeFirst(with: [.mock(id: "stale")])
+        await oldRequest.value
+        XCTAssertEqual(vm.items.map(\.id), ["current"])
+        XCTAssertEqual(vm.loadState, .loaded)
+    }
+
+    func test_cancelledViewTask_doesNotCancelInFlightRequest() async {
+        let fake = CancellationAwareLiveListService()
+        let vm = LiveListViewModel(service: fake, pageSize: 20)
+
+        let viewTask = Task { await vm.loadFirstPage() }
+        await fake.waitForRequest()
+        viewTask.cancel()
+        await fake.complete(with: [.mock(id: "completed-after-view-cancel")])
+        await viewTask.value
+
+        XCTAssertEqual(vm.items.map(\.id), ["completed-after-view-cancel"])
+        XCTAssertEqual(vm.loadState, .loaded)
+    }
+}
+
+@MainActor
+final class LiveStreamViewModelSessionTests: XCTestCase {
+
+    func test_cancelledViewTask_doesNotCancelInFlightFirstPage() async {
+        let fake = CancellationAwareLiveStreamService()
+        let vm = LiveStreamViewModel(service: fake, firstPageSize: 6, pageSize: 10)
+
+        vm.prepareForSession(UUID())
+        let viewTask = Task { await vm.loadFirstPage() }
+        await fake.waitForRequest()
+        viewTask.cancel()
+        await fake.complete(with: [.mock(id: "live-after-view-cancel")])
+        await viewTask.value
+
+        XCTAssertEqual(vm.items.map(\.id), ["live-after-view-cancel"])
+        XCTAssertEqual(vm.loadState, .loaded)
+    }
+
+    func test_oldSessionResponse_afterContextSwitch_isDiscarded() async {
+        let fake = ControlledLiveStreamService()
+        let vm = LiveStreamViewModel(service: fake, firstPageSize: 6, pageSize: 10)
+
+        vm.prepareForSession(UUID())
+        let oldRequest = Task { await vm.loadFirstPage() }
+        await fake.waitForRequestCount(1)
+        vm.prepareForSession(UUID())
+        await fake.completeFirst(with: [.mock(id: "stale-live")])
+        await oldRequest.value
+
+        XCTAssertEqual(vm.items, [])
+        XCTAssertEqual(vm.loadState, .idle)
+    }
+
+    func test_newSessionCanLoadWhileOldSessionRequestFinishesLate() async {
+        let fake = ControlledLiveStreamService()
+        let vm = LiveStreamViewModel(service: fake, firstPageSize: 6, pageSize: 10)
+
+        vm.prepareForSession(UUID())
+        let oldRequest = Task { await vm.loadFirstPage() }
+        await fake.waitForRequestCount(1)
+
+        vm.prepareForSession(UUID())
+        let newRequest = Task { await vm.loadFirstPage() }
+        await fake.waitForRequestCount(2)
+        await fake.complete(at: 1, with: [.mock(id: "current-live")])
+        await newRequest.value
+
+        await fake.completeFirst(with: [.mock(id: "stale-live")])
+        await oldRequest.value
+        XCTAssertEqual(vm.items.map(\.id), ["current-live"])
+        XCTAssertEqual(vm.loadState, .loaded)
+    }
 }
 
 // MARK: - Fakes & helpers
@@ -201,10 +328,125 @@ private final class FakeLiveListService: LiveListServiceProtocol {
     }
 }
 
+private actor ControlledLiveListService: LiveListServiceProtocol {
+    private var continuations: [CheckedContinuation<[LiveListAnchor], Never>] = []
+
+    func fetchUsers(keyword: Int, currentPage: Int, pageSize: Int) async throws -> [LiveListAnchor] {
+        await withCheckedContinuation { continuation in
+            continuations.append(continuation)
+        }
+    }
+
+    func waitForRequestCount(_ count: Int) async {
+        while continuations.count < count {
+            await Task.yield()
+        }
+    }
+
+    func completeFirst(with items: [LiveListAnchor]) {
+        guard !continuations.isEmpty else { return }
+        continuations.removeFirst().resume(returning: items)
+    }
+
+    func complete(at index: Int, with items: [LiveListAnchor]) {
+        guard continuations.indices.contains(index) else { return }
+        continuations.remove(at: index).resume(returning: items)
+    }
+}
+
+private actor CancellationAwareLiveListService: LiveListServiceProtocol {
+    private var requestStarted = false
+    private var result: [LiveListAnchor]?
+
+    func fetchUsers(keyword: Int, currentPage: Int, pageSize: Int) async throws -> [LiveListAnchor] {
+        requestStarted = true
+        while result == nil {
+            try Task.checkCancellation()
+            try await Task.sleep(nanoseconds: 1_000_000)
+        }
+        return result ?? []
+    }
+
+    func waitForRequest() async {
+        while !requestStarted {
+            await Task.yield()
+        }
+    }
+
+    func complete(with items: [LiveListAnchor]) {
+        result = items
+    }
+}
+
+private actor ControlledLiveStreamService: LiveStreamServiceProtocol {
+    private var continuations: [CheckedContinuation<[LiveStreamAnchor], Never>] = []
+
+    func fetchLiveList(currentPage: Int, pageSize: Int) async throws -> [LiveStreamAnchor] {
+        await withCheckedContinuation { continuation in
+            continuations.append(continuation)
+        }
+    }
+
+    func waitForRequestCount(_ count: Int) async {
+        while continuations.count < count {
+            await Task.yield()
+        }
+    }
+
+    func completeFirst(with items: [LiveStreamAnchor]) {
+        guard !continuations.isEmpty else { return }
+        continuations.removeFirst().resume(returning: items)
+    }
+
+    func complete(at index: Int, with items: [LiveStreamAnchor]) {
+        guard continuations.indices.contains(index) else { return }
+        continuations.remove(at: index).resume(returning: items)
+    }
+}
+
+private actor CancellationAwareLiveStreamService: LiveStreamServiceProtocol {
+    private var requestStarted = false
+    private var result: [LiveStreamAnchor]?
+
+    func fetchLiveList(currentPage: Int, pageSize: Int) async throws -> [LiveStreamAnchor] {
+        requestStarted = true
+        while result == nil {
+            try Task.checkCancellation()
+            try await Task.sleep(nanoseconds: 1_000_000)
+        }
+        return result ?? []
+    }
+
+    func waitForRequest() async {
+        while !requestStarted {
+            await Task.yield()
+        }
+    }
+
+    func complete(with items: [LiveStreamAnchor]) {
+        result = items
+    }
+}
+
 private extension LiveListAnchor {
     static func mock(id: String) -> LiveListAnchor {
         LiveListAnchor(userId: id, nickname: "u\(id)", icon: nil,
                        userLevel: "1", vipExpireTimeMs: nil,
                        country: "US", yxAccid: "yx-\(id)")
+    }
+}
+
+private extension LiveStreamAnchor {
+    static func mock(id: String) -> LiveStreamAnchor {
+        LiveStreamAnchor(
+            userId: id,
+            nickname: "u\(id)",
+            icon: nil,
+            backgroundImgUrl: nil,
+            joinNum: "0",
+            weekIncome: nil,
+            pkStatus: nil,
+            diamondGiftActive: nil
+        )
     }
 }

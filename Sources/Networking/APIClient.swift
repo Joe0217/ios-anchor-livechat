@@ -13,11 +13,21 @@ struct APIError: Error, LocalizedError {
 final class APIClient {
     static let shared = APIClient()
     private let session: URLSession
+    private let waitUntilReachable: () async -> Void
+    private let authTokenProvider: () -> String?
 
     /// 默认 init：生产 / 真机走 default config 即可。
     /// 单测从这里注入 ephemeral + URLProtocol mock 的 session，对 envelope 解码/错误码分流做断言。
-    init(session: URLSession = URLSession(configuration: .default)) {
+    init(
+        session: URLSession = URLSession(configuration: .default),
+        waitUntilReachable: @escaping () async -> Void = {
+            await NetworkReachability.shared.waitUntilReachable()
+        },
+        authTokenProvider: @escaping () -> String? = { AuthToken.value }
+    ) {
         self.session = session
+        self.waitUntilReachable = waitUntilReachable
+        self.authTokenProvider = authTokenProvider
     }
 
     /// POST 请求。body 会被 JSON 序列化 → AES → Base64 作为原始 body 发送。
@@ -38,16 +48,19 @@ final class APIClient {
 
     /// dict / array 共用的加密 + 发送内核。
     private func postJSON(_ path: String, jsonBody: Any?, token: String?, suppressCodes: Set<String>) async throws -> Data {
+        let authContext = APIRequestAuthContext(explicitToken: token, currentToken: authTokenProvider)
+        let headers = commonHeaders(resolvedToken: authContext.token)
+        try authContext.ensureCurrent()
         // 首次冷启动前若系统权限对话框「允许使用无线数据」尚未通过,
         // URLSession 会立即失败 —— 让请求等到网络真正可达再发出(10s 超时兜底走原错误路径)
-        await NetworkReachability.shared.waitUntilReachable()
+        await waitUntilReachable()
+        try authContext.ensureCurrent()
         guard let url = URL(string: AppConfig.apiBaseURL + path) else {
             throw APIError(code: "-1", message: "非法 URL")
         }
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.timeoutInterval = 30
-        let headers = commonHeaders(token: token)
         for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
 
         if let body = jsonBody {
@@ -71,6 +84,7 @@ final class APIClient {
         do {
             (data, resp) = try await session.data(for: req)
         } catch {
+            try authContext.ensureCurrent()
             // Task cancel / URLError.cancelled 是用户/系统主动打断（切页、logout、二次刷新前 cancel 旧任务），
             // 不弹 banner；直接向上抛。
             if GlobalErrorBannerNotify.isCancellation(error) { throw error }
@@ -80,6 +94,7 @@ final class APIClient {
             #endif
             throw error
         }
+        try authContext.ensureCurrent()
 
         #if DEBUG
         let respPreview = String(data: data, encoding: .utf8)?.prefix(300) ?? "<binary>"
@@ -88,7 +103,13 @@ final class APIClient {
         #endif
 
         // 走公用 decodeEnvelope：内部处理 HTTP 非 2xx（先试 envelope）+ envelope-parse-fail + 业务码分流
-        return try decodeEnvelope(data, path: path, httpStatus: (resp as? HTTPURLResponse)?.statusCode, suppressCodes: suppressCodes)
+        return try decodeEnvelope(
+            data,
+            path: path,
+            httpStatus: (resp as? HTTPURLResponse)?.statusCode,
+            suppressCodes: suppressCodes,
+            authContext: authContext
+        )
     }
 
     /// GET 请求。query 参数走 URL query string；无请求体加密（对齐 H5 `http.get(...)`）。
@@ -97,7 +118,11 @@ final class APIClient {
     /// **接入 wishlist 后端时的诊断**：后端严格 method 校验；POST 请求会返
     /// `{"code":"1111","message":"Please check your method type, Maybe it's GET"}`。
     func get(_ path: String, query: [String: Any]? = nil, token: String? = nil, suppressCodes: Set<String> = []) async throws -> Data {
-        await NetworkReachability.shared.waitUntilReachable()
+        let authContext = APIRequestAuthContext(explicitToken: token, currentToken: authTokenProvider)
+        let headers = commonHeaders(resolvedToken: authContext.token)
+        try authContext.ensureCurrent()
+        await waitUntilReachable()
+        try authContext.ensureCurrent()
         var components = URLComponents(string: AppConfig.apiBaseURL + path)
         if let query, !query.isEmpty {
             components?.queryItems = query.map { URLQueryItem(name: $0.key, value: "\($0.value)") }
@@ -108,7 +133,7 @@ final class APIClient {
         var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.timeoutInterval = 30
-        for (k, v) in commonHeaders(token: token) { req.setValue(v, forHTTPHeaderField: k) }
+        for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
 
         #if DEBUG
         AppLogger.net.debug("GET \(path, privacy: .public) query=\(String(describing: query), privacy: .public)")
@@ -119,6 +144,7 @@ final class APIClient {
         do {
             (data, resp) = try await session.data(for: req)
         } catch {
+            try authContext.ensureCurrent()
             // Task cancel / URLError.cancelled：不弹 banner，向上抛
             if GlobalErrorBannerNotify.isCancellation(error) { throw error }
             AppLogger.net.error("network error path=\(path, privacy: .public): \(String(describing: error), privacy: .public)")
@@ -127,6 +153,7 @@ final class APIClient {
             #endif
             throw error
         }
+        try authContext.ensureCurrent()
 
         #if DEBUG
         let respPreview = String(data: data, encoding: .utf8)?.prefix(300) ?? "<binary>"
@@ -134,20 +161,30 @@ final class APIClient {
         AppLogger.net.debug("RESP \(path, privacy: .public) status=\(statusCode, privacy: .public) len=\(data.count, privacy: .public) body=\(String(respPreview), privacy: .private)")
         #endif
 
-        return try decodeEnvelope(data, path: path, httpStatus: (resp as? HTTPURLResponse)?.statusCode, suppressCodes: suppressCodes)
+        return try decodeEnvelope(
+            data,
+            path: path,
+            httpStatus: (resp as? HTTPURLResponse)?.statusCode,
+            suppressCodes: suppressCodes,
+            authContext: authContext
+        )
     }
 
     /// DELETE 请求。id 走 URL path（对齐 H5 `http.delete(<path>/<id>)`），无请求体，响应处理同 POST。
     /// **stage 3 接入**：wishlist `deleteWishPromiseItem(id)` 走此方法。
     func delete(_ path: String, token: String? = nil, suppressCodes: Set<String> = []) async throws -> Data {
-        await NetworkReachability.shared.waitUntilReachable()
+        let authContext = APIRequestAuthContext(explicitToken: token, currentToken: authTokenProvider)
+        let headers = commonHeaders(resolvedToken: authContext.token)
+        try authContext.ensureCurrent()
+        await waitUntilReachable()
+        try authContext.ensureCurrent()
         guard let url = URL(string: AppConfig.apiBaseURL + path) else {
             throw APIError(code: "-1", message: "非法 URL")
         }
         var req = URLRequest(url: url)
         req.httpMethod = "DELETE"
         req.timeoutInterval = 30
-        for (k, v) in commonHeaders(token: token) { req.setValue(v, forHTTPHeaderField: k) }
+        for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
 
         #if DEBUG
         AppLogger.net.debug("DELETE \(path, privacy: .public)")
@@ -158,6 +195,7 @@ final class APIClient {
         do {
             (data, resp) = try await session.data(for: req)
         } catch {
+            try authContext.ensureCurrent()
             // Task cancel / URLError.cancelled：不弹 banner，向上抛
             if GlobalErrorBannerNotify.isCancellation(error) { throw error }
             AppLogger.net.error("network error path=\(path, privacy: .public): \(String(describing: error), privacy: .public)")
@@ -166,6 +204,7 @@ final class APIClient {
             #endif
             throw error
         }
+        try authContext.ensureCurrent()
 
         #if DEBUG
         let respPreview = String(data: data, encoding: .utf8)?.prefix(300) ?? "<binary>"
@@ -173,7 +212,13 @@ final class APIClient {
         AppLogger.net.debug("RESP \(path, privacy: .public) status=\(statusCode, privacy: .public) len=\(data.count, privacy: .public) body=\(String(respPreview), privacy: .private)")
         #endif
 
-        return try decodeEnvelope(data, path: path, httpStatus: (resp as? HTTPURLResponse)?.statusCode, suppressCodes: suppressCodes)
+        return try decodeEnvelope(
+            data,
+            path: path,
+            httpStatus: (resp as? HTTPURLResponse)?.statusCode,
+            suppressCodes: suppressCodes,
+            authContext: authContext
+        )
     }
 
     /// Envelope 解析 + 1004/1005 分流 + result Hex 解密。POST/GET/DELETE 三个 method 共用。
@@ -181,7 +226,14 @@ final class APIClient {
     ///
     /// - parameter httpStatus: HTTP status code（可选，用于诊断日志区分"200 body 空"vs"5xx body 空"）
     /// - parameter suppressCodes: 对指定错误码不 post `.apiSessionInvalidated` 通知（A-2 spec v3 BLOCK-1）
-    private func decodeEnvelope(_ data: Data, path: String, httpStatus: Int? = nil, suppressCodes: Set<String> = []) throws -> Data {
+    private func decodeEnvelope(
+        _ data: Data,
+        path: String,
+        httpStatus: Int? = nil,
+        suppressCodes: Set<String> = [],
+        authContext: APIRequestAuthContext
+    ) throws -> Data {
+        try authContext.ensureCurrent()
         // 先尝试 envelope 解析：即便 HTTP 非 2xx（如 401/403/500 携带 code=1004/1005 body），
         // 也要走业务码分流；解析不出才 fallback HTTP status 分支。
         let envelope = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
@@ -209,7 +261,11 @@ final class APIClient {
                 NotificationCenter.default.post(
                     name: .apiSessionInvalidated,
                     object: nil,
-                    userInfo: ["code": code, "message": message]
+                    userInfo: [
+                        "code": code,
+                        "message": message,
+                        "originToken": authContext.token,
+                    ]
                 )
             }
             // 业务码非 0000：post 通用 banner（后端 message 优先，空则用 code 兜底避免落 parse-failure 文案）；
@@ -236,8 +292,7 @@ final class APIClient {
 
     // MARK: - 公共请求头（对应 H5 请求拦截器）
 
-    private func commonHeaders(token: String?) -> [String: String] {
-        let t = token ?? AuthToken.value ?? ""
+    private func commonHeaders(resolvedToken: String) -> [String: String] {
         return [
             "Accept": "application/json, text/plain",
             "Content-Type": "application/json;charset=UTF-8",
@@ -252,9 +307,33 @@ final class APIClient {
             "appVersion": AppConfig.appVersion,
             "version": AppConfig.appVersion,
             "appid": AppConfig.appId,
-            "loginToken": t,
-            "anchorToken": t,
+            "loginToken": resolvedToken,
+            "anchorToken": resolvedToken,
         ]
+    }
+}
+
+/// 将一次请求绑定到创建它时的登录身份。`nil` 表示使用当前会话并跟踪账号切换；
+/// 显式 token（包括注册校验使用的空串）保持调用方指定的身份，不回退读取全局 Token。
+struct APIRequestAuthContext {
+    let token: String
+    private let tracksCurrentSession: Bool
+    private let currentToken: () -> String?
+
+    init(
+        explicitToken: String?,
+        currentToken: @escaping () -> String? = { AuthToken.value }
+    ) {
+        tracksCurrentSession = explicitToken == nil
+        self.currentToken = currentToken
+        token = explicitToken ?? currentToken() ?? ""
+    }
+
+    func ensureCurrent() throws {
+        guard !Task.isCancelled else { throw CancellationError() }
+        guard !tracksCurrentSession || (currentToken() ?? "") == token else {
+            throw CancellationError()
+        }
     }
 }
 
@@ -341,19 +420,29 @@ enum DeviceInfo {
 enum AuthToken {
     private static let key = "auth.token.v2"
     private static let legacyKey = "auth.token.v1"
+    /// getter 包含 v1 -> v2 复合迁移，必须与 logout setter 串行，避免旧 token 在清理后写回。
+    private static let lock = NSLock()
 
     static var value: String? {
         get {
+            lock.lock()
+            defer { lock.unlock() }
             if let v = KeychainStore.getString(for: key) { return v }
             // 一次性迁移：旧 UserDefaults 残留 → Keychain，迁完清旧
             if let legacy = UserDefaults.standard.string(forKey: legacyKey), !legacy.isEmpty {
-                KeychainStore.setString(legacy, for: key)
-                UserDefaults.standard.removeObject(forKey: legacyKey)
+                if KeychainStore.setString(legacy, for: key) {
+                    UserDefaults.standard.removeObject(forKey: legacyKey)
+                }
                 return legacy
             }
             return nil
         }
         set {
+            lock.lock()
+            defer { lock.unlock() }
+            // 无论登录写入还是登出清空，都终结 v1 迁移源；否则 logout 删除 v2 后，
+            // 下一次 getter 会把旧账号的 legacy token 再次迁回 Keychain。
+            UserDefaults.standard.removeObject(forKey: legacyKey)
             if let v = newValue, !v.isEmpty {
                 KeychainStore.setString(v, for: key)
             } else {

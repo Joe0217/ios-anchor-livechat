@@ -118,6 +118,7 @@ final class DefaultGiftDataSource: GiftPanelDataSource {
             return entry.groups
         }
 
+        let cacheContext = cacheScene.map { GiftCatalogCache.shared.writeContext(for: $0) }
         let grouped = try await GiftService.getGroupedGiftList(scene: scene)
         var result: [GiftPanelTab: [GiftListData]] = [:]
         var seen = Set<Int64>()
@@ -140,8 +141,13 @@ final class DefaultGiftDataSource: GiftPanelDataSource {
         }
         // 写缓存（live/call 场景无 balance 字段；nil）；scene 若不参与 cache 就跳过
         // review #3 · 空态守护：所有 tab 未识别 groups=[] 时不缓存，让下次开面板可重拉重试
-        if let cs = cacheScene, !groups.isEmpty {
-            GiftCatalogCache.shared.set(scene: cs, groups: groups, userDiamond: nil)
+        if let cs = cacheScene, let cacheContext, !groups.isEmpty {
+            GiftCatalogCache.shared.set(
+                scene: cs,
+                groups: groups,
+                userDiamond: nil,
+                context: cacheContext
+            )
         } else if groups.isEmpty {
             logger.notice("all tabs unmapped scene=\(self.scene.rawValue, privacy: .public); skip cache write to allow retry")
         }

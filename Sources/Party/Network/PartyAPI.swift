@@ -15,12 +15,10 @@ enum PartyAPI {
     private static let auditRoomListPath = "/sapi/weidou/v1/client/party/audit/room/list"
     private static let decoder = JSONDecoder()
 
-    /// 当前提审包的有效角色。权限桥尚未发布首帧时，以已存在的登录 token
-    /// 判定认证态，仍然回退到固定 107，不读取服务端 userType。
+    /// 当前有效模式。权限桥尚未发布首帧时回退登录响应派生的线程安全快照。
     private static var usesAuditRoomEndpoints: Bool {
-        let isAuthenticated = AuthToken.value.map { !$0.isEmpty } ?? false
         let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
-            ?? UserTypeExperience.effectiveUserType(isAuthenticated: isAuthenticated)
+            ?? SessionStore.effectiveUserTypeSnapshot
         return UserTypeExperience.isPartyOnly(effectiveUserType)
     }
 

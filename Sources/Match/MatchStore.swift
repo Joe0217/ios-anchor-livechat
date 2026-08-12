@@ -163,6 +163,10 @@ final class MatchStore: ObservableObject {
     private var faceCheckTask: Task<Void, Never>?
     /// 5s 未露脸倒计时 task
     private var noFaceCountdownTask: Task<Void, Never>?
+    /// 截图上传 + 违规上报链路；登出/降权时必须取消并以账号代际阻止迟到上报。
+    private var faceViolationTask: Task<Void, Never>?
+    private var accountGeneration = 0
+    private(set) var activeUserID: Int?
 
     /// 单例（对齐 CallStore.shared / LiveStore.shared / PartyStore.shared 模式）
     static let shared = MatchStore(
@@ -178,14 +182,14 @@ final class MatchStore: ObservableObject {
         self.service = service
         self.faceDetection = faceDetection
         self.faceEvidenceProvider = faceEvidenceProvider
-        loadFromPersistence()
+        loadFromPersistence(userID: nil)
     }
 
     // MARK: - 冷启动加载
 
     /// 冷启动读 UserDefaults（v3 §2.3 不变量：isMatchBlocked=true → matchState=.blocked）。
-    private func loadFromPersistence() {
-        let persisted = MatchPersistedStore.load()
+    private func loadFromPersistence(userID: Int?) {
+        let persisted = MatchPersistedStore.load(userID: userID)
         isMatchBlocked = persisted.isMatchBlocked
         todayNoReminderChecked = persisted.todayNoReminderChecked
         isFirstMatchToday = MatchDateHelper.isFirstToday(savedDate: persisted.ruleAgreedDate)
@@ -196,6 +200,20 @@ final class MatchStore: ObservableObject {
             state = .ended
         }
         logger.info("loadFromPersistence: state=\(String(describing: self.state)) blocked=\(persisted.isMatchBlocked) firstToday=\(self.isFirstMatchToday) noReminder=\(persisted.todayNoReminderChecked)")
+    }
+
+    /// 完整能力会话建立时绑定账号。相同账号从 107 恢复时不重载，以保留该账号真实封禁；
+    /// 换账号则从各自命名空间恢复，绝不继承上一账号内存态。
+    func activateSession(userID: Int?) {
+        guard activeUserID != userID else { return }
+        accountGeneration &+= 1
+        faceViolationTask?.cancel()
+        faceViolationTask = nil
+        stopFaceCheck()
+        cameraSession?.stop()
+        activeUserID = userID
+        clearTransientPresentationState()
+        loadFromPersistence(userID: userID)
     }
 
     // MARK: - 依赖注入 & 事件订阅
@@ -355,7 +373,7 @@ final class MatchStore: ObservableObject {
             // 若原态为 .blocked → 清 blocked（v3 §5.1 F14 出口边）
             if isMatchBlocked {
                 isMatchBlocked = false
-                MatchPersistedStore.saveIsMatchBlocked(false)
+                MatchPersistedStore.saveIsMatchBlocked(false, userID: activeUserID)
                 logger.info("openMatch: isOpen returned allowed, cleared isMatchBlocked")
             }
         case .faceCheckFailed:
@@ -389,7 +407,7 @@ final class MatchStore: ObservableObject {
 
         // 5) 更新首日规则日期
         let today = MatchDateHelper.todayString()
-        MatchPersistedStore.saveRuleAgreedDate(today)
+        MatchPersistedStore.saveRuleAgreedDate(today, userID: activeUserID)
         isFirstMatchToday = false
 
         lastToast = .turnOnSucceed
@@ -428,13 +446,38 @@ final class MatchStore: ObservableObject {
     /// 登出或主播资格撤销时结束本地匹配会话。
     /// 不请求服务端：会话凭据已失效，但本地摄像头必须立即关闭。
     func stopForSessionEnd() {
+        accountGeneration &+= 1
+        faceViolationTask?.cancel()
+        faceViolationTask = nil
         stopFaceCheck()
         cameraSession?.stop()
+        clearTransientPresentationState()
+        state = isMatchBlocked ? .blocked : .ended
+        logger.info("stopForSessionEnd: local match session stopped")
+    }
+
+    /// 真正登出专用：清内存身份与所有瞬态，但保留按账号存储的封禁/日期，供同账号重登恢复。
+    func resetForLogout() {
+        accountGeneration &+= 1
+        faceViolationTask?.cancel()
+        faceViolationTask = nil
+        stopFaceCheck()
+        cameraSession?.stop()
+        activeUserID = nil
+        isMatchBlocked = false
+        todayNoReminderChecked = false
+        isFirstMatchToday = true
+        clearTransientPresentationState()
+        state = .ended
+        logger.info("resetForLogout: cleared account-bound in-memory state")
+    }
+
+    private func clearTransientPresentationState() {
         wasConnectedInCall = false
+        showNoFacePopup = false
+        showExitMatchPopup = false
         showResumeMatchAlert = false
         lastToast = nil
-        state = .ended
-        logger.info("stopForSessionEnd: local match session stopped")
     }
 
     // MARK: - 被动关匹配路径
@@ -443,7 +486,7 @@ final class MatchStore: ObservableObject {
     private func handleBlocked(reason: MatchToast) {
         cameraSession?.stop()
         isMatchBlocked = true
-        MatchPersistedStore.saveIsMatchBlocked(true)
+        MatchPersistedStore.saveIsMatchBlocked(true, userID: activeUserID)
         state = .blocked
         lastToast = reason
         // **不调 toggleMatch**（后端已明示拒绝，见 v3 §2.2）
@@ -607,8 +650,14 @@ final class MatchStore: ObservableObject {
     /// 用户勾选"今日不再提醒"。持久化 + clearInterval 由 MatchPopupCoordinator 观察此字段处理。
     func markTodayNoReminder() {
         todayNoReminderChecked = true
-        MatchPersistedStore.saveTodayNoReminderChecked(true)
-        MatchPersistedStore.saveTipShownDate(MatchDateHelper.todayString())
+        MatchPersistedStore.saveTodayNoReminderChecked(true, userID: activeUserID)
+        MatchPersistedStore.saveTipShownDate(MatchDateHelper.todayString(), userID: activeUserID)
+    }
+
+    func resetTodayNoReminderForNewDay() {
+        todayNoReminderChecked = false
+        MatchPersistedStore.saveTodayNoReminderChecked(false, userID: activeUserID)
+        MatchPersistedStore.saveTipShownDate(MatchDateHelper.todayString(), userID: activeUserID)
     }
 
     /// Bug 1 fix：首日规则弹窗 Agree 那一刻立即存日期（对齐 H5 c-goMatch.vue:290-293
@@ -617,7 +666,7 @@ final class MatchStore: ObservableObject {
     /// openMatch 内的 saveRuleAgreedDate 保留幂等（成功后二次写同值 no-op）。
     func markRuleAgreedToday() {
         let today = MatchDateHelper.todayString()
-        MatchPersistedStore.saveRuleAgreedDate(today)
+        MatchPersistedStore.saveRuleAgreedDate(today, userID: activeUserID)
         isFirstMatchToday = false
         logger.info("markRuleAgreedToday: date=\(today)")
     }
@@ -636,7 +685,9 @@ final class MatchStore: ObservableObject {
     func shouldShowTipPopup(appHidden: Bool, blockedByOtherPage: Bool = false, userOnline: Bool = true) -> Bool {
         let today = MatchDateHelper.todayString()
         // 若跨自然日 → 重置 noReminder（对齐 H5 c-goMatch.vue:460-462）
-        let noTodayShow = !MatchDateHelper.isFirstToday(savedDate: MatchPersistedStore.load().tipShownDate)
+        let noTodayShow = !MatchDateHelper.isFirstToday(
+            savedDate: MatchPersistedStore.load(userID: activeUserID).tipShownDate
+        )
                           && todayNoReminderChecked
 
         _ = today  // 保留以便未来展示日期字段
@@ -733,7 +784,7 @@ final class MatchStore: ObservableObject {
         logger.warning("handleFaceCheckException: fromRandom=\(fromRandom) inCall=\(inCall)")
         stopFaceCheck()
         isMatchBlocked = true
-        MatchPersistedStore.saveIsMatchBlocked(true)
+        MatchPersistedStore.saveIsMatchBlocked(true, userID: activeUserID)
 
         if inCall {
             // P1 通话中：不改 state，不停摄像头（CallView 有自己的 CameraManager），不弹 exitMatchPopup（H5 line 279 明示仅 openMatch 期 5s 倒计时后才弹）
@@ -747,7 +798,16 @@ final class MatchStore: ObservableObject {
 
         // H5 c-goMatch.vue：只有截图上传成功才触发 reportNoFace 与 toggleMatch(0, 1)。
         // 本地仍立即 blocked，避免用户绕过合规流程；服务端退池由取证成功的异步链路完成。
-        Task { [service, evidenceProvider, previewSession] in
+        faceViolationTask?.cancel()
+        accountGeneration &+= 1
+        let generation = accountGeneration
+        faceViolationTask = Task { [weak self, service, evidenceProvider, previewSession] in
+            guard let self else { return }
+            defer {
+                if generation == self.accountGeneration {
+                    self.faceViolationTask = nil
+                }
+            }
             guard let evidenceProvider else {
                 logger.warning("face violation evidence unavailable: no provider")
                 return
@@ -758,6 +818,7 @@ final class MatchStore: ObservableObject {
             } else {
                 imageData = await evidenceProvider.capturePreviewEvidence(from: previewSession)
             }
+            guard generation == self.accountGeneration, !Task.isCancelled else { return }
             guard let imageData else {
                 logger.warning("face violation evidence unavailable: no fresh frame")
                 return
@@ -766,9 +827,11 @@ final class MatchStore: ObservableObject {
             do {
                 imageURL = try await evidenceProvider.uploadEvidence(imageData)
             } catch {
+                guard generation == self.accountGeneration, !Task.isCancelled else { return }
                 logger.error("face violation evidence upload failed: \(String(describing: error), privacy: .private)")
                 return
             }
+            guard generation == self.accountGeneration, !Task.isCancelled else { return }
             // H5 不等待两个请求互相完成；上传成功后同时发出，任一路失败不取消另一条。
             async let report: Void? = try? await service.reportNoFace(imageURL: imageURL)
             async let close: Bool? = try? await service.toggleMatch(status: 0, faceCheckStatus: 1)

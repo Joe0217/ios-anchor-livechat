@@ -7,6 +7,7 @@ import SwiftUI
 struct PartySearchView: View {
     @StateObject private var store = PartySearchStore()
     @ObservedObject private var permission = SelfPermissionBridge.shared
+    @ObservedObject private var session = SessionStore.shared
     /// v4：传完整对象让上层判密码房前置弹窗
     let onTapRoom: (PartyRoomInfo) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -14,6 +15,25 @@ struct PartySearchView: View {
 
     private var showsRankVisuals: Bool {
         permission.canVirtualItems && permission.canGiftSending
+    }
+
+    private var canUseSearch: Bool {
+        permission.canParty && session.isLoggedIn && session.user != nil
+    }
+
+    private struct SearchTaskKey: Hashable {
+        let dataContext: String
+        let canParty: Bool
+        let isLoggedIn: Bool
+    }
+
+    private var searchDataContext: String {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? SessionStore.effectiveUserTypeSnapshot
+        return PartyEndpointDataContext.identifier(
+            sessionGeneration: session.sessionGeneration,
+            usesAuditRoomEndpoints: UserTypeExperience.isPartyOnly(effectiveUserType)
+        )
     }
 
     var body: some View {
@@ -32,11 +52,25 @@ struct PartySearchView: View {
         }
         .navigationBarHidden(true)
         .swipeToPopEnabled()
-        .onAppear {
-            // 进页面自动聚焦（对齐 H5 用户体验：直接可打字）
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                searchFocused = true
+        .task(id: SearchTaskKey(
+            dataContext: searchDataContext,
+            canParty: permission.canParty,
+            isLoggedIn: session.isLoggedIn
+        )) {
+            let context = searchDataContext
+            store.prepareForDataContext(context)
+            guard canUseSearch else {
+                store.clear()
+                dismiss()
+                return
             }
+
+            // 进页面自动聚焦（对齐 H5 用户体验：直接可打字）
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            guard !Task.isCancelled,
+                  context == searchDataContext,
+                  canUseSearch else { return }
+            searchFocused = true
         }
     }
 
@@ -83,7 +117,7 @@ struct PartySearchView: View {
             .textInputAutocapitalization(.never)
             .submitLabel(.search)
             .focused($searchFocused)
-            .onSubmit { store.search() }
+            .onSubmit(submitSearch)
 
             if !store.query.isEmpty {
                 Button {
@@ -129,7 +163,7 @@ struct PartySearchView: View {
             LazyVStack(spacing: 12) {
                 ForEach(rooms, id: \.stableListId) { room in
                     Button {
-                        onTapRoom(room)
+                        handleTapRoom(room)
                     } label: {
                         PartyRoomCardView(
                             room: room,
@@ -188,5 +222,23 @@ struct PartySearchView: View {
                 .tint(.white)
                 .scaleEffect(1.2)
         }
+    }
+
+    private func submitSearch() {
+        guard canUseSearch else {
+            store.clear()
+            dismiss()
+            return
+        }
+        store.search()
+    }
+
+    private func handleTapRoom(_ room: PartyRoomInfo) {
+        guard canUseSearch else {
+            store.clear()
+            dismiss()
+            return
+        }
+        onTapRoom(room)
     }
 }

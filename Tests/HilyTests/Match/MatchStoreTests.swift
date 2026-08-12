@@ -78,6 +78,53 @@ final class MatchStoreTests: XCTestCase {
         XCTAssertTrue(store.isMatchBlocked)
     }
 
+    func test_accountPersistence_isIsolatedAndRestoredPerUser() {
+        let userA = 91_001
+        let userB = 91_002
+        MatchPersistedStore.resetForTesting(userID: userA)
+        MatchPersistedStore.resetForTesting(userID: userB)
+        defer {
+            MatchPersistedStore.resetForTesting(userID: userA)
+            MatchPersistedStore.resetForTesting(userID: userB)
+        }
+        MatchPersistedStore.saveIsMatchBlocked(true, userID: userA)
+
+        let (store, _, _) = makeStore()
+        store.activateSession(userID: userA)
+        XCTAssertEqual(store.state, .blocked)
+        XCTAssertTrue(store.isMatchBlocked)
+
+        store.activateSession(userID: userB)
+        XCTAssertEqual(store.state, .ended)
+        XCTAssertFalse(store.isMatchBlocked)
+
+        store.activateSession(userID: userA)
+        XCTAssertEqual(store.state, .blocked)
+        XCTAssertTrue(store.isMatchBlocked)
+    }
+
+    func test_resetForLogout_clearsTransientStateButPreservesAccountBlock() {
+        let userA = 91_003
+        MatchPersistedStore.resetForTesting(userID: userA)
+        defer { MatchPersistedStore.resetForTesting(userID: userA) }
+        MatchPersistedStore.saveIsMatchBlocked(true, userID: userA)
+
+        let (store, _, _) = makeStore()
+        store.activateSession(userID: userA)
+        store.showNoFacePopup = true
+        store.showExitMatchPopup = true
+        store.showResumeMatchAlert = true
+
+        store.resetForLogout()
+
+        XCTAssertEqual(store.state, .ended)
+        XCTAssertFalse(store.isMatchBlocked)
+        XCTAssertFalse(store.showNoFacePopup)
+        XCTAssertFalse(store.showExitMatchPopup)
+        XCTAssertFalse(store.showResumeMatchAlert)
+        XCTAssertTrue(MatchPersistedStore.load(userID: userA).isMatchBlocked)
+    }
+
     /// F3：openMatch happy path → isOpen(1) → toggleMatch(1) → camera.start() → state=.matching
     /// v3 修正：删除 beauty pre-check，先切态后开相机
     func test_F3_openMatch_happy_stateMatching() async {
@@ -456,6 +503,42 @@ final class MatchStoreTests: XCTestCase {
         XCTAssertTrue(service.reportNoFaceURLs.isEmpty)
     }
 
+    func test_logoutDuringEvidenceUpload_doesNotReportWithNextSession() async {
+        let userA = 91_004
+        let userB = 91_005
+        MatchPersistedStore.resetForTesting(userID: userA)
+        MatchPersistedStore.resetForTesting(userID: userB)
+        defer {
+            MatchPersistedStore.resetForTesting(userID: userA)
+            MatchPersistedStore.resetForTesting(userID: userB)
+        }
+
+        let service = FakeMatchService()
+        let face = FakeFaceDetectionService()
+        let camera = FakeMatchCameraSession()
+        let evidence = DelayedMatchFaceEvidenceProvider()
+        let store = MatchStore(
+            service: service,
+            faceDetection: face,
+            faceEvidenceProvider: evidence
+        )
+        store.attachCameraSession(camera)
+        store.activateSession(userID: userA)
+
+        await store.openMatch()
+        store.handleCallStoreLeavingIdle()
+        face.stubbedHasFace = false
+        store.handleJoinCallSource("matchV4")
+        await waitUntil { evidence.uploadCallCount == 1 }
+
+        store.resetForLogout()
+        store.activateSession(userID: userB)
+        try? await Task.sleep(nanoseconds: 350_000_000)
+
+        XCTAssertTrue(service.reportNoFaceURLs.isEmpty)
+        XCTAssertFalse(service.toggleMatchCalls.contains { $0.status == 0 && $0.faceCheckStatus == 1 })
+    }
+
     /// P1-b：进入 .matchingCalling 立即检测有脸 → state 正常保持 .matchingCalling，isMatchBlocked 不变
     func test_P1b_inCallingImmediateHasFace_stateNormal() async {
         let face = FakeFaceDetectionService()
@@ -568,5 +651,30 @@ final class MatchStoreTests: XCTestCase {
         // openMatch 内部会再次调 isMatchOpen（自动恢复走完整校验流程）
         XCTAssertGreaterThan(service.isMatchOpenCallCount, isMatchOpenCountBefore,
                              "auto openMatch should run isOpen check")
+    }
+
+    private func waitUntil(_ condition: @escaping () -> Bool) async {
+        for _ in 0..<300 {
+            if condition() { return }
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("timed out waiting for Match async operation")
+    }
+}
+
+@MainActor
+private final class DelayedMatchFaceEvidenceProvider: MatchFaceEvidenceProviding {
+    private(set) var uploadCallCount = 0
+
+    func capturePreviewEvidence(from session: MatchCameraSessionProtocol?) async -> Data? { Data([0x01]) }
+    func captureCallEvidence() async -> Data? { Data([0x01]) }
+
+    func uploadEvidence(_ imageData: Data) async throws -> String {
+        uploadCallCount += 1
+        return await Task.detached {
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            return "test://delayed-evidence"
+        }.value
     }
 }

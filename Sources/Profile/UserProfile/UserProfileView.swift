@@ -21,6 +21,7 @@ struct UserProfileView: View {
     @State private var reportSuccessToast: Bool = false
     /// 每次触发递增的 token，让 `.task(id:)` 自动取消上一次 sleep（review 建议-5）。
     @State private var reportSuccessToken: Int = 0
+    @State private var galleryContext: MediaGalleryContext?
 
     /// 若详情页是从私聊页 push 出来的，携带该私聊 peer 的 yxAccid。
     /// 「消息」按钮据此判断目标是否就是"上一层"—— 是则 pop 而非 push，避免详情↔聊天栈无限嵌套。
@@ -56,6 +57,9 @@ struct UserProfileView: View {
         .toolbarBackground(Theme.Palette.profileBackground, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
+        .fullScreenCover(item: $galleryContext) { context in
+            MediaGalleryView(urls: context.urls, startIndex: context.startIndex)
+        }
         .task(id: permission.canProfileViewing) {
             guard permission.canProfileViewing else {
                 showingMenu = false
@@ -229,6 +233,27 @@ struct UserProfileView: View {
                 if permission.canProfileSocial {
                     statsRow(detail: detail)
                         .padding(.horizontal, Theme.Metric.userProfileScreenHPadding)
+                }
+
+                let photos = detail.picList.filter {
+                    $0.mediaType == 1 && $0.vaild == 1 && !$0.mediaUrl.isEmpty
+                }
+                if permission.canProfileAlbum && !photos.isEmpty {
+                    ProfileMediaGrid(
+                        title: String(format: L10n.profilePhotosFormat, photos.count, photos.count),
+                        items: photos.map {
+                            MediaAsset(assetId: $0.assetId, url: $0.mediaUrl, coverUrl: nil,
+                                       vaild: $0.vaild, createTime: nil)
+                        },
+                        isVideoGrid: false,
+                        onTap: { item in
+                            let urls = photos.map(\.mediaUrl)
+                            if let index = urls.firstIndex(of: item.url ?? "") {
+                                galleryContext = MediaGalleryContext(urls: urls, startIndex: index)
+                            }
+                        }
+                    )
+                    .padding(.top, Theme.Metric.userProfileSectionVTop)
                 }
 
                 // H5 guardian-card：直接消费 getUserDetail.guardianList 前三项，空态整卡隐藏。
@@ -697,7 +722,7 @@ extension UserDetail {
                 Gift(giftId: 2, iconUrl: nil, name: "Heart", count: 5),
                 Gift(giftId: 3, iconUrl: nil, name: "Diamond", count: 1)
             ],
-            guardianList: []
+            guardianList: [], picList: []
         )
     }
 }

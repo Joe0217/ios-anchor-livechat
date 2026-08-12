@@ -97,9 +97,7 @@ final class OnlineStatusStore: ObservableObject {
 
     private var isFixedPartyOnlySession: Bool {
         let userType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
-            ?? UserTypeExperience.effectiveUserType(
-                isAuthenticated: SessionStore.shared.user != nil
-            )
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
         return UserTypeExperience.isPartyOnly(userType)
     }
 

@@ -40,6 +40,9 @@ final class AnchorInfoStore: ObservableObject {
     @Published private(set) var mine: AnchorInfo?
     @Published private(set) var loadState: LoadState = .idle
     @Published private(set) var hasLoadedOnce: Bool = false
+    /// 仅 owner 匹配的 `/api/anchor/userInfo` 新响应成功落地时记录当前会话代际。
+    /// 权限判定用它区分“本次登录后的新鲜资料”与为 UI 保留的跨会话旧 `info`。
+    private var lastSuccessfulAnchorEpoch: Int?
 
     /// 社交数（跨页同步源；FollowListViewModel.toggleFollow 后通过 NotificationCenter 增减）
     @Published var followingCount: Int = 0
@@ -62,6 +65,8 @@ final class AnchorInfoStore: ObservableObject {
     private let cacheKey = "anchorInfoStore.v5"
     private static let obsoleteCacheKeys = ["anchorInfoStore.v3", "anchorInfoStore.v4"]
     private var inflightTask: Task<Void, Never>?
+    private var permissionGiftWallTask: Task<Void, Never>?
+    private var permissionGiftWallGeneration: Int = 0
     private var followObserver: NSObjectProtocol?
     private var permissionCancellables = Set<AnyCancellable>()
 
@@ -122,10 +127,52 @@ final class AnchorInfoStore: ObservableObject {
         await performReload()
     }
 
+    /// 旧版 Session Keychain 不含媒体字段时的迁移兜底。只信任 owner 明确匹配的完整资料
+    /// `info`；`mine` 来自登录响应，无法携带“媒体字段异常/缺失”的三态证据，不能反向
+    /// 把其 lossy 空数组解释为已确认的全功能账号。
+    func cachedPermissionVideoURLs(for userID: Int?) -> [String]? {
+        guard let userID, let info, info.userId == userID else { return nil }
+        return info.permissionVideoEvidence
+    }
+
+    /// 只返回当前登录代际中由网络成功落地的 owner 资料。失败后保留的旧快照不能进入权限判定。
+    func freshAnchorInfo(for userID: Int) -> AnchorInfo? {
+        guard lastSuccessfulAnchorEpoch == reloadEpoch,
+              let info,
+              info.userId == userID else { return nil }
+        return info
+    }
+
     /// 2026-07-16：从登录响应直接注入 `mine`，对齐 H5 `loginSuccess → setMineInfo(res)`。
     /// SessionStore.applyLogin（登录成功）+ SessionStore.load（冷启动 restore）双入口调用；
     /// 后端不存在 `/api/user/getUserInfo`，登录响应本身是 mine 权威来源。
-    func hydrateFromLogin(_ result: LoginResult) {
+    func hydrateFromLogin(_ result: LoginResult, preserveCachedSnapshot: Bool = false) {
+        // applyLogin 可能在未先 logout 的重录流程直接建立新会话。必须先让旧 refresh 失效；
+        // 冷启动只在缓存 owner 明确等于本次用户时允许 stale-while-revalidate。
+        reloadEpoch &+= 1
+        inflightTask?.cancel()
+        inflightTask = nil
+        cancelPermissionGiftWallTask()
+        lastSuccessfulAnchorEpoch = nil
+
+        let hasOwnedSnapshot = info?.userId == result.userId || mine?.userId == result.userId
+        let infoHasValidOwner = info == nil || info?.userId == result.userId
+        let mineHasValidOwner = mine == nil || mine?.userId == result.userId
+        let canPreserve = preserveCachedSnapshot
+            && result.userId != nil
+            && hasOwnedSnapshot
+            && infoHasValidOwner
+            && mineHasValidOwner
+        if !canPreserve {
+            info = nil
+            followingCount = 0
+            followersCount = 0
+            friendsCount = 0
+            giftWallList = []
+            loadState = .idle
+            hasLoadedOnce = false
+            ImageCache.shared.clear()
+        }
         mine = AnchorInfo.fromLoginResult(result)
         saveToDisk()
     }
@@ -167,8 +214,10 @@ final class AnchorInfoStore: ObservableObject {
         reloadEpoch += 1
         inflightTask?.cancel()
         inflightTask = nil
+        cancelPermissionGiftWallTask()
         info = nil
         mine = nil
+        lastSuccessfulAnchorEpoch = nil
         loadState = .idle
         hasLoadedOnce = false
         followingCount = 0
@@ -191,8 +240,14 @@ final class AnchorInfoStore: ObservableObject {
     /// 老 task 完成时 guard mismatch 直接 discard，避免"A logout 后 A 老 task 覆盖 B 新数据"。
     private func performReload() async {
         let epoch = reloadEpoch
+        guard let expectedUserID = SessionStore.shared.user?.userId, expectedUserID > 0 else {
+            logger.warning("performReload skipped: no authenticated owner")
+            return
+        }
+        // 完整刷新覆盖礼物墙补拉；取消独立任务，避免两次响应乱序落地。
+        cancelPermissionGiftWallTask()
         let task = Task.detached { @MainActor [self] in
-            await doReload(epoch: epoch)
+            await doReload(epoch: epoch, expectedUserID: expectedUserID)
         }
         inflightTask = task
         await task.value
@@ -203,7 +258,7 @@ final class AnchorInfoStore: ObservableObject {
         }
     }
 
-    private func doReload(epoch: Int) async {
+    private func doReload(epoch: Int, expectedUserID: Int) async {
         // 起点守卫：detached task 排 MainActor 期间 clear() 已递增 epoch → 整段丢弃不做任何写入
         guard epoch == self.reloadEpoch else {
             logger.info("doReload skipped at start: epoch=\(epoch) current=\(self.reloadEpoch)")
@@ -221,38 +276,69 @@ final class AnchorInfoStore: ObservableObject {
                 return nil
             }
         }()
-        // 礼物墙独立接口（H5 mine/index.vue:92）。107 的 Party-only 会话没有
-        // 虚拟道具能力，连同旧缓存一起收口，不能只靠 Profile UI 隐藏入口。
-        let shouldLoadGiftWall = canAccessVirtualItems
-        if !shouldLoadGiftWall {
-            clearGiftWallForDisabledVirtualItems()
-        }
-        async let giftTask: [GiftItem] = {
-            guard shouldLoadGiftWall else { return [] }
-            do { return try await ProfileService.getGiftWallList() }
-            catch {
-                logger.warning("getGiftWallList failed (non-fatal): \(String(describing: error))")
-                return []
-            }
-        }()
+        let fetchedAnchor = await anchorTask
 
-        let anchor = await anchorTask
-        let giftWall = await giftTask
-
-        // API await 期间可能被 clear() 递增 epoch（用户登出竞态）——丢弃全部写入，
-        // 不写 info/mine/social/loadState/hasLoadedOnce，也不 saveToDisk（否则 keychain 会被 A 数据污染，
-        // 冷启动 loadFromDisk 又恢复 A 让 hasLoadedOnce=true 短路新 loadIfNeeded）
-        guard epoch == self.reloadEpoch else {
+        // API await 期间可能被 clear() 递增 epoch（用户登出竞态）——丢弃全部写入。
+        guard epoch == self.reloadEpoch,
+              SessionStore.shared.user?.userId == expectedUserID else {
             logger.info("doReload result discarded: epoch=\(epoch) current=\(self.reloadEpoch)")
             return
+        }
+
+        let anchor: AnchorInfo?
+        if let fetchedAnchor, fetchedAnchor.userId == expectedUserID {
+            anchor = fetchedAnchor
+        } else {
+            anchor = nil
+            if fetchedAnchor != nil {
+                logger.error("doReload profile owner mismatch expected=\(expectedUserID, privacy: .private) actual=\(fetchedAnchor?.userId ?? -1, privacy: .private)")
+            }
         }
 
         // stale-while-revalidate：只有拿到服务端新值才覆盖冷启动已恢复的旧资料。
         // 请求失败时 anchor=nil，保留旧 info 供 UI 继续使用。
         if let anchor {
             self.info = anchor
+            self.lastSuccessfulAnchorEpoch = epoch
+            if let mediaURLs = anchor.permissionVideoEvidence {
+                let placeholderMatched = mediaURLs.contains(
+                    where: ReviewAccountModePolicy.isPlaceholderVideoURL
+                )
+                let stored = ReviewAccountModeRegistry.record(
+                    userID: expectedUserID,
+                    placeholderMatched: placeholderMatched
+                )
+                if !stored {
+                    logger.error("permission mode cache write failed")
+                }
+                #if DEBUG
+                logger.info("[PermissionModeCache] source=fresh-profile mediaCount=\(mediaURLs.count) placeholder=\(placeholderMatched) stored=\(stored)")
+                #endif
+            }
         }
-        self.giftWallList = canAccessVirtualItems ? giftWall : []
+
+        // 礼物墙读取认证建立时已发布的模式。资料媒体会更新下次认证所用缓存，
+        // 不在当前会话中热切权限。
+        let shouldLoadGiftWall = canAccessVirtualItems
+        if !shouldLoadGiftWall {
+            clearGiftWallForDisabledVirtualItems()
+        }
+        let giftWall: [GiftItem]
+        if shouldLoadGiftWall {
+            do { giftWall = try await ProfileService.getGiftWallList() }
+            catch {
+                logger.warning("getGiftWallList failed (non-fatal): \(String(describing: error))")
+                giftWall = []
+            }
+        } else {
+            giftWall = []
+        }
+        guard epoch == self.reloadEpoch,
+              SessionStore.shared.user?.userId == expectedUserID else {
+            logger.info("doReload gift result discarded: epoch=\(epoch) current=\(self.reloadEpoch)")
+            return
+        }
+        self.giftWallList = shouldLoadGiftWall ? giftWall : []
         // `mine` 保留 hydrateFromLogin 注入值，不在此重写
 
         // 社交数从接口字段直接写入（覆盖；用户操作的增减在 Notification 收到时再叠加）；
@@ -358,6 +444,7 @@ final class AnchorInfoStore: ObservableObject {
         if !fromPicList.isEmpty { return fromPicList }
         return info?.videos ?? mine?.videos ?? []
     }
+
     /// 礼物墙：优先独立接口 `giftWallList`（H5 mine/index.vue:92）；
     /// 兜底 anchor/mine 里可能夹带的 giftList（后端偶尔混发时不丢）。
     var giftList: [GiftItem] {
@@ -444,30 +531,81 @@ final class AnchorInfoStore: ObservableObject {
 
     // MARK: - Virtual item permission
 
-    /// Bridge 首次绑定 SessionStore 前保留 userType 映射兜底：正常主播不会因启动时序漏拉
-    /// 礼物墙，107 则从登录响应落地起就被拒绝。未登录时一律不请求。
+    /// Bridge UI 发布可能落后一帧；Store 必须优先读取同步原子快照，再回退到登录用户信息。
     private var canAccessVirtualItems: Bool {
         let permission = SelfPermissionBridge.shared
-        if permission.isLoaded {
-            return permission.canVirtualItems
+        if let effectiveUserType = permission.effectiveUserTypeSnapshot {
+            return !UserPermissionMapping.blocked(for: effectiveUserType).contains(.virtualItems)
         }
-        guard SessionStore.shared.isLoggedIn else {
+        guard let user = SessionStore.shared.user else {
             return false
         }
-        return !UserPermissionMapping.blocked(for: UserTypeExperience.fixedUserType).contains(.virtualItems)
+        let fallbackUserType = UserTypeExperience.effectiveUserType(userInfo: user)
+        return !UserPermissionMapping.blocked(for: fallbackUserType).contains(.virtualItems)
     }
 
-    /// 角色热切换时清掉独立礼物墙缓存。飞行中的 reload 在落地时会再次读取
-    /// `canAccessVirtualItems`，不会把旧角色的结果重新写回内存。
+    /// 运行中权限变化时同步礼物墙：权限关闭立即清空，权限开放后独立补拉，
+    /// 不重复刷新整份本人资料。
     private func observeVirtualItemsPermission() {
         let permission = SelfPermissionBridge.shared
         permission.$isLoaded
             .combineLatest(permission.$canVirtualItems)
             .sink { [weak self] isLoaded, canVirtualItems in
-                guard isLoaded, !canVirtualItems else { return }
-                self?.clearGiftWallForDisabledVirtualItems()
+                guard let self else { return }
+                guard isLoaded, canVirtualItems else {
+                    self.cancelPermissionGiftWallTask()
+                    self.clearGiftWallForDisabledVirtualItems()
+                    return
+                }
+                self.loadGiftWallAfterPermissionExpansionIfNeeded()
             }
             .store(in: &permissionCancellables)
+    }
+
+    private func loadGiftWallAfterPermissionExpansionIfNeeded() {
+        guard hasLoadedOnce,
+              giftWallList.isEmpty,
+              permissionGiftWallTask == nil,
+              let expectedUserID = SessionStore.shared.user?.userId,
+              expectedUserID > 0 else { return }
+
+        let epoch = reloadEpoch
+        permissionGiftWallGeneration &+= 1
+        let generation = permissionGiftWallGeneration
+        permissionGiftWallTask = Task { @MainActor [weak self] in
+            let giftWall: [GiftItem]
+            do {
+                giftWall = try await ProfileService.getGiftWallList()
+            } catch {
+                logger.warning("getGiftWallList after permission expansion failed (non-fatal): \(String(describing: error))")
+                giftWall = []
+            }
+
+            guard let self else { return }
+            defer {
+                if epoch == self.reloadEpoch,
+                   generation == self.permissionGiftWallGeneration {
+                    self.permissionGiftWallTask = nil
+                }
+            }
+            guard !Task.isCancelled,
+                  epoch == self.reloadEpoch,
+                  generation == self.permissionGiftWallGeneration,
+                  SessionStore.shared.user?.userId == expectedUserID,
+                  self.canAccessVirtualItems else {
+                logger.info("expanded-permission gift result discarded: epoch=\(epoch) current=\(self.reloadEpoch)")
+                return
+            }
+            self.giftWallList = giftWall
+            self.saveToDisk()
+            logger.info("expanded-permission gift reload OK userId=\(expectedUserID, privacy: .private) giftWall=\(giftWall.count)")
+        }
+    }
+
+    private func cancelPermissionGiftWallTask() {
+        permissionGiftWallGeneration &+= 1
+        permissionGiftWallTask?.cancel()
+        permissionGiftWallTask = nil
     }
 
     private func clearGiftWallForDisabledVirtualItems() {

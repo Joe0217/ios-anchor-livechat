@@ -6,10 +6,28 @@ final class SessionStore: ObservableObject {
     static let shared = SessionStore()
 
     @Published private(set) var isLoggedIn = false
-    @Published private(set) var user: LoginResult?
+    @Published private(set) var user: LoginResult? {
+        didSet {
+            Self.updatePermissionSessionSnapshot(
+                PermissionSessionState(
+                    userType: UserTypeExperience.effectiveUserType(userInfo: user),
+                    isAuthenticated: user != nil
+                )
+            )
+        }
+    }
+    /// 每次建立或结束认证会话都会变化。View-owned 的账号数据 Store 用它隔离 SwiftUI
+    /// keep-alive / identity 复用，不能仅凭相同 userId 判断仍是同一次登录。
+    @Published private(set) var sessionGeneration = UUID()
     private(set) var authenticatedEmail: String?
     @Published var isLoading = false
     @Published var errorMessage = ""
+    /// 本机最近成功登录的账号，最新记录在前，最多保留 5 条。
+    @Published private(set) var recentLoginAccounts: [String] = []
+    /// 登出后的 RTC/RTM/房间本地清理事务。下一次认证建立前必须等待它完成，避免旧账号
+    /// 的延迟 leave/destroy 覆盖新账号刚启动的共享 Agora/NIM 状态。
+    private var runtimeCleanupTask: Task<Void, Never>?
+    private var runtimeCleanupGeneration: UInt64 = 0
 
     // MARK: - H M4：sysMsg 通道字段（C/J 期 UI 绑订）
 
@@ -56,6 +74,36 @@ final class SessionStore: ObservableObject {
     private let storeKey = "session.user.v2"
     private let legacyStoreKey = "session.user.v1"
     private let defaults = UserDefaults.standard
+    private static let recentLoginAccountLimit = 5
+
+    private nonisolated static let effectiveUserTypeSnapshotLock = NSLock()
+    /// 启动时尚未建立 SessionStore.user，也必须先按 107 处理。登录用户写入后由 didSet
+    /// 原子替换为该用户的实际派生模式；登出写回 107。
+    private nonisolated(unsafe) static var storedPermissionSessionSnapshot = PermissionSessionState.loggedOut
+
+    /// 非 UI 权限判定使用的线程安全模式快照。值已由登录响应中的资料视频解析为 107 / 2，
+    /// 无用户时保持 107，不能再读取服务端原始 userType 代替该条件。
+    nonisolated static var effectiveUserTypeSnapshot: Int? {
+        effectiveUserTypeSnapshotLock.lock()
+        defer { effectiveUserTypeSnapshotLock.unlock() }
+        return storedPermissionSessionSnapshot.isAuthenticated
+            ? storedPermissionSessionSnapshot.userType
+            : 107
+    }
+
+    /// 权限桥的冷启动初值。它不访问 `SessionStore.shared`，因此可在 SessionStore 自身
+    /// 初始化期间安全读取，避免两个 static singleton 互相初始化。
+    nonisolated static var permissionSessionSnapshot: PermissionSessionState {
+        effectiveUserTypeSnapshotLock.lock()
+        defer { effectiveUserTypeSnapshotLock.unlock() }
+        return storedPermissionSessionSnapshot
+    }
+
+    private nonisolated static func updatePermissionSessionSnapshot(_ session: PermissionSessionState) {
+        effectiveUserTypeSnapshotLock.lock()
+        storedPermissionSessionSnapshot = session
+        effectiveUserTypeSnapshotLock.unlock()
+    }
 
     /// 当前登录 token，供需要鉴权的接口使用
     var token: String? { user?.token }
@@ -78,6 +126,7 @@ final class SessionStore: ObservableObject {
     private var sessionInvalidatedObserver: NSObjectProtocol?
 
     init() {
+        recentLoginAccounts = loadRecentLoginAccounts()
         load()
         sessionInvalidatedObserver = NotificationCenter.default.addObserver(
             forName: .apiSessionInvalidated,
@@ -101,6 +150,19 @@ final class SessionStore: ObservableObject {
     private func handleSessionInvalidated(userInfo: [AnyHashable: Any]?) {
         let code = (userInfo?["code"] as? String) ?? ""
         let backend = (userInfo?["message"] as? String) ?? ""
+
+        // HTTP/SAPI 使用主 token、NIM 使用 IM account 标记请求/回调来源。即使账号恰好在
+        // 通知投递前完成切换，A 的迟到 1004/1005 也不能把 B 登出。
+        if let originToken = userInfo?["originToken"] as? String,
+           originToken != user?.token {
+            AppLogger.auth.notice("[Session] stale invalidation ignored code=\(code, privacy: .public)")
+            return
+        }
+        if let originNIMAccount = userInfo?["originNIMAccount"] as? String,
+           originNIMAccount != user?.yxAccid {
+            AppLogger.auth.notice("[Session] stale NIM invalidation ignored code=\(code, privacy: .public)")
+            return
+        }
         AppLogger.auth.error("session invalidated code=\(code, privacy: .public) backend=\(backend, privacy: .private)")
 
         // 用户可感知反馈（GlobalErrorBanner）**独立于闸门**触发 —— 对齐 H5 `request/index.ts:96-108`：
@@ -122,6 +184,8 @@ final class SessionStore: ObservableObject {
         errorMessage = ""
         defer { isLoading = false }
 
+        await waitForRuntimeCleanup()
+
         if DeletedAccountRegistry.contains(email) {
             pendingRegister = PendingRegister(email: email, password: password)
             RegisterAnalytics.report(.signUp)
@@ -135,15 +199,14 @@ final class SessionStore: ObservableObject {
                 body: ["email": email, "password": pwd],
                 suppressCodes: ["1005"]                     // A-2 spec §3.2 v3 BLOCK-1：让 1005 走 catch 分流未注册跳注册，而非被 observer logout 拦截
             )
-            let result = try JSONDecoder().decode(LoginResult.self, from: data)
+            let result = try LoginResult.decodeNetworkResponse(from: data, source: "login")
             guard let token = result.token, !token.isEmpty else {
                 errorMessage = L10n.authErrorNoToken
                 return
             }
 
-            // 2026-07-16 重构：对齐 H5 loginSuccess (`stores/modules/user.js:74-131`)——登录响应本身足以驱动
-            // UI 分流,不再依赖 profile 接口拉取。userType 判定后延到 RootView 分流(userType != 2 && != 9 →
-            // RestrictedTabView,由 MineRestrictedView.Resubmit 按钮才拉资料 hydrate)。
+            // 登录接口本次返回的媒体是最高优先级输入；字段缺失时，读取同一 userId
+            // 的版本化模式缓存。两者都缺失时保守进入 107。
             //
             // 保留 pendingRegisterPassword Keychain 保存:MineRestrictedView.handleResubmit 拉 mineInfo 后
             // RegisterStore.hydrate 需要 cachedPassword 兜底(H5 register 提交仍要带明文密码走 MD5)。
@@ -166,6 +229,46 @@ final class SessionStore: ObservableObject {
         }
     }
 
+    /// 为新会话准备首帧权限模式。完整登录/注册媒体优先；媒体缺失时读取同 userId
+    /// 的双向模式缓存。无可信缓存时 fail-closed 到 107。
+    private func resolvingInitialPermissionMode(
+        for result: LoginResult
+    ) -> (user: LoginResult, source: String) {
+        let cachedPermissionVideoURLs = AnchorInfoStore.shared.cachedPermissionVideoURLs(
+            for: result.userId
+        )
+        let cachedPlaceholderMatched = ReviewAccountModeRegistry.placeholderMatched(
+            for: result.userId
+        )
+        #if DEBUG
+        let profileCacheDescription = cachedPermissionVideoURLs.map {
+            "present(\($0.count))"
+        } ?? "missing"
+        let modeCacheDescription = cachedPlaceholderMatched.map(String.init(describing:))
+            ?? "missing"
+        AppLogger.auth.info(
+            "[PermissionModeLookup] userId=\(result.userId ?? -1, privacy: .private) sessionResolved=\(result.resolvedReviewPlaceholderMatch != nil, privacy: .public) profileCache=\(profileCacheDescription, privacy: .public) modeCache=\(modeCacheDescription, privacy: .public)"
+        )
+        #endif
+        let resolved = result.resolvingInitialPermissionMode(
+            cachedPermissionVideoURLs: cachedPermissionVideoURLs,
+            cachedPlaceholderMatched: cachedPlaceholderMatched
+        )
+        if let matched = resolved.user.resolvedReviewPlaceholderMatch {
+            let stored = ReviewAccountModeRegistry.record(
+                userID: resolved.user.userId,
+                placeholderMatched: matched
+            )
+            if !stored {
+                AppLogger.auth.error("[PermissionModeCache] write failed source=\(resolved.source, privacy: .public)")
+            }
+            #if DEBUG
+            AppLogger.auth.info("[PermissionModeCache] source=\(resolved.source, privacy: .public) placeholder=\(matched, privacy: .public) stored=\(stored, privacy: .public)")
+            #endif
+        }
+        return resolved
+    }
+
     /// 登录 / 注册成功后的公共副作用链——单一入口，避免 login() 与 register.submit() 分岔重复。
     ///
     /// A-2 spec §3.3 v3 MAJOR-4 抽出：
@@ -179,21 +282,45 @@ final class SessionStore: ObservableObject {
     /// - returns: true = 登录状态已建立；false = token 缺失，调用方决定文案
     @discardableResult
     func applyLogin(_ result: LoginResult, email: String) async -> Bool {
+        await waitForRuntimeCleanup()
         guard let token = result.token, !token.isEmpty else { return false }
         let normalizedEmail = DeletedAccountRegistry.normalize(email)
         guard !normalizedEmail.isEmpty else { return false }
-        user = result
+        // 每次交互式登录都重新计算：本次响应优先，缺失时只读取当前 userId 的模式缓存。
+        // 这样双向切号不会沿用前一用户，也不会让全开放账号先展示 107 再热切。
+        let initialMode = resolvingInitialPermissionMode(for: result)
+        let sessionResult = initialMode.user
+        // 先失效上一账号的资料请求，再发布当前登录用户。
+        AnchorInfoStore.shared.hydrateFromLogin(sessionResult)
+        user = sessionResult
+        let effectiveUserType = UserTypeExperience.effectiveUserType(userInfo: sessionResult)
+        SelfPermissionBridge.shared.synchronizeImmediately(PermissionSessionState(
+            userType: effectiveUserType,
+            isAuthenticated: true
+        ))
+        // 会话代际必须在 user + 权限快照就绪后发布，避免 View 用上一账号模式重建。
+        let loginGeneration = UUID()
+        sessionGeneration = loginGeneration
         authenticatedEmail = normalizedEmail
         _ = KeychainStore.setString(normalizedEmail, for: KeychainKey.authenticatedEmail)
         isLoggedIn = true
         save()   // 内部会 AuthToken.value = token
-        AnalyticsTracker.login(userId: result.userId)
-        CrashReporter.setUser(userID: result.userId)
-        AppLogger.auth.info("[LOGIN OK] userId=\(result.userId ?? -1, privacy: .private) → fire AnchorInfoStore.refresh() + AppConfigStore.activate()")
+        recordRecentLoginAccount(normalizedEmail)
+        AnalyticsTracker.login(userId: sessionResult.userId)
+        CrashReporter.setUser(userID: sessionResult.userId)
+        #if DEBUG
+        AppLogger.auth.info("[LOGIN OK] userId=\(sessionResult.userId ?? -1, privacy: .private) modeSource=\(initialMode.source, privacy: .public) modeResolved=\(sessionResult.isReviewModeResolved, privacy: .public) placeholder=\(sessionResult.resolvedReviewPlaceholderMatch == true, privacy: .public) permissionMedia=\(sessionResult.permissionModeMediaURLs.count, privacy: .public) effectiveUserType=\(effectiveUserType ?? -1, privacy: .public) → fire profile/config refresh")
+        #else
+        AppLogger.auth.info("[LOGIN OK] userId=\(sessionResult.userId ?? -1, privacy: .private) → fire profile/config refresh")
+        #endif
         // 2026-07-16：对齐 H5 `loginSuccess → setMineInfo(res)`——用登录响应直接注入 mine，
         // 不再依赖 `/api/user/getUserInfo`（后端 404）。getAnchorInfo 结果稍后由 refresh() 覆盖 info。
-        AnchorInfoStore.shared.hydrateFromLogin(result)
-        Task { await AnchorInfoStore.shared.refresh() }
+        Task {
+            await self.refreshAuditStatus(
+                expectedGeneration: loginGeneration,
+                expectedUserID: sessionResult.userId
+            )
+        }
         // H-3：AppConfigStore 横断基建（视频通话权限 / 翻译 key / 回复积分 config），
         // 挂 session-scoped rule 双入口之 login refresh；一次拉 4 key 逗号 join
         Task { await AppConfigStore.shared.activate() }
@@ -220,15 +347,23 @@ final class SessionStore: ObservableObject {
     private func synchronizeMessageSessionStore(for userType: Int?) {
         let isAllowed = !UserPermissionMapping.blocked(for: userType).contains(.directMessages)
         MessageSessionStore.updateSharedDirectMessagesCapability(isAllowed: isAllowed)
+        if !isAllowed {
+            ReplyPointsStore.shared.clear()
+        }
     }
 
-    /// 当前包固定按 107 同步非 UI 资源：关闭普通 P2P observer/session store，
-    /// 并停止拉取该角色不可见的运营资源。真实账号 userType 不参与此判定。
+    /// 按当前有效账号模式同步非 UI 资源；DEBUG 覆盖与真实账号共用同一权限结果。
     func synchronizePermissionScopedServices() {
-        guard user != nil else { return }
-        let userType = UserTypeExperience.fixedUserType
+        guard let user else { return }
+        // SessionStore.user 是本次认证的权威来源。权限桥可能仍处在上一账号的 UI 发布帧，
+        // 会话副作用不能优先读取该旧快照。
+        let userType = UserTypeExperience.effectiveUserType(userInfo: user)
         synchronizeGlobalP2PObserver(for: userType)
         synchronizeMessageSessionStore(for: userType)
+        let blocked = UserPermissionMapping.blocked(for: userType)
+        if blocked.contains(.giftSending) || blocked.contains(.virtualItems) {
+            GiftCatalogCache.shared.clear()
+        }
         preloadPublicAssetsIfNeeded(for: userType)
     }
 
@@ -256,6 +391,8 @@ final class SessionStore: ObservableObject {
         lastAuditStatus = nil
         AnalyticsTracker.logout()
         CrashReporter.clearUser()
+        MatchStore.shared.resetForLogout()
+        MatchPopupCoordinator.shared.resetForLogout()
         // Phase C：任务中心页折叠态 per-user 清理(session-scoped rule 双入口之 logout clear)
         // 必须在 user = nil 之前调 —— 需要 userId 定位 UserDefaults key
         // 直接内联删除 UserDefaults key(避免跨 module 依赖 —— TaskCenterCollapseStore 是新 module,
@@ -269,9 +406,14 @@ final class SessionStore: ObservableObject {
                 UserDefaults.standard.removeObject(forKey: "taskCenter.weeklySection.\(section).\(uidStr)")
             }
         }
+        let logoutUser = user
+        AppLogger.auth.info("[PermissionModeSession] event=logout userId=\(logoutUser?.userId ?? -1, privacy: .private) oldMode=\(UserTypeExperience.effectiveUserType(userInfo: logoutUser) ?? -1, privacy: .public) nextDefaultMode=107")
         user = nil
-        authenticatedEmail = nil
         isLoggedIn = false
+        SelfPermissionBridge.shared.synchronizeImmediately(.loggedOut)
+        // 先撤销认证用户和权限，再让仍被 SwiftUI keep-alive 的账号级 View Store 换代。
+        sessionGeneration = UUID()
+        authenticatedEmail = nil
         errorMessage = ""
         KeychainStore.remove(for: storeKey)
         KeychainStore.remove(for: KeychainKey.authenticatedEmail)
@@ -284,6 +426,11 @@ final class SessionStore: ObservableObject {
         SapiTokenStore.shared.clear()
         // 同步清空主播信息缓存,避免下个账号登录后看到上个号的残留
         AnchorInfoStore.shared.clear()
+        // 账号级共享 Store 必须与认证生命周期一起失效；View dismount 不是可靠清理边界。
+        WishSettingSharedStore.shared.reset()
+        ReplyPointsStore.shared.clear()
+        GiftMarqueeStore.shared.clear()
+        AnchorInfoConsumerBridge.shared.clear()
         // 图片缓存也清掉:上个号的头像/相册/视频缩略不应被下个号看到
         ImageCache.shared.clear()
         // IM 场景闸门清空（防 A 账号场景残留误导 B 账号过滤逻辑）
@@ -326,6 +473,46 @@ final class SessionStore: ObservableObject {
         // RootView 分流回 LoginView 时 LoginView 顶层 NavigationStack 用 pathHolder.path 恢复到最后一次的注册栈。
         // 修：logout 时清 path 让下次进 LoginView 从根开始
         RegisterPathHolder.shared.reset()
+        beginRuntimeCleanup()
+    }
+
+    /// RootView 的登出分支与下一次登录共用同一清理事务，禁止各自启动一套 SDK teardown。
+    func waitForRuntimeCleanup() async {
+        guard let task = runtimeCleanupTask else { return }
+        let generation = runtimeCleanupGeneration
+        await task.value
+        if runtimeCleanupGeneration == generation {
+            runtimeCleanupTask = nil
+        }
+    }
+
+    private func beginRuntimeCleanup() {
+        guard runtimeCleanupTask == nil else { return }
+        runtimeCleanupGeneration &+= 1
+        let generation = runtimeCleanupGeneration
+
+        // 在首个 await 前同步撤销所有新启动资格。
+        WSHeartbeat.shared.stop()
+        AutoOfflineMonitor.shared.stop()
+        NIMOnlineKeeper.shared.stop()
+        CallStore.shared.invalidatePendingStart()
+        MatchStore.shared.stopForSessionEnd()
+
+        let task = Task { @MainActor in
+            await LiveSessionRegistry.shared.stopForSessionEnd()
+            await RobotCallStore.shared.resetForSessionEnd()
+            await PartyStore.shared.resetForSessionEnd()
+            PartyStore.shared.detachChatRouter()
+            await CallStore.shared.stop(destroySharedAgoraEngine: true)
+        }
+        runtimeCleanupTask = task
+
+        Task { @MainActor [weak self] in
+            await task.value
+            guard let self, self.runtimeCleanupGeneration == generation else { return }
+            self.runtimeCleanupTask = nil
+            AppLogger.auth.info("[Session] runtime cleanup completed generation=\(generation, privacy: .public)")
+        }
     }
 
     /// 模拟删除成功后的本地收口必须与退出登录完全一致，避免残留账号缓存或认证信息。
@@ -350,9 +537,9 @@ final class SessionStore: ObservableObject {
     /// P1-6（2026-07-14）从原"仅落 @Published 字段"扩展为 UI 联动 + logout 联动。
     func handleAuditStatus(applyStatus: Int, content: String) {
         guard !UserTypeExperience.isPartyOnly(
-            UserTypeExperience.effectiveUserType(isAuthenticated: user != nil)
+            UserTypeExperience.effectiveUserType(userInfo: user)
         ) else {
-            AppLogger.auth.notice("[Session] audit status ignored in fixed 107 mode")
+            AppLogger.auth.notice("[Session] audit status ignored in Party-only mode")
             return
         }
         lastAuditStatus = (applyStatus, content)
@@ -381,24 +568,41 @@ final class SessionStore: ObservableObject {
     /// 数据源:AnchorInfoStore.shared.refresh() 拉 getAnchorInfo → info?.userType/valid/onReview/banAlways/bannedSubType/type
     /// 同步回 self.user (LoginResult),save() 持久化到 Keychain。
     ///
-    /// 失败静默:refresh 内部已 non-fatal(anchor/mine/gift 3 接口任一失败不 throw),info 可能仍为 nil;此时不覆盖 user,
-    /// 保持首次登录的审核态快照(用户重新登录时会拿到新的 LoginResult 覆盖)。
-    func refreshAuditStatus() async {
-        await AnchorInfoStore.shared.refresh()
-        guard let current = user, let info = AnchorInfoStore.shared.info else {
-            AppLogger.auth.notice("[Session] refreshAuditStatus skip: user or anchorInfo nil")
+    /// 失败静默:refresh 内部 non-fatal，且会为 UI 保留旧 info。资料媒体只更新该账号
+    /// 下次认证所用的模式缓存；本次会话权限由认证建立时的登录响应/同账号缓存固定，
+    /// 不因异步资料回包再次切换界面能力。
+    func refreshAuditStatus(
+        expectedGeneration: UUID? = nil,
+        expectedUserID: Int? = nil
+    ) async {
+        let requestGeneration = expectedGeneration ?? sessionGeneration
+        let requestUserID = expectedUserID ?? user?.userId
+        guard let requestUserID else {
+            AppLogger.auth.notice("[Session] refreshAuditStatus skip: no expected user")
             return
         }
-        // 只同步审核态相关字段;其他字段(userId/token/imToken 等)保持登录响应原值
-        let updated = LoginResult(
+
+        await AnchorInfoStore.shared.refresh()
+        guard isLoggedIn,
+              sessionGeneration == requestGeneration,
+              let current = user,
+              current.userId == requestUserID else {
+            AppLogger.auth.notice("[Session] profile refresh discarded: stale session")
+            return
+        }
+        guard let info = AnchorInfoStore.shared.freshAnchorInfo(for: requestUserID) else {
+            AppLogger.auth.notice("[Session] profile refresh skipped: no fresh owner data userId=\(requestUserID, privacy: .private)")
+            return
+        }
+        // 只同步审核提示字段；角色与权限模式都由认证建立时的登录响应/同账号缓存固定。
+        // 避免资料接口中的 userType 或媒体在本次会话内改变 Root 路由与能力集合。
+        let refreshed = LoginResult(
             userId: current.userId,
             token: current.token,
             loginUuid: current.loginUuid,
             yxAccid: current.yxAccid,
             imToken: current.imToken,
-            // H5 `setMineInfo` 以 userType 决定 isHost；type 仅用于受限页的审核提示。
-            // 审核通过后服务端通常只更新 userType，若仍用 type 覆盖会让 iOS 卡在受限模式。
-            userType: info.userType ?? info.type ?? current.userType,
+            userType: current.userType,
             nickname: info.nickname ?? current.nickname,
             icon: info.icon ?? current.icon,
             userLevel: info.userLevel ?? current.userLevel,
@@ -408,12 +612,18 @@ final class SessionStore: ObservableObject {
             onReview: info.onReview ?? current.onReview,
             banAlways: info.banAlways ?? current.banAlways,
             bannedSubType: info.bannedSubType ?? current.bannedSubType,
-            type: info.type ?? current.type
+            type: info.type ?? current.type,
+            // 保留认证建立时的媒体证据，确保资料刷新不会热切本次会话权限。
+            picList: current.picList,
+            videos: current.videos,
+            reviewPlaceholderVideoMatched: current.reviewPlaceholderVideoMatched,
+            reviewModeResolved: current.reviewModeResolved,
+            reviewModeEvidenceVersion: current.reviewModeEvidenceVersion
         )
-        user = updated
+
+        user = refreshed
         save()
-        synchronizePermissionScopedServices()
-        AppLogger.auth.info("[Session] refreshAuditStatus OK userType=\(updated.userType ?? -1) valid=\(updated.valid ?? -1) onReview=\(updated.onReview == true) banAlways=\(updated.banAlways == true)")
+        AppLogger.auth.info("[Session] refreshAuditStatus OK userType=\(refreshed.userType ?? -1) valid=\(refreshed.valid ?? -1) onReview=\(refreshed.onReview == true) banAlways=\(refreshed.banAlways == true)")
     }
 
     /// RootView `.alert(item:)` dismissButton 回调；根据 applyStatus 分流 logout / refresh。
@@ -440,6 +650,61 @@ final class SessionStore: ObservableObject {
         AuthToken.value = user.token   // 供 APIClient 自动附带
     }
 
+    func removeRecentLoginAccount(_ account: String) {
+        let normalizedAccount = DeletedAccountRegistry.normalize(account)
+        guard !normalizedAccount.isEmpty else { return }
+
+        let updated = recentLoginAccounts.filter { $0 != normalizedAccount }
+        guard updated.count != recentLoginAccounts.count else { return }
+        recentLoginAccounts = updated
+        persistRecentLoginAccounts()
+    }
+
+    private func recordRecentLoginAccount(_ account: String) {
+        let normalizedAccount = DeletedAccountRegistry.normalize(account)
+        guard !normalizedAccount.isEmpty else { return }
+
+        recentLoginAccounts = (
+            [normalizedAccount]
+                + recentLoginAccounts.filter { $0 != normalizedAccount }
+        )
+        .prefix(Self.recentLoginAccountLimit)
+        .map { $0 }
+        persistRecentLoginAccounts()
+    }
+
+    private func loadRecentLoginAccounts() -> [String] {
+        guard let data = KeychainStore.getData(for: KeychainKey.recentLoginAccounts) else {
+            return []
+        }
+        guard let storedAccounts = try? JSONDecoder().decode([String].self, from: data) else {
+            AppLogger.auth.error("[RecentLogin] unable to decode local account list")
+            return []
+        }
+
+        var seen = Set<String>()
+        return storedAccounts.compactMap { account in
+            let normalizedAccount = DeletedAccountRegistry.normalize(account)
+            guard !normalizedAccount.isEmpty, seen.insert(normalizedAccount).inserted else {
+                return nil
+            }
+            return normalizedAccount
+        }
+        .prefix(Self.recentLoginAccountLimit)
+        .map { $0 }
+    }
+
+    private func persistRecentLoginAccounts() {
+        guard !recentLoginAccounts.isEmpty else {
+            _ = KeychainStore.remove(for: KeychainKey.recentLoginAccounts)
+            return
+        }
+        guard let data = try? JSONEncoder().encode(recentLoginAccounts) else { return }
+        if !KeychainStore.setData(data, for: KeychainKey.recentLoginAccounts) {
+            AppLogger.auth.error("[RecentLogin] unable to save local account list")
+        }
+    }
+
     private func load() {
         authenticatedEmail = KeychainStore.getString(for: KeychainKey.authenticatedEmail)
             .map(DeletedAccountRegistry.normalize)
@@ -448,43 +713,60 @@ final class SessionStore: ObservableObject {
         if let data = KeychainStore.getData(for: storeKey),
            let u = try? JSONDecoder().decode(LoginResult.self, from: data),
            let t = u.token, !t.isEmpty {
-            user = u
+            let initialMode = resolvingInitialPermissionMode(for: u)
+            let restoredUser = initialMode.user
+            AnchorInfoStore.shared.hydrateFromLogin(restoredUser, preserveCachedSnapshot: true)
+            user = restoredUser
             isLoggedIn = true
-            AuthToken.value = t
-            AnalyticsTracker.login(userId: u.userId)
-            CrashReporter.setUser(userID: u.userId)
+            save()
+            AnalyticsTracker.login(userId: restoredUser.userId)
+            CrashReporter.setUser(userID: restoredUser.userId)
             // 冷启动恢复同样按账号能力决定是否注册 P2P observer，避免 107 在后台收到私聊事件。
             synchronizePermissionScopedServices()
             // H-3: 冷启动 restore 时也 activate AppConfigStore(rule session-scoped-store-refresh 双入口)
             // 否则 microsoftTranslatorKey/Area 为 nil,翻译 tap 会 toast "Translation config missing"
             Task { await AppConfigStore.shared.activate() }
-            // 2026-07-17:冷启动 restore 同步注入 AnchorInfoStore.mine(对齐 applyLogin 里的 hydrateFromLogin 双入口设计)。
-            // 若不注入,mine 恒 nil,派生 UI 字段(displayName/userId/iconURL 等)只能靠 info 或 SessionStore.user 兜底;
-            // 未审核账号 info 拉取可能失败(non-fatal),mine 缺失会让派生链断层。
-            AnchorInfoStore.shared.hydrateFromLogin(u)
-            // stale-while-revalidate：旧值已同步可见，后台强制拉取最新用户信息并回写会话。
-            Task { await self.refreshAuditStatus() }
+            #if DEBUG
+            AppLogger.auth.info("[SESSION RESTORE] store=v2 userId=\(restoredUser.userId ?? -1, privacy: .private) modeSource=\(initialMode.source, privacy: .public) modeResolved=\(restoredUser.isReviewModeResolved, privacy: .public) placeholder=\(restoredUser.resolvedReviewPlaceholderMatch == true, privacy: .public) permissionMedia=\(restoredUser.permissionModeMediaURLs.count, privacy: .public) effectiveUserType=\(UserTypeExperience.effectiveUserType(userInfo: restoredUser) ?? -1, privacy: .public)")
+            #endif
+            // 后台刷新资料和审核状态，但不改写本次恢复时已经确定的权限模式。
+            let restoreGeneration = sessionGeneration
+            Task {
+                await self.refreshAuditStatus(
+                    expectedGeneration: restoreGeneration,
+                    expectedUserID: restoredUser.userId
+                )
+            }
             return
         }
         // v1 迁移：UserDefaults 残留 → Keychain，迁完清旧
         if let legacyData = defaults.data(forKey: legacyStoreKey),
            let u = try? JSONDecoder().decode(LoginResult.self, from: legacyData),
            let t = u.token, !t.isEmpty {
-            KeychainStore.setData(legacyData, for: storeKey)
             defaults.removeObject(forKey: legacyStoreKey)
-            user = u
+            let initialMode = resolvingInitialPermissionMode(for: u)
+            let restoredUser = initialMode.user
+            AnchorInfoStore.shared.hydrateFromLogin(restoredUser, preserveCachedSnapshot: true)
+            user = restoredUser
             isLoggedIn = true
-            AuthToken.value = t
-            AnalyticsTracker.login(userId: u.userId)
-            CrashReporter.setUser(userID: u.userId)
+            save()
+            AnalyticsTracker.login(userId: restoredUser.userId)
+            CrashReporter.setUser(userID: restoredUser.userId)
             // v1 迁移路径与 Keychain 恢复保持相同权限语义。
             synchronizePermissionScopedServices()
             // H-3: 同 v2 路径,冷启动 restore 后 activate AppConfigStore
             Task { await AppConfigStore.shared.activate() }
-            // 2026-07-17:v1 迁移路径同步 hydrate(与 v2 分支对称)
-            AnchorInfoStore.shared.hydrateFromLogin(u)
-            // v1 迁移同样先展示旧值，再后台刷新。
-            Task { await self.refreshAuditStatus() }
+            #if DEBUG
+            AppLogger.auth.info("[SESSION RESTORE] store=v1 userId=\(restoredUser.userId ?? -1, privacy: .private) modeSource=\(initialMode.source, privacy: .public) modeResolved=\(restoredUser.isReviewModeResolved, privacy: .public) placeholder=\(restoredUser.resolvedReviewPlaceholderMatch == true, privacy: .public) permissionMedia=\(restoredUser.permissionModeMediaURLs.count, privacy: .public) effectiveUserType=\(UserTypeExperience.effectiveUserType(userInfo: restoredUser) ?? -1, privacy: .public)")
+            #endif
+            // v1 迁移与 v2 一致：恢复首帧模式后仅后台刷新资料和审核状态。
+            let restoreGeneration = sessionGeneration
+            Task {
+                await self.refreshAuditStatus(
+                    expectedGeneration: restoreGeneration,
+                    expectedUserID: restoredUser.userId
+                )
+            }
         }
     }
 }

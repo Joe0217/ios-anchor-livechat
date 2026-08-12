@@ -14,21 +14,25 @@ extension SelfPermissionBridge {
 
     /// nonisolated 静态工厂：创建会话状态 relay + Bridge，异步 Task 里绑定 SessionStore（避免直接跨 actor 读 @MainActor 属性）。
     private static func makeShared() -> SelfPermissionBridge {
-        let sessionRelay = CurrentValueSubject<PermissionSessionState, Never>(.loggedOut)
+        // SessionStore 在同步恢复 Keychain 用户时已经写好这个静态快照。这里不能直接读取
+        // SessionStore.shared，否则 SessionStore.load() 与本 static singleton 会递归初始化。
+        let sessionRelay = CurrentValueSubject<PermissionSessionState, Never>(
+            SessionStore.permissionSessionSnapshot
+        )
 
         let bridge = SelfPermissionBridge(
             sessionPublisher: sessionRelay.eraseToAnyPublisher()
         )
 
-        // 异步派发到 MainActor 绑定登录态。当前包固定为 107，不读取真实 userType，
-        // DEBUG override 同样不再改变有效角色，避免提审结构被本地状态漂移。
+        // 异步派发到 MainActor 绑定登录接口返回或从 Keychain 恢复的用户信息。
+        // 登录响应和可信缓存都缺媒体时，本次会话保持 107；资料刷新不热切当前权限。
         Task { @MainActor in
             let session = SessionStore.shared
             session.$user
                 .sink { user in
                     let isAuthenticated = user != nil
                     sessionRelay.send(PermissionSessionState(
-                        userType: UserTypeExperience.effectiveUserType(isAuthenticated: isAuthenticated),
+                        userType: UserTypeExperience.effectiveUserType(userInfo: user),
                         isAuthenticated: isAuthenticated
                     ))
                 }

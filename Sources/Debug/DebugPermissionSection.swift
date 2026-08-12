@@ -5,7 +5,7 @@ import os
 
 private let debugCDNUploaderLogger = Logger(subsystem: "com.anchor.livechat", category: "cdn-upload")
 
-/// DEBUG-only：Settings 页里的权限状态 section。当前包固定为 107，暂不提供角色切换。
+/// DEBUG-only：Settings 页里的自动账号权限模式状态 section。
 ///
 /// **不入 Release 包**（整个文件 `#if DEBUG` 门）。
 ///
@@ -13,20 +13,14 @@ private let debugCDNUploaderLogger = Logger(subsystem: "com.anchor.livechat", ca
 struct DebugPermissionSection: View {
     /// SelfPermissionBridge 是单例；观察 @Published 让 canX 变化时 body 重算
     @ObservedObject private var permission = SelfPermissionBridge.shared
+    @ObservedObject private var session = SessionStore.shared
 
     var body: some View {
-        Section("Debug · Permission (fixed)") {
-            HStack {
-                Text("107 · Party-only")
-                    .foregroundColor(.white)
-                    .font(.system(size: 14))
-                Spacer()
-                Image(systemName: "checkmark")
-                    .foregroundColor(.pink)
-                    .font(.system(size: 14, weight: .semibold))
-            }
-
-            infoRow(title: "Effective", value: effectiveText, mono: true)
+        Section("Debug · Permission mode") {
+            infoRow(title: "Session / Bridge", value: sessionAndBridgeText, mono: true)
+            infoRow(title: "Mode source", value: session.user == nil ? "unavailable" : "login / keychain", mono: true)
+            infoRow(title: "Raw placeholder", value: rawPlaceholderText, mono: true)
+            infoRow(title: "picList / videos", value: mediaCountsText, mono: true)
             infoRow(title: "Call / Live / Party", value: permissionsText, mono: true)
             infoRow(title: "Gift / Wallet / WD / EX", value: economyPermissionsText, mono: true)
             infoRow(title: "Lot / Game / Lucky / Free / Item / Home / Work / H5", value: reviewPermissionsText, mono: true)
@@ -47,8 +41,20 @@ struct DebugPermissionSection: View {
         }
     }
 
-    private var effectiveText: String {
-        "\(UserTypeExperience.fixedUserType) (fixed)"
+    private var sessionAndBridgeText: String {
+        let sessionType = UserTypeExperience.effectiveUserType(userInfo: session.user)
+        return "\(sessionType.map(String.init) ?? "nil") / \(permission.effectiveUserType.map(String.init) ?? "nil")"
+    }
+
+    private var rawPlaceholderText: String {
+        guard let user = session.user else { return "unavailable" }
+        guard user.isReviewModeResolved else { return "unresolved (defaults to 107)" }
+        return user.resolvedReviewPlaceholderMatch == true ? "matched" : "not matched"
+    }
+
+    private var mediaCountsText: String {
+        guard let user = session.user else { return "- / -" }
+        return "\(user.picList?.count ?? -1) / \(user.videos?.count ?? -1)"
     }
 
     private var permissionsText: String {

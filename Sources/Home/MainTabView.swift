@@ -823,7 +823,7 @@ struct MainTabView: View {
                                 }
                             case .blocklist:    BlocklistView()
                             case .editProfile:
-                                if permission.canProfileSocial {
+                                if permission.canProfileEditing {
                                     EditProfileView(service: EditProfileService.shared)
                                 } else {
                                     EmptyView()
@@ -906,7 +906,7 @@ struct MainTabView: View {
         }
     }
 
-    /// 以权限组合识别 107 的提审结构，保证 DEBUG userType override 与真实账号走同一条 QA 路径。
+    /// 以权限组合识别 107 的提审结构，资料派生模式与 UI 使用同一条权限路径。
     /// 当前映射里只有 107 同时保留 Party、关闭 Home/Messages/Work。
     private var uses107TabStructure: Bool {
         permission.isLoaded
@@ -921,11 +921,12 @@ struct MainTabView: View {
     /// 无会话则保守不挂载。
     private var shouldMountHomeContent: Bool {
         if permission.isLoaded { return permission.canHomeDiscovery }
-        guard session.user != nil else { return false }
-        return !UserPermissionMapping.blocked(for: UserTypeExperience.fixedUserType).contains(.homeDiscovery)
+        guard let user = session.user else { return false }
+        let fallbackUserType = UserTypeExperience.effectiveUserType(userInfo: user)
+        return !UserPermissionMapping.blocked(for: fallbackUserType).contains(.homeDiscovery)
     }
 
-    /// 107 在会话权限加载后从默认 Home 收敛到 Party；其他账号类型仍沿用既有 tab 行为。
+    /// DEBUG 权限覆盖或运行期能力撤销后，确保当前选中项仍属于可见集合。
     private func enforceVisibleSelection() {
         guard permission.isLoaded, !visibleTabs.contains(selection) else { return }
         switch selection {
@@ -956,10 +957,11 @@ struct MainTabView: View {
     /// Match 的相机预览和 10 分钟提示均属于完整主播通话能力。107 进入 Party 时，
     /// 既不挂接相机，也不保留上一个账号/角色留下的定时提示。
     private func updateMatchCapability() {
-        guard matchCapabilityEnabled else {
+        guard matchCapabilityEnabled, let userID = session.user?.userId else {
             matchPopupCoordinator.stop()
             return
         }
+        MatchStore.shared.activateSession(userID: userID)
         MatchStore.shared.attachCameraSession(matchCameraSession)
         matchPopupCoordinator.start()
     }

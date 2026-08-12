@@ -83,6 +83,15 @@ struct LoginView: View {
                 }
             }
         }
+        .onAppear(perform: fillDebugPasswordIfNeeded)
+    }
+
+    private func fillDebugPasswordIfNeeded() {
+        #if DEBUG
+        if password.isEmpty {
+            password = "12345678"
+        }
+        #endif
     }
 
     // MARK: - 组件
@@ -138,6 +147,65 @@ struct LoginView: View {
             Theme.Palette.authInputFill,
             in: RoundedRectangle(cornerRadius: Theme.Radius.authInput, style: .continuous)
         )
+        .overlay(alignment: .top) {
+            if focusedField == .email, email.isEmpty, !session.recentLoginAccounts.isEmpty {
+                recentLoginAccounts
+                    .padding(.top, Theme.Metric.authInputHeight + 8)
+            }
+        }
+        .zIndex(focusedField == .email ? 1 : 0)
+    }
+
+    private var recentLoginAccounts: some View {
+        VStack(spacing: 0) {
+            ForEach(session.recentLoginAccounts, id: \.self) { account in
+                HStack(spacing: 8) {
+                    Button {
+                        email = account
+                        focusedField = .password
+                    } label: {
+                        Text(account)
+                            .font(Theme.Typography.authInputText)
+                            .foregroundStyle(Theme.Palette.authInputText)
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(account)
+
+                    Button(role: .destructive) {
+                        session.removeRecentLoginAccount(account)
+                    } label: {
+                        Image(systemName: "trash")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Theme.Palette.authInputIconTint)
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(L10n.authRemoveRecentAccountA11y)
+                }
+                .padding(.leading, Theme.Metric.authInputHPadding)
+                .padding(.trailing, 8)
+                .frame(height: 48)
+
+                if account != session.recentLoginAccounts.last {
+                    Divider()
+                        .overlay(Theme.Palette.authInputIconTint.opacity(0.3))
+                        .padding(.leading, Theme.Metric.authInputHPadding)
+                }
+            }
+        }
+        .background(
+            .ultraThinMaterial,
+            in: RoundedRectangle(cornerRadius: Theme.Radius.authInput, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.authInput, style: .continuous)
+                .stroke(.white.opacity(0.2), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.24), radius: 10, y: 5)
     }
 
     private var passwordField: some View {

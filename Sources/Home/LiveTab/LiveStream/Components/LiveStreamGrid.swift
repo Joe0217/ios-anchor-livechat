@@ -29,7 +29,9 @@ struct LiveStreamGrid: View {
             cardGrid
         } else {
             switch viewModel.loadState {
-            case .idle, .loadingFirstPage:
+            case .idle:
+                idleState
+            case .loadingFirstPage:
                 centeredLoading
             case .error(let msg):
                 errorState(msg)
@@ -89,6 +91,10 @@ struct LiveStreamGrid: View {
             Spacer()
         }
         .frame(minHeight: 220)
+    }
+
+    private var idleState: some View {
+        Color.clear.frame(minHeight: 220)
     }
 
     private var emptyState: some View {

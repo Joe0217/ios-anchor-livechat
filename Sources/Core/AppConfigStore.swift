@@ -65,6 +65,8 @@ final class AppConfigStore: ObservableObject {
     // MARK: - 依赖注入
 
     private let fetch: ([String]) async throws -> [String: Any]
+    /// 登出清理代际。旧账号请求即使不响应 cancellation，也不能重新发布配置。
+    private var activationGeneration = 0
 
     init(fetch: @escaping ([String]) async throws -> [String: Any]) {
         self.fetch = fetch
@@ -75,8 +77,10 @@ final class AppConfigStore: ObservableObject {
     /// login 成功后调用；一次拉取 4 key + 二次 parse microsoft 配置。
     /// 幂等：即使已 loaded 再调也重新覆盖字段。
     func activate() async {
+        let generation = activationGeneration
         do {
             let dict = try await fetch(Self.fetchKeys)
+            guard generation == activationGeneration, !Task.isCancelled else { return }
 
             // 1. 直接扁平字段
             achorHideButton = dict["achor_hide_button"] as? String
@@ -109,6 +113,7 @@ final class AppConfigStore: ObservableObject {
                let fallback = try? await fetch(["microsoft_translator_config"]) {
                 translatorConfig = Self.translatorConfig(from: fallback["microsoft_translator_config"])
             }
+            guard generation == activationGeneration, !Task.isCancelled else { return }
             if let cfg = translatorConfig {
                 microsoftTranslatorKey = cfg.key
                 microsoftTranslatorArea = cfg.area
@@ -122,6 +127,7 @@ final class AppConfigStore: ObservableObject {
             isLoaded = true
             logger.info("[AppConfig] activate success: achor_hide_button=\(self.achorHideButton ?? "nil", privacy: .public) payPoints=\(self.payMsgPoints ?? -1) freePoints=\(self.freeMsgPoints ?? -1) pkMatchDur=\(self.pkMatchDuration ?? -1) pkEffective=\(self.pkEffectiveValue ?? -1) pkGiftQueue=\(self.pkGiftQueue ?? -1)")
         } catch {
+            guard generation == activationGeneration, !Task.isCancelled else { return }
             // 网络失败 / 后端异常不阻塞 view；翻译功能保持不可用直到下次成功拉取配置。
             microsoftTranslatorKey = nil
             microsoftTranslatorArea = nil
@@ -132,6 +138,7 @@ final class AppConfigStore: ObservableObject {
 
     /// logout 时清空。`isLoaded=false` 让下游 bridge 回落到"未就绪"态。
     func clear() {
+        activationGeneration &+= 1
         achorHideButton = nil
         payMsgPoints = nil
         freeMsgPoints = nil

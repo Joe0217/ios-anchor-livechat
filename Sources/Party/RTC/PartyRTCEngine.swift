@@ -18,7 +18,7 @@ import UIKit
 /// - `audioProfile = .speechStandard`
 ///
 /// 默认进 `.audience` 观众；上麦切 `.broadcaster` + `enableLocalAudio(true)`；
-/// 视频位额外 `enableLocalVideo(true)` + 接外部源订阅（M5 接 CameraManager v5.8 字典）。
+/// 视频位额外启用自定义视频轨并接外部源订阅（M5 接 CameraManager v5.8 字典）。
 ///
 /// 远端音频**禁止**用 `muteRemoteAudioStream`（订阅层取消，解禁后首帧丢失）；
 /// 必须用 `adjustUserPlaybackSignalVolume(uid, 0/100)` 在播放端静音。
@@ -114,8 +114,14 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         kit.setAudioScenario(.chatRoom)
         kit.setAudioProfile(.speechStandard)
 
-        // 语聊默认禁视频（M5 视频位再 enableVideo）
-        kit.disableVideo()
+        // 视频模块同时承载远端订阅和本端发布。允许 Party 视频时先开启模块，
+        // 但保持本地采集关闭；只有本人真正位于视频麦时才由 enableVideoSeat 开启发布。
+        if partyVideoCapabilityEnabled {
+            kit.enableVideo()
+            kit.enableLocalVideo(false)
+        } else {
+            kit.disableVideo()
+        }
         kit.enableAudio()
         kit.setDefaultAudioRouteToSpeakerphone(true)
         kit.enableAudioVolumeIndication(500, smooth: 3, reportVad: false)
@@ -220,6 +226,13 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         partyVideoCapabilityEnabled = enabled
         guard let engine else { return }
 
+        if enabled {
+            // disableVideo 会同时关闭远端解码；账号从 107 恢复为完整权限时必须显式重开。
+            // SDK 要求先 enableVideo，再用 enableLocalVideo(false) 保留纯远端接收模式。
+            engine.enableVideo()
+            engine.enableLocalVideo(false)
+        }
+
         let option = AgoraRtcChannelMediaOptions()
         option.autoSubscribeVideo = enabled
         if !enabled {
@@ -227,7 +240,11 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         }
         engine.updateChannel(with: option)
 
-        guard !enabled else { return }
+        if enabled {
+            AppLogger.party.notice("[PartyRTC] Party video capability enabled")
+            return
+        }
+
         if videoSeatActive {
             disableVideoSeatInternal()
         } else {
@@ -281,7 +298,10 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         option.publishCustomVideoTrack = false
         engine.updateChannel(with: option)
         engine.enableLocalVideo(false)
-        engine.disableVideo()
+        // 本人下视频麦或关闭摄像头时仍需接收其他视频麦；只有账号能力被撤销才关闭整个模块。
+        if !partyVideoCapabilityEnabled {
+            engine.disableVideo()
+        }
         videoSeatActive = false
         AppLogger.party.info("[PartyRTC] disableVideoSeat")
         updateFrameSnapshot()  // P0-1
@@ -396,10 +416,6 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         resetPendingSpeakingUids()
         guard let engine else { return }
 
-        // 二轮复查 wfpw5v1us：本地快照 wasVideoActive
-        // 必须在 videoSeatActive=false 之前取值，否则 line 358 永远走不到 disableVideo() 分支（死分支 / video source 不释放）
-        let wasVideoActive = videoSeatActive
-
         // P0-1：进 leave 立即作废 pushFrame 快照，防止 didLeave 回调返回前 captureOutput 仍在推帧到正在销毁的 channel
         videoSeatActive = false
         updateFrameSnapshot()
@@ -411,7 +427,8 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         engine.updateChannel(with: option)
         // 不等 leaveChannel 回调：本地设备必须在退房开始时就关闭。
         engine.disableAudio()
-        if wasVideoActive { engine.disableVideo() }
+        // 普通观众也可能为接收远端画面启用了视频模块，退房时必须统一关闭。
+        engine.disableVideo()
 
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             if leaveContinuation != nil {

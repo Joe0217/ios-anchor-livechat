@@ -11,11 +11,13 @@ import SwiftUI
 /// - `PartyListStore` = view-owned `@StateObject`（tab 销毁重建策略下随 view 一起 deinit + cancel task）
 /// - `partyPath` = 外部注入（由 `MainTabView` 持有），子页 push 时 tabbar 用 `isSubpagePushed` 自然隐藏
 ///
-/// **登出清理**：不需要 store 显式 reset —— 用户登出 → `RootView` 切 LoginView → MainTabView dismount →
-/// PartyTabRootView dismount → PartyListStore deinit → currentTask cancel（自动路径）。
+/// **上下文清理**：MainTabView 会 keep-alive Party 树，Party 列表与搜索以会话代际和
+/// 实际列表端点模式共同组成数据上下文；账号或模式变化时显式 reset Store。
+/// deinit cancel 仅作为最终兜底。
 struct PartyTabRootView: View {
     @Binding var path: NavigationPath
     @ObservedObject private var permission = SelfPermissionBridge.shared
+    @ObservedObject private var session = SessionStore.shared
 
     /// view-owned Store。构造时注入 Live service。
     @StateObject private var listStore = PartyListStore(
@@ -46,8 +48,17 @@ struct PartyTabRootView: View {
 
     private var isPartyOnlyMode: Bool {
         let effectiveUserType = permission.effectiveUserTypeSnapshot
-            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.isLoggedIn)
+            ?? UserTypeExperience.effectiveUserType(userInfo: session.user)
         return UserTypeExperience.isPartyOnly(effectiveUserType)
+    }
+
+    private var partyDataContext: String {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? SessionStore.effectiveUserTypeSnapshot
+        return PartyEndpointDataContext.identifier(
+            sessionGeneration: session.sessionGeneration,
+            usesAuditRoomEndpoints: UserTypeExperience.isPartyOnly(effectiveUserType)
+        )
     }
 
     var body: some View {
@@ -185,8 +196,17 @@ struct PartyTabRootView: View {
         }
         guard !guide.roomId.isEmpty else { return }
 
+        let dataContext = partyDataContext
         Task {
-            guard let target = await preferredTopRoomTarget(guide, topRankLimit: topRankLimit) else {
+            let target = await preferredTopRoomTarget(guide, topRankLimit: topRankLimit)
+            guard dataContext == partyDataContext,
+                  session.isLoggedIn,
+                  session.user != nil,
+                  permission.canParty,
+                  permission.canPartyActivities else {
+                return
+            }
+            guard let target else {
                 permissionDeniedToast = L10n.Party.errorNetworkLost
                 return
             }
@@ -252,11 +272,17 @@ struct PartyTabRootView: View {
         Task { @MainActor in
             let error = await PartyStore.shared.validateRoomEntryPassword(roomId: id, password: "0000")
             autoEnteringPasswordRoomID = nil
-            guard error == nil else {
+            guard let error else {
+                path.append(PartyRoute.room(id: id, password: nil, entryPath: entryPath))
+                return
+            }
+            if case .passwordWrong = error {
                 pendingPasswordRoom = PasswordRoom(id: id, entryPath: entryPath)
                 return
             }
-            path.append(PartyRoute.room(id: id, password: nil, entryPath: entryPath))
+            // 107 的网络或普通接口失败不应被误判为密码错误。清理潜在的进房状态并留在大厅。
+            await PartyStore.shared.forceLeaveRoom(.entryFailed)
+            permissionDeniedToast = error.localizedDescription
         }
     }
 

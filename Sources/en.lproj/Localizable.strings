@@ -325,47 +325,47 @@
 "settings.feedbackComingSoon"  = "Coming soon";
 
 // MARK: - Native 107 Party documents
-"settings.document.anchorPolicy.introduction" = "These Community Guidelines apply to the Party experience available in HiFunny.";
+"settings.document.anchorPolicy.introduction" = "These Community Guidelines apply to the Party-focused experience available to this account in HiFunny, including voice rooms, public room chat, expressions, free interactions, Connections, profiles and approved profile photos.";
 "settings.document.anchorPolicy.respect.title" = "Respect in Party Rooms";
-"settings.document.anchorPolicy.respect.body" = "Use public chat, expressions and free interactions respectfully. Do not harass, threaten, bully, discriminate against, or sexually target anyone.";
+"settings.document.anchorPolicy.respect.body" = "Use Party voice, public room chat, expressions, free dice and rock-paper-scissors respectfully. Do not harass, threaten, bully, discriminate against, or sexually target anyone.";
 "settings.document.anchorPolicy.content.title" = "Safe Content and Profiles";
-"settings.document.anchorPolicy.content.body" = "Use accurate account information and appropriate content. Do not impersonate others, expose personal information, or post unlawful, violent, sexually explicit, or exploitative material.";
+"settings.document.anchorPolicy.content.body" = "Use accurate account and profile information. Avatars, profile photos, review videos, room messages and other submitted content must be yours to share and must not be unlawful, violent, sexually explicit, exploitative, deceptive or invasive of another person's privacy.";
 "settings.document.anchorPolicy.commercial.title" = "No Gambling or Commercial Abuse";
 "settings.document.anchorPolicy.commercial.body" = "Do not use Party rooms, dice, rock-paper-scissors, or any free interaction for wagers, prizes, payments, solicitation, fraud, or other commercial activity.";
 "settings.document.anchorPolicy.safety.title" = "Keep the Room Safe";
 "settings.document.anchorPolicy.safety.body" = "Do not involve minors in adult content, seek off-platform contact for exploitation, or share private contact, identity, or location details without consent.";
 "settings.document.anchorPolicy.moderation.title" = "Moderation";
-"settings.document.anchorPolicy.moderation.body" = "We may remove content, restrict Party participation, or limit an account when these guidelines or applicable law are violated. Use Settings to block an unwanted account or send feedback.";
+"settings.document.anchorPolicy.moderation.body" = "We may remove submitted content, restrict Party or Connections functions, or limit an account when these guidelines or applicable law are violated. Use Connections or Settings to block an account, contact support or submit feedback.";
 
-"settings.document.agreement.introduction" = "This agreement covers the Party-focused HiFunny experience currently available in this app.";
+"settings.document.agreement.introduction" = "This agreement covers the Party-focused HiFunny experience available to this account. Functions not listed as available below are not part of this experience.";
 "settings.document.agreement.acceptance.title" = "Acceptance";
 "settings.document.agreement.acceptance.body" = "By signing in or using HiFunny, you agree to this agreement, the Community Guidelines, and applicable law. Do not use the service where you are not legally permitted to do so.";
 "settings.document.agreement.scope.title" = "Available Functions";
-"settings.document.agreement.scope.body" = "During sign-up, HiFunny requires an avatar and at least one profile photo. Invitation codes and review-video recording are not offered in the current registration flow. Your account can use Party rooms, public room chat, expressions, free dice and rock-paper-scissors, profile viewing and follow relationships, customer support, and on-device beauty tools. Live broadcasting, calls, person-to-person direct messages, virtual gifts or currency, wallet, withdrawal, lotteries, Party video, activities, and half-screen games are not offered in this experience.";
+"settings.document.agreement.scope.body" = "Registration requires an avatar and at least one profile photo. When a six-character invitation code is validated, review-video recording becomes available and registration requires six profile photos and a recorded review video. This account can use Party voice rooms, public room chat, expressions, free dice and rock-paper-scissors, Connections lists, profiles and approved photo albums, follow, unfollow and block controls, basic profile, avatar and photo editing, beauty-camera tools, feedback, customer support and Settings. Live broadcasting, calls, person-to-person direct messages, virtual gifts or currency, wallet, withdrawal, lotteries or Lucky Number, Party video, Party music, activities, paid games and half-screen games are not available.";
 "settings.document.agreement.use.title" = "Using the Service";
-"settings.document.agreement.use.body" = "Use HiFunny only for lawful, personal entertainment. Do not attempt to bypass access controls, disrupt Party rooms, automate interactions, or use the service to harm others.";
+"settings.document.agreement.use.body" = "Use HiFunny only for lawful, personal social interaction and entertainment. Do not bypass access controls, disrupt Party rooms, automate interactions, use free games for wagers or prizes, scrape information, or use the service to harm others.";
 "settings.document.agreement.content.title" = "Your Content";
-"settings.document.agreement.content.body" = "You are responsible for the profile information, messages, expressions, and free interactions you send. You must have the rights needed to share them, and they must follow the Community Guidelines.";
+"settings.document.agreement.content.body" = "You are responsible for the profile details, avatar, photos, review video, public room messages, expressions and free interactions you submit. You must have the rights and permissions needed to share them, and they must follow the Community Guidelines.";
 "settings.document.agreement.service.title" = "Service Availability and Enforcement";
-"settings.document.agreement.service.body" = "We may maintain, change, suspend, or remove Party features when needed for safety, security, legal compliance, or service operation. Violations may lead to content removal, restricted participation, or account limits.";
+"settings.document.agreement.service.body" = "We may maintain, change, suspend or remove the available Party, Connections, profile and support functions when needed for safety, security, legal compliance or service operation. Violations may lead to content removal, restricted participation or account limits.";
 "settings.document.agreement.account.title" = "Account and Feedback";
-"settings.document.agreement.account.body" = "Keep your account credentials confidential and tell us about suspected unauthorized use. Account options and Feedback are available in Settings for requests or concerns. Profile > Settings > Delete account clears the local session; contact support to request deletion of account data stored on our services.";
+"settings.document.agreement.account.body" = "Keep your account credentials confidential and report suspected unauthorized use through Feedback or customer support. Profile > Settings contains profile, privacy, blocklist and account controls. Delete Account currently removes the local session from this device; contact support to request deletion of account data stored on our services.";
 "settings.document.agreement.changes.title" = "Changes to This Agreement";
 "settings.document.agreement.changes.body" = "We may update this agreement as the service or legal requirements change. Continued use after an update means you accept the updated agreement.";
 
-"settings.document.privacy.introduction" = "This policy explains how the Party-focused HiFunny experience processes information. HiFunny is intended for people aged 13 and older, and we do not knowingly collect personal information from children under 13.";
+"settings.document.privacy.introduction" = "This policy explains how information is processed for the Party-focused HiFunny experience available to this account. HiFunny is intended for people aged 13 and older, and we do not knowingly collect personal information from children under 13.";
 "settings.document.privacy.data.title" = "Information We Process";
-"settings.document.privacy.data.body" = "We process account details and profile data required during sign-up, including email, name or nickname, birthday, country, languages, avatar and at least one profile photo. We process user and device IDs, Following/Followers/Friends and blocked-account relationships, Party room participation, public room text messages and expressions, voice or audio used in a Party room, customer support requests, and product interaction, crash, performance, and security information. Photos and videos you submit are user content. Beauty settings and beauty-camera effects are processed on your device; a captured photo is saved only when you choose to add it to your photo library. Invitation codes and review-video recording are not used in the current registration flow.";
+"settings.document.privacy.data.body" = "We process sign-up and profile information including email, name or nickname, birthday, country, languages, avatar and profile photos. If you enter a six-character invitation code, we send it for validation; after successful validation, registration also processes six profile photos and the review video you record. We process user and device IDs, Connections and blocked-account relationships, Party room participation, public room text, expressions and free-interaction results, Party voice audio, feedback and support requests, and product interaction, crash, performance, abuse-prevention and security information. Beauty settings and preview effects are processed on your device; photos or videos are uploaded only when you choose to submit them.";
 "settings.document.privacy.use.title" = "How We Use Information";
-"settings.document.privacy.use.body" = "We use information to authenticate your account, provide profiles, Party rooms, public chat, connections and customer support, prevent abuse, secure the service, troubleshoot issues, perform product analytics, diagnose crashes and performance problems, and meet legal obligations. We do not sell personal information or use it for cross-app advertising.";
+"settings.document.privacy.use.body" = "We use information to authenticate and review registration, provide and edit profiles and approved photo albums, operate Party voice rooms, public room chat, expressions and free interactions, provide Connections, blocking, feedback and customer support, prevent abuse, secure and troubleshoot the service, perform product analytics, diagnose crashes and performance problems, and meet legal obligations. We do not sell personal information or use it for cross-app advertising.";
 "settings.document.privacy.visibility.title" = "What Other Participants Can See";
-"settings.document.privacy.visibility.body" = "Messages, expressions, and free interactions sent in a Party room may be visible to other participants in that room. Do not share private contact, identity, location, or other sensitive information publicly.";
+"settings.document.privacy.visibility.body" = "Your nickname, avatar, basic profile and approved profile photos may be visible to people who can open your profile. Public room messages, expressions and free interactions are visible to participants in that Party room, and your voice is transmitted to room participants while you use a microphone seat. Do not share private contact, identity, location or other sensitive information publicly.";
 "settings.document.privacy.sharing.title" = "Service Providers and Disclosure";
-"settings.document.privacy.sharing.body" = "We use service providers that help operate the app, including Agora for Party voice and real-time media, NIM for room messaging, ThinkingData for product analytics, Sentry for crash and performance diagnostics, and hosting/CDN providers for submitted media and support attachments. We may disclose information when required by law or to protect users, the service, or the public.";
+"settings.document.privacy.sharing.body" = "We use service providers that help operate the available functions: Agora for Party voice, NIM for public room messaging, ThinkingData for product analytics, Sentry for crash and performance diagnostics, and hosting or CDN providers for profile media, review videos and support attachments. We may disclose information when required by law or to protect users, the service or the public.";
 "settings.document.privacy.security.title" = "Retention and Security";
-"settings.document.privacy.security.body" = "We retain information only as needed for the purposes described here and applicable obligations. We use reasonable safeguards, but no online service can guarantee absolute security.";
+"settings.document.privacy.security.body" = "We retain account, profile, Party, Connections, support and diagnostic information only as needed for the purposes described here and applicable obligations. We use reasonable safeguards, but no online service can guarantee absolute security.";
 "settings.document.privacy.choices.title" = "Your Choices and Requests";
-"settings.document.privacy.choices.body" = "You can update your profile, follow or unfollow users, manage your blocklist, and manage camera, microphone, and photo permissions in iOS Settings. Profile > Settings > Delete account clears your local session. Contact support to request deletion of account data stored on our services. For privacy questions or requests to access, correct, or delete information, submit Feedback from Settings.";
+"settings.document.privacy.choices.body" = "You can edit basic profile information, avatar and photos, follow or unfollow users, manage your blocklist, and manage camera, microphone and photo-library permissions in iOS Settings. Profile > Settings > Delete Account currently clears the local session on this device. Contact support through Feedback to request access, correction or deletion of account data stored on our services or to ask a privacy question.";
 
 // MARK: - Feedback 反馈表单页
 "feedback.type.appError"       = "App Error";
@@ -423,6 +423,7 @@
 "auth.consent.toggleA11y"    = "Agree to the User Agreement and Privacy Policy";
 "auth.clearEmailA11y"        = "Clear email";
 "auth.clearPasswordA11y"     = "Clear password";
+"auth.removeRecentAccountA11y" = "Remove recent account";
 
 // MARK: - LivePrepare 开播准备
 "livePrepare.navTitle"       = "Go Live Demo";
@@ -1875,7 +1876,7 @@
 "register.action.confirmN"                          = "Confirm ( %d )";
 "register.action.cancel"                            = "Cancel";
 "register.action.languageTitle"                     = "Language";
-"register.video.guideBody"                          = "A review video is not required during registration at this time. If additional account verification is needed later, HiFunny will explain the purpose before requesting a %d-second recording.";
+"register.video.guideBody"                          = "Please record and upload a %d-second review video to complete registration with an invitation code.";
 "register.video.discardConfirm"                     = "Discard recording? Recording will be lost.";
 "register.error.avatarRequired"                     = "Please upload your avatar";
 "register.error.nicknameRequired"                   = "Please enter your nickname";
@@ -1884,7 +1885,7 @@
 "register.error.languageRequired"                   = "Please select your language";
 "register.error.languageMax"                        = "You can only choose four";
 "register.error.photosMin"                          = "Please upload at least %d profile photos";
-"register.error.videoRequired"                      = "A review video is not required at this time.";
+"register.error.videoRequired"                      = "Please record and upload a review video.";
 "register.error.cameraDenied"                       = "Camera access required. Please enable it in Settings.";
 "register.error.micDenied"                          = "Microphone access required. Please enable it in Settings.";
 "register.error.recordInterrupted"                  = "Recording interrupted. Please retry.";

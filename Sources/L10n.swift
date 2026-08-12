@@ -1491,6 +1491,7 @@ enum L10n {
     static var authConsentToggleA11y: String { localize("auth.consent.toggleA11y", comment: "登录页协议复选框无障碍文案") }
     static var authClearEmailA11y: String { localize("auth.clearEmailA11y", comment: "清空邮箱输入框无障碍文案") }
     static var authClearPasswordA11y: String { localize("auth.clearPasswordA11y", comment: "清空密码输入框无障碍文案") }
+    static var authRemoveRecentAccountA11y: String { localize("auth.removeRecentAccountA11y", comment: "移除最近登录账号无障碍文案") }
 
     // MARK: - LivePrepare 开播准备
     static var livePrepareNavTitle: String { localize("livePrepare.navTitle", comment: "开播 Demo 导航标题") }

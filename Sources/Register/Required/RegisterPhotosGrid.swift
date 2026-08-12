@@ -12,6 +12,10 @@ struct RegisterPhotosGrid: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
 
     @State private var pickerItems: [PhotosPickerItem] = []
+    @State private var showMediaSourceMenu = false
+    @State private var showPhotoLibrary = false
+    @State private var showBeautyCamera = false
+    @State private var showCameraPermissionAlert = false
 
     private var remainingSlots: Int { max(0, maxPhotos - store.picUploadTasks.count) }
 
@@ -22,6 +26,48 @@ struct RegisterPhotosGrid: View {
             }
             if remainingSlots > 0 {
                 addCell
+            }
+        }
+        .confirmationDialog(
+            L10n.Publish.addImage,
+            isPresented: $showMediaSourceMenu,
+            titleVisibility: .visible
+        ) {
+            Button {
+                DispatchQueue.main.async { openBeautyCamera() }
+            } label: {
+                Label(L10n.beautyStudioCamera, systemImage: "camera.fill")
+            }
+            Button {
+                DispatchQueue.main.async { showPhotoLibrary = true }
+            } label: {
+                Label(L10n.Publish.mediaSourcePhotoLibrary, systemImage: "photo")
+            }
+            Button(L10n.Publish.cancel, role: .cancel) {}
+        }
+        .photosPicker(
+            isPresented: $showPhotoLibrary,
+            selection: $pickerItems,
+            maxSelectionCount: remainingSlots,
+            matching: .images
+        )
+        .onChange(of: pickerItems) { newItems in
+            Task { await enqueueAndUpload(newItems) }
+        }
+        .overlay {
+            if showCameraPermissionAlert {
+                MediaPermissionDialog(
+                    requirement: .camera,
+                    onCancel: { showCameraPermissionAlert = false },
+                    onConfirm: retryBeautyCameraPermission
+                )
+                .zIndex(100)
+            }
+        }
+        .fullScreenCover(isPresented: $showBeautyCamera) {
+            BeautySettingsView(mode: .camera) { data in
+                showBeautyCamera = false
+                Task { await enqueueAndUpload([data]) }
             }
         }
     }
@@ -71,7 +117,9 @@ struct RegisterPhotosGrid: View {
     }
 
     private var addCell: some View {
-        PhotosPicker(selection: $pickerItems, maxSelectionCount: remainingSlots, matching: .images) {
+        Button {
+            showMediaSourceMenu = true
+        } label: {
             RoundedRectangle(cornerRadius: 8)
                 .fill(Color(red: 0.17, green: 0.13, blue: 0.24))
                 .aspectRatio(1, contentMode: .fit)
@@ -80,21 +128,58 @@ struct RegisterPhotosGrid: View {
                         .font(.system(size: 30))
                         .foregroundStyle(.white.opacity(0.4))
                 )
+                .contentShape(Rectangle())
         }
-        .onChange(of: pickerItems) { newItems in
-            Task { await enqueueAndUpload(newItems) }
-        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(L10n.Publish.addImage)
     }
 
     @MainActor
     private func enqueueAndUpload(_ items: [PhotosPickerItem]) async {
         for item in items {
+            guard store.picUploadTasks.count < maxPhotos else { break }
             guard let data = try? await item.loadTransferable(type: Data.self) else { continue }
-            let taskId = UUID()
-            store.picUploadTasks.append(PhotoUploadTask(id: taskId, localData: data, state: .uploading(progress: 0)))
-            Task { await performUpload(id: taskId, data: data) }
+            enqueueAndUpload(data)
         }
         pickerItems.removeAll()
+    }
+
+    @MainActor
+    private func enqueueAndUpload(_ dataItems: [Data]) async {
+        for data in dataItems {
+            guard store.picUploadTasks.count < maxPhotos else { break }
+            enqueueAndUpload(data)
+        }
+    }
+
+    @MainActor
+    private func enqueueAndUpload(_ data: Data) {
+        let taskId = UUID()
+        store.picUploadTasks.append(
+            PhotoUploadTask(id: taskId, localData: data, state: .uploading(progress: 0))
+        )
+        Task { await performUpload(id: taskId, data: data) }
+    }
+
+    private func openBeautyCamera() {
+        Task { @MainActor in
+            guard await MediaPermissionGate.requestAccess(for: .camera) else {
+                showCameraPermissionAlert = true
+                return
+            }
+            showBeautyCamera = true
+        }
+    }
+
+    private func retryBeautyCameraPermission() {
+        Task { @MainActor in
+            guard await MediaPermissionGate.requestAccess(for: .camera) else {
+                MediaPermissionGate.openAppSettings()
+                return
+            }
+            showCameraPermissionAlert = false
+            showBeautyCamera = true
+        }
     }
 
     @MainActor

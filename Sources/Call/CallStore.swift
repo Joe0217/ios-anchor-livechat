@@ -220,7 +220,15 @@ final class CallStore: ObservableObject {
 
     // MARK: - 内部
 
+    private struct StartContext: Equatable {
+        let lifecycleEpoch: UInt64
+        let sessionGeneration: UUID
+        let userID: Int
+        let effectiveUserType: Int?
+    }
+
     private var signaling: CallSignaling?
+    private var lifecycleContext: StartContext?
     private var myUserId: Int = 0
     /// `createCall` 尚未返回时也占用真人通话入场权；否则机器人来电可在 await 间隙启动 RTC。
     private var isStartingDirectCall = false
@@ -250,7 +258,17 @@ final class CallStore: ObservableObject {
     /// start 防重入标志。start 是 async 含多个 await 点（getAgoraRtmToken / login）；
     /// NWPathMonitor、startRetryTask、RootView 都会触发 start，必须串行化避免双 CallSignaling
     /// 实例 + 双 RTM client 泄漏。
-    private var isStarting: Bool = false
+    private var isStartingEpoch: UInt64?
+    /// 每次 start / stop / 权限撤销都会推进。旧 token、RTM login、重试和网络恢复任务即使不响应
+    /// Task cancellation，也不能再把上一账号或上一权限模式的信令实例装回 Store。
+    private var lifecycleEpoch: UInt64 = 0
+    /// Agora leave 是异步的；新会话若在旧 stop 完成前到达，先记下启动意图，等共享引擎清理完成
+    /// 再启动 RTM，避免旧 leave/destroy 与新账号 RTC 生命周期交叉。
+    private var activeStopEpoch: UInt64?
+    private var activeStopTask: Task<Void, Never>?
+    private var activeStopDestroysSharedAgoraEngine = false
+    private var startSuspendedForCleanup = false
+    private var pendingStartUserID: Int?
     /// callRate 上报开关（C 范围默认关，避免与后端联调相互干扰）
     // D 里程碑：callRate 上报开启（C 验证通过 + 后端契约确认 callRate 接口已上线）
     private var callRateEnabled = true
@@ -374,36 +392,156 @@ final class CallStore: ObservableObject {
 
     // MARK: - 生命周期
 
+    private func makeStartContext(userID: Int, lifecycleEpoch: UInt64) -> StartContext {
+        let session = SessionStore.shared
+        return StartContext(
+            lifecycleEpoch: lifecycleEpoch,
+            sessionGeneration: session.sessionGeneration,
+            userID: userID,
+            effectiveUserType: UserTypeExperience.effectiveUserType(userInfo: session.user)
+        )
+    }
+
+    private func isContextSessionCurrent(_ context: StartContext) -> Bool {
+        let session = SessionStore.shared
+        let currentType = UserTypeExperience.effectiveUserType(userInfo: session.user)
+        return lifecycleEpoch == context.lifecycleEpoch
+            && session.isLoggedIn
+            && session.sessionGeneration == context.sessionGeneration
+            && session.user?.userId == context.userID
+            && currentType == context.effectiveUserType
+    }
+
+    private func isStartContextCurrent(_ context: StartContext) -> Bool {
+        isContextSessionCurrent(context)
+            && UserTypeExperience.hasFullHostRealtimeCapability(context.effectiveUserType)
+            && !UserPermissionMapping.blocked(for: context.effectiveUserType).contains(.call)
+            && SelfPermissionBridge.shared.canCallSnapshot
+    }
+
+    private func isCallLifecycleCurrent(signaling expectedSignaling: CallSignaling? = nil) -> Bool {
+        guard isSignalingReady,
+              let context = lifecycleContext,
+              isStartContextCurrent(context),
+              myUserId == context.userID else { return false }
+        if let expectedSignaling {
+            return signaling === expectedSignaling
+        }
+        return signaling != nil
+    }
+
+    /// RootView 在开始清理直播/Party 等共享 RTC 使用方之前同步调用。这里只撤销启动和重试资格，
+    /// 真正的信令/RTC 释放仍由 `stop()` 按既有顺序完成。
+    private func invalidateStartLifecycle(clearPendingStart: Bool) {
+        lifecycleEpoch &+= 1
+        lifecycleContext = nil
+        isStartingEpoch = nil
+        startSuspendedForCleanup = true
+        if clearPendingStart {
+            pendingStartUserID = nil
+        }
+        cancelStartRetry()
+        nwMonitor?.cancel()
+        nwMonitor = nil
+        isSignalingReady = false
+        rtmStateCancellable?.cancel()
+        rtmStateCancellable = nil
+        let signalingToInvalidate = signaling
+        signaling = nil
+        signalingToInvalidate?.logout()
+        rtmConnectionState = .idle
+    }
+
+    func invalidatePendingStart() {
+        invalidateStartLifecycle(clearPendingStart: true)
+    }
+
     /// 登录后由 RootView 调用：拉 rtmToken，初始化 RTM client。
     /// 重复调用安全（已就绪直接 return）。
     /// **失败兜底**：① NWPathMonitor 监听网络恢复立刻 retry ② 5s 定时兜底 retry（即便无网络事件）。
     func start(myUserId: Int) async {
-        if isSignalingReady { return }
+        let session = SessionStore.shared
+        let currentType = UserTypeExperience.effectiveUserType(userInfo: session.user)
+        guard session.isLoggedIn,
+              session.user?.userId == myUserId,
+              UserTypeExperience.hasFullHostRealtimeCapability(currentType),
+              !UserPermissionMapping.blocked(for: currentType).contains(.call),
+              SelfPermissionBridge.shared.canCallSnapshot else {
+            AppLogger.call.notice("⚠️ [CallStore] start blocked by stale session or permission uid=\(myUserId, privacy: .private)")
+            return
+        }
+        if startSuspendedForCleanup || activeStopEpoch != nil {
+            pendingStartUserID = myUserId
+            AppLogger.call.notice("⚠️ [CallStore] start deferred until stop completes uid=\(myUserId, privacy: .private)")
+            return
+        }
+        if isSignalingReady,
+           signaling?.myUserId == myUserId,
+           let context = lifecycleContext,
+           isStartContextCurrent(context) {
+            return
+        }
+        // 快速切号时，旧 RootView 清理可能尚未走到 CallStore。新账号不能与旧 RTM client
+        // 并存；先完整释放旧通话信令，再按最新 SessionStore 快照重新进入 start。
+        if signaling != nil || (self.myUserId != 0 && self.myUserId != myUserId) {
+            await stop(destroySharedAgoraEngine: false)
+            await start(myUserId: myUserId)
+            return
+        }
         // 防重入：start 有 2 个 await 点（getAgoraRtmToken / login），NWPathMonitor 与
         // startRetryTask 任一进入会引发"双 CallSignaling 实例 + 双 RTM client"泄漏。
-        if isStarting {
+        if isStartingEpoch != nil {
             AppLogger.call.notice("⚠️ [CallStore] start 已在进行中，跳过 uid=\(myUserId, privacy: .private)")
             return
         }
-        isStarting = true
-        defer { isStarting = false }
+        // 相同会话内的定时/网络重试复用同一 epoch；切号、权限变更和 stop 会使旧 context
+        // 失效，下一次显式 start 才创建新的生命周期。
+        let context: StartContext
+        if let existing = lifecycleContext,
+           existing.userID == myUserId,
+           existing.sessionGeneration == session.sessionGeneration,
+           existing.effectiveUserType == currentType,
+           isContextSessionCurrent(existing) {
+            context = existing
+        } else {
+            lifecycleEpoch &+= 1
+            context = makeStartContext(userID: myUserId, lifecycleEpoch: lifecycleEpoch)
+            lifecycleContext = context
+        }
+        guard isContextSessionCurrent(context) else { return }
+        isStartingEpoch = context.lifecycleEpoch
+        defer {
+            if isStartingEpoch == context.lifecycleEpoch {
+                isStartingEpoch = nil
+            }
+        }
 
         self.myUserId = myUserId
+        cancelStartRetry()
         // 首次进入 start 时启动网络监听（一次性，stop 才销毁）
-        if nwMonitor == nil { startNetworkMonitor() }
+        if nwMonitor == nil { startNetworkMonitor(context: context) }
         do {
             let tokenRes = try await LiveService.getAgoraRtmToken()
+            guard isContextSessionCurrent(context) else { return }
             guard let rtm = tokenRes.rtmToken, !rtm.isEmpty else {
                 lastError = L10n.callErrorRtmTokenEmpty
-                scheduleStartRetry(myUserId: myUserId, reason: "empty_token")
+                scheduleStartRetry(context: context, reason: "empty_token")
                 return
             }
             let s = CallSignaling(myUserId: myUserId)
             s.delegate = self
             try await s.login(token: rtm, refreshToken: { [weak self] in
-                guard self != nil else { return nil }
-                return try? await LiveService.getAgoraRtmToken().rtmToken
+                guard let self, self.isContextSessionCurrent(context) else { return nil }
+                let refreshed = try? await LiveService.getAgoraRtmToken().rtmToken
+                guard self.isContextSessionCurrent(context) else { return nil }
+                return refreshed
             })
+            guard isContextSessionCurrent(context) else {
+                // stop()/切号可能发生在 Agora login 的 completion 之前；该局部 client 从未归属
+                // 当前 Store，必须在这里主动 destroy，不能等待下一次 stop()。
+                s.logout()
+                return
+            }
             signaling = s
             isSignalingReady = true
             lastError = ""
@@ -412,8 +550,10 @@ final class CallStore: ObservableObject {
             // 后续 SDK connectionChangedToState 回调驱动 .reconnecting/.disconnected/.connected 变化。
             rtmStateCancellable = s.rtmStatePublisher
                 .receive(on: DispatchQueue.main)
-                .sink { [weak self] new in
-                    guard let self else { return }
+                .sink { [weak self, weak s] new in
+                    guard let self, let s,
+                          self.signaling === s,
+                          self.isContextSessionCurrent(context) else { return }
                     if self.rtmConnectionState != new {
                         AppLogger.rtm.debug("📡 [CallStore] rtmConnectionState \(self.rtmConnectionState.rawValue, privacy: .public) → \(new.rawValue, privacy: .public)")
                     }
@@ -421,30 +561,35 @@ final class CallStore: ObservableObject {
                 }
             AppLogger.call.info("✅ [CallStore] start 成功 uid=\(myUserId, privacy: .private)")
         } catch let e as APIError {
+            guard isContextSessionCurrent(context) else { return }
             let msg = "CallStore.start 失败: \(e.message)(\(e.code))"
             lastError = msg
             AppLogger.call.error("❌ [CallStore] \(msg, privacy: .private)")
-            scheduleStartRetry(myUserId: myUserId, reason: "api_\(e.code)")
+            scheduleStartRetry(context: context, reason: "api_\(e.code)")
         } catch {
+            guard isContextSessionCurrent(context) else { return }
             let msg = "CallStore.start 异常: \(error.localizedDescription)"
             lastError = msg
             AppLogger.call.error("❌ [CallStore] \(msg, privacy: .private)")
-            scheduleStartRetry(myUserId: myUserId, reason: "exception")
+            scheduleStartRetry(context: context, reason: "exception")
         }
     }
 
     // MARK: - start 失败兜底重试
 
     /// 调度 5s 后再 try start。若期间网络恢复（NWPathMonitor 触发），会被 cancel 由网络回调立刻 retry。
-    private func scheduleStartRetry(myUserId: Int, reason: String) {
+    private func scheduleStartRetry(context: StartContext, reason: String) {
+        guard isContextSessionCurrent(context) else { return }
         cancelStartRetry()
         let delay: TimeInterval = isNetworkAvailable ? 5 : 10  // 无网络时等长一点，省电
         AppLogger.call.debug("🔄 [CallStore] scheduleStartRetry reason=\(reason, privacy: .public) delay=\(delay, privacy: .public)s (net=\(self.isNetworkAvailable, privacy: .public))")
         startRetryTask = Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             if Task.isCancelled { return }
-            guard let self, !self.isSignalingReady, self.myUserId == myUserId else { return }
-            await self.start(myUserId: myUserId)
+            guard let self,
+                  !self.isSignalingReady,
+                  self.isContextSessionCurrent(context) else { return }
+            await self.start(myUserId: context.userID)
         }
     }
 
@@ -457,7 +602,7 @@ final class CallStore: ObservableObject {
 
     /// 监听网络可达性，从 unsatisfied → satisfied 时若 RTM 未就绪则立即 retry start。
     /// 解决"冷启动无网 → 用户开网后 RTM 永远停在 idle"的死锁。
-    private func startNetworkMonitor() {
+    private func startNetworkMonitor(context: StartContext) {
         let m = NWPathMonitor()
         // NWPathMonitor.start 后会立即首次回调当前实际网络状态。初值 isNetworkAvailable=false
         // 与"网络恢复"边沿（was=false → satisfied=true）匹配，会触发一次不必要的 retry 调度
@@ -471,7 +616,7 @@ final class CallStore: ObservableObject {
             let firstShot = firstCallback.value
             firstCallback.value = false
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, self.isContextSessionCurrent(context) else { return }
                 let was = self.isNetworkAvailable
                 self.isNetworkAvailable = satisfied
                 if firstShot {
@@ -479,11 +624,11 @@ final class CallStore: ObservableObject {
                     return
                 }
                 if !was && satisfied {
-                    if !self.isSignalingReady, self.myUserId != 0 {
+                    if !self.isSignalingReady {
                         // 冷启动失败 → 立即 retry start（已 login 之前的路径）
-                        AppLogger.rtm.debug("📶 [CallStore] 网络恢复 → 立即 retry start uid=\(self.myUserId, privacy: .private)")
+                        AppLogger.rtm.debug("📶 [CallStore] 网络恢复 → 立即 retry start uid=\(context.userID, privacy: .private)")
                         self.cancelStartRetry()
-                        await self.start(myUserId: self.myUserId)
+                        await self.start(myUserId: context.userID)
                     } else if self.isSignalingReady, let s = self.signaling {
                         // 已 login → 通知 RtmReconnect 立即重连（消除慢重试 5s tick 等待）
                         AppLogger.rtm.debug("📶 [CallStore] 网络恢复 → 通知 RTM 立即重连")
@@ -510,6 +655,47 @@ final class CallStore: ObservableObject {
     /// - Parameter destroySharedAgoraEngine: 仅登出/完全受限时为 true。107 Party-only 账号降级时
     ///   Party 房仍在使用同一进程级 Agora 引擎，必须只退出通话而保留该引擎。
     func stop(destroySharedAgoraEngine: Bool = true) async {
+        if let activeStopTask {
+            let inFlightDestroysEngine = activeStopDestroysSharedAgoraEngine
+            await activeStopTask.value
+            if destroySharedAgoraEngine, !inFlightDestroysEngine {
+                await stop(destroySharedAgoraEngine: true)
+            }
+            return
+        }
+
+        activeStopDestroysSharedAgoraEngine = destroySharedAgoraEngine
+        let task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            await self.performStop(destroySharedAgoraEngine: destroySharedAgoraEngine)
+        }
+        activeStopTask = task
+        await task.value
+        activeStopTask = nil
+        activeStopDestroysSharedAgoraEngine = false
+    }
+
+    private func performStop(destroySharedAgoraEngine: Bool) async {
+        let stopSessionGeneration = SessionStore.shared.sessionGeneration
+        let cleanupWasAlreadyStarted = startSuspendedForCleanup
+        invalidateStartLifecycle(clearPendingStart: !cleanupWasAlreadyStarted)
+        let stopEpoch = lifecycleEpoch
+        activeStopEpoch = stopEpoch
+        let shouldLeaveAgora = state != .idle
+
+        defer {
+            if activeStopEpoch == stopEpoch {
+                activeStopEpoch = nil
+                startSuspendedForCleanup = false
+                let deferredUserID = pendingStartUserID
+                pendingStartUserID = nil
+                if let deferredUserID {
+                    Task { @MainActor [weak self] in
+                        await self?.start(myUserId: deferredUserID)
+                    }
+                }
+            }
+        }
         AppSoundPlayer.shared.stopIncomingCallRingtone()
         cancelCallOutTimeout()
         cancelCallInTimeout()
@@ -518,20 +704,17 @@ final class CallStore: ObservableObject {
         nwMonitor = nil
         endedToIdleTask?.cancel()
         endedToIdleTask = nil
-        rtmStateCancellable?.cancel()
-        rtmStateCancellable = nil
         stopOwnedLocalCamera()
-        if state != .idle { await agora.leave() }
-        signaling?.logout()
-        signaling = nil
-        isSignalingReady = false
-        rtmConnectionState = .idle
-        myUserId = 0
+        if shouldLeaveAgora { await agora.leave() }
+        // 新 start 会在 activeStopEpoch 期间排队，因此这里不会覆盖新账号的通话状态。
         state = .idle
         current = CurrentCallInfo()
+        myUserId = 0
         isEndingCall = false
         isStartingDirectCall = false
-        if destroySharedAgoraEngine {
+        if destroySharedAgoraEngine,
+           activeStopEpoch == stopEpoch,
+           SessionStore.shared.sessionGeneration == stopSessionGeneration {
             // 退登/完全受限链路：销毁 AgoraRtcEngineKit 全局单例，
             // 下次登录时 sharedEngine(with:) 会拿到干净的新 singleton。
             AgoraManager.destroyEngine()
@@ -559,6 +742,11 @@ final class CallStore: ObservableObject {
             lastError = L10n.userProfileNetworkError
             return
         }
+        guard isCallLifecycleCurrent() else {
+            lastError = L10n.userProfileNetworkError
+            AppLogger.call.notice("⚠️ [CallStore] callOut blocked by stale call lifecycle")
+            return
+        }
         guard !RobotCallStore.shared.blocksOtherCalls else {
             lastError = L10n.callErrorLocalBusy
             AppLogger.call.notice("[CallStore] callOut blocked: robot call is active")
@@ -567,6 +755,7 @@ final class CallStore: ObservableObject {
         // 最小化 Party 房仍占用 RTC/NIM；主动拨打前先完整退房，避免通话初始化被旧会话干扰。
         if PartyStore.shared.isMinimized {
             await PartyStore.shared.leaveMinimizedRoom()
+            guard isCallLifecycleCurrent() else { return }
         }
         guard isSignalingReady, let signaling, acquireDirectCallAdmission() else {
             if lastError.isEmpty { lastError = L10n.userProfileNetworkError }
@@ -576,7 +765,7 @@ final class CallStore: ObservableObject {
         defer { isStartingDirectCall = false }
         guard await requireMediaAccess(.liveStream, retry: { [weak self] in
             await self?.callOut(remoteUserId: remoteUserId)
-        }) else { return }
+        }), isCallLifecycleCurrent(signaling: signaling) else { return }
         // code-review Finding 5：内部化 preflight 让 caller 简化（原 4 处 caller preflight 分裂：POCDebug 无 / ChatDetail 缺 isSignalingReady / LiveList+UserProfile 全套）
         // signaling 未就绪 / 通话中 / calling → set lastError 让 view 层 observe → 统一反馈路径
         guard let remoteUid = Int(remoteUserId), remoteUid > 0 else {
@@ -596,11 +785,14 @@ final class CallStore: ObservableObject {
             lastError = error.localizedDescription
             return
         }
+        guard isCallLifecycleCurrent(signaling: signaling) else { return }
         guard let channelId = res.channelId, !channelId.isEmpty else {
             lastError = L10n.callErrorCreateFailed
             return
         }
-        guard state == .idle, self.signaling === signaling, !RobotCallStore.shared.blocksOtherCalls else {
+        guard state == .idle,
+              isCallLifecycleCurrent(signaling: signaling),
+              !RobotCallStore.shared.blocksOtherCalls else {
             lastError = L10n.callErrorLocalBusy
             AppLogger.call.notice("[CallStore] callOut abandoned after createCall: another call acquired RTC")
             return
@@ -635,7 +827,9 @@ final class CallStore: ObservableObject {
 
         // 5) 发 RTM VideoCall（H5 await _publishMessage）
         let ok = await signaling.publish(buildMessage(action: .videoCall))
-        guard state == .calling, current.callId == info.callId else { return }
+        guard isCallLifecycleCurrent(signaling: signaling),
+              state == .calling,
+              current.callId == info.callId else { return }
         if !ok {
             lastError = L10n.callErrorSendFailed
             sendCallNimSignal(.cancel)
@@ -694,6 +888,7 @@ final class CallStore: ObservableObject {
         mediaPermissionAlertRequirement = nil
         pendingMediaPermissionAction = nil
         if await MediaPermissionGate.requestAccess(for: requirement) {
+            guard isCallLifecycleCurrent() else { return }
             await action?()
         } else {
             MediaPermissionGate.openAppSettings()
@@ -706,6 +901,7 @@ final class CallStore: ObservableObject {
     /// 由 handleIncomingVideoCall 内 `isMatchActive?() == true` 分支调用，不弹浮层。
     /// 与 acceptIncomingFromLive 的差异：`frontGameType = .direct`（走标准 CallView g-waitingCall→g-faceTime 分支）
     func acceptIncomingFromMatch(msg: CallMessage) async {
+        guard isCallLifecycleCurrent() else { return }
         guard acquireDirectCallAdmission() else {
             await publishRejectBusy(msg: msg, reason: "busy")
             return
@@ -721,7 +917,7 @@ final class CallStore: ObservableObject {
         }
         guard await requireMediaAccess(.liveStream, retry: { [weak self] in
             await self?.acceptIncomingFromMatch(msg: msg)
-        }) else { return }
+        }), isCallLifecycleCurrent(signaling: signaling) else { return }
 
         // 1) 初始化 currentCallInfo（被叫 in / frontGameType=.direct，让 CallView 走标准分支）
         var info = CurrentCallInfo()
@@ -736,6 +932,7 @@ final class CallStore: ObservableObject {
 
         // 2) 立刻发 Accept
         let ok = await signaling.publish(buildMessage(action: .accept))
+        guard isCallLifecycleCurrent(signaling: signaling) else { return }
         guard ok else {
             lastError = L10n.callErrorAcceptFailed
             sendCallNimSignal(.reject)
@@ -746,6 +943,7 @@ final class CallStore: ObservableObject {
 
         // 3) join RTC
         await joinRtc(channel: fromRoomId, rateType: .callee)
+        guard isCallLifecycleCurrent(signaling: signaling) else { return }
 
         // 4) 主叫端可能已在频道（同 acceptIncomingFromLive Step 4）
         if agora.remoteUid != 0, state == .connecting {
@@ -759,9 +957,13 @@ final class CallStore: ObservableObject {
                          answerTime: current.sinceStartDuration, abnormal: 0)
 
         // 6) 异步拉对方资料（joinCall.source 用于 MatchStore 判定 matchV4）
+        let profileLifecycle = lifecycleContext
         Task { @MainActor in
             do {
                 let r = try await CallService.joinCall(channelId: fromRoomId)
+                guard let profileLifecycle,
+                      self.lifecycleContext == profileLifecycle,
+                      self.isStartContextCurrent(profileLifecycle) else { return }
                 self.lastJoinCallSource = r.source
                 guard self.state != .idle, self.state != .ended, self.state != .failed,
                       self.current.callId == msg.callId,
@@ -795,6 +997,7 @@ final class CallStore: ObservableObject {
             await publishRejectBusy(msg: msg, reason: "permission_denied")
             return
         }
+        guard isCallLifecycleCurrent() else { return }
         guard acquireDirectCallAdmission() else {
             await publishRejectBusy(msg: msg, reason: "busy")
             return
@@ -810,7 +1013,7 @@ final class CallStore: ObservableObject {
         }
         guard await requireMediaAccess(.liveStream, retry: { [weak self] in
             await self?.acceptIncomingFromLive(msg: msg)
-        }) else { return }
+        }), isCallLifecycleCurrent(signaling: signaling) else { return }
 
         // 1) 初始化 currentCallInfo（被叫 in / frontGameType=.live）
         var info = CurrentCallInfo()
@@ -825,6 +1028,7 @@ final class CallStore: ObservableObject {
 
         // 2) 立刻发 Accept（publish 失败必须收尾，避免主叫永等不到 Accept）
         let ok = await signaling.publish(buildMessage(action: .accept))
+        guard isCallLifecycleCurrent(signaling: signaling) else { return }
         guard ok else {
             lastError = L10n.callErrorAcceptFailed
             sendCallNimSignal(.reject)
@@ -835,6 +1039,7 @@ final class CallStore: ObservableObject {
 
         // 3) join RTC 通话频道
         await joinRtc(channel: fromRoomId, rateType: .callee)
+        guard isCallLifecycleCurrent(signaling: signaling) else { return }
 
         // 4) 主叫端可能已在频道（callOut 时先 join），若 didJoinedOfUid 在切到 .connecting 前已触发，
         //    handleRemoteRtcChange 不会再回调，此处手动补一次升级。
@@ -852,9 +1057,13 @@ final class CallStore: ObservableObject {
                          answerTime: current.sinceStartDuration, abnormal: 0)
 
         // 6) 异步拉对方资料（C 范围 joinCall 接口；失败仅影响 UI，不影响接通能力）
+        let profileLifecycle = lifecycleContext
         Task { @MainActor in
             do {
                 let r = try await CallService.joinCall(channelId: fromRoomId)
+                guard let profileLifecycle,
+                      self.lifecycleContext == profileLifecycle,
+                      self.isStartContextCurrent(profileLifecycle) else { return }
                 // L 里程碑：无条件 assign source（不受 state guard 约束）——
                 // MatchStore 订阅此字段实时判定 matchState 迁移。LIVE 私 call 通常 source='liveCall' 或 nil。
                 self.lastJoinCallSource = r.source
@@ -889,6 +1098,7 @@ final class CallStore: ObservableObject {
             await publishRejectBusy(msg: msg, reason: "permission_denied")
             return
         }
+        guard isCallLifecycleCurrent() else { return }
         guard acquireDirectCallAdmission() else {
             await publishRejectBusy(msg: msg, reason: "busy")
             return
@@ -904,7 +1114,7 @@ final class CallStore: ObservableObject {
         }
         guard await requireMediaAccess(.liveStream, retry: { [weak self] in
             await self?.acceptIncomingFromParty(msg: msg)
-        }) else { return }
+        }), isCallLifecycleCurrent(signaling: signaling) else { return }
 
         // 1) 初始化 currentCallInfo（被叫 in / frontGameType=.party）
         var info = CurrentCallInfo()
@@ -919,6 +1129,7 @@ final class CallStore: ObservableObject {
 
         // 2) 立刻发 Accept（publish 失败必须收尾，避免主叫永等不到 Accept）
         let ok = await signaling.publish(buildMessage(action: .accept))
+        guard isCallLifecycleCurrent(signaling: signaling) else { return }
         guard ok else {
             lastError = L10n.callErrorAcceptFailed
             sendCallNimSignal(.reject)
@@ -929,6 +1140,7 @@ final class CallStore: ObservableObject {
 
         // 3) join RTC 通话频道（sharedEngine 会显式 setChannelProfile(.communication) · rule §5）
         await joinRtc(channel: fromRoomId, rateType: .callee)
+        guard isCallLifecycleCurrent(signaling: signaling) else { return }
 
         // 4) 主叫端可能已在频道（callOut 时先 join），若 didJoinedOfUid 在切到 .connecting 前已触发，
         //    handleRemoteRtcChange 不会再回调，此处手动补一次升级。
@@ -943,9 +1155,13 @@ final class CallStore: ObservableObject {
                          answerTime: current.sinceStartDuration, abnormal: 0)
 
         // 6) 异步拉对方资料（joinCall 接口；失败仅影响 UI，不影响接通能力）
+        let profileLifecycle = lifecycleContext
         Task { @MainActor in
             do {
                 let r = try await CallService.joinCall(channelId: fromRoomId)
+                guard let profileLifecycle,
+                      self.lifecycleContext == profileLifecycle,
+                      self.isStartContextCurrent(profileLifecycle) else { return }
                 self.lastJoinCallSource = r.source
                 guard self.state != .idle, self.state != .ended, self.state != .failed,
                       self.current.callId == msg.callId,
@@ -976,9 +1192,10 @@ final class CallStore: ObservableObject {
             return
         }
         guard state == .calling, current.inOrOut == .in, let signaling else { return }
+        guard isCallLifecycleCurrent(signaling: signaling) else { return }
         guard await requireMediaAccess(.liveStream, retry: { [weak self] in
             await self?.accept(auto: auto)
-        }) else { return }
+        }), isCallLifecycleCurrent(signaling: signaling) else { return }
         let info = current
         cancelCallInTimeout()
         AppSoundPlayer.shared.stopIncomingCallRingtone()
@@ -988,6 +1205,7 @@ final class CallStore: ObservableObject {
         //    Cancel，本端此时是 .connecting，handleRemoteCancel 守卫 `state == .calling`
         //    会丢 Cancel → 卡死 .connecting。
         let ok = await signaling.publish(buildMessage(action: .accept))
+        guard isCallLifecycleCurrent(signaling: signaling) else { return }
         guard ok else {
             lastError = L10n.callErrorAcceptFailed
             sendCallNimSignal(.reject)
@@ -998,6 +1216,7 @@ final class CallStore: ObservableObject {
 
         // 2) 拿 rtcToken + join 频道
         await joinRtc(channel: info.channelId, rateType: .callee)
+        guard isCallLifecycleCurrent(signaling: signaling) else { return }
 
         // 3) 主叫端可能已经在频道里（主叫 callOut 时先 join），如此 didJoinedOfUid
         //    在状态切到 .connecting 之前就触发过、不会再触发，这里手动补一次升级。
@@ -1301,8 +1520,13 @@ final class CallStore: ObservableObject {
     // 没有清理路径。所以拿到 token 后必须再次校验 state 仍处于"应当继续 join"的阶段。
     private func joinRtc(channel: String, rateType: CallRateType) async {
         let stateBeforeAwait = state
+        guard let lifecycle = lifecycleContext,
+              isCallLifecycleCurrent() else { return }
         do {
             let tokenRes = try await LiveService.getAgoraRtmToken()
+            guard isStartContextCurrent(lifecycle),
+                  lifecycleContext == lifecycle,
+                  isCallLifecycleCurrent() else { return }
             guard let rtcToken = tokenRes.rtcToken, !rtcToken.isEmpty else {
                 lastError = L10n.callErrorRtcTokenFailed
                 await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, answerTime: 0, abnormal: 1)
@@ -1311,15 +1535,18 @@ final class CallStore: ObservableObject {
             // 关键守卫：state 必须仍在拨号/接通过程中。.calling 适用于主叫端 callOut 后立刻 join 的
             // 路径；.connecting 适用于主/被叫 Accept 后的路径。其它（.ended/.failed/.idle）都
             // 表示通话已中止，幽灵 join 必须被阻断。
-            guard state == .calling || state == .connecting else {
+            guard (state == .calling || state == .connecting),
+                  isCallLifecycleCurrent() else {
                 AppLogger.call.debug("📍 [CallStore] joinRtc 拿到 token 后 state 已是 \(self.state.rawValue, privacy: .public)（之前=\(stateBeforeAwait.rawValue, privacy: .public)）→ 放弃 join")
                 return
             }
             agora.join(channelId: channel, token: rtcToken, uid: UInt(myUserId), profile: .communication)
         } catch let e as APIError {
+            guard isStartContextCurrent(lifecycle), lifecycleContext == lifecycle else { return }
             lastError = String(format: L10n.callErrorRtcTokenFormat, e.message)
             await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, answerTime: 0, abnormal: 1)
         } catch {
+            guard isStartContextCurrent(lifecycle), lifecycleContext == lifecycle else { return }
             lastError = String(format: L10n.callErrorRtcTokenFormat, error.localizedDescription)
             await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, answerTime: 0, abnormal: 1)
         }
@@ -1498,6 +1725,10 @@ final class CallStore: ObservableObject {
 
 extension CallStore: CallSignalingDelegate {
     func signaling(_ signaling: CallSignaling, didReceive message: CallMessage, from publisher: String) {
+        guard isCallLifecycleCurrent(signaling: signaling) else {
+            AppLogger.call.notice("⚠️ [CallStore] stale signaling message ignored from=\(publisher, privacy: .public)")
+            return
+        }
         guard let action = message.action else {
             AppLogger.call.notice("⚠️ [CallStore] 未知 action=\(message.messageAction, privacy: .public) from=\(publisher, privacy: .public)")
             return
@@ -1506,11 +1737,13 @@ extension CallStore: CallSignalingDelegate {
     }
 
     func signalingDidDetectSameUidLogin(_ signaling: CallSignaling) {
+        guard isCallLifecycleCurrent(signaling: signaling) else { return }
         AppLogger.call.error("🚨 [CallStore] 同 UID 登录 — 主流程交给 SessionStore.logout")
         Task { @MainActor in SessionStore.shared.logout() }
     }
 
     private func handleRemote(action: CallAction, message msg: CallMessage) async {
+        guard isCallLifecycleCurrent() else { return }
         switch action {
         case .videoCall:   await handleIncomingVideoCall(msg)
         case .audioCall:   AppLogger.call.notice("⚠️ [CallStore] 收到 audioCall（C 不接入）from=\(msg.fromUserId, privacy: .private)")
@@ -1599,6 +1832,7 @@ extension CallStore: CallSignalingDelegate {
             let callerType: Int?
             do {
                 let resp = try await CallService.queryCall(fromUserId: msg.fromUserId, channelId: channelId)
+                guard isCallLifecycleCurrent() else { return }
                 callerType = resp.callerType
             } catch {
                 AppLogger.call.notice("🚫 [CallStore] 派对房 queryCall 超时/失败 → 保守 reject err=\(error.localizedDescription, privacy: .private)")
@@ -1681,9 +1915,13 @@ extension CallStore: CallSignalingDelegate {
         startCallInTimeout()
 
         // 3s 超时拉对方资料（失败仅影响 UI 展示，不影响接通能力）
+        let profileLifecycle = lifecycleContext
         Task { @MainActor in
             do {
                 let r = try await CallService.joinCall(channelId: fromRoomId)
+                guard let profileLifecycle,
+                      self.lifecycleContext == profileLifecycle,
+                      self.isStartContextCurrent(profileLifecycle) else { return }
                 // L 里程碑：无条件 assign source —— MatchStore 订阅此字段实时判定 matchState 迁移。
                 // 若 source=='matchV4' → MatchStore 转 .matchingCalling；非 matchV4 → .matchingSuspended
                 self.lastJoinCallSource = r.source

@@ -28,6 +28,7 @@ struct MatchPersistedState: Codable, Equatable {
 }
 
 /// UserDefaults 读写封装。使用 4 独立 key（非整 struct 序列化）便于跨版本兼容 + 单字段更新原子。
+/// 生产调用必须传 userID；nil 命名空间仅保留给逻辑测试，避免切账号时共享封禁和弹窗日期。
 enum MatchPersistedStore {
     private static let defaults = UserDefaults.standard
 
@@ -41,41 +42,46 @@ enum MatchPersistedStore {
 
     // MARK: - 整体加载（冷启动用）
 
-    static func load() -> MatchPersistedState {
+    static func load(userID: Int? = nil) -> MatchPersistedState {
         MatchPersistedState(
-            isMatchBlocked: defaults.bool(forKey: Keys.isMatchBlocked),
-            todayNoReminderChecked: defaults.bool(forKey: Keys.todayNoReminderChecked),
-            ruleAgreedDate: defaults.string(forKey: Keys.ruleAgreedDate) ?? "",
-            tipShownDate: defaults.string(forKey: Keys.tipShownDate) ?? ""
+            isMatchBlocked: defaults.bool(forKey: key(Keys.isMatchBlocked, userID: userID)),
+            todayNoReminderChecked: defaults.bool(forKey: key(Keys.todayNoReminderChecked, userID: userID)),
+            ruleAgreedDate: defaults.string(forKey: key(Keys.ruleAgreedDate, userID: userID)) ?? "",
+            tipShownDate: defaults.string(forKey: key(Keys.tipShownDate, userID: userID)) ?? ""
         )
     }
 
     // MARK: - 单字段写入
 
-    static func saveIsMatchBlocked(_ value: Bool) {
-        defaults.set(value, forKey: Keys.isMatchBlocked)
+    static func saveIsMatchBlocked(_ value: Bool, userID: Int? = nil) {
+        defaults.set(value, forKey: key(Keys.isMatchBlocked, userID: userID))
     }
 
-    static func saveTodayNoReminderChecked(_ value: Bool) {
-        defaults.set(value, forKey: Keys.todayNoReminderChecked)
+    static func saveTodayNoReminderChecked(_ value: Bool, userID: Int? = nil) {
+        defaults.set(value, forKey: key(Keys.todayNoReminderChecked, userID: userID))
     }
 
-    static func saveRuleAgreedDate(_ value: String) {
-        defaults.set(value, forKey: Keys.ruleAgreedDate)
+    static func saveRuleAgreedDate(_ value: String, userID: Int? = nil) {
+        defaults.set(value, forKey: key(Keys.ruleAgreedDate, userID: userID))
     }
 
-    static func saveTipShownDate(_ value: String) {
-        defaults.set(value, forKey: Keys.tipShownDate)
+    static func saveTipShownDate(_ value: String, userID: Int? = nil) {
+        defaults.set(value, forKey: key(Keys.tipShownDate, userID: userID))
     }
 
     // MARK: - 单测清空
 
     /// **仅供单测使用**：清空所有 Match 相关 UserDefaults 键。
-    static func resetForTesting() {
-        defaults.removeObject(forKey: Keys.isMatchBlocked)
-        defaults.removeObject(forKey: Keys.todayNoReminderChecked)
-        defaults.removeObject(forKey: Keys.ruleAgreedDate)
-        defaults.removeObject(forKey: Keys.tipShownDate)
+    static func resetForTesting(userID: Int? = nil) {
+        defaults.removeObject(forKey: key(Keys.isMatchBlocked, userID: userID))
+        defaults.removeObject(forKey: key(Keys.todayNoReminderChecked, userID: userID))
+        defaults.removeObject(forKey: key(Keys.ruleAgreedDate, userID: userID))
+        defaults.removeObject(forKey: key(Keys.tipShownDate, userID: userID))
+    }
+
+    private static func key(_ base: String, userID: Int?) -> String {
+        guard let userID else { return base }
+        return "\(base).user.\(userID)"
     }
 }
 

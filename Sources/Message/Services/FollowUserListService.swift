@@ -22,6 +22,8 @@ final class FollowUserListService: FollowUserListProviderProtocol {
     private var cachedSet: Set<String> = []
     private var lastFetchedAt: Date?
     private var inflightTask: Task<Set<String>, Never>?
+    private var inflightGeneration: Int?
+    private var dataGeneration = 0
 
     private let logger = Logger(subsystem: "com.anchor.livechat", category: "FollowUserListService")
 
@@ -65,30 +67,39 @@ final class FollowUserListService: FollowUserListProviderProtocol {
             return await inflight.value
         }
 
+        let generation = dataGeneration
         let task = Task<Set<String>, Never> { [self] in
             do {
                 let set = try await fetcher()
+                guard generation == dataGeneration, !Task.isCancelled else { return [] }
                 cachedSet = set
                 lastFetchedAt = Date()
                 logger.info("[FollowList] fetched count=\(set.count, privacy: .public)")
                 return set
             } catch {
+                guard generation == dataGeneration, !Task.isCancelled else { return [] }
                 // H5 `useFollowUserList.js:53-57`：失败保留旧缓存
                 logger.notice("[FollowList] fetch failed, preserve cache count=\(self.cachedSet.count, privacy: .public) error=\(String(describing: error), privacy: .public)")
                 return cachedSet
             }
         }
         inflightTask = task
+        inflightGeneration = generation
         let result = await task.value
-        inflightTask = nil
+        if inflightGeneration == generation {
+            inflightTask = nil
+            inflightGeneration = nil
+        }
         return result
     }
 
     func clear() {
+        dataGeneration &+= 1
         cachedSet.removeAll()
         lastFetchedAt = nil
         inflightTask?.cancel()
         inflightTask = nil
+        inflightGeneration = nil
         logger.info("[FollowList] cleared (logout/switch account)")
     }
 }

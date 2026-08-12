@@ -116,6 +116,7 @@ final class PaidBulletQueue: ObservableObject {
 
         do {
             let response = try await service.dislike(billId: item.billId)
+            #if !HILY_TESTS
             AnalyticsTracker.track(
                 "h_bullet_dislike",
                 properties: [
@@ -126,6 +127,9 @@ final class PaidBulletQueue: ObservableObject {
                     "hit_mute_threshold": response.muted ?? false,
                 ]
             )
+            #else
+            _ = response
+            #endif
         } catch {
             dislikedBillIds.remove(item.billId)
             throw error

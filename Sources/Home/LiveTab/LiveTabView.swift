@@ -7,6 +7,14 @@ import SwiftUI
 /// - 按主播段位派生 tab 顺序 (S 级 / 非 S 级)，段位异步加载竞态处理 §5.12
 /// - Circle case 接入 `CircleView`（含内层 3 子 tab + Moment 子 tab 业务）
 struct LiveTabView: View {
+    private struct InitialLoadKey: Hashable {
+        let sessionGeneration: UUID
+        let isPermissionLoaded: Bool
+        let canHomeDiscovery: Bool
+        let isHomeTabActive: Bool
+        let currentOuter: HomeTopTab?
+    }
+
     /// trial step 3 真集成反悔：spec §3.1 / §5.12 原本"段位未就绪 loading 占位"
     /// 真接口拉慢/失败时变成永久 dead-state。改为**默认按 S 级兜底**，info 到达后 onChange 矫正。
     @StateObject private var homeStore = HomeTopTabStore(initialIsSLevel: true)
@@ -50,6 +58,7 @@ struct LiveTabView: View {
 
     /// scenePhase 用于"onResume 静默检查"（对齐安卓 HomeHomeFragment.onResume）。
     @Environment(\.scenePhase) private var scenePhase
+    @EnvironmentObject private var session: SessionStore
 
     var body: some View {
         content
@@ -92,12 +101,6 @@ struct LiveTabView: View {
                     await anchorInfoStore.loadIfNeeded()
                     reapplyTier()
                 }
-                // initial state 已满足加载条件时的首次触发——
-                // S 级默认 currentOuter=.live、非 S 级默认 currentOuter=.list，
-                // `.onChange` 契约不在初始挂载 fire，需要 onAppear 显式补触发一次
-                // 否则默认落在的子 tab 会永远停在 loadState=.idle → 视觉上"一直转圈"
-                triggerStreamLazyLoadIfNeeded()
-                triggerListLazyLoadIfNeeded()
             }
             // 监听派生 Bool 而非 AnchorInfo (后者未 Equatable 不能 onChange)：
             // hasLoadedTier  false→true 触发首次 applyTier；
@@ -108,15 +111,10 @@ struct LiveTabView: View {
             .onChange(of: permission.canCall) { _ in reapplyTier() }
             // code-review Finding 3：permission.isLoaded 变化也要触发（避免冷启动 permission=false 首帧摘 Match tab 再补的闪烁）
             .onChange(of: permission.isLoaded) { _ in reapplyTier() }
-            // Live / List 子页 lazy load：keep-alive 架构下不在 view tree mount 时触发，
-            // 仅在 home 真正 active + 当前 outer tab 匹配 + 未加载过时触发。
-            .onChange(of: isHomeTabActive) { _ in
-                triggerListLazyLoadIfNeeded()
-                triggerStreamLazyLoadIfNeeded()
-            }
-            .onChange(of: homeStore.currentOuter) { _ in
-                triggerListLazyLoadIfNeeded()
-                triggerStreamLazyLoadIfNeeded()
+            // 统一由 task identity 驱动首拉。它在初始挂载、账号代际、权限发布、Home 可见性
+            // 和顶部 tab 变化时都会重新核对，避免 onAppear/onChange 边沿丢失后 VM 永久停在 idle。
+            .task(id: initialLoadKey) {
+                await loadVisibleHomePageIfNeeded()
             }
     }
 
@@ -138,22 +136,37 @@ struct LiveTabView: View {
         homeStore.applyTier(isSLevel: isSLevel, canCall: permission.canCall)
     }
 
-    /// 1. home tab 必须 active（避免启动即预热）
-    /// 2. 当前 outer tab 必须是 .list（避免用户在 live/circle 时浪费请求）
-    /// 3. loadState 必须是 .idle（避免重复加载——切走再回不重发，对齐 keep-alive 体感）
-    private func triggerListLazyLoadIfNeeded() {
-        guard isHomeTabActive,
-              homeStore.currentOuter == .list,
-              case .idle = listViewModel.loadState else { return }
-        Task { await listViewModel.loadFirstPage() }
+    private var initialLoadKey: InitialLoadKey {
+        InitialLoadKey(
+            sessionGeneration: session.sessionGeneration,
+            isPermissionLoaded: permission.isLoaded,
+            canHomeDiscovery: permission.canHomeDiscovery,
+            isHomeTabActive: isHomeTabActive,
+            currentOuter: homeStore.currentOuter
+        )
     }
 
-    /// 触发 Live 广场首页加载——与 List 同款三重守卫。
-    private func triggerStreamLazyLoadIfNeeded() {
-        guard isHomeTabActive,
-              homeStore.currentOuter == .live,
-              case .idle = streamViewModel.loadState else { return }
-        Task { await streamViewModel.loadFirstPage() }
+    private func loadVisibleHomePageIfNeeded() async {
+        let generation = session.sessionGeneration
+        // 先换数据上下文，再做可见性/权限判断。这样即使新会话首帧仍不可见，
+        // 上一账号的 loading、数据和迟到响应也已经失效。
+        streamViewModel.prepareForSession(generation)
+        listViewModel.prepareForSession(generation)
+
+        guard session.isLoggedIn,
+              session.sessionGeneration == generation,
+              permission.isLoaded,
+              permission.canHomeDiscovery,
+              isHomeTabActive else { return }
+
+        switch homeStore.currentOuter {
+        case .live where streamViewModel.loadState == .idle:
+            await streamViewModel.loadFirstPage()
+        case .list where listViewModel.loadState == .idle:
+            await listViewModel.loadFirstPage()
+        default:
+            return
+        }
     }
 
     /// 整页背景：底层径向晕染切图 + 上方渐变叠层增加层次感。
@@ -270,6 +283,11 @@ struct LiveTabView: View {
         }
         .scrollIndicators(.hidden)
         .refreshable {
+            let generation = session.sessionGeneration
+            streamViewModel.prepareForSession(generation)
+            guard session.isLoggedIn,
+                  session.sessionGeneration == generation,
+                  permission.canHomeDiscovery else { return }
             await streamViewModel.loadFirstPage()
         }
     }

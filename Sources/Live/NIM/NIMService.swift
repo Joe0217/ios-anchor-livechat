@@ -2,6 +2,52 @@ import Foundation
 import NIMSDK
 import os
 
+/// NIM SDK delegate 不携带业务会话标识。该 tracker 在回调进入点生成可比较的账号代际快照，
+/// 防止回调已到达但等待 MainActor 期间发生 A -> B 切号后仍修改 B 的状态。
+/// SDK 在新账号登录后才交付的无来源旧回调仍依赖其自身 login/logout 串行生命周期保证。
+final class NIMSessionContextTracker: @unchecked Sendable {
+    struct Context: Equatable {
+        let generation: UInt64
+        let account: String?
+    }
+
+    private let lock = NSLock()
+    private var generation: UInt64 = 0
+    private var account: String?
+
+    /// 绑定账号；重复绑定同一账号保持代际不变，避免幂等 start 使当前 delegate 失效。
+    func activate(account: String) -> Context {
+        lock.lock()
+        defer { lock.unlock() }
+        if self.account != account {
+            generation &+= 1
+            self.account = account
+        }
+        return Context(generation: generation, account: self.account)
+    }
+
+    /// 登出请求一发起就失效旧账号，而不是等 SDK completion 返回。
+    func invalidate() -> Context {
+        lock.lock()
+        defer { lock.unlock() }
+        generation &+= 1
+        account = nil
+        return Context(generation: generation, account: nil)
+    }
+
+    func snapshot() -> Context {
+        lock.lock()
+        defer { lock.unlock() }
+        return Context(generation: generation, account: account)
+    }
+
+    func isCurrent(_ context: Context) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return generation == context.generation && account == context.account
+    }
+}
+
 /// 云信 IM 共底座（H 里程碑 spec §2.4）。
 ///
 /// **职责集中**：
@@ -50,6 +96,9 @@ final class NIMService: NSObject, ObservableObject {
     /// 冷启动 auto-login 时 SDK login 早于 sync，若用 `connectionState=.connected` 触发 fetch
     /// 会拿到空 sessions → 用户重启后消息丢失）。
     @Published private(set) var isSessionSyncOK: Bool = false
+
+    /// nonisolated delegate 在进入点读取，随后切到 MainActor 前后复核同一账号代际。
+    private nonisolated let sessionContexts = NIMSessionContextTracker()
 
     /// 是否已登录 IM。优先读 SDK 实时态，避免本地缓存与 SDK 状态分裂。
     var isLogined: Bool {
@@ -103,30 +152,44 @@ final class NIMService: NSObject, ObservableObject {
     /// 登录 IM。重复登录时直接返回，不再调 SDK。
     /// - Throws: `NIMServiceError`
     func login(account: String, token: String) async throws {
-        if isLogined {
-            // 同步 connectionState：极少数路径下 NIMLoginManagerDelegate.onLogin(.loginOK) 早于本 helper 调用，
-            // 但本地 @Published 状态仍可能在 .idle / .connecting；显式刷新避免 UI 显示分裂。
-            connectionState = .connected
-            // SDK auto-login 场景：进程重启时 SDK isLogined=true 但不 fire delegate → 主动设 syncOK=true
-            // 假设：SDK isLogined 意味着之前 login 完整走完 → sessions 已 sync（v2 修复：MessageStore fetchAll 门 gate）
-            isSessionSyncOK = true
-            Self.logger.info("🟢 [NIMService] 已登录，跳过 login (isSessionSyncOK=true)")
-            return
+        let loginManager = NIMSDK.shared().loginManager
+        if loginManager.isLogined() {
+            let currentAccount = loginManager.currentAccount()
+            if currentAccount != account {
+                Self.logger.notice("[NIMService] switching IM account; logout current session first")
+                await logout()
+            } else {
+                _ = sessionContexts.activate(account: account)
+                // 同步 connectionState：极少数路径下 NIMLoginManagerDelegate.onLogin(.loginOK) 早于本 helper 调用，
+                // 但本地 @Published 状态仍可能在 .idle / .connecting；显式刷新避免 UI 显示分裂。
+                connectionState = .connected
+                // SDK auto-login 场景：进程重启时 SDK isLogined=true 但不 fire delegate → 主动设 syncOK=true
+                // 假设：SDK isLogined 意味着之前 login 完整走完 → sessions 已 sync（v2 修复：MessageStore fetchAll 门 gate）
+                isSessionSyncOK = true
+                Self.logger.info("🟢 [NIMService] 已登录同一账号，跳过 login (isSessionSyncOK=true)")
+                return
+            }
         }
+
+        let context = sessionContexts.activate(account: account)
         connectionState = .connecting
 
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            NIMSDK.shared().loginManager.login(account, token: token) { [weak self] error in
+            loginManager.login(account, token: token) { [weak self] error in
                 Task { @MainActor in
                     guard let self else {
                         cont.resume()
+                        return
+                    }
+                    guard self.sessionContexts.isCurrent(context) else {
+                        cont.resume(throwing: CancellationError())
                         return
                     }
                     if let error {
                         let mapped = NIMServiceError.from(nsError: error as NSError, fallback: .loginFailed(code: (error as NSError).code, message: error.localizedDescription))
                         self.connectionState = .disconnected
                         Self.logger.error("🔴 [NIMService] login 失败 code=\((error as NSError).code, privacy: .public)")
-                        self.notifyIfSessionInvalidating(mapped)
+                        self.notifyIfSessionInvalidating(mapped, context: context)
                         cont.resume(throwing: mapped)
                     } else {
                         self.connectionState = .connected
@@ -143,19 +206,30 @@ final class NIMService: NSObject, ObservableObject {
 
     /// 登出 IM。已登出时直接返回，不再调 SDK。
     func logout() async {
+        let context = sessionContexts.invalidate()
         guard isLogined else {
             connectionState = .idle
+            isSessionSyncOK = false
             return
         }
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             NIMSDK.shared().loginManager.logout { [weak self] error in
                 Task { @MainActor in
+                    guard let self else {
+                        cont.resume()
+                        return
+                    }
+                    guard self.sessionContexts.isCurrent(context) else {
+                        cont.resume()
+                        return
+                    }
                     if let error {
                         Self.logger.notice("⚠️ [NIMService] logout 失败 \(String(describing: error), privacy: .private)")
                     } else {
                         Self.logger.info("🟢 [NIMService] 已 logout")
                     }
-                    self?.connectionState = .idle
+                    self.connectionState = .idle
+                    self.isSessionSyncOK = false
                     cont.resume()
                 }
             }
@@ -284,13 +358,24 @@ final class NIMService: NSObject, ObservableObject {
     // MARK: - 错误码分流
 
     /// 当错误触发 1004 / 1005 时广播 `.apiSessionInvalidated` 通知，与 APIClient 一致。
-    fileprivate func notifyIfSessionInvalidating(_ err: NIMServiceError) {
-        guard err.triggersSessionInvalidation else { return }
+    fileprivate func notifyIfSessionInvalidating(
+        _ err: NIMServiceError,
+        context: NIMSessionContextTracker.Context
+    ) {
+        guard err.triggersSessionInvalidation,
+              sessionContexts.isCurrent(context),
+              let account = context.account,
+              !account.isEmpty else { return }
         let code: String = (err == .kickedOut) ? "1004" : "1005"
         NotificationCenter.default.post(
             name: .apiSessionInvalidated,
             object: nil,
-            userInfo: ["source": "nim", "code": code, "message": err.errorDescription ?? ""]
+            userInfo: [
+                "source": "nim",
+                "code": code,
+                "message": err.errorDescription ?? "",
+                "originNIMAccount": account,
+            ]
         )
     }
 }
@@ -337,7 +422,12 @@ extension NIMService: NIMLoginManagerDelegate {
     /// **backlog grace**：.loginOK 时启用 10s 全放行窗口，覆盖离线/重连后 SDK 逐条推送的累积消息——
     /// backlog 是过去事件，不能按当前 active 场景过滤（参考 IMSceneFilter §设计核心 4）。
     nonisolated func onLogin(_ step: NIMLoginStep) {
+        let context = sessionContexts.snapshot()
         Task { @MainActor in
+            guard self.sessionContexts.isCurrent(context) else {
+                Self.logger.notice("[NIMService] stale onLogin ignored step=\(step.rawValue, privacy: .public)")
+                return
+            }
             switch step {
             case .linkFailed, .loseConnection:
                 self.connectionState = .disconnected
@@ -364,21 +454,31 @@ extension NIMService: NIMLoginManagerDelegate {
 
     /// 被其他端踢下线 / 服务端踢下线。1004 触发全局 logout。
     nonisolated func onKickout(_ result: NIMLoginKickoutResult) {
+        let context = sessionContexts.snapshot()
         Task { @MainActor in
+            guard self.sessionContexts.isCurrent(context), context.account != nil else {
+                Self.logger.notice("[NIMService] stale onKickout ignored")
+                return
+            }
             Self.logger.notice("🔴 [NIMService] onKickout reason=\(result.reasonCode.rawValue, privacy: .public)")
             self.connectionState = .disconnected
-            self.notifyIfSessionInvalidating(.kickedOut)
+            self.notifyIfSessionInvalidating(.kickedOut, context: context)
         }
     }
 
     /// 自动登录失败（多数情况是 1005 token 失效）。
     nonisolated func onAutoLoginFailed(_ error: Error) {
+        let context = sessionContexts.snapshot()
         Task { @MainActor in
+            guard self.sessionContexts.isCurrent(context), context.account != nil else {
+                Self.logger.notice("[NIMService] stale onAutoLoginFailed ignored")
+                return
+            }
             let code = (error as NSError).code
             Self.logger.error("🔴 [NIMService] onAutoLoginFailed code=\(code, privacy: .public)")
             let mapped = NIMServiceError.from(nsError: error as NSError, fallback: .tokenInvalid)
             self.connectionState = .disconnected
-            self.notifyIfSessionInvalidating(mapped)
+            self.notifyIfSessionInvalidating(mapped, context: context)
         }
     }
 }

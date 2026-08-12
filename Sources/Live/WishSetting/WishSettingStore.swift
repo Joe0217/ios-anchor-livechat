@@ -306,11 +306,15 @@ final class WishSettingStore: ObservableObject {
         defer { isSubmittingSave = false }
         // 全过 → 持久化
         _ = save()  // canSave 已保证过；save 内的 guard 不会命中 return false
+        let sharedGeneration = WishSettingSharedStore.shared.generationToken
         // H5 `saveAndBack`：首次勾选规则后先提交同意回执；成功才写本地标记，
         // 失败仍保存配置，但下次开播会继续弹规则确认。
         if ruleChecked, !UserDefaults.standard.bool(forKey: "wishRuleAgreed") {
             do {
                 try await LiveService.clickWishAgreement()
+                guard WishSettingSharedStore.shared.isCurrent(generation: sharedGeneration) else {
+                    return .failed
+                }
                 UserDefaults.standard.set(true, forKey: "wishRuleAgreed")
             } catch {
                 logger.warning("clickWishAgreement failed while saving wishlist: \(String(describing: error), privacy: .private)")

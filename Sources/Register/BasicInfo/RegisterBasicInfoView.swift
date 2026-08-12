@@ -125,6 +125,11 @@ struct RegisterBasicInfoView: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, 14).frame(height: 44)
                 .background(Color(red: 0.17, green: 0.13, blue: 0.24), in: RoundedRectangle(cornerRadius: 22))
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+                .onChange(of: store.inviteCode) { value in
+                    store.updateInviteCode(value)
+                }
             }
         }
     }

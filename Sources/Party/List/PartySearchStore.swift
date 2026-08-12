@@ -47,16 +47,37 @@ final class PartySearchStore: ObservableObject {
 
     private var currentTask: Task<Void, Never>?
     private var lastFireAt: Date? = nil
+    /// 搜索页可能在权限模式切换期间仍留在导航栈。端点上下文变化时递增代际，
+    /// 即使底层请求不响应取消，旧响应也不能回填当前页面。
+    private var dataContext: String?
+    private var dataGeneration = 0
     /// 对齐 H5 throttle 1500ms
     private let throttleInterval: TimeInterval = 1.5
 
     deinit { currentTask?.cancel() }
 
+    @discardableResult
+    func prepareForDataContext(_ context: String) -> Bool {
+        guard dataContext != context else { return false }
+        dataContext = context
+        dataGeneration &+= 1
+        currentTask?.cancel()
+        currentTask = nil
+        lastFireAt = nil
+        query = ""
+        state = .idle
+        return true
+    }
+
     /// 显式触发搜索（键盘回车 / 搜索按钮）。1500ms throttle 防抖。
     /// 对齐 H5 `useThrottleFn(searchPartyRoomList, 1500)`。
     func search() {
+        let generation = dataGeneration
         let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else {
+            currentTask?.cancel()
+            currentTask = nil
+            lastFireAt = nil
             state = .idle
             return
         }
@@ -81,14 +102,24 @@ final class PartySearchStore: ObservableObject {
                 )
                 try Task.checkCancellation()
                 await MainActor.run { [weak self] in
-                    guard let self, self.query.trimmingCharacters(in: .whitespacesAndNewlines) == q else { return }
+                    guard let self,
+                          !Task.isCancelled,
+                          generation == self.dataGeneration,
+                          self.query.trimmingCharacters(in: .whitespacesAndNewlines) == q else {
+                        return
+                    }
                     self.state = rooms.isEmpty ? .empty(query: q) : .result(rooms: rooms, query: q)
                 }
             } catch is CancellationError {
                 return
             } catch {
                 await MainActor.run { [weak self] in
-                    guard let self, self.query.trimmingCharacters(in: .whitespacesAndNewlines) == q else { return }
+                    guard let self,
+                          !Task.isCancelled,
+                          generation == self.dataGeneration,
+                          self.query.trimmingCharacters(in: .whitespacesAndNewlines) == q else {
+                        return
+                    }
                     // 对齐 H5 catch：清空 list（error 态视觉同 empty）
                     self.state = .error(message: error.localizedDescription, query: q)
                 }
@@ -99,6 +130,7 @@ final class PartySearchStore: ObservableObject {
     /// 清空输入 + 状态回到 idle（点 ✕ 按钮 / 手动清空时用）
     func clear() {
         currentTask?.cancel()
+        currentTask = nil
         lastFireAt = nil
         query = ""
         state = .idle

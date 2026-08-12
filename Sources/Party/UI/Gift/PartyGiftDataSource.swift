@@ -178,7 +178,9 @@ final class PartyGiftDataSource: GiftPanelDataSource, GiftPanelBalanceSource {
             return entry.groups
         }
 
+        let cacheContext = GiftCatalogCache.shared.writeContext(for: .party)
         let response = try await PartyAPI.getPartyRoomGift(showType: 0, apiVersion: 2)
+        guard GiftCatalogCache.shared.isCurrent(cacheContext, for: .party) else { return [] }
         guard canAccessGifts() else {
             clearUnavailableGiftState()
             return []
@@ -213,7 +215,12 @@ final class PartyGiftDataSource: GiftPanelDataSource, GiftPanelBalanceSource {
                 return []
             }
             if !groups.isEmpty {
-                GiftCatalogCache.shared.set(scene: .party, groups: groups, userDiamond: response.userDiamond)
+                GiftCatalogCache.shared.set(
+                    scene: .party,
+                    groups: groups,
+                    userDiamond: response.userDiamond,
+                    context: cacheContext
+                )
             } else {
                 logger.notice("[PartyGift] v2 all tabCode unmapped; skip cache write to allow retry")
             }
@@ -237,7 +244,12 @@ final class PartyGiftDataSource: GiftPanelDataSource, GiftPanelBalanceSource {
                 return []
             }
             if !groups.isEmpty {
-                GiftCatalogCache.shared.set(scene: .party, groups: groups, userDiamond: response.userDiamond)
+                GiftCatalogCache.shared.set(
+                    scene: .party,
+                    groups: groups,
+                    userDiamond: response.userDiamond,
+                    context: cacheContext
+                )
             } else {
                 logger.notice("[PartyGift] v1 all tabName unmapped; skip cache write to allow retry")
             }
@@ -283,8 +295,10 @@ final class PartyGiftDataSource: GiftPanelDataSource, GiftPanelBalanceSource {
             clearUnavailableGiftState()
             return nil
         }
+        let cacheContext = GiftCatalogCache.shared.writeContext(for: .party)
         do {
             let response = try await PartyAPI.getPartyRoomGift(showType: 0, apiVersion: 2)
+            guard GiftCatalogCache.shared.isCurrent(cacheContext, for: .party) else { return nil }
             guard canAccessGifts() else {
                 clearUnavailableGiftState()
                 return nil
@@ -302,10 +316,19 @@ final class PartyGiftDataSource: GiftPanelDataSource, GiftPanelBalanceSource {
                 return nil
             }
             if !freshGroups.isEmpty {
-                GiftCatalogCache.shared.set(scene: .party, groups: freshGroups, userDiamond: response.userDiamond ?? syncedBalance)
+                GiftCatalogCache.shared.set(
+                    scene: .party,
+                    groups: freshGroups,
+                    userDiamond: response.userDiamond ?? syncedBalance,
+                    context: cacheContext
+                )
             } else if let b = response.userDiamond {
                 // groups 空但 balance 有 → 只更 balance 不写空 groups（对齐 review #3 空态守护）
-                GiftCatalogCache.shared.updateBalance(scene: .party, userDiamond: b)
+                GiftCatalogCache.shared.updateBalance(
+                    scene: .party,
+                    userDiamond: b,
+                    context: cacheContext
+                )
             }
             logger.info("[PartyGift] refreshFromServer done balance=\(response.userDiamond ?? -1, privacy: .public) groups=\(freshGroups.count, privacy: .public)")
             return response.userDiamond ?? syncedBalance
@@ -345,13 +368,18 @@ final class PartyGiftDataSource: GiftPanelDataSource, GiftPanelBalanceSource {
 
     /// sendGift 成功后 Store 侧从 response.userDiamond 更新余额；同步到 DataSource 缓存 + GiftCatalogCache
     /// 让下次 currentBalance() 返回最新值（若面板 reopen 不需要重拉 API）
-    func updateBalanceFromSend(_ balance: Int64) {
+    func updateBalanceFromSend(_ balance: Int64, cacheContext: GiftCatalogCache.WriteContext) {
+        guard GiftCatalogCache.shared.isCurrent(cacheContext, for: .party) else { return }
         guard canAccessGifts() else {
             clearUnavailableGiftState()
             return
         }
         lock.lock(); _latestBalance = balance; lock.unlock()
-        GiftCatalogCache.shared.updateBalance(scene: .party, userDiamond: balance)
+        GiftCatalogCache.shared.updateBalance(
+            scene: .party,
+            userDiamond: balance,
+            context: cacheContext
+        )
     }
 
     /// 从完整主播动态切到 107 时，礼物架和钻石余额均不能继续保留在内存或共享缓存中。

@@ -43,6 +43,11 @@ struct EditProfileView: View {
     @State private var galleryCtx: MediaGalleryContext?
     /// Discard confirm（未保存离开）；对齐 PostPublishView pattern（rule `swiftui-fullscreencover-hoist.md`）
     @State private var showDiscardConfirm: Bool = false
+    @State private var showAvatarSourceMenu = false
+    @State private var showAvatarPhotoLibrary = false
+    @State private var avatarPickerItem: PhotosPickerItem?
+    @State private var showAvatarBeautyCamera = false
+    @State private var showAvatarCameraPermissionAlert = false
 
     var body: some View {
         content
@@ -168,6 +173,51 @@ struct EditProfileView: View {
         } message: {
             Text(L10n.EditProfile.discardMessage)
         }
+        .confirmationDialog(
+            L10n.Publish.addImage,
+            isPresented: $showAvatarSourceMenu,
+            titleVisibility: .visible
+        ) {
+            if permission.canBeautyStudio {
+                Button {
+                    DispatchQueue.main.async { openAvatarBeautyCamera() }
+                } label: {
+                    Label(L10n.beautyStudioCamera, systemImage: "camera.fill")
+                }
+            }
+            Button {
+                DispatchQueue.main.async { showAvatarPhotoLibrary = true }
+            } label: {
+                Label(L10n.Publish.mediaSourcePhotoLibrary, systemImage: "photo")
+            }
+            Button(L10n.Publish.cancel, role: .cancel) {}
+        }
+        .photosPicker(
+            isPresented: $showAvatarPhotoLibrary,
+            selection: $avatarPickerItem,
+            matching: .images
+        )
+        .onChange(of: avatarPickerItem) { item in
+            guard let item else { return }
+            avatarPickerItem = nil
+            Task { await handleAvatarPicked(item) }
+        }
+        .overlay {
+            if showAvatarCameraPermissionAlert {
+                MediaPermissionDialog(
+                    requirement: .camera,
+                    onCancel: { showAvatarCameraPermissionAlert = false },
+                    onConfirm: retryAvatarBeautyCameraPermission
+                )
+                .zIndex(100)
+            }
+        }
+        .fullScreenCover(isPresented: $showAvatarBeautyCamera) {
+            BeautySettingsView(mode: .camera) { data in
+                showAvatarBeautyCamera = false
+                Task { await store.uploadAvatar(data: data) }
+            }
+        }
     }
 
     // MARK: - Content by phase
@@ -200,8 +250,10 @@ struct EditProfileView: View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 16) {
                 basicSection
-                if permission.canProfileSocial {
+                if permission.canProfileEditing {
                     photosSection
+                }
+                if permission.canProfileSocial {
                     videosSection
                     if permission.canCall {
                         callVideoSection
@@ -231,7 +283,7 @@ struct EditProfileView: View {
                         avatarUrl: store.draft.avatarUrl,
                         isReviewing: store.review.avatar,
                         isRejected: store.review.avatarRejected,
-                        onPick: { item in Task { await handleAvatarPicked(item) } },
+                        onEditTap: { showAvatarSourceMenu = true },
                         onReviewingTap: {
                             store.showToast(.avatarInReview)
                         }
@@ -470,6 +522,32 @@ struct EditProfileView: View {
     private func handleAvatarPicked(_ item: PhotosPickerItem) async {
         guard let data = try? await item.loadTransferable(type: Data.self) else { return }
         await store.uploadAvatar(data: data)
+    }
+
+    private func openAvatarBeautyCamera() {
+        Task { @MainActor in
+            guard permission.canBeautyStudio else { return }
+            guard await MediaPermissionGate.requestAccess(for: .camera) else {
+                showAvatarCameraPermissionAlert = true
+                return
+            }
+            showAvatarBeautyCamera = true
+        }
+    }
+
+    private func retryAvatarBeautyCameraPermission() {
+        Task { @MainActor in
+            guard permission.canBeautyStudio else {
+                showAvatarCameraPermissionAlert = false
+                return
+            }
+            guard await MediaPermissionGate.requestAccess(for: .camera) else {
+                MediaPermissionGate.openAppSettings()
+                return
+            }
+            showAvatarCameraPermissionAlert = false
+            showAvatarBeautyCamera = true
+        }
     }
 
     private func handlePhotoPicked(_ item: PhotosPickerItem) async {

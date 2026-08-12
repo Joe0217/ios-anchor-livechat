@@ -90,7 +90,7 @@ struct AnchorInfo: Codable {
     // 其它字段沿用 decodeIfPresent 语义（与 Swift 自动 synthesized 一致；写全一遍是因为一旦手写 init(from:) 就会禁用 auto synthesize）
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        self.userId = try c.decodeIfPresent(Int.self, forKey: .userId)
+        self.userId = c.decodeFlexibleInt(forKey: .userId)
         self.nickname = try c.decodeIfPresent(String.self, forKey: .nickname)
         self.icon = try c.decodeIfPresent(String.self, forKey: .icon)
         self.sex = try c.decodeIfPresent(Int.self, forKey: .sex)
@@ -179,7 +179,19 @@ struct AnchorInfo: Codable {
             signature: nil, signatureVaild: nil,
             level: nil, levelName: nil, userLevel: r.userLevel, callPrice: nil,
             upsNum: nil, fansNum: nil, friendsNum: nil,
-            pictures: nil, videos: nil, picList: nil,
+            pictures: nil,
+            videos: r.videos.map { urls in
+                urls.map { MediaAsset(assetId: nil, url: $0, coverUrl: nil, vaild: nil, createTime: nil) }
+            },
+            picList: r.picList?.map {
+                AnchorPicItem(
+                    assetId: $0.assetId,
+                    mediaUrl: $0.mediaUrl,
+                    mediaType: $0.mediaType,
+                    videoCover: $0.videoCover,
+                    vaild: $0.vaild
+                )
+            },
             greetMsgs: nil,
             callVideoUrl: nil, giftList: nil,
             chatBubble: r.chatBubble,
@@ -191,6 +203,51 @@ struct AnchorInfo: Codable {
             valid: r.valid, onReview: r.onReview, banAlways: r.banAlways,
             bannedSubType: r.bannedSubType, type: r.type, userType: r.userType
         )
+    }
+}
+
+extension AnchorInfo {
+    /// `nil` means the profile response did not provide trustworthy media evidence.
+    /// An explicit empty array is resolved evidence and therefore returns `[]`.
+    var permissionVideoEvidence: [String]? {
+        guard picList != nil || videos != nil else { return nil }
+
+        var malformed = false
+        var candidateURLs: [String] = []
+        if let picList {
+            for item in picList {
+                guard let url = item.mediaUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !url.isEmpty else {
+                    malformed = true
+                    continue
+                }
+                if item.mediaType == 2
+                    || item.mediaType == nil
+                    || ReviewAccountModePolicy.isPlaceholderVideoURL(url) {
+                    candidateURLs.append(url)
+                }
+            }
+        }
+        if let videos {
+            for asset in videos {
+                guard let url = asset.url?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !url.isEmpty else {
+                    malformed = true
+                    continue
+                }
+                candidateURLs.append(url)
+            }
+        }
+
+        var seen = Set<String>()
+        let uniqueURLs = candidateURLs.filter { seen.insert($0).inserted }
+        // A confirmed placeholder always keeps the restricted mode. Malformed sibling items
+        // cannot erase that positive restriction evidence.
+        if uniqueURLs.contains(where: ReviewAccountModePolicy.isPlaceholderVideoURL) {
+            return uniqueURLs
+        }
+        guard !malformed else { return nil }
+        return uniqueURLs
     }
 }
 
@@ -352,6 +409,32 @@ struct AnchorPicItem: Codable, Identifiable, Hashable {
         case assetId = "id"
         case mediaUrl, mediaType, videoCover, vaild
     }
+
+    init(assetId: Int?, mediaUrl: String?, mediaType: Int?, videoCover: String?, vaild: Int?) {
+        self.assetId = assetId
+        self.mediaUrl = mediaUrl
+        self.mediaType = mediaType
+        self.videoCover = videoCover
+        self.vaild = vaild
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        assetId = c.decodeFlexibleInt(forKey: .assetId)
+        mediaUrl = c.decodeFlexibleString(forKey: .mediaUrl)
+        mediaType = c.decodeFlexibleInt(forKey: .mediaType)
+        videoCover = c.decodeFlexibleString(forKey: .videoCover)
+        vaild = c.decodeFlexibleInt(forKey: .vaild)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(assetId, forKey: .assetId)
+        try c.encodeIfPresent(mediaUrl, forKey: .mediaUrl)
+        try c.encodeIfPresent(mediaType, forKey: .mediaType)
+        try c.encodeIfPresent(videoCover, forKey: .videoCover)
+        try c.encodeIfPresent(vaild, forKey: .vaild)
+    }
 }
 
 /// 相册/视频条目（用于 pictures[] / videos[]）。
@@ -370,5 +453,31 @@ struct MediaAsset: Codable, Identifiable, Hashable {
     enum CodingKeys: String, CodingKey {
         case assetId = "id"  // 接口字段名为 "id"，本地避开协议名冲突
         case url, coverUrl, vaild, createTime
+    }
+
+    init(assetId: Int?, url: String?, coverUrl: String?, vaild: Int?, createTime: Int?) {
+        self.assetId = assetId
+        self.url = url
+        self.coverUrl = coverUrl
+        self.vaild = vaild
+        self.createTime = createTime
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        assetId = c.decodeFlexibleInt(forKey: .assetId)
+        url = c.decodeFlexibleString(forKey: .url)
+        coverUrl = c.decodeFlexibleString(forKey: .coverUrl)
+        vaild = c.decodeFlexibleInt(forKey: .vaild)
+        createTime = c.decodeFlexibleInt(forKey: .createTime)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(assetId, forKey: .assetId)
+        try c.encodeIfPresent(url, forKey: .url)
+        try c.encodeIfPresent(coverUrl, forKey: .coverUrl)
+        try c.encodeIfPresent(vaild, forKey: .vaild)
+        try c.encodeIfPresent(createTime, forKey: .createTime)
     }
 }

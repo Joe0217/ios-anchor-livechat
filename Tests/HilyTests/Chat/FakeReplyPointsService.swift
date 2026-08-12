@@ -12,6 +12,9 @@ final class FakeReplyPointsService: ReplyPointsServiceProtocol {
         SettleReplyPointsResult(settled: false, points: 0, multiplier: 1, basePoints: 0, currentTotalPoints: 0, message: nil)
     )
     var stubRecords: Result<[MessageBoxRecordItem], Error> = .success([])
+    var fetchMessageBoxListHandler: ((String) async throws -> MessageBoxList)?
+    var claimHandler: ((String) async throws -> Int)?
+    var settleHandler: ((String, String, String) async throws -> SettleReplyPointsResult)?
 
     // MARK: - 调用记录
 
@@ -24,16 +27,25 @@ final class FakeReplyPointsService: ReplyPointsServiceProtocol {
 
     func fetchMessageBoxList(userYxAccid: String) async throws -> MessageBoxList {
         fetchMessageBoxListCalls.append(userYxAccid)
+        if let fetchMessageBoxListHandler {
+            return try await fetchMessageBoxListHandler(userYxAccid)
+        }
         return try stubMessageBoxList.get()
     }
 
     func claimTreasureBox(userYxAccid: String) async throws -> Int {
         claimCalls.append(userYxAccid)
+        if let claimHandler {
+            return try await claimHandler(userYxAccid)
+        }
         return try stubClaimDiamond.get()
     }
 
     func settleReplyPoints(userYxAccid: String, userMsgId: String, msgType: String) async throws -> SettleReplyPointsResult {
         settleCalls.append((userYxAccid, userMsgId, msgType))
+        if let settleHandler {
+            return try await settleHandler(userYxAccid, userMsgId, msgType)
+        }
         return try stubSettleResult.get()
     }
 

@@ -78,7 +78,8 @@ extension UserDetail {
                        like: Int = 100,
                        favorite: Int = 50,
                        giftList: [Gift] = [],
-                       guardianList: [UserGuardianAnchor] = []) -> UserDetail {
+                       guardianList: [UserGuardianAnchor] = [],
+                       picList: [UserProfileMedia] = []) -> UserDetail {
         UserDetail(
             userId: userId,
             nickname: nickname,
@@ -93,7 +94,8 @@ extension UserDetail {
             like: like,
             favorite: favorite,
             giftList: giftList,
-            guardianList: guardianList
+            guardianList: guardianList,
+            picList: picList
         )
     }
 }

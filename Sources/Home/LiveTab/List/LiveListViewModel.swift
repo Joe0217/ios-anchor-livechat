@@ -27,10 +27,16 @@ final class LiveListViewModel: ObservableObject {
     /// 当前 segment（View 切 segment 直接改这里）。didSet 处理瞬时切换 + 首次加载触发。
     @Published var segment: LiveListSegment = .online {
         didSet {
-            guard oldValue != segment else { return }
+            guard oldValue != segment, !isResettingSession else { return }
             // 切换瞬时即可——目标 segment 从未加载过 → 触发首次加载；否则不发请求（keep-alive 体感）
             if states[segment]?.loadState == .idle {
-                Task { await loadFirstPage() }
+                let targetSegment = segment
+                let expectedDataGeneration = dataGeneration
+                Task { [weak self] in
+                    guard let self,
+                          expectedDataGeneration == self.dataGeneration else { return }
+                    await self.load(reset: true, for: targetSegment)
+                }
             }
         }
     }
@@ -52,6 +58,13 @@ final class LiveListViewModel: ObservableObject {
     /// 代际 token 按 segment 隔离：online 的请求漂移不影响 prime。
     private var loadGenerations: [LiveListSegment: Int] = [.online: 0, .prime: 0]
     private let networkErrorFallback: String
+    /// keep-alive Home 子树的账号级数据上下文。请求返回时同时核对
+    /// session + segment 两层代际，避免旧账号响应写入新会话。
+    private var sessionGeneration: UUID?
+    private var dataGeneration: Int = 0
+    private var isResettingSession = false
+    private var inflightTasks: [LiveListSegment: Task<Void, Never>] = [:]
+    private var inflightTaskIDs: [LiveListSegment: UUID] = [:]
 
     init(service: LiveListServiceProtocol = LiveListService.shared,
          pageSize: Int = 20,
@@ -62,6 +75,28 @@ final class LiveListViewModel: ObservableObject {
     }
 
     // MARK: - Actions
+
+    @discardableResult
+    func prepareForSession(_ generation: UUID) -> Bool {
+        guard sessionGeneration != generation else { return false }
+        sessionGeneration = generation
+        dataGeneration &+= 1
+
+        for task in inflightTasks.values { task.cancel() }
+        inflightTasks.removeAll()
+        inflightTaskIDs.removeAll()
+
+        isResettingSession = true
+        segment = .online
+        isResettingSession = false
+        states = [
+            .online: SegmentState(),
+            .prime: SegmentState(),
+        ]
+        loadGenerations = [.online: 0, .prime: 0]
+        logger.info("session context reset generation=\(generation.uuidString, privacy: .private)")
+        return true
+    }
 
     /// 拉首页（首次进入 / 下拉刷新 / segment 切换触发）。
     func loadFirstPage() async {
@@ -83,8 +118,38 @@ final class LiveListViewModel: ObservableObject {
     // MARK: - Internal load logic
 
     private func load(reset: Bool, for targetSegment: LiveListSegment) async {
+        if let inflight = inflightTasks[targetSegment] {
+            await inflight.value
+            return
+        }
         // 单一态守卫（按 segment 隔离）
         guard !(states[targetSegment]?.loadState.isLoading ?? false) else { return }
+        let expectedDataGeneration = dataGeneration
+
+        let taskID = UUID()
+        let task = Task.detached { @MainActor [weak self] in
+            guard let self else { return }
+            await self.doLoad(
+                reset: reset,
+                for: targetSegment,
+                expectedDataGeneration: expectedDataGeneration
+            )
+        }
+        inflightTasks[targetSegment] = task
+        inflightTaskIDs[targetSegment] = taskID
+        await task.value
+        if inflightTaskIDs[targetSegment] == taskID {
+            inflightTasks[targetSegment] = nil
+            inflightTaskIDs[targetSegment] = nil
+        }
+    }
+
+    private func doLoad(
+        reset: Bool,
+        for targetSegment: LiveListSegment,
+        expectedDataGeneration: Int
+    ) async {
+        guard expectedDataGeneration == dataGeneration else { return }
 
         if reset {
             updateState(for: targetSegment) {
@@ -108,7 +173,8 @@ final class LiveListViewModel: ObservableObject {
                 pageSize: pageSize
             )
             // 代际过期 → 丢弃（同 segment 内重复 reset / 段位外切换无关）
-            guard snapshotGen == loadGenerations[targetSegment, default: 0] else { return }
+            guard expectedDataGeneration == dataGeneration,
+                  snapshotGen == loadGenerations[targetSegment, default: 0] else { return }
 
             // 真分页 fallback：连续两页相同 id → 服务端不支持真分页停止
             let currentItems = states[targetSegment]?.items ?? []
@@ -134,12 +200,20 @@ final class LiveListViewModel: ObservableObject {
                 $0.loadState = .loaded
             }
         } catch let e as APIError {
-            guard snapshotGen == loadGenerations[targetSegment, default: 0] else { return }
+            guard expectedDataGeneration == dataGeneration,
+                  snapshotGen == loadGenerations[targetSegment, default: 0] else { return }
             updateState(for: targetSegment) {
                 $0.loadState = .error(e.message)
             }
         } catch {
-            guard snapshotGen == loadGenerations[targetSegment, default: 0] else { return }
+            guard expectedDataGeneration == dataGeneration,
+                  snapshotGen == loadGenerations[targetSegment, default: 0] else { return }
+            if GlobalErrorBannerNotify.isCancellation(error) {
+                updateState(for: targetSegment) {
+                    $0.loadState = $0.currentPage > 0 ? .loaded : .idle
+                }
+                return
+            }
             updateState(for: targetSegment) {
                 $0.loadState = .error(networkErrorFallback)
             }

@@ -43,8 +43,7 @@ struct LiveListView: View {
                 await viewModel.loadFirstPage()
             }
         }
-        // 首次加载由父级 LiveTabView 控制（见 `triggerListLazyLoadIfNeeded`）——
-        // keep-alive 架构下 view tree 永久持有，不能用 .task 触发首次加载（启动即预热）。
+        // 首次加载由父级 LiveTabView 的可见性 task 控制，避免 keep-alive 挂载即预热。
     }
 
     /// 按状态机分支渲染：首屏 loading / 卡片列表（含底部 footer）/ 空 / 错误。
@@ -60,7 +59,9 @@ struct LiveListView: View {
             cardList   // 同一位置承载所有非空态（loaded / loadingMore / loadMoreError）
         } else {
             switch viewModel.loadState {
-            case .idle, .loadingFirstPage:
+            case .idle:
+                idleState
+            case .loadingFirstPage:
                 centeredLoading
             case .error(let msg):
                 errorState(msg)
@@ -116,6 +117,10 @@ struct LiveListView: View {
             ProgressView().tint(.white)
             Spacer()
         }
+    }
+
+    private var idleState: some View {
+        Color.clear.frame(minHeight: 220)
     }
 
     private var emptyState: some View {

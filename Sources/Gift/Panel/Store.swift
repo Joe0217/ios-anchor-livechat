@@ -335,12 +335,24 @@ final class CommonGiftPanelStore: ObservableObject {
                              service: PartyGiftSendService?) async {
         self.phase = .sending
         if let service {
+            #if !HILY_TESTS
+            let partyCacheContext: GiftCatalogCache.WriteContext? =
+                (config.dataSource as? PartyGiftDataSource).map { _ in
+                    GiftCatalogCache.shared.writeContext(for: .party)
+                }
+            #endif
             do {
                 let result = try await service.send(
                     giftId: gift.id,
                     num: self.count,
                     yxAccidList: accids
                 )
+                #if !HILY_TESTS
+                if let partyCacheContext,
+                   !GiftCatalogCache.shared.isCurrent(partyCacheContext, for: .party) {
+                    return
+                }
+                #endif
                 // 余额更新（若 response 携带；nil 时保留 UI 现值等待下次 refreshBalance 兜底）
                 if let newBalance = result.userDiamond {
                     self.balanceValue = newBalance
@@ -348,8 +360,12 @@ final class CommonGiftPanelStore: ObservableObject {
                     // 类型转换而非 protocol 扩展：BalanceSource protocol 无需暴露 update 方法给通用场景
                     // #if !HILY_TESTS：PartyGiftDataSource 依赖 PartyAPI 不入 tests 白名单
                     #if !HILY_TESTS
-                    if let partySource = config.dataSource as? PartyGiftDataSource {
-                        partySource.updateBalanceFromSend(newBalance)
+                    if let partySource = config.dataSource as? PartyGiftDataSource,
+                       let partyCacheContext {
+                        partySource.updateBalanceFromSend(
+                            newBalance,
+                            cacheContext: partyCacheContext
+                        )
                     }
                     #endif
                 }

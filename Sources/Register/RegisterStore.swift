@@ -9,8 +9,8 @@ import os
 @MainActor
 final class RegisterStore: ObservableObject {
     static let shared = RegisterStore()
-    /// 107 提审包暂不采集注册审核视频；服务端必填字段统一使用公共占位资源。
-    private static let placeholderReviewVideoURL = "https://img.hnhily.link/00000000/20260806/8c2bc4a182a8483e92c38c06518d1d87.mp4"
+    /// 普通注册仍使用公共占位视频；有效邀请码注册禁止提交该占位资源。
+    private static let placeholderReviewVideoURL = ReviewAccountModePolicy.placeholderReviewVideoURL
     private init() {}
 
     private let logger = Logger(subsystem: "com.anchor.livechat", category: "RegisterStore")
@@ -49,6 +49,12 @@ final class RegisterStore: ObservableObject {
     @Published var isVideoUploading: Bool = false
     @Published var isSubmitting: Bool = false
     @Published var submitError: String? = nil
+    /// 仅邀请码校验成功后开启 6 图 + 视频注册模式。
+    @Published private(set) var isInviteCodeValid: Bool = false
+
+    private var inviteValidationTask: Task<Bool?, Never>?
+    private var inviteValidationGeneration: UInt = 0
+    private var validatedInviteCode: String?
 
     // MARK: - 场景标记
 
@@ -139,11 +145,16 @@ final class RegisterStore: ObservableObject {
         self.deviceId = DeviceInfo.deviceId
         self.phone = mineInfo.phone ?? ""
         self.isResubmit = true
+        // 重审资料同样必须重新确认邀请码，不能复用单例 Store 中可能残留的校验结果。
+        updateInviteCode(self.inviteCode)
         logger.info("[RegisterStore] hydrated resubmit userId=\(mineInfo.userId ?? -1, privacy: .private) email=\(mineInfo.email ?? "", privacy: .private)")
     }
 
     /// 冷启动清 / logout 清 / 注册成功清
     func reset() {
+        inviteValidationGeneration &+= 1
+        inviteValidationTask?.cancel()
+        inviteValidationTask = nil
         email = ""
         password = ""
         iconUrl = nil
@@ -170,9 +181,68 @@ final class RegisterStore: ObservableObject {
         isVideoUploading = false
         isSubmitting = false
         submitError = nil
+        isInviteCodeValid = false
+        validatedInviteCode = nil
 
         isResubmit = false
         logger.info("[RegisterStore] reset")
+    }
+
+    /// 绑定邀请码输入框：最多 6 位，填满后发起一次校验；其他状态静默回退到普通注册要求。
+    func updateInviteCode(_ rawValue: String) {
+        let value = String(rawValue.prefix(6))
+        if inviteCode != value {
+            inviteCode = value
+        }
+        inviteValidationGeneration &+= 1
+        let generation = inviteValidationGeneration
+        inviteValidationTask?.cancel()
+        inviteValidationTask = nil
+        isInviteCodeValid = false
+        validatedInviteCode = nil
+        guard RegisterFeatureAvailability.isInvitationCodeEnabled, value.count == 6 else { return }
+
+        inviteValidationTask = Task { [weak self] in
+            let valid: Bool
+            do {
+                valid = try await RegisterService.checkInviteCode(value)
+            } catch {
+                guard !Task.isCancelled,
+                      !GlobalErrorBannerNotify.isCancellation(error),
+                      let self,
+                      self.inviteValidationGeneration == generation,
+                      self.inviteCode == value else { return nil }
+                self.logger.error("[RegisterStore] invite validation failed: \(error.localizedDescription, privacy: .public)")
+                return nil
+            }
+            guard !Task.isCancelled,
+                  let self,
+                  self.inviteValidationGeneration == generation,
+                  self.inviteCode == value else { return nil }
+            self.validatedInviteCode = value
+            self.isInviteCodeValid = valid
+            return valid
+        }
+    }
+
+    /// 提交前等待当前 6 位邀请码的在飞校验，避免快速点击时按普通注册规则绕过视频要求。
+    private func resolveInviteCodeForSubmission() async -> Bool? {
+        guard RegisterFeatureAvailability.isInvitationCodeEnabled else { return false }
+        let value = inviteCode
+        guard value.count == 6 else { return false }
+
+        if validatedInviteCode != value, let task = inviteValidationTask {
+            _ = await task.value
+        }
+        // 防御直接赋值或页面切换时 onChange 尚未触发：提交层必须自行补一次校验，不能降级绕过。
+        if validatedInviteCode != value, inviteCode == value {
+            updateInviteCode(value)
+            if let task = inviteValidationTask {
+                _ = await task.value
+            }
+        }
+        guard validatedInviteCode == value else { return nil }
+        return isInviteCodeValid
     }
 
     // MARK: - Submit（Page 2 底部 Upload 按钮触发）
@@ -186,6 +256,27 @@ final class RegisterStore: ObservableObject {
         submitError = nil
         defer { isSubmitting = false }
 
+        guard let hasValidInviteCode = await resolveInviteCodeForSubmission() else {
+            submitError = L10n.authErrorRequestFailed
+            return
+        }
+        let uploadedVideoURL = (videoUrl ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if hasValidInviteCode {
+            guard picUrls.count >= 6 else {
+                submitError = L10n.Register.errorPhotosMin(6)
+                return
+            }
+            guard !uploadedVideoURL.isEmpty,
+                  uploadedVideoURL != Self.placeholderReviewVideoURL else {
+                submitError = L10n.Register.errorVideoRequired
+                return
+            }
+        }
+
+        let submittedVideos = hasValidInviteCode
+            ? [uploadedVideoURL]
+            : [Self.placeholderReviewVideoURL]
+
         let body = RegisterSubmitBody(
             email: email,
             password: CryptoUtil.loginPassword(password),
@@ -193,10 +284,11 @@ final class RegisterStore: ObservableObject {
             nickname: nickname,
             birthday: birthday,
             countryId: countryName ?? (countryCode ?? ""),   // Bug fix 2026-07-08：优先用 countryName (en 名 "Spain")，对齐 H5 registerForm.vue:110 `formData.countryId = item.text`（en 名）；locale fallback 兜底
+            // 预校验无效时保持普通资料限制，但仍把用户输入交给注册接口做最终业务校验并映射 1076。
             inviteCode: RegisterFeatureAvailability.isInvitationCodeEnabled ? inviteCode : "",
             language: languages.joined(separator: ","),
             picList: picUrls,
-            videos: [Self.placeholderReviewVideoURL],
+            videos: submittedVideos,
             gender: gender,
             deviceId: DeviceInfo.deviceId,
             phone: phone
@@ -225,15 +317,21 @@ final class RegisterStore: ObservableObject {
                 }
             }
 
+            // 注册响应在部分后端版本不会立即回显刚提交的视频。正常注册/重录用本次已成功
+            // 提交的值补齐会话快照；删除账号假注册实际调用登录接口，必须完全信登录返回。
+            let sessionResult = isDeletedAccount
+                ? result
+                : result.includingSubmittedPermissionVideoURLs(submittedVideos)
+
             // v3 NEW-6: applyLogin 返 Bool；false 表示 token 缺失
-            guard await SessionStore.shared.applyLogin(result, email: email) else {
+            guard await SessionStore.shared.applyLogin(sessionResult, email: email) else {
                 submitError = L10n.authErrorNoToken
                 return
             }
             // resubmit 场景清短期 Keychain 密码
             _ = KeychainStore.remove(for: KeychainKey.pendingRegisterPassword)
             RegisterAnalytics.report(.appSign)
-            logger.info("[RegisterStore] submit success userId=\(result.userId ?? -1, privacy: .private) isResubmit=\(self.isResubmit, privacy: .public)")
+            logger.info("[RegisterStore] submit success userId=\(sessionResult.userId ?? -1, privacy: .private) isResubmit=\(self.isResubmit, privacy: .public)")
             reset()
             // 2026-07-16 修:submit 成功后 nav path 必须 reset。restricted resubmit flow submit 成功后
             // 不走 logout(直接 applyLogin userType=2 切 MainTabView),shared path 残留 [basicInfo,

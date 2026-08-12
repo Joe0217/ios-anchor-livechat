@@ -1,8 +1,8 @@
 import Foundation
 
 enum RegisterFeatureAvailability {
-    /// 107 提审包暂不开放邀请码输入；恢复时只需打开此开关。
-    static let isInvitationCodeEnabled = false
+    /// 注册页开放邀请码输入；只有 6 位邀请码校验成功后才开启增强资料要求。
+    static let isInvitationCodeEnabled = true
 }
 
 // MARK: - 导航路由

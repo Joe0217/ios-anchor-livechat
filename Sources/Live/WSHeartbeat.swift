@@ -89,7 +89,7 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
     /// 完整主播登录后调用。重复调用安全；若当前是 Party-only 连接则切回完整主播语义。
     func start(loginUuid: String) {
         let userType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
-            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.user != nil)
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
         guard UserTypeExperience.hasFullHostRealtimeCapability(userType) else {
             AppLogger.heartbeat.notice("[WS] full-host start rejected for non-host session")
             return
@@ -100,7 +100,7 @@ final class WSHeartbeat: NSObject, URLSessionWebSocketDelegate {
     /// 107 登录后即调用；进入 Party 后同一心跳再携带 roomId/seatIndex 刷新 25s TTL。
     func startPartyOnly(loginUuid: String) {
         let userType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
-            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.user != nil)
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
         guard UserTypeExperience.isPartyOnly(userType) else {
             AppLogger.heartbeat.notice("[WS] party-only start rejected for non-107 session")
             return

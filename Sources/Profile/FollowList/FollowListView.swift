@@ -232,13 +232,23 @@ struct FollowListView: View {
         let state = vm.currentState
 
         if state.users.isEmpty {
-            switch state.loadState {
-            case .loading, .idle:
-                centerSpinner
-            case .error(let msg):
-                errorView(msg: msg)
-            case .loaded:
-                emptyView
+            GeometryReader { proxy in
+                ScrollView {
+                    Group {
+                        switch state.loadState {
+                        case .loading, .idle:
+                            centerSpinner
+                        case .error(let msg):
+                            errorView(msg: msg)
+                        case .loaded:
+                            emptyView
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+                }
+                .refreshable {
+                    await vm.loadFirstPage()
+                }
             }
         } else {
             list

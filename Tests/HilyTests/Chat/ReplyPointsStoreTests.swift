@@ -498,7 +498,8 @@ final class ReplyPointsStoreTests: XCTestCase {
     /// R-32 / R-33：logout clear 全清（session-scoped rule）
     func testClear_ResetsEverything() async {
         let svc = FakeReplyPointsService()
-        svc.stubMessageBoxList = .success(makeBoxList(items: [(100, 10, .notReached)]))
+        svc.stubMessageBoxList = .success(makeBoxList(items: [(100, 10, .claimable)]))
+        svc.stubClaimDiamond = .success(10)
         svc.stubSettleResult = .success(SettleReplyPointsResult(
             settled: true, points: 10, multiplier: 1, basePoints: 10, currentTotalPoints: 20, message: nil
         ))
@@ -509,12 +510,82 @@ final class ReplyPointsStoreTests: XCTestCase {
 
         XCTAssertEqual(store.currentUserSendPaidMessageCount, 1)
         XCTAssertNotNil(store.pendingSettleResult)
+        XCTAssertNotNil(store.pendingClaimDiamond)
 
         store.clear()
 
         XCTAssertEqual(store.currentUserSendPaidMessageCount, 0)
         XCTAssertNil(store.pendingSettleResult)
+        XCTAssertNil(store.pendingClaimDiamond)
         XCTAssertTrue(store.sessions.isEmpty)
+    }
+
+    func testClear_OldBeginResponseCannotRecreateNewSession() async {
+        let svc = FakeReplyPointsService()
+        let oldList = makeBoxList(items: [(100, 10, .notReached)], anchorPoint: 10)
+        let newList = makeBoxList(items: [(200, 20, .notReached)], anchorPoint: 200)
+        svc.fetchMessageBoxListHandler = { [weak svc] _ in
+            if svc?.fetchMessageBoxListCalls.count == 1 {
+                return await Task.detached {
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                    return oldList
+                }.value
+            }
+            return newList
+        }
+        let store = makeStore(service: svc)
+
+        let oldBegin = Task {
+            await store.beginSession(peer: peer, tipTexts: FakeReplyPointsTipTexts.all)
+        }
+        await waitUntil { svc.fetchMessageBoxListCalls.count == 1 }
+
+        store.clear()
+        await store.beginSession(peer: peer, tipTexts: FakeReplyPointsTipTexts.all)
+        XCTAssertEqual(store.sessions[peer]?.currentProgress, 200)
+
+        await oldBegin.value
+        XCTAssertEqual(store.sessions[peer]?.currentProgress, 200)
+    }
+
+    func testClear_OldSettleResponseCannotMutateNewSession() async {
+        let svc = FakeReplyPointsService()
+        svc.stubMessageBoxList = .success(makeBoxList(items: [(100, 10, .notReached)], anchorPoint: 10))
+        svc.settleHandler = { _, _, _ in
+            await Task.detached {
+                try? await Task.sleep(nanoseconds: 250_000_000)
+                return SettleReplyPointsResult(
+                    settled: true,
+                    points: 10,
+                    multiplier: 1,
+                    basePoints: 10,
+                    currentTotalPoints: 999,
+                    message: nil
+                )
+            }.value
+        }
+        let store = makeStore(service: svc)
+        await store.beginSession(peer: peer, tipTexts: FakeReplyPointsTipTexts.all)
+        store.onReceiveUserMsg(
+            peer: peer,
+            msgId: "old-message",
+            timestamp: 1,
+            msgType: "pay",
+            isGift: false,
+            stimulateTipText: "s"
+        )
+
+        let oldSettle = Task { await store.onSendAnchorMsg(peer: peer) }
+        await waitUntil { svc.settleCalls.count == 1 }
+
+        store.clear()
+        svc.stubMessageBoxList = .success(makeBoxList(items: [(200, 20, .notReached)], anchorPoint: 200))
+        await store.beginSession(peer: peer, tipTexts: FakeReplyPointsTipTexts.all)
+
+        await oldSettle.value
+        XCTAssertEqual(store.sessions[peer]?.currentProgress, 200)
+        XCTAssertNil(store.sessions[peer]?.lastUserMsgInfo)
+        XCTAssertNil(store.pendingSettleResult)
     }
 
     // MARK: - ChatTip.stableSortKey（Major-7 + Minor-3）
@@ -536,5 +607,14 @@ final class ReplyPointsStoreTests: XCTestCase {
         let t1 = ChatTip(kind: .guide, text: "g1", timestamp: 1_720_000_000_000)
         let t2 = ChatTip(kind: .guide, text: "g2", timestamp: 1_720_000_001_000)
         XCTAssertLessThan(t1.stableSortKey, t2.stableSortKey)
+    }
+
+    private func waitUntil(_ condition: @escaping () -> Bool) async {
+        for _ in 0..<300 {
+            if condition() { return }
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("timed out waiting for async ReplyPoints call")
     }
 }

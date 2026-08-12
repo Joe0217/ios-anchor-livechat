@@ -5,7 +5,8 @@ import SwiftUI
 /// **对齐 H5 蓝本** `livechat-h5/src/components/party/components/party-expression-popup.vue`：
 /// - `van-popup position="bottom"` 底部半屏 sheet · min-h 50%（iOS 用 `.fraction(0.5)`）
 /// - 上部 `v-swiper` 分类 × 分页拍平 · 每页固定 **4×3 = 12** 格
-/// - 分类和表情按服务端返回顺序完整展示，不过滤、不重排
+/// - 接口返回的全部分类（包括“玩法表情”）都属于表情体系，不是半屏游戏
+/// - 分类和表情按服务端返回顺序完整展示，不按 index、名称、类型或内容过滤、重排
 /// - 底部 tab bar 横向可滚 · 每 tab 圆形 24×24 · 激活 opacity 0.16 底色
 /// - 单分类多页时展示自绘小圆点 indicator
 ///
@@ -222,11 +223,6 @@ struct PartyExpressionPanel: View {
     // MARK: - Pick handler
 
     private func handleEmojiPick(_ item: PartyEmojiItem) {
-        // Store 仍保留二次 gate，防止权限动态变化时绕过业务层。
-        if item.isPlayEmoji, !canSendPlayEmoji {
-            showToast(L10n.PartyRoom.emojiPlayError)
-            return
-        }
         // 玩法 -11 门槛：观众 tap 走 toast（对齐 H5 `usePartyHooks.js:1783` `inPartyRole > 0`）
         if item.isPlayEmoji, store.selfSeat == nil {
             showToast(L10n.PartyRoom.emojiOnSeatRequired)
@@ -250,10 +246,6 @@ struct PartyExpressionPanel: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             withAnimation { toastMessage = nil }
         }
-    }
-
-    private var canSendPlayEmoji: Bool {
-        PartyExpressionAvailability.canSendPlayEmoji
     }
 
     private func selectAdjacentTab(delta: Int, count: Int) {

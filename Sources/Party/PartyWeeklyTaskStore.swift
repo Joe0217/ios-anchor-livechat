@@ -673,10 +673,12 @@ final class PartyTopRoomGuideStore: ObservableObject {
     @Published private(set) var guide: PartyHotRoomGuide?
     @Published private(set) var topRankLimit = 3
 
-    private static let shownAtDefaultsKey = "party.topRoomGuide.shownAt"
+    private static let shownAtDefaultsKeyPrefix = "party.topRoomGuide.shownAt"
     private let defaults: UserDefaults
     private var isLoading = false
     private var requestSequence = 0
+    private var dataContext: String?
+    private var currentUserID: Int?
 
     private var canUsePartyActivities: Bool {
         SelfPermissionBridge.shared.canPartyActivities
@@ -686,12 +688,22 @@ final class PartyTopRoomGuideStore: ObservableObject {
         self.defaults = defaults
     }
 
+    /// Party 大厅为 keep-alive，完整账号之间切换时能力值不会变化。用显式上下文保证
+    /// 上个账号的弹窗、请求和“今日已展示”状态都不会被新账号复用。
+    func prepareForDataContext(_ context: String, userID: Int?) {
+        guard dataContext != context else { return }
+        dataContext = context
+        currentUserID = userID
+        resetForDataContext()
+    }
+
     func loadIfEligible() async {
         guard canUsePartyActivities else {
             clearForDisabledActivities()
             return
         }
-        guard !isLoading, guide == nil, !hasShownToday else { return }
+        guard let shownAtDefaultsKey else { return }
+        guard !isLoading, guide == nil, !hasShownToday(forKey: shownAtDefaultsKey) else { return }
         isLoading = true
         let sequence = { requestSequence &+= 1; return requestSequence }()
         defer {
@@ -713,9 +725,10 @@ final class PartyTopRoomGuideStore: ObservableObject {
                 clearForDisabledActivities()
                 return
             }
+            guard self.shownAtDefaultsKey == shownAtDefaultsKey else { return }
 
             // Android 在成功获取目标后、显示弹窗前写入当天标记；关闭不重弹。
-            defaults.set(Date().timeIntervalSince1970, forKey: Self.shownAtDefaultsKey)
+            defaults.set(Date().timeIntervalSince1970, forKey: shownAtDefaultsKey)
             guide = target
             PartyAnalytics.track(
                 "h_party_top3_popup_show",
@@ -758,14 +771,23 @@ final class PartyTopRoomGuideStore: ObservableObject {
     /// UI 在权限热切换时调用；递增版本号可以阻止旧网络响应恢复已隐藏的引导。
     func clearForDisabledActivities() {
         guard !canUsePartyActivities else { return }
+        resetForDataContext()
+    }
+
+    /// 会话/账号/接口模式变化时无条件清理；与权限撤销路径共用同一个失效入口。
+    func resetForDataContext() {
         requestSequence &+= 1
         isLoading = false
         guide = nil
         topRankLimit = 3
     }
 
-    private var hasShownToday: Bool {
-        let timestamp = defaults.double(forKey: Self.shownAtDefaultsKey)
+    private var shownAtDefaultsKey: String? {
+        currentUserID.map { "\(Self.shownAtDefaultsKeyPrefix).\($0)" }
+    }
+
+    private func hasShownToday(forKey key: String) -> Bool {
+        let timestamp = defaults.double(forKey: key)
         guard timestamp > 0 else { return false }
         return partyDay(for: Date(timeIntervalSince1970: timestamp)) == partyDay(for: Date())
     }

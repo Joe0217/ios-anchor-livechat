@@ -26,6 +26,18 @@ struct UserDetail: Equatable {
     let giftList: [Gift]       // 礼物墙（trial #3 step 3 反悔 #7 补，H5 type.ts 不完整）
     /// H5 `getUserDetail.guardianList` 的主播前 3；空时资料页不展示守护卡。
     let guardianList: [UserGuardianAnchor]
+    let picList: [UserProfileMedia]
+}
+
+/// 他人详情接口返回的只读相册媒体。
+struct UserProfileMedia: Equatable, Hashable, Identifiable {
+    let assetId: Int?
+    let mediaUrl: String
+    let mediaType: Int
+    let videoCover: String?
+    let vaild: Int?
+
+    var id: String { "\(assetId ?? -1)-\(mediaUrl)" }
 }
 
 /// 礼物墙单项（H5 `views/mine/components/gifts.vue` 用法对照）。

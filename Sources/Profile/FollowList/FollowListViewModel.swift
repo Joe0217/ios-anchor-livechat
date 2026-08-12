@@ -34,6 +34,7 @@ final class FollowListViewModel: ObservableObject {
 
     private let pageSize: Int
     private var notificationObserver: NSObjectProtocol?
+    private var loadingSegments: Set<FollowSegment> = []
 
     init(initial: FollowSegment = .following, pageSize: Int = 20) {
         self.selectedSegment = initial
@@ -70,7 +71,9 @@ final class FollowListViewModel: ObservableObject {
 
     /// 加载首页（覆盖既有数据）。切 segment 第一次显示时调用。
     func loadFirstPage() async {
-        await load(reset: true)
+        // 已展示过内容时由 `.refreshable` 自带进度指示，保持当前列表/空态结构稳定。
+        // 否则 loadState 切到 loading 会替换承载 refreshable 的 ScrollView，导致请求被系统取消(-999)。
+        await load(reset: true, preservesVisibleState: currentState.loadState == .loaded)
     }
 
     /// 加载下一页（追加）。滚到底部时调用。
@@ -161,14 +164,18 @@ final class FollowListViewModel: ObservableObject {
         states[segment] = state
     }
 
-    private func load(reset: Bool) async {
+    private func load(reset: Bool, preservesVisibleState: Bool = false) async {
         let segment = selectedSegment
         var state = states[segment] ?? SegmentState()
-        if state.loadState.isLoading { return }
+        guard !loadingSegments.contains(segment) else { return }
+        loadingSegments.insert(segment)
+        defer { loadingSegments.remove(segment) }
 
         let nextPage = reset ? 1 : state.currentPage + 1
-        state.loadState = .loading
-        states[segment] = state
+        if !preservesVisibleState {
+            state.loadState = .loading
+            states[segment] = state
+        }
 
         do {
             let page = try await FollowListService.getUserFriend(
@@ -192,6 +199,13 @@ final class FollowListViewModel: ObservableObject {
             state.hasMore = page.hasMore
             state.loadState = .loaded
             states[segment] = state
+        } catch where GlobalErrorBannerNotify.isCancellation(error) {
+            // SwiftUI task 生命周期取消不是业务错误，不显示失败态，也不污染已有数据。
+            if !preservesVisibleState {
+                state.loadState = state.currentPage > 0 ? .loaded : .idle
+                states[segment] = state
+            }
+            logger.debug("load segment=\(segment.rawValue) cancelled")
         } catch let e as APIError {
             state.loadState = .error(String(format: L10n.profileLoadFailedFormat, L10n.commonNetworkError))
             states[segment] = state

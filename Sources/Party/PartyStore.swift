@@ -413,7 +413,7 @@ final class PartyStore: ObservableObject {
     /// 锁房、排麦申请或 MC Seat 接口。
     private var canUseAdvancedRoomManagement: Bool {
         let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
-            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.user != nil)
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
         return !UserTypeExperience.isPartyOnly(effectiveUserType)
     }
 
@@ -945,6 +945,25 @@ final class PartyStore: ObservableObject {
         roomState = .ended
 
     }
+
+    /// 认证已失效后的本地收尾。不得调用 exitRoom：新登录会等待本事务完成，但这里仍不应把
+    /// 空 token 或未来账号 token 用于旧房间业务请求。RTC、聊天室和全部房间内任务照常释放。
+    func resetForSessionEnd() async {
+        invalidateRoomEntry()
+        roomState = .leaving
+        endPartySessionDependencies(roomId: roomInfo?.id)
+        chat.clearDeferredMessages()
+        isMinimized = false
+        minimizedBridge.hide()
+        deactivateLocalSeatMediaForExit()
+        await rtc.leave()
+        WSHeartbeat.shared.clearPartyContext()
+        chat.leave()
+        resetState()
+        roomState = .ended
+        AppLogger.party.info("[PartyStore] session-end local cleanup completed")
+    }
+
     private func resetState() {
         // 小窗退出时 PartyRoomView 已卸载，不能依赖其 onDisappear 清理会话外资源。
         // 普通退房会先由视图清理一次；以下接口均幂等，集中在 Store 兜底所有退出路径。
@@ -1236,10 +1255,10 @@ final class PartyStore: ObservableObject {
         expressionListState = .loading
         do {
             let list = try await PartyAPI.getPartyRoomEmojis()
-            // 过滤：emojisList 为空的分类不显示（H5 侧默认过滤空 tab）
-            let nonEmpty = list.filter { !$0.emojisList.isEmpty }
-            expressionListState = .loaded(nonEmpty)
-            AppLogger.party.info("[PartyStore] expression list loaded classifications=\(nonEmpty.count, privacy: .public)")
+            // 服务端确认该接口只返回表情体系内容。保持分类与条目原始顺序和数量，
+            // 不按 index、类型、名称或内容过滤/重排。
+            expressionListState = .loaded(list)
+            AppLogger.party.info("[PartyStore] expression list loaded classifications=\(list.count, privacy: .public)")
         } catch {
             let msg = (error as? PartyAPIError)?.localizedDescription
                 ?? (error as? DecodingError).map { String(describing: $0) }
@@ -1265,11 +1284,6 @@ final class PartyStore: ObservableObject {
     func sendEmoji(_ item: PartyEmojiItem) {
         guard let myUserId = myUserIdString, !myUserId.isEmpty else {
             AppLogger.party.notice("[PartyStore] sendEmoji skip: no userId")
-            return
-        }
-        // Store 第二层防护：UI 隐藏不能替代业务入口 gate；权限在点击与发送之间变化时 fail closed。
-        if item.isPlayEmoji,
-           !PartyExpressionAvailability.canSendPlayEmoji {
             return
         }
         // 玩法 -11 门槛：仅上麦者可发（对齐 H5 `usePartyHooks.js:1783` `inPartyRole > 0`）
@@ -2440,7 +2454,7 @@ final class PartyStore: ObservableObject {
     /// 上下文，同一心跳同时刷新房间 TTL。
     private func updatePartyHeartbeatContext(roomId: String, seatIndex: Int) {
         let userType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
-            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.user != nil)
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
         if UserTypeExperience.isPartyOnly(userType),
            let loginUuid = SessionStore.shared.user?.loginUuid,
            !loginUuid.isEmpty {
@@ -4490,15 +4504,10 @@ extension PartyStore: PartyRoomChatManagerDelegate {
     func partyRoomChat(
         _ chat: PartyRoomChatManager,
         didReceiveEmoji payload: PartyEmojiPayload,
-        isPlay: Bool,
+        isPlay _: Bool,
         raw: NIMMessage
     ) {
         _ = raw
-        // Router 已提前拒绝；Store 再守一次，避免未来新增入口绕过消息路由层。
-        if isPlay,
-           !PartyExpressionAvailability.canReceivePlayEmoji(payload) {
-            return
-        }
         guard !isMinimized else { return }
         enqueueEmoji(seatUserId: payload.sendUserId, payload: payload)
         AppLogger.party.info("[PartyStore] emoji enqueued sender=\(payload.sendUserId, privacy: .public) emojiId=\(payload.emojiId, privacy: .public) queueSize=\(self.emojiQueueMap[payload.sendUserId]?.count ?? 0, privacy: .public)")

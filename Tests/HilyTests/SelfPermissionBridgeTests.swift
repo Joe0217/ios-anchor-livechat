@@ -149,6 +149,7 @@ final class SelfPermissionBridgeTests: XCTestCase {
         XCTAssertTrue(bridge.canBeautyStudioSnapshot)
         XCTAssertTrue(bridge.canProfileAlbumSnapshot)
         XCTAssertFalse(bridge.canPartyMusicSnapshot)
+        XCTAssertTrue(bridge.canProfileEditingSnapshot)
     }
 
     func test_userTypes_101To106_keepNewSensitiveCapabilitiesEnabled() {
@@ -179,6 +180,7 @@ final class SelfPermissionBridgeTests: XCTestCase {
             XCTAssertTrue(bridge.canBeautyStudioSnapshot, "userType \(userType) must retain beauty studio")
             XCTAssertTrue(bridge.canProfileAlbumSnapshot, "userType \(userType) must retain profile Album")
             XCTAssertTrue(bridge.canPartyMusicSnapshot, "userType \(userType) must retain Party music")
+            XCTAssertTrue(bridge.canProfileEditingSnapshot, "userType \(userType) must retain profile editing")
         }
     }
 
@@ -223,6 +225,31 @@ final class SelfPermissionBridgeTests: XCTestCase {
         }
     }
 
+    func test_userType107_logout_thenNormalAccountCannotBeOverwrittenByStalePublish() async {
+        let (bridge, session) = makeBridge()
+        sendSession(userType: 107, to: session)
+        session.send(.loggedOut)
+        sendSession(userType: 2, to: session)
+
+        XCTAssertEqual(bridge.effectiveUserTypeSnapshot, 2)
+        for feature in PermissionFeature.allCases {
+            XCTAssertTrue(
+                bridge.canUseSnapshot(feature),
+                "normal account snapshot must restore \(String(describing: feature))"
+            )
+        }
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        await MainActor.run {
+            XCTAssertTrue(bridge.isLoaded)
+            XCTAssertEqual(bridge.effectiveUserType, 2)
+            XCTAssertTrue(bridge.canCall)
+            XCTAssertTrue(bridge.canHomeDiscovery)
+            XCTAssertTrue(bridge.canDirectMessages)
+            XCTAssertTrue(bridge.canPartyVideo)
+        }
+    }
+
     func test_userType_normalTo107_immediatelyRevokesPartyVideoButKeepsParty() {
         let (bridge, session) = makeBridge()
         sendSession(userType: 2, to: session)
@@ -239,6 +266,22 @@ final class SelfPermissionBridgeTests: XCTestCase {
         XCTAssertFalse(bridge.canPartyLuckyNumberSnapshot)
         XCTAssertTrue(bridge.canPartyFreeGamesSnapshot)
         XCTAssertTrue(bridge.canProfileViewingSnapshot)
+    }
+
+    @MainActor
+    func test_synchronizeImmediatelyPublishesNewAccountBeforeReturning() {
+        let (bridge, _) = makeBridge()
+
+        bridge.synchronizeImmediately(PermissionSessionState(userType: 2, isAuthenticated: true))
+        XCTAssertTrue(bridge.canCall)
+        XCTAssertTrue(bridge.canHomeDiscovery)
+
+        bridge.synchronizeImmediately(PermissionSessionState(userType: 107, isAuthenticated: true))
+        XCTAssertEqual(bridge.effectiveUserType, 107)
+        XCTAssertFalse(bridge.canCall)
+        XCTAssertFalse(bridge.canHomeDiscovery)
+        XCTAssertFalse(bridge.canDirectMessages)
+        XCTAssertTrue(bridge.canParty)
     }
 
     func test_partyFreeInteractionPolicy_allowsOnlyFreePartyInteractions() {
@@ -299,6 +342,7 @@ final class SelfPermissionBridgeTests: XCTestCase {
             XCTAssertEqual(bridge.canBeautyStudio, bridge.canBeautyStudioSnapshot)
             XCTAssertEqual(bridge.canProfileAlbum, bridge.canProfileAlbumSnapshot)
             XCTAssertEqual(bridge.canPartyMusic, bridge.canPartyMusicSnapshot)
+            XCTAssertEqual(bridge.canProfileEditing, bridge.canProfileEditingSnapshot)
         }
     }
 

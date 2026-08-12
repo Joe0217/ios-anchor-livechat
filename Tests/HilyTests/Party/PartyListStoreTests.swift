@@ -19,6 +19,7 @@ import XCTest
 /// - pageError → refresh 从头拉 → test_refresh_fromPageError_resetsAndReloads
 /// - 参数透传 languageCode → test_serviceCall_transmitsLanguageCode
 /// - Cancel identity 不改 state（避免 dismount race）→ test_cancel_doesNotOverwriteState（隐含在 R-6a）
+/// - 账号/端点上下文变化立即清空，旧请求不得回写 → context isolation tests
 
 @MainActor
 final class PartyListStoreTests: XCTestCase {
@@ -364,6 +365,152 @@ final class PartyListStoreTests: XCTestCase {
         XCTAssertEqual(items[0].stableListId, "id_fresh")
     }
 
+    // MARK: - 会话 / 端点上下文隔离
+
+    func test_endpointDataContext_distinguishesAuditAndStandardWithinSameSession() {
+        let generation = UUID()
+
+        let audit = PartyEndpointDataContext.identifier(
+            sessionGeneration: generation,
+            usesAuditRoomEndpoints: true
+        )
+        let standard = PartyEndpointDataContext.identifier(
+            sessionGeneration: generation,
+            usesAuditRoomEndpoints: false
+        )
+
+        XCTAssertEqual(audit, "\(generation.uuidString):audit")
+        XCTAssertEqual(standard, "\(generation.uuidString):standard")
+        XCTAssertNotEqual(audit, standard)
+    }
+
+    func test_prepareForDataContext_changeImmediatelyClearsLoadedState() async {
+        let fake = FakePartyListService()
+        fake.responses = [.success([.mock(id: "audit-room")])]
+
+        let store = PartyListStore(service: fake, pageSize: 20)
+        XCTAssertTrue(store.prepareForDataContext("session-a:audit"))
+        store.startInitial()
+        await waitForState(store)
+        XCTAssertEqual(store.displayedRooms.map(\.stableListId), ["id_audit-room"])
+
+        XCTAssertTrue(store.prepareForDataContext("session-a:standard"))
+        XCTAssertEqual(store.state, .idle)
+        XCTAssertTrue(store.displayedRooms.isEmpty)
+        XCTAssertEqual(store.languages, [.all])
+        XCTAssertEqual(store.activeLanguageIndex, 0)
+        XCTAssertNil(store.myRoom)
+        XCTAssertFalse(store.didLoadMyRoom)
+    }
+
+    func test_prepareForDataContext_sameContextIsNoOp() async {
+        let fake = FakePartyListService()
+        fake.responses = [.success([.mock(id: "kept")])]
+
+        let store = PartyListStore(service: fake, pageSize: 20)
+        XCTAssertTrue(store.prepareForDataContext("session-a:standard"))
+        store.startInitial()
+        await waitForState(store)
+
+        XCTAssertFalse(store.prepareForDataContext("session-a:standard"))
+        XCTAssertEqual(store.displayedRooms.map(\.stableListId), ["id_kept"])
+    }
+
+    func test_contextChange_oldUncancellableResponseCannotOverwriteNewList() async {
+        let fake = FakePartyListService()
+        fake.responses = [
+            .uncancellableDelayThenSuccess([.mock(id: "old-audit")], delayNanos: 250_000_000),
+            .success([.mock(id: "new-standard")])
+        ]
+
+        let store = PartyListStore(service: fake, pageSize: 20)
+        store.prepareForDataContext("session-a:audit")
+        store.startInitial()
+        await waitForCallCount(1, in: fake)
+
+        store.prepareForDataContext("session-a:standard")
+        store.startInitial()
+        await waitForState(store)
+
+        guard case .loaded(let rooms, _) = store.state else {
+            return XCTFail("expected new context list, got \(store.state)")
+        }
+        XCTAssertEqual(rooms.map(\.stableListId), ["id_new-standard"])
+
+        try? await Task.sleep(nanoseconds: 350_000_000)
+        XCTAssertEqual(store.displayedRooms.map(\.stableListId), ["id_new-standard"])
+        XCTAssertEqual(fake.calls.count, 2)
+    }
+
+    func test_contextChange_standardToAuditRejectsOldUncancellableResponse() async {
+        let fake = FakePartyListService()
+        fake.responses = [
+            .uncancellableDelayThenSuccess([.mock(id: "old-standard")], delayNanos: 250_000_000),
+            .success([.mock(id: "new-audit")])
+        ]
+
+        let store = PartyListStore(service: fake, pageSize: 20)
+        store.prepareForDataContext("session-a:standard")
+        store.startInitial()
+        await waitForCallCount(1, in: fake)
+
+        store.prepareForDataContext("session-a:audit")
+        store.startInitial()
+        await waitForState(store)
+
+        XCTAssertEqual(store.displayedRooms.map(\.stableListId), ["id_new-audit"])
+        try? await Task.sleep(nanoseconds: 350_000_000)
+        XCTAssertEqual(store.displayedRooms.map(\.stableListId), ["id_new-audit"])
+        XCTAssertEqual(fake.calls.count, 2)
+    }
+
+    func test_refreshAsync_contextChangeDoesNotBlockNewContextOrApplyOldResponse() async {
+        let fake = FakePartyListService()
+        fake.responses = [
+            .uncancellableDelayThenSuccess([.mock(id: "old-standard")], delayNanos: 250_000_000),
+            .success([.mock(id: "new-audit")])
+        ]
+
+        let store = PartyListStore(service: fake, pageSize: 20)
+        store.prepareForDataContext("session-a:standard")
+        let oldRefresh = Task { await store.refreshAsync() }
+        await waitForCallCount(1, in: fake)
+
+        store.prepareForDataContext("session-a:audit")
+        await store.refreshAsync()
+
+        XCTAssertEqual(store.displayedRooms.map(\.stableListId), ["id_new-audit"])
+        XCTAssertEqual(fake.calls.count, 2)
+
+        await oldRefresh.value
+        XCTAssertEqual(store.displayedRooms.map(\.stableListId), ["id_new-audit"])
+    }
+
+    func test_contextChange_oldMyRoomResponseCannotOverwriteNewAccount() async {
+        let oldRoom = PartyMyRoomInfoWrapper(myRoom: PartyMyRoom(id: "old-room", roomStatus: 1))
+        let newRoom = PartyMyRoomInfoWrapper(myRoom: PartyMyRoom(id: "new-room", roomStatus: 1))
+        let provider = FakePartyMyRoomProvider(responses: [
+            .uncancellableDelayThenValue(oldRoom, delayNanos: 250_000_000),
+            .value(newRoom),
+        ])
+        let store = PartyListStore(
+            service: FakePartyListService(),
+            myRoomProvider: { await provider.fetch() }
+        )
+
+        store.prepareForDataContext("session-a:standard")
+        let oldLoad = Task { await store.loadMyRoomIfNeeded() }
+        await waitForMyRoomCallCount(1, in: provider)
+
+        store.prepareForDataContext("session-b:standard")
+        await store.loadMyRoomIfNeeded()
+        XCTAssertEqual(store.myRoom?.id, "new-room")
+
+        await oldLoad.value
+        XCTAssertEqual(store.myRoom?.id, "new-room")
+        XCTAssertTrue(store.didLoadMyRoom)
+    }
+
     // MARK: - 参数透传
 
     /// languageCode provider 值应传给 service
@@ -420,5 +567,23 @@ final class PartyListStoreTests: XCTestCase {
                 continue
             }
         }
+    }
+
+    private func waitForCallCount(_ count: Int, in fake: FakePartyListService) async {
+        for _ in 0..<300 {
+            if fake.calls.count >= count { return }
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("timed out waiting for \(count) service calls")
+    }
+
+    private func waitForMyRoomCallCount(_ count: Int, in fake: FakePartyMyRoomProvider) async {
+        for _ in 0..<300 {
+            if await fake.callCount >= count { return }
+            await Task.yield()
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("timed out waiting for \(count) My Room calls")
     }
 }

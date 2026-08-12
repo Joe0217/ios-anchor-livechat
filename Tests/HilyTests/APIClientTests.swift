@@ -77,6 +77,124 @@ final class APIClientTests: XCTestCase {
         XCTAssertFalse(headers["deviceId"]?.isEmpty ?? true)
     }
 
+    func testPost_sessionChangesWhileWaiting_cancelsBeforeSending() async {
+        let gate = APIClientTestGate()
+        let token = APIClientTestToken("account-a-token")
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.protocolClasses = [MockURLProtocol.self]
+        let client = APIClient(
+            session: URLSession(configuration: cfg),
+            waitUntilReachable: { await gate.wait() },
+            authTokenProvider: { token.value }
+        )
+        MockURLProtocol.handler = { req in
+            (Self.ok200(req.url!), Self.envelope(code: "0000", resultHex: nil))
+        }
+
+        let request = Task { try await client.post("/api/x") }
+        await gate.waitUntilSuspended()
+        token.value = "account-b-token"
+        await gate.open()
+
+        do {
+            _ = try await request.value
+            XCTFail("账号切换后旧请求应取消")
+        } catch is CancellationError {
+            // Expected: the old account request never reaches URLSession.
+        } catch {
+            XCTFail("expected CancellationError, got: \(error)")
+        }
+        XCTAssertNil(MockURLProtocol.lastRequest)
+    }
+
+    func testPost_explicitAnonymousTokenDoesNotFallBackAfterSessionChanges() async throws {
+        let gate = APIClientTestGate()
+        let token = APIClientTestToken("account-a-token")
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.protocolClasses = [MockURLProtocol.self]
+        let client = APIClient(
+            session: URLSession(configuration: cfg),
+            waitUntilReachable: { await gate.wait() },
+            authTokenProvider: { token.value }
+        )
+        MockURLProtocol.handler = { req in
+            (Self.ok200(req.url!), Self.envelope(code: "0000", resultHex: nil))
+        }
+
+        let request = Task { try await client.post("/api/user/checkApplyInfo", token: "") }
+        await gate.waitUntilSuspended()
+        token.value = "account-b-token"
+        await gate.open()
+        _ = try await request.value
+
+        let headers = MockURLProtocol.lastRequest?.allHTTPHeaderFields ?? [:]
+        XCTAssertEqual(headers["loginToken"] ?? "", "")
+        XCTAssertEqual(headers["anchorToken"] ?? "", "")
+    }
+
+    func testPost_oldResponseAfterSessionChangeDoesNotInvalidateNewSession() async {
+        let token = APIClientTestToken("account-a-token")
+        let cfg = URLSessionConfiguration.ephemeral
+        cfg.protocolClasses = [MockURLProtocol.self]
+        let client = APIClient(
+            session: URLSession(configuration: cfg),
+            waitUntilReachable: {},
+            authTokenProvider: { token.value }
+        )
+        let invalidated = expectation(description: "new session must not receive old 1004")
+        invalidated.isInverted = true
+        let observer = NotificationCenter.default.addObserver(
+            forName: .apiSessionInvalidated,
+            object: nil,
+            queue: nil
+        ) { _ in
+            invalidated.fulfill()
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        MockURLProtocol.handler = { req in
+            token.value = "account-b-token"
+            let body = Data("{\"code\":\"1004\",\"message\":\"expired\",\"result\":null}".utf8)
+            return (Self.ok200(req.url!), body)
+        }
+
+        do {
+            _ = try await client.post("/api/x")
+            XCTFail("旧账号响应应在解析前取消")
+        } catch is CancellationError {
+            // Expected: no stale session-invalidated notification is posted.
+        } catch {
+            XCTFail("expected CancellationError, got: \(error)")
+        }
+        await fulfillment(of: [invalidated], timeout: 0.1)
+    }
+
+    func testAuthToken_clearRemovesLegacyTokenWithoutResurrection() {
+        let defaults = UserDefaults.standard
+        let tokenKey = "auth.token.v2"
+        let legacyKey = "auth.token.v1"
+        let originalToken = KeychainStore.getString(for: tokenKey)
+        let originalLegacy = defaults.string(forKey: legacyKey)
+        defer {
+            if let originalToken {
+                KeychainStore.setString(originalToken, for: tokenKey)
+            } else {
+                KeychainStore.remove(for: tokenKey)
+            }
+            if let originalLegacy {
+                defaults.set(originalLegacy, forKey: legacyKey)
+            } else {
+                defaults.removeObject(forKey: legacyKey)
+            }
+        }
+
+        AuthToken.value = nil
+        defaults.set("legacy-account-a-token", forKey: legacyKey)
+        AuthToken.value = nil
+
+        XCTAssertNil(defaults.string(forKey: legacyKey))
+        XCTAssertNil(AuthToken.value)
+    }
+
     // MARK: - \u{54cd}\u{5e94} envelope \u{89e3}\u{6790}
 
     func testPost_successWithEncryptedResult_returnsDecryptedJSON() async throws {
@@ -200,5 +318,51 @@ final class APIClientTests: XCTestCase {
         guard let base64 = CryptoUtil.aesEncryptToBase64(plain),
               let data = Data(base64Encoded: base64) else { return nil }
         return data.map { String(format: "%02x", $0) }.joined()
+    }
+}
+
+private actor APIClientTestGate {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var isSuspended = false
+    private var isOpen = false
+
+    func wait() async {
+        guard !isOpen else { return }
+        isSuspended = true
+        await withCheckedContinuation { continuation = $0 }
+    }
+
+    func waitUntilSuspended() async {
+        while !isSuspended {
+            await Task.yield()
+        }
+    }
+
+    func open() {
+        isOpen = true
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
+private final class APIClientTestToken {
+    private let lock = NSLock()
+    private var storage: String?
+
+    init(_ value: String?) {
+        storage = value
+    }
+
+    var value: String? {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return storage
+        }
+        set {
+            lock.lock()
+            storage = newValue
+            lock.unlock()
+        }
     }
 }

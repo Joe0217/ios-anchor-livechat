@@ -1,44 +1,11 @@
 import Foundation
 
-enum PartyExpressionAvailability {
-    /// 表情面板是 107 明确保留的基础互动。它与 Party PK、半屏游戏等能力分开，
-    /// 因此固定 107 也允许发送服务端下发的玩法表情。
-    static var canSendPlayEmoji: Bool {
-        #if HILY_TESTS
-        return true
-        #else
-        return SelfPermissionBridge.shared.canPartyGamesSnapshot || isPartyOnlySession
-        #endif
-    }
-
-    /// 接收端与发送端保持一致，避免 107 能发送却看不到自己或他人的表情结果。
-    static func canReceivePlayEmoji(_ payload: PartyEmojiPayload) -> Bool {
-        _ = payload
-        #if HILY_TESTS
-        return true
-        #else
-        return SelfPermissionBridge.shared.canPartyGamesSnapshot || isPartyOnlySession
-        #endif
-    }
-
-    /// 面板布局用账号形态。权限桥首帧尚未发布时仍按固定 107 fail closed。
-    static var isPartyOnlySession: Bool {
-        #if HILY_TESTS
-        return false
-        #else
-        let isAuthenticated = AuthToken.value.map { !$0.isEmpty } ?? false
-        let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
-            ?? UserTypeExperience.effectiveUserType(isAuthenticated: isAuthenticated)
-        return UserTypeExperience.isPartyOnly(effectiveUserType)
-        #endif
-    }
-}
-
 /// 派对房表情面板数据模型（F 里程碑 · 对齐 H5 蓝本 `party-expression-popup.vue` +
 /// `livechat-h5/src/api/pay/index.ts:4-20` `PartyEmojiClassification` / `PartyEmojiItem`）。
 ///
 /// 面板结构 = 分类列表（`classType/coverImage/emojisList`） × 每分类内 emoji 数组
 /// （`id/minImage/gifImage/playType/resultImages`）。
+/// 服务端确认所有分类均为表情内容；数组顺序就是展示顺序，不推断或过滤所谓“游戏 tab”。
 ///
 /// **静态 vs 玩法区分**（对齐 H5 `constant/party.ts:30-37` `isPartyPlayEmoji`）：
 /// - `playType` 空/nil/"normal" → 静态表情 → IM attachType `-10` (`.emojiStatic`)

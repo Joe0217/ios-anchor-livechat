@@ -25,11 +25,14 @@ struct RootView: View {
                 LoginView()
             } else if isAgency {
                 AgencyLoginUnsupportedView { session.logout() }
+                    .id(session.sessionGeneration)
             } else if isRestricted {
                 // 缺失角色字段时 fail-closed，防止不完整登录响应放行未审核账号。
                 RestrictedTabView()
+                    .id(session.sessionGeneration)
             } else {
                 MainTabView(initialSelection: UserTypeExperience.isPartyOnly(effectiveUserType) ? .party : .home)
+                    .id(session.sessionGeneration)
             }
 
             // 直播私 call 由 LiveRoomView 持有的 CallView 展示，并注入直播相机。
@@ -167,10 +170,10 @@ struct RootView: View {
         .appLocaleEnvironment()
     }
 
-    /// 当前包固定为 107；权限桥尚未发布首帧时也不回退读取真实 userType。
+    /// 根路由只读取当前认证会话。权限桥负责下游能力发布，但切号时可能短暂保留上一账号
+    /// 的发布快照，不能反向决定新账号的首屏模式。
     private var effectiveUserType: Int? {
-        permission.effectiveUserTypeSnapshot
-            ?? UserTypeExperience.effectiveUserType(isAuthenticated: session.isLoggedIn)
+        UserTypeExperience.effectiveUserType(userInfo: session.user)
     }
 
     /// 完整主播、权限矩阵账号和 Party-only 角色可进入主界面。
@@ -194,35 +197,95 @@ struct RootView: View {
 
     /// 角色能力变化时也要重新同步主播能力。
     private var sessionCapabilityKey: String {
-        let user = session.user
-        return "\(session.isLoggedIn)-\(user?.userId ?? -1)-\(effectiveUserType ?? -1)"
+        let context = currentSessionCapabilityContext
+        return "\(context.generation.uuidString)-\(context.isLoggedIn)-\(context.userID ?? -1)-\(context.effectiveUserType ?? -1)"
+    }
+
+    /// RootView 的异步能力编排会跨 token、RTC 和配置请求。只用 userId 无法区分同账号
+    /// 退出后重新登录，也无法阻止旧模式任务在权限切换后继续落地副作用。
+    private struct SessionCapabilityContext: Equatable {
+        let generation: UUID
+        let isLoggedIn: Bool
+        let userID: Int?
+        let effectiveUserType: Int?
+
+        var canEnterMainApp: Bool {
+            UserTypeExperience.canEnterMainApp(effectiveUserType)
+        }
+
+        var hasFullHostRealtimeCapability: Bool {
+            UserTypeExperience.hasFullHostRealtimeCapability(effectiveUserType)
+        }
+
+        var isPartyOnly: Bool {
+            UserTypeExperience.isPartyOnly(effectiveUserType)
+        }
+
+        var canCall: Bool {
+            hasFullHostRealtimeCapability
+                && !UserPermissionMapping.blocked(for: effectiveUserType).contains(.call)
+        }
+    }
+
+    private var currentSessionCapabilityContext: SessionCapabilityContext {
+        SessionCapabilityContext(
+            generation: session.sessionGeneration,
+            isLoggedIn: session.isLoggedIn,
+            userID: session.user?.userId,
+            effectiveUserType: effectiveUserType
+        )
+    }
+
+    /// `.task(id:)` 会取消旧任务，但网络/SDK await 不一定响应协作取消；因此每个 await 后
+    /// 仍需对权威 SessionStore 快照做显式复核。
+    private func isCurrent(_ context: SessionCapabilityContext) -> Bool {
+        !Task.isCancelled && currentSessionCapabilityContext == context
     }
 
     /// 登录态连接同步：NIM 保留给受限页客服聊天和 Party-only 会话；
     /// 只有完整主播角色才启动主播专属实时能力。
     private func syncSessionDependent() async {
-        if session.isLoggedIn, let user = session.user {
+        let context = currentSessionCapabilityContext
+        guard isCurrent(context) else { return }
+
+        if context.isLoggedIn, let user = session.user {
             session.synchronizePermissionScopedServices()
+            // 权限可在已进房/小窗期间动态切换。两种方向都要同步 RTC：
+            // 降为 107 时停视频，恢复完整权限时重开远端订阅并重新绑定视频麦画布。
+            PartyStore.shared.refreshPartyVideoCapability()
             // 受限页仍需 NIM 联系管理员、接收 attachType=58；但其他主播实时能力全部关闭。
-            guard hasFullHostRealtimeCapability else {
+            guard context.hasFullHostRealtimeCapability else {
+                // 页面可能已因最小化卸载。107 的音乐、活动和完整主播定时器必须在第一个
+                // await 之前同步撤销，不能给旧的全功能任务留下继续播放/触发的窗口。
+                AutoOfflineMonitor.shared.stop()
+                warmupTask?.cancel()
+                warmupTask = nil
+                if context.isPartyOnly {
+                    PartyStore.shared.disableRoomMusicForPermissionRevocation()
+                    PartyStore.shared.suspendPartyActivitiesForRestrictedRole()
+                }
                 if let account = user.yxAccid, !account.isEmpty,
                    let token = user.imToken, !token.isEmpty {
                     NIMOnlineKeeper.shared.start(account: account, token: token)
                 }
-                Task { try? await SapiTokenStore.shared.ensureValid() }
+                Task { @MainActor in
+                    guard isCurrent(context) else { return }
+                    try? await SapiTokenStore.shared.ensureValid()
+                }
                 // Party-only 角色保留 Party 的 RTC/NIM 会话和 chat router；其他受限角色沿用完整清理。
-                await stopHostCapabilities(preservingPartySession: canEnterMainApp)
+                await stopHostCapabilities(
+                    preservingPartySession: context.canEnterMainApp,
+                    context: context
+                )
+                guard isCurrent(context) else { return }
                 // Party-only 角色不在登录时常驻 WS；但正在 Party 房时必须立刻恢复带 roomId 的心跳，
                 // 否则后端的 30s Party TTL 会把本端强制下麦。
-                if canEnterMainApp {
+                if context.canEnterMainApp {
                     // PartyRoomView 在小窗态已卸载，不能依赖页面级权限观察来停止热门/周任务。
                     // 保留普通 Party 会话，但立即撤销活动任务的后台网络与人脸校验链路。
                     PartyStore.shared.suspendPartyActivitiesForRestrictedRole()
-                    // PartyRoomView 在小窗态已经卸载，不能依赖其 onChange 撤销已有 RTC 视频订阅。
-                    // 角色从完整主播动态降为 Party-only 时，在根级同步中收敛为纯语音 Party 会话。
-                    PartyStore.shared.refreshPartyVideoCapability()
                     // 固定 107 模式登录期间持续维持空闲在线；Party 房上下文由 PartyStore 另行补入。
-                    if UserTypeExperience.isPartyOnly(effectiveUserType),
+                    if context.isPartyOnly,
                        let loginUuid = user.loginUuid,
                        !loginUuid.isEmpty {
                         WSHeartbeat.shared.startPartyOnly(loginUuid: loginUuid)
@@ -231,6 +294,8 @@ struct RootView: View {
                 }
                 return
             }
+            guard isCurrent(context) else { return }
+            MatchStore.shared.activateSession(userID: user.userId)
             // GiftEffect 引擎冷启：Window + install 生产 router + 5s 后 warmup SVGA parser
             if let scene = UIApplication.shared.connectedScenes
                 .compactMap({ $0 as? UIWindowScene }).first {
@@ -247,11 +312,11 @@ struct RootView: View {
                 // iOS 16+ Duration API：类型安全避免 nanoseconds 位数手误漏 0 → runtime bug
                 // （对齐 code-review-discipline §9.5 正例）
                 try? await Task.sleep(for: .seconds(5))
-                guard !Task.isCancelled else { return }
+                guard isCurrent(context), context.hasFullHostRealtimeCapability else { return }
                 GiftEffectCenter.shared.warmupSVGA()
                 // 300ms 间隔避免两组 SDK 实例同时首次分配 GPU 资源 spike 内存
                 try? await Task.sleep(for: .milliseconds(300))
-                guard !Task.isCancelled else { return }
+                guard isCurrent(context), context.hasFullHostRealtimeCapability else { return }
                 EnterEffectCenter.shared.warmupSVGA()
             }
 
@@ -261,14 +326,21 @@ struct RootView: View {
             // sapi token 启动懒续（对齐 H5 App.vue:162-164 冷启动检查）：
             // ensureValid 内部走 needsRefresh 判定：距过期 <24h / 未取过 才真跑 exchange；否则 O(1) 命中缓存。
             // 与 applyLogin 尾部的 forceRefresh 并发：SapiTokenStore.runExchange 有 inflightExchange 合并，只会跑一次。
-            Task { try? await SapiTokenStore.shared.ensureValid() }
+            Task { @MainActor in
+                guard isCurrent(context) else { return }
+                try? await SapiTokenStore.shared.ensureValid()
+            }
             if let account = user.yxAccid, !account.isEmpty,
                let token = user.imToken, !token.isEmpty {
                 NIMOnlineKeeper.shared.start(account: account, token: token)
             }
-            if let uid = user.userId {
+            if context.canCall, let uid = user.userId {
                 await callStore.start(myUserId: uid)
+            } else {
+                // 101/104/105 仍有其他完整主播能力，但不得保留上一模式的通话 RTM。
+                await callStore.stop(destroySharedAgoraEngine: false)
             }
+            guard isCurrent(context), context.hasFullHostRealtimeCapability else { return }
             // L 里程碑 #3a：CallStore 自动接听判定 —— 匹配态收到 videoCall 直接 accept 不弹浮层
             callStore.isMatchActive = { MatchStore.shared.state == .matching }
             // L 里程碑 U3/U4：CallStore + NIM observer bridge 挂载（登录后一次）
@@ -288,10 +360,19 @@ struct RootView: View {
 
             // 长时间无操作自动离线：拉配置后启动（服务端 max_no_use_app_reminder_time > 0 才启用）
             let minutes = await AppConfigService.fetchAutoOfflineReminderMinutes()
+            guard isCurrent(context), context.hasFullHostRealtimeCapability else { return }
             AutoOfflineMonitor.shared.start(reminderMinutes: minutes)
         } else {
             NIMOnlineKeeper.shared.stop()
-            await stopHostCapabilities()
+            WSHeartbeat.shared.stop()
+            AutoOfflineMonitor.shared.stop()
+            warmupTask?.cancel()
+            warmupTask = nil
+            GiftEffectCenter.shared.reset()
+            EnterEffectCenter.shared.reset()
+            GiftEffectOverlayWindow.shared.hide()
+            // SessionStore 持有唯一清理事务；下一次 login/applyLogin 也会等待同一个 task。
+            await session.waitForRuntimeCleanup()
         }
     }
 
@@ -299,34 +380,48 @@ struct RootView: View {
     ///
     /// `preservingPartySession` 仅用于 Party-only 角色：它必须关闭完整主播能力，同时保留 Party 房和
     /// 对应 IM router。Party、直播和通话共用声网进程级单例，因此该分支也不能销毁该引擎。
-    private func stopHostCapabilities(preservingPartySession: Bool = false) async {
+    private func stopHostCapabilities(
+        preservingPartySession: Bool = false,
+        context: SessionCapabilityContext
+    ) async {
+        guard isCurrent(context) else { return }
         WSHeartbeat.shared.stop()
-        // 先结束所有活跃媒体。CallStore.stop() 会销毁共享 Agora 引擎，必须最后执行，
-        // 否则直播/机器人播报/派对房来不及正常 leave。
-        MatchStore.shared.stopForSessionEnd()
-        await LiveSessionRegistry.shared.stopForSessionEnd()
-        await robotCallStore.resetForSessionEnd()
-        if !preservingPartySession {
-            await PartyStore.shared.forceLeaveRoom(.userRequest)
-            PartyStore.shared.detachChatRouter()
-        }
-
-        // Party 私 call 被角色降级中断时，PartyStore 仍处于 .joined 但 RTC 已为私 call 离开。
-        // 先让 CallStore 释放通话，再重新加入原 Party 房；不能依赖其异步 observer，因为 stop()
-        // 会立即清空 current。
-        let shouldResumePartyAfterStoppingCall = preservingPartySession
-            && callStore.current.frontGameType == .party
-            && PartyStore.shared.roomState == .joined
-        await callStore.stop(destroySharedAgoraEngine: !preservingPartySession)
-        if shouldResumePartyAfterStoppingCall {
-            await PartyStore.shared.resumeParty()
-        }
         AutoOfflineMonitor.shared.stop()
         warmupTask?.cancel()
         warmupTask = nil
         GiftEffectCenter.shared.reset()
         EnterEffectCenter.shared.reset()
         GiftEffectOverlayWindow.shared.hide()
+        // 立即作废 token/RTM 登录和网络重试；共享 RTC 的 leave 顺序仍留给下方完整清理。
+        callStore.invalidatePendingStart()
+        // 先结束所有活跃媒体。CallStore.stop() 会销毁共享 Agora 引擎，必须最后执行，
+        // 否则直播/机器人播报/派对房来不及正常 leave。
+        MatchStore.shared.stopForSessionEnd()
+        await LiveSessionRegistry.shared.stopForSessionEnd()
+        // 即使这里切入了新账号，剩余 CallStore/RTC 清理也要执行；CallStore 自身会按 epoch
+        // 延迟新账号 start。只跳过会影响 Party 新会话的后续副作用。
+        await robotCallStore.resetForSessionEnd()
+        if !preservingPartySession,
+           isCurrent(context) {
+            await PartyStore.shared.forceLeaveRoom(.userRequest)
+            if isCurrent(context) {
+                PartyStore.shared.detachChatRouter()
+            }
+        }
+
+        // Party 私 call 被角色降级中断时，PartyStore 仍处于 .joined 但 RTC 已为私 call 离开。
+        // 先让 CallStore 释放通话，再重新加入原 Party 房；不能依赖其异步 observer，因为 stop()
+        // 会立即清空 current。
+        let shouldResumePartyAfterStoppingCall = isCurrent(context)
+            && preservingPartySession
+            && callStore.current.frontGameType == .party
+            && PartyStore.shared.roomState == .joined
+        await callStore.stop(destroySharedAgoraEngine: !preservingPartySession)
+        guard isCurrent(context) else { return }
+        if shouldResumePartyAfterStoppingCall {
+            await PartyStore.shared.resumeParty()
+            guard isCurrent(context) else { return }
+        }
     }
 }
 

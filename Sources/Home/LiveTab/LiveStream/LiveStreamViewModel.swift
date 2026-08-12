@@ -29,6 +29,12 @@ final class LiveStreamViewModel: ObservableObject {
 
     /// 进行中的 detached task 引用——避免 refreshable / view cancel 传播到 URLSession。
     private var inflightTask: Task<Void, Never>?
+    private var inflightTaskID: UUID?
+
+    /// Home 是 keep-alive 子树，数据必须绑定到建立该请求的登录会话。
+    /// 仅依赖 View dismount 不足以隔离快速退出/重登时的迟到响应。
+    private var sessionGeneration: UUID?
+    private var dataGeneration: Int = 0
 
     init(service: LiveStreamServiceProtocol = LiveStreamService.shared,
          firstPageSize: Int = 6,
@@ -46,6 +52,26 @@ final class LiveStreamViewModel: ObservableObject {
     }
 
     // MARK: - Actions
+
+    /// 为当前登录会话准备数据上下文。会话变化时不保留上个账号的
+    /// 列表、分页位置或 loading 态；所有旧请求在落地前都会核对代际。
+    @discardableResult
+    func prepareForSession(_ generation: UUID) -> Bool {
+        guard sessionGeneration != generation else { return false }
+        sessionGeneration = generation
+        dataGeneration &+= 1
+        loadGeneration &+= 1
+
+        inflightTask?.cancel()
+        inflightTask = nil
+        inflightTaskID = nil
+        items = []
+        loadState = .idle
+        hasMore = true
+        currentPage = 0
+        logger.info("session context reset generation=\(generation.uuidString, privacy: .private)")
+        return true
+    }
 
     /// 拉首页（首次进入 / 下拉刷新触发）。
     func loadFirstPage() async {
@@ -77,18 +103,27 @@ final class LiveStreamViewModel: ObservableObject {
             logger.info("performLoad skip: already loading reset=\(reset)")
             return
         }
-        let task = Task.detached { @MainActor [self] in
-            await doLoad(reset: reset)
+        let expectedDataGeneration = dataGeneration
+        let taskID = UUID()
+        let task = Task.detached { @MainActor [weak self] in
+            guard let self else { return }
+            await self.doLoad(reset: reset, expectedDataGeneration: expectedDataGeneration)
         }
         inflightTask = task
+        inflightTaskID = taskID
         await task.value
-        inflightTask = nil
+        // 会话切换后可能已有新 task。旧 await 返回时不能把新引用清空。
+        if inflightTaskID == taskID {
+            inflightTask = nil
+            inflightTaskID = nil
+        }
     }
 
-    private func doLoad(reset: Bool) async {
+    private func doLoad(reset: Bool, expectedDataGeneration: Int) async {
+        guard expectedDataGeneration == dataGeneration else { return }
         if reset {
             loadState = .loadingFirstPage
-            loadGeneration += 1
+            loadGeneration &+= 1
         } else {
             guard hasMore else { return }
             loadState = .loadingMore
@@ -100,8 +135,9 @@ final class LiveStreamViewModel: ObservableObject {
 
         do {
             let page = try await service.fetchLiveList(currentPage: nextPage, pageSize: usedSize)
-            guard snapshotGen == loadGeneration else {
-                logger.info("load discard: gen expired snap=\(snapshotGen) cur=\(self.loadGeneration)")
+            guard expectedDataGeneration == dataGeneration,
+                  snapshotGen == loadGeneration else {
+                logger.info("load discard: context/load generation expired")
                 return
             }
 
@@ -126,11 +162,17 @@ final class LiveStreamViewModel: ObservableObject {
             loadState = .loaded
             logger.info("load applied reset=\(reset) items=\(self.items.count) hasMore=\(self.hasMore)")
         } catch let e as APIError {
-            guard snapshotGen == loadGeneration else { return }
+            guard expectedDataGeneration == dataGeneration,
+                  snapshotGen == loadGeneration else { return }
             loadState = .error(e.message)
             logger.error("load APIError code=\(e.code) message=\(e.message, privacy: .public)")
         } catch {
-            guard snapshotGen == loadGeneration else { return }
+            guard expectedDataGeneration == dataGeneration,
+                  snapshotGen == loadGeneration else { return }
+            if GlobalErrorBannerNotify.isCancellation(error) {
+                loadState = currentPage > 0 ? .loaded : .idle
+                return
+            }
             loadState = .error(networkErrorFallback)
             logger.error("load error: \(String(describing: error), privacy: .public)")
         }

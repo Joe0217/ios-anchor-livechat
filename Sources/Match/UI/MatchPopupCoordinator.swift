@@ -46,12 +46,12 @@ final class MatchPopupCoordinator: ObservableObject {
 
     /// MainTabView.onAppear 调用（登录后每次 tab 挂载）
     func start() {
+        let userID = MatchStore.shared.activeUserID
         // 跨自然日检查：若 tipShownDate 不是今天 → 重置 noReminder（对齐 H5 c-goMatch.vue:461-462）
-        let persisted = MatchPersistedStore.load()
+        let persisted = MatchPersistedStore.load(userID: userID)
         if MatchDateHelper.isFirstToday(savedDate: persisted.tipShownDate) {
             // 隔日重置
-            MatchPersistedStore.saveTodayNoReminderChecked(false)
-            MatchPersistedStore.saveTipShownDate(MatchDateHelper.todayString())
+            MatchStore.shared.resetTodayNoReminderForNewDay()
         }
 
         // 启动 timer
@@ -66,6 +66,14 @@ final class MatchPopupCoordinator: ObservableObject {
         timerTask = nil
         isShowing = false
         logger.info("MatchPopupCoordinator stopped by capability gate")
+    }
+
+    func resetForLogout() {
+        stop()
+        appHidden = false
+        blockedByOtherPage = false
+        partyTabBlocked = false
+        userOnline = true
     }
 
     /// scenePhase 观察：app hidden/active 变化时更新

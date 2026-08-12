@@ -1,9 +1,17 @@
 import Foundation
 
+/// Party 列表请求会按审核模式选择不同端点。即使登录会话未变化，端点模式变化也必须
+/// 产生新的数据上下文，避免旧端点的缓存或迟到响应落入当前页面。
+enum PartyEndpointDataContext {
+    static func identifier(sessionGeneration: UUID, usesAuditRoomEndpoints: Bool) -> String {
+        "\(sessionGeneration.uuidString):\(usesAuditRoomEndpoints ? "audit" : "standard")"
+    }
+}
+
 /// 派对房大厅列表状态机（E 期 Step 1a，spec §2/§7）。
 ///
-/// **架构**：view-owned `@StateObject`（挂 PartyTabRootView）。tab 销毁重建时 store 随之 deinit，
-/// deinit 里 cancel currentTask（spec §7 F-23）。**不做** shared 单例（spec §6B F-02 拍板）。
+/// **架构**：view-owned `@StateObject`（挂 PartyTabRootView）。Party tab keep-alive 期间通过
+/// `prepareForDataContext` 隔离账号/端点，最终 deinit 时取消全部任务。**不做** shared 单例。
 ///
 /// **状态机 6 态 + cancel 边**（spec §2）：
 /// - `idle` → startInitial → `loading`
@@ -98,8 +106,8 @@ final class PartyListStore: ObservableObject {
     /// **已成功解析一次 myRoom 拉取**。View 层用来 gate 浮动按钮渲染 ——
     /// 网络错误不能视为“没有房间”，否则会错误显示 Create Room；未解析前一律隐藏入口。
     @Published private(set) var didLoadMyRoom = false
-    /// 拉取进行中 dedup flag（独立于 didLoadMyRoom 语义）
-    private var isLoadingMyRoom = false
+    /// 当前上下文中正在拉取 My Room 的代际；账号/接口模式变化后旧代际不能阻塞新请求。
+    private var myRoomLoadingGeneration: Int?
 
     /// 本 Store 服务的 tab 类型（.party 主大厅 / .followed 关注 / .recent 最近）。
     let kind: PartyRoomListKind
@@ -107,14 +115,28 @@ final class PartyListStore: ObservableObject {
     private let service: PartyListService
     private let pageSize: Int
     private let languageCodeProvider: () -> String?
+    private let languageListProvider: () async throws -> [PartyLanguage]
+    private let myRoomProvider: () async throws -> PartyMyRoomInfoWrapper?
 
     private var currentTask: Task<Void, Never>?
+    private var currentTaskID: UUID?
+    /// My Room 使用 detached task 避免 SwiftUI `.refreshable` 取消传播；仍需单独持有，
+    /// 以便账号/端点变化和 deinit 时主动停止旧请求。
+    private var myRoomTask: Task<Void, Never>?
+    private var myRoomTaskID: UUID?
 
-    /// refreshAsync 独立 inflight 标记（v3：与 currentTask 解耦）。
+    /// refreshAsync 独立 inflight 标记（v3：与 currentTask 解耦）。按数据代际记录，
+    /// 账号/接口模式变化时旧 refresh 不会阻塞新上下文首拉。
     /// 修复 P1：原 inflight guard 用 `currentTask != nil` 判断，`beginLoadMore` 完成不清 nil →
     /// loadMore 后调 refreshAsync 误把已完成的 loadMore task 当 inflight → `.value` 立即返回 →
     /// spinner 一闪即收。改为独立 flag：refresh 只 gate 自己，不受 loadMore 生命周期影响。
-    private var isRefreshing = false
+    private var refreshingGeneration: Int?
+
+    /// Party 大厅是 keep-alive view，不能把 View 销毁当作账号隔离边界。
+    /// context 变化会清空可见数据并递增代际，所有飞行请求落地前都必须复核。
+    private var dataContext: String?
+    private var dataGeneration = 0
+    private var languageLoadingGeneration: Int?
 
     /// 当前已加载页面数（用于 offset 计算）。`loaded/pageError` 时表示已成功页数；`loadingMore` 时是"尝试中"。
     private var loadedPageCount: Int = 0
@@ -125,20 +147,70 @@ final class PartyListStore: ObservableObject {
         service: PartyListService,
         kind: PartyRoomListKind = .party,
         pageSize: Int = PartyListStore.defaultPageSize,
-        languageCodeProvider: @escaping () -> String? = { nil }
+        languageCodeProvider: @escaping () -> String? = { nil },
+        languageListProvider: @escaping () async throws -> [PartyLanguage] = {
+            #if HILY_TESTS
+            return []
+            #else
+            return try await PartyAPI.languageList()
+            #endif
+        },
+        myRoomProvider: @escaping () async throws -> PartyMyRoomInfoWrapper? = {
+            #if HILY_TESTS
+            return nil
+            #else
+            try await PartyAPI.getMyRoomAndFamilyInfo()
+            #endif
+        }
     ) {
         self.service = service
         self.kind = kind
         self.pageSize = pageSize
         self.languageCodeProvider = languageCodeProvider
+        self.languageListProvider = languageListProvider
+        self.myRoomProvider = myRoomProvider
     }
 
     deinit {
         // spec §7 F-23：view-owned @StateObject dismount 时确保网络任务不空转
         currentTask?.cancel()
+        myRoomTask?.cancel()
     }
 
     // MARK: - 公开入口
+
+    /// 切换登录会话或 Party 列表接口模式。与用户主动下拉刷新不同，这里必须立即清空旧数据，
+    /// 避免审核列表、上个账号的 Follow/Recent/My Room 在新上下文中继续可见。
+    /// - returns: true 表示上下文发生变化，调用方需要按当前可见状态重新加载。
+    @discardableResult
+    func prepareForDataContext(_ context: String) -> Bool {
+        guard dataContext != context else { return false }
+        dataContext = context
+        dataGeneration &+= 1
+
+        currentTask?.cancel()
+        currentTask = nil
+        currentTaskID = nil
+        myRoomTask?.cancel()
+        myRoomTask = nil
+        myRoomTaskID = nil
+        refreshingGeneration = nil
+        languageLoadingGeneration = nil
+        myRoomLoadingGeneration = nil
+        loadedPageCount = 0
+
+        state = .idle
+        languages = [.all]
+        activeLanguageIndex = 0
+        didLoadLanguages = false
+        myRoom = nil
+        didLoadMyRoom = false
+        return true
+    }
+
+    func isPrepared(for context: String) -> Bool {
+        dataContext == context
+    }
 
     /// 首次进入 tab / 冷启动 / idle → 拉首页
     func startInitial() {
@@ -159,16 +231,22 @@ final class PartyListStore: ObservableObject {
     /// 2. **Task.detached**：请求生命周期与 SwiftUI view/refreshable Task 完全解耦——即便 refreshable
     ///    closure 被 SwiftUI cancel（页切走/body re-eval），URLSession 请求继续跑完再回填 state
     func refreshAsync() async {
+        let generation = dataGeneration
         // v3 inflight guard：只 gate refresh 自身，不受 loadMore/前置 startInitial 的 currentTask 生命周期影响
-        if isRefreshing {
+        if refreshingGeneration == generation {
             await currentTask?.value
             return
         }
-        isRefreshing = true
-        defer { isRefreshing = false }
+        refreshingGeneration = generation
+        defer {
+            if refreshingGeneration == generation {
+                refreshingGeneration = nil
+            }
+        }
 
         // 若前置有 startInitial/setLanguage 启动的 task_A 未完成，cancel 之避免与本次 refresh 并行写 state
         currentTask?.cancel()
+        currentTaskID = nil
 
         loadedPageCount = 0
         switch state {
@@ -182,11 +260,16 @@ final class PartyListStore: ObservableObject {
 
         let task = Task.detached { @MainActor [weak self] in
             guard let self else { return }
-            await self.performInitial()
+            await self.performInitial(generation: generation)
         }
+        let taskID = UUID()
         currentTask = task
+        currentTaskID = taskID
         await task.value
-        if currentTask == task { currentTask = nil }
+        if currentTaskID == taskID {
+            currentTask = nil
+            currentTaskID = nil
+        }
     }
 
     /// 上拉加载更多：仅 `.loaded` 有效；`loading/loadingMore/error/pageError` 时忽略（refresh 承担强夺）
@@ -212,12 +295,30 @@ final class PartyListStore: ObservableObject {
     /// 首次进入 Party tab 时拉一次语言列表。失败保留 [.all] 单项，本会话不重试。
     /// 对齐 H5 用户端 `stores/modules/party.js:1354 getLanguageList` 首项拼 All。
     func loadLanguagesIfNeeded() async {
-        guard !didLoadLanguages else { return }
+        let generation = dataGeneration
+        guard !didLoadLanguages, languageLoadingGeneration != generation else { return }
         didLoadLanguages = true
+        languageLoadingGeneration = generation
+        defer {
+            if languageLoadingGeneration == generation {
+                languageLoadingGeneration = nil
+            }
+        }
         do {
-            let list = try await PartyAPI.languageList()
+            let list = try await languageListProvider()
+            guard generation == dataGeneration else { return }
+            guard !Task.isCancelled else {
+                didLoadLanguages = false
+                return
+            }
             languages = [.all] + list
         } catch {
+            guard generation == dataGeneration else { return }
+            if Task.isCancelled || (error as? URLError)?.code == .cancelled {
+                // SwiftUI task 被页面切换取消不代表服务端已返回失败；下次激活需要重试。
+                didLoadLanguages = false
+                return
+            }
             // 保留 [.all]，静默；下次 tab 切回不重试（避免长期失败刷屏）
             languages = [.all]
         }
@@ -249,30 +350,54 @@ final class PartyListStore: ObservableObject {
     /// 之前 SwiftUI `.task(id: isPartyTabActive)` cancel 会传播到 URLSession → -999 cancelled
     /// → catch 后若置 didLoadMyRoom=true，会把网络错误误判为无房间并显示 Create Room
     func loadMyRoomIfNeeded() async {
-        guard !didLoadMyRoom, !isLoadingMyRoom else { return }
+        let generation = dataGeneration
+        guard !didLoadMyRoom, myRoomLoadingGeneration != generation else { return }
+        myRoomLoadingGeneration = generation
         let task = Task.detached { @MainActor [weak self] in
             guard let self else { return }
-            await self.performLoadMyRoom(clearOnFail: true)
+            await self.performLoadMyRoom(clearOnFail: true, generation: generation)
         }
+        let taskID = UUID()
+        myRoomTask = task
+        myRoomTaskID = taskID
         await task.value
+        if myRoomTaskID == taskID {
+            myRoomTask = nil
+            myRoomTaskID = nil
+        }
+        if myRoomLoadingGeneration == generation {
+            myRoomLoadingGeneration = nil
+        }
     }
 
     /// 手动重拉（如刚创建完房 pop 回大厅时）。已 loaded 时按钮已在，reload 期间保留旧值不清空避免闪。
     /// v7：同 loadMyRoomIfNeeded 用 Task.detached 隔离 —— 防 refreshable closure cancel 传播
     func reloadMyRoom() async {
-        guard !isLoadingMyRoom else { return }
+        let generation = dataGeneration
+        guard myRoomLoadingGeneration != generation else { return }
+        myRoomLoadingGeneration = generation
         let task = Task.detached { @MainActor [weak self] in
             guard let self else { return }
-            await self.performLoadMyRoom(clearOnFail: false)
+            await self.performLoadMyRoom(clearOnFail: false, generation: generation)
         }
+        let taskID = UUID()
+        myRoomTask = task
+        myRoomTaskID = taskID
         await task.value
+        if myRoomTaskID == taskID {
+            myRoomTask = nil
+            myRoomTaskID = nil
+        }
+        if myRoomLoadingGeneration == generation {
+            myRoomLoadingGeneration = nil
+        }
     }
 
-    private func performLoadMyRoom(clearOnFail: Bool) async {
-        isLoadingMyRoom = true
-        defer { isLoadingMyRoom = false }
+    private func performLoadMyRoom(clearOnFail: Bool, generation: Int) async {
+        guard generation == dataGeneration else { return }
         do {
-            let wrapper = try await PartyAPI.getMyRoomAndFamilyInfo()
+            let wrapper = try await myRoomProvider()
+            guard generation == dataGeneration, !Task.isCancelled else { return }
             if let r = wrapper?.myRoom, r.isVisible {
                 myRoom = r
             } else {
@@ -280,6 +405,7 @@ final class PartyListStore: ObservableObject {
             }
             didLoadMyRoom = true
         } catch {
+            guard generation == dataGeneration, !Task.isCancelled else { return }
             // v7：URLError -999 cancelled 是 SwiftUI Task cancel 传播（非真失败），不锁 didLoadMyRoom
             // 让下次 loadIfNeeded 能重试；防御性设计（detach 后理论上不再传播，但双保险）
             if let urlErr = error as? URLError, urlErr.code == .cancelled {
@@ -300,7 +426,9 @@ final class PartyListStore: ObservableObject {
     // MARK: - 内部 —— 状态迁移
 
     private func beginRefresh() {
+        let generation = dataGeneration
         currentTask?.cancel()
+        currentTaskID = nil
         loadedPageCount = 0
         // list-refresh-preserve-items rule：refresh 期保留已有 rooms 视觉，仅无数据时走 loading
         switch state {
@@ -314,23 +442,28 @@ final class PartyListStore: ObservableObject {
 
         currentTask = Task { [weak self] in
             guard let self else { return }
-            await self.performInitial()
+            await self.performInitial(generation: generation)
         }
+        currentTaskID = UUID()
     }
 
     private func beginLoadMore(currentRooms: [PartyRoomInfo]) {
+        let generation = dataGeneration
         currentTask?.cancel()
+        currentTaskID = nil
         state = .loadingMore(rooms: currentRooms)
 
         currentTask = Task { [weak self] in
             guard let self else { return }
-            await self.performLoadMore(currentRooms: currentRooms)
+            await self.performLoadMore(currentRooms: currentRooms, generation: generation)
         }
+        currentTaskID = UUID()
     }
 
     // MARK: - 内部 —— 执行
 
-    private func performInitial() async {
+    private func performInitial(generation: Int) async {
+        guard generation == dataGeneration else { return }
         // list-refresh-preserve-items：refresh 期失败也不能让 rooms 消失，先记录进入本次拉取时的 rooms 快照
         let preservedRooms: [PartyRoomInfo]? = {
             if case .refreshing(let rooms) = state { return rooms }
@@ -348,6 +481,7 @@ final class PartyListStore: ObservableObject {
                 version: "v2"
             )
             try Task.checkCancellation()
+            guard generation == dataGeneration else { return }
 
             loadedPageCount = 1
             let hasMore = rooms.count == pageSize
@@ -356,7 +490,7 @@ final class PartyListStore: ObservableObject {
             // 静默：view 已 dismount 或被 refresh 强夺
             return
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, generation == dataGeneration else { return }
             if let rooms = preservedRooms {
                 // refresh 失败 → 保留旧 rooms + 底部 banner（对齐 pageError 语义，用户可继续看列表 + retry）
                 state = .pageError(rooms: rooms, message: mapMessage(error))
@@ -366,7 +500,8 @@ final class PartyListStore: ObservableObject {
         }
     }
 
-    private func performLoadMore(currentRooms: [PartyRoomInfo]) async {
+    private func performLoadMore(currentRooms: [PartyRoomInfo], generation: Int) async {
+        guard generation == dataGeneration else { return }
         let offset = loadedPageCount * pageSize
         do {
             try Task.checkCancellation()
@@ -379,6 +514,7 @@ final class PartyListStore: ObservableObject {
                 version: "v2"
             )
             try Task.checkCancellation()
+            guard generation == dataGeneration else { return }
 
             loadedPageCount += 1
             let merged = currentRooms + page
@@ -387,7 +523,7 @@ final class PartyListStore: ObservableObject {
         } catch is CancellationError {
             return
         } catch {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, generation == dataGeneration else { return }
             state = .pageError(rooms: currentRooms, message: mapMessage(error))
         }
     }

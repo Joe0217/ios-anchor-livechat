@@ -89,7 +89,7 @@ struct ProfileHeaderView: View {
                     Text(vm.displayName)
                         .font(Theme.Typography.profileName)
                         .foregroundColor(Theme.Palette.profileName)
-                    if permission.canProfileSocial {
+                    if permission.canProfileEditing {
                         NavigationLink(value: ProfileRoute.editProfile) {
                             CDNAssetImage("profileEditIcon")
                                 .resizable()

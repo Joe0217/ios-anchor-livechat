@@ -177,6 +177,9 @@ final class UserProfileService: UserProfileServiceProtocol {
             giftList = rawList.compactMap(parseGift(from:))
         }
         let guardianList = GuardianResponseAdapter.profileGuardians(from: dict["guardianList"])
+        let picList = (dict["picList"] as? [Any] ?? [])
+            .compactMap { $0 as? [String: Any] }
+            .compactMap(parseMedia(from:))
 
         return UserDetail(
             userId: userId,
@@ -192,8 +195,34 @@ final class UserProfileService: UserProfileServiceProtocol {
             like: like,
             favorite: favorite,
             giftList: giftList,
-            guardianList: guardianList
+            guardianList: guardianList,
+            picList: picList
         )
+    }
+
+    static func parseMedia(from dict: [String: Any]) -> UserProfileMedia? {
+        guard let rawURL = dict["mediaUrl"] as? String else { return nil }
+        let url = rawURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !url.isEmpty else { return nil }
+        let assetId = flexibleInt(dict["id"])
+        let mediaType = flexibleInt(dict["mediaType"]) ?? 0
+        let vaild = flexibleInt(dict["vaild"])
+        return UserProfileMedia(assetId: assetId, mediaUrl: url, mediaType: mediaType,
+                                videoCover: dict["videoCover"] as? String, vaild: vaild)
+    }
+
+    /// JSONSerialization 将整数桥接为 NSNumber；后端同时存在数字字符串返回。
+    /// Bool 也是 NSNumber 子类，必须显式排除，避免 true 被误解成媒体类型 1。
+    private static func flexibleInt(_ raw: Any?) -> Int? {
+        if let number = raw as? NSNumber {
+            let type = String(cString: number.objCType)
+            guard type != "c", type != "B" else { return nil }
+            return number.intValue
+        }
+        if let value = raw as? String {
+            return Int(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        return nil
     }
 
     /// 解析单个礼物（H5 模板 `giftImg || icon` / `giftName` / `giftCount || num` 兼容）。

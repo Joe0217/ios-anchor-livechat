@@ -22,6 +22,7 @@ final class GiftMarqueeStore: ObservableObject {
 
     private let service: GiftMarqueeServiceProtocol
     private var inflightTask: Task<Void, Never>?
+    private var dataGeneration = 0
 
     init(service: GiftMarqueeServiceProtocol = GiftMarqueeService.shared) {
         self.service = service
@@ -48,6 +49,7 @@ final class GiftMarqueeStore: ObservableObject {
 
     /// 登出清空。
     func clear() {
+        dataGeneration &+= 1
         inflightTask?.cancel()
         inflightTask = nil
         items = []
@@ -57,23 +59,30 @@ final class GiftMarqueeStore: ObservableObject {
     // MARK: - private
 
     private func performReload() async {
+        let generation = dataGeneration
         let task = Task.detached { @MainActor [self] in
-            await doReload()
+            await doReload(generation: generation)
         }
         inflightTask = task
         await task.value
-        inflightTask = nil
+        if generation == dataGeneration, inflightTask == task {
+            inflightTask = nil
+        }
     }
 
-    private func doReload() async {
+    private func doReload(generation: Int) async {
+        guard generation == dataGeneration else { return }
         do {
             let list = try await service.fetchMarquee()
+            guard generation == dataGeneration, !Task.isCancelled else { return }
             items = list
             hasLoadedOnce = true
             logger.info("loaded marquee count=\(list.count)")
         } catch let e as APIError {
+            guard generation == dataGeneration, !Task.isCancelled else { return }
             logger.error("load APIError code=\(e.code) message=\(e.message, privacy: .public)")
         } catch {
+            guard generation == dataGeneration, !Task.isCancelled else { return }
             logger.error("load error: \(String(describing: error), privacy: .public)")
         }
     }

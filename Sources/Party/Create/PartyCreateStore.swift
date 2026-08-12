@@ -479,12 +479,13 @@ final class PartyCreateStore: ObservableObject {
         return true
         #else
         let permission = SelfPermissionBridge.shared
-        if permission.isLoaded {
-            return permission.canPartyVideoSnapshot
+        if let effectiveUserType = permission.effectiveUserTypeSnapshot {
+            return !UserPermissionMapping.blocked(for: effectiveUserType).contains(.partyVideo)
         }
-        // Bridge 的 Session 订阅在一个 MainActor Task 中装配；首帧同样固定按 107 推导。
-        guard SessionStore.shared.user != nil else { return false }
-        return !UserPermissionMapping.blocked(for: UserTypeExperience.fixedUserType).contains(.partyVideo)
+        // Bridge 的 Session 订阅在一个 MainActor Task 中装配；首帧直接读登录用户快照。
+        guard let user = SessionStore.shared.user else { return false }
+        let fallbackUserType = UserTypeExperience.effectiveUserType(userInfo: user)
+        return !UserPermissionMapping.blocked(for: fallbackUserType).contains(.partyVideo)
         #endif
     }
 }

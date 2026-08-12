@@ -35,6 +35,7 @@ private struct PartyLobbyRankingScrollOffsetMarker: View {
 struct PartyListMainView: View {
     @ObservedObject var listStore: PartyListStore
     @ObservedObject private var permission = SelfPermissionBridge.shared
+    @ObservedObject private var session = SessionStore.shared
     /// NavigationStack push 后大厅仍保活；仅根页真实可见时可以触发奖励引导。
     let isLobbyVisible: Bool
     /// Follow tab store（v2：跟 listStore 同类型，kind=.followed）
@@ -71,11 +72,17 @@ struct PartyListMainView: View {
     @State private var reportedLobbyExposureSessionID: UUID?
     @Environment(\.isPartyTabActive) private var isPartyTabActive
 
+    private struct LobbyLoadTaskKey: Hashable {
+        let isPartyTabActive: Bool
+        let dataContext: String
+    }
+
     private struct TopRoomGuideTaskKey: Hashable {
         let isPartyTabActive: Bool
         let isLobbyVisible: Bool
         let activeTab: Int
         let canPartyActivities: Bool
+        let dataContext: String
     }
 
     private var canShowValueRankings: Bool {
@@ -84,8 +91,25 @@ struct PartyListMainView: View {
 
     private var isPartyOnlyMode: Bool {
         let effectiveUserType = permission.effectiveUserTypeSnapshot
-            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.isLoggedIn)
+            ?? UserTypeExperience.effectiveUserType(userInfo: session.user)
         return UserTypeExperience.isPartyOnly(effectiveUserType)
+    }
+
+    /// Party 根页会 keep-alive，且列表端点会随审核模式动态切换。数据上下文同时包含
+    /// 会话代际和 PartyAPI 实际使用的端点模式，防止同一会话内跨端点复用列表。
+    private var lobbyDataContext: String {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? SessionStore.effectiveUserTypeSnapshot
+        return PartyEndpointDataContext.identifier(
+            sessionGeneration: session.sessionGeneration,
+            usesAuditRoomEndpoints: UserTypeExperience.isPartyOnly(effectiveUserType)
+        )
+    }
+
+    private var hasPreparedLobbyDataContext: Bool {
+        listStore.isPrepared(for: lobbyDataContext)
+            && followStore.isPrepared(for: lobbyDataContext)
+            && recentStore.isPrepared(for: lobbyDataContext)
     }
 
     /// 107 仅展示审核主列表，不能通过 Follow/Recent 进入普通房间列表接口。
@@ -113,28 +137,53 @@ struct PartyListMainView: View {
 
             VStack(spacing: 0) {
                 topBar
-                if activeTab == 0 {
-                    languagePillBar
-                    if permission.canPartyActivities {
-                        partyHomeBanner
+                if hasPreparedLobbyDataContext {
+                    if activeTab == 0 {
+                        languagePillBar
+                        if permission.canPartyActivities {
+                            partyHomeBanner
+                        }
                     }
+                    tabContent
+                } else {
+                    Color.clear
                 }
-                tabContent
             }
 
             // 等待 My Room 请求完成，避免先显示 Create Room 再切换为 My Room。
-            if listStore.didLoadMyRoom {
+            if hasPreparedLobbyDataContext, listStore.didLoadMyRoom {
                 anchorMyRoomButton
                     .transition(.opacity)
             }
         }
-        .task(id: isPartyTabActive) {
+        .task(id: LobbyLoadTaskKey(
+            isPartyTabActive: isPartyTabActive,
+            dataContext: lobbyDataContext
+        )) {
+            let context = lobbyDataContext
+            let mainContextChanged = listStore.prepareForDataContext(context)
+            let followContextChanged = followStore.prepareForDataContext(context)
+            let recentContextChanged = recentStore.prepareForDataContext(context)
+            let contextChanged = mainContextChanged || followContextChanged || recentContextChanged
+
+            if contextChanged {
+                activeTab = 0
+                activeBannerPage = nil
+                exposedBannerIDs.removeAll()
+                lobbyExposureSessionID = UUID()
+                reportedLobbyExposureSessionID = nil
+                homeBannerStore.resetForDataContext()
+            }
+
             guard isPartyTabActive else {
                 // 重新回到 Party 页时应产生一个新的大厅曝光，但同一次可见期间只报一次。
                 lobbyExposureSessionID = UUID()
                 reportedLobbyExposureSessionID = nil
                 return
             }
+            guard session.isLoggedIn, session.user != nil else { return }
+            let exposureTab = activeTab
+            let exposureSessionID = lobbyExposureSessionID
             // 首屏独立资源没有依赖，保持与列表并发；仅 Tab 曝光必须等待列表完成以判断 PK 标识。
             async let loadLanguages: Void = listStore.loadLanguagesIfNeeded()
             async let loadMyRoom: Void = listStore.loadMyRoomIfNeeded()
@@ -146,16 +195,23 @@ struct PartyListMainView: View {
             default:
                 break
             }
-            reportLobbyTabExposure(for: activeTab, sessionID: lobbyExposureSessionID)
+            guard !Task.isCancelled, context == lobbyDataContext else { return }
+            reportLobbyTabExposure(for: exposureTab, sessionID: exposureSessionID)
             _ = await (loadLanguages, loadMyRoom, loadBanners)
+            guard !Task.isCancelled, context == lobbyDataContext else { return }
             reportFirstBannerExposureIfNeeded()
         }
         .task(id: TopRoomGuideTaskKey(
             isPartyTabActive: isPartyTabActive,
             isLobbyVisible: isLobbyVisible,
             activeTab: activeTab,
-            canPartyActivities: permission.canPartyActivities
+            canPartyActivities: permission.canPartyActivities,
+            dataContext: lobbyDataContext
         )) {
+            topRoomGuideStore.prepareForDataContext(
+                lobbyDataContext,
+                userID: session.user?.userId
+            )
             guard permission.canPartyActivities else {
                 topRoomGuideStore.clearForDisabledActivities()
                 return
@@ -768,6 +824,12 @@ private final class PartyHomeBannerStore: ObservableObject {
 
     /// 权限撤销时清旧内容并失效飞行请求，防止 await 返回后把活动 banner 写回内存。
     func clearForDisabledActivities() {
+        resetForDataContext()
+    }
+
+    /// 登录会话或账号变化时无条件清理。完整账号切换到另一个完整账号时权限值不会变化，
+    /// 因此不能只依赖 `clearForDisabledActivities()` 的调用时机。
+    func resetForDataContext() {
         requestToken = UUID()
         didLoad = false
         items = []

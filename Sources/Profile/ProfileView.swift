@@ -57,7 +57,7 @@ struct ProfileView: View {
                 ProfileHeaderView(
                     vm: vm,
                     showsRelationships: permission.canRelationshipViewing,
-                    showsCompletionHint: permission.canProfileSocial
+                    showsCompletionHint: permission.canProfileEditing
                 )
 
                 ProfileBioView(bio: vm.bio)
@@ -216,7 +216,7 @@ struct ProfileView: View {
 
     private var isPartyOnlyMode: Bool {
         let effectiveUserType = permission.effectiveUserTypeSnapshot
-            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.isLoggedIn)
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
         return UserTypeExperience.isPartyOnly(effectiveUserType)
     }
 

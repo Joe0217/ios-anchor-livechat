@@ -377,6 +377,8 @@ struct PostPublishView: View {
     private func handlePickerItems(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
         let captured = items
+        // 立即清空系统选择绑定，避免加载失败/超尺寸时再次打开相册仍保留旧勾选。
+        pickerItems = []
         Task {
             for item in captured {
                 do {
@@ -394,9 +396,6 @@ struct PostPublishView: View {
                         viewModel.transientError = L10n.Publish.photoLoadFailed
                     }
                 }
-            }
-            await MainActor.run {
-                pickerItems = []  // 清空让用户可再次选
             }
         }
     }

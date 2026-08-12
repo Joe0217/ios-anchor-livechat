@@ -29,6 +29,12 @@ final class GiftCatalogCache: @unchecked Sendable {
         case call
     }
 
+    /// 网络请求开始前捕获，写入时复核。包含全会话和单场景两层代际。
+    struct WriteContext: Equatable {
+        fileprivate let generation: UInt64
+        fileprivate let sceneGeneration: UInt64
+    }
+
     /// 缓存条目：groups + balance + 时戳
     struct Entry {
         let groups: [GiftPanelGroup]
@@ -45,6 +51,8 @@ final class GiftCatalogCache: @unchecked Sendable {
 
     private let lock = NSLock()
     private var cache: [Scene: Entry] = [:]
+    private var generation: UInt64 = 0
+    private var sceneGenerations: [Scene: UInt64] = [:]
 
     private init() {}
 
@@ -60,9 +68,29 @@ final class GiftCatalogCache: @unchecked Sendable {
         return entry
     }
 
+    func writeContext(for scene: Scene) -> WriteContext {
+        lock.lock(); defer { lock.unlock() }
+        return WriteContext(
+            generation: generation,
+            sceneGeneration: sceneGenerations[scene] ?? 0
+        )
+    }
+
+    func isCurrent(_ context: WriteContext, for scene: Scene) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return context.generation == generation
+            && context.sceneGeneration == (sceneGenerations[scene] ?? 0)
+    }
+
     /// 写缓存：loadGifts 成功拿到 API 结果时调
-    func set(scene: Scene, groups: [GiftPanelGroup], userDiamond: Int64?) {
+    func set(scene: Scene, groups: [GiftPanelGroup], userDiamond: Int64?, context: WriteContext) {
         lock.lock()
+        guard context.generation == generation,
+              context.sceneGeneration == (sceneGenerations[scene] ?? 0) else {
+            lock.unlock()
+            logger.info("[GiftCache] discard stale set scene=\(scene.rawValue, privacy: .public)")
+            return
+        }
         cache[scene] = Entry(groups: groups, userDiamond: userDiamond, timestamp: Date())
         lock.unlock()
         logger.info("[GiftCache] set scene=\(scene.rawValue, privacy: .public) groups=\(groups.count, privacy: .public) userDiamond=\(userDiamond ?? -1, privacy: .public)")
@@ -82,8 +110,13 @@ final class GiftCatalogCache: @unchecked Sendable {
     }
 
     /// 仅更新余额（送礼成功后 sync；不重置 timestamp，避免延长 groups TTL）
-    func updateBalance(scene: Scene, userDiamond: Int64) {
+    func updateBalance(scene: Scene, userDiamond: Int64, context: WriteContext) {
         lock.lock(); defer { lock.unlock() }
+        guard context.generation == generation,
+              context.sceneGeneration == (sceneGenerations[scene] ?? 0) else {
+            logger.info("[GiftCache] discard stale balance scene=\(scene.rawValue, privacy: .public)")
+            return
+        }
         guard var entry = cache[scene] else { return }
         entry.userDiamond = userDiamond
         cache[scene] = entry
@@ -93,6 +126,7 @@ final class GiftCatalogCache: @unchecked Sendable {
     /// 精准 invalidate 单场景（下拉刷新用；未来面板加下拉手势时挂）
     func invalidate(scene: Scene) {
         lock.lock(); defer { lock.unlock() }
+        sceneGenerations[scene, default: 0] &+= 1
         cache.removeValue(forKey: scene)
         logger.info("[GiftCache] invalidate scene=\(scene.rawValue, privacy: .public)")
     }
@@ -100,6 +134,8 @@ final class GiftCatalogCache: @unchecked Sendable {
     /// 全清：logout / 切账号时调（避免 A 账号礼物架泄漏到 B）
     func clear() {
         lock.lock(); defer { lock.unlock() }
+        generation &+= 1
+        sceneGenerations.removeAll()
         cache.removeAll()
         logger.info("[GiftCache] cleared all")
     }

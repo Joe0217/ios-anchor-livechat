@@ -33,7 +33,16 @@ final class PartyAPIClient {
     ///   （用于业务侧已有独立处理的 code：如 ROOM_SEAT_IS_OCCUPIED 自动重拉对账、
     ///    ROOM_PASSWORD_WRONG 密码 sheet 内联、1019 diamond not enough 独立充值弹窗）
     func post(_ path: String, body: [String: Any]? = nil, suppressCodes: Set<String> = []) async throws -> Data {
-        try await send(method: "POST", path: path, body: body, query: nil, isRetry: false, suppressCodes: suppressCodes)
+        let authContext = APIRequestAuthContext(explicitToken: nil)
+        return try await send(
+            method: "POST",
+            path: path,
+            body: body,
+            query: nil,
+            isRetry: false,
+            suppressCodes: suppressCodes,
+            authContext: authContext
+        )
     }
 
     /// GET 请求（F-1a 2026-07-17 加：sapi 域部分端点强制 GET，如 party/battle/templates、
@@ -42,12 +51,31 @@ final class PartyAPIClient {
     /// GET 无 body 加密；query 参数拼到 URL；响应 envelope 同 POST（若后端 GET 也返
     /// `{code:'200', result: hex}` 走 result 解密；否则 result 若为 JSON dict/array 直接 return）。
     func get(_ path: String, query: [String: String]? = nil, suppressCodes: Set<String> = []) async throws -> Data {
-        try await send(method: "GET", path: path, body: nil, query: query, isRetry: false, suppressCodes: suppressCodes)
+        let authContext = APIRequestAuthContext(explicitToken: nil)
+        return try await send(
+            method: "GET",
+            path: path,
+            body: nil,
+            query: query,
+            isRetry: false,
+            suppressCodes: suppressCodes,
+            authContext: authContext
+        )
     }
 
-    private func send(method: String, path: String, body: [String: Any]?, query: [String: String]?, isRetry: Bool, suppressCodes: Set<String> = []) async throws -> Data {
+    private func send(
+        method: String,
+        path: String,
+        body: [String: Any]?,
+        query: [String: String]?,
+        isRetry: Bool,
+        suppressCodes: Set<String> = [],
+        authContext: APIRequestAuthContext
+    ) async throws -> Data {
+        try authContext.ensureCurrent()
         // 首次冷启动前等到系统「允许使用无线数据」权限对话框通过再发请求(10s 超时兜底走原错误路径)
         await NetworkReachability.shared.waitUntilReachable()
+        try authContext.ensureCurrent()
 
         // GET 请求：query 参数拼 URL
         var finalPath = path
@@ -68,17 +96,19 @@ final class PartyAPIClient {
         do {
             authToken = try await SapiTokenStore.shared.ensureValid()
         } catch {
+            try authContext.ensureCurrent()
             // Task cancel / URLError.cancelled：调用方已放弃，直接向上抛不再发请求
             if GlobalErrorBannerNotify.isCancellation(error) { throw error }
             AppLogger.party.error("[PartyAPI] ensureValid failed: \(String(describing: error), privacy: .private)")
             // 续 token 失败不阻塞调用（让请求带 nil auth_token 走，让服务端返 401 走 retry 链路决定终态）
             authToken = nil
         }
+        try authContext.ensureCurrent()
 
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.timeoutInterval = 30
-        let headers = SapiTokenStore.sapiHeaders(authToken: authToken, loginToken: AuthToken.value)
+        let headers = SapiTokenStore.sapiHeaders(authToken: authToken, loginToken: authContext.token)
         for (k, v) in headers { req.setValue(v, forHTTPHeaderField: k) }
 
         // GET 无 body 加密，跳过下方 body 处理段
@@ -113,12 +143,14 @@ final class PartyAPIClient {
         do {
             (data, response) = try await session.data(for: req)
         } catch {
+            try authContext.ensureCurrent()
             // Task cancel / URLError.cancelled：不弹 banner，向上抛
             if GlobalErrorBannerNotify.isCancellation(error) { throw error }
             AppLogger.party.error("[PartyAPI] session.data threw for \(path, privacy: .public): \(String(describing: error), privacy: .public)")
             GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: path)
             throw PartyAPIError.networkError
         }
+        try authContext.ensureCurrent()
         guard let http = response as? HTTPURLResponse else {
             GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: path)
             throw PartyAPIError.networkError
@@ -133,20 +165,36 @@ final class PartyAPIClient {
         if http.statusCode == 401 {
             if isRetry {
                 AppLogger.party.error("[PartyAPI] retry still 401, give up")
-                notifySessionInvalidated(message: "SAPI request still unauthorized after token exchange")
+                notifySessionInvalidated(
+                    message: "SAPI request still unauthorized after token exchange",
+                    originToken: authContext.token
+                )
                 throw PartyAPIError.tokenExchangeFailed
             }
             AppLogger.party.notice("[PartyAPI] 401 → exchange token + retry")
             do {
                 _ = try await SapiTokenStore.shared.ensureValid(forceRefresh: true)
             } catch {
+                try authContext.ensureCurrent()
                 // Task cancel：直接向上抛
                 if GlobalErrorBannerNotify.isCancellation(error) { throw error }
                 // SAPI token 无法续接时，主会话也不再可用；复用 1004 的统一登出链路。
-                notifySessionInvalidated(message: "SAPI token exchange failed")
+                notifySessionInvalidated(
+                    message: "SAPI token exchange failed",
+                    originToken: authContext.token
+                )
                 throw PartyAPIError.tokenExchangeFailed
             }
-            return try await send(method: method, path: path, body: body, query: query, isRetry: true, suppressCodes: suppressCodes)
+            try authContext.ensureCurrent()
+            return try await send(
+                method: method,
+                path: path,
+                body: body,
+                query: query,
+                isRetry: true,
+                suppressCodes: suppressCodes,
+                authContext: authContext
+            )
         }
 
         // 其他非 200 HTTP（403/404/500 等）：先尝试解析 envelope 拿 code；
@@ -197,11 +245,15 @@ final class PartyAPIClient {
 
     /// SAPI 401 自动续接失败与主接口 1004 共用会话失效处理：
     /// SessionStore 负责提示、审核弹窗闸门与完整登出清理。
-    private func notifySessionInvalidated(message: String) {
+    private func notifySessionInvalidated(message: String, originToken: String) {
         NotificationCenter.default.post(
             name: .apiSessionInvalidated,
             object: nil,
-            userInfo: ["code": "1004", "message": message]
+            userInfo: [
+                "code": "1004",
+                "message": message,
+                "originToken": originToken,
+            ]
         )
     }
 }

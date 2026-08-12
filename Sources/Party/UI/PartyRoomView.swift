@@ -176,7 +176,7 @@ struct PartyRoomView: View {
 
     private var isPartyOnlyMode: Bool {
         let effectiveUserType = permission.effectiveUserTypeSnapshot
-            ?? UserTypeExperience.effectiveUserType(isAuthenticated: SessionStore.shared.isLoggedIn)
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
         return UserTypeExperience.isPartyOnly(effectiveUserType)
     }
 
@@ -485,6 +485,11 @@ struct PartyRoomView: View {
                     startTaskTrackingIfNeeded()
                 case .ended:
                     stopTaskTracking()
+                    // 107 进房任一阶段失败（HTTP / RTC / IM）后立即返回大厅，不停留在失效房间页。
+                    if isPartyOnlyMode, store.lastError != nil {
+                        dismiss()
+                        return
+                    }
                     // 被踢或收到 1009 关闭/限制通知后，退房已由 Store 完成；房间页也必须回到列表。
                     // H5 同样在这两类通知后立即离开房间，而不是留在失效的房间 UI。
                     if case .some(.kicked) = store.lastError {
@@ -1193,10 +1198,8 @@ struct PartyRoomView: View {
         .frame(height: containerHeight)
     }
 
-    /// v12：6 视频位模板 —— 3 列 × 2 行 grid（对齐 H5 `grid grid-cols-3 gap-1 px-1` + `aspect-[6/5]`）
-    /// v12：6 视频位模板 —— 3 列 × 2 行 grid（对齐 H5 `grid grid-cols-3 gap-1 px-1` + `aspect-[6/5]`）
-    /// **固定 height**：aspectRatio(.fit) 两维 flex 会被父 VStack 因键盘 padding 挤压 → 视频位缩小；
-    /// 显式挂 `.frame(height:)` 让 seat 脱离 flex，键盘弹起时不受影响。
+    /// 6 视频位模板 —— 3 列 × 2 行 grid。
+    /// 网格总高与 3 视频位模板一致，避免新增 6 视频位模板挤压聊天和底部操作区。
     private var sixBigSeatGrid: some View {
         let total = bigSeats.count
         return LazyVGrid(columns: sixBigSeatColumns, spacing: 2) {
@@ -1207,7 +1210,7 @@ struct PartyRoomView: View {
                     isLocalCameraActive: store.isLocalCameraActive,
                     camera: store.camera,
                     engine: store.rtc,
-                    aspectRatio: 6.0 / 5.0,
+                    aspectRatio: sixBigSeatCellAspectRatio,
                     showsGiftValue: canShowValueRankings,
                     showsHeadFrame: permission.canVirtualItems,
                     allowsVideo: permission.canPartyVideo
@@ -1229,13 +1232,16 @@ struct PartyRoomView: View {
         Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
     }
 
-    /// 6 视频位模板固定高度：cellW = (屏宽 - 2*4 hPadding - 2*2 colSpacing) / 3，cellH = cellW * 5/6，总高 = 2 行 + 1 rowSpacing
+    /// 6 位模板与 3 位模板共用舞台高度；每个 cell 平分两行高度。
     private var sixBigSeatGridHeight: CGFloat {
+        multiBigSeatRowHeight
+    }
+
+    private var sixBigSeatCellAspectRatio: CGFloat {
         let screenW = UIScreen.main.bounds.width
         let cellW = (screenW - 12) / 3   // 12 = 2*4 padding + 2*2 col spacing
-        let cellH = cellW * 5.0 / 6.0
-        let baseHeight = cellH * 2 + 2   // 2 行 + 1 行 spacing
-        return isBattleActive ? max(0, baseHeight - 40) : baseHeight
+        let cellH = max(1, (sixBigSeatGridHeight - 2) / 2)
+        return cellW / cellH
     }
 
     /// 对齐 H5 `main-wrap.vue`：2/3/其他视频位共用 `video-wrap h-180`，横向均分。
@@ -1863,6 +1869,11 @@ struct PartyRoomView: View {
     }
 
     private func handleLastErrorChange(_ msg: String) {
+        if isPartyOnlyMode, !msg.isEmpty, store.roomState == .ended {
+            showError = false
+            dismiss()
+            return
+        }
         showError = !msg.isEmpty
     }
 
