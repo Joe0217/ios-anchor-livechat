@@ -9,6 +9,9 @@ import SwiftUI
 struct GiftPanelReceiverRow: View {
     @ObservedObject var store: CommonGiftPanelStore
 
+    /// 头像 34pt + 序号胶囊约 12pt，再加上下留白。
+    private let rowHeight: CGFloat = 58
+
     /// review #13 · 用 @ViewBuilder + if let 替代 AnyView 类型擦除
     /// AnyView anti-pattern：body 重求值触发 diffing 全刷；@ViewBuilder 保持静态类型
     @ViewBuilder
@@ -30,7 +33,7 @@ struct GiftPanelReceiverRow: View {
                 Spacer()
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .frame(height: rowHeight)
         } else {
             HStack(spacing: 10) {
                 // 计数显示（左）
@@ -57,7 +60,7 @@ struct GiftPanelReceiverRow: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 4)  // 高度压缩：10 → 4
+            .frame(height: rowHeight)
         }
     }
 
@@ -77,19 +80,20 @@ struct GiftPanelReceiverRow: View {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 12))
                             .foregroundStyle(.white, Theme.Palette.brandPink)
-                            .offset(x: 2, y: -2)
+                            .padding(1)
                     }
                 }
-                // 麦位序号胶囊（重叠在头像底部；nil 时隐藏留白等宽）
+
+                // 序号参与正常布局，不使用 offset，避免超出收礼人栏边界。
                 if let idx = item.seatIndex {
                     Text("\(idx)")
                         .font(.system(size: 9, weight: .medium))
                         .foregroundColor(.white)
                         .padding(.horizontal, 5).padding(.vertical, 1)
                         .background(Capsule().fill(Color.black.opacity(0.5)))
-                        .offset(y: -6)
                 }
             }
+            .frame(width: 34, height: rowHeight, alignment: .top)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

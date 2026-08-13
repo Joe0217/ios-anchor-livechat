@@ -372,7 +372,7 @@ struct PartyRoomRankSheet: View {
                     Text(PartyNumberFormat.compact(value))
                         .font(.system(size: 13, weight: .semibold))
                 }
-                .foregroundColor(Theme.Palette.brandPrimary)
+                .foregroundColor(Theme.Palette.brandPink)
             }
         case .honor:
             if let value = entry.rankValue {
@@ -397,7 +397,7 @@ struct PartyRoomRankSheet: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
-                .foregroundColor(Theme.Palette.brandPrimary)
+                .foregroundColor(Theme.Palette.brandPink)
             }
         case .viewers:
             PartyRoleBadge(roomRoleType: entry.roomRoleType, size: 16)

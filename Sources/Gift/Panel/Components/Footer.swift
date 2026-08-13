@@ -26,7 +26,8 @@ struct GiftPanelFooter: View {
             actionButton
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.top, 10)
+        .padding(.bottom, -10)
     }
 
     // MARK: - Balance

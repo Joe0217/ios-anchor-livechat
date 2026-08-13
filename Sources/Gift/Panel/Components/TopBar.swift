@@ -43,7 +43,8 @@ struct GiftPanelTopBar: View {
             }
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 8)
+        // 分类栏压缩 18pt，给礼物网格保留更多可视高度。
+        .frame(height: 30)
     }
 
     private func tabButton(_ tab: GiftPanelTab) -> some View {

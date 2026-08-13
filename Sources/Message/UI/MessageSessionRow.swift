@@ -66,17 +66,26 @@ struct MessageSessionRow: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
-                    .layoutPriority(1)
+                    .truncationMode(.tail)
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(-1)
                 if profile?.activeTycoon == true {
                     ActiveTycoonBadge()
+                        .fixedSize()
+                        .layoutPriority(2)
                 }
                 if let name = profile?.userLevelName, profile?.showsLevelBadge == true {
-                    UserLevelBadge(levelName: name)
+                    UserLevelBadge(levelName: name, size: .small)
+                        .fixedSize()
+                        .layoutPriority(2)
                 }
                 if profile?.isVIPActive() == true {
-                    VIPBadge()
+                    VIPBadge(size: .small)
+                        .fixedSize()
+                        .layoutPriority(2)
                 }
             }
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             // preview 行:最后一条我方消息前展示已读态勾(对齐设计稿 消息列表-未读已读.png)
             HStack(spacing: 4) {
                 readReceiptCheck

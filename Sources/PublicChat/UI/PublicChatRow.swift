@@ -756,16 +756,23 @@ private struct PartyNicknameRow: View {
     var body: some View {
         HStack(alignment: .center, spacing: 4) {
             nickname
+                .layoutPriority(-1)
             if let lv = sender?.userLevel, lv > 0 {
                 UserLevelBadge(level: lv, size: .small)
+                    .fixedSize()
+                    .layoutPriority(1)
             }
             if sender?.isVip == true {
                 VIPBadge(size: .small)
+                    .fixedSize()
+                    .layoutPriority(1)
             }
             if let medals = sender?.medals {
                 ForEach(Array(medals.enumerated()), id: \.offset) { _, medalURL in
                     CachedAsyncImage(url: URL(string: medalURL), contentMode: .fit) { Color.clear }
                         .frame(width: 16, height: 16)
+                        .fixedSize()
+                        .layoutPriority(1)
                 }
             }
             // 房管图标（对齐 H5 chat-list.vue L161 `h16 w16` · icon_lv_${role}.png）
@@ -775,6 +782,8 @@ private struct PartyNicknameRow: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 16, height: 16)
+                    .fixedSize()
+                    .layoutPriority(1)
                     .accessibilityLabel(role == .owner ? "Owner" : "Manager")
             }
             // 平台管理员
@@ -783,6 +792,8 @@ private struct PartyNicknameRow: View {
                     .font(.system(size: 12))
                     .foregroundColor(Color(red: 1.0, green: 0.10, blue: 0.65))
                     .frame(width: 16, height: 16)
+                    .fixedSize()
+                    .layoutPriority(1)
                     .accessibilityLabel("Platform Admin")
             }
         }
@@ -795,6 +806,7 @@ private struct PartyNicknameRow: View {
             .foregroundColor(.white)
             .lineLimit(1)
             .truncationMode(.tail)
+            .frame(maxWidth: .infinity, alignment: .leading)
         if let onTapNickname {
             Button(action: onTapNickname) { label }
                 .buttonStyle(.plain)

@@ -2,33 +2,33 @@ import SwiftUI
 
 /// 设计系统 token（首个引入）。
 ///
-/// 配色以 App Icon 为唯一品牌视觉来源：深莓黑底 + 高饱和洋红主色。
+/// 取值源自 Work 设计稿（750×1860 = 375pt@2x）多 agent 提取 + 人工读图校验。
 /// 后续页面复用此处的配色 / 间距 / 字号，避免每屏重新猜测，保证多屏一致性。
 /// 颜色用 0xRRGGBB 字面量声明；布局尺寸为 375pt 逻辑宽度下的点值。
 enum Theme {
 
     // MARK: - 配色
     enum Palette {
-        // MARK: 品牌主题色
-        /// App Icon 的核心洋红。所有主操作和已选中状态使用此色。
-        static let brandPrimary = Color(hex: 0xF20BE5)
-        /// 主色的深色按压/强调版本。
-        static let brandPrimaryPressed = Color(hex: 0xC900BE)
-        /// 主色浅色版本，用于小面积高亮和选中背景。
-        static let brandPrimarySoft = Color(hex: 0xFF75F2)
-        /// 为兼容既有业务 token 保留的品牌色别名；不再引入黄、橙、蓝等无关主色。
-        static let brandYellow = brandPrimary
-        static let brandOrange = brandPrimarySoft
-        static let brandPinkA  = brandPrimarySoft
-        static let brandPink   = brandPrimary
-        static let brandPurple = brandPrimaryPressed
-        static let brandBlue   = Color(hex: 0xA84BA8)
-        static let brandCyan   = Color(hex: 0xE99AE4)
+        // MARK: 品牌主题色（单一来源，改主题改这里；下方场景色引用这些）
+        /// 通用黄 / SS 级
+        static let brandYellow = Color(hex: 0xFFE600)
+        /// 通用橘 / S 级
+        static let brandOrange = Color(hex: 0xFD8965)
+        /// A 级
+        static let brandPinkA  = Color(hex: 0xFB4DA6)
+        /// 通用深粉 / B 级
+        static let brandPink   = Color(hex: 0xFB0FEB)
+        /// 通用紫 / New 级
+        static let brandPurple = Color(hex: 0xBC53F5)
+        /// C 级
+        static let brandBlue   = Color(hex: 0x7CA2F5)
+        /// D 级
+        static let brandCyan   = Color(hex: 0x32F1EA)
 
         /// 通用次级白色文字 / 首页顶部 tab 未选中（白 60%）
         static let textSecondaryWhite = Color.white.opacity(0.6)
         /// 底部 tab bar 未选中文案
-        static let tabBarInactive     = Color(hex: 0x9D819E)
+        static let tabBarInactive     = Color(hex: 0xAA9FC2)
 
         /// 在线状态
         static let statusOnline  = Color(hex: 0x10F496)
@@ -39,119 +39,119 @@ enum Theme {
 
         // MARK: 基础场景色
         /// 页面背景：近黑带极淡紫，纯色非渐变
-        static let screenBackground = Color(hex: 0x0F0312)
+        static let screenBackground = Color(hex: 0x0B0010)
         /// 卡片 / 面板悬浮表面
-        static let cardFill         = Color(hex: 0x240929)
+        static let cardFill         = Color(hex: 0x2B213E)
         /// 卡片内细分隔线
-        static let divider          = Color(hex: 0x4C1851)
+        static let divider          = Color(hex: 0x3A3150)
         /// 朋友圈评论块背景（比 cardFill 更深一档，对齐 H5 `#F5F7F8` 反色语义）
-        static let momentCommentsBackground = Color(hex: 0x18051C)
+        static let momentCommentsBackground = Color(hex: 0x1A1428)
         /// 朋友圈评论昵称色（H5 `text-color-purple`）
-        static let momentCommentNickname    = brandPrimarySoft
+        static let momentCommentNickname    = Color(hex: 0xA961FF)
         /// 主文本（标题 / 收益数字）
         static let textPrimary      = Color.white
         /// 次要文本（caption / 说明）
-        static let textSecondary    = Color(hex: 0xB5A1B6)
-        /// 主强调色（通话数 / 周收益 / 激活 tab）
-        static let accentYellow     = brandPrimary
+        static let textSecondary    = Color(hex: 0x95909E)
+        /// 强调黄（通话数 / 周收益 / 激活 tab）
+        static let accentYellow     = brandYellow
         /// 强调绿（好评率）
         static let accentGreen      = Color(hex: 0x08FF77)
         /// 描边胶囊（Detail / Withdrawal）边框与文字
-        static let outlinePill      = Color(hex: 0x9D819E)
+        static let outlinePill      = Color(hex: 0x95909E)
         /// 未激活 tab 文字（底部 tab bar）
         static let tabInactiveLabel = tabBarInactive
         /// 激活 tab（Work）
-        static let tabActive        = brandPrimary
+        static let tabActive        = brandYellow
         /// 在线开关「关」态底色（灰紫）
-        static let onlineToggleOff  = Color(hex: 0x422044)
+        static let onlineToggleOff  = Color(hex: 0x463C5C)
 
         // MARK: Live 页（设计稿还原）
         /// Live 页顶部紫色亮区
-        static let liveTopPurple        = Color(hex: 0x310635)
+        static let liveTopPurple        = Color(hex: 0x3D1862)
         /// Live 页中段深紫
-        static let liveMidPurple        = Color(hex: 0x1B071F)
+        static let liveMidPurple        = Color(hex: 0x1F0938)
         /// Live 页底部近黑紫（与 screenBackground 相接）
-        static let liveBottomDark       = screenBackground
+        static let liveBottomDark       = Color(hex: 0x0B0010)
         /// 顶部子 tab 选中文字（橙金）
-        static let liveSubTabSelected   = brandPrimary
+        static let liveSubTabSelected   = Color(hex: 0xFFB800)
         /// 顶部子 tab 未选中文字（白 60%）
         static let liveSubTabUnselected = textSecondaryWhite
         /// 在线绿点
         static let liveOnlineDot        = statusOnline
         /// 礼物通知条主紫
-        static let liveNoticeBarPurple  = Color(hex: 0x57105B)
+        static let liveNoticeBarPurple  = Color(hex: 0x4A2275)
         /// 礼物通知条强调粉
-        static let liveNoticeBarPink    = brandPrimaryPressed
+        static let liveNoticeBarPink    = Color(hex: 0xA03A8C)
         /// 礼物通知条玫红描边
-        static let liveNoticeBarBorder  = brandPrimarySoft
+        static let liveNoticeBarBorder  = Color(hex: 0xFF4D8F)
         /// 礼物通知条"Emma" 用户名绿
         static let liveNoticeUserGreen  = Color(hex: 0x3DFFA0)
         /// 礼物通知条数字金
-        static let liveNoticeNumber     = brandPrimarySoft
+        static let liveNoticeNumber     = Color(hex: 0xFFD700)
         /// 圣诞 banner 紫描边
-        static let liveBannerBorder     = brandPrimary
+        static let liveBannerBorder     = Color(hex: 0xA03AFF)
         /// 圣诞 banner 底色
-        static let liveBannerFill       = Color(hex: 0x26092C)
+        static let liveBannerFill       = Color(hex: 0x2A0E47)
         /// 直播卡片头像名称白
         static let liveCardName         = Color.white
         /// 观看人数徽章橙
-        static let liveViewerBadge      = brandPrimary
+        static let liveViewerBadge      = Color(hex: 0xFF6B00)
 
         // MARK: List 子页（设计稿还原）
         /// Online/Prime 切换器容器底色
-        static let liveListSwitcherTrack    = Color(hex: 0x1B061F)
+        static let liveListSwitcherTrack    = Color(hex: 0x1A0F2E)
         /// Online/Prime 选中胶囊渐变起点
-        static let liveListSwitcherOnA      = brandPrimaryPressed
+        static let liveListSwitcherOnA      = Color(hex: 0x6C2BCB)
         /// Online/Prime 选中胶囊渐变终点
-        static let liveListSwitcherOnB      = brandPrimary
+        static let liveListSwitcherOnB      = Color(hex: 0xFF3D6E)
         /// 选中态文字（黄）
-        static let liveListSwitcherSelected = Color.white
+        static let liveListSwitcherSelected = Color(hex: 0xFFE600)
         /// 未选中文字
         static let liveListSwitcherUnselected = Color.white.opacity(0.85)
         /// Invite banner 渐变起点（紫）
-        static let liveListInviteBgA        = Color(hex: 0x8D1688)
+        static let liveListInviteBgA        = Color(hex: 0x6722A5)
         /// Invite banner 渐变终点（粉）
-        static let liveListInviteBgB        = brandPrimary
+        static let liveListInviteBgB        = Color(hex: 0xC04CE1)
         /// Invite banner 标题黄
-        static let liveListInviteTitle      = Color.white
+        static let liveListInviteTitle      = Color(hex: 0xFFE066)
         /// Invite banner 副标题
         static let liveListInviteSubtitle   = Color.white.opacity(0.85)
         /// 用户卡片背景
-        static let liveListCardFill         = Color(hex: 0x1D071F, opacity: 0.9)
+        static let liveListCardFill         = Color(hex: 0x14082A, opacity: 0.85)
         /// 用户卡片描边
         static let liveListCardBorder       = Color.white.opacity(0.06)
         /// 用户卡片名称白
         static let liveListUserName         = Color.white
         /// 用户卡片次要描述粉
-        static let liveListUserMeta         = textSecondary
+        static let liveListUserMeta         = Color(hex: 0xC9A0B8)
         /// 用户卡片地点文字
-        static let liveListLocationText     = textSecondary
+        static let liveListLocationText     = Color(hex: 0xC9A0B8)
         /// 头像在线小圆点（与 Live 页同款）
         static let liveListOnlineDot        = statusOnline
 
         // MARK: Profile 页（设计稿还原）
         /// 整页底色（顶部背景图下方继续到底部 tab 之间的近黑紫）
-        static let profileBackground   = screenBackground
+        static let profileBackground   = Color(hex: 0x0B0010)
         /// 名字白
         static let profileName         = Color.white
         /// ID 浅紫灰
-        static let profileIdText       = Color(hex: 0xD9C6DB, opacity: 0.7)
+        static let profileIdText       = Color(hex: 0xC8B6E0, opacity: 0.7)
         /// 年龄 / 位置 meta 文字
         static let profileMetaText     = Color.white.opacity(0.85)
         /// SS 段位粉红
-        static let profileTier         = brandPrimary
+        static let profileTier         = Color(hex: 0xFF3D7F)
         /// 800/min 白
         static let profileRate         = Color.white
         /// stats 分隔细线
         static let profileStatDivider  = Color.white.opacity(0.18)
         /// stats caption 灰
-        static let profileStatCaption  = Color(hex: 0xD9C6DB, opacity: 0.8)
+        static let profileStatCaption  = Color(hex: 0xC8B6E0, opacity: 0.8)
         /// 描述正文白
         static let profileDesc         = Color.white
         /// Tab 选中黄
-        static let profileTabActive    = brandPrimary
+        static let profileTabActive    = Color(hex: 0xFFE600)
         /// Tab 未选中灰
-        static let profileTabInactive  = textSecondary
+        static let profileTabInactive  = Color(hex: 0x95909E)
         /// section 标题白
         static let profileSection      = Color.white
         /// 网格 cell 占位（无图时）
@@ -181,14 +181,14 @@ enum Theme {
         /// like/favorite 卡片底色（H5 #2B213E）
         static let userProfileStatsCardFill = Color(hex: 0x2B213E)
         /// 头像三色光环（H5 #72ACF6 / #A211FC / #FA226A）
-        static let userProfileAvatarRing1  = brandPrimarySoft
-        static let userProfileAvatarRing2  = brandPrimary
-        static let userProfileAvatarRing3  = brandPrimaryPressed
+        static let userProfileAvatarRing1  = Color(hex: 0x72ACF6)
+        static let userProfileAvatarRing2  = Color(hex: 0xA211FC)
+        static let userProfileAvatarRing3  = Color(hex: 0xFA226A)
         /// FOLLOW 渐变 #8515FF → #E40132
-        static let userProfileFollowGradientStart = brandPrimaryPressed
-        static let userProfileFollowGradientEnd   = brandPrimary
+        static let userProfileFollowGradientStart = Color(hex: 0x8515FF)
+        static let userProfileFollowGradientEnd   = Color(hex: 0xE40132)
         /// FOLLOWING 紫罗兰半透明
-        static let userProfileFollowingButton     = Color(hex: 0x70256E).opacity(0.6)
+        static let userProfileFollowingButton     = Color(hex: 0x9E7DDC).opacity(0.5)
         /// 详情页主文字 / uid 50% / stats label 50%
         static let userProfileNickname            = Color.white
         static let userProfileUid                 = Color.white.opacity(0.5)
@@ -196,7 +196,7 @@ enum Theme {
         /// 占位 / coming-soon 背景（与 blocklistRetryButton 同语义）
         static let userProfilePlaceholderBg       = Color.white.opacity(0.1)
         /// 菜单 / popup 黑底（H5 CMenuPop 风格）
-        static let userProfileMenuBackground      = Color(hex: 0x210825)
+        static let userProfileMenuBackground      = Color(hex: 0x1F1830)
 
         // MARK: LiveRoom 直播间（设计稿还原）
         /// 顶部主播胶囊 / 观众数徽章 / 底部输入框 通用半透明黑底
@@ -254,7 +254,7 @@ enum Theme {
 
         // MARK: Match tab（L 里程碑设计稿还原）
         /// Match tab 选中态文字（黄，对齐 profileTabActive）
-        static let matchTabSelected     = brandPrimary
+        static let matchTabSelected     = Color(hex: 0xFFE600)
         /// Match tab 未选中态文字（白）
         static let matchTabUnselected   = Color.white
         /// 跑马灯胶囊左端渐变起点（对齐 H5 c-marquee 内层 90deg #E40132）
@@ -268,7 +268,7 @@ enum Theme {
         /// 跑马灯 caller 昵称绿（对齐 H5 text-#15FF3E）
         static let matchMarqueeCaller   = Color(hex: 0x15FF3E)
         /// 跑马灯 receiver 昵称黄（对齐 H5 text-#FFE600）
-        static let matchMarqueeReceiver = brandPrimary
+        static let matchMarqueeReceiver = Color(hex: 0xFFE600)
         /// 跑马灯正文白
         static let matchMarqueeText     = Color.white
         /// 主副标题白
@@ -282,7 +282,7 @@ enum Theme {
         /// 页面背景（复用直播间底色）
         static let partyListBackground   = liveBottomDark
         /// 房间卡片背景填充
-        static let partyCardFill         = Color(hex: 0x260A2C, opacity: 0.9)
+        static let partyCardFill         = Color(hex: 0x2E1A4F, opacity: 0.75)
         /// 房间卡片描边
         static let partyCardBorder       = Color.white.opacity(0.04)
         /// 房主名字白
@@ -290,62 +290,62 @@ enum Theme {
         /// 欢迎语灰白
         static let partyGreeting         = Color.white.opacity(0.55)
         /// pill Live+Voice 渐变起（粉红）
-        static let partyPillLiveA        = brandPrimaryPressed
+        static let partyPillLiveA        = Color(hex: 0xFB4DA6)
         /// pill Live+Voice 渐变止（紫粉）
-        static let partyPillLiveB        = brandPrimary
+        static let partyPillLiveB        = Color(hex: 0xFF6BE3)
         /// pill Voice 绿
         static let partyPillVoice        = Color(hex: 0x2ED573)
         /// pill 语言 蓝紫
-        static let partyPillLanguage     = Color(hex: 0x682064)
+        static let partyPillLanguage     = Color(hex: 0x6C4CFF)
         /// pill 文字白
         static let partyPillText         = Color.white
         /// Create Room 按钮渐变起（紫粉）
-        static let partyCreateBtnA       = brandPrimaryPressed
+        static let partyCreateBtnA       = Color(hex: 0xC03AFF)
         /// Create Room 按钮渐变止（品红）
-        static let partyCreateBtnB       = brandPrimary
+        static let partyCreateBtnB       = Color(hex: 0xFF3D8F)
         /// 火苗数字文字（灰白）
         static let partyHeatText         = Color.white.opacity(0.85)
         /// crown +100K badge 底（深紫圆角胶囊）
-        static let partyCrownBadgeBg     = Color(hex: 0x3C103F, opacity: 0.95)
+        static let partyCrownBadgeBg     = Color(hex: 0x2C1042, opacity: 0.9)
         /// crown 金黄
-        static let partyCrownGold        = brandPrimarySoft
+        static let partyCrownGold        = Color(hex: 0xFFD54A)
         /// crown badge 数字文字
-        static let partyCrownText        = brandPrimarySoft
+        static let partyCrownText        = Color(hex: 0xFFD54A)
         /// tab icon Party inactive 用（tabBarInactive 复用）
         static let partyTabInactive      = tabBarInactive
 
         // MARK: Party 创房页（E-spec v5，2026-07-10）
         /// 创房页 section 标题紫（"Room name" / "Room Tagline" 等）
-        static let partyCreateSectionTitle = brandPrimarySoft
+        static let partyCreateSectionTitle = Color(hex: 0x9B7BE2)
         /// 输入框背景
-        static let partyCreateInputFill    = Color(hex: 0x220826, opacity: 0.9)
+        static let partyCreateInputFill    = Color(hex: 0x2E1A4F, opacity: 0.6)
         /// 输入框描边
         static let partyCreateInputBorder  = Color.white.opacity(0.08)
         /// 输入框主文本白
         static let partyCreateInputText    = Color.white
         /// 输入框字数计数灰紫
-        static let partyCreateInputCounter = Color(hex: 0xB98BB6)
+        static let partyCreateInputCounter = Color(hex: 0x9B7BE2)
         /// picker chevron 紫粉
-        static let partyCreateChevron      = brandPrimary
+        static let partyCreateChevron      = Color(hex: 0xC060FF)
         /// 头像圆环渐变（从 Palette 头像 avatarRing3 借用）
-        static let partyCreateAvatarRing1  = brandPrimarySoft
-        static let partyCreateAvatarRing2  = brandPrimary
+        static let partyCreateAvatarRing1  = Color(hex: 0xFFC542)
+        static let partyCreateAvatarRing2  = Color(hex: 0xFF5C39)
         /// 头像相机小图标背景
-        static let partyCreateAvatarCameraBg = brandPrimary
+        static let partyCreateAvatarCameraBg = Color(hex: 0xFF9438)
         /// mode picker sheet 顶部 tab 选中态渐变（对齐 H5 create.vue linear-gradient 90deg #FF9438 #FF0090 #FE00DE）
-        static let partyCreateModeTabA     = brandPrimaryPressed
-        static let partyCreateModeTabB     = brandPrimary
-        static let partyCreateModeTabC     = brandPrimarySoft
+        static let partyCreateModeTabA     = Color(hex: 0xFF9438)
+        static let partyCreateModeTabB     = Color(hex: 0xFF0090)
+        static let partyCreateModeTabC     = Color(hex: 0xFE00DE)
         /// mode picker sheet 顶部 tab 未选中文字
         static let partyCreateModeTabInactive = Color.white.opacity(0.5)
         /// mode picker 模板卡片选中态描边
-        static let partyCreateTempSelected = brandPrimary
+        static let partyCreateTempSelected = Color(hex: 0xFB0FEB)
         /// mode picker 卡片底色（Lock/Unlock 都用）
-        static let partyCreateTempFill     = Color(hex: 0x1C071F)
+        static let partyCreateTempFill     = Color(hex: 0x1F1235)
 
         // MARK: Party 房间内（设计稿还原 2026-07-11）
         /// 房间背景色（image 115 未覆盖处的兜底纯色）
-        static let partyRoomBackground     = screenBackground
+        static let partyRoomBackground     = Color(hex: 0x0B0010)
         /// 内容层暗化遮罩（覆盖背景大图，让文字可读）
         static let partyRoomOverlay        = Color.black.opacity(0.35)
         /// 顶部主播名 白
@@ -353,11 +353,11 @@ enum Theme {
         /// 顶部 ID 浅灰紫
         static let partyRoomAnchorId       = Color.white.opacity(0.55)
         /// 关注按钮底色（紫灰半透明）
-        static let partyRoomFollowFill     = Color(hex: 0x6A366A, opacity: 0.72)
+        static let partyRoomFollowFill     = Color(hex: 0x8B84B0, opacity: 0.55)
         /// 顶部工具栏图标 tint
         static let partyRoomToolbarIcon    = Color.white
         /// 收益金黄（趟马灯/奖杯数字/箭头）
-        static let partyRoomHeatGold       = brandPrimarySoft
+        static let partyRoomHeatGold       = Color(hex: 0xFFD54A)
         /// 观众数白
         static let partyRoomViewerCount    = Color.white
         /// 麦位视频/占位背景色（相机关时的深灰底）
@@ -377,13 +377,13 @@ enum Theme {
         /// 空占位数字（"3"、"4"、"7"）文字白
         static let partyRoomEmptyIndex     = Color.white
         /// Tab strip 选中态文字色（黄）
-        static let partyRoomTabActive      = brandPrimary
+        static let partyRoomTabActive      = Color(hex: 0xFFE600)
         /// Tab strip 未选中态（白 55%）
         static let partyRoomTabInactive    = Color.white.opacity(0.55)
         /// Tab strip 选中下划线（黄）
-        static let partyRoomTabUnderline   = brandPrimary
+        static let partyRoomTabUnderline   = Color(hex: 0xFFE600)
         /// 欢迎消息文字绿
-        static let partyRoomWelcomeText    = brandPrimarySoft
+        static let partyRoomWelcomeText    = Color(hex: 0x4EFFB0)
         /// 聊天用户名文字白
         static let partyRoomChatName       = Color.white
         /// 聊天正文白
@@ -407,7 +407,7 @@ enum Theme {
 
         // MARK: Auth 登录页（设计稿还原 2026-07-13）
         /// 登录按钮胶囊纯色粉(设计稿采样 #FF55CC)
-        static let authLoginButton        = brandPrimary
+        static let authLoginButton        = Color(hex: 0xFF55CC)
         /// 登录按钮文字白
         static let authLoginButtonText    = Color.white
         /// 输入框填充：15% 透明白，与紫色渐变背景拉开层次。
@@ -728,7 +728,7 @@ enum Theme {
         static let partyRoomGemsVPadding: CGFloat   = 2
         static let partyRoomGemsIconSize: CGFloat   = 12
         /// Tab strip 上下 padding
-        static let partyRoomTabV: CGFloat           = 3
+        static let partyRoomTabV: CGFloat           = 8
         /// Tab 项之间水平间距
         static let partyRoomTabGap: CGFloat         = 20
         /// Tab 下划线宽/高
@@ -1055,25 +1055,25 @@ enum Theme {
             endPoint: .trailing
         )
 
-        /// 等级徽章胶囊（App Icon 洋红色阶）
+        /// 等级徽章胶囊（紫→品红→粉）
         static let levelBadge = LinearGradient(
-            colors: [Palette.brandPrimaryPressed, Palette.brandPrimary, Palette.brandPrimarySoft],
+            colors: [Color(hex: 0x7C3AED), Color(hex: 0xC026D3), Color(hex: 0xEC4899)],
             startPoint: .leading,
             endPoint: .trailing
         )
 
-        /// 头像描边环（深洋红→亮洋红，角向）
+        /// 头像描边环（金黄→粉,角向）
         static let avatarRing = AngularGradient(
             colors: [
-                Palette.brandPrimarySoft, Palette.brandPrimary,
-                Palette.brandPrimaryPressed, Palette.brandPrimarySoft,
+                Color(hex: 0xFFD60A), Color(hex: 0xFF6B9D),
+                Color(hex: 0xC026D3), Color(hex: 0xFFD60A),
             ],
             center: .center
         )
 
-        /// 在线开关「开」态胶囊（App Icon 洋红色阶，横向）
+        /// 在线开关「开」态胶囊（紫→品红→粉，横向）
         static let onlineToggleOn = LinearGradient(
-            colors: [Palette.brandPrimaryPressed, Palette.brandPrimary, Palette.brandPrimarySoft],
+            colors: [Color(hex: 0x9B1FC4), Color(hex: 0xD81E9E), Color(hex: 0xFF2E7E)],
             startPoint: .leading,
             endPoint: .trailing
         )
@@ -1086,38 +1086,39 @@ enum Theme {
             endPoint: .bottom
         )
 
-        /// App Icon 的近黑莓色底，登录和 Party 房间共用。
+        /// 107 Party 房默认背景 `profileTopBg` 经房间 35% 暗色遮罩后的原生渐变近似。
+        /// 登录页复用该渐变，避免重新引入背景图片。
         static let partyRoomDefaultBackground = LinearGradient(
             colors: [
-                Color(hex: 0x26082B),
-                Palette.screenBackground,
-                Color(hex: 0x080109),
+                Color(hex: 0x350F55),
+                Color(hex: 0x1F083E),
+                Color(hex: 0x07010C),
             ],
             startPoint: .top,
             endPoint: .bottom
         )
 
-        /// 顶部子 tab 选中字渐变（深洋红→亮洋红）
+        /// 顶部子 tab "Live" 选中字渐变（橙→金）
         static let liveSubTabText = LinearGradient(
-            colors: [Palette.brandPrimaryPressed, Palette.brandPrimary],
+            colors: [Color(hex: 0xFF7A00), Color(hex: 0xFFB800)],
             startPoint: .top,
             endPoint: .bottom
         )
 
-        /// 通知条横向渐变背景（深洋红→洋红→深洋红）
+        /// 礼物通知条横向渐变背景（紫→品红→紫）
         static let liveNoticeBar = LinearGradient(
             colors: [
-                Palette.brandPrimaryPressed.opacity(0.75),
-                Palette.brandPrimary.opacity(0.9),
-                Palette.brandPrimaryPressed.opacity(0.75),
+                Color(hex: 0x4A2275, opacity: 0.85),
+                Color(hex: 0xA03A8C, opacity: 0.95),
+                Color(hex: 0x4A2275, opacity: 0.85),
             ],
             startPoint: .leading,
             endPoint: .trailing
         )
 
-        /// 观看人数徽章渐变（深洋红→亮洋红）
+        /// 观看人数徽章渐变（橙→红）
         static let liveViewerBadge = LinearGradient(
-            colors: [Palette.brandPrimary, Palette.brandPrimaryPressed],
+            colors: [Color(hex: 0xFFB800), Color(hex: 0xFF4D00)],
             startPoint: .top,
             endPoint: .bottom
         )

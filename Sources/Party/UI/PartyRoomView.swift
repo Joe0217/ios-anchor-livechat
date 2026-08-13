@@ -767,14 +767,6 @@ struct PartyRoomView: View {
                     onTap: handlePartyGameTap
                 )
             }
-            if permission.canLottery && superWheelStore.isActive {
-                PartySuperWheelFloatingButton(state: superWheelStore.wheelState?.state ?? 0) {
-                    trackSuperWheelIcon("b_wheel_icon_click")
-                    superWheelStore.openPanel()
-                } onVisible: {
-                    trackSuperWheelIcon("b_wheel_icon_view")
-                }
-            }
             if permission.canPartyMusic {
                 PartyMusicMiniWidget(
                     settings: store.roomMusicSettings,
@@ -2820,17 +2812,6 @@ struct PartyRoomView: View {
         PartyAnalytics.track("partyRoom_tool_click", properties: properties)
     }
 
-    private func trackSuperWheelIcon(_ event: String) {
-        guard let state = superWheelStore.wheelState else { return }
-        var properties = PartyAnalytics.roomProperties(
-            roomId: state.roomId,
-            ownerId: state.hostId ?? store.roomInfo?.ownerId,
-            roomTempId: store.roomInfo?.roomTempId
-        )
-        properties["hostid"] = state.hostId ?? ""
-        PartyAnalytics.track(event, properties: properties)
-    }
-
     private var hotTaskSheetPresented: Binding<Bool> {
         Binding(
             get: { showHotTaskSheet },
@@ -3076,6 +3057,8 @@ struct PartyRoomView: View {
         }
         // 礼物架固定占屏 45%；PK 分类栏包含在该高度内。
         .presentationDetents([.fraction(0.45)])
+        // 仅增加 sheet 顶部内边距，不改变礼物面板内部各栏高度。
+        .sheetTopInset(8)
         .preferredColorScheme(.dark)
     }
 
@@ -3250,6 +3233,7 @@ struct PartyRoomView: View {
                         && battleStore.isFunctionEnabled
                         && store.roomInfo?.roomTempIdInt == 1,
                     showSuperWheel: permission.canLottery && (store.selfRole == .owner || store.selfRole == .admin),
+                    superWheelHasRedDot: superWheelStore.showEntryRedDot,
                     showsLuckyNumber: permission.canPartyLuckyNumber,
                     showsBasicTools: !isPartyOnlyMode,
                     isRoomMuted: store.isRoomMuted,
