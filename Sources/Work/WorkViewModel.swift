@@ -25,35 +25,38 @@ final class WorkViewModel: ObservableObject {
     /// - 未达通话目标 → "Call target not met"
     /// - 已达 + 有数据 → "Average Call Time XX (nextLevel YY)"
     /// - 无有效数据 → ""
-    /// 接接口前用 SS 占位文案。
-    var levelText: String { L10n.workLevelTextTopHost }
+    var levelText: String {
+        guard let info = AnchorInfoStore.shared.info ?? AnchorInfoStore.shared.mine else { return "" }
+        if info.userLevel == "SS" { return L10n.workLevelTextTopHost }
+        if info.userLevel == "S" { return L10n.workLevelTextKeepSTier }
+        if info.isCallTarget == false { return L10n.workLevelTextCallTargetNotMet }
+        guard let duration = info.anchorSettleMap?.averageCallDuration else { return "" }
+        var text = "\(L10n.workLevelTextAverageCallTime)\(Self.timeString(duration))"
+        if let nextLevel = info.nextLevel, !nextLevel.isEmpty {
+            text += "\(L10n.workLevelTextNextLevel)\(nextLevel))"
+        }
+        return text
+    }
 
     // MARK: - 三项概览（对齐 H5 hostDashboard: onlineTime / avgCallDuration / positiveRating）
-    /// 今日在线时长（秒）—— H5: dataStatistics.callNum
+    /// 今日在线时长（秒）—— H5 `anchorSettleMap.onlineTime`。
     @Published var onlineTimeSec: Int = 0
-    /// 平均通话时长（秒）—— H5: dataStatistics.weeklyDiamonds（字段名 H5 复用，业务是时长）
+    /// 平均通话时长（秒）—— H5 `anchorSettleMap.averageCallDuration`。
     @Published var avgCallDurationSec: Int = 0
     /// 好评率（百分比整数）—— H5: dataStatistics.positiveRating
     @Published var positiveRating: Int = 0
 
-    // MARK: - 4 张预览卡（激活 H5 蓝本 work/index.vue L443-491 被注释的卡组）
-    /// Calls Today —— dataStatistics.callNum。
-    /// ⚠️ 与 `onlineTimeSec` 共享同一后端字段但语义不同（同一字段不可能两种语义都对）；
-    /// 现有 StatCardsRow 解释为"在线时长秒数"，本卡按用户/安卓端映射解释为"通话数"。
-    /// 真机首次拉取后向用户报告冲突判断。
+    // Android Work 专属的概览卡字段；H5 当前未启用这组卡片。
     @Published var dailyCalls: Int = 0
-    /// Coins —— dataStatistics.weeklyDiamonds。与 `avgCallDurationSec` 同款字段共享冲突。
     @Published var weeklyCoins: Int = 0
-    /// Diamonds —— sapi `getBalance.diamond`；fetch 失败保持 0（fail-silent）。
     @Published var walletDiamonds: Int64 = 0
-    /// Gems —— sapi `getBalance.gem`；fetch 失败保持 0（fail-silent）。
     @Published var walletGems: Int64 = 0
 
     /// 官方 WhatsApp 客服号（H5 `getConfigByKey({searchValue: 'WhatsApp'})`）。
     /// 空串表示未拉到或未配置，Footer 里空时整行隐藏（fail-silent）。
     @Published var whatsappPhone: String = ""
 
-    // MARK: - 今日收益（H5 anchorIncomeMap.{callIncome/giftIncome/taskReward/invitationReward/unlock/totalCoin}）
+    // MARK: - 今日收益（H5 anchorIncomeMap.{callIncome,giftIncome,taskReward,invitationReward,othersIncome,totalCoin}）
     /// 值来自后端字符串（H5 蓝本 `|| '0'` 兜底），保留 String 类型避免精度丢失
     @Published var callIncomes: String = "0"
     @Published var giftIncomes: String = "0"
@@ -77,8 +80,21 @@ final class WorkViewModel: ObservableObject {
     @Published private(set) var showNewbie: Bool = false
     /// Star User（大 R）入口是否显示 —— 对齐 H5 `getBigREntryVisibleApi().visible`
     @Published private(set) var showBigR: Bool = false
+    /// 成长中心存在尚未查看的模块时显示红点（对齐 H5 `/api/anchor/guide/list` + moduleKey 已读集合）。
+    @Published private(set) var hasAnchorGuideRedDot: Bool = false
+
+    private var anchorGuideModuleKeys = Set<String>()
+    private var cancellables = Set<AnyCancellable>()
 
     init() {
+        NotificationCenter.default.publisher(for: .anchorGuideModuleViewed)
+            .compactMap { $0.userInfo?["moduleKey"] as? String }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] moduleKey in
+                self?.markAnchorGuideModuleViewed(moduleKey)
+            }
+            .store(in: &cancellables)
+
         // 派生头像 URL：follow AnchorInfoStore.iconURL 优先级（info.icon → mine.icon → session.user.icon）。
         // 只订阅 $info/$mine 两个字段（不 @ObservedObject 大 store），登出→登录切账号时会因
         // AnchorInfoStore.clear + login refresh 双入口自动重刷（rule session-scoped-store-refresh）。
@@ -107,23 +123,19 @@ final class WorkViewModel: ObservableObject {
             .removeDuplicates()
             .assign(to: &$weeklyLevel)
 
-        // dataStatistics 三项（H5 work/index.vue L498/509/520）
+        // H5 Work 三项：anchorSettleMap 两个时长 + dataStatistics.positiveRating。
         AnchorInfoStore.shared.$info
-            .map { $0?.dataStatistics?.callNum ?? 0 }
+            .map { $0?.anchorSettleMap?.onlineTime ?? 0 }
             .removeDuplicates()
             .assign(to: &$onlineTimeSec)
         AnchorInfoStore.shared.$info
-            .map { $0?.dataStatistics?.weeklyDiamonds ?? 0 }
+            .map { $0?.anchorSettleMap?.averageCallDuration ?? 0 }
             .removeDuplicates()
             .assign(to: &$avgCallDurationSec)
         AnchorInfoStore.shared.$info
             .map { $0?.dataStatistics?.positiveRating ?? 0 }
             .removeDuplicates()
             .assign(to: &$positiveRating)
-
-        // 4 张预览卡的 anchor 端派生（复用同 $info publisher，同 removeDuplicates 守门）
-        // 与 onlineTimeSec / avgCallDurationSec 共享 callNum / weeklyDiamonds 但语义不同，
-        // 详见字段 @Published 注释
         AnchorInfoStore.shared.$info
             .map { $0?.dataStatistics?.callNum ?? 0 }
             .removeDuplicates()
@@ -151,7 +163,7 @@ final class WorkViewModel: ObservableObject {
             .removeDuplicates()
             .assign(to: &$inviteIncomes)
         AnchorInfoStore.shared.$info
-            .map { $0?.anchorIncomeMap?.unlock ?? "0" }
+            .map { $0?.anchorIncomeMap?.othersIncome ?? "0" }
             .removeDuplicates()
             .assign(to: &$managedIncomes)
         AnchorInfoStore.shared.$info
@@ -159,39 +171,45 @@ final class WorkViewModel: ObservableObject {
             .removeDuplicates()
             .assign(to: &$totalIncomes)
 
-        // 并行拉两个 visibility 接口 + 钱包余额（H5 Promise.allSettled 语义：任一失败不阻塞另一个）。
-        // 余额走 sapi 域（PartyAPIClient），与主接口 visibility 域并行不冲突。
+        // H5 共用的工具探针，外加 Android Work 的余额概览。
         Task { @MainActor [weak self] in
             async let newbie = Self.fetchVisible(path: "/api/anchor/newTask/checkEntryVisible", tag: "newbie")
             async let bigR = Self.fetchVisible(path: "/api/anchor/bigr/entryVisible", tag: "bigR")
             async let balance = Self.fetchWalletBalance()
             async let whatsapp = Self.fetchWhatsapp()
-            let (n, b, bal, wa) = await (newbie, bigR, balance, whatsapp)
+            async let anchorGuideKeys = Self.fetchAnchorGuideModuleKeys()
+            let (n, b, balanceResult, wa, guideKeys) = await (newbie, bigR, balance, whatsapp, anchorGuideKeys)
             guard let self else { return }
             self.showNewbie = n
             self.showBigR = b
-            self.walletDiamonds = bal.diamond
-            self.walletGems = bal.gem
+            self.walletDiamonds = balanceResult.diamond
+            self.walletGems = balanceResult.gem
             self.whatsappPhone = wa
+            self.updateAnchorGuideRedDot(moduleKeys: guideKeys)
         }
     }
 
     /// 下拉刷新（对齐 H5 `userStore.getMineInfoData(true)` + `listOnRefresh`）。
     /// - `async` 必要：`.refreshable` closure await 到本函数完成才收顶部 spinner，
     ///   否则手势 release 时 spinner 一闪即隐（rule list-refresh-preserve-items §B）
-    /// - 同时刷新工具入口 visibility（对齐 H5 listOnRefresh 语义）
+    /// - H5 下拉刷新刷新主播资料和成长中心红点；其它工具探针保留首次进入结果。
     func refresh() async {
         async let anchorRefresh: Void = AnchorInfoStore.shared.refresh()
-        async let newbie = Self.fetchVisible(path: "/api/anchor/newTask/checkEntryVisible", tag: "newbie")
-        async let bigR = Self.fetchVisible(path: "/api/anchor/bigr/entryVisible", tag: "bigR")
-        async let balance = Self.fetchWalletBalance()
         async let whatsapp = Self.fetchWhatsapp()
-        let (_, n, b, bal, wa) = await (anchorRefresh, newbie, bigR, balance, whatsapp)
-        self.showNewbie = n
-        self.showBigR = b
-        self.walletDiamonds = bal.diamond
-        self.walletGems = bal.gem
+        async let anchorGuideKeys = Self.fetchAnchorGuideModuleKeys()
+        let (_, wa, guideKeys) = await (anchorRefresh, whatsapp, anchorGuideKeys)
         self.whatsappPhone = wa
+        updateAnchorGuideRedDot(moduleKeys: guideKeys)
+    }
+
+    /// 仅在用户展开了 H5 成长中心模块后标记该模块已读，避免“只进入页面就清空所有提醒”。
+    private func markAnchorGuideModuleViewed(_ rawModuleKey: String) {
+        let moduleKey = rawModuleKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !moduleKey.isEmpty else { return }
+        var readKeys = Set(UserDefaults.standard.stringArray(forKey: anchorGuideReadKeysStorageKey) ?? [])
+        guard readKeys.insert(moduleKey).inserted else { return }
+        UserDefaults.standard.set(Array(readKeys), forKey: anchorGuideReadKeysStorageKey)
+        hasAnchorGuideRedDot = anchorGuideModuleKeys.contains { !readKeys.contains($0) }
     }
 
     /// POST 无 body 拉 `{visible: Bool}`。失败静默返 false（对齐 H5 allSettled fail-silent）。
@@ -217,44 +235,96 @@ final class WorkViewModel: ObservableObject {
         }
     }
 
-    /// 拉钱包余额 —— sapi `/sapi/weidou/v1/client/gem/getBalance`（走 PartyAPIClient，
-    /// 与 PartyBalanceService 同域但需同时取 diamond + gem 双字段，不复用 PartyBalanceService
-    /// 的单值实现）。失败静默返 (0, 0)（fail-silent；浮窗数据不阻塞主页面）。
-    ///
-    /// 字段名 fallback（agent-recon-field-names-unverified rule）：
-    /// - Diamonds：`diamond` → `diamonds` → `diamondNum`
-    /// - Gems：`gem` → `gems`
-    /// 真机首次拉取后按 log 校准。NSNumber/String 类型双兼容。
+    /// H5 以 `/api/anchor/guide/list` 返回的 moduleKey 与本地已读集合求差来决定入口红点。
+    /// 空响应或请求失败返回 nil；调用方会使用上次成功保存的模块快照，避免离线时误灭。
+    private static func fetchAnchorGuideModuleKeys() async -> Set<String>? {
+        do {
+            let data = try await APIClient.shared.post("/api/anchor/guide/list", body: nil)
+            guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let tabs = object["tabs"] as? [[String: Any]] else {
+                AppLogger.net.error("[Work.anchorGuide] list response invalid")
+                return nil
+            }
+            var keys = Set<String>()
+            for tab in tabs {
+                let modules = tab["modules"] as? [[String: Any]] ?? []
+                for module in modules {
+                    guard let key = module["moduleKey"] as? String else { continue }
+                    let normalized = key.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !normalized.isEmpty {
+                        keys.insert(normalized)
+                    }
+                }
+            }
+            return keys
+        } catch {
+            AppLogger.net.error("[Work.anchorGuide] list fetch failed: \(String(describing: error), privacy: .private)")
+            return nil
+        }
+    }
+
+    private func updateAnchorGuideRedDot(moduleKeys: Set<String>?) {
+        let resolvedModuleKeys: Set<String>
+        if let moduleKeys, !moduleKeys.isEmpty {
+            resolvedModuleKeys = moduleKeys
+            UserDefaults.standard.set(Array(moduleKeys), forKey: anchorGuideModuleKeysStorageKey)
+        } else {
+            resolvedModuleKeys = Set(UserDefaults.standard.stringArray(forKey: anchorGuideModuleKeysStorageKey) ?? [])
+        }
+        anchorGuideModuleKeys = resolvedModuleKeys
+        guard !resolvedModuleKeys.isEmpty else {
+            // 与 H5 相同：首次无法获得内容快照时保留提醒；已知列表为空时不会写快照，因此也不误灭旧状态。
+            hasAnchorGuideRedDot = UserDefaults.standard.object(forKey: anchorGuideModuleKeysStorageKey) == nil
+            return
+        }
+        let readKeys = Set(UserDefaults.standard.stringArray(forKey: anchorGuideReadKeysStorageKey) ?? [])
+        hasAnchorGuideRedDot = resolvedModuleKeys.contains { !readKeys.contains($0) }
+    }
+
+    private var anchorGuideReadKeysStorageKey: String {
+        "anchorGuide.readKeys.\(anchorGuideUserID)"
+    }
+
+    private var anchorGuideModuleKeysStorageKey: String {
+        "anchorGuide.allKeys.\(anchorGuideUserID)"
+    }
+
+    private var anchorGuideUserID: Int {
+        let userID = SessionStore.shared.user?.userId
+            ?? AnchorInfoStore.shared.info?.userId
+            ?? AnchorInfoStore.shared.mine?.userId
+            ?? 0
+        return userID
+    }
+
+    /// Android Work 专属钻石/宝石概览：sapi `gem/getBalance`。
     private static func fetchWalletBalance() async -> (diamond: Int64, gem: Int64) {
         do {
             let data = try await PartyAPIClient.shared.post(
                 "/sapi/weidou/v1/client/gem/getBalance",
                 body: [:]
             )
-            guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                AppLogger.net.error("[Work.balance] response not object")
+            guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 return (0, 0)
             }
-            let diamond = extractInt64(from: obj, keys: ["diamond", "diamonds", "diamondNum"])
-            let gem = extractInt64(from: obj, keys: ["gem", "gems"])
-            return (diamond, gem)
+            return (
+                extractInt64(from: object, keys: ["diamond", "diamonds", "diamondNum"]),
+                extractInt64(from: object, keys: ["gem", "gems"])
+            )
         } catch {
             AppLogger.net.error("[Work.balance] fetch failed: \(String(describing: error), privacy: .private)")
             return (0, 0)
         }
     }
 
-    /// 从字典按优先级取整数值（NSNumber / String 双兼容，排除 Bool 桥接）。
-    private static func extractInt64(from obj: [String: Any], keys: [String]) -> Int64 {
+    private static func extractInt64(from object: [String: Any], keys: [String]) -> Int64 {
         for key in keys {
-            if let n = obj[key] as? NSNumber {
-                let cType = String(cString: n.objCType)
-                if cType != "c" && cType != "B" {  // 排除 Bool 桥接
-                    return n.int64Value
-                }
+            if let number = object[key] as? NSNumber {
+                let type = String(cString: number.objCType)
+                if type != "c" && type != "B" { return number.int64Value }
             }
-            if let s = obj[key] as? String, let v = Int64(s) {
-                return v
+            if let string = object[key] as? String, let value = Int64(string) {
+                return value
             }
         }
         return 0
@@ -272,6 +342,13 @@ final class WorkViewModel: ObservableObject {
             AppLogger.net.error("[Work.whatsapp] fetch failed: \(String(describing: error), privacy: .private)")
             return ""
         }
+    }
+
+    private static func timeString(_ seconds: Int) -> String {
+        let hours = seconds / 3_600
+        let minutes = (seconds % 3_600) / 60
+        let remainingSeconds = seconds % 60
+        return String(format: "%02d:%02d:%02d", hours, minutes, remainingSeconds)
     }
 
     /// 点击开关：上线直改；下线走确认弹窗（H5 changeOnline 分支）
@@ -292,4 +369,8 @@ final class WorkViewModel: ObservableObject {
         }
         showOfflineConfirm = false
     }
+}
+
+extension Notification.Name {
+    static let anchorGuideModuleViewed = Notification.Name("anchorGuideModuleViewed")
 }

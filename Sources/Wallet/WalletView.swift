@@ -421,11 +421,11 @@ private struct WithdrawalBalanceCard: View {
             Text(L10n.Wallet.cashableBalance)
                 .font(.system(size: 14))
                 .foregroundStyle(.white.opacity(0.72))
-            Text("\(wallet?.canWithdrawalAmount ?? 0)")
+            Text("\(wallet?.diamondAmount ?? 0)")
                 .font(.system(size: 30, weight: .bold))
                 .foregroundStyle(Color(hex: 0xFFE600))
-            if let diamondAmount = wallet?.diamondAmount {
-                Text("\(L10n.Wallet.withdrawalBalance): \(diamondAmount)")
+            if let canWithdrawalAmount = wallet?.canWithdrawalAmount {
+                Text("\(L10n.Wallet.withdrawalBalance): \(canWithdrawalAmount)")
                     .font(.system(size: 13))
                     .foregroundStyle(.white.opacity(0.66))
             }
@@ -488,7 +488,9 @@ private struct WithdrawalPasswordSheet: View {
             Text(request.config.isSet ? L10n.Wallet.enterPassword : L10n.Wallet.setPassword)
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(.white)
-            Text(request.config.isSet ? L10n.Wallet.enterPasswordDetail : L10n.Wallet.setPasswordDetail)
+            Text(request.config.message.isEmpty
+                ? (request.config.isSet ? L10n.Wallet.enterPasswordDetail : L10n.Wallet.setPasswordDetail)
+                : request.config.message)
                 .font(.system(size: 14))
                 .foregroundStyle(.white.opacity(0.7))
             Button {
@@ -536,8 +538,8 @@ private struct WithdrawalPasswordSheet: View {
                     }
                 }
                 .walletPrimaryButton()
-                .disabled(password.count != 6 || store.isPasswordSubmitting)
-                .opacity(password.count == 6 ? 1 : 0.55)
+                .disabled(password.count != 6 || store.isPasswordSubmitting || store.isWithdrawalPasswordLocked)
+                .opacity(password.count == 6 && !store.isWithdrawalPasswordLocked ? 1 : 0.55)
             }
         }
         .padding(22)

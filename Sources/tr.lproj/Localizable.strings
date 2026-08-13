@@ -73,6 +73,11 @@
 "dataStatistics.deductionUnavailable"         = "Puanlarınız yetersiz";
 
 "work.levelText.topHost"     = "Sen üst düzey bir yayıncısın";
+"work.levelText.keepSTier" = "SS seviyesine ulaşmak için S seviyesini koru";
+"work.levelText.callTargetNotMet" = "Arama hedefi karşılanmadı";
+"work.levelText.averageCallTime" = "Ortalama Arama Süresi: ";
+"work.levelText.nextLevel" = " (sonraki seviye: ";
+"wallet.minimumRequestAmountFormat" = "Her para çekme işlemi en az %lld elmas olmalıdır.";
 
 "call.reconnect"             = "Yeniden Bağlan";
 

@@ -9,6 +9,7 @@ struct ToolsSection: View {
     // 用 value 而非 @ObservedObject vm：只在这个 Bool 变化时 diff 重算，
     // 不订阅 vm 的其他 @Published（避免 onlineTimeSec / callIncomes 变化时 12+ 图标网格重算 —— 审查报告-202607061550 必修-1）。
     let showNewbie: Bool
+    let hasAnchorGuideRedDot: Bool
     /// Work 根页的全部 push 都必须写入 MainTabView 持有的 path，确保任何二级页自动隐藏 TabBar。
     @Binding var path: NavigationPath
 
@@ -123,7 +124,9 @@ struct ToolsSection: View {
                             .buttonStyle(.plain)
                     // Anchor Guide → 内嵌 H5 功能页
                     } else if tools[i].icon == "toolWorkingGuide" {
-                        NavigationLink(value: WorkRoute.anchorGuide) { cell }
+                        Button {
+                            path.append(WorkRoute.anchorGuide)
+                        } label: { cell }
                             .buttonStyle(.plain)
                     // Live Data → Phase B 占位（下一个开工）
                     // P 项目权限管理 v2：canLive=false 时不渲染入口
@@ -206,14 +209,24 @@ struct ToolsSection: View {
     // MARK: - 单个工具
     private func toolCell(icon: String, label: String) -> some View {
         VStack(spacing: 8) {
-            if icon == "toolBeautyCamera" {
-                beautyCameraToolIcon
-            } else {
-                CDNAssetImage(icon)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: Theme.Metric.toolTile, height: Theme.Metric.toolTile)
-                    .accessibilityHidden(true)
+            ZStack(alignment: .topTrailing) {
+                if icon == "toolBeautyCamera" {
+                    beautyCameraToolIcon
+                } else {
+                    CDNAssetImage(icon)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: Theme.Metric.toolTile, height: Theme.Metric.toolTile)
+                        .accessibilityHidden(true)
+                }
+                if icon == "toolWorkingGuide", hasAnchorGuideRedDot {
+                    Circle()
+                        .fill(Color(hex: 0xFC4A46))
+                        .frame(width: 8, height: 8)
+                        .overlay(Circle().stroke(Theme.Palette.cardFill, lineWidth: 1))
+                        .offset(x: 2, y: -2)
+                        .accessibilityHidden(true)
+                }
             }
             Text(label)
                 .font(Theme.Typography.toolLabel)

@@ -40,7 +40,11 @@ struct WorkView: View {
                             path.append(WorkRoute.wallet)
                         }
                     }
-                    ToolsSection(showNewbie: vm.showNewbie, path: $path)
+                    ToolsSection(
+                        showNewbie: vm.showNewbie,
+                        hasAnchorGuideRedDot: vm.hasAnchorGuideRedDot,
+                        path: $path
+                    )
                     WorkSysInfoFooter(whatsapp: vm.whatsappPhone)
                 }
                 .padding(.horizontal, Theme.Metric.screenMargin)

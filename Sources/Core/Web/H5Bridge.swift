@@ -38,6 +38,9 @@ enum H5Bridge {
             return .goRoom(roomId: string(payload["roomId"]))
         case "GO_PROFILE":
             return .goProfile(userId: string(payload["userId"]))
+        case "ANCHOR_GUIDE_MODULE_VIEWED":
+            guard let moduleKey = string(payload["moduleKey"]) else { return nil }
+            return .anchorGuideModuleViewed(moduleKey: moduleKey)
         default:
             return .unsupported(type: type)
         }

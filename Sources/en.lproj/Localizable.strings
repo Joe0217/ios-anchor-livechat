@@ -71,6 +71,10 @@
 "dataStatistics.deductionUnavailable"         = "Your points are insufficient";
 
 "work.levelText.topHost"     = "You are a top host";
+"work.levelText.keepSTier" = "Keep S-tier to become an SS-tier";
+"work.levelText.callTargetNotMet" = "Call target not met";
+"work.levelText.averageCallTime" = "Average Call Time: ";
+"work.levelText.nextLevel" = " (nextLevel: ";
 
 "call.reconnect"             = "Reconnect";
 
@@ -2238,6 +2242,7 @@
 "wallet.integerAmount" = "Withdrawal amount must be a whole number.";
 "wallet.amountExceedsBalance" = "The amount exceeds your cashable balance.";
 "wallet.minimumDiamond" = "Each withdrawal must be at least 200 diamonds.";
+"wallet.minimumRequestAmountFormat" = "Each withdrawal must be at least %lld diamonds.";
 "wallet.minimumRate" = "The amount must be at least the diamond exchange rate.";
 "wallet.channelMinimum" = "The selected collection method does not meet its minimum withdrawal amount.";
 "wallet.verificationCheckFailed" = "Unable to check identity verification. Please try again.";

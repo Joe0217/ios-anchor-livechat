@@ -321,7 +321,7 @@ struct H5WebView: UIViewRepresentable {
           if (!nativeHandler) return;
           var runtime = \(runtimeJSON);
           var isActivityProfile = \(isActivityProfile);
-          var known = ['getAppParams', 'SET_NAV', 'CLOSE', 'JUMP_WALLET', 'JUMP_RANKING', 'REPORT_SHUSHU', 'GO_ROOM', 'GO_PROFILE', 'GO_LIVE', 'COMMON_JUMP'];
+          var known = ['getAppParams', 'SET_NAV', 'CLOSE', 'JUMP_WALLET', 'JUMP_RANKING', 'REPORT_SHUSHU', 'GO_ROOM', 'GO_PROFILE', 'GO_LIVE', 'COMMON_JUMP', 'ANCHOR_GUIDE_MODULE_VIEWED'];
           function post(type, data) { nativeHandler.postMessage({ type: type, data: data || {} }); }
           window.__hilyReceiveNativeMessage = function(payload) {
             if (payload && payload.type === 'getAppParams') runtime = payload;
@@ -341,6 +341,7 @@ struct H5WebView: UIViewRepresentable {
             commonJump: function(className) { post('COMMON_JUMP', { className: className || '' }); },
             jumpLiveRoom: function() { post('GO_LIVE'); },
             jumpPartRoom: function(roomId) { post('GO_ROOM', { roomId: roomId }); },
+            anchorGuideModuleViewed: function(moduleKey) { post('ANCHOR_GUIDE_MODULE_VIEWED', { moduleKey: moduleKey || '' }); },
             isInLiveRoom: function() { return String(runtime.isInLiveRoom).toLowerCase() === 'true'; },
             isInPartyRoom: function() { return String(runtime.isInPartyRoom).toLowerCase() === 'true'; }
           });

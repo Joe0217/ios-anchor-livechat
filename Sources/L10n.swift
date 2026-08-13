@@ -832,6 +832,10 @@ enum L10n {
     static var dataStatisticsDeductionUnavailable: String { localize("dataStatistics.deductionUnavailable", comment: "无法抵扣 toast") }
 
     static var workLevelTextTopHost: String { localize("work.levelText.topHost", comment: "顶级主播场景文案") }
+    static var workLevelTextKeepSTier: String { localize("work.levelText.keepSTier", comment: "S 级主播场景文案") }
+    static var workLevelTextCallTargetNotMet: String { localize("work.levelText.callTargetNotMet", comment: "通话目标未达标文案") }
+    static var workLevelTextAverageCallTime: String { localize("work.levelText.averageCallTime", comment: "平均通话时长前缀") }
+    static var workLevelTextNextLevel: String { localize("work.levelText.nextLevel", comment: "下一等级前缀") }
 
     // Home 顶部刷新按钮 toast（对齐 H5 tabsNav.vue refreshIMOnline → showToast('call.reconnect')）
     static var callReconnect: String { localize("call.reconnect", comment: "重连 toast") }
@@ -2778,6 +2782,7 @@ enum L10n {
         static var integerAmount: String { localize("wallet.integerAmount", comment: "Whole number amount required") }
         static var amountExceedsBalance: String { localize("wallet.amountExceedsBalance", comment: "Amount exceeds balance") }
         static var minimumDiamond: String { localize("wallet.minimumDiamond", comment: "Minimum 200 diamonds") }
+        static var minimumRequestAmountFormat: String { localize("wallet.minimumRequestAmountFormat", comment: "Minimum withdrawal amount %@ diamonds") }
         static var minimumRate: String { localize("wallet.minimumRate", comment: "Minimum exchange rate") }
         static var channelMinimum: String { localize("wallet.channelMinimum", comment: "Channel minimum") }
         static var verificationCheckFailed: String { localize("wallet.verificationCheckFailed", comment: "Face verification preflight failure") }

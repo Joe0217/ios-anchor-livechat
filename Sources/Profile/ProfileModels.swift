@@ -58,8 +58,14 @@ struct AnchorInfo: Codable {
     let chatBubbleGuardianLevel: Int?
     let activeTycoon: Bool?        // 主播自己是否大R（发送消息时 remoteExt 透传给对端，让对端 nav 显徽章）
 
-    // 工作台数据（H5 mineInfo.dataStatistics + anchorIncomeMap；H5 type.ts 声明 anchorIncomeMap?: null 是撒谎，真接口返 dict）
+    // 工作台数据（H5 mineInfo + Android HomeWorkFragment 共用字段）。
+    let nextLevel: String?
+    let isCallTarget: Bool?
+    let isNewAnchor: Bool?
+    let newAnchorEndTime: Int?
+    let diamondNum: Int?
     let dataStatistics: AnchorDataStatistics?
+    let anchorSettleMap: AnchorSettleMap?
     let anchorIncomeMap: AnchorIncomeMap?
 
     // A-2 新增（v3 BLOCK-2 修：供注册被拒重录 hydrate 回填；H5 `type.ts` L67/78/115/195 等多处 mineInfo 类型声明字段名推）
@@ -116,7 +122,13 @@ struct AnchorInfo: Codable {
         self.chatBubble = try c.decodeIfPresent(String.self, forKey: .chatBubble)
         self.chatBubbleGuardianLevel = c.decodeFlexibleInt(forKey: .chatBubbleGuardianLevel)
         self.activeTycoon = try c.decodeIfPresent(Bool.self, forKey: .activeTycoon)
+        self.nextLevel = c.decodeFlexibleString(forKey: .nextLevel)
+        self.isCallTarget = c.decodeFlexibleBool(forKey: .isCallTarget)
+        self.isNewAnchor = c.decodeFlexibleBool(forKey: .isNewAnchor)
+        self.newAnchorEndTime = c.decodeFlexibleInt(forKey: .newAnchorEndTime)
+        self.diamondNum = c.decodeFlexibleInt(forKey: .diamondNum)
         self.dataStatistics = try c.decodeIfPresent(AnchorDataStatistics.self, forKey: .dataStatistics)
+        self.anchorSettleMap = try c.decodeIfPresent(AnchorSettleMap.self, forKey: .anchorSettleMap)
         self.anchorIncomeMap = try c.decodeIfPresent(AnchorIncomeMap.self, forKey: .anchorIncomeMap)
         self.email = try c.decodeIfPresent(String.self, forKey: .email)
         // birthday: String/Int/Double 兼容（对齐 ios-decode-userid-compat.md）
@@ -145,7 +157,10 @@ struct AnchorInfo: Codable {
          greetMsgs: [GreetMsg]?,
          callVideoUrl: String?, giftList: [GiftItem]?,
          chatBubble: String?, chatBubbleGuardianLevel: Int? = nil, activeTycoon: Bool?,
-         dataStatistics: AnchorDataStatistics? = nil, anchorIncomeMap: AnchorIncomeMap? = nil,
+         nextLevel: String? = nil, isCallTarget: Bool? = nil, isNewAnchor: Bool? = nil,
+         newAnchorEndTime: Int? = nil, diamondNum: Int? = nil,
+         dataStatistics: AnchorDataStatistics? = nil, anchorSettleMap: AnchorSettleMap? = nil,
+         anchorIncomeMap: AnchorIncomeMap? = nil,
          email: String?, birthday: String?, phone: String?, inviteCode: String?,
          language: String?, countryId: String?,
          valid: Int? = nil, onReview: Bool? = nil, banAlways: Bool? = nil,
@@ -161,7 +176,10 @@ struct AnchorInfo: Codable {
         self.callVideoUrl = callVideoUrl; self.giftList = giftList
         self.chatBubble = chatBubble; self.chatBubbleGuardianLevel = chatBubbleGuardianLevel
         self.activeTycoon = activeTycoon
-        self.dataStatistics = dataStatistics; self.anchorIncomeMap = anchorIncomeMap
+        self.nextLevel = nextLevel; self.isCallTarget = isCallTarget; self.isNewAnchor = isNewAnchor
+        self.newAnchorEndTime = newAnchorEndTime; self.diamondNum = diamondNum
+        self.dataStatistics = dataStatistics; self.anchorSettleMap = anchorSettleMap
+        self.anchorIncomeMap = anchorIncomeMap
         self.email = email; self.birthday = birthday; self.phone = phone; self.inviteCode = inviteCode
         self.language = language; self.countryId = countryId
         self.valid = valid; self.onReview = onReview; self.banAlways = banAlways
@@ -197,7 +215,7 @@ struct AnchorInfo: Codable {
             chatBubble: r.chatBubble,
             chatBubbleGuardianLevel: r.chatBubbleGuardianLevel,
             activeTycoon: nil,
-            dataStatistics: nil, anchorIncomeMap: nil,
+            dataStatistics: nil, anchorSettleMap: nil, anchorIncomeMap: nil,
             email: nil, birthday: nil, phone: nil, inviteCode: nil,
             language: nil, countryId: nil,
             valid: r.valid, onReview: r.onReview, banAlways: r.banAlways,
@@ -254,12 +272,10 @@ extension AnchorInfo {
 // 通用 KeyedDecodingContainer 兼容 helper 已迁移到 Sources/Core/Extensions/CodableExtensions.swift
 // (2026-07-17 H 里程碑 · LiveGiftTask spec §4 · HilyTests 白名单精确 include)
 
-/// 主播工作台数据统计（H5 `mineInfo.dataStatistics`，getAnchorInfo 响应字段）。
-/// H5 蓝本 work/index.vue L498/509/520：`callNum` 是**在线时长**（秒），`weeklyDiamonds` 是**平均通话时长**（秒），
-/// 字段名 H5 复用未纠正，业务语义已跑偏；本文件的 doc comment 描述业务语义为准。
+/// 主播工作台数据统计。当前 H5 Work 页仅使用 `positiveRating`；Android 另使用通话数和周累计钻石。
 struct AnchorDataStatistics: Codable, Equatable {
-    let callNum: Int?           // 今日在线时长（秒）
-    let weeklyDiamonds: Int?    // 今日平均通话时长（秒）
+    let callNum: Int?           // Android：当天通话数量
+    let weeklyDiamonds: Int?    // Android：周累计钻石
     let positiveRating: Int?    // 好评率（0-100 整数）
 
     init(callNum: Int? = nil, weeklyDiamonds: Int? = nil, positiveRating: Int? = nil) {
@@ -276,6 +292,23 @@ struct AnchorDataStatistics: Codable, Equatable {
     }
 }
 
+/// H5 与 Android Work 页共用的主播结算数据。
+struct AnchorSettleMap: Codable, Equatable {
+    let onlineTime: Int?
+    let averageCallDuration: Int?
+
+    init(onlineTime: Int? = nil, averageCallDuration: Int? = nil) {
+        self.onlineTime = onlineTime
+        self.averageCallDuration = averageCallDuration
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        onlineTime = c.decodeFlexibleInt(forKey: .onlineTime)
+        averageCallDuration = c.decodeFlexibleInt(forKey: .averageCallDuration)
+    }
+}
+
 /// 今日收益字典（H5 `mineInfo.anchorIncomeMap`）。
 /// H5 蓝本 work/index.vue L279 `mappedIncomeItems`：值直接与 UI 拼接 + `|| '0'` 兜底 → 类型按 String? 处理；
 /// 后端混发 Int/String 由 flexible decode 统一收敛到 String。
@@ -285,15 +318,18 @@ struct AnchorIncomeMap: Codable, Equatable {
     let giftIncome: String?
     let taskReward: String?
     let invitationReward: String?
+    let othersIncome: String?
     let unlock: String?
 
     init(totalCoin: String? = nil, callIncome: String? = nil, giftIncome: String? = nil,
-         taskReward: String? = nil, invitationReward: String? = nil, unlock: String? = nil) {
+         taskReward: String? = nil, invitationReward: String? = nil,
+         othersIncome: String? = nil, unlock: String? = nil) {
         self.totalCoin = totalCoin
         self.callIncome = callIncome
         self.giftIncome = giftIncome
         self.taskReward = taskReward
         self.invitationReward = invitationReward
+        self.othersIncome = othersIncome
         self.unlock = unlock
     }
 
@@ -304,6 +340,7 @@ struct AnchorIncomeMap: Codable, Equatable {
         self.giftIncome = c.decodeFlexibleString(forKey: .giftIncome)
         self.taskReward = c.decodeFlexibleString(forKey: .taskReward)
         self.invitationReward = c.decodeFlexibleString(forKey: .invitationReward)
+        self.othersIncome = c.decodeFlexibleString(forKey: .othersIncome)
         self.unlock = c.decodeFlexibleString(forKey: .unlock)
     }
 }

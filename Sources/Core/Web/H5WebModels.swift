@@ -367,6 +367,8 @@ enum H5BridgeAction {
     case goLive
     case goRoom(roomId: String?)
     case goProfile(userId: String?)
+    /// 成长中心展开模块后回传已读 key；由 Work 宿主维护入口红点。
+    case anchorGuideModuleViewed(moduleKey: String)
     case unsupported(type: String)
 }
 

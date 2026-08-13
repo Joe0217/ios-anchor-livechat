@@ -91,6 +91,7 @@ struct H5WebContainerView: View {
 struct H5EmbeddedFeatureContainerView: View {
     let feature: H5EmbeddedFeature
     let title: String
+    var onAction: (H5BridgeAction) -> Void = { _ in }
 
     var body: some View {
         if let page = H5Page.embeddedFeature(feature, title: title) {
@@ -98,7 +99,8 @@ struct H5EmbeddedFeatureContainerView: View {
                 page: page,
                 showsNativeNavigation: false,
                 allowsInteractivePop: true,
-                allowsWebViewEdgeSwipeNavigation: true
+                allowsWebViewEdgeSwipeNavigation: true,
+                onAction: onAction
             )
         } else {
             ZStack {

@@ -73,12 +73,14 @@ struct WalletLedgerEntry: Equatable, Identifiable {
 struct WithdrawalWallet: Equatable {
     let canWithdrawalAmount: Int64
     let diamondAmount: Int64
+    let weekIncomeDiamond: Int64
     let diamondRate: Int64
     let description: String
 
     init(object: [String: Any]) {
         canWithdrawalAmount = WalletJSON.int64(object["canWithdrawalAmount"]) ?? 0
         diamondAmount = WalletJSON.int64(object["diamondAmount"]) ?? 0
+        weekIncomeDiamond = WalletJSON.int64(object["weekIncomeDiamond"]) ?? 0
         diamondRate = WalletJSON.int64(object["diamondRate"]) ?? 0
         description = WalletJSON.string(object["description"]) ?? ""
     }
@@ -89,6 +91,9 @@ struct WithdrawalAccount: Equatable, Identifiable {
     let type: String
     let address: String
     let name: String
+    let chainType: String
+    let minimumRequestAmount: Int64
+    let serviceChargePlan: Int?
     let serviceCharge: Decimal
 
     init?(object: [String: Any]) {
@@ -103,6 +108,11 @@ struct WithdrawalAccount: Equatable, Identifiable {
         // Older accounts can predate `accountName`. Keep them selectable and
         // use the same stable channel name supplied by the H5 add-account flow.
         name = WalletJSON.string(object["accountName"]) ?? Self.defaultName(for: type)
+        chainType = WalletJSON.string(object["chainType"]) ?? ""
+        minimumRequestAmount = WalletJSON.int64(object["minRequestAmount"])
+            ?? WalletJSON.int64(object["min_request_amount"])
+            ?? 0
+        serviceChargePlan = WalletJSON.int(object["serviceChargePlan"])
         serviceCharge = WalletJSON.decimal(object["serviceCharge"]) ?? 0
     }
 
@@ -119,9 +129,13 @@ struct WithdrawalAccount: Equatable, Identifiable {
 
 struct WithdrawalPasswordConfig: Equatable {
     let isSet: Bool
+    let message: String
+    let remainingAttempts: Int?
 
     init(object: [String: Any]) {
         isSet = WalletJSON.bool(object["isSet"]) ?? false
+        message = WalletJSON.string(object["message"]) ?? ""
+        remainingAttempts = WalletJSON.int(object["tryNum"])
     }
 }
 
@@ -173,9 +187,8 @@ enum WithdrawalValidationError: Equatable {
     case missingAmount
     case invalidInteger
     case exceedsBalance
-    case belowMinimumDiamond
+    case belowMinimumRequestAmount(Int64)
     case belowExchangeRate
-    case belowChannelMinimum
 }
 
 struct WithdrawalAuthorization: Equatable {

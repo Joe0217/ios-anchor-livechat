@@ -26,6 +26,7 @@ final class WalletStore: ObservableObject {
     @Published private(set) var isPreparingWithdrawal = false
     @Published private(set) var passwordRequest: PasswordRequest?
     @Published private(set) var isPasswordSubmitting = false
+    @Published private(set) var isWithdrawalPasswordLocked = false
     @Published private(set) var isMutatingAccount = false
     @Published private(set) var supportWhatsAppPhone = "+86 185 0202 7264"
     @Published private(set) var completedWithdrawalID: UUID?
@@ -124,16 +125,32 @@ final class WalletStore: ObservableObject {
         guard !isLoadingWithdrawal else { return }
         isLoadingWithdrawal = true
         defer { isLoadingWithdrawal = false }
+
+        // 两路请求独立落地：任一先返回即更新 UI，慢/失败的一路不能阻断另一侧可用数据。
+        async let walletLoad: Void = loadWithdrawalWallet()
+        async let accountLoad: Void = loadWithdrawalAccounts()
+        _ = await (walletLoad, accountLoad)
+    }
+
+    private func loadWithdrawalWallet() async {
         do {
-            async let wallet = service.fetchWithdrawalWallet()
-            async let accountList = service.fetchAccounts()
-            let (loadedWallet, loadedAccounts) = try await (wallet, accountList)
+            let loadedWallet = try await service.fetchWithdrawalWallet()
             withdrawalWallet = loadedWallet
+        } catch {
+            AppLogger.net.error("[Wallet] withdrawal wallet load failed: \(String(describing: error), privacy: .private)")
+            showFailure(error, fallback: L10n.Wallet.loadFailed)
+        }
+    }
+
+    private func loadWithdrawalAccounts() async {
+        do {
+            let loadedAccounts = try await service.fetchAccounts()
             accounts = loadedAccounts
             if let selectedAccountID, !loadedAccounts.contains(where: { $0.id == selectedAccountID }) {
                 self.selectedAccountID = nil
             }
         } catch {
+            AppLogger.net.error("[Wallet] withdrawal account list load failed: \(String(describing: error), privacy: .private)")
             showFailure(error, fallback: L10n.Wallet.loadFailed)
         }
     }
@@ -198,11 +215,10 @@ final class WalletStore: ObservableObject {
         guard let amount = Int64(amountText), amount > 0 else { return .invalidInteger }
         guard let wallet = withdrawalWallet else { return .missingAmount }
         guard amount <= wallet.canWithdrawalAmount else { return .exceedsBalance }
-        guard amount >= 200 else { return .belowMinimumDiamond }
+        guard amount >= account.minimumRequestAmount else {
+            return .belowMinimumRequestAmount(account.minimumRequestAmount)
+        }
         guard wallet.diamondRate > 0, amount >= wallet.diamondRate else { return .belowExchangeRate }
-        let quote = WithdrawalQuote(amount: amount, rate: wallet.diamondRate, serviceCharge: account.serviceCharge)
-        if account.type == "Digifinex", quote.grossUSD < 20 { return .belowChannelMinimum }
-        if account.type == "Epay", quote.grossUSD < 50 { return .belowChannelMinimum }
         return nil
     }
 
@@ -294,7 +310,8 @@ final class WalletStore: ObservableObject {
         }
         guard password.utf8.count == 6,
               password.utf8.allSatisfy({ (48...57).contains($0) }),
-              let request = passwordRequest else {
+              let request = passwordRequest,
+              !isWithdrawalPasswordLocked else {
             AppToastCenter.shared.show(L10n.Wallet.passwordSixDigits)
             return false
         }
@@ -329,6 +346,9 @@ final class WalletStore: ObservableObject {
             AppToastCenter.shared.show(L10n.Wallet.withdrawalSubmitted)
             return true
         } catch {
+            if let apiError = error as? APIError, apiError.code == "2008" {
+                isWithdrawalPasswordLocked = true
+            }
             showFailure(error, fallback: L10n.Wallet.withdrawalSubmitFailed)
             return false
         }
@@ -351,6 +371,7 @@ final class WalletStore: ObservableObject {
 
     private func openPassword(for quote: WithdrawalQuote, account: WithdrawalAccount) async throws {
         let config = try await service.fetchPasswordConfig()
+        isWithdrawalPasswordLocked = config.isSet && config.remainingAttempts == 0
         passwordRequest = PasswordRequest(quote: quote, account: account, config: config)
     }
 
@@ -366,9 +387,9 @@ final class WalletStore: ObservableObject {
         case .missingAmount: return L10n.Wallet.enterAmount
         case .invalidInteger: return L10n.Wallet.integerAmount
         case .exceedsBalance: return L10n.Wallet.amountExceedsBalance
-        case .belowMinimumDiamond: return L10n.Wallet.minimumDiamond
+        case .belowMinimumRequestAmount(let amount):
+            return String(format: L10n.Wallet.minimumRequestAmountFormat, amount)
         case .belowExchangeRate: return L10n.Wallet.minimumRate
-        case .belowChannelMinimum: return L10n.Wallet.channelMinimum
         }
     }
 
