@@ -73,7 +73,10 @@ struct PartyCreateRoomView: View {
         .onChange(of: store.roomTagline) { _ in store.trimTaglineIfNeeded() }
         // 相册选图 → 上传
         .onChange(of: photoPickerItem) { item in
-            guard let item else { return }
+            guard canEditRoomAvatar, let item else {
+                photoPickerItem = nil
+                return
+            }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self) {
                     await store.uploadAvatar(rawData: data)
@@ -134,21 +137,33 @@ struct PartyCreateRoomView: View {
     // MARK: - Avatar block
 
     private var avatarBlock: some View {
-        PhotosPicker(selection: $photoPickerItem, matching: .images) {
-            ZStack(alignment: .bottomTrailing) {
-                Circle()
-                    .strokeBorder(
-                        LinearGradient(colors: [Theme.Palette.partyCreateAvatarRing1, Theme.Palette.partyCreateAvatarRing2],
-                                       startPoint: .top, endPoint: .bottom),
-                        lineWidth: 3
-                    )
-                    .background(
-                        Circle().fill(Theme.Palette.partyCardFill)
-                    )
-                    .frame(width: 120, height: 120)
-                    .overlay(avatarOverlay)
+        Group {
+            if canEditRoomAvatar {
+                PhotosPicker(selection: $photoPickerItem, matching: .images) {
+                    avatarContent(showsCamera: true)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Change avatar")
+            } else {
+                avatarContent(showsCamera: false)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
 
-                // 相机小图标（tap 整个头像触发 PhotosPicker，icon 仅装饰）
+    private func avatarContent(showsCamera: Bool) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            Circle()
+                .strokeBorder(
+                    LinearGradient(colors: [Theme.Palette.partyCreateAvatarRing1, Theme.Palette.partyCreateAvatarRing2],
+                                   startPoint: .top, endPoint: .bottom),
+                    lineWidth: 3
+                )
+                .background(Circle().fill(Theme.Palette.partyCardFill))
+                .frame(width: 120, height: 120)
+                .overlay(avatarOverlay)
+
+            if showsCamera {
                 Circle()
                     .fill(Theme.Palette.partyCreateAvatarCameraBg)
                     .frame(width: 32, height: 32)
@@ -161,8 +176,6 @@ struct PartyCreateRoomView: View {
                     .accessibilityHidden(true)
             }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Change avatar")
     }
 
     @ViewBuilder
@@ -170,7 +183,7 @@ struct PartyCreateRoomView: View {
         if store.isUploadingAvatar {
             Circle().fill(Color.black.opacity(0.4))
                 .overlay(ProgressView().tint(.white))
-        } else if let url = store.uploadedAvatarUrl ?? store.defaultAvatarUrl,
+        } else if let url = displayedAvatarURL,
                   !url.isEmpty,
                   let u = URL(string: url) {
             // v7 对齐安卓：本地上传优先 → fallback 登录默认头像
@@ -184,6 +197,16 @@ struct PartyCreateRoomView: View {
                 .font(.system(size: 44))
                 .foregroundColor(.white.opacity(0.5))
         }
+    }
+
+    private var displayedAvatarURL: String? {
+        canEditRoomAvatar
+            ? (store.uploadedAvatarUrl ?? store.defaultAvatarUrl)
+            : store.defaultAvatarUrl
+    }
+
+    private var canEditRoomAvatar: Bool {
+        store.canEditRoomAvatar
     }
 
     // MARK: - Sections

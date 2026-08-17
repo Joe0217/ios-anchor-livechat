@@ -206,7 +206,7 @@ struct PartyBlocklistSheet: View {
     @ViewBuilder
     private func middleInfo(item: PartyBlocklistItem) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(item.nickname?.isEmpty == false ? item.nickname! : item.userId)
+            Text(reviewSafeNickname(item))
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(.white)
                 .lineLimit(1)
@@ -230,6 +230,16 @@ struct PartyBlocklistSheet: View {
                     .lineLimit(1)
             }
         }
+    }
+
+    private func reviewSafeNickname(_ item: PartyBlocklistItem) -> String {
+        let value = item.nickname?.isEmpty == false ? item.nickname! : item.userId
+        return ObjectionableContentFilter.sanitizedForDisplay(
+            value,
+            replacement: L10n.Party.defaultUser,
+            effectiveUserType: SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+                ?? SessionStore.effectiveUserTypeSnapshot
+        )
     }
 
     /// 性别 + age 一体 chip（gender=1 male 蓝底、gender=2 female 粉底；age 缺失时只显 icon）

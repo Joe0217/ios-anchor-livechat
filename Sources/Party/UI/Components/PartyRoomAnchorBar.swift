@@ -13,6 +13,8 @@ struct PartyRoomAnchorBar: View {
     let roomName: String
     let roomId: String
     let anchorAvatarURL: String?
+    /// 受限模式与 Party 列表统一使用本地房间默认图，不回退到人物占位图。
+    var usesDefaultRoomCover: Bool = false
     /// v12：房主头像装饰框 URL（对齐 H5 head-frame.vue，源自 `apiPartyGetUser.headFrameSmallImg`）
     /// SVGA / 静态图统一由 `HeadFrameView` 分流（v16 SVGA 已接 RemoteSVGAImageView 循环播放）
     let headFrameURL: String?
@@ -130,14 +132,22 @@ struct PartyRoomAnchorBar: View {
     }
 
     private var avatarCircle: some View {
-        CachedAsyncImage(url: URL(string: anchorAvatarURL ?? ""),
-                         contentMode: .fill,
-                         cdn: (.avatarSmall, .fill)) {
-            Circle().fill(Theme.Palette.partyRoomSeatFill)
-                .overlay(
-                    Image(systemName: "person.fill")
-                        .foregroundColor(Theme.Palette.partyRoomSeatChair)
-                )
+        Group {
+            if usesDefaultRoomCover {
+                CDNAssetImage("partyRoomCover")
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            } else {
+                CachedAsyncImage(url: URL(string: anchorAvatarURL ?? ""),
+                                 contentMode: .fill,
+                                 cdn: (.avatarSmall, .fill)) {
+                    Circle().fill(Theme.Palette.partyRoomSeatFill)
+                        .overlay(
+                            Image(systemName: "person.fill")
+                                .foregroundColor(Theme.Palette.partyRoomSeatChair)
+                        )
+                }
+            }
         }
         .frame(width: Theme.Metric.partyRoomAnchorAvatar,
                height: Theme.Metric.partyRoomAnchorAvatar)

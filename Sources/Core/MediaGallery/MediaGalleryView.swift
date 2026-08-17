@@ -229,15 +229,17 @@ struct MediaGalleryView: View {
 
     fileprivate let source: Source
     let startIndex: Int
+    private let allowsRegistrationReviewImages: Bool
     @Environment(\.dismiss) private var dismiss
     @State private var currentIndex: Int
     /// 下拉关闭的 drag 偏移（视觉跟手 + 松手判定）
     @State private var dragOffsetY: CGFloat = 0
 
     /// 远端 URL 列表模式（默认）——图片/视频按扩展名自动分派
-    init(urls: [String], startIndex: Int = 0) {
+    init(urls: [String], startIndex: Int = 0, allowsRegistrationReviewImages: Bool = false) {
         self.source = .urls(urls)
         self.startIndex = startIndex
+        self.allowsRegistrationReviewImages = allowsRegistrationReviewImages
         _currentIndex = State(initialValue: startIndex)
     }
 
@@ -246,6 +248,7 @@ struct MediaGalleryView: View {
     init(localImages: [UIImage], startIndex: Int = 0) {
         self.source = .localImages(localImages)
         self.startIndex = startIndex
+        self.allowsRegistrationReviewImages = false
         _currentIndex = State(initialValue: startIndex)
     }
 
@@ -333,7 +336,10 @@ struct MediaGalleryView: View {
                 if MomentPost.isVideo(url: arr[index]) {
                     MediaGalleryVideoPlayer(urlString: arr[index], isCurrent: isCurrent)
                 } else {
-                    MediaGalleryImageCell(urlString: arr[index])
+                    MediaGalleryImageCell(
+                        urlString: arr[index],
+                        allowsRegistrationReviewImage: allowsRegistrationReviewImages
+                    )
                         .allowsHitTesting(true)
                 }
             case .localImages(let arr):
@@ -370,6 +376,8 @@ struct MediaGalleryView: View {
 /// `retryToken` 递增触发 `.task(id:)` 重跑，实现 "点击 retry → 重新拉图" 的正确取消 + 重启。
 private struct MediaGalleryImageCell: View {
     let urlString: String
+    let allowsRegistrationReviewImage: Bool
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     private enum LoadState: Equatable {
         case loading
@@ -382,22 +390,36 @@ private struct MediaGalleryImageCell: View {
     var body: some View {
         ZStack {
             Color.black   // 底色：loading/failed 期避免透明区域
-            switch state {
-            case .loading:
-                ProgressView()
-                    .tint(.white)
-                    .scaleEffect(1.2)
-            case .loaded(let image):
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-            case .failed:
-                failedOverlay
+            if shouldMaskRegistrationImage {
+                CDNAssetImage("defaultAvatar", contentMode: .fit)
+            } else {
+                switch state {
+                case .loading:
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(1.2)
+                case .loaded(let image):
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                case .failed:
+                    failedOverlay
+                }
             }
         }
-        .task(id: TaskKey(url: urlString, retry: retryToken)) {
-            await load()
+        .task(id: TaskKey(url: urlString, retry: retryToken, masked: shouldMaskRegistrationImage)) {
+            await load(masked: shouldMaskRegistrationImage)
         }
+    }
+
+    private var shouldMaskRegistrationImage: Bool {
+        guard !allowsRegistrationReviewImage else { return false }
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
+        return RegistrationReviewMediaPolicy.shouldMask(
+            URL(string: urlString),
+            effectiveUserType: effectiveUserType
+        )
     }
 
     private var failedOverlay: some View {
@@ -427,10 +449,15 @@ private struct MediaGalleryImageCell: View {
     private struct TaskKey: Equatable {
         let url: String
         let retry: Int
+        let masked: Bool
     }
 
     @MainActor
-    private func load() async {
+    private func load(masked: Bool) async {
+        guard !masked else {
+            state = .loading
+            return
+        }
         // 池命中 → 直接展示（跳过 loading 闪烁）
         if let cached = MediaGalleryCache.shared.getImage(url: urlString) {
             state = .loaded(cached)

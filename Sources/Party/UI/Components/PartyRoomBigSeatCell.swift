@@ -29,6 +29,7 @@ struct PartyRoomBigSeatCell: View {
     /// PK-aware gems 显示（SELECTING 期强制 0，对齐 H5 audio-wrap.vue :93-97）
     /// cell 直接订阅 battleStore 触发 SELECTING → RUNNING 时 gems 数字自动重绘
     @ObservedObject private var battleStore = PartyBattleStore.shared
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     init(
         seat: PartyRoomSeat,
@@ -376,7 +377,7 @@ struct PartyRoomBigSeatCell: View {
 
     private var nameChip: some View {
         HStack(spacing: 4) {
-            Text(seat.nickname ?? L10n.Party.defaultUser)
+            Text(reviewSafeNickname)
                 .font(Theme.Typography.partyRoomSeatName)
                 .foregroundColor(Theme.Palette.partyRoomSeatNameText)
                 .lineLimit(1)
@@ -390,6 +391,16 @@ struct PartyRoomBigSeatCell: View {
         .padding(.vertical, Theme.Metric.partyRoomSeatNameVPadding)
         .background(
             Capsule().fill(Theme.Palette.partyRoomSeatNameFill)
+        )
+    }
+
+    private var reviewSafeNickname: String {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
+        return ObjectionableContentFilter.sanitizedForDisplay(
+            seat.nickname ?? L10n.Party.defaultUser,
+            replacement: L10n.Party.defaultUser,
+            effectiveUserType: effectiveUserType
         )
     }
 

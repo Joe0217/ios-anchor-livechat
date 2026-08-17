@@ -403,7 +403,7 @@ struct UserProfileView: View {
 
     private func nicknameRow(detail: UserDetail) -> some View {
         HStack(spacing: Theme.Metric.userProfileNicknameToGenderGap) {
-            Text(detail.nickname)
+            Text(reviewSafeNickname(detail.nickname))
                 .font(Theme.Typography.userProfileNickname)
                 .foregroundColor(Theme.Palette.userProfileNickname)
             // gender icon（1=男 / 2=女 / 其他不显示）
@@ -414,6 +414,16 @@ struct UserProfileView: View {
             Spacer(minLength: 0)
         }
         .padding(.top, Theme.Metric.userProfileHeaderVPadding)
+    }
+
+    private func reviewSafeNickname(_ value: String) -> String {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
+        return ObjectionableContentFilter.sanitizedForDisplay(
+            value,
+            replacement: "User",
+            effectiveUserType: effectiveUserType
+        )
     }
 
     @ViewBuilder

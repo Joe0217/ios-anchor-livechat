@@ -142,7 +142,11 @@ struct EditProfileView: View {
         }
         .overlay(alignment: .top) { toastOverlay }
         .fullScreenCover(item: $galleryCtx) { ctx in
-            MediaGalleryView(urls: ctx.urls, startIndex: ctx.startIndex)
+            MediaGalleryView(
+                urls: ctx.urls,
+                startIndex: ctx.startIndex,
+                allowsRegistrationReviewImages: true
+            )
         }
         // Size alert（图片/视频超大 / 视频格式不支持 —— 醒目居中弹窗，替代顶部小 toast）
         // 用户需求 2026-07-07 #1：明显一点。对齐 vant showFailToast 中央大提示视觉意图
@@ -281,7 +285,7 @@ struct EditProfileView: View {
                     Spacer()
                     AvatarEditView(
                         avatarUrl: store.draft.avatarUrl,
-                        isReviewing: store.review.avatar,
+                        isReviewing: store.review.avatar || isRegistrationAvatarReviewing,
                         isRejected: store.review.avatarRejected,
                         onEditTap: { showAvatarSourceMenu = true },
                         onReviewingTap: {
@@ -309,6 +313,13 @@ struct EditProfileView: View {
                 )
             }
         }
+    }
+
+    private var isRegistrationAvatarReviewing: Bool {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
+        return UserTypeExperience.isPartyOnly(effectiveUserType)
+            && RegistrationReviewMediaPolicy.containsMarker(store.draft.avatarUrl)
     }
 
     private var photosSection: some View {

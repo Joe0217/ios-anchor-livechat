@@ -72,13 +72,34 @@ struct ProfileHeaderView: View {
     private var avatar: some View {
         // 外环 72，内图 64：外圈描边在 72pt 圆上，内图 64pt 圆居中显示，单边间距 4pt
         // 本人头像走 persistent=true，NSCache 命中后切 tab 回来无闪烁
-        AvatarView(url: vm.iconURL, size: Theme.Metric.profileAvatarInner, kind: .anchor, persistent: true)
+        AvatarView(
+            url: vm.iconURL,
+            size: Theme.Metric.profileAvatarInner,
+            kind: .anchor,
+            persistent: true,
+            allowsRegistrationReviewImage: true
+        )
             .frame(width: Theme.Metric.profileAvatarSize, height: Theme.Metric.profileAvatarSize)
             .overlay(
                 Circle()
                     .strokeBorder(Theme.Gradients.avatarRing, lineWidth: Theme.Metric.profileAvatarRing)
             )
+            .overlay(alignment: .bottom) {
+                if isRegistrationAvatarReviewing {
+                    InReviewBadge(style: .inline)
+                        .offset(y: 8)
+                }
+            }
             .accessibilityHidden(true)
+    }
+
+    private var isRegistrationAvatarReviewing: Bool {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
+        return RegistrationReviewMediaPolicy.shouldMask(
+            vm.iconURL,
+            effectiveUserType: effectiveUserType
+        )
     }
 
     private var nameAndMeta: some View {
@@ -86,7 +107,7 @@ struct ProfileHeaderView: View {
         VStack(alignment: .leading, spacing: 4) {
             if !vm.displayName.isEmpty {
                 HStack(spacing: 6) {
-                    Text(vm.displayName)
+                    Text(reviewSafeDisplayName)
                         .font(Theme.Typography.profileName)
                         .foregroundColor(Theme.Palette.profileName)
                     if permission.canProfileEditing {
@@ -143,6 +164,16 @@ struct ProfileHeaderView: View {
                 }
             }
         }
+    }
+
+    private var reviewSafeDisplayName: String {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
+        return ObjectionableContentFilter.sanitizedForDisplay(
+            vm.displayName,
+            replacement: "User",
+            effectiveUserType: effectiveUserType
+        )
     }
 
     @ViewBuilder

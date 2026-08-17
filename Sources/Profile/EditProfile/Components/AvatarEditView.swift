@@ -78,7 +78,13 @@ struct AvatarEditView: View {
     // MARK: - Sub-views
 
     private var avatarContent: some View {
-        AvatarView(url: URL(string: avatarUrl), size: size, kind: .anchor, persistent: true)
+        AvatarView(
+            url: URL(string: avatarUrl),
+            size: size,
+            kind: .anchor,
+            persistent: true,
+            allowsRegistrationReviewImage: true
+        )
     }
 
     private var editBadge: some View {

@@ -10,6 +10,7 @@ import PhotosUI
 /// 供上层同步 `PartyStore.roomInfo` —— 顶栏立即刷新，不必等下次 enter/IM 广播。
 struct PartyRoomSettingsView: View {
     @StateObject var store: PartyRoomSettingsStore
+    @ObservedObject private var permission = SelfPermissionBridge.shared
     var onSaved: (PartyRoomSettingsSnapshot) -> Void
 
     @State private var showLanguagePicker = false
@@ -93,7 +94,10 @@ struct PartyRoomSettingsView: View {
             )
         }
         .onChange(of: photoPickerItem) { item in
-            guard let item else { return }
+            guard canEditRoomAvatar, let item else {
+                photoPickerItem = nil
+                return
+            }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self) {
                     await store.uploadAvatar(rawData: data)
@@ -126,18 +130,33 @@ struct PartyRoomSettingsView: View {
     // MARK: - Avatar
 
     private var avatarBlock: some View {
-        PhotosPicker(selection: $photoPickerItem, matching: .images) {
-            ZStack(alignment: .bottomTrailing) {
-                Circle()
-                    .strokeBorder(
-                        LinearGradient(colors: [Theme.Palette.partyCreateAvatarRing1, Theme.Palette.partyCreateAvatarRing2],
-                                       startPoint: .top, endPoint: .bottom),
-                        lineWidth: 3
-                    )
-                    .background(Circle().fill(Theme.Palette.partyCardFill))
-                    .frame(width: 120, height: 120)
-                    .overlay(avatarOverlay)
+        Group {
+            if canEditRoomAvatar {
+                PhotosPicker(selection: $photoPickerItem, matching: .images) {
+                    avatarContent(showsCamera: true)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.Party.settingsChangeAvatar)
+            } else {
+                avatarContent(showsCamera: false)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
 
+    private func avatarContent(showsCamera: Bool) -> some View {
+        ZStack(alignment: .bottomTrailing) {
+            Circle()
+                .strokeBorder(
+                    LinearGradient(colors: [Theme.Palette.partyCreateAvatarRing1, Theme.Palette.partyCreateAvatarRing2],
+                                   startPoint: .top, endPoint: .bottom),
+                    lineWidth: 3
+                )
+                .background(Circle().fill(Theme.Palette.partyCardFill))
+                .frame(width: 120, height: 120)
+                .overlay(avatarOverlay)
+
+            if showsCamera {
                 Circle()
                     .fill(Theme.Palette.partyCreateAvatarCameraBg)
                     .frame(width: 32, height: 32)
@@ -146,8 +165,6 @@ struct PartyRoomSettingsView: View {
                     .accessibilityHidden(true)
             }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(L10n.Party.settingsChangeAvatar)
     }
 
     @ViewBuilder
@@ -155,7 +172,7 @@ struct PartyRoomSettingsView: View {
         if store.isUploadingAvatar {
             Circle().fill(Color.black.opacity(0.4))
                 .overlay(ProgressView().tint(.white))
-        } else if let url = store.uploadedAvatarUrl ?? store.originalAvatarUrl,
+        } else if let url = displayedAvatarURL,
                   !url.isEmpty,
                   let u = URL(string: url) {
             CachedAsyncImage(url: u, persistent: true, cdn: (.avatarLarge, .fill)) {
@@ -168,6 +185,19 @@ struct PartyRoomSettingsView: View {
                 .font(.system(size: 44))
                 .foregroundColor(.white.opacity(0.5))
         }
+    }
+
+    private var displayedAvatarURL: String? {
+        canEditRoomAvatar
+            ? (store.uploadedAvatarUrl ?? store.originalAvatarUrl)
+            : SessionStore.shared.user?.icon
+    }
+
+    private var canEditRoomAvatar: Bool {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? SessionStore.effectiveUserTypeSnapshot
+        guard let effectiveUserType else { return false }
+        return !UserTypeExperience.isPartyOnly(effectiveUserType)
     }
 
     // MARK: - Sections

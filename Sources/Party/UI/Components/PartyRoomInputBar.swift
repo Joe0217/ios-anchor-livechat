@@ -49,13 +49,22 @@ struct PartyRoomInputBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if showsQuickPhrases, !quickPhrases.isEmpty {
-                quickPhraseBar
-            }
+            // 发送普通消息后快捷词条会收起。保留该节点而非条件移除，避免系统仍在
+            // 处理 TextField 提交/表情输入会话时重建同级输入栏，造成 RTI session 失效。
+            quickPhraseBar
+                .frame(height: isQuickPhraseBarVisible ? 42 : 0)
+                .opacity(isQuickPhraseBarVisible ? 1 : 0)
+                .allowsHitTesting(isQuickPhraseBarVisible)
+                .accessibilityHidden(!isQuickPhraseBarVisible)
+                .clipped()
 
             toolbar
         }
         .animation(.easeInOut(duration: 0.2), value: focus.wrappedValue)
+    }
+
+    private var isQuickPhraseBarVisible: Bool {
+        showsQuickPhrases && !quickPhrases.isEmpty
     }
 
     private var toolbar: some View {

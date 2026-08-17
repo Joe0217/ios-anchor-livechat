@@ -9,6 +9,7 @@ struct FollowUserRow: View {
     var isPending: Bool = false
     var onOpenProfile: (() -> Void)? = nil
     var onToggleFollow: (() -> Void)? = nil
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     var body: some View {
         HStack(spacing: 12) {
@@ -18,7 +19,7 @@ struct FollowUserRow: View {
                 HStack(spacing: 12) {
                     avatar
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(user.nickname ?? "—")
+                        Text(reviewSafeNickname)
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(.white)
                             .lineLimit(1)
@@ -39,6 +40,16 @@ struct FollowUserRow: View {
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
         .contentShape(Rectangle())
+    }
+
+    private var reviewSafeNickname: String {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
+        return ObjectionableContentFilter.sanitizedForDisplay(
+            user.nickname ?? "—",
+            replacement: "User",
+            effectiveUserType: effectiveUserType
+        )
     }
 
     private var avatar: some View {

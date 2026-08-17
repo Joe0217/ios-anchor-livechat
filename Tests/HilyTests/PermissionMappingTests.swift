@@ -489,6 +489,8 @@ final class PartyCreateStorePermissionTests: XCTestCase {
         ])
         let store = PartyCreateStore(service: service, partyVideoCapabilityProvider: { false })
 
+        XCTAssertFalse(store.canEditRoomAvatar)
+
         await store.loadInitial()
 
         XCTAssertEqual(store.mode, PartyCreateStore.modeVoice)
@@ -535,6 +537,8 @@ final class PartyCreateStorePermissionTests: XCTestCase {
             PartyCreateStore.modeLiveVoice: [live],
         ])
         let store = PartyCreateStore(service: service, partyVideoCapabilityProvider: { true })
+
+        XCTAssertTrue(store.canEditRoomAvatar)
 
         await store.loadInitial()
 

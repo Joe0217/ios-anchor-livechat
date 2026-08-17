@@ -34,6 +34,10 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
     /// 小窗期间暂存的新公屏。H5 不在小窗时更新可见公屏，恢复后才将最近 100 条合并。
     private var defersMessages = false
     private var deferredMessages: [UnifiedPublicChatMessage] = []
+    /// 对方未在 remoteExt 携带头像时，按云信账号去重补查，避免每条消息重复请求。
+    private var pendingProfileAccIds: Set<String> = []
+    /// 当前房间已补齐的画像缓存。消息未携带头像时先同步复用，避免逐条打批查接口。
+    private var resolvedProfiles: [String: ConversationProfile] = [:]
 
     weak var delegate: PartyRoomChatManagerDelegate?
 
@@ -161,6 +165,8 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
         // imAlive 反映长连接，退房不应该置 false（IM 仍在线）
         roomId = ""
         messages = []
+        pendingProfileAccIds.removeAll()
+        resolvedProfiles.removeAll()
         onlineCount = 0
 
         guard !exitingRoomId.isEmpty else {
@@ -190,6 +196,7 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
                 if !mapped.isEmpty {
                     self.messages.insert(contentsOf: mapped, at: 0)
                     self.trimIfNeeded()
+                    self.hydrateMissingSenderProfiles(in: mapped)
                 }
                 AppLogger.party.info("[PartyChat] history pulled count=\(mapped.count, privacy: .public)")
             }
@@ -322,6 +329,15 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
         var ext = m.remoteExt as? [String: Any] ?? [:]
         let text = m.text ?? ""
         guard !text.isEmpty else { return nil }
+        let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? SessionStore.effectiveUserTypeSnapshot
+        guard !ObjectionableContentFilter.shouldBlock(
+            text,
+            effectiveUserType: effectiveUserType
+        ) else {
+            AppLogger.party.notice("[PartyChat] incoming text hidden by local moderation")
+            return nil
+        }
         // 头像 fallback：remoteExt 无 userAvatar 时从 NIMUser 缓存查（对齐 H5 senderAvatar 语义）
         if (ext["userAvatar"] as? String)?.isEmpty ?? true,
            let from = m.from,
@@ -338,6 +354,18 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
            !nickName.isEmpty {
             ext["nickname"] = nickName
         }
+        if let nickname = ext["nickname"] as? String {
+            ext["nickname"] = ObjectionableContentFilter.sanitizedForDisplay(
+                nickname,
+                replacement: "User",
+                effectiveUserType: effectiveUserType
+            )
+        }
+        let fallbackNickname = ObjectionableContentFilter.sanitizedForDisplay(
+            m.senderName ?? "",
+            replacement: "User",
+            effectiveUserType: effectiveUserType
+        )
         let source: PublicChatMessageSource? = {
             let messageId = m.messageId
             guard !messageId.isEmpty,
@@ -352,7 +380,7 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
         }()
         return UnifiedPublicChatMessage(
             timestamp: Date(timeIntervalSince1970: m.timestamp),
-            sender: PartyPublicChatAdapter.makeSender(from: ext, fallbackNickname: m.senderName, isSelf: isSelf),
+            sender: PartyPublicChatAdapter.makeSender(from: ext, fallbackNickname: fallbackNickname, isSelf: isSelf),
             variant: .text(content: text),
             source: source
         )
@@ -365,10 +393,74 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
             if deferredMessages.count > messagesLimit {
                 deferredMessages.removeFirst(deferredMessages.count - messagesLimit)
             }
+            hydrateMissingSenderProfiles(in: [msg])
             return
         }
         messages.append(msg)
         trimIfNeeded()
+        hydrateMissingSenderProfiles(in: [msg])
+    }
+
+    private func hydrateMissingSenderProfiles(in candidates: [UnifiedPublicChatMessage]) {
+        if !resolvedProfiles.isEmpty {
+            applySenderProfiles(resolvedProfiles, to: &messages)
+            applySenderProfiles(resolvedProfiles, to: &deferredMessages)
+        }
+        let accIds = Set(candidates.compactMap { message -> String? in
+            guard message.sender?.avatarURL?.isEmpty != false,
+                  let accId = message.source?.fromAccid,
+                  !accId.isEmpty,
+                  resolvedProfiles[accId] == nil,
+                  !pendingProfileAccIds.contains(accId) else { return nil }
+            return accId
+        })
+        guard !accIds.isEmpty else { return }
+        pendingProfileAccIds.formUnion(accIds)
+        let requestedRoomId = roomId
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let profiles = await ConversationProfileService.shared.fetch(yxAccIds: Array(accIds))
+            guard self.roomId == requestedRoomId, !requestedRoomId.isEmpty else { return }
+            self.pendingProfileAccIds.subtract(accIds)
+            guard !profiles.isEmpty else { return }
+            self.resolvedProfiles.merge(profiles) { _, latest in latest }
+            self.applySenderProfiles(profiles, to: &self.messages)
+            self.applySenderProfiles(profiles, to: &self.deferredMessages)
+        }
+    }
+
+    private func applySenderProfiles(
+        _ profiles: [String: ConversationProfile],
+        to target: inout [UnifiedPublicChatMessage]
+    ) {
+        for index in target.indices {
+            let old = target[index]
+            guard let accId = old.source?.fromAccid,
+                  let profile = profiles[accId],
+                  var sender = old.sender else { continue }
+            if sender.avatarURL?.isEmpty != false, let icon = profile.icon, !icon.isEmpty {
+                sender.avatarURL = icon
+            }
+            if sender.nickname.isEmpty, let nickname = profile.nickname, !nickname.isEmpty {
+                let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+                    ?? SessionStore.effectiveUserTypeSnapshot
+                sender.nickname = ObjectionableContentFilter.sanitizedForDisplay(
+                    nickname,
+                    replacement: "User",
+                    effectiveUserType: effectiveUserType
+                )
+            }
+            guard sender != old.sender else { continue }
+            target[index] = UnifiedPublicChatMessage(
+                id: old.id,
+                timestamp: old.timestamp,
+                sender: sender,
+                variant: old.variant,
+                source: old.source,
+                actionURL: old.actionURL
+            )
+        }
     }
 
     /// 进入 Party 小窗：后续实时公屏先入 pending，避免更新已卸载的房间页面。

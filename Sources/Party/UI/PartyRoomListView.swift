@@ -272,7 +272,8 @@ struct PartyRoomListContent<Store: PartyRoomListLike>: View {
                                 isMyRoom: room.id == myRoomID,
                                 showsRankVisuals: showsRankVisuals,
                                 showsLockIndicator: showsLockIndicators,
-                                showsRoomTypeLabel: !isPartyOnlyMode
+                                showsRoomTypeLabel: !isPartyOnlyMode,
+                                isPartyOnlyMode: isPartyOnlyMode
                             )
                             // Top3 背景的装饰边框会越出卡片底部，预留下方空间避免覆盖下一行。
                             .padding(.bottom, hasDecorativeRankBorder(room) ? 8 : 0)
@@ -353,6 +354,8 @@ struct PartyRoomCardView: View {
     var showsLockIndicator: Bool = true
     /// 107 审核模式隐藏 Voice / Live+Voice 房型标签，但不筛除对应房间。
     var showsRoomTypeLabel: Bool = true
+    /// 由列表容器的权限快照显式传入，确保封面与文字使用同一次模式判断。
+    var isPartyOnlyMode: Bool = false
 
     var body: some View {
         ZStack {
@@ -424,13 +427,21 @@ struct PartyRoomCardView: View {
                     )
                 )
                 .frame(width: 66, height: 66)
-            CachedAsyncImage(url: URL(string: room.roomAvatar ?? ""),
-                             contentMode: .fill,
-                             persistent: true,
-                             cdn: (.avatarLarge, .fill)) {
-                CDNAssetImage("partyRoomCover")
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
+            Group {
+                if isPartyOnlyMode {
+                    CDNAssetImage("partyRoomCover")
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    CachedAsyncImage(url: URL(string: room.roomAvatar ?? ""),
+                                     contentMode: .fill,
+                                     persistent: true,
+                                     cdn: (.avatarLarge, .fill)) {
+                        CDNAssetImage("partyRoomCover")
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    }
+                }
             }
             .frame(width: 64, height: 64)
             .clipShape(Circle())
@@ -458,12 +469,13 @@ struct PartyRoomCardView: View {
 
     private var info: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(room.roomName ?? L10n.Party.listUnnamed)
+            Text(reviewSafeText(room.roomName ?? L10n.Party.listUnnamed, replacement: L10n.Party.listUnnamed))
                 .font(.system(size: 15, weight: .bold))
                 .foregroundColor(Theme.Palette.partyRoomName)
                 .lineLimit(1)
 
-            Text(room.greetingMessage ?? L10n.Party.listWelcomeFallback)
+            Text(reviewSafeText(room.greetingMessage ?? L10n.Party.listWelcomeFallback,
+                                replacement: L10n.Party.listWelcomeFallback))
                 .font(.system(size: 13))
                 .foregroundColor(Theme.Palette.partyGreeting)
                 .lineLimit(1)
@@ -488,6 +500,14 @@ struct PartyRoomCardView: View {
             .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func reviewSafeText(_ value: String, replacement: String) -> String {
+        return ObjectionableContentFilter.sanitizedForDisplay(
+            value,
+            replacement: replacement,
+            effectiveUserType: isPartyOnlyMode ? 107 : 2
+        )
     }
 
     private var roomTypePill: some View {

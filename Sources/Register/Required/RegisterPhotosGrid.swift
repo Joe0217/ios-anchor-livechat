@@ -82,12 +82,20 @@ struct RegisterPhotosGrid: View {
                     case .uploading:
                         ProgressView().tint(.white)
                     case .succeeded(let url):
-                        AsyncImage(url: URL(string: url)) { img in
-                            img.resizable().aspectRatio(contentMode: .fill)
-                        } placeholder: {
+                        CachedAsyncImage(
+                            url: URL(string: url),
+                            contentMode: .fill,
+                            persistent: false,
+                            allowsRegistrationReviewImage: true
+                        ) {
                             ProgressView()
                         }
                         .clipShape(RoundedRectangle(cornerRadius: 8))
+                        if RegistrationReviewMediaPolicy.containsMarker(url) {
+                            reviewingBadge
+                                .padding(.bottom, 4)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                        }
                     case .failed:
                         VStack(spacing: 4) {
                             Image(systemName: "arrow.clockwise.circle.fill")
@@ -114,6 +122,20 @@ struct RegisterPhotosGrid: View {
             }
             .padding(4)
         }
+    }
+
+    private var reviewingBadge: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "clock.fill")
+                .font(.system(size: 10, weight: .semibold))
+            Text(L10n.profileMediaReviewing)
+                .font(.system(size: 10, weight: .semibold))
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(Color.black.opacity(0.55))
+        .clipShape(Capsule())
     }
 
     private var addCell: some View {
@@ -193,7 +215,11 @@ struct RegisterPhotosGrid: View {
 
     private func performUpload(id: UUID, data: Data) async {
         do {
-            let url = try await ImageUploader.shared.upload(rawData: data, preset: .moment)
+            let url = try await ImageUploader.shared.upload(
+                rawData: data,
+                preset: .moment,
+                directory: .registrationReview
+            )
             await MainActor.run { store.setPicSucceeded(id: id, url: url) }
         } catch ImageCompressor.CompressError.originalTooLarge(let bytes) {
             let maxMB = Int((Double(bytes) / 1024.0 / 1024.0).rounded())

@@ -183,8 +183,13 @@ struct PartyMCSeatSheet: View {
     }
 
     private func displayNickname(seat: PartyRoomSeat) -> String {
-        if let n = seat.nickname, !n.isEmpty { return n }
-        return seat.userId ?? ""
+        let value = seat.nickname?.isEmpty == false ? seat.nickname! : (seat.userId ?? "")
+        return ObjectionableContentFilter.sanitizedForDisplay(
+            value,
+            replacement: L10n.Party.defaultUser,
+            effectiveUserType: SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+                ?? SessionStore.effectiveUserTypeSnapshot
+        )
     }
 
     /// 副行：seat # 序号（仅展示业务定位信息，不引入未落地 L10n 的角色文案）

@@ -1,5 +1,34 @@
 import Foundation
 
+public enum ImageUploadDirectory {
+    case standard
+    case registrationReview
+
+    fileprivate var suffix: String? {
+        switch self {
+        case .standard: return nil
+        case .registrationReview: return "register-107check"
+        }
+    }
+}
+
+enum ImageObjectKeyBuilder {
+    static func make(
+        directory: ImageUploadDirectory = .standard,
+        now: Date = Date(),
+        uuid: UUID = UUID()
+    ) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd"
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        let date = formatter.string(from: now)
+        let filename = uuid.uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        return ["hiFunny", date, directory.suffix, "\(filename).jpg"]
+            .compactMap { $0 }
+            .joined(separator: "/")
+    }
+}
+
 /// OSS 上传错误，便于 ViewModel 区分"凭证过期需重拉"vs"普通失败"（spec R19）。
 enum OssUploadError: Error, Equatable {
     /// HTTP 4xx/5xx，附 statusCode 与 body 关键字（识别 SecurityTokenExpired 等）
@@ -31,7 +60,7 @@ protocol OssUploadServiceProtocol {
     /// 上传一张图。
     /// - parameter imageData: JPEG 数据（已压缩，Content-Type: image/jpeg）
     /// - parameter credential: STS 凭证
-    /// - parameter objectKey: OSS object key，格式 `00000000/{yyyyMMdd}/{UUID}.jpg`（由 ViewModel 拼装）
+    /// - parameter objectKey: OSS object key，格式 `hiFunny/{yyyyMMdd}/[业务目录/]{UUID}.jpg`
     /// - returns: 上传成功后的 cdnUrl
     /// - throws: OssUploadError
     func uploadImage(imageData: Data,

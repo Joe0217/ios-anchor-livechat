@@ -31,6 +31,7 @@ struct PartyRoomSmallSeatCell: View {
     /// PK-aware gems 显示（SELECTING 期强制 0，对齐 H5 audio-wrap.vue :93-97）
     /// cell 直接订阅 battleStore 触发 SELECTING → RUNNING 时 gems 数字自动重绘
     @ObservedObject private var battleStore = PartyBattleStore.shared
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     /// v17：avatar 尺寸按 variant 派生 —— sm=35pt / default=46pt（对齐 H5 :deep(.audio-avatar-inner) 35.52px）
     private var avatarSize: CGFloat {
@@ -168,7 +169,7 @@ struct PartyRoomSmallSeatCell: View {
                 // v16.8：昵称 + 身份标识（对齐 H5 audio-wrap.vue:172）
                 // roomRoleType=1 → 房主 mic icon / roomRoleType=2 → 房管 icon
                 HStack(spacing: 3) {
-                    Text(seat.nickname ?? L10n.Party.defaultUser)
+                    Text(reviewSafeNickname)
                         .font(Theme.Typography.partyRoomSmallSeatName)
                         .foregroundColor(Theme.Palette.partyRoomSeatNameText)
                         .lineLimit(1)
@@ -192,5 +193,15 @@ struct PartyRoomSmallSeatCell: View {
                 .font(Theme.Typography.partyRoomEmptyIndex)
                 .foregroundColor(Theme.Palette.partyRoomEmptyIndex)
         }
+    }
+
+    private var reviewSafeNickname: String {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
+        return ObjectionableContentFilter.sanitizedForDisplay(
+            seat.nickname ?? L10n.Party.defaultUser,
+            replacement: L10n.Party.defaultUser,
+            effectiveUserType: effectiveUserType
+        )
     }
 }

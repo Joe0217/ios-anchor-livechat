@@ -10,6 +10,20 @@ import XCTest
 /// - 终止 boundary 含 trailing CRLF
 final class OssMultipartBodyBuilderTests: XCTestCase {
 
+    func test_imageUploaderObjectKeys_useHiFunnyRootAndRegistrationReviewDirectory() {
+        let now = Date(timeIntervalSince1970: 1_776_076_800) // 2026-04-13 in Asia/Shanghai
+        let uuid = UUID(uuidString: "12345678-90AB-CDEF-1234-567890ABCDEF")!
+
+        XCTAssertEqual(
+            ImageObjectKeyBuilder.make(directory: .standard, now: now, uuid: uuid),
+            "hiFunny/20260413/1234567890abcdef1234567890abcdef.jpg"
+        )
+        XCTAssertEqual(
+            ImageObjectKeyBuilder.make(directory: .registrationReview, now: now, uuid: uuid),
+            "hiFunny/20260413/register-107check/1234567890abcdef1234567890abcdef.jpg"
+        )
+    }
+
     /// 金标验证：手工构造期望 body 字节，OssMultipartBodyBuilder 输出必须完全一致。
     func test_build_producesGoldenMultipartBody() {
         let cred = OssCredential(
@@ -22,7 +36,7 @@ final class OssMultipartBodyBuilderTests: XCTestCase {
         )
         let fileBytes = Data([0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10])  // JPEG 头 + 几字节
         let boundary = "TestBoundary0123456789abcdefghij"  // 32 字符 [A-Za-z0-9]
-        let objectKey = "00000000/20260626/abc123.jpg"
+        let objectKey = "hiFunny/20260626/abc123.jpg"
 
         let out = OssMultipartBodyBuilder.build(
             credential: cred,
@@ -40,7 +54,7 @@ final class OssMultipartBodyBuilderTests: XCTestCase {
         expected.append(string: "--\(boundary)\r\n")
         expected.append(string: "Content-Disposition: form-data; name=\"key\"\r\n")
         expected.append(string: "\r\n")
-        expected.append(string: "00000000/20260626/abc123.jpg")
+        expected.append(string: "hiFunny/20260626/abc123.jpg")
         expected.append(string: "\r\n")
         // policy
         expected.append(string: "--\(boundary)\r\n")
@@ -166,7 +180,7 @@ final class OssMultipartBodyBuilderTests: XCTestCase {
         // filename 必须是 object key 的 lastPathComponent
         let out = OssMultipartBodyBuilder.build(
             credential: OssCredential.fixture(),
-            objectKey: "00000000/20260626/unique-uuid.jpg",
+            objectKey: "hiFunny/20260626/unique-uuid.jpg",
             imageData: Data([0x00]),
             boundary: "B12345678901234567890123456789EF"
         )

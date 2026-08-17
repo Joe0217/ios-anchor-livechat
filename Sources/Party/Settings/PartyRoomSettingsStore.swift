@@ -81,6 +81,17 @@ final class PartyRoomSettingsStore: ObservableObject {
 
     private let service: PartyRoomSettingsService
 
+    private var canEditRoomAvatar: Bool {
+        #if HILY_TESTS
+        true
+        #else
+        let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? SessionStore.effectiveUserTypeSnapshot
+        guard let effectiveUserType else { return false }
+        return !UserTypeExperience.isPartyOnly(effectiveUserType)
+        #endif
+    }
+
     /// v18：selectBackground 串行化，防用户快速 tap X→Y 导致 setBackground 请求乱序 →
     /// 本地 currentRoomBackground / selectedBackground / 服务器状态三方分裂。
     /// 有 in-flight 时新 tap 静默丢弃（View 层已通过 selectedBackground 乐观 UI 立即反馈）。
@@ -178,6 +189,10 @@ final class PartyRoomSettingsStore: ObservableObject {
     // MARK: - Actions
 
     func uploadAvatar(rawData: Data) async {
+        guard canEditRoomAvatar else {
+            uploadedAvatarUrl = nil
+            return
+        }
         isUploadingAvatar = true
         uploadError = ""
         defer { isUploadingAvatar = false }
@@ -232,7 +247,7 @@ final class PartyRoomSettingsStore: ObservableObject {
         return curName != originalRoomName
             || curTag != originalTagline
             || curLang != originalLanguageCode
-            || uploadedAvatarUrl != nil
+            || (canEditRoomAvatar && uploadedAvatarUrl != nil)
     }
 
     /// 提交条件：字段非空 + 有变更 + 不在提交/上传中
@@ -270,7 +285,7 @@ final class PartyRoomSettingsStore: ObservableObject {
         let diffName: String? = curName != originalRoomName ? curName : nil
         let diffTag: String? = curTag != originalTagline ? curTag : nil
         let diffLang: String? = curLang != originalLanguageCode ? curLang : nil
-        let diffAvatar: String? = uploadedAvatarUrl   // 有本地新上传就传，否则 nil
+        let diffAvatar: String? = canEditRoomAvatar ? uploadedAvatarUrl : nil
 
         do {
             try await service.updateRoom(
@@ -299,7 +314,7 @@ final class PartyRoomSettingsStore: ObservableObject {
             roomName: curName != originalRoomName ? curName : nil,
             tagline: curTag != originalTagline ? curTag : nil,
             languageCode: curLang != originalLanguageCode ? curLang : nil,
-            avatarUrl: uploadedAvatarUrl
+            avatarUrl: canEditRoomAvatar ? uploadedAvatarUrl : nil
         )
     }
 }

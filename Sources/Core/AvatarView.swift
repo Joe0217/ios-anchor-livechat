@@ -44,6 +44,8 @@ struct AvatarView: View {
     /// **默认 true 的原因**：直播列表 / 消息列表 / 私聊气泡等场景，同一用户头像跨 view 高频复用，
     /// 若不持久化每次进入都会重新下载，是本工程主要流量与加载慢的根因。
     var persistent: Bool = true
+    /// 仅注册上传、个人资料和编辑资料传 `true`，允许展示待审核头像原图。
+    var allowsRegistrationReviewImage: Bool = false
     /// 头像所属用户 id（String 兼容后端 Int/String 混发）。传 nil = 不启用内置 tap 分派
     var userId: String? = nil
     /// 显式禁用内置 tap，用于外层已挂 tap/NavigationLink 的场景 opt-out
@@ -61,6 +63,7 @@ struct AvatarView: View {
          headwearRatio: CGFloat = 1.0,
          showsOnlineDot: Bool = false,
          persistent: Bool = true,
+         allowsRegistrationReviewImage: Bool = false,
          userId: String? = nil,
          disablesTap: Bool = false) {
         self.url = url
@@ -70,6 +73,7 @@ struct AvatarView: View {
         self.headwearRatio = headwearRatio
         self.showsOnlineDot = showsOnlineDot
         self.persistent = persistent
+        self.allowsRegistrationReviewImage = allowsRegistrationReviewImage
         self.userId = userId
         self.disablesTap = disablesTap
     }
@@ -82,6 +86,7 @@ struct AvatarView: View {
          headwearRatio: CGFloat = 1.0,
          showsOnlineDot: Bool = false,
          persistent: Bool = true,
+         allowsRegistrationReviewImage: Bool = false,
          userId: String? = nil,
          disablesTap: Bool = false) {
         self.init(
@@ -92,6 +97,7 @@ struct AvatarView: View {
             headwearRatio: headwearRatio,
             showsOnlineDot: showsOnlineDot,
             persistent: persistent,
+            allowsRegistrationReviewImage: allowsRegistrationReviewImage,
             userId: userId,
             disablesTap: disablesTap
         )
@@ -166,7 +172,13 @@ struct AvatarView: View {
 
     @ViewBuilder
     private var avatarLayer: some View {
-        CachedAsyncImage(url: url, contentMode: .fill, persistent: persistent, cdn: (avatarCDNSize, .fill)) {
+        CachedAsyncImage(
+            url: url,
+            contentMode: .fill,
+            persistent: persistent,
+            cdn: (avatarCDNSize, .fill),
+            allowsRegistrationReviewImage: allowsRegistrationReviewImage
+        ) {
             defaultImage
         }
     }

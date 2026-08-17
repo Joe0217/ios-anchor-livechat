@@ -115,7 +115,11 @@ struct ProfileView: View {
             Color.clear.frame(height: Theme.Metric.tabBarHeight)
         }
         .fullScreenCover(item: $galleryContext) { ctx in
-            MediaGalleryView(urls: ctx.urls, startIndex: ctx.startIndex)
+            MediaGalleryView(
+                urls: ctx.urls,
+                startIndex: ctx.startIndex,
+                allowsRegistrationReviewImages: true
+            )
         }
         .preferredColorScheme(.dark)
     }
@@ -226,6 +230,7 @@ struct ProfileView: View {
                 title: String(format: L10n.profilePhotosFormat, albumPhotos.count, albumPhotos.count),
                 items: albumPhotos,
                 isVideoGrid: false,
+                allowsRegistrationReviewImages: true,
                 onTap: { asset in openGallery(with: albumPhotos, target: asset) }
             )
             if !isPartyOnlyMode {
@@ -233,6 +238,7 @@ struct ProfileView: View {
                     title: String(format: L10n.profileVideosFormat, albumVideos.count, albumVideos.count),
                     items: albumVideos,
                     isVideoGrid: true,
+                    allowsRegistrationReviewImages: true,
                     onTap: { asset in openGallery(with: albumVideos, target: asset) }
                 )
             }

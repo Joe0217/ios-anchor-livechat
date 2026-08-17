@@ -288,6 +288,16 @@ final class P2PChatStore: ObservableObject {
         guard requireDirectMessages(action: "p2pSendText") else { return }
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        #if HILY_TESTS
+        let effectiveUserType: Int? = nil
+        #else
+        let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? SessionStore.effectiveUserTypeSnapshot
+        #endif
+        guard !ObjectionableContentFilter.shouldBlock(
+            trimmed,
+            effectiveUserType: effectiveUserType
+        ) else { return }
         let clientMsgId = UUID().uuidString
         let now = currentTimestampMs()
         // Batch 3.9：我方 optimistic 消息带主播自己穿戴的 chatBubble URL（TextBubbleView 用 NinePatchImageView 渲染背景）

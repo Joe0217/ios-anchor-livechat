@@ -139,7 +139,7 @@ struct ChatMessageRow: View {
     private var bubbleView: some View {
         switch message.content {
         case .text(let s):
-            textBubble(text: s)
+            textBubble(text: reviewSafeText(s))
         case .image(let url, _):
             ImageBubbleView(url: url)
                 .onTapGesture { onTapImage(message) }
@@ -224,6 +224,16 @@ struct ChatMessageRow: View {
             // 与普通文本共用右侧翻译图标，保持所有可翻译气泡的入口一致。
             textBubble(text: text)
         }
+    }
+
+    private func reviewSafeText(_ text: String) -> String {
+        let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? SessionStore.effectiveUserTypeSnapshot
+        return ObjectionableContentFilter.sanitizedForDisplay(
+            text,
+            replacement: L10n.objectionableContentRejected,
+            effectiveUserType: effectiveUserType
+        )
     }
 
     /// 私聊翻译与公屏统一使用 `character.book.closed.fill`，并作为气泡右侧的独立动作，

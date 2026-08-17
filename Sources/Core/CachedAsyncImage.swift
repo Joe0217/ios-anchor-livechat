@@ -21,12 +21,15 @@ struct CachedAsyncImage<Placeholder: View>: View {
     /// `false`：他人头像等不需要持久化的临时资源 —— view dismount 后即丢
     var persistent: Bool = true
     var templateRenderingMode: Image.TemplateRenderingMode?
+    /// 注册上传、个人资料和编辑资料可显式展示待审核原图；其他场景保持默认屏蔽。
+    private let allowsRegistrationReviewImage: Bool
     let placeholder: () -> Placeholder
     /// 礼物图等不含账号私密内容的公共资源，使用独立文件缓存，登出后继续复用。
     private let usesPublicAssetCache: Bool
 
     @State private var image: UIImage?
     @State private var lastLoadedURL: URL?
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     init(url: URL?,
          contentMode: ContentMode = .fill,
@@ -35,6 +38,7 @@ struct CachedAsyncImage<Placeholder: View>: View {
          renderingMode: Image.TemplateRenderingMode? = nil,
          /// `true` 用于可跨账号复用的运营图；账号头像、相册等保持默认 `false`。
          publicAsset: Bool = false,
+         allowsRegistrationReviewImage: Bool = false,
          @ViewBuilder placeholder: @escaping () -> Placeholder) {
         // 若指定了 CDN 参数则拼装缩放 URL；缓存 key 也用改造后的 URL，按分档独立缓存
         // 同时强制 http/https scheme 白名单：URLSession 会响应 file:// / data:// 等,
@@ -49,6 +53,7 @@ struct CachedAsyncImage<Placeholder: View>: View {
         self.contentMode = contentMode
         self.persistent = persistent
         self.templateRenderingMode = renderingMode
+        self.allowsRegistrationReviewImage = allowsRegistrationReviewImage
         self.placeholder = placeholder
         if let cdn, case .gift = cdn.size {
             usesPublicAssetCache = true
@@ -66,7 +71,9 @@ struct CachedAsyncImage<Placeholder: View>: View {
 
     var body: some View {
         Group {
-            if let image {
+            if shouldMaskRegistrationImage {
+                CDNAssetImage("defaultAvatar", contentMode: contentMode)
+            } else if let image {
                 Image(uiImage: rendered(image))
                     .resizable()
                     .aspectRatio(contentMode: contentMode)
@@ -74,7 +81,21 @@ struct CachedAsyncImage<Placeholder: View>: View {
                 placeholder()
             }
         }
-        .task(id: url) { await load() }
+        .task(id: LoadTaskKey(url: url?.absoluteString, masked: shouldMaskRegistrationImage)) {
+            await load(masked: shouldMaskRegistrationImage)
+        }
+    }
+
+    private struct LoadTaskKey: Hashable {
+        let url: String?
+        let masked: Bool
+    }
+
+    private var shouldMaskRegistrationImage: Bool {
+        guard !allowsRegistrationReviewImage else { return false }
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
+        return RegistrationReviewMediaPolicy.shouldMask(url, effectiveUserType: effectiveUserType)
     }
 
     private func rendered(_ image: UIImage) -> UIImage {
@@ -83,7 +104,12 @@ struct CachedAsyncImage<Placeholder: View>: View {
         return image.withRenderingMode(mode)
     }
 
-    private func load() async {
+    private func load(masked: Bool) async {
+        guard !masked else {
+            image = nil
+            lastLoadedURL = nil
+            return
+        }
         guard let url else {
             image = nil
             lastLoadedURL = nil

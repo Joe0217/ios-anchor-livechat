@@ -635,13 +635,6 @@ struct PartyRoomView: View {
                 PartySeatInviteSheet(store: store, seat: presentation.seat)
                     .giftPanelSheetBackground()
             }
-            // v16.10：TapGesture 让点击外部区域收起键盘（对齐 LiveRoomView L459）。
-            // TapGesture 与 Button/DragGesture 不同类别，不会挡住 seat/toolbar 按钮点击。
-            .simultaneousGesture(
-                TapGesture().onEnded {
-                    if isInputFocused { isInputFocused = false }
-                }
-            )
             // v16.11：键盘 notification 订阅，同步 keyboardHeight 让 inputBar 上移
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
                 guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
@@ -853,6 +846,19 @@ struct PartyRoomView: View {
     /// 内容层（v16.11 版本）
     private var contentColumn: some View {
         VStack(spacing: 0) {
+            roomContentWithFocusDismiss
+            inputBar
+        }
+        // v16.11：contentColumn 层阻止 SwiftUI 默认键盘避让
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+    }
+
+    /// 输入框聚焦时，只有点击输入栏以外的房间内容才收起键盘。
+    ///
+    /// 手势必须挂在输入栏上方的容器，不能挂在房间根节点：祖先的
+    /// `simultaneousGesture` 会同时收到 TextField 的点击，导致选择文字或移动光标时失焦。
+    private var roomContentWithFocusDismiss: some View {
+        VStack(spacing: 0) {
             anchorBar
                 // v3：上内边距再 +6pt（8 → 16 → 22），与 status bar/dynamic island 更宽松呼吸位
                 .padding(.top, 22)
@@ -865,10 +871,11 @@ struct PartyRoomView: View {
             }
             chatArea
             Spacer(minLength: 0)
-            inputBar
         }
-        // v16.11：contentColumn 层阻止 SwiftUI 默认键盘避让
-        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if isInputFocused { isInputFocused = false }
+        }
     }
 
     /// PK 的渐变底色需连续覆盖比分、视频位、麦位与 Top3，而非只停在顶部 HUD。
@@ -901,9 +908,13 @@ struct PartyRoomView: View {
 
     private var anchorBar: some View {
         PartyRoomAnchorBar(
-            roomName: store.roomInfo?.roomName ?? L10n.Party.defaultRoomName,
+            roomName: reviewSafeText(
+                store.roomInfo?.roomName ?? L10n.Party.defaultRoomName,
+                replacement: L10n.Party.defaultRoomName
+            ),
             roomId: store.roomInfo?.id ?? roomId,
-            anchorAvatarURL: store.roomInfo?.roomAvatar,
+            anchorAvatarURL: isPartyOnlyMode ? nil : store.roomInfo?.roomAvatar,
+            usesDefaultRoomCover: isPartyOnlyMode,
             // v12：头像装饰框 URL（async 从 apiPartyGetUser 拉；对齐 H5 head-frame.vue）
             headFrameURL: store.ownerHeadFrameURL,
             showsHeadFrame: permission.canVirtualItems,
@@ -1505,7 +1516,10 @@ struct PartyRoomView: View {
 
         return PartyRoomChatArea(
             filter: $chatFilter,
-            welcomeMessage: store.roomInfo?.greetingMessage ?? L10n.PartyRoom.welcomeFallback,
+            welcomeMessage: reviewSafeText(
+                store.roomInfo?.greetingMessage ?? L10n.PartyRoom.welcomeFallback,
+                replacement: L10n.PartyRoom.welcomeFallback
+            ),
             chat: store.chat,
             lastGiftEvent: permission.canGiftSending ? store.lastGiftEvent : nil,
             canDeleteTextMessages: store.selfRole == .owner || store.selfRole == .admin,
@@ -3076,7 +3090,10 @@ struct PartyRoomView: View {
     @ViewBuilder
     private var announcementSheet: some View {
         NavigationStack {
-            let currentText = store.roomInfo?.announcement ?? ""
+            let currentText = reviewSafeText(
+                store.roomInfo?.announcement ?? "",
+                replacement: L10n.PartyRoom.announcementEmpty
+            )
             let canEdit = store.selfRole == .owner
             ScrollView {
                 if isEditingAnnouncement {
@@ -3161,6 +3178,16 @@ struct PartyRoomView: View {
                 announcementDraft = ""
             }
         }
+    }
+
+    private func reviewSafeText(_ value: String, replacement: String) -> String {
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
+        return ObjectionableContentFilter.sanitizedForDisplay(
+            value,
+            replacement: replacement,
+            effectiveUserType: effectiveUserType
+        )
     }
 
     /// F 期房主管理批：Save 通告。成功 toast + 关编辑态 + 关 sheet；失败 toast 保留编辑态供重试。

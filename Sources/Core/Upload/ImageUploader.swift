@@ -44,13 +44,14 @@ public final class ImageUploader {
     /// - parameter preset: 压缩预设（默认 `.moment`）
     /// - throws: `ImageCompressor.CompressError` / `APIError` / `OssUploadError`
     public func upload(rawData: Data,
-                       preset: ImageCompressionPreset = .moment) async throws -> String {
+                       preset: ImageCompressionPreset = .moment,
+                       directory: ImageUploadDirectory = .standard) async throws -> String {
         // 1. 压缩
         let compressed = try ImageCompressor.compress(rawData: rawData, preset: preset)
         // 2. 拿凭证
         let credential = try await credentialService.getOssUploadParam()
         // 3. 拼 object key
-        let objectKey = Self.makeObjectKey()
+        let objectKey = Self.makeObjectKey(directory: directory)
         // 4. 上传
         let url = try await ossService.uploadImage(
             imageData: compressed,
@@ -79,15 +80,15 @@ public final class ImageUploader {
         return (urls, nil)
     }
 
-    /// 拼 OSS object key：`00000000/{yyyyMMdd}/{UUID}.jpg`（对齐安卓 OssInternationStationKtx）。
+    /// 拼 OSS object key：普通图片为 `hiFunny/{yyyyMMdd}/{UUID}.jpg`；注册审核图片在日期后
+    /// 增加 `register-107check` 目录。
     /// 时区固定 Asia/Shanghai（CLAUDE.md 时区纪律）。
-    private static func makeObjectKey() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd"
-        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
-        let dateStr = formatter.string(from: Date())
-        let uuid = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
-        return "00000000/\(dateStr)/\(uuid).jpg"
+    static func makeObjectKey(
+        directory: ImageUploadDirectory = .standard,
+        now: Date = Date(),
+        uuid: UUID = UUID()
+    ) -> String {
+        ImageObjectKeyBuilder.make(directory: directory, now: now, uuid: uuid)
     }
 }
 #endif

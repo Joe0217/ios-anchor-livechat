@@ -111,6 +111,7 @@ final class PartyCreateStore: ObservableObject {
     let taglineLengthLimit: Int
 
     var canUseVideoTemplates: Bool { canUsePartyVideo }
+    var canEditRoomAvatar: Bool { canUsePartyVideo }
 
     private var canUsePartyVideo: Bool { partyVideoCapabilityProvider() }
 
@@ -337,7 +338,9 @@ final class PartyCreateStore: ObservableObject {
         submitError = ""
         defer { isSubmitting = false }
         // v7 对齐安卓：本地上传优先，否则 fallback 到登录默认头像
-        let avatarUrl = uploadedAvatarUrl ?? defaultAvatarUrl
+        let avatarUrl = canEditRoomAvatar
+            ? (uploadedAvatarUrl ?? defaultAvatarUrl)
+            : defaultAvatarUrl
         do {
             let info = try await service.createRoom(
                 roomName: roomName.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -402,6 +405,10 @@ final class PartyCreateStore: ObservableObject {
     /// View 层 PhotosPicker 拿到图片 Data 后调此方法：压缩 → OSS 上传 → 存 uploadedAvatarUrl
     /// - Note: 阻塞提交按钮直到上传完成，避免用户等待时 tap Create
     func uploadAvatar(rawData: Data) async {
+        guard canEditRoomAvatar else {
+            uploadedAvatarUrl = nil
+            return
+        }
         isUploadingAvatar = true
         uploadError = ""
         defer { isUploadingAvatar = false }

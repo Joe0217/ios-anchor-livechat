@@ -11,7 +11,16 @@ struct RegisterAvatarPickerView: View {
             ZStack(alignment: .bottomTrailing) {
                 // 头像圆形（无背景色/边框，对齐 2026-07-09 用户反馈）
                 ZStack {
-                    AvatarView(urlString: store.iconUrl, size: 100, kind: .anchor, persistent: false)
+                    AvatarView(
+                        urlString: store.iconUrl,
+                        size: 100,
+                        kind: .anchor,
+                        persistent: false,
+                        allowsRegistrationReviewImage: true
+                    )
+                    if RegistrationReviewMediaPolicy.containsMarker(store.iconUrl) {
+                        InReviewBadge(style: .overlay)
+                    }
                     if store.isAvatarUploading {
                         Circle().fill(.black.opacity(0.4)).frame(width: 100, height: 100)
                         ProgressView().tint(.white)
@@ -47,7 +56,11 @@ struct RegisterAvatarPickerView: View {
         store.isAvatarUploading = true
         defer { store.isAvatarUploading = false }
         do {
-            let url = try await ImageUploader.shared.upload(rawData: data, preset: .avatar)
+            let url = try await ImageUploader.shared.upload(
+                rawData: data,
+                preset: .avatar,
+                directory: .registrationReview
+            )
             guard epoch == store.avatarUploadEpoch else { return }   // upload 期间又切了 → 丢弃（iconUrl 保持后续 Task 的结果）
             store.iconUrl = url
             store.avatarUploadError = nil

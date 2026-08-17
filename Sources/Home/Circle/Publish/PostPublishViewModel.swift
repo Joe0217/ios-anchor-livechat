@@ -342,14 +342,14 @@ final class PostPublishViewModel: ObservableObject {
         uploadedUrls.sorted { $0.key < $1.key }.map { $0.value }
     }
 
-    /// 拼 OSS object key：`00000000/{yyyyMMdd}/{UUID}.jpg`（对齐安卓 OssInternationStationKtx）
+    /// 拼 OSS object key：`hiFunny/{yyyyMMdd}/{UUID}.jpg`
     private func makeObjectKey(now: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd"
         formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")  // 对齐 CLAUDE.md 时区纪律
         let dateStr = formatter.string(from: now)
         let uuid = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
-        return "00000000/\(dateStr)/\(uuid).jpg"
+        return "hiFunny/\(dateStr)/\(uuid).jpg"
     }
 
     /// dismiss 时 cancel 所有 upload Task

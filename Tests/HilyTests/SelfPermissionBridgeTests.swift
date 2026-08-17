@@ -5,10 +5,24 @@ import Combine
 /// 见 [P-plan-用户权限管理系统-*.md] Task 3。
 final class SelfPermissionBridgeTests: XCTestCase {
 
+    func test_registrationReviewMediaPolicy_matchesPathContentAndOnlyMasksPartyOnlyMode() {
+        let plain = URL(string: "https://img.example/hiFunny/20260817/photo.jpg")
+        let marked = URL(string: "https://img.example/hiFunny/20260817/register-107check/photo.jpg")
+        let encoded = URL(string: "https://img.example/hiFunny/20260817/register%2D107check/photo.jpg")
+
+        XCTAssertFalse(RegistrationReviewMediaPolicy.containsMarker(plain))
+        XCTAssertTrue(RegistrationReviewMediaPolicy.containsMarker(marked))
+        XCTAssertTrue(RegistrationReviewMediaPolicy.containsMarker(encoded))
+        XCTAssertTrue(RegistrationReviewMediaPolicy.shouldMask(marked, effectiveUserType: 107))
+        XCTAssertFalse(RegistrationReviewMediaPolicy.shouldMask(marked, effectiveUserType: 2))
+    }
+
     func test_objectionableContentFilter_blocksHighConfidenceTermsAndObfuscation() {
         let blocked = [
             "porn", "P0RN", "p.o.r.n", "go kill yourself", "child pornography",
-            "buy cocaine", "色情内容", "儿 童 色 情", "kendini öldür", "اقتل نفسك",
+            "buy cocaine", "fuckyou", "f.u.c.k you", "fuuuck you", "send-nudes",
+            "underage sex", "I will kill you", "色情内容", "儿 童 色 情",
+            "kendini öldür", "اقتل نفسك",
         ]
 
         for value in blocked {
@@ -37,6 +51,25 @@ final class SelfPermissionBridgeTests: XCTestCase {
         XCTAssertTrue(ObjectionableContentFilter.shouldBlock("porn", effectiveUserType: 107))
         XCTAssertFalse(ObjectionableContentFilter.shouldBlock("porn", effectiveUserType: 2))
         XCTAssertFalse(ObjectionableContentFilter.shouldBlock("hello", effectiveUserType: 107))
+    }
+
+    func test_objectionableContentFilter_sanitizesIncomingTextOnlyForPartyOnlyAccount() {
+        XCTAssertEqual(
+            ObjectionableContentFilter.sanitizedForDisplay(
+                "porn room",
+                replacement: "Room",
+                effectiveUserType: 107
+            ),
+            "Room"
+        )
+        XCTAssertEqual(
+            ObjectionableContentFilter.sanitizedForDisplay(
+                "porn room",
+                replacement: "Room",
+                effectiveUserType: 2
+            ),
+            "porn room"
+        )
     }
 
     // MARK: - Helper

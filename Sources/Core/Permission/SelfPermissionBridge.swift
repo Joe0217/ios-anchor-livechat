@@ -1,16 +1,39 @@
 import Foundation
 import Combine
 
+/// 注册审核图片的稳定路径标记。判断基于 URL 内容而非媒体数组索引，兼容接口重排及百分号编码。
+enum RegistrationReviewMediaPolicy {
+    static let pathMarker = "register-107check"
+
+    static func containsMarker(_ value: String?) -> Bool {
+        guard let value, !value.isEmpty else { return false }
+        if value.range(of: pathMarker, options: [.caseInsensitive]) != nil { return true }
+        return value.removingPercentEncoding?
+            .range(of: pathMarker, options: [.caseInsensitive]) != nil
+    }
+
+    static func containsMarker(_ url: URL?) -> Bool {
+        containsMarker(url?.absoluteString)
+    }
+
+    static func shouldMask(_ url: URL?, effectiveUserType: Int?) -> Bool {
+        UserTypeExperience.isPartyOnly(effectiveUserType) && containsMarker(url)
+    }
+}
+
 /// 审核账号的本地 UGC 前置过滤。服务端内容审核仍是最终防线；这里负责在发送/提交前
 /// 即时阻断明显的色情、仇恨、暴力、毒品、骚扰和自残内容，并兼容常见字符规避。
 enum ObjectionableContentFilter {
     private static let tokenTerms: Set<String> = [
         // English
-        "sex", "porn", "pornography", "nude", "nudes", "rape", "rapist",
-        "pedophile", "pedophilia", "incest", "bestiality", "nazi", "terrorist",
-        "terrorism", "cocaine", "heroin", "methamphetamine", "fentanyl", "doxxing",
-        "beheading", "fuck", "bitch", "whore", "slut", "nigger", "kike", "chink",
-        "faggot",
+        "sex", "sexual", "porn", "porno", "pornography", "nude", "nudes", "nudity",
+        "rape", "rapist", "raping", "pedophile", "pedophilia", "incest", "bestiality",
+        "sexting", "grooming", "molester", "molestation", "prostitute", "prostitution",
+        "blowjob", "handjob", "gangbang", "nazi", "terrorist", "terrorism", "genocide",
+        "cocaine", "heroin", "methamphetamine", "meth", "fentanyl", "ketamine", "ecstasy",
+        "doxxing", "beheading", "decapitation", "massacre", "murder", "suicide",
+        "fuck", "motherfucker", "asshole", "bullshit", "shit", "bitch", "whore", "slut",
+        "nigger", "kike", "chink", "faggot",
         // Turkish (diacritics are folded during normalization)
         "porno", "pornografi", "ciplak", "tecavuz", "pedofili", "uyusturucu",
         "kokain", "eroin", "terorist", "orospu", "intihar",
@@ -20,9 +43,12 @@ enum ObjectionableContentFilter {
     ]
 
     private static let phraseTerms: [String] = [
-        "child porn", "child pornography", "child sexual", "sexual services",
-        "kill yourself", "go kill yourself", "suicide pact", "buy drugs", "sell drugs",
-        "bomb threat", "white power", "heil hitler",
+        "child porn", "child pornography", "child sexual", "child abuse", "underage sex",
+        "underage nude", "sexual services", "send nudes", "rape you", "kill yourself",
+        "go kill yourself", "commit suicide", "suicide pact", "i will kill you",
+        "im going to kill you", "death threat", "bomb threat", "shoot up", "buy drugs",
+        "sell drugs", "white power", "heil hitler", "fuck you", "fuck off",
+        "piece of shit", "son of a bitch",
         "cocuk pornosu", "kendini oldur", "uyusturucu sat",
         "اقتل نفسك", "مواد اباحية", "بيع مخدرات",
     ]
@@ -30,9 +56,14 @@ enum ObjectionableContentFilter {
     /// 去掉分隔符后仍匹配的高置信短语，用于拦截 `p.o.r.n`、`k1ll yourself` 等规避。
     /// 只放低误伤词，不对普通短词做任意子串匹配。
     private static let compactTerms: [String] = [
-        "porn", "pornography", "childporn", "childpornography", "childsexual",
-        "killyourself", "gokillyourself", "suicidepact", "sexualservices",
-        "buydrugs", "selldrugs", "bombthreat", "heilhitler", "whitepower",
+        "porn", "pornography", "pedophile", "pedophilia", "bestiality", "blowjob",
+        "handjob", "gangbang", "fuck", "motherfucker", "asshole", "bullshit", "bitch",
+        "whore", "slut", "nigger", "kike", "faggot", "childporn",
+        "childpornography", "childsexual", "childabuse", "underagesex", "underagenude",
+        "killyourself", "gokillyourself", "commitsuicide", "suicidepact", "iwillkillyou",
+        "imgoingtokillyou", "deaththreat", "sexualservices", "sendnudes", "rapeyou",
+        "buydrugs", "selldrugs", "bombthreat", "shootup", "heilhitler", "whitepower",
+        "fuckyou", "fuckoff", "pieceofshit", "sonofabitch",
         "cocukpornosu", "kendinioldur", "uyusturucusat",
     ]
 
@@ -42,7 +73,7 @@ enum ObjectionableContentFilter {
     ]
 
     static func containsObjectionableContent(_ input: String) -> Bool {
-        let normalized = normalize(input)
+        let normalized = collapseExcessiveRepeats(in: normalize(input))
         guard !normalized.isEmpty else { return false }
 
         let tokens = Set(normalized.split(separator: " ").map(String.init))
@@ -57,6 +88,15 @@ enum ObjectionableContentFilter {
     static func shouldBlock(_ input: String, effectiveUserType: Int?) -> Bool {
         UserTypeExperience.isPartyOnly(effectiveUserType)
             && containsObjectionableContent(input)
+    }
+
+    /// 107 展示服务端 UGC 前的最后一道防线。非 107 原样返回，避免影响正式模式。
+    static func sanitizedForDisplay(
+        _ input: String,
+        replacement: String,
+        effectiveUserType: Int?
+    ) -> String {
+        shouldBlock(input, effectiveUserType: effectiveUserType) ? replacement : input
     }
 
     private static func normalize(_ input: String) -> String {
@@ -93,6 +133,29 @@ enum ObjectionableContentFilter {
             }
         }
         return result.trimmingCharacters(in: .whitespaces)
+    }
+
+    /// 将 3 个及以上连续相同字符压缩为 1 个，兼容 `fuuuck` 一类规避；正常双写单词不受影响。
+    private static func collapseExcessiveRepeats(in input: String) -> String {
+        var result = ""
+        var previous: Character?
+        var runLength = 0
+
+        for character in input {
+            if character == previous {
+                runLength += 1
+            } else {
+                if let previous {
+                    result += String(repeating: String(previous), count: runLength >= 3 ? 1 : runLength)
+                }
+                previous = character
+                runLength = 1
+            }
+        }
+        if let previous {
+            result += String(repeating: String(previous), count: runLength >= 3 ? 1 : runLength)
+        }
+        return result
     }
 }
 

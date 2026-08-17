@@ -11,7 +11,10 @@ struct ProfileMediaGrid: View {
     let isVideoGrid: Bool
     /// 受限资料页的 H5 卡片内容边距为 12pt；普通 Profile 保持既有 16pt。
     var horizontalInset: CGFloat = Theme.Metric.profileDescPadding
+    /// 仅一级 Profile 显示注册审核照片；用户详情等复用场景保持默认屏蔽。
+    var allowsRegistrationReviewImages: Bool = false
     var onTap: ((MediaAsset) -> Void)? = nil
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     private var columns: [GridItem] {
         Array(
@@ -62,7 +65,7 @@ struct ProfileMediaGrid: View {
     /// `MomentPostRow.gridCell` 同款模式，保证 photos/videos 两个 grid 每格都是完全一致的正方形。
     private func cell(for item: MediaAsset) -> some View {
         let imageURL = URL(string: (isVideoGrid ? item.coverUrl : item.url) ?? "")
-        let isReviewing = item.vaild == 2
+        let isReviewing = item.vaild == 2 || isRegistrationReviewing(item)
         let isRejected = item.vaild == 3
 
         return Color.clear
@@ -70,7 +73,12 @@ struct ProfileMediaGrid: View {
             .overlay {
                 ZStack {
                     // 远端图：缓存版 AsyncImage，切 tab 回来无重新加载
-                    CachedAsyncImage(url: imageURL, contentMode: .fill, cdn: (.custom(width: 320), .fill)) {
+                    CachedAsyncImage(
+                        url: imageURL,
+                        contentMode: .fill,
+                        cdn: (.custom(width: 320), .fill),
+                        allowsRegistrationReviewImage: allowsRegistrationReviewImages
+                    ) {
                         Theme.Palette.profileGridPlaceholder
                     }
 
@@ -109,5 +117,14 @@ struct ProfileMediaGrid: View {
         if isReviewing { return "\(baseType), \(L10n.profileMediaReviewing)" }
         if isRejected  { return "\(baseType), \(L10n.profileMediaRejected)" }
         return baseType
+    }
+
+    private func isRegistrationReviewing(_ item: MediaAsset) -> Bool {
+        guard allowsRegistrationReviewImages else { return false }
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
+        let value = isVideoGrid ? item.coverUrl : item.url
+        return UserTypeExperience.isPartyOnly(effectiveUserType)
+            && RegistrationReviewMediaPolicy.containsMarker(value)
     }
 }

@@ -85,7 +85,7 @@ struct PartyRoomAdminManagementView: View {
         HStack(spacing: 12) {
             avatar(admin)
             VStack(alignment: .leading, spacing: 2) {
-                Text(admin.nickname?.isEmpty == false ? admin.nickname! : admin.userId)
+                Text(reviewSafeNickname(admin))
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(.white)
                 Text("ID: \(admin.userId)")
@@ -108,6 +108,16 @@ struct PartyRoomAdminManagementView: View {
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Theme.Palette.partyCreateInputFill))
+    }
+
+    private func reviewSafeNickname(_ admin: PartyRoomAdmin) -> String {
+        let value = admin.nickname?.isEmpty == false ? admin.nickname! : admin.userId
+        return ObjectionableContentFilter.sanitizedForDisplay(
+            value,
+            replacement: L10n.Party.defaultUser,
+            effectiveUserType: SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+                ?? SessionStore.effectiveUserTypeSnapshot
+        )
     }
 
     @ViewBuilder

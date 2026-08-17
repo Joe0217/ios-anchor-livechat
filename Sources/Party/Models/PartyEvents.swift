@@ -74,9 +74,14 @@ struct PartyEnterFloatingMessage: Identifiable, Equatable {
             return nil
         }
 
-        let nickname = (payload["nickname"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawNickname = (payload["nickname"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
             ?? fallbackNickname?.trimmingCharacters(in: .whitespacesAndNewlines)
             ?? ""
+        let nickname = ObjectionableContentFilter.sanitizedForDisplay(
+            rawNickname,
+            replacement: "User",
+            effectiveUserType: SessionStore.effectiveUserTypeSnapshot
+        )
         guard !nickname.isEmpty else { return nil }
 
         return PartyEnterFloatingMessage(

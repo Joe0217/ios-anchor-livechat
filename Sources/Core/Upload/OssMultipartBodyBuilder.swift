@@ -27,7 +27,7 @@ enum OssMultipartBodyBuilder {
 
     /// 构造 multipart body。
     /// - parameter credential: OSS 凭证（提供 policy/signature/accessid）
-    /// - parameter objectKey: OSS object key，形如 `00000000/20260626/<UUID>.jpg`（或 `.mp4`）
+    /// - parameter objectKey: OSS object key；图片形如 `hiFunny/20260626/<UUID>.jpg`，视频沿用各自业务路径
     /// - parameter fileData: 文件二进制（图片=压缩 JPEG / 视频=原始 mp4）
     /// - parameter contentType: 文件 MIME（默认 `image/jpeg` 兼容 J 朋友圈；视频传 `video/mp4`）
     /// - parameter objectAcl: OSS ACL（nil=默认桶策略；私密视频传 `"private"`）

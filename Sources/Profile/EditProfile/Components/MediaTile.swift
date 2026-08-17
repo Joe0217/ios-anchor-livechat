@@ -16,6 +16,7 @@ struct MediaTile: View {
     let onRemove: () -> Void
     let onRetry: () -> Void
     let onPreview: () -> Void
+    @ObservedObject private var permission = SelfPermissionBridge.shared
 
     init(item: DraftMediaItem,
          showsCoverPlayIcon: Bool = false,
@@ -53,7 +54,7 @@ struct MediaTile: View {
                     .tint(.white)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .allowsHitTesting(false)
-            } else if item.isServerReviewing || item.isServerRejected {
+            } else if isReviewing || item.isServerRejected {
                 // 服务端 vaild 审核态：底部小胶囊标签（用户需求 2026-07-08 v2：从左上角改到底部）
                 // 不用全 tile 蒙层，图内容仍可见；胶囊自带背景不干扰图片
                 serverReviewBadge
@@ -116,7 +117,11 @@ struct MediaTile: View {
     @ViewBuilder
     private var imageContent: some View {
         if !previewURLString.isEmpty, let url = URL(string: previewURLString) {
-            CachedAsyncImage(url: url, contentMode: .fill) {
+            CachedAsyncImage(
+                url: url,
+                contentMode: .fill,
+                allowsRegistrationReviewImage: true
+            ) {
                 Color.clear
             }
         } else {
@@ -132,15 +137,23 @@ struct MediaTile: View {
         return item.url
     }
 
+    private var isReviewing: Bool {
+        guard !item.isServerReviewing else { return true }
+        let effectiveUserType = permission.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
+        return UserTypeExperience.isPartyOnly(effectiveUserType)
+            && RegistrationReviewMediaPolicy.containsMarker(previewURLString)
+    }
+
     /// 服务端审核态标签 —— **左上角小胶囊**（用户需求 2026-07-08）
     ///
     /// 与初版全 tile 蒙层不同：胶囊自带黑色半透明底色，图内容不被完全遮挡；
     /// 位置固定左上角（tile 右上是 × 删除按钮，避开视觉冲突）。
     private var serverReviewBadge: some View {
         HStack(spacing: 3) {
-            Image(systemName: item.isServerReviewing ? "clock.fill" : "xmark.octagon.fill")
+            Image(systemName: isReviewing ? "clock.fill" : "xmark.octagon.fill")
                 .font(.system(size: 10, weight: .semibold))
-            Text(item.isServerReviewing ? L10n.profileMediaReviewing : L10n.profileMediaRejected)
+            Text(isReviewing ? L10n.profileMediaReviewing : L10n.profileMediaRejected)
                 .font(.system(size: 10, weight: .semibold))
         }
         .foregroundStyle(.white)

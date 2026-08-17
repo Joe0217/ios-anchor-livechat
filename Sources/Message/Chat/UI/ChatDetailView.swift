@@ -969,6 +969,12 @@ struct ChatDetailView: View {
 
     private func handleSendText() {
         let text = inputText
+        let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? SessionStore.effectiveUserTypeSnapshot
+        if ObjectionableContentFilter.shouldBlock(text, effectiveUserType: effectiveUserType) {
+            AppToastCenter.shared.show(L10n.objectionableContentRejected)
+            return
+        }
         inputText = ""
         Task { await store.sendText(text) }
     }
