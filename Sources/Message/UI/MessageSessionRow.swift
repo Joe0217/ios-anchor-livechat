@@ -18,7 +18,6 @@ struct MessageSessionRow: View {
         HStack(alignment: .center, spacing: 12) {
             avatar
             mainInfo
-            Spacer(minLength: 8)
             trailing
         }
         .padding(.horizontal, 16)
@@ -67,7 +66,6 @@ struct MessageSessionRow: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                     .layoutPriority(-1)
                 if profile?.activeTycoon == true {
                     ActiveTycoonBadge()
@@ -85,7 +83,6 @@ struct MessageSessionRow: View {
                         .layoutPriority(2)
                 }
             }
-            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
             // preview 行:最后一条我方消息前展示已读态勾(对齐设计稿 消息列表-未读已读.png)
             HStack(spacing: 4) {
                 readReceiptCheck
@@ -95,6 +92,7 @@ struct MessageSessionRow: View {
                     .lineLimit(1)
             }
         }
+        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
     }
 
     /// 已读态勾图标:sent = 灰勾(ic-no-add)/ read = 绿勾(Component 13)/ none = 不显示

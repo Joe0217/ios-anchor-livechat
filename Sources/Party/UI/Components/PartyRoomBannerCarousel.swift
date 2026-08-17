@@ -55,28 +55,25 @@ struct PartyRoomBannerCarousel: View {
     var body: some View {
         let items = displayableBanners
         if !items.isEmpty {
-            ZStack(alignment: .top) {
-                ZStack(alignment: .bottom) {
-                    bannerPager(items: items)
+            ZStack(alignment: .bottom) {
+                bannerPager(items: items)
 
-                    if items.count > 1 {
-                        pageIndicator(count: items.count)
-                            .padding(.bottom, 5)
-                            .allowsHitTesting(false)
-                    }
+                if items.count > 1 {
+                    pageIndicator(count: items.count)
+                        .padding(.bottom, 5)
+                        .allowsHitTesting(false)
                 }
-                .frame(width: 50, height: 50)
-                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
-
+            }
+            .frame(width: 50, height: 50)
+            .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .overlay(alignment: .top) {
                 if items.indices.contains(currentIndex),
                    let flameURL = items[currentIndex].activeFlameURL {
                     PartyRoomBannerFlame(urlString: flameURL)
                         .allowsHitTesting(false)
+                        .offset(y: -20)
                 }
             }
-            // H5 `party-banner.vue` uses `pt-20`: the 50x16 flame occupies the top
-            // reserve, while the tappable 50x50 banner remains at the bottom.
-            .frame(width: 50, height: 70, alignment: .bottom)
             .onChange(of: loopKey) { _ in
                 pageChangeOrigin = .loopCorrection
                 currentIndex = 0

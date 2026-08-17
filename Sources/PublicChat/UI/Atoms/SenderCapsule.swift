@@ -26,11 +26,12 @@ struct PublicChatSenderCapsule: View {
                 .foregroundColor(nicknameColor)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .layoutPriority(-1)
             // v16.8：派对房身份徽章挂在昵称**后**（对齐 H5 message-user.vue:57 顺序：昵称 + role icon）
             // Live 场景 sender.role = nil → 内部 optional 分支不渲染，视觉零影响
             PublicChatRoleBadge(role: sender.role, size: 16)
+                .fixedSize()
+                .layoutPriority(1)
         }
     }
 

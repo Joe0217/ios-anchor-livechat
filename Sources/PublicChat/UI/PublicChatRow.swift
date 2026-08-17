@@ -806,7 +806,6 @@ private struct PartyNicknameRow: View {
             .foregroundColor(.white)
             .lineLimit(1)
             .truncationMode(.tail)
-            .frame(maxWidth: .infinity, alignment: .leading)
         if let onTapNickname {
             Button(action: onTapNickname) { label }
                 .buttonStyle(.plain)
