@@ -1635,7 +1635,9 @@ final class PartyStore: ObservableObject {
             if !rid.isEmpty,
                SelfPermissionBridge.shared.gate(.lottery, action: "partySuperWheelTracking") {
                 PartySuperWheelStore.shared.beginTracking(roomId: rid)
+                PartySuperWheelStore.shared.beginEnterSilence()
                 await PartySuperWheelStore.shared.loadState(roomId: rid, presentWhenActive: true)
+                await PartySuperWheelStore.shared.loadConfig()
             } else {
                 PartySuperWheelStore.shared.reset()
             }
@@ -3701,6 +3703,15 @@ final class PartyStore: ObservableObject {
         }
         let announcement = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !announcement.isEmpty, announcement != info.announcement else {
+            return false
+        }
+        let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? SessionStore.effectiveUserTypeSnapshot
+        guard !ObjectionableContentFilter.shouldBlock(
+            announcement,
+            effectiveUserType: effectiveUserType
+        ) else {
+            AppLogger.party.notice("[PartyStore] updateAnnouncement blocked by local moderation")
             return false
         }
         isBusyAnnouncement = true

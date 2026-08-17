@@ -2218,6 +2218,11 @@
 "partyRoom.superWheel.winningRatio" = "Kazanma Oranı";
 "partyRoom.superWheel.nextRound" = "Tüm oyuncular bir sonraki tura geçer";
 "partyRoom.superWheel.rewardHint" = "Kazanan havuzun %80'ini, oda sahibi %10'unu alır.";
+"partyRoom.superWheel.minPlayers" = "Daha fazla oyuncunun katılmasını bekliyor";
+"partyRoom.superWheel.addBets" = "Bahis ekle!";
+"partyRoom.superWheel.entryFees" = "Giriş Ücretleri";
+"partyRoom.superWheel.loading" = "Yükleniyor";
+"partyRoom.superWheel.rulesTitle" = "Kurallar";
 "liveGift.firstGiftHeadline" = "{name} {streamer} First Gift {gift} gönderdi";
 "liveGift.firstGiftStreamer" = "yayıncıya";
 "liveGift.firstGiftKick" = "İlk selamlaşma anını başlat";

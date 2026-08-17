@@ -2217,6 +2217,11 @@
 "partyRoom.superWheel.winningRatio" = "نسبة الفوز";
 "partyRoom.superWheel.nextRound" = "ينتقل جميع اللاعبين إلى الجولة التالية";
 "partyRoom.superWheel.rewardHint" = "يحصل الفائز على 80٪ من الجائزة ويحصل مالك الغرفة على 10٪.";
+"partyRoom.superWheel.minPlayers" = "في انتظار انضمام المزيد من اللاعبين";
+"partyRoom.superWheel.addBets" = "!أضف رهانات";
+"partyRoom.superWheel.entryFees" = "رسوم الدخول";
+"partyRoom.superWheel.loading" = "جاري التحميل";
+"partyRoom.superWheel.rulesTitle" = "القواعد";
 "liveGift.firstGiftHeadline" = "{name} أرسل First Gift {gift} إلى {streamer}";
 "liveGift.firstGiftStreamer" = "Streamer";
 "liveGift.firstGiftKick" = "لنبدأ لحظة التحية الأولى";

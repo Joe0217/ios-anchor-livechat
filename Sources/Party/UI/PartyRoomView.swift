@@ -2135,7 +2135,10 @@ struct PartyRoomView: View {
     private func sendText() {
         let txt = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !txt.isEmpty, store.roomState == .joined else { return }
-        store.chat.sendText(txt)
+        guard store.chat.sendText(txt) else {
+            AppToastCenter.shared.show(L10n.objectionableContentRejected)
+            return
+        }
         inputText = ""
         // 与 H5 一致：用户主动发送普通聊天后收起快捷词条栏。
         areQuickPhrasesDismissed = true
@@ -2164,7 +2167,10 @@ struct PartyRoomView: View {
         let content = phrase.content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty, store.roomState == .joined else { return }
         trackQuickPhrase("b_quick_msg_item_click", phrase: phrase)
-        store.chat.sendText(content)
+        guard store.chat.sendText(content) else {
+            AppToastCenter.shared.show(L10n.objectionableContentRejected)
+            return
+        }
         areQuickPhrasesDismissed = true
     }
 
@@ -3160,8 +3166,12 @@ struct PartyRoomView: View {
     /// F 期房主管理批：Save 通告。成功 toast + 关编辑态 + 关 sheet；失败 toast 保留编辑态供重试。
     private func performSaveAnnouncement() {
         guard !isSavingAnnouncement, canSaveAnnouncement else { return }
-        isSavingAnnouncement = true
         let draft = announcementDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isPartyOnlyMode, ObjectionableContentFilter.containsObjectionableContent(draft) {
+            AppToastCenter.shared.show(L10n.objectionableContentRejected)
+            return
+        }
+        isSavingAnnouncement = true
         Task { @MainActor in
             let ok = await store.updateAnnouncement(text: draft)
             isSavingAnnouncement = false

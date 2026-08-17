@@ -717,6 +717,11 @@ enum L10n {
         static var superWheelWinningRatio: String { localize("partyRoom.superWheel.winningRatio", comment: "Super Winner 胜率标签") }
         static var superWheelNextRound: String { localize("partyRoom.superWheel.nextRound", comment: "Super Winner 淘汰后下一轮提示") }
         static var superWheelRewardHint: String { localize("partyRoom.superWheel.rewardHint", comment: "Super Winner 开局奖励说明") }
+        static var superWheelMinPlayers: String { localize("partyRoom.superWheel.minPlayers", comment: "Super Winner 人数不足提示") }
+        static var superWheelAddBets: String { localize("partyRoom.superWheel.addBets", comment: "Super Winner 加注区标语") }
+        static var superWheelEntryFees: String { localize("partyRoom.superWheel.entryFees", comment: "Super Winner 入场费标题") }
+        static var superWheelLoading: String { localize("partyRoom.superWheel.loading", comment: "Super Winner 档位加载中") }
+        static var superWheelRulesTitle: String { localize("partyRoom.superWheel.rulesTitle", comment: "Super Winner 规则弹窗标题") }
 
         // 公屏 tab strip（PartyRoomChatTabStrip）
         static var tabAll: String { localize("partyRoom.tab.all", comment: "公屏 tab All") }

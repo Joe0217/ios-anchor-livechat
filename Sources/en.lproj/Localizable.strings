@@ -2352,6 +2352,11 @@
 "partyRoom.superWheel.winningRatio" = "Winning Ratio";
 "partyRoom.superWheel.nextRound" = "All players move on to the next round";
 "partyRoom.superWheel.rewardHint" = "The winner receives 80% of the jackpot. The room owner receives 10%.";
+"partyRoom.superWheel.minPlayers" = "Waiting for more players to join";
+"partyRoom.superWheel.addBets" = "Add bets!";
+"partyRoom.superWheel.entryFees" = "Entry Fees";
+"partyRoom.superWheel.loading" = "Loading";
+"partyRoom.superWheel.rulesTitle" = "Rules";
 "liveGift.firstGiftHeadline" = "{name} Sent to {streamer} First Gift {gift}";
 "liveGift.firstGiftStreamer" = "Streamer";
 "liveGift.firstGiftKick" = "Kick off the first greeting moment";
