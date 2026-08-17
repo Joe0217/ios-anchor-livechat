@@ -5,6 +5,40 @@ import Combine
 /// 见 [P-plan-用户权限管理系统-*.md] Task 3。
 final class SelfPermissionBridgeTests: XCTestCase {
 
+    func test_objectionableContentFilter_blocksHighConfidenceTermsAndObfuscation() {
+        let blocked = [
+            "porn", "P0RN", "p.o.r.n", "go kill yourself", "child pornography",
+            "buy cocaine", "色情内容", "儿 童 色 情", "kendini öldür", "اقتل نفسك",
+        ]
+
+        for value in blocked {
+            XCTAssertTrue(
+                ObjectionableContentFilter.containsObjectionableContent(value),
+                "expected blocked: \(value)"
+            )
+        }
+    }
+
+    func test_objectionableContentFilter_allowsOrdinaryContentWithoutSubstringFalsePositives() {
+        let allowed = [
+            "Welcome to my party room", "Class starts at seven", "Essex",
+            "Let us play rock paper scissors", "Merhaba arkadaşlar", "مرحبا بالجميع",
+        ]
+
+        for value in allowed {
+            XCTAssertFalse(
+                ObjectionableContentFilter.containsObjectionableContent(value),
+                "expected allowed: \(value)"
+            )
+        }
+    }
+
+    func test_objectionableContentFilter_isAdditionalGateOnlyForPartyOnlyAccount() {
+        XCTAssertTrue(ObjectionableContentFilter.shouldBlock("porn", effectiveUserType: 107))
+        XCTAssertFalse(ObjectionableContentFilter.shouldBlock("porn", effectiveUserType: 2))
+        XCTAssertFalse(ObjectionableContentFilter.shouldBlock("hello", effectiveUserType: 107))
+    }
+
     // MARK: - Helper
 
     private func makeBridge() -> (SelfPermissionBridge, CurrentValueSubject<PermissionSessionState, Never>) {
