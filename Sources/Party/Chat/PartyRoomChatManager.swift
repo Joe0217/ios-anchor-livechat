@@ -202,9 +202,19 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
     /// 文本走 NIM `.text` 标准消息；`remoteExt` 附挂 H5 sendTextMessage 全字段
     /// （对齐 `livechat-h5/src/stores/modules/party.js:1044` serverExtension.data：
     /// `userId / nickname / userAvatar / isVip / userLevel / role / headFrame / chatBubble / isPlatformAdmin`）
-    func sendText(_ text: String) {
+    @discardableResult
+    func sendText(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, hasJoined else { return }
+        guard !trimmed.isEmpty, hasJoined else { return false }
+        let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? SessionStore.effectiveUserTypeSnapshot
+        guard !ObjectionableContentFilter.shouldBlock(
+            trimmed,
+            effectiveUserType: effectiveUserType
+        ) else {
+            AppLogger.party.notice("[PartyChat] outgoing text blocked by local moderation")
+            return false
+        }
 
         let me = SessionStore.shared.user
         let anchorMine = AnchorInfoStore.shared.mine
@@ -257,6 +267,7 @@ final class PartyRoomChatManager: NSObject, ObservableObject {
         } catch {
             AppLogger.party.error("[PartyChat] send failed: \(String(describing: error), privacy: .private)")
         }
+        return true
     }
 
     // MARK: - 发送自定义消息（表情等 attachType 通道）

@@ -583,6 +583,7 @@ struct EditProfileView: View {
         case .nicknameInReview:           return L10n.EditProfile.toastNicknameInReview
         case .networkError:               return L10n.EditProfile.toastNetworkError
         case .uploadTimeout:              return L10n.EditProfile.toastUploadTimeout
+        case .objectionableContent:       return L10n.objectionableContentRejected
         case .apiError(let code, let msg): return "\(msg) (\(code))"
         }
     }

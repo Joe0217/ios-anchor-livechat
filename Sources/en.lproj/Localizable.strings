@@ -22,6 +22,7 @@
 
 // MARK: - 全局空态占位（EmptyStateView 默认文案）
 "common.emptyState.noContent" = "No content available";
+"content.moderation.rejected" = "This content may violate our Community Guidelines. Please revise it and try again.";
 
 // MARK: - 网络弱网降级（v5 分层）
 "network.warning"            = "Network unstable, switched to low frame rate";

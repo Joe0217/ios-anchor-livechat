@@ -585,6 +585,12 @@ final class EditProfileStore: ObservableObject {
             return
         }
 
+        if !Self.canConfigureProfileSocial,
+           [draft.nickname, draft.signature].contains(where: ObjectionableContentFilter.containsObjectionableContent) {
+            transientToast = .objectionableContent
+            return
+        }
+
         let request = buildUpdateRequest()
         guard let req = request, !req.isEmpty else {
             // 无变更（对齐 H5 handleSubmit L369-374 `router.back()` 无 dialog）：

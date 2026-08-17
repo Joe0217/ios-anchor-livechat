@@ -73,6 +73,9 @@ enum L10n {
 
     // 全局空态占位（EmptyStateView 默认文案；所有列表/网格/tab 无数据统一使用）
     static var commonNoContent: String { localize("common.emptyState.noContent", comment: "全局空态：暂无内容") }
+    static var objectionableContentRejected: String {
+        localize("content.moderation.rejected", comment: "UGC 命中本地安全过滤时的统一提示")
+    }
 
     // 网络弱网降级提示（v5 分层）
     static var networkWarning: String { localize("network.warning", comment: "网络较差，已切换低帧率") }

@@ -1,6 +1,101 @@
 import Foundation
 import Combine
 
+/// 审核账号的本地 UGC 前置过滤。服务端内容审核仍是最终防线；这里负责在发送/提交前
+/// 即时阻断明显的色情、仇恨、暴力、毒品、骚扰和自残内容，并兼容常见字符规避。
+enum ObjectionableContentFilter {
+    private static let tokenTerms: Set<String> = [
+        // English
+        "sex", "porn", "pornography", "nude", "nudes", "rape", "rapist",
+        "pedophile", "pedophilia", "incest", "bestiality", "nazi", "terrorist",
+        "terrorism", "cocaine", "heroin", "methamphetamine", "fentanyl", "doxxing",
+        "beheading", "fuck", "bitch", "whore", "slut", "nigger", "kike", "chink",
+        "faggot",
+        // Turkish (diacritics are folded during normalization)
+        "porno", "pornografi", "ciplak", "tecavuz", "pedofili", "uyusturucu",
+        "kokain", "eroin", "terorist", "orospu", "intihar",
+        // Arabic
+        "اباحي", "اباحية", "عاري", "اغتصاب", "مخدرات", "كوكايين", "هيروين",
+        "ارهابي", "نازي", "انتحار",
+    ]
+
+    private static let phraseTerms: [String] = [
+        "child porn", "child pornography", "child sexual", "sexual services",
+        "kill yourself", "go kill yourself", "suicide pact", "buy drugs", "sell drugs",
+        "bomb threat", "white power", "heil hitler",
+        "cocuk pornosu", "kendini oldur", "uyusturucu sat",
+        "اقتل نفسك", "مواد اباحية", "بيع مخدرات",
+    ]
+
+    /// 去掉分隔符后仍匹配的高置信短语，用于拦截 `p.o.r.n`、`k1ll yourself` 等规避。
+    /// 只放低误伤词，不对普通短词做任意子串匹配。
+    private static let compactTerms: [String] = [
+        "porn", "pornography", "childporn", "childpornography", "childsexual",
+        "killyourself", "gokillyourself", "suicidepact", "sexualservices",
+        "buydrugs", "selldrugs", "bombthreat", "heilhitler", "whitepower",
+        "cocukpornosu", "kendinioldur", "uyusturucusat",
+    ]
+
+    private static let directSubstringTerms: [String] = [
+        "色情", "儿童色情", "裸聊", "强奸", "迷奸", "乱伦", "约炮", "援交",
+        "毒品", "冰毒", "海洛因", "可卡因", "恐怖袭击", "纳粹", "自杀", "杀了你", "去死",
+    ]
+
+    static func containsObjectionableContent(_ input: String) -> Bool {
+        let normalized = normalize(input)
+        guard !normalized.isEmpty else { return false }
+
+        let tokens = Set(normalized.split(separator: " ").map(String.init))
+        if !tokens.isDisjoint(with: tokenTerms) { return true }
+        if phraseTerms.contains(where: { normalized.contains($0) }) { return true }
+
+        let compact = normalized.replacingOccurrences(of: " ", with: "")
+        if compactTerms.contains(where: { compact.contains($0) }) { return true }
+        return directSubstringTerms.contains(where: { compact.contains($0) })
+    }
+
+    static func shouldBlock(_ input: String, effectiveUserType: Int?) -> Bool {
+        UserTypeExperience.isPartyOnly(effectiveUserType)
+            && containsObjectionableContent(input)
+    }
+
+    private static func normalize(_ input: String) -> String {
+        let folded = input.precomposedStringWithCompatibilityMapping.folding(
+            options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive],
+            locale: Locale(identifier: "en_US_POSIX")
+        )
+        var result = ""
+        var previousWasSeparator = true
+
+        for scalar in folded.unicodeScalars {
+            let replacement: Character?
+            switch scalar.value {
+            case 48: replacement = "o"       // 0
+            case 49: replacement = "i"       // 1
+            case 51: replacement = "e"       // 3
+            case 52: replacement = "a"       // 4
+            case 53: replacement = "s"       // 5
+            case 55: replacement = "t"       // 7
+            case 64: replacement = "a"       // @
+            case 36: replacement = "s"       // $
+            default: replacement = nil
+            }
+
+            if let replacement {
+                result.append(replacement)
+                previousWasSeparator = false
+            } else if CharacterSet.alphanumerics.contains(scalar) {
+                result.unicodeScalars.append(scalar)
+                previousWasSeparator = false
+            } else if !previousWasSeparator {
+                result.append(" ")
+                previousWasSeparator = true
+            }
+        }
+        return result.trimmingCharacters(in: .whitespaces)
+    }
+}
+
 // MARK: - BlockedFeatures OptionSet
 
 /// 权限受限功能的 bit 组合。`.call` 同时代表"通话 + 匹配"。

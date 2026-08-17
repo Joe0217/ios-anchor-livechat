@@ -260,6 +260,11 @@ final class RegisterStore: ObservableObject {
             submitError = L10n.authErrorRequestFailed
             return
         }
+        if !hasValidInviteCode,
+           ObjectionableContentFilter.containsObjectionableContent(nickname) {
+            submitError = L10n.objectionableContentRejected
+            return
+        }
         let uploadedVideoURL = (videoUrl ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         if hasValidInviteCode {
             guard picUrls.count >= 6 else {

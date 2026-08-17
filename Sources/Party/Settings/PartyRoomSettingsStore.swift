@@ -255,6 +255,17 @@ final class PartyRoomSettingsStore: ObservableObject {
         let curTag = roomTagline.trimmingCharacters(in: .whitespacesAndNewlines)
         let curLang = selectedLanguage?.languageCode ?? ""
 
+        #if !HILY_TESTS
+        let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? SessionStore.effectiveUserTypeSnapshot
+        if [curName, curTag].contains(where: {
+            ObjectionableContentFilter.shouldBlock($0, effectiveUserType: effectiveUserType)
+        }) {
+            saveError = L10n.objectionableContentRejected
+            return
+        }
+        #endif
+
         // 仅传 diff（对齐 H5 create.vue:296-302）
         let diffName: String? = curName != originalRoomName ? curName : nil
         let diffTag: String? = curTag != originalTagline ? curTag : nil

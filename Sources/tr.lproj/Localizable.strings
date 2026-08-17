@@ -24,6 +24,7 @@
 
 // MARK: - 全局空态占位（EmptyStateView 默认文案）
 "common.emptyState.noContent" = "Kullanılabilir içerik yok";
+"content.moderation.rejected" = "Bu içerik Topluluk Kurallarımızı ihlal edebilir. Lütfen düzenleyip tekrar deneyin.";
 
 // MARK: - 网络弱网降级（v5 分层）
 "network.warning"            = "Ağ kararsız, düşük kare hızına geçildi";

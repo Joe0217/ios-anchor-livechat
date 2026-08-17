@@ -328,6 +328,11 @@ final class PartyCreateStore: ObservableObject {
             return
         }
         guard canSubmit else { return }
+        if !canUsePartyVideo,
+           [roomName, roomTagline].contains(where: ObjectionableContentFilter.containsObjectionableContent) {
+            submitError = L10n.objectionableContentRejected
+            return
+        }
         isSubmitting = true
         submitError = ""
         defer { isSubmitting = false }
