@@ -53,15 +53,9 @@ struct GiftPanelGrid: View {
                     .padding(.horizontal, 4)
 
                 HStack(spacing: 2) {
-                    if isPartySend {
-                        // Party 房送礼场景：紫钻 partyGems
-                        CDNAssetImage("partyGems")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 10, height: 10)
-                    } else if store.config.useBlueDiamond {
-                        // Party 私 call 场景使用标准蓝色 Gems 资产。
-                        CDNAssetImage("gems")
+                    if isPartySend || store.config.useBlueDiamond {
+                        // Party 房送礼场景 + Party 私 call 场景:统一用真紫钻(礼物面板余额同款)
+                        CDNAssetImage("giftPanelBalanceCoin")
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .frame(width: 10, height: 10)

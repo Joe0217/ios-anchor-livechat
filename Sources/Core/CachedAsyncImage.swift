@@ -159,11 +159,23 @@ struct CDNAssetImage: View {
 enum CDNAssetURL {
     private static let rootURL = "https://file.lovetravel.link/iosAnchor/assets"
     private static let defaultVersion = "v20260804"
-    private static let recoveredVersion = "v20260807"
+    private static let recoveredVersion = "v20260817"
     private static var baseURL: String { "\(rootURL)/\(defaultVersion)" }
     private static let recoveredImageNames: Set<String> = [
+        // 原批次(v20260807 覆盖)—— 已并入 recoveredVersion 新批次统一走 v20260817
         "ic_backpack", "luckyGiftNoticeBadge", "luckyGiftNoticeDiamond",
         "restrictedNewsHeader", "pinkClock",
+        // SuperWheel 新增批次(2026-08-17):18 项 SuperWinner 转盘玩法资源
+        // 紫钻图标复用已有 giftPanelBalanceCoin,不含 iconDiamond
+        "superWinnerAddBets", "superWinnerBgConfig",
+        "superWinnerBtnBet50", "superWinnerBtnBet500",
+        "superWinnerBtnJoin", "superWinnerBtnJoinGray",
+        "superWinnerClose", "superWinnerCongratsBg",
+        "superWinnerCrown", "superWinnerCrying",
+        "superWinnerEntryIcon", "superWinnerHand",
+        "superWinnerHeaderBtnLeft", "superWinnerHelp",
+        "superWinnerPointer", "superWinnerTitle",
+        "superWinnerWheelRing", "superWinnerWinnerWing",
     ]
     private static let beautyNames: Set<String> = [
         "bailiang1", "fennen1", "gexing1", "heibai1", "lengsediao1", "mitao1",
@@ -571,6 +583,24 @@ statCalls
 statOnlineTime
 statRating
 statRevenue
+superWinnerAddBets
+superWinnerBgConfig
+superWinnerBtnBet50
+superWinnerBtnBet500
+superWinnerBtnJoin
+superWinnerBtnJoinGray
+superWinnerClose
+superWinnerCongratsBg
+superWinnerCrown
+superWinnerCrying
+superWinnerEntryIcon
+superWinnerHand
+superWinnerHeaderBtnLeft
+superWinnerHelp
+superWinnerPointer
+superWinnerTitle
+superWinnerWheelRing
+superWinnerWinnerWing
 tabHome
 tabHomeActive
 tabMessages

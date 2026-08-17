@@ -85,14 +85,15 @@ struct DebugCDNAssetUploadSection: View {
 
     var body: some View {
         Section("Debug · CDN Asset Upload") {
+            // 主入口:只上传当前批次(SuperWheel 19 项),避免每次跑历史全量 411 个。
             Button {
-                uploader.start()
+                uploader.uploadCurrentBatch()
             } label: {
                 HStack {
                     Image(systemName: uploader.isUploading ? "arrow.triangle.2.circlepath" : "arrow.up.circle")
                         .foregroundColor(.pink)
                         .frame(width: 22)
-                    Text("Upload all CDN image assets")
+                    Text("Upload current batch (18 SuperWheel assets)")
                         .foregroundColor(.white)
                     Spacer()
                     if !session.isLoggedIn {
@@ -109,15 +110,16 @@ struct DebugCDNAssetUploadSection: View {
             .buttonStyle(.plain)
             .disabled(!session.isLoggedIn || uploader.isUploading)
 
+            // 备用:全量上传(仅在需要重刷所有历史资源时使用,慎用)。
             Button {
-                uploader.uploadPreviouslyFailedAssets()
+                uploader.start()
             } label: {
                 HStack {
-                    Image(systemName: "arrow.clockwise")
-                        .foregroundColor(.orange)
+                    Image(systemName: "arrow.up.doc.on.clipboard")
+                        .foregroundColor(.gray)
                         .frame(width: 22)
-                    Text("Upload remaining 6 failed assets")
-                        .foregroundColor(.white)
+                    Text("Upload all (411 legacy assets · rarely needed)")
+                        .foregroundColor(.white.opacity(0.7))
                     Spacer()
                 }
                 .contentShape(Rectangle())
@@ -180,6 +182,11 @@ private final class DebugCDNAssetUploadStore: ObservableObject {
 
     func uploadPreviouslyFailedAssets() {
         begin(samples: DebugCDNAssetSample.remainingFailed)
+    }
+
+    /// 只上传本次新增批次(SuperWheel 转盘玩法 19 项),避免每次都跑历史全量 411 个。
+    func uploadCurrentBatch() {
+        begin(samples: DebugCDNAssetSample.currentBatch)
     }
 
     private func begin(samples: [DebugCDNAssetSample]) {
@@ -351,6 +358,21 @@ private struct DebugCDNAssetSample {
 
     static let remainingFailed: [DebugCDNAssetSample] = [
         "blackTriangle", "lightning", "moneyBag", "upArrow", "yellowDiamond", "yellowRoundArrow",
+    ].map(assetCatalogSample)
+
+    /// 本次新增批次 —— SuperWheel 转盘玩法资源(2026-08-17):18 项。
+    /// 只需上传增量,避免每次跑历史全量 411 个 asset。
+    /// 紫钻图标复用已有 giftPanelBalanceCoin,不单独上传 iconDiamond。
+    static let currentBatch: [DebugCDNAssetSample] = [
+        "superWinnerAddBets", "superWinnerBgConfig",
+        "superWinnerBtnBet50", "superWinnerBtnBet500",
+        "superWinnerBtnJoin", "superWinnerBtnJoinGray",
+        "superWinnerClose", "superWinnerCongratsBg",
+        "superWinnerCrown", "superWinnerCrying",
+        "superWinnerEntryIcon", "superWinnerHand",
+        "superWinnerHeaderBtnLeft", "superWinnerHelp",
+        "superWinnerPointer", "superWinnerTitle",
+        "superWinnerWheelRing", "superWinnerWinnerWing",
     ].map(assetCatalogSample)
 
     private static func assetCatalogSample(_ name: String) -> DebugCDNAssetSample {
@@ -725,6 +747,24 @@ statCalls
 statOnlineTime
 statRating
 statRevenue
+superWinnerAddBets
+superWinnerBgConfig
+superWinnerBtnBet50
+superWinnerBtnBet500
+superWinnerBtnJoin
+superWinnerBtnJoinGray
+superWinnerClose
+superWinnerCongratsBg
+superWinnerCrown
+superWinnerCrying
+superWinnerEntryIcon
+superWinnerHand
+superWinnerHeaderBtnLeft
+superWinnerHelp
+superWinnerPointer
+superWinnerTitle
+superWinnerWheelRing
+superWinnerWinnerWing
 tabHome
 tabHomeActive
 tabMessages
