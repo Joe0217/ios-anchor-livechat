@@ -269,6 +269,64 @@ final class SessionStore: ObservableObject {
         return resolved
     }
 
+    /// 全新安装或该账号首次在本机登录时，登录响应可能不带 `picList/videos`，本机也没有
+    /// 模式缓存。此时必须在发布登录态前用本次 token 拉取本人资料，否则首帧会按 107
+    /// 构建，并一直保持到下一次启动。请求失败、owner 不匹配或媒体字段不可信时继续
+    /// fail-closed 到 107，绝不使用服务端原始 userType 猜测模式。
+    private func resolvingInteractivePermissionMode(
+        for result: LoginResult,
+        token: String
+    ) async -> (user: LoginResult, source: String) {
+        let initial = resolvingInitialPermissionMode(for: result)
+        guard initial.source == "unresolved",
+              let expectedUserID = result.userId,
+              expectedUserID > 0 else {
+            return initial
+        }
+
+        do {
+            let profile = try await ProfileService.getAnchorInfo(token: token)
+            guard profile.userId == expectedUserID else {
+                AppLogger.auth.error(
+                    "[PermissionModePrelogin] owner mismatch expected=\(expectedUserID, privacy: .private) actual=\(profile.userId ?? -1, privacy: .private); defaulting to 107"
+                )
+                return initial
+            }
+            guard let permissionVideoURLs = profile.permissionVideoEvidence else {
+                AppLogger.auth.notice(
+                    "[PermissionModePrelogin] media unresolved userId=\(expectedUserID, privacy: .private); defaulting to 107"
+                )
+                return initial
+            }
+
+            let resolved = initial.user.applyingFreshProfilePermissionEvidence(
+                permissionVideoURLs
+            )
+            let placeholderMatched = resolved.resolvedReviewPlaceholderMatch == true
+            let stored = ReviewAccountModeRegistry.record(
+                userID: expectedUserID,
+                placeholderMatched: placeholderMatched
+            )
+            if !stored {
+                AppLogger.auth.error("[PermissionModePrelogin] cache write failed")
+            }
+            #if DEBUG
+            AppLogger.auth.info(
+                "[PermissionModePrelogin] resolved userId=\(expectedUserID, privacy: .private) mediaCount=\(permissionVideoURLs.count, privacy: .public) placeholder=\(placeholderMatched, privacy: .public) stored=\(stored, privacy: .public)"
+            )
+            #endif
+            return (
+                resolved,
+                placeholderMatched ? "prelogin-profile-review" : "prelogin-profile-full"
+            )
+        } catch {
+            AppLogger.auth.notice(
+                "[PermissionModePrelogin] request failed userId=\(expectedUserID, privacy: .private); defaulting to 107 error=\(String(describing: error), privacy: .private)"
+            )
+            return initial
+        }
+    }
+
     /// 登录 / 注册成功后的公共副作用链——单一入口，避免 login() 与 register.submit() 分岔重复。
     ///
     /// A-2 spec §3.3 v3 MAJOR-4 抽出：
@@ -286,9 +344,9 @@ final class SessionStore: ObservableObject {
         guard let token = result.token, !token.isEmpty else { return false }
         let normalizedEmail = DeletedAccountRegistry.normalize(email)
         guard !normalizedEmail.isEmpty else { return false }
-        // 每次交互式登录都重新计算：本次响应优先，缺失时只读取当前 userId 的模式缓存。
-        // 这样双向切号不会沿用前一用户，也不会让全开放账号先展示 107 再热切。
-        let initialMode = resolvingInitialPermissionMode(for: result)
+        // 每次交互式登录都重新计算：本次响应优先，缺失时只读取当前 userId 的模式缓存；
+        // 全新账号连缓存也没有时，在发布登录态前补拉本人资料，避免先展示 107 再热切。
+        let initialMode = await resolvingInteractivePermissionMode(for: result, token: token)
         let sessionResult = initialMode.user
         // 先失效上一账号的资料请求，再发布当前登录用户。
         AnchorInfoStore.shared.hydrateFromLogin(sessionResult)

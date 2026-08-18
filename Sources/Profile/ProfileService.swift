@@ -18,8 +18,8 @@ enum ProfileService {
 
     /// 主播详情：Codable 解码版本。字段名与 `AnchorInfo` 不符的部分会落 nil，
     /// 调试期建议同时调 `getAnchorInfoRaw` 看原始字段。
-    static func getAnchorInfo() async throws -> AnchorInfo {
-        let data = try await APIClient.shared.post("/api/anchor/userInfo")
+    static func getAnchorInfo(token: String? = nil) async throws -> AnchorInfo {
+        let data = try await APIClient.shared.post("/api/anchor/userInfo", token: token)
         do {
             let info = try JSONDecoder().decode(AnchorInfo.self, from: data)
             logger.info("getAnchorInfo decoded userId=\(info.userId ?? -1) nickname=\(info.nickname ?? "nil")")

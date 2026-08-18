@@ -399,4 +399,25 @@ final class LoginResultDecodeTests: XCTestCase {
         XCTAssertEqual(placeholder.picList?.last?.mediaType, 1)
         XCTAssertEqual(placeholder.picList?.last?.vaild, 1)
     }
+
+    func testFreshProfilePermissionEvidenceResolvesFirstLoginWithoutChangingMedia() throws {
+        let unresolved = try LoginResult.decodeNetworkResponse(
+            from: Data("{ \"userId\": 7, \"token\": \"token\" }".utf8),
+            source: "test"
+        )
+
+        let fullMode = unresolved.applyingFreshProfilePermissionEvidence([])
+        XCTAssertTrue(fullMode.isReviewModeResolved)
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: fullMode), 2)
+        XCTAssertNil(fullMode.videos)
+        XCTAssertNil(fullMode.picList)
+
+        let reviewMode = unresolved.applyingFreshProfilePermissionEvidence([
+            ReviewAccountModePolicy.placeholderReviewVideoURL
+        ])
+        XCTAssertTrue(reviewMode.isReviewModeResolved)
+        XCTAssertEqual(UserTypeExperience.effectiveUserType(userInfo: reviewMode), 107)
+        XCTAssertNil(reviewMode.videos)
+        XCTAssertNil(reviewMode.picList)
+    }
 }

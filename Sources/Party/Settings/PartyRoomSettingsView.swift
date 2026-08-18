@@ -33,8 +33,10 @@ struct PartyRoomSettingsView: View {
 
             ScrollView {
                 VStack(spacing: 20) {
-                    avatarBlock.padding(.top, 20)
-                    sectionName
+                    if canEditRoomAvatar {
+                        avatarBlock.padding(.top, 20)
+                    }
+                    sectionName.padding(.top, canEditRoomAvatar ? 0 : 20)
                     sectionTagline
                     sectionLanguage
                     sectionBackground

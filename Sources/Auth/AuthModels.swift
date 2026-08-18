@@ -630,9 +630,41 @@ struct LoginResult: Codable {
         )
     }
 
+    /// 首次交互式登录没有媒体字段和同账号缓存时，用登录 token 预拉到的本人资料补齐模式。
+    /// 这里只持久化“是否命中占位视频”的判定，不把资料接口的照片 URL 塞进登录模型的
+    /// `videos`，避免权限证据被 Profile UI 误当成用户视频展示。
+    func applyingFreshProfilePermissionEvidence(_ permissionVideoURLs: [String]) -> LoginResult {
+        let placeholderMatched = permissionVideoURLs.contains(
+            where: ReviewAccountModePolicy.isPlaceholderVideoURL
+        )
+        return LoginResult(
+            userId: userId,
+            token: token,
+            loginUuid: loginUuid,
+            yxAccid: yxAccid,
+            imToken: imToken,
+            userType: userType,
+            nickname: nickname,
+            icon: icon,
+            userLevel: userLevel,
+            chatBubble: chatBubble,
+            chatBubbleGuardianLevel: chatBubbleGuardianLevel,
+            valid: valid,
+            onReview: onReview,
+            banAlways: banAlways,
+            bannedSubType: bannedSubType,
+            type: type,
+            picList: picList,
+            videos: videos,
+            reviewPlaceholderVideoMatched: placeholderMatched,
+            reviewModeResolved: true,
+            reviewModeEvidenceVersion: ReviewAccountModePolicy.currentEvidenceVersion
+        )
+    }
+
     /// 计算认证建立时的权限模式。登录/注册响应永远优先；响应缺少媒体时，跨会话
-    /// 缓存按同一 userId 恢复 107 或全开放。两类缓存都缺失时固定按 107；登录后的
-    /// 资料刷新只更新下次认证缓存，不改变本次会话已经确定的模式。
+    /// 缓存按同一 userId 恢复 107 或全开放。两类缓存都缺失时先保持未解析（有效模式为
+    /// 107）；交互式登录会在进入主界面前预拉本人资料，冷启动恢复则继续 fail-closed。
     func resolvingInitialPermissionMode(
         cachedPermissionVideoURLs: [String]?,
         cachedPlaceholderMatched: Bool?
