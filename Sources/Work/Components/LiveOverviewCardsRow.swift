@@ -22,7 +22,7 @@ struct LiveOverviewCardsRow: View {
         }
         items.append(CardData(id: "coins", icon: "coins", number: "\(vm.weeklyCoins)", numberColor: Color(hex: 0xF9991A), label: L10n.workCoins, currencyTab: nil))
         items.append(CardData(id: "diamonds", icon: "diamonds", number: "\(vm.walletDiamonds)", numberColor: Color(hex: 0xF640DC), label: L10n.workDiamonds, currencyTab: .diamonds))
-        items.append(CardData(id: "gems", icon: "gems", number: "\(vm.walletGems)", numberColor: Color(hex: 0x3A8AE0), label: L10n.workGems, currencyTab: .gems))
+        items.append(CardData(id: "gems", icon: "gems", number: vm.walletGemsDisplay, numberColor: Color(hex: 0x3A8AE0), label: L10n.workGems, currencyTab: .gems))
         return items
     }
 

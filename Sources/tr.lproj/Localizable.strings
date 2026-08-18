@@ -79,6 +79,7 @@
 "work.levelText.averageCallTime" = "Ortalama Arama Süresi: ";
 "work.levelText.nextLevel" = " (sonraki seviye: ";
 "wallet.minimumRequestAmountFormat" = "Her para çekme işlemi en az %lld elmas olmalıdır.";
+"wallet.weekIncomeDiamond" = "Geçen Hafta Geliri";
 
 "call.reconnect"             = "Yeniden Bağlan";
 

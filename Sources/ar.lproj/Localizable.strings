@@ -79,6 +79,7 @@
 "work.levelText.averageCallTime" = "متوسط وقت المكالمة: ";
 "work.levelText.nextLevel" = " (المستوى التالي: ";
 "wallet.minimumRequestAmountFormat" = "يجب أن يكون كل سحب %lld ماسة على الأقل.";
+"wallet.weekIncomeDiamond" = "دخل الأسبوع الماضي";
 
 "call.reconnect"             = "إعادة الاتصال";
 

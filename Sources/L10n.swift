@@ -2746,6 +2746,7 @@ enum L10n {
         static var withdrawCash: String { localize("wallet.withdrawCash", comment: "Submit withdrawal") }
         static var cashableBalance: String { localize("wallet.cashableBalance", comment: "Cashable balance") }
         static var withdrawalBalance: String { localize("wallet.withdrawalBalance", comment: "Withdrawal-only balance") }
+        static var weekIncomeDiamond: String { localize("wallet.weekIncomeDiamond", comment: "Previous week income diamonds") }
         static var inviteEntry: String { localize("wallet.inviteEntry", comment: "Invite entry") }
         static var records: String { localize("wallet.records", comment: "Withdrawal records") }
         static var selectAccount: String { localize("wallet.selectAccount", comment: "Select withdrawal account") }

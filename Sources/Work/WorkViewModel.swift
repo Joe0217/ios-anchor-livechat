@@ -50,7 +50,7 @@ final class WorkViewModel: ObservableObject {
     @Published var dailyCalls: Int = 0
     @Published var weeklyCoins: Int = 0
     @Published var walletDiamonds: Int64 = 0
-    @Published var walletGems: Int64 = 0
+    @Published var walletGems: Decimal = 0
 
     /// 官方 WhatsApp 客服号（H5 `getConfigByKey({searchValue: 'WhatsApp'})`）。
     /// 空串表示未拉到或未配置，Footer 里空时整行隐藏（fail-silent）。
@@ -298,7 +298,7 @@ final class WorkViewModel: ObservableObject {
     }
 
     /// Android Work 专属钻石/宝石概览：sapi `gem/getBalance`。
-    private static func fetchWalletBalance() async -> (diamond: Int64, gem: Int64) {
+    private static func fetchWalletBalance() async -> (diamond: Int64, gem: Decimal) {
         do {
             let data = try await PartyAPIClient.shared.post(
                 "/sapi/weidou/v1/client/gem/getBalance",
@@ -309,7 +309,7 @@ final class WorkViewModel: ObservableObject {
             }
             return (
                 extractInt64(from: object, keys: ["diamond", "diamonds", "diamondNum"]),
-                extractInt64(from: object, keys: ["gem", "gems"])
+                extractDecimal(from: object, keys: ["gem", "gems"])
             )
         } catch {
             AppLogger.net.error("[Work.balance] fetch failed: \(String(describing: error), privacy: .private)")
@@ -328,6 +328,30 @@ final class WorkViewModel: ObservableObject {
             }
         }
         return 0
+    }
+
+    private static func extractDecimal(from object: [String: Any], keys: [String]) -> Decimal {
+        for key in keys {
+            if let number = object[key] as? NSNumber {
+                let type = String(cString: number.objCType)
+                if type != "c", type != "B", let value = Decimal(string: number.stringValue, locale: Locale(identifier: "en_US_POSIX")) {
+                    return value
+                }
+            }
+            if let string = object[key] as? String,
+               let value = Decimal(string: string.trimmingCharacters(in: .whitespacesAndNewlines), locale: Locale(identifier: "en_US_POSIX")) {
+                return value
+            }
+        }
+        return 0
+    }
+
+    var walletGemsDisplay: String {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale.current
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSDecimalNumber(decimal: walletGems)) ?? "0.00"
     }
 
     /// 拉官方 WhatsApp 客服号（对齐 H5 `getConfigByKey({searchValue: 'WhatsApp'})`）。

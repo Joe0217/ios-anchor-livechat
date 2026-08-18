@@ -429,6 +429,11 @@ private struct WithdrawalBalanceCard: View {
                     .font(.system(size: 13))
                     .foregroundStyle(.white.opacity(0.66))
             }
+            if let weekIncomeDiamond = wallet?.weekIncomeDiamond {
+                Text("\(L10n.Wallet.weekIncomeDiamond): \(weekIncomeDiamond)")
+                    .font(.system(size: 13))
+                    .foregroundStyle(.white.opacity(0.66))
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)

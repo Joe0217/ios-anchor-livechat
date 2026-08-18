@@ -2199,6 +2199,7 @@
 "wallet.withdrawCash" = "Withdraw Cash";
 "wallet.cashableBalance" = "Cashable Diamond Balance";
 "wallet.withdrawalBalance" = "Withdrawal Balance";
+"wallet.weekIncomeDiamond" = "Last Week Income";
 "wallet.inviteEntry" = "Invite and earn rewards";
 "wallet.records" = "Withdrawal Records";
 "wallet.selectAccount" = "Select Withdrawal Account";
