@@ -89,7 +89,7 @@
 "setToBusy.goMatch"          = "Go Match";
 
 "work.onlineTime"            = "Online Time (d)";
-"work.avgCallDuration"       = "Avg Call Duration (d)";
+"work.avgCallDuration"       = "Avg Call Duration(This Week)";
 "work.positiveRating"        = "Positive Rating";
 "work.callsToday"            = "Calls Today";
 "work.coins"                 = "Coins";

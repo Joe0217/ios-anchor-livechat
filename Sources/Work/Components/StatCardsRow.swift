@@ -24,7 +24,7 @@ struct StatCardsRow: View {
                          caption: L10n.workAvgCallDuration)
             }
             StatCard(icon: "statRating",
-                     number: "\(vm.positiveRating)%",
+                     number: vm.positiveRating,
                      numberColor: Color(hex: 0xF640DC),
                      caption: L10n.workPositiveRating)
         }

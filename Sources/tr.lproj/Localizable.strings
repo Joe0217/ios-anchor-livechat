@@ -93,7 +93,7 @@
 "setToBusy.goMatch"          = "Eşleş";
 
 "work.onlineTime"            = "Çevrimiçi Süre (g)";
-"work.avgCallDuration"       = "Ort. Arama Süresi (g)";
+"work.avgCallDuration"       = "Ort. Arama Süresi (Bu Hafta)";
 "work.positiveRating"        = "Olumlu Değerlendirme";
 "work.callsToday"            = "Bugünkü Aramalar";
 "work.coins"                 = "Coin";

@@ -276,9 +276,9 @@ extension AnchorInfo {
 struct AnchorDataStatistics: Codable, Equatable {
     let callNum: Int?           // Android：当天通话数量
     let weeklyDiamonds: Int?    // Android：周累计钻石
-    let positiveRating: Int?    // 好评率（0-100 整数）
+    let positiveRating: String? // H5/Android 直接展示服务端文本（可能自带百分号）
 
-    init(callNum: Int? = nil, weeklyDiamonds: Int? = nil, positiveRating: Int? = nil) {
+    init(callNum: Int? = nil, weeklyDiamonds: Int? = nil, positiveRating: String? = nil) {
         self.callNum = callNum
         self.weeklyDiamonds = weeklyDiamonds
         self.positiveRating = positiveRating
@@ -288,7 +288,7 @@ struct AnchorDataStatistics: Codable, Equatable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.callNum = c.decodeFlexibleInt(forKey: .callNum)
         self.weeklyDiamonds = c.decodeFlexibleInt(forKey: .weeklyDiamonds)
-        self.positiveRating = c.decodeFlexibleInt(forKey: .positiveRating)
+        self.positiveRating = c.decodeFlexibleString(forKey: .positiveRating)
     }
 }
 

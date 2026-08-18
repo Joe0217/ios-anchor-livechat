@@ -42,6 +42,7 @@ struct WorkView: View {
                     }
                     ToolsSection(
                         showNewbie: vm.showNewbie,
+                        showBigR: vm.showBigR,
                         hasAnchorGuideRedDot: vm.hasAnchorGuideRedDot,
                         path: $path
                     )

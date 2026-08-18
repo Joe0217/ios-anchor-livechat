@@ -43,8 +43,8 @@ final class WorkViewModel: ObservableObject {
     @Published var onlineTimeSec: Int = 0
     /// 平均通话时长（秒）—— H5 `anchorSettleMap.averageCallDuration`。
     @Published var avgCallDurationSec: Int = 0
-    /// 好评率（百分比整数）—— H5: dataStatistics.positiveRating
-    @Published var positiveRating: Int = 0
+    /// 好评率展示文本——H5/Android 直接展示 dataStatistics.positiveRating，不额外拼 `%`。
+    @Published var positiveRating: String = "-"
 
     // Android Work 专属的概览卡字段；H5 当前未启用这组卡片。
     @Published var dailyCalls: Int = 0
@@ -133,7 +133,10 @@ final class WorkViewModel: ObservableObject {
             .removeDuplicates()
             .assign(to: &$avgCallDurationSec)
         AnchorInfoStore.shared.$info
-            .map { $0?.dataStatistics?.positiveRating ?? 0 }
+            .map { info in
+                let value = info?.dataStatistics?.positiveRating?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return value.isEmpty ? "-" : value
+            }
             .removeDuplicates()
             .assign(to: &$positiveRating)
         AnchorInfoStore.shared.$info

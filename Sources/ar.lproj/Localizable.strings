@@ -93,7 +93,7 @@
 "setToBusy.goMatch"          = "مطابقة";
 
 "work.onlineTime"            = "وقت الاتصال (يوم)";
-"work.avgCallDuration"       = "متوسط مدة المكالمة (يوم)";
+"work.avgCallDuration"       = "متوسط مدة المكالمة (هذا الأسبوع)";
 "work.positiveRating"        = "تقييم إيجابي";
 "work.callsToday"            = "المكالمات اليوم";
 "work.coins"                 = "العملات";

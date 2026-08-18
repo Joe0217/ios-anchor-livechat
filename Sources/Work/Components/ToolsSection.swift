@@ -9,6 +9,7 @@ struct ToolsSection: View {
     // 用 value 而非 @ObservedObject vm：只在这个 Bool 变化时 diff 重算，
     // 不订阅 vm 的其他 @Published（避免 onlineTimeSec / callIncomes 变化时 12+ 图标网格重算 —— 审查报告-202607061550 必修-1）。
     let showNewbie: Bool
+    let showBigR: Bool
     let hasAnchorGuideRedDot: Bool
     /// Work 根页的全部 push 都必须写入 MainTabView 持有的 path，确保任何二级页自动隐藏 TabBar。
     @Binding var path: NavigationPath
@@ -48,7 +49,7 @@ struct ToolsSection: View {
             arr.removeAll { restrictedIcons.contains($0.icon) }
         }
         if showNewbie { arr.append(("toolNewbie", L10n.toolNewbie)) }
-        arr.append(("toolBigR", L10n.toolStarUser))
+        if showBigR { arr.append(("toolBigR", L10n.toolStarUser)) }
         return arr
     }
 
