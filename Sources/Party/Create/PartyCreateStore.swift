@@ -337,7 +337,8 @@ final class PartyCreateStore: ObservableObject {
         isSubmitting = true
         submitError = ""
         defer { isSubmitting = false }
-        // v7 对齐安卓：本地上传优先，否则 fallback 到登录默认头像
+        // 图片入口是否展示只影响用户编辑能力；默认值与既有创房逻辑保持一致。
+        // 107 仍提交登录账号头像，不能因路径包含 register-107check 改变请求结构。
         let avatarUrl = canEditRoomAvatar
             ? (uploadedAvatarUrl ?? defaultAvatarUrl)
             : defaultAvatarUrl

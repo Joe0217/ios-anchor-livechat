@@ -500,6 +500,30 @@ final class PartyCreateStorePermissionTests: XCTestCase {
         XCTAssertEqual(store.selectedTemplate?.id, voice.id)
     }
 
+    func test_partyOnlyCreateKeepsAccountAvatarAsDefault() async {
+        let voice = PartyRoomTemplate(id: 1, modeType: PartyCreateStore.modeVoice, seatCount: 5)
+        let service = PartyCreatePermissionService(templatesByType: [
+            PartyCreateStore.modeVoice: [voice],
+        ])
+        let store = PartyCreateStore(
+            service: service,
+            defaultName: "Room",
+            defaultTagline: "Welcome",
+            defaultAvatarUrl: "https://example.com/hiFunny/20260817/register-107check/avatar.jpg",
+            partyVideoCapabilityProvider: { false }
+        )
+
+        await store.loadInitial()
+        await store.submit()
+
+        XCTAssertEqual(service.createTemplateIDs, [voice.id])
+        XCTAssertEqual(service.createAvatarURLs.count, 1)
+        XCTAssertEqual(
+            service.createAvatarURLs[0],
+            "https://example.com/hiFunny/20260817/register-107check/avatar.jpg"
+        )
+    }
+
     func test_partyOnlyRejectsStaleVideoTemplateBeforeSubmission() async {
         let voice = PartyRoomTemplate(id: 1, modeType: PartyCreateStore.modeVoice, seatCount: 5)
         let live = PartyRoomTemplate(id: 2, modeType: PartyCreateStore.modeLiveVoice, videoSeatCount: 1)
@@ -553,6 +577,7 @@ private final class PartyCreatePermissionService: PartyCreateService, @unchecked
     let templatesByType: [Int: [PartyRoomTemplate]]
     private(set) var templateRequests: [Int] = []
     private(set) var createTemplateIDs: [Int] = []
+    private(set) var createAvatarURLs: [String?] = []
 
     init(templatesByType: [Int: [PartyRoomTemplate]]) {
         self.templatesByType = templatesByType
@@ -582,6 +607,7 @@ private final class PartyCreatePermissionService: PartyCreateService, @unchecked
         bgImgId: Int?
     ) async throws -> PartyRoomInfo {
         createTemplateIDs.append(roomTempId)
+        createAvatarURLs.append(roomAvatar)
         let data = Data(#"{"id":"created-room","roomName":"Test"}"#.utf8)
         return try JSONDecoder().decode(PartyRoomInfo.self, from: data)
     }

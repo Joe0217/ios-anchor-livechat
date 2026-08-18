@@ -50,8 +50,10 @@ struct PartyCreateRoomView: View {
 
             ScrollView {
                 VStack(spacing: 20) {
-                    avatarBlock.padding(.top, 20)
-                    sectionName
+                    if canEditRoomAvatar {
+                        avatarBlock.padding(.top, 20)
+                    }
+                    sectionName.padding(.top, canEditRoomAvatar ? 0 : 20)
                     sectionTagline
                     sectionLanguage
                     sectionMode
@@ -122,7 +124,7 @@ struct PartyCreateRoomView: View {
         // submitError toast overlay（对齐安卓失败 toast，让用户看到错误原因）
         .overlay(alignment: .top) {
             if !store.submitError.isEmpty {
-                Text(L10n.commonNetworkError)
+                Text(submitErrorMessage)
                     .toastStyle()
                     .transition(Toast.transition)
                     .task(id: store.submitError) {
@@ -132,6 +134,12 @@ struct PartyCreateRoomView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: store.submitError.isEmpty)
+    }
+
+    private var submitErrorMessage: String {
+        store.submitError == L10n.objectionableContentRejected
+            ? L10n.objectionableContentRejected
+            : L10n.commonNetworkError
     }
 
     // MARK: - Avatar block

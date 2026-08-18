@@ -12,13 +12,15 @@ struct InReviewBadge: View {
     }
 
     let style: Style
+    var fontSize: CGFloat = 10
 
     var body: some View {
         HStack(spacing: 3) {
             Image(systemName: "clock.fill")
                 .font(.system(size: 9, weight: .semibold))
             Text(L10n.EditProfile.badgeInReview)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.system(size: fontSize, weight: .semibold))
+                .lineLimit(1)
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 6)

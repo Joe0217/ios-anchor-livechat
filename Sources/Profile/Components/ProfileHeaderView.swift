@@ -86,7 +86,7 @@ struct ProfileHeaderView: View {
             )
             .overlay(alignment: .bottom) {
                 if isRegistrationAvatarReviewing {
-                    InReviewBadge(style: .inline)
+                    InReviewBadge(style: .inline, fontSize: 9)
                         .offset(y: 8)
                 }
             }
