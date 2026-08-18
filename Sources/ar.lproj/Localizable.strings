@@ -106,7 +106,7 @@
 "work.giftIncomes"           = "أرباح الهدايا";
 "work.taskIncomes"           = "أرباح المهام";
 "work.inviteIncomes"         = "أرباح الدعوات";
-"work.managedIncomes"        = "أرباح مُدارة";
+"work.otherIncomes"          = "دخل آخر";
 "work.totalIncomes"          = "إجمالي الأرباح";
 
 "work.tools"                 = "الأدوات";

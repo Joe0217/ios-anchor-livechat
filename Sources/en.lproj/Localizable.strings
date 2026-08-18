@@ -102,7 +102,7 @@
 "work.giftIncomes"           = "Gift Incomes";
 "work.taskIncomes"           = "Task Incomes";
 "work.inviteIncomes"         = "Invite Incomes";
-"work.managedIncomes"        = "Managed Incomes";
+"work.otherIncomes"          = "Other Incomes";
 "work.totalIncomes"          = "Total Incomes";
 
 "work.tools"                 = "Tools";

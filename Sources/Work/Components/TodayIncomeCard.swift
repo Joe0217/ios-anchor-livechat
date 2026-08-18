@@ -17,7 +17,7 @@ struct TodayIncomeCard: View {
         arr.append(("\(vm.giftIncomes)",    L10n.workGiftIncomes))
         arr.append(("\(vm.taskIncomes)",    L10n.workTaskIncomes))
         arr.append(("\(vm.inviteIncomes)",  L10n.workInviteIncomes))
-        arr.append(("\(vm.managedIncomes)", L10n.workManagedIncomes))
+        arr.append(("\(vm.otherIncomes)",   L10n.workOtherIncomes))
         arr.append(("\(vm.totalIncomes)",   L10n.workTotalIncomes))
         return arr
     }

@@ -106,7 +106,7 @@
 "work.giftIncomes"           = "Hediye Gelirleri";
 "work.taskIncomes"           = "Görev Gelirleri";
 "work.inviteIncomes"         = "Davet Gelirleri";
-"work.managedIncomes"        = "Yönetilen Gelirler";
+"work.otherIncomes"          = "Diğer Gelirler";
 "work.totalIncomes"          = "Toplam Gelir";
 
 "work.tools"                 = "Araçlar";

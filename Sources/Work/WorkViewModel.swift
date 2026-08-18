@@ -62,7 +62,7 @@ final class WorkViewModel: ObservableObject {
     @Published var giftIncomes: String = "0"
     @Published var taskIncomes: String = "0"
     @Published var inviteIncomes: String = "0"
-    @Published var managedIncomes: String = "0"
+    @Published var otherIncomes: String = "0"
     @Published var totalIncomes: String = "0"
 
     // MARK: - 在线开关
@@ -165,7 +165,7 @@ final class WorkViewModel: ObservableObject {
         AnchorInfoStore.shared.$info
             .map { $0?.anchorIncomeMap?.othersIncome ?? "0" }
             .removeDuplicates()
-            .assign(to: &$managedIncomes)
+            .assign(to: &$otherIncomes)
         AnchorInfoStore.shared.$info
             .map { $0?.anchorIncomeMap?.totalCoin ?? "0" }
             .removeDuplicates()

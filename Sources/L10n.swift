@@ -874,7 +874,7 @@ enum L10n {
     static var workGiftIncomes: String { localize("work.giftIncomes", comment: "礼物收益") }
     static var workTaskIncomes: String { localize("work.taskIncomes", comment: "任务收益") }
     static var workInviteIncomes: String { localize("work.inviteIncomes", comment: "邀请收益") }
-    static var workManagedIncomes: String { localize("work.managedIncomes", comment: "管理收益") }
+    static var workOtherIncomes: String { localize("work.otherIncomes", comment: "其他收益") }
     static var workTotalIncomes: String { localize("work.totalIncomes", comment: "总收益") }
 
     static var workTools: String { localize("work.tools", comment: "工具") }
