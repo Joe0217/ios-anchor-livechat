@@ -11,6 +11,8 @@ import Foundation
 /// - `success` 后状态机不可逆，view 销毁
 enum PostingState: Equatable {
     case editing
+    /// 本地内容预检进行中。
+    case checkingContent
     /// 上传 OSS 进行中。
     /// - progress：已成功上传张数
     /// - total：图片总数（imgs.count，本轮不变）
@@ -32,6 +34,10 @@ enum FailureReason: Equatable {
     case textEmpty
     /// imgs 空（用户 Q3 决策：H5 强制 ≥1 图）
     case noImages
+    /// 本地图片模型判定至少一张图片为高风险。
+    case contentRejected
+    /// 107/注册审核要求本地模型可用；资源缺失时 fail closed。
+    case contentCheckUnavailable
     /// STS getOssUploadParam 失败（含 2 次重拉耗尽，spec R6/R19）
     case credentialFailed
     /// 第 N 张图上传失败（同时整体失败，不发 create，spec R8）

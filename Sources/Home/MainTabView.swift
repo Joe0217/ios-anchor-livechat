@@ -301,6 +301,7 @@ struct MainTabView: View {
             }
             enforceVisibleSelection()
         }
+        .onChange(of: permission.canCircleSocial) { _ in enforceVisibleSelection() }
         .onChange(of: permission.canWorkDashboard) { _ in enforceVisibleSelection() }
         .onChange(of: permission.canRelationshipViewing) { allowed in
             if !allowed { connectionsPath = NavigationPath() }
@@ -849,6 +850,7 @@ struct MainTabView: View {
                         // 详情↔聊天互跳所有 destination + 头像 tap 详情 pusher
                         .userProfileAndChatDestinations()
                         .avatarProfilePusher { uid in profilePath.append(UserProfileRoute.userId(uid)) }
+                        .environment(\.openUserProfile, openUserProfileAction)
                 }
             }
         }
@@ -909,7 +911,11 @@ struct MainTabView: View {
                 return uses107TabStructure && permission.canRelationshipViewing
             case .beauty:
                 return uses107TabStructure && permission.canBeautyStudio
-            case .home: return permission.canHomeDiscovery
+            case .home:
+                // 107 has a circle-only Home surface. Live/List/Match remain
+                // unavailable and are filtered by LiveTabView's circleOnly order.
+                return permission.canHomeDiscovery
+                    || (uses107TabStructure && permission.canCircleSocial)
             case .work: return permission.canWorkDashboard
             case .messages: return permission.canDirectMessages
             case .profile: return true
@@ -931,10 +937,16 @@ struct MainTabView: View {
     /// 但 107 在 Bridge 尚未装配时也绝不能短暂构造 Home 子树。会话已存在时复用同一映射同步判定；
     /// 无会话则保守不挂载。
     private var shouldMountHomeContent: Bool {
-        if permission.isLoaded { return permission.canHomeDiscovery }
+        if permission.isLoaded {
+            return permission.canHomeDiscovery
+                || (uses107TabStructure && permission.canCircleSocial)
+        }
         guard let user = session.user else { return false }
         let fallbackUserType = UserTypeExperience.effectiveUserType(userInfo: user)
-        return !UserPermissionMapping.blocked(for: fallbackUserType).contains(.homeDiscovery)
+        let blocked = UserPermissionMapping.blocked(for: fallbackUserType)
+        return !blocked.contains(.homeDiscovery)
+            || (UserTypeExperience.isPartyOnly(fallbackUserType)
+                && !blocked.contains(.profileSocial))
     }
 
     /// DEBUG 权限覆盖或运行期能力撤销后，确保当前选中项仍属于可见集合。
@@ -956,7 +968,8 @@ struct MainTabView: View {
         if permission.canParty { return .party }
         if uses107TabStructure, permission.canRelationshipViewing { return .connections }
         if uses107TabStructure, permission.canBeautyStudio { return .beauty }
-        if permission.canHomeDiscovery { return .home }
+        if permission.canHomeDiscovery
+            || (uses107TabStructure && permission.canCircleSocial) { return .home }
         if permission.canDirectMessages { return .messages }
         return .profile
     }
@@ -990,9 +1003,10 @@ struct MainTabView: View {
                     .resizable()
                     .scaledToFit()
                     .frame(width: 26, height: 26)
+                    .foregroundStyle(isSelected ? Theme.Palette.tabActive : Theme.Palette.tabInactiveLabel)
                     .accessibilityHidden(true)
             }
-            Text(tab.label)
+            Text(tab == .home && uses107TabStructure ? L10n.tabCircle : tab.label)
                 .font(Theme.Typography.tabLabel)
                 .foregroundStyle(isSelected ? Theme.Palette.tabActive : Theme.Palette.tabInactiveLabel)
         }
@@ -1396,7 +1410,8 @@ enum MainTab: CaseIterable {
         case .home:     return "tabHome"
         case .messages: return "tabMessages"
         case .party:    return "tabParty"
-        case .connections, .beauty: return ""
+        case .connections: return "tabMessages"
+        case .beauty: return "tabWork"
         case .work:     return "tabWork"
         case .profile:  return "tabProfile"
         }
@@ -1408,7 +1423,8 @@ enum MainTab: CaseIterable {
         case .home:     return "tabHomeActive"
         case .messages: return "tabMessagesActive"
         case .party:    return "tabPartyActive"
-        case .connections, .beauty: return ""
+        case .connections: return "tabMessagesActive"
+        case .beauty: return "tabWorkActive"
         case .work:     return "tabWorkActive"
         case .profile:  return "tabProfileActive"
         }
@@ -1428,8 +1444,7 @@ enum MainTab: CaseIterable {
 
     var systemIcons: (inactive: String, active: String)? {
         switch self {
-        case .connections: return ("person.2", "person.2.fill")
-        case .beauty: return ("camera", "camera.fill")
+        case .connections, .beauty: return nil
         default: return nil
         }
     }

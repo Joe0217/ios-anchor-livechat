@@ -23,11 +23,18 @@ final class PostPublishViewModel: ObservableObject {
             if text.count > PostPublishLimits.maxTextLength {
                 text = String(text.prefix(PostPublishLimits.maxTextLength))
             }
+            // 修改被拦截的文字后，清除旧的失败状态，允许重新发布。
+            if case .failed(.contentRejected, _) = state {
+                state = .editing
+                transientError = nil
+            }
         }
     }
     /// 原始图片数据数组（按选图顺序）。
     /// 选图阶段已做 > 10MB 拒绝（外层 view + ImageCompressor 配合）
     @Published private(set) var imageDataList: [Data] = []
+    /// 选图后立即更新的本地审核状态，索引与 imageDataList 一一对应。
+    @Published private(set) var imageModerationStates: [ImageModerationStatus] = []
 
     // MARK: - 输出
 
@@ -45,6 +52,9 @@ final class PostPublishViewModel: ObservableObject {
     private let ossService: OssUploadServiceProtocol
     /// 压缩函数（runtime 注入 `ImageCompressor.compress`，单测注入 identity 或 mock）
     private let compressImage: (Data) throws -> Data
+    /// 图片预检。普通账号注入 allow-all，107 runtime 才注入惰性 Core ML 服务。
+    private let imageModerationService: ImageContentModerationServiceProtocol
+    private let textModerationEnabled: Bool
     /// "now" 注入便于单测 R18 expire 预检；生产传 `{ Date().timeIntervalSince1970 }`
     private let nowEpoch: () -> TimeInterval
     /// 文案注入（HilyTests 不依赖 L10n）
@@ -63,16 +73,27 @@ final class PostPublishViewModel: ObservableObject {
     /// create Task（spec R21：dismiss 时不 cancel 这个）
     private var inflightCreateTask: Task<Void, Never>?
 
+    enum ImageModerationStatus: Equatable {
+        case checking
+        case allowed
+        case blocked
+        case unavailable
+    }
+
     init(service: PostPublishServiceProtocol,
          credentialService: OssCredentialServiceProtocol,
          ossService: OssUploadServiceProtocol,
          compressImage: @escaping (Data) throws -> Data,
+         imageModerationService: ImageContentModerationServiceProtocol = AllowAllImageContentModerationService(),
+         textModerationEnabled: Bool = false,
          nowEpoch: @escaping () -> TimeInterval = { Date().timeIntervalSince1970 },
          strings: PostPublishStrings = .englishFallback) {
         self.service = service
         self.credentialService = credentialService
         self.ossService = ossService
         self.compressImage = compressImage
+        self.imageModerationService = imageModerationService
+        self.textModerationEnabled = textModerationEnabled
         self.nowEpoch = nowEpoch
         self.strings = strings
     }
@@ -96,17 +117,54 @@ final class PostPublishViewModel: ObservableObject {
             return
         }
         imageDataList.append(rawData)
+        imageModerationStates.append(.checking)
+        let index = imageDataList.count - 1
+        Task { [weak self] in
+            guard let self else { return }
+            let decision = await self.imageModerationService.check(data: rawData)
+            guard self.imageDataList.indices.contains(index), self.imageDataList[index] == rawData else { return }
+            switch decision {
+            case .allowed: self.imageModerationStates[index] = .allowed
+            case .blocked:
+                self.imageModerationStates[index] = .blocked
+                self.transientError = self.strings.contentRejected
+            case .unavailable:
+                self.imageModerationStates[index] = .unavailable
+                self.transientError = self.strings.contentCheckUnavailable
+            }
+        }
     }
 
     func removeImage(at idx: Int) {
         guard imageDataList.indices.contains(idx) else { return }
         imageDataList.remove(at: idx)
+        if imageModerationStates.indices.contains(idx) {
+            imageModerationStates.remove(at: idx)
+        }
+        // Removing the image that caused the local moderation failure returns
+        // the editor to an actionable state. Without this, the state machine
+        // remains in `.failed(.contentRejected)` and Release stays disabled.
+        switch state {
+        case .checkingContent:
+            state = .editing
+        case .failed(.contentRejected, _), .failed(.contentCheckUnavailable, _):
+            state = .editing
+            transientError = nil
+        default:
+            break
+        }
     }
 
     /// 是否可点发布按钮（前端 disable，spec F7）
     var canPublish: Bool {
         guard case .editing = state else { return false }
-        return !trimmedText.isEmpty && !imageDataList.isEmpty
+        guard !trimmedText.isEmpty, !imageDataList.isEmpty else { return false }
+        return imageModerationStates.allSatisfy {
+            if case .blocked = $0 { return false }
+            if case .unavailable = $0 { return false }
+            if case .checking = $0 { return false }
+            return true
+        }
     }
 
     private var trimmedText: String {
@@ -116,7 +174,7 @@ final class PostPublishViewModel: ObservableObject {
     // MARK: - 主流程：publish
 
     /// 触发发布（用户点 Release 按钮）。
-    /// 状态机：editing → uploadingImages → creatingPost → success
+    /// 状态机：editing → checkingContent → uploadingImages → creatingPost → success
     /// 或：→ failed(原因)
     func publish() {
         guard case .editing = state else { return }  // R13 防双发布
@@ -133,11 +191,17 @@ final class PostPublishViewModel: ObservableObject {
             state = .failed(reason: .noImages, uploadedUrls: [:])
             return
         }
+        if textModerationEnabled,
+           ObjectionableContentFilter.containsObjectionableContent(trimmed) {
+            transientError = strings.contentRejected
+            state = .failed(reason: .contentRejected, uploadedUrls: [:])
+            return
+        }
 
-        // 同步切到 uploadingImages：让 canPublish 立即返 false（R13 同步守 + UI 立即变 loading）
+        // 同步切到 checkingContent：让 canPublish 立即返 false（R13 同步守）。
         // epoch +=1 也在同步，让 stale callback 立即被守住
         currentEpoch += 1
-        state = .uploadingImages(progress: 0, total: imageDataList.count, uploadedUrls: [:])
+        state = .checkingContent
         let epoch = currentEpoch
         Task { await runUploadFlow(epoch: epoch, uploadedUrls: [:]) }
     }
@@ -148,7 +212,7 @@ final class PostPublishViewModel: ObservableObject {
     func retry() {
         guard case .failed(let reason, let uploadedUrls) = state else { return }
         switch reason {
-        case .textEmpty, .noImages:
+        case .textEmpty, .noImages, .contentRejected, .contentCheckUnavailable:
             // 回 editing 让用户改输入
             state = .editing
         case .createFailed:
@@ -190,6 +254,43 @@ final class PostPublishViewModel: ObservableObject {
     /// 由 publish / retry 调用：epoch + state 已由调用方同步设置；本函数仅做 async 流程。
     private func runUploadFlow(epoch: Int, uploadedUrls: [Int: String]) async {
         let total = imageDataList.count
+
+        // Do not request credentials or upload media until the local image
+        // gate has accepted every image. The normal-account service is a no-op.
+        if uploadedUrls.isEmpty {
+            for (idx, data) in imageDataList.enumerated() {
+                guard epoch == currentEpoch else { return }
+                let status = imageModerationStates.indices.contains(idx) ? imageModerationStates[idx] : .checking
+                switch status {
+                case .allowed:
+                    continue
+                case .blocked:
+                    state = .failed(reason: .contentRejected, uploadedUrls: [:])
+                    transientError = strings.contentRejected
+                    return
+                case .unavailable:
+                    logger.error("local image moderation unavailable idx=\(idx, privacy: .public)")
+                    state = .failed(reason: .contentCheckUnavailable, uploadedUrls: [:])
+                    transientError = strings.contentCheckUnavailable
+                    return
+                case .checking:
+                    switch await imageModerationService.check(data: data) {
+                    case .allowed:
+                        if imageModerationStates.indices.contains(idx) { imageModerationStates[idx] = .allowed }
+                    case .blocked:
+                        if imageModerationStates.indices.contains(idx) { imageModerationStates[idx] = .blocked }
+                        state = .failed(reason: .contentRejected, uploadedUrls: [:])
+                        transientError = strings.contentRejected
+                        return
+                    case .unavailable:
+                        if imageModerationStates.indices.contains(idx) { imageModerationStates[idx] = .unavailable }
+                        state = .failed(reason: .contentCheckUnavailable, uploadedUrls: [:])
+                        transientError = strings.contentCheckUnavailable
+                        return
+                    }
+                }
+            }
+        }
 
         // 1. STS 凭证（预检 expire，spec R18）
         guard let credential = await ensureCredential(epoch: epoch) else { return }
@@ -389,6 +490,8 @@ struct PostPublishStrings {
     let createFailed: String
     let networkError: String
     let publishSuccess: String
+    let contentRejected: String
+    let contentCheckUnavailable: String
 
     static let englishFallback = PostPublishStrings(
         textEmpty: "Please enter content",
@@ -398,7 +501,9 @@ struct PostPublishStrings {
         uploadFailed: "Upload failed, please retry",
         createFailed: "Publish failed",
         networkError: "Network error, please try again",
-        publishSuccess: "Successfully published"
+        publishSuccess: "Successfully published",
+        contentRejected: "This image cannot be published",
+        contentCheckUnavailable: "Unable to check image content"
     )
 }
 

@@ -186,7 +186,7 @@ struct BlockedFeatures: OptionSet {
     static let partyActivities = BlockedFeatures(rawValue: 1 << 12)
     /// 仅 107 使用：关闭 P2P 消息、群发和私密媒体链路；Party 房公屏不受此位影响。
     static let directMessages = BlockedFeatures(rawValue: 1 << 13)
-    /// 仅 107 使用：关闭朋友圈、分享、资料媒体编辑等宽泛社交能力。
+    /// 朋友圈发布由本地图片/文字预检保护；107 仍关闭其他高风险社交媒体编辑能力。
     /// 关注关系与只读 Album 已拆成更窄的独立能力，不再复用此位。
     static let profileSocial = BlockedFeatures(rawValue: 1 << 14)
     /// 仅 107 使用：不展示非 Party 的启动站内公告。
@@ -313,10 +313,11 @@ enum UserPermissionMapping {
         case 107:
             return [
                 .call, .live,
+                .profileSocial,
                 .giftSending, .wallet, .withdrawal, .currencyExchange,
                 .lottery, .partyGames, .virtualItems,
                 .homeDiscovery, .workDashboard, .partyActivities,
-                .directMessages, .profileSocial, .systemAnnouncements,
+                .directMessages, .systemAnnouncements,
                 .partyVideo, .partyLuckyNumber, .partyMusic
             ]
         default:  return []
@@ -420,6 +421,7 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
     @MainActor @Published private(set) var canPartyActivities: Bool = false
     @MainActor @Published private(set) var canDirectMessages: Bool = false
     @MainActor @Published private(set) var canProfileSocial: Bool = false
+    @MainActor @Published private(set) var canCircleSocial: Bool = false
     @MainActor @Published private(set) var canSystemAnnouncements: Bool = false
     @MainActor @Published private(set) var canPartyVideo: Bool = false
     @MainActor @Published private(set) var canPartyLuckyNumber: Bool = false
@@ -472,6 +474,7 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
     nonisolated var canPartyActivitiesSnapshot: Bool { canUseSnapshot(.partyActivities) }
     nonisolated var canDirectMessagesSnapshot: Bool { canUseSnapshot(.directMessages) }
     nonisolated var canProfileSocialSnapshot: Bool { canUseSnapshot(.profileSocial) }
+    nonisolated var canCircleSocialSnapshot: Bool { canUseSnapshot(.profileSocial) || effectiveUserTypeSnapshot == 107 }
     nonisolated var canSystemAnnouncementsSnapshot: Bool { canUseSnapshot(.systemAnnouncements) }
     nonisolated var canPartyVideoSnapshot: Bool { canUseSnapshot(.partyVideo) }
     nonisolated var canPartyLuckyNumberSnapshot: Bool { canUseSnapshot(.partyLuckyNumber) }
@@ -603,6 +606,7 @@ final class SelfPermissionBridge: ObservableObject, @unchecked Sendable {
         canPartyActivities = loaded && !blocked.contains(.partyActivities)
         canDirectMessages = loaded && !blocked.contains(.directMessages)
         canProfileSocial = loaded && !blocked.contains(.profileSocial)
+        canCircleSocial = canProfileSocial || (loaded && userType == 107)
         canSystemAnnouncements = loaded && !blocked.contains(.systemAnnouncements)
         canPartyVideo = loaded && !blocked.contains(.partyVideo)
         canPartyLuckyNumber = loaded && !blocked.contains(.partyLuckyNumber)

@@ -11,14 +11,14 @@ import PhotosUI
 struct PhotosEditGrid: View {
     let items: [DraftMediaItem]
     let isRefreshing: Bool
-    let onPick: (PhotosPickerItem) -> Void
+    let onPick: ([PhotosPickerItem]) -> Void
     let onRemove: (String) -> Void
     let onRetry: (String) -> Void
     let onPreview: (DraftMediaItem) -> Void
 
     init(items: [DraftMediaItem],
          isRefreshing: Bool = false,
-         onPick: @escaping (PhotosPickerItem) -> Void,
+         onPick: @escaping ([PhotosPickerItem]) -> Void,
          onRemove: @escaping (String) -> Void,
          onRetry: @escaping (String) -> Void,
          onPreview: @escaping (DraftMediaItem) -> Void) {
@@ -50,7 +50,9 @@ struct PhotosEditGrid: View {
                         .aspectRatio(1, contentMode: .fit)
                 }
             } else if items.count < EditProfileLimits.photosMaxCount {
-                AddMediaTile(matching: .images, disabled: false) { picker in
+                AddMediaTile(matching: .images,
+                             disabled: false,
+                             maxSelectionCount: EditProfileLimits.photosMaxCount - items.count) { picker in
                     onPick(picker)
                 }
                 .aspectRatio(1, contentMode: .fit)
@@ -103,7 +105,7 @@ struct VideosEditGrid: View {
                 }
             } else if items.count < EditProfileLimits.videosMaxCount {
                 AddMediaTile(matching: .videos, disabled: false) { picker in
-                    onPick(picker)
+                    if let item = picker.first { onPick(item) }
                 }
                 .aspectRatio(1, contentMode: .fit)
             }
@@ -152,7 +154,7 @@ struct CallVideoEditCell: View {
                     .frame(width: 100, height: 100)
             } else {
                 AddMediaTile(matching: .videos, disabled: false) { picker in
-                    onPick(picker)
+                    if let item = picker.first { onPick(item) }
                 }
                 .frame(width: 100, height: 100)
             }

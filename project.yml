@@ -33,9 +33,14 @@ targets:
     entitlements:
       path: Hily.entitlements
     sources:
-      - Sources
+      - path: Sources
+        excludes:
+          - Core/ContentModeration/Models/OpenNSFW8Bit.mlmodel
       # iOS 17+ 提审：声明使用到的必备 API（UserDefaults）+ 采集数据类别
       - path: Sources/PrivacyInfo.xcprivacy
+        buildPhase: resources
+      # 107/注册图片预检：Core ML 模型作为资源编译，Swift 服务仅在需要时加载。
+      - path: Sources/Core/ContentModeration/Models/OpenNSFW8Bit.mlmodel
         buildPhase: resources
       - Vendor/FaceUnity/FUManager.h
       - Vendor/FaceUnity/FUManager.m
@@ -340,6 +345,7 @@ targets:
       - path: Sources/Home/Circle/Publish/PostPublishModels.swift
       - path: Sources/Home/Circle/Publish/PostPublishServiceProtocol.swift
       - path: Sources/Home/Circle/Publish/PostPublishViewModel.swift
+      - path: Sources/Core/ContentModeration/ImageContentModeration.swift
       # H 里程碑 H-2 (私密媒体解锁 step 1a)：Models + Store + Service stub（真接口 step 1c）
       - path: Sources/Work/GiftMessage/GiftMessageModels.swift
       - path: Sources/Work/GiftMessage/GiftMessageStore.swift

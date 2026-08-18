@@ -37,6 +37,73 @@ final class PostPublishViewModelTests: XCTestCase {
 
     private func bytes(_ n: Int) -> Data { Data(repeating: 0x00, count: n) }
 
+    private struct FixedImageModerationService: ImageContentModerationServiceProtocol {
+        let decision: ImageModerationDecision
+
+        func check(data: Data) async -> ImageModerationDecision {
+            decision
+        }
+    }
+
+    private func makeVM(imageDecision: ImageModerationDecision,
+                        textModerationEnabled: Bool = false) -> PostPublishViewModel {
+        PostPublishViewModel(
+            service: FakePostPublishService(),
+            credentialService: FakeOssCredentialService(),
+            ossService: FakeOssUploadService(),
+            compressImage: { $0 },
+            imageModerationService: FixedImageModerationService(decision: imageDecision),
+            textModerationEnabled: textModerationEnabled,
+            strings: .englishFallback
+        )
+    }
+
+    func test_localTextPreflight_rejects107ContentBeforeUpload() {
+        let vm = makeVM(imageDecision: .allowed(confidence: 0), textModerationEnabled: true)
+        vm.text = "send nudes"
+        vm.appendImage(rawData: bytes(100))
+        vm.publish()
+
+        XCTAssertEqual(vm.state, .failed(reason: .contentRejected, uploadedUrls: [:]))
+    }
+
+    func test_localImagePreflight_rejectsBeforeCredentialRequest() async {
+        let credentials = FakeOssCredentialService()
+        let vm = PostPublishViewModel(
+            service: FakePostPublishService(),
+            credentialService: credentials,
+            ossService: FakeOssUploadService(),
+            compressImage: { $0 },
+            imageModerationService: FixedImageModerationService(decision: .blocked(confidence: 0.99)),
+            strings: .englishFallback
+        )
+        vm.text = "hello"
+        vm.appendImage(rawData: bytes(100))
+        vm.publish()
+        _ = await waitFor(vm) { $0 == .failed(reason: .contentRejected, uploadedUrls: [:]) }
+
+        XCTAssertEqual(credentials.calls, 0)
+    }
+
+    func test_removingRejectedImage_returnsEditorToEditing() async {
+        let vm = PostPublishViewModel(
+            service: FakePostPublishService(),
+            credentialService: FakeOssCredentialService(),
+            ossService: FakeOssUploadService(),
+            compressImage: { $0 },
+            imageModerationService: FixedImageModerationService(decision: .blocked(confidence: 0.99)),
+            strings: .englishFallback
+        )
+        vm.text = "hello"
+        vm.appendImage(rawData: bytes(100))
+        vm.publish()
+        _ = await waitFor(vm) { $0 == .failed(reason: .contentRejected, uploadedUrls: [:]) }
+
+        vm.removeImage(at: 0)
+        XCTAssertEqual(vm.state, .editing)
+        XCTAssertTrue(vm.transientError == nil)
+    }
+
     // MARK: - R1: 文本空 + 有图
 
     func test_R1_publish_emptyText_setsTextEmpty() {

@@ -21,6 +21,7 @@ struct MomentView: View {
     /// 删除回调（仅当 showDelete=true 时由调用方注入有效闭包）。
     /// 当前 trial #1 UI 对齐阶段：按钮显示，业务接入随发布功能里程碑落地。
     var onDeleteTap: ((MomentPost) -> Void)? = nil
+    var onReportTap: ((MomentPost) -> Void)? = nil
     /// 图片/视频大图预览请求向上传递给 CircleView 层的 fullScreenCover binding。
     ///
     /// **不在本 view 层挂 fullScreenCover 的原因**：TabView(.page) 内 3 个 MomentView tag
@@ -49,6 +50,9 @@ struct MomentView: View {
                             if let id = post.postId { store.tapLike(postId: id) }
                         },
                         onDeleteTap: showDelete ? { onDeleteTap?(post) } : nil,
+                        onReportTap: (!showDelete && post.userId != SessionStore.shared.user?.userId)
+                            ? { onReportTap?(post) }
+                            : nil,
                         showComment: showComment,
                         // 点击某图/视频 cell → 向 CircleView 层的 fullScreenCover 传值
                         // 用 DispatchQueue.main.async 延迟一帧避免 SwiftUI Button action 内

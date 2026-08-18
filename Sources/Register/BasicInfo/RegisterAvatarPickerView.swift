@@ -56,6 +56,16 @@ struct RegisterAvatarPickerView: View {
         store.isAvatarUploading = true
         defer { store.isAvatarUploading = false }
         do {
+            switch await CoreMLImageContentModerationService.shared.check(data: data) {
+            case .blocked:
+                store.avatarUploadError = L10n.objectionableContentRejected
+                return
+            case .unavailable:
+                store.avatarUploadError = L10n.authErrorRequestFailed
+                return
+            case .allowed:
+                break
+            }
             let url = try await ImageUploader.shared.upload(
                 rawData: data,
                 preset: .avatar,

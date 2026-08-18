@@ -9,20 +9,23 @@ import PhotosUI
 struct AddMediaTile: View {
     let matching: PHPickerFilter
     let disabled: Bool
-    let onPick: (PhotosPickerItem) -> Void
+    let maxSelectionCount: Int
+    let onPick: ([PhotosPickerItem]) -> Void
 
-    @State private var pickerItem: PhotosPickerItem?
+    @State private var pickerItems: [PhotosPickerItem] = []
 
     init(matching: PHPickerFilter = .images,
          disabled: Bool = false,
-         onPick: @escaping (PhotosPickerItem) -> Void) {
+         maxSelectionCount: Int = 1,
+         onPick: @escaping ([PhotosPickerItem]) -> Void) {
         self.matching = matching
         self.disabled = disabled
+        self.maxSelectionCount = maxSelectionCount
         self.onPick = onPick
     }
 
     var body: some View {
-        PhotosPicker(selection: $pickerItem, matching: matching, photoLibrary: .shared()) {
+        PhotosPicker(selection: $pickerItems, maxSelectionCount: maxSelectionCount, matching: matching, photoLibrary: .shared()) {
             ZStack {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .strokeBorder(Theme.Palette.divider, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
@@ -34,12 +37,10 @@ struct AddMediaTile: View {
             .opacity(disabled ? 0.35 : 1.0)
         }
         .disabled(disabled)
-        .onChange(of: pickerItem) { newItem in
-            if let newItem {
-                onPick(newItem)
-                // reset 让下次同一图片也能重新触发
-                pickerItem = nil
-            }
+        .onChange(of: pickerItems) { newItems in
+            guard !newItems.isEmpty else { return }
+            onPick(newItems)
+            pickerItems = []
         }
     }
 

@@ -233,6 +233,12 @@ struct PostPublishView: View {
                 }
             }
             .clipped()
+            .overlay(alignment: .topLeading) {
+                if viewModel.imageModerationStates.indices.contains(idx) {
+                    moderationBadge(viewModel.imageModerationStates[idx])
+                        .padding(5)
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay(alignment: .topTrailing) {
                 Button {
@@ -241,9 +247,11 @@ struct PostPublishView: View {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 18))
                         .foregroundStyle(.white, .black.opacity(0.5))
-                        .padding(4)
+                        .frame(width: 18, height: 18)
                 }
                 .buttonStyle(.plain)
+                .frame(width: 34, height: 34)
+                .contentShape(Rectangle())
                 .accessibilityLabel(L10n.Publish.removeImage)
                 .allowsHitTesting(!isInProgress)
             }
@@ -265,7 +273,31 @@ struct PostPublishView: View {
         }
         .disabled(isInProgress)
         .buttonStyle(.plain)
-        .accessibilityLabel(L10n.Publish.addImage)
+            .accessibilityLabel(L10n.Publish.addImage)
+    }
+
+    @ViewBuilder
+    private func moderationBadge(_ status: PostPublishViewModel.ImageModerationStatus) -> some View {
+        switch status {
+        case .checking:
+            Text(L10n.contentModerationChecking)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Color.black.opacity(0.65))
+                .clipShape(Capsule())
+        case .blocked, .unavailable:
+            Text(L10n.contentModerationBlocked)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(Color.red.opacity(0.85))
+                .clipShape(Capsule())
+        case .allowed:
+            EmptyView()
+        }
     }
 
     private var progressOverlay: some View {
@@ -306,10 +338,10 @@ struct PostPublishView: View {
 
     // MARK: - 派生 / 辅助
 
-    /// 是否处于上传/create 进行中（disable 输入 + 显示 overlay）
+    /// 是否处于预检/上传/create 进行中（disable 输入 + 显示 overlay）
     private var isInProgress: Bool {
         switch viewModel.state {
-        case .uploadingImages, .creatingPost: return true
+        case .checkingContent, .uploadingImages, .creatingPost: return true
         default: return false
         }
     }
@@ -331,7 +363,7 @@ struct PostPublishView: View {
                 viewModel.cancelInflightForDismiss()
                 dismiss()
             }
-        case .uploadingImages, .creatingPost:
+        case .checkingContent, .uploadingImages, .creatingPost:
             showDiscardConfirm = true
         case .success:
             dismiss()

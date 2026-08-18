@@ -329,7 +329,7 @@ struct EditProfileView: View {
             PhotosEditGrid(
                 items: store.draft.photos,
                 isRefreshing: store.isRefreshing,
-                onPick: { item in Task { await handlePhotoPicked(item) } },
+                onPick: { items in Task { await handlePhotoPicked(items) } },
                 onRemove: { id in store.removePhoto(id: id) },
                 onRetry: { id in store.retryPhoto(id: id) },
                 onPreview: { tapped in presentGallery(items: store.draft.photos, tapped: tapped) }
@@ -561,9 +561,14 @@ struct EditProfileView: View {
         }
     }
 
-    private func handlePhotoPicked(_ item: PhotosPickerItem) async {
-        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
-        await store.uploadPhoto(data: data)
+    private func handlePhotoPicked(_ items: [PhotosPickerItem]) async {
+        var dataList: [Data] = []
+        for item in items {
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                dataList.append(data)
+            }
+        }
+        await store.uploadPhotos(dataList: dataList)
     }
 
     private func handleVideoPicked(_ item: PhotosPickerItem, forCallVideo: Bool) async {
@@ -595,6 +600,7 @@ struct EditProfileView: View {
         case .networkError:               return L10n.EditProfile.toastNetworkError
         case .uploadTimeout:              return L10n.EditProfile.toastUploadTimeout
         case .objectionableContent:       return L10n.objectionableContentRejected
+        case .imageContentRejected:       return L10n.objectionableContentRejected
         case .apiError(let code, let msg): return "\(msg) (\(code))"
         }
     }

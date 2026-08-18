@@ -17,7 +17,9 @@ extension PostPublishViewModel {
             uploadFailed:      L10n.Publish.uploadFailed,
             createFailed:      L10n.Publish.createFailed,
             networkError:      L10n.Publish.networkError,
-            publishSuccess:    L10n.Publish.publishSuccess
+            publishSuccess:    L10n.Publish.publishSuccess,
+            contentRejected:   L10n.objectionableContentRejected,
+            contentCheckUnavailable: L10n.authErrorRequestFailed
         )
     }
 
@@ -26,11 +28,20 @@ extension PostPublishViewModel {
     static func makeRuntime(service: PostPublishServiceProtocol = PostPublishService.shared,
                             credentialService: OssCredentialServiceProtocol = OssCredentialService.shared,
                             ossService: OssUploadServiceProtocol = OssUploadService.shared) -> PostPublishViewModel {
-        PostPublishViewModel(
+        let imageModerationService: ImageContentModerationServiceProtocol =
+            UserTypeExperience.isPartyOnly(SelfPermissionBridge.shared.effectiveUserTypeSnapshot)
+                ? CoreMLImageContentModerationService.shared
+                : AllowAllImageContentModerationService()
+        let textModerationEnabled = UserTypeExperience.isPartyOnly(
+            SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+        )
+        return PostPublishViewModel(
             service: service,
             credentialService: credentialService,
             ossService: ossService,
             compressImage: { try ImageCompressor.compress(rawData: $0, preset: .moment) },
+            imageModerationService: imageModerationService,
+            textModerationEnabled: textModerationEnabled,
             strings: localizedStrings
         )
     }

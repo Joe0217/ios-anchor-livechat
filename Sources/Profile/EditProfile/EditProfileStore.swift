@@ -37,6 +37,7 @@ final class EditProfileStore: ObservableObject {
     // MARK: - Deps & Internal
 
     private let service: EditProfileServiceProtocol
+    private let imageModerationOverride: (any ImageContentModerationServiceProtocol)?
     private(set) var uploadEpoch: Int = 0
     private var sessionInvalidatedObserver: NSObjectProtocol?
 
@@ -52,8 +53,14 @@ final class EditProfileStore: ObservableObject {
 
     // MARK: - Init
 
-    init(service: EditProfileServiceProtocol) {
+    init(service: EditProfileServiceProtocol,
+         imageModeration: (any ImageContentModerationServiceProtocol)? = nil) {
         self.service = service
+        if let imageModeration {
+            self.imageModerationOverride = imageModeration
+        } else {
+            self.imageModerationOverride = nil
+        }
         registerSessionInvalidatedObserver()
     }
 
@@ -701,6 +708,11 @@ final class EditProfileStore: ObservableObject {
             transientToast = .imageTooLarge
             return
         }
+        let decision = await currentImageModerationService().check(data: data)
+        guard case .allowed = decision else {
+            transientToast = .imageContentRejected
+            return
+        }
         let epoch = beginUpload()
         do {
             let url = try await service.uploadImage(data: data, preset: .avatar)
@@ -721,6 +733,11 @@ final class EditProfileStore: ObservableObject {
             transientToast = .imageTooLarge
             return
         }
+        let decision = await currentImageModerationService().check(data: data)
+        guard case .allowed = decision else {
+            transientToast = .imageContentRejected
+            return
+        }
         guard let tileId = addPhotoPlaceholder() else { return }
         let epoch = beginUpload()
         do {
@@ -738,6 +755,26 @@ final class EditProfileStore: ObservableObject {
             logger.error("uploadPhoto failed: \(String(describing: error))")
             markPhotoFailed(id: tileId, message: (error as? APIError)?.message ?? error.localizedDescription)
         }
+    }
+
+    /// 多选照片并发上传；Store 仍在主线程串行更新 draft，网络等待期间允许并行传输。
+    func uploadPhotos(dataList: [Data]) async {
+        await withTaskGroup(of: Void.self) { group in
+            for data in dataList {
+                group.addTask { [weak self] in
+                    guard let self else { return }
+                    await self.uploadPhoto(data: data)
+                }
+            }
+        }
+    }
+
+    private func currentImageModerationService() -> any ImageContentModerationServiceProtocol {
+        if let imageModerationOverride { return imageModerationOverride }
+        if SelfPermissionBridge.shared.effectiveUserTypeSnapshot == 107 {
+            return CoreMLImageContentModerationService.shared
+        }
+        return AllowAllImageContentModerationService()
     }
 
     /// 相册视频上传

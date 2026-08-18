@@ -96,12 +96,19 @@ struct RegisterPhotosGrid: View {
                                 .padding(.bottom, 4)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                         }
-                    case .failed:
+                    case .failed(let error):
                         VStack(spacing: 4) {
                             Image(systemName: "arrow.clockwise.circle.fill")
                                 .font(.title2)
                                 .foregroundStyle(.orange)
-                            Text(L10n.commonRetry).font(.caption2).foregroundStyle(.white)
+                            Text(error == L10n.objectionableContentRejected
+                                 ? L10n.contentModerationBlocked
+                                 : L10n.commonRetry)
+                                .font(.caption2)
+                                .foregroundStyle(error == L10n.objectionableContentRejected ? .red : .white)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(2)
+                                .padding(.horizontal, 4)
                         }
                     }
                 }
@@ -215,6 +222,20 @@ struct RegisterPhotosGrid: View {
 
     private func performUpload(id: UUID, data: Data) async {
         do {
+            switch await CoreMLImageContentModerationService.shared.check(data: data) {
+            case .blocked:
+                await MainActor.run {
+                    store.setPicFailed(id: id, error: L10n.objectionableContentRejected)
+                }
+                return
+            case .unavailable:
+                await MainActor.run {
+                    store.setPicFailed(id: id, error: L10n.authErrorRequestFailed)
+                }
+                return
+            case .allowed:
+                break
+            }
             let url = try await ImageUploader.shared.upload(
                 rawData: data,
                 preset: .moment,

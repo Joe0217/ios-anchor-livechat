@@ -22,7 +22,7 @@ final class HomeTopTabStore: ObservableObject {
     /// nil 表示用户尚未交互过，段位到达后默认选 `availableOrder.first`。
     private var userSelected: HomeTopTab?
 
-    init(initialIsSLevel: Bool? = nil) {
+    init(initialIsSLevel: Bool? = nil, initialCircleOnly: Bool = false) {
         if let isS = initialIsSLevel {
             // 乐观 init canCall=true：Match tab 首帧可见（大多数正常用户 UX 无 loading 断层）。
             // 视觉级 tap 绕过由 `tapOuter` 内部的 canCall snapshot guard 挡住（见下方），功能级
@@ -34,7 +34,7 @@ final class HomeTopTabStore: ObservableObject {
             //
             // 配套 LiveTabView.reapplyTier 单 gate `permission.isLoaded`（不 gate hasLoadedTier），
             // permission drain 后立即 apply；tier 未 loaded 用 fallback `isSLevel: true`。
-            applyTier(isSLevel: isS, canCall: true)
+            applyTier(isSLevel: isS, canCall: true, circleOnly: initialCircleOnly)
         }
     }
 
@@ -48,10 +48,12 @@ final class HomeTopTabStore: ObservableObject {
     /// 若 userSelected == .match 时 canCall 变 false，userSelected 保持但 order 不含 → fallback 到 order.first。
     ///
     /// **code-review Finding 1/2 修复**：canCall 必填无 default 值，编译强制 caller 显式传，防止 fail-open。
-    func applyTier(isSLevel: Bool, canCall: Bool) {
-        var order: [HomeTopTab] = isSLevel
-            ? [.live, .list, .match, .circle]
-            : [.list, .match, .live, .circle]
+    func applyTier(isSLevel: Bool, canCall: Bool, circleOnly: Bool = false) {
+        var order: [HomeTopTab] = circleOnly
+            ? [.circle]
+            : (isSLevel
+                ? [.live, .list, .match, .circle]
+                : [.list, .match, .live, .circle])
         if !canCall {
             order.removeAll { $0 == .match }
         }

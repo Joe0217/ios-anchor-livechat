@@ -76,6 +76,12 @@ enum L10n {
     static var objectionableContentRejected: String {
         localize("content.moderation.rejected", comment: "UGC 命中本地安全过滤时的统一提示")
     }
+    static var contentModerationChecking: String {
+        localize("content.moderation.checking", comment: "图片审核中短标签")
+    }
+    static var contentModerationBlocked: String {
+        localize("content.moderation.blocked", comment: "图片审核拦截短标签")
+    }
 
     // 网络弱网降级提示（v5 分层）
     static var networkWarning: String { localize("network.warning", comment: "网络较差，已切换低帧率") }
@@ -988,6 +994,7 @@ enum L10n {
 
     // 底部 tab 标签
     static var tabHome: String { localize("tab.home", comment: "首页") }
+    static var tabCircle: String { localize("tab.circle", comment: "朋友圈") }
     static var tabMessages: String { localize("tab.messages", comment: "消息") }
     static var tabParty: String { localize("tab.party", comment: "派对") }
     static var tabConnections: String { localize("tab.connections", comment: "关系") }
@@ -1454,6 +1461,7 @@ enum L10n {
     static var momentActionUnlike: String          { localize("moment.action.unlike", comment: "动态取消点赞 a11y") }
     /// 删除动态按钮 a11y（仅 me 入口）
     static var momentActionDelete: String          { localize("moment.action.delete", comment: "动态删除 a11y") }
+    static var momentActionReport: String          { localize("moment.action.report", comment: "动态举报 a11y") }
     /// 删除动态二次确认标题
     static var momentDeleteConfirmTitle: String    { localize("moment.delete.confirm.title", comment: "删除动态确认标题") }
     /// 删除动态确认按钮（destructive）

@@ -13,6 +13,7 @@ struct MomentPostRow: View {
     var onLikeTap: (() -> Void)? = nil
     /// 删除回调（仅 me 入口注入；对齐 H5 `circle/me.vue` showDelete=true）。
     var onDeleteTap: (() -> Void)? = nil
+    var onReportTap: (() -> Void)? = nil
     /// 是否显示评论计数（official 入口为 false，对齐 H5 `circle/official.vue` showContent=false）。
     var showComment: Bool = true
     /// 图片/视频 cell 点击回调（父 view 拉起大图预览）。参数：`imgUrls` 中的 index。
@@ -186,6 +187,15 @@ struct MomentPostRow: View {
                 statItem(icon: "bubble.left",
                          value: post.commentCount ?? 0,
                          tint: Color.white.opacity(0.55))
+            }
+            if let onReportTap {
+                Button(action: onReportTap) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color.white.opacity(0.55))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.momentActionReport)
             }
         }
     }

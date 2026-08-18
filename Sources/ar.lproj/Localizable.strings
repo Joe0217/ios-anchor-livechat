@@ -191,6 +191,7 @@
 
 // 底部 tab 标签
 "tab.home"                   = "الرئيسية";
+"tab.circle"                 = "الدوائر";
 "tab.messages"               = "الرسائل";
 "tab.party"                  = "حفلة";
 "tab.connections"            = "العلاقات";
@@ -1064,6 +1065,7 @@
 "moment.action.like"             = "إعجاب";
 "moment.action.unlike"           = "إلغاء الإعجاب";
 "moment.action.delete"           = "حذف";
+"moment.action.report"           = "إبلاغ";
 "moment.delete.confirm.title"    = "حذف هذا المنشور؟";
 "moment.delete.confirm.action"   = "حذف";
 "moment.delete.confirm.cancel"   = "إلغاء";
@@ -2266,3 +2268,5 @@
 "lottery.winnerFormat" = "%@ حصل على %@";
 "lottery.validDaysFormat" = "* %d يومًا";
 "lottery.quantityFormat" = "* %d";
+"content.moderation.checking" = "جارٍ الفحص";
+"content.moderation.blocked" = "محظور";

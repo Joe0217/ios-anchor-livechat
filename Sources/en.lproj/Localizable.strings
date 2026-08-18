@@ -187,6 +187,7 @@
 
 // 底部 tab 标签
 "tab.home"                   = "Home";
+"tab.circle"                 = "Circle";
 "tab.messages"               = "Messages";
 "tab.party"                  = "Party";
 "tab.connections"            = "Connections";
@@ -1020,6 +1021,7 @@
 "moment.action.like"             = "Like";
 "moment.action.unlike"           = "Unlike";
 "moment.action.delete"           = "Delete";
+"moment.action.report"           = "Report";
 "moment.delete.confirm.title"    = "Delete this moment?";
 "moment.delete.confirm.action"   = "Delete";
 "moment.delete.confirm.cancel"   = "Cancel";
@@ -2401,3 +2403,5 @@
 "lottery.winnerFormat" = "%@ got %@";
 "lottery.validDaysFormat" = "* %d days";
 "lottery.quantityFormat" = "* %d";
+"content.moderation.checking" = "Checking";
+"content.moderation.blocked" = "Blocked";

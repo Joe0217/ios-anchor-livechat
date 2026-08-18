@@ -260,8 +260,7 @@ final class RegisterStore: ObservableObject {
             submitError = L10n.authErrorRequestFailed
             return
         }
-        if !hasValidInviteCode,
-           ObjectionableContentFilter.containsObjectionableContent(nickname) {
+        if ObjectionableContentFilter.containsObjectionableContent(nickname) {
             submitError = L10n.objectionableContentRejected
             return
         }

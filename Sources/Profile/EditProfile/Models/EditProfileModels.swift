@@ -188,6 +188,7 @@ enum EditProfileToastKey: Equatable, Sendable {
     case networkError                   // 网络错
     case uploadTimeout                  // 后台超时批量标 failed
     case objectionableContent           // 审核账号本地 UGC 前置过滤
+    case imageContentRejected           // 图片本地鉴黄未通过
     case apiError(code: String, message: String)  // 业务错误码 + 后端 message
 }
 

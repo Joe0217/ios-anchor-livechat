@@ -11,13 +11,14 @@ struct LiveTabView: View {
         let sessionGeneration: UUID
         let isPermissionLoaded: Bool
         let canHomeDiscovery: Bool
+        let canProfileSocial: Bool
         let isHomeTabActive: Bool
         let currentOuter: HomeTopTab?
     }
 
     /// trial step 3 真集成反悔：spec §3.1 / §5.12 原本"段位未就绪 loading 占位"
     /// 真接口拉慢/失败时变成永久 dead-state。改为**默认按 S 级兜底**，info 到达后 onChange 矫正。
-    @StateObject private var homeStore = HomeTopTabStore(initialIsSLevel: true)
+    @StateObject private var homeStore: HomeTopTabStore
     @StateObject private var viewModel = LiveTabViewModel()
     /// List 子页 VM 在父级持有，避免 .list 分支被销毁时丢失 segment / scroll 状态。
     /// 网络错误兜底文案走 L10n（ar/tr 用户感知一致）；ViewModel 内 default 是英文，仅供 HilyTests 使用。
@@ -59,6 +60,14 @@ struct LiveTabView: View {
     /// scenePhase 用于"onResume 静默检查"（对齐安卓 HomeHomeFragment.onResume）。
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var session: SessionStore
+
+    init() {
+        let userType = UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
+        _homeStore = StateObject(wrappedValue: HomeTopTabStore(
+            initialIsSLevel: true,
+            initialCircleOnly: UserTypeExperience.isPartyOnly(userType)
+        ))
+    }
 
     var body: some View {
         content
@@ -109,6 +118,7 @@ struct LiveTabView: View {
             .onChange(of: anchorInfoStore.isSLevelAnchor) { _ in reapplyTier() }
             // P 项目权限管理 v2：canCall 变化时（切账号 / DebugPermissionOverride）重新派生 top tab
             .onChange(of: permission.canCall) { _ in reapplyTier() }
+            .onChange(of: permission.canCircleSocial) { _ in reapplyTier() }
             // code-review Finding 3：permission.isLoaded 变化也要触发（避免冷启动 permission=false 首帧摘 Match tab 再补的闪烁）
             .onChange(of: permission.isLoaded) { _ in reapplyTier() }
             // 统一由 task identity 驱动首拉。它在初始挂载、账号代际、权限发布、Home 可见性
@@ -133,7 +143,11 @@ struct LiveTabView: View {
         guard permission.isLoaded else { return }
         // tier 未 loaded 时用默认 S 级顺序（含 .match）；tier loaded 后正确的 isSLevel 会再触发一次 apply
         let isSLevel = anchorInfoStore.hasLoadedTier ? anchorInfoStore.isSLevelAnchor : true
-        homeStore.applyTier(isSLevel: isSLevel, canCall: permission.canCall)
+        let circleOnly = UserTypeExperience.isPartyOnly(permission.effectiveUserTypeSnapshot)
+            && permission.canCircleSocial
+        homeStore.applyTier(isSLevel: isSLevel,
+                            canCall: permission.canCall,
+                            circleOnly: circleOnly)
     }
 
     private var initialLoadKey: InitialLoadKey {
@@ -141,6 +155,7 @@ struct LiveTabView: View {
             sessionGeneration: session.sessionGeneration,
             isPermissionLoaded: permission.isLoaded,
             canHomeDiscovery: permission.canHomeDiscovery,
+            canProfileSocial: permission.canCircleSocial,
             isHomeTabActive: isHomeTabActive,
             currentOuter: homeStore.currentOuter
         )
@@ -156,7 +171,7 @@ struct LiveTabView: View {
         guard session.isLoggedIn,
               session.sessionGeneration == generation,
               permission.isLoaded,
-              permission.canHomeDiscovery,
+              (permission.canHomeDiscovery || permission.canCircleSocial),
               isHomeTabActive else { return }
 
         switch homeStore.currentOuter {
