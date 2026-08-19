@@ -20,7 +20,7 @@ struct MessageSessionRow: View {
             mainInfo
             trailing
         }
-        .padding(.horizontal, 0)
+        .padding(.horizontal, 10)
         .padding(.vertical, 10)
         .contentShape(Rectangle())
         // longPress 优先注册，避免 tap 抢占；SwiftUI 的 .onTapGesture + .onLongPressGesture
@@ -103,13 +103,13 @@ struct MessageSessionRow: View {
             CDNAssetImage("messageReadCheckmarkGray")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 10, height: 10)
+                .frame(width: 14, height: 14)
                 .accessibilityHidden(true)
         case .read:
             CDNAssetImage("messageReadCheckmarkGreen")
                 .resizable()
                 .scaledToFit()
-                .frame(width: 10, height: 10)
+                .frame(width: 14, height: 14)
                 .accessibilityHidden(true)
         case .none:
             EmptyView()

@@ -202,7 +202,7 @@ struct UserProfileView: View {
                 endPoint: .trailing
             )
         } else {
-            Color(red: 0x9E / 255, green: 0x7D / 255, blue: 0xDC / 255).opacity(0.9)
+            Color(red: 0x9E / 255, green: 0x7D / 255, blue: 0xDC / 255).opacity(0.8)
         }
     }
 
