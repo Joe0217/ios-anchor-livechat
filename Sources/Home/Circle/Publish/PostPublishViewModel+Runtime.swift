@@ -28,13 +28,13 @@ extension PostPublishViewModel {
     static func makeRuntime(service: PostPublishServiceProtocol = PostPublishService.shared,
                             credentialService: OssCredentialServiceProtocol = OssCredentialService.shared,
                             ossService: OssUploadServiceProtocol = OssUploadService.shared) -> PostPublishViewModel {
+        let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
         let imageModerationService: ImageContentModerationServiceProtocol =
-            UserTypeExperience.isPartyOnly(SelfPermissionBridge.shared.effectiveUserTypeSnapshot)
+            UserTypeExperience.isPartyOnly(effectiveUserType)
                 ? CoreMLImageContentModerationService.shared
                 : AllowAllImageContentModerationService()
-        let textModerationEnabled = UserTypeExperience.isPartyOnly(
-            SelfPermissionBridge.shared.effectiveUserTypeSnapshot
-        )
+        let textModerationEnabled = UserTypeExperience.isPartyOnly(effectiveUserType)
         return PostPublishViewModel(
             service: service,
             credentialService: credentialService,

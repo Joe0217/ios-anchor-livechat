@@ -37,7 +37,9 @@ final class EditProfileStore: ObservableObject {
     // MARK: - Deps & Internal
 
     private let service: EditProfileServiceProtocol
+    #if HILY_TESTS
     private let imageModerationOverride: (any ImageContentModerationServiceProtocol)?
+    #endif
     private(set) var uploadEpoch: Int = 0
     private var sessionInvalidatedObserver: NSObjectProtocol?
 
@@ -56,11 +58,9 @@ final class EditProfileStore: ObservableObject {
     init(service: EditProfileServiceProtocol,
          imageModeration: (any ImageContentModerationServiceProtocol)? = nil) {
         self.service = service
-        if let imageModeration {
-            self.imageModerationOverride = imageModeration
-        } else {
-            self.imageModerationOverride = nil
-        }
+        #if HILY_TESTS
+        self.imageModerationOverride = imageModeration
+        #endif
         registerSessionInvalidatedObserver()
     }
 
@@ -759,19 +759,26 @@ final class EditProfileStore: ObservableObject {
 
     /// 多选照片并发上传；Store 仍在主线程串行更新 draft，网络等待期间允许并行传输。
     func uploadPhotos(dataList: [Data]) async {
-        await withTaskGroup(of: Void.self) { group in
-            for data in dataList {
-                group.addTask { [weak self] in
-                    guard let self else { return }
-                    await self.uploadPhoto(data: data)
+        for batchStart in stride(from: 0, to: dataList.count, by: 2) {
+            let batchEnd = min(batchStart + 2, dataList.count)
+            await withTaskGroup(of: Void.self) { group in
+                for data in dataList[batchStart..<batchEnd] {
+                    group.addTask { [weak self] in
+                        guard let self else { return }
+                        await self.uploadPhoto(data: data)
+                    }
                 }
             }
         }
     }
 
     private func currentImageModerationService() -> any ImageContentModerationServiceProtocol {
+        #if HILY_TESTS
         if let imageModerationOverride { return imageModerationOverride }
-        if SelfPermissionBridge.shared.effectiveUserTypeSnapshot == 107 {
+        #endif
+        let effectiveUserType = SelfPermissionBridge.shared.effectiveUserTypeSnapshot
+            ?? UserTypeExperience.effectiveUserType(userInfo: SessionStore.shared.user)
+        if effectiveUserType == 107 {
             return CoreMLImageContentModerationService.shared
         }
         return AllowAllImageContentModerationService()

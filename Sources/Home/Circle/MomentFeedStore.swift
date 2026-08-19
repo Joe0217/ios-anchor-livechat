@@ -62,7 +62,7 @@ final class MomentFeedStore: ObservableObject {
     private let service: CircleServiceProtocol
     private let pageSize: Int
     /// 数据源：决定 fetchPage 走哪个 service 方法（official/all/my）。
-    private let source: MomentSource
+    private var source: MomentSource
 
     /// posts 数组内存上限。超过时在 `startLoadingMore` 成功合并后 trim 最旧条目（顶部）。
     ///
@@ -326,6 +326,18 @@ final class MomentFeedStore: ObservableObject {
         default:
             break
         }
+    }
+
+    /// Clears account-scoped feed state before a new authenticated session loads.
+    func resetForSession(userId: Int? = nil) {
+        cancelInflight()
+        if case .me = source, let userId {
+            source = .me(userId: userId)
+        }
+        state = .idle
+        currentPage = 0
+        translations.removeAll()
+        pendingTranslateIds.removeAll()
     }
 
     // MARK: - Internal load logic

@@ -13,6 +13,7 @@ struct CircleView: View {
     /// LiveTabView 注入：当前 outer tab 是否是 .circle。
     /// 与 `\.isHomeTabActive` 组合判定"CircleView 是否真的对用户可见"。
     let isActive: Bool
+    @ObservedObject private var session = SessionStore.shared
     @ObservedObject private var permission = SelfPermissionBridge.shared
 
     @Environment(\.isHomeTabActive) private var isHomeTabActive
@@ -36,6 +37,7 @@ struct CircleView: View {
     @State private var mediaPreview: MediaGalleryContext?
     /// 删除动态二次确认 pending 项（`me` 入口专用）
     @State private var pendingDeletePost: MomentPost?
+    @State private var lastLoadedSessionGeneration: UUID?
 
     init(isActive: Bool) {
         self.isActive = isActive
@@ -125,24 +127,14 @@ struct CircleView: View {
         }
         // Lazy load 三入口：可见性 / outer tab 切换 / sub tab 切换 任一变化都重新检查
         .onChange(of: circleStore.currentSub) { newSub in
-            triggerCurrentSubLoadIfNeeded()
             cancelOtherSubsInflight(except: newSub)
-        }
-        .onChange(of: permission.isLoaded) { _ in
-            triggerCurrentSubLoadIfNeeded()
-            if isActive { storeFor(circleStore.currentSub).enterMoment() }
-        }
-        .onChange(of: permission.canCircleSocial) { _ in
-            triggerCurrentSubLoadIfNeeded()
         }
         // 离开朋友圈页面清空预览媒体缓存——用户诉求：不跨"朋友圈页面"。
         // keep-alive 架构下 onDisappear 不总触发，改用 isActive/isHomeTabActive true→false 语义清空。
         .onChange(of: isHomeTabActive) { active in
-            triggerCurrentSubLoadIfNeeded()
             if !active { MediaGalleryCache.shared.clear() }
         }
         .onChange(of: isActive) { active in
-            triggerCurrentSubLoadIfNeeded()
             if !active { MediaGalleryCache.shared.clear() }
         }
         // **不加 .onDisappear { clear() }**：SwiftUI fullScreenCover 打开时会让底层 CircleView 走 onDisappear
@@ -151,14 +143,14 @@ struct CircleView: View {
         // 兜底：TabView(.page) 若 lazy 创建 tag view，CircleView 首次 mount 时
         // isActive 初始就是 true，`.onChange(of: isActive)` 没有 false→true 变化历史不触发。
         // .task 在 view mount 时跑一次，触发首次 lazy load（enterMoment 是 idempotent，安全）。
-        .task {
-            // 107 的 circle-only 首页可能在权限切换完成前挂载；让环境值和 outer
-            // selection 先完成一轮更新，再触发首次请求，避免只停留在 loadingFirst。
-            await Task.yield()
-            triggerCurrentSubLoadIfNeeded()
-            if UserTypeExperience.isPartyOnly(SelfPermissionBridge.shared.effectiveUserTypeSnapshot), isActive {
-                storeFor(circleStore.currentSub).enterMoment()
+        .task(id: circleLoadTrigger) {
+            if sessionGeneration != lastLoadedSessionGeneration {
+                officialStore.resetForSession()
+                momentStore.resetForSession()
+                meStore.resetForSession(userId: SessionStore.shared.user?.userId ?? 0)
+                lastLoadedSessionGeneration = sessionGeneration
             }
+            triggerCurrentSubLoadIfNeeded()
         }
     }
 
@@ -168,6 +160,12 @@ struct CircleView: View {
         guard isHomeTabActive, isActive else { return }
         storeFor(circleStore.currentSub).enterMoment()
     }
+
+    private var circleLoadTrigger: String {
+        "\(SessionStore.shared.sessionGeneration)-\(isHomeTabActive)-\(isActive)-\(permission.isLoaded)-\(permission.canCircleSocial)-\(circleStore.currentSub)"
+    }
+
+    private var sessionGeneration: UUID? { SessionStore.shared.sessionGeneration }
 
     /// 切走的 sub 取消 inflight，避免不可见 store 浪费网络。
     private func cancelOtherSubsInflight(except current: CircleSubTab) {

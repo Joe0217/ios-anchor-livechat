@@ -22,6 +22,24 @@ struct MomentPost: Codable, Identifiable, Hashable {
     let displayRange: Int?     // 1=全部 2=私密 3=朋友
     let appId: Int?            // H5: appId > 0 的普通用户帖允许他人评论
 
+    init(postId: Int?, userId: Int?, nickname: String?, icon: String?,
+         textContent: String?, imgUrls: [String]?, createTime: String?,
+         likeCount: Int?, commentCount: Int?, likeFlag: Int?,
+         displayRange: Int?, appId: Int?) {
+        self.postId = postId
+        self.userId = userId
+        self.nickname = nickname
+        self.icon = icon
+        self.textContent = textContent
+        self.imgUrls = imgUrls
+        self.createTime = createTime
+        self.likeCount = likeCount
+        self.commentCount = commentCount
+        self.likeFlag = likeFlag
+        self.displayRange = displayRange
+        self.appId = appId
+    }
+
     var id: String { "\(postId ?? -1)-\(createTime ?? "")" }
 
     /// 判断 `imgUrls` 里的某个 URL 是否是视频（对齐 H5 `circleContent.vue:isVideo`）。
@@ -44,6 +62,45 @@ struct MomentPost: Codable, Identifiable, Hashable {
         case likeCount = "likeNum"
         case commentCount = "commentNum"
         case likeFlag, displayRange, appId
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        postId = try values.decodeIfPresent(Int.self, forKey: .postId)
+        nickname = try values.decodeIfPresent(String.self, forKey: .nickname)
+        icon = try values.decodeIfPresent(String.self, forKey: .icon)
+        textContent = try values.decodeIfPresent(String.self, forKey: .textContent)
+        imgUrls = try values.decodeIfPresent([String].self, forKey: .imgUrls)
+        createTime = try values.decodeIfPresent(String.self, forKey: .createTime)
+        likeCount = try values.decodeIfPresent(Int.self, forKey: .likeCount)
+        commentCount = try values.decodeIfPresent(Int.self, forKey: .commentCount)
+        likeFlag = try values.decodeIfPresent(Int.self, forKey: .likeFlag)
+        displayRange = try values.decodeIfPresent(Int.self, forKey: .displayRange)
+        appId = try values.decodeIfPresent(Int.self, forKey: .appId)
+
+        let dynamic = try decoder.container(keyedBy: DynamicCodingKey.self)
+        userId = Self.decodeFlexibleInt(dynamic, keys: ["userId", "uid", "anchorId", "authorId"])
+    }
+
+    private static func decodeFlexibleInt(
+        _ container: KeyedDecodingContainer<DynamicCodingKey>,
+        keys: [String]
+    ) -> Int? {
+        for rawKey in keys {
+            let key = DynamicCodingKey(stringValue: rawKey)
+            if let value = try? container.decodeIfPresent(Int.self, forKey: key) { return value }
+            if let raw = try? container.decodeIfPresent(String.self, forKey: key),
+               let value = Int(raw) { return value }
+        }
+        return nil
+    }
+
+    private struct DynamicCodingKey: CodingKey {
+        let stringValue: String
+        let intValue: Int? = nil
+
+        init(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { return nil }
     }
 }
 
