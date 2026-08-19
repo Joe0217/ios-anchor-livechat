@@ -17,7 +17,7 @@ struct SystemInboxRow: View {
                 Spacer(minLength: 8)
                 trailing
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 0)
             .padding(.vertical, 10)
             .contentShape(Rectangle())
         }

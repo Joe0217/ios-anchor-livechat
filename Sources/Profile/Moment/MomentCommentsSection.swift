@@ -15,11 +15,12 @@ private let logger = Logger(subsystem: "com.anchor.livechat", category: "MomentC
 struct MomentCommentsSection: View {
 
     let postId: Int
+    var refreshToken: Int = 0
     /// 服务注入（默认 CircleService.shared；单测/Preview 可传 mock）
     var service: CircleServiceProtocol = CircleService.shared
 
     @State private var comments: [MomentComment] = []
-    @State private var loaded: Bool = false
+    @State private var loadedRefreshToken: Int?
 
     var body: some View {
         Group {
@@ -33,7 +34,7 @@ struct MomentCommentsSection: View {
                 .background(Theme.Palette.momentCommentsBackground, in: RoundedRectangle(cornerRadius: 6))
             }
         }
-        .task {
+        .task(id: refreshToken) {
             await loadOnce()
         }
     }
@@ -54,8 +55,8 @@ struct MomentCommentsSection: View {
     }
 
     private func loadOnce() async {
-        guard !loaded else { return }
-        loaded = true
+        guard loadedRefreshToken != refreshToken else { return }
+        loadedRefreshToken = refreshToken
         do {
             let res = try await service.getComments(postId: postId, pageSize: 100, currentPage: 1)
             comments = res

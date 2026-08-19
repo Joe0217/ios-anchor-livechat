@@ -867,7 +867,8 @@ struct PartyRoomView: View {
             } else {
                 bigSeatRow
                 smallSeatGrid
-                    .padding(.top, 12)
+                    // 所有模板的大麦位与语音麦位统一收紧 10pt。
+                    .padding(.top, 2)
             }
             chatArea
             Spacer(minLength: 0)
@@ -1235,15 +1236,26 @@ struct PartyRoomView: View {
         Array(repeating: GridItem(.flexible(), spacing: 2), count: 3)
     }
 
-    /// 6 位模板每个 cell 与 3 位模板单行高度一致；总高度为两行加行间距。
+    /// 纯 6 视频模板的每个 cell 与 3 视频模板单行高度一致；总高度为两行加行间距。
+    /// 6 视频 + 10 麦位模板保留原先 6:5 视频比例，避免挤占公屏和语音麦位区域。
     private var sixBigSeatGridHeight: CGFloat {
-        multiBigSeatRowHeight * 2 + 2
+        let screenW = UIScreen.main.bounds.width
+        let cellW = (screenW - 12) / 3
+        let pureVideoHeight = multiBigSeatRowHeight * 2 + 2
+        let mixedTemplateHeight = cellW * 5.0 / 6.0 * 2 + 2
+        let baseHeight = hasVoiceSeats ? mixedTemplateHeight : pureVideoHeight
+        return isBattleActive ? max(0, baseHeight - 40) : baseHeight
     }
 
     private var sixBigSeatCellAspectRatio: CGFloat {
         let screenW = UIScreen.main.bounds.width
         let cellW = (screenW - 12) / 3   // 12 = 2*4 padding + 2*2 col spacing
-        return cellW / max(1, multiBigSeatRowHeight)
+        let cellH = max(1, (sixBigSeatGridHeight - 2) / 2)
+        return cellW / cellH
+    }
+
+    private var hasVoiceSeats: Bool {
+        !smallSeats.isEmpty
     }
 
     /// 对齐 H5 `main-wrap.vue`：2/3/其他视频位共用 `video-wrap h-180`，横向均分。
@@ -3328,6 +3340,8 @@ struct PartyRoomView: View {
                         isRoomOwner: store.isSelfRoomOwner
                     )
                     .preferredColorScheme(.dark)
+                    // fullScreenCover 默认使用不透明黑色背景，会把房间底图完全遮住。
+                    .background(ClearFullScreenCoverBackground())
                 } else {
                     EmptyView()
                 }

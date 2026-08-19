@@ -86,6 +86,15 @@ final class CircleService: CircleServiceProtocol {
         logger.info("like postId=\(postId) optionType=\(optionType) ok")
     }
 
+    /// H5 `postComment`: user-profile Moments comment composer.
+    func comment(postId: Int, content: String) async throws {
+        _ = try await APIClient.shared.post(
+            "/api/expand/friendsCircle/comment",
+            body: ["friendsCircleId": postId, "commentContent": content]
+        )
+        logger.info("comment postId=\(postId) ok")
+    }
+
     /// 删除动态（对齐 H5 `api/circle/index.ts:12` `postDelete({ searchValue: id })`）。
     /// 200 视为成功；调用方（`MomentFeedStore.deletePost`）负责成功后本地移除 —— 对齐 H5 `.then(filter)`
     /// 悲观 UI 语义，避免请求失败时错删数据。

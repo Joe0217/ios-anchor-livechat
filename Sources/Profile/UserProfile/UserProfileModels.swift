@@ -27,6 +27,49 @@ struct UserDetail: Equatable {
     /// H5 `getUserDetail.guardianList` 的主播前 3；空时资料页不展示守护卡。
     let guardianList: [UserGuardianAnchor]
     let picList: [UserProfileMedia]
+    /// H5 userProfile uses this value to choose the level cover and call metadata.
+    let levelName: String?
+    /// H5 `head-frame` accepts the user's equipped static/SVGA frame URL.
+    let headFrame: String?
+}
+
+// MARK: - User profile walls
+
+enum UserGiftWallTab: String, CaseIterable, Identifiable {
+    case lit
+    case unlit
+    case all
+
+    var id: String { rawValue }
+}
+
+struct UserGiftWallItem: Equatable, Hashable, Identifiable {
+    let giftId: Int
+    let iconURL: String?
+    let name: String
+    let price: Int
+    let count: Int
+    let lit: Bool
+
+    var id: Int { giftId }
+}
+
+enum UserPrivilegeType: Int, CaseIterable, Identifiable {
+    case badge = 1
+    case frame = 2
+    case vehicle = 3
+
+    var id: Int { rawValue }
+}
+
+struct UserPrivilegeItem: Equatable, Hashable, Identifiable {
+    let itemId: Int
+    let name: String
+    let imageURL: String?
+    let obtained: Bool
+    let wearStatus: Int
+
+    var id: Int { itemId }
 }
 
 /// 他人详情接口返回的只读相册媒体。

@@ -95,7 +95,9 @@ extension UserDetail {
             favorite: favorite,
             giftList: giftList,
             guardianList: guardianList,
-            picList: picList
+            picList: picList,
+            levelName: nil,
+            headFrame: nil
         )
     }
 }

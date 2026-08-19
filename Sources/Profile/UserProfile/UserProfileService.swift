@@ -196,8 +196,23 @@ final class UserProfileService: UserProfileServiceProtocol {
             favorite: favorite,
             giftList: giftList,
             guardianList: guardianList,
-            picList: picList
+            picList: picList,
+            levelName: flexibleString(dict["levelName"]),
+            headFrame: flexibleString(dict["headFrame"])
         )
+    }
+
+    private static func flexibleString(_ raw: Any?) -> String? {
+        if let value = raw as? String {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        if let number = raw as? NSNumber {
+            let type = String(cString: number.objCType)
+            guard type != "c", type != "B" else { return nil }
+            return number.stringValue
+        }
+        return nil
     }
 
     static func parseMedia(from dict: [String: Any]) -> UserProfileMedia? {
@@ -246,6 +261,104 @@ final class UserProfileService: UserProfileServiceProtocol {
         return Gift(giftId: giftId, iconUrl: iconUrl, name: name, count: count)
     }
 }
+
+#if !HILY_TESTS
+/// Independent data sources used by the H5-aligned profile walls and moments.
+final class UserProfileFeatureService {
+    static let shared = UserProfileFeatureService()
+
+    private init() {}
+
+    func fetchGiftWall(userId: Int, tab: UserGiftWallTab) async throws -> [UserGiftWallItem] {
+        let data = try await APIClient.shared.post(
+            "/api/user/getGiftWall",
+            body: ["userId": userId, "tab": tab.rawValue]
+        )
+        return Self.decodeGiftWall(from: data)
+    }
+
+    func fetchPrivileges(userId: Int, type: UserPrivilegeType) async throws -> [UserPrivilegeItem] {
+        let data = try await PartyAPIClient.shared.post(
+            "/sapi/weidou/v1/client/user/privilegeList",
+            body: ["targetUserId": userId, "type": type.rawValue]
+        )
+        return Self.decodePrivileges(from: data)
+    }
+
+    func fetchMoments(userId: Int) async throws -> [MomentPost] {
+        let page = try await CircleService.shared.getMyMoments(userId: userId, pageSize: 20, currentPage: 1)
+        return page.posts
+    }
+
+    static func decodeGiftWall(from data: Data) -> [UserGiftWallItem] {
+        guard let object = try? JSONSerialization.jsonObject(with: data) else { return [] }
+        let values: [Any]
+        if let array = object as? [Any] {
+            values = array
+        } else if let dict = object as? [String: Any] {
+            values = (dict["list"] as? [Any]) ?? (dict["data"] as? [Any]) ?? (dict["items"] as? [Any]) ?? []
+        } else {
+            values = []
+        }
+        return values.compactMap { raw in
+            guard let dict = raw as? [String: Any], let giftId = profileFlexibleInt(dict["giftId"]) else { return nil }
+            return UserGiftWallItem(
+                giftId: giftId,
+                iconURL: profileFlexibleString(dict["icon"]),
+                name: profileFlexibleString(dict["name"]) ?? "",
+                price: profileFlexibleInt(dict["price"]) ?? 0,
+                count: profileFlexibleInt(dict["count"]) ?? 0,
+                lit: profileFlexibleBool(dict["lit"]) ?? ((profileFlexibleInt(dict["count"]) ?? 0) > 0)
+            )
+        }
+    }
+
+    static func decodePrivileges(from data: Data) -> [UserPrivilegeItem] {
+        guard let dict = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return [] }
+        let values = (dict["list"] as? [Any]) ?? (dict["data"] as? [Any]) ?? []
+        return values.compactMap { raw in
+            guard let item = raw as? [String: Any], let itemId = profileFlexibleInt(item["itemId"]) else { return nil }
+            return UserPrivilegeItem(
+                itemId: itemId,
+                name: profileFlexibleString(item["name"]) ?? "",
+                imageURL: profileFlexibleString(item["img"]),
+                obtained: profileFlexibleBool(item["isObtained"]) ?? false,
+                wearStatus: profileFlexibleInt(item["wearStatus"]) ?? 0
+            )
+        }
+    }
+
+    private static func profileFlexibleInt(_ raw: Any?) -> Int? {
+        if let value = raw as? Int { return value }
+        if let value = raw as? NSNumber {
+            let type = String(cString: value.objCType)
+            guard type != "c", type != "B" else { return nil }
+            return value.intValue
+        }
+        if let value = raw as? String { return Int(value.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        return nil
+    }
+
+    private static func profileFlexibleString(_ raw: Any?) -> String? {
+        guard let value = raw as? String else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func profileFlexibleBool(_ raw: Any?) -> Bool? {
+        if let value = raw as? Bool { return value }
+        if let value = raw as? NSNumber { return value.intValue != 0 }
+        if let value = raw as? String {
+            switch value.lowercased() {
+            case "true", "1": return true
+            case "false", "0": return false
+            default: return nil
+            }
+        }
+        return nil
+    }
+}
+#endif
 
 /// 保留 enum 给 Preview 用（生产代码不再 throw）。
 enum UserProfileServiceError: Error, LocalizedError {

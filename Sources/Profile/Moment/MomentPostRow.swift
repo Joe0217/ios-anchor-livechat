@@ -14,6 +14,7 @@ struct MomentPostRow: View {
     /// 删除回调（仅 me 入口注入；对齐 H5 `circle/me.vue` showDelete=true）。
     var onDeleteTap: (() -> Void)? = nil
     var onReportTap: (() -> Void)? = nil
+    var onCommentTap: (() -> Void)? = nil
     /// 是否显示评论计数（official 入口为 false，对齐 H5 `circle/official.vue` showContent=false）。
     var showComment: Bool = true
     /// 图片/视频 cell 点击回调（父 view 拉起大图预览）。参数：`imgUrls` 中的 index。
@@ -24,6 +25,7 @@ struct MomentPostRow: View {
     var onTapTranslate: (() -> Void)? = nil
     /// v25（2026-07-13）:翻译进行中。true 时按钮替换为 ProgressView + 灰色 label,防二次触发
     var isTranslating: Bool = false
+    var commentRefreshToken: Int = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -44,7 +46,7 @@ struct MomentPostRow: View {
             // 评论列表（对齐 H5 `circleContent.vue:229`：永久挂载，不受 showContent 控制；
             // 视口内 cell 出现时 .task 触发拉一次，无评论时 view 内部 v-if 不渲染，无空白）
             if let pid = post.postId {
-                MomentCommentsSection(postId: pid)
+                MomentCommentsSection(postId: pid, refreshToken: commentRefreshToken)
             }
         }
         .padding(12)
@@ -184,9 +186,18 @@ struct MomentPostRow: View {
             likeStatItem
             // official 入口隐藏评论计数（showComment=false）
             if showComment {
-                statItem(icon: "bubble.left",
-                         value: post.commentCount ?? 0,
-                         tint: Color.white.opacity(0.55))
+                if let onCommentTap {
+                    Button(action: onCommentTap) {
+                        statItem(icon: "bubble.left",
+                                 value: post.commentCount ?? 0,
+                                 tint: Color.white.opacity(0.55))
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    statItem(icon: "bubble.left",
+                             value: post.commentCount ?? 0,
+                             tint: Color.white.opacity(0.55))
+                }
             }
             if let onReportTap {
                 Button(action: onReportTap) {

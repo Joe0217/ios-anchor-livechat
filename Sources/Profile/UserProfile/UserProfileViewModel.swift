@@ -225,3 +225,194 @@ final class UserProfileViewModel: ObservableObject {
         !canFollowProvider() || Int(userId) == nil || pendingFollowIds.contains(userId)
     }
 }
+
+#if !HILY_TESTS
+enum UserProfileFeatureLoadState: Equatable {
+    case idle
+    case loading
+    case loaded
+    case error
+}
+
+/// Independent state machines for the H5 honor wall, gift wall and moments.
+@MainActor
+final class UserProfileFeatureViewModel: ObservableObject {
+    @Published private(set) var giftItems: [UserGiftWallItem] = []
+    @Published private(set) var privilegeItems: [UserPrivilegeItem] = []
+    @Published private(set) var moments: [MomentPost] = []
+    @Published private(set) var momentTranslations: [Int: String] = [:]
+    @Published private(set) var translatingMomentIds: Set<Int> = []
+    @Published private(set) var momentCommentRefreshTokens: [Int: Int] = [:]
+    @Published private(set) var giftState: UserProfileFeatureLoadState = .idle
+    @Published private(set) var privilegeState: UserProfileFeatureLoadState = .idle
+    @Published private(set) var momentsState: UserProfileFeatureLoadState = .idle
+    @Published var giftTab: UserGiftWallTab = .lit
+    @Published var privilegeType: UserPrivilegeType = .badge
+
+    private let userId: String
+    private let service: UserProfileFeatureService
+    private var giftTask: Task<Void, Never>?
+    private var privilegeTask: Task<Void, Never>?
+    private var momentsTask: Task<Void, Never>?
+
+    init(userId: String, service: UserProfileFeatureService = .shared) {
+        self.userId = userId
+        self.service = service
+    }
+
+    func loadInitial(canVirtualItems: Bool = true, canProfileSocial: Bool = true) async {
+        guard let uid = Int(userId) else { return }
+        await withTaskGroup(of: Void.self) { group in
+            if canVirtualItems {
+                group.addTask { await self.loadGift(uid: uid, tab: self.giftTab) }
+                group.addTask { await self.loadPrivilege(uid: uid, type: self.privilegeType) }
+            }
+            if canProfileSocial {
+                group.addTask { await self.loadMoments(uid: uid) }
+            }
+            await group.waitForAll()
+        }
+    }
+
+    func reloadGift() {
+        guard let uid = Int(userId) else { return }
+        giftTask?.cancel()
+        giftTask = Task { [weak self] in
+            guard let self else { return }
+            await self.loadGift(uid: uid, tab: self.giftTab)
+        }
+    }
+
+    func reloadPrivilege() {
+        guard let uid = Int(userId) else { return }
+        privilegeTask?.cancel()
+        privilegeTask = Task { [weak self] in
+            guard let self else { return }
+            await self.loadPrivilege(uid: uid, type: self.privilegeType)
+        }
+    }
+
+    func reloadMoments() {
+        guard let uid = Int(userId) else { return }
+        momentsTask?.cancel()
+        momentsTask = Task { [weak self] in
+            guard let self else { return }
+            await self.loadMoments(uid: uid)
+        }
+    }
+
+    func selectGiftTab(_ tab: UserGiftWallTab) {
+        guard giftTab != tab else { return }
+        giftTab = tab
+        reloadGift()
+    }
+
+    func selectPrivilegeType(_ type: UserPrivilegeType) {
+        guard privilegeType != type else { return }
+        privilegeType = type
+        reloadPrivilege()
+    }
+
+    func toggleMomentLike(postId: Int) {
+        guard let index = moments.firstIndex(where: { $0.postId == postId }) else { return }
+        let oldFlag = moments[index].likeFlag ?? 0
+        let oldCount = moments[index].likeCount ?? 0
+        let newFlag = oldFlag == 1 ? 0 : 1
+        moments[index].likeFlag = newFlag
+        moments[index].likeCount = max(0, oldCount + (newFlag == 1 ? 1 : -1))
+        Task {
+            do {
+                try await CircleService.shared.like(postId: postId, optionType: newFlag)
+            } catch {
+                guard let current = moments.firstIndex(where: { $0.postId == postId }) else { return }
+                moments[current].likeFlag = oldFlag
+                moments[current].likeCount = oldCount
+            }
+        }
+    }
+
+    func translateMoment(postId: Int, text: String) {
+        guard !text.isEmpty,
+              momentTranslations[postId] == nil,
+              !translatingMomentIds.contains(postId),
+              let key = AppConfigStore.shared.microsoftTranslatorKey,
+              let area = AppConfigStore.shared.microsoftTranslatorArea else { return }
+        translatingMomentIds.insert(postId)
+        let language: String
+        switch AppLocaleStore.shared.current {
+        case .en: language = "en"
+        case .ar: language = "ar"
+        case .tr: language = "tr"
+        case .system: language = Locale.current.language.languageCode?.identifier ?? "en"
+        }
+        Task {
+            defer { translatingMomentIds.remove(postId) }
+            if let translated = try? await MicrosoftTranslateService.shared.translate(
+                text: text,
+                targetLang: language,
+                key: key,
+                area: area
+            ) {
+                momentTranslations[postId] = translated
+            }
+        }
+    }
+
+    func submitMomentComment(postId: Int, content: String) async -> Bool {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        do {
+            try await CircleService.shared.comment(postId: postId, content: trimmed)
+            if let index = moments.firstIndex(where: { $0.postId == postId }) {
+                moments[index].commentCount = (moments[index].commentCount ?? 0) + 1
+            }
+            momentCommentRefreshTokens[postId, default: 0] &+= 1
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func loadGift(uid: Int, tab: UserGiftWallTab) async {
+        giftState = .loading
+        do {
+            let items = try await service.fetchGiftWall(userId: uid, tab: tab)
+            guard !Task.isCancelled, tab == giftTab else { return }
+            giftItems = items
+            giftState = .loaded
+        } catch {
+            guard !Task.isCancelled, tab == giftTab else { return }
+            giftItems = []
+            giftState = .error
+        }
+    }
+
+    private func loadPrivilege(uid: Int, type: UserPrivilegeType) async {
+        privilegeState = .loading
+        do {
+            let items = try await service.fetchPrivileges(userId: uid, type: type)
+            guard !Task.isCancelled, type == privilegeType else { return }
+            privilegeItems = items
+            privilegeState = .loaded
+        } catch {
+            guard !Task.isCancelled, type == privilegeType else { return }
+            privilegeItems = []
+            privilegeState = .error
+        }
+    }
+
+    private func loadMoments(uid: Int) async {
+        momentsState = .loading
+        do {
+            let items = try await service.fetchMoments(userId: uid)
+            guard !Task.isCancelled else { return }
+            moments = items
+            momentsState = .loaded
+        } catch {
+            guard !Task.isCancelled else { return }
+            moments = []
+            momentsState = .error
+        }
+    }
+}
+#endif

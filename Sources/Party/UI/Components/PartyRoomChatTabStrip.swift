@@ -32,7 +32,8 @@ struct PartyRoomChatTabStrip: View {
             Spacer()
         }
         .padding(.horizontal, Theme.Metric.partyRoomScreenH)
-        .padding(.vertical, Theme.Metric.partyRoomTabV)
+        // 公屏 tab 栏上下边距各减少 6pt（8pt → 2pt），保留文字和下划线本身尺寸。
+        .padding(.vertical, max(0, Theme.Metric.partyRoomTabV - 6))
     }
 
     private func tabButton(_ tab: PartyRoomChatFilter) -> some View {

@@ -435,4 +435,20 @@ final class UserProfileDecodeTests: XCTestCase {
         """
         XCTAssertNil(UserProfileService.decodeDetail(from: Data(json.utf8))?.connRate)
     }
+
+    func test_decodeDetail_levelNameAndHeadFrame_decodedForProfileDecorations() {
+        let json = #"""
+        {
+          "userId":"1001",
+          "nickname":"A",
+          "levelName":38,
+          "headFrame":"https://cdn.example/frame.svga?version=2"
+        }
+        """#
+
+        let detail = UserProfileService.decodeDetail(from: Data(json.utf8))
+
+        XCTAssertEqual(detail?.levelName, "38")
+        XCTAssertEqual(detail?.headFrame, "https://cdn.example/frame.svga?version=2")
+    }
 }

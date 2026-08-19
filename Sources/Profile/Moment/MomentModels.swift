@@ -17,9 +17,10 @@ struct MomentPost: Codable, Identifiable, Hashable {
     // trial #1：likeFlag / likeCount 改为 var，支持乐观点赞就地切换；
     // 其他字段保持 let (只读)，避免业务无关字段被误改。
     var likeCount: Int?
-    let commentCount: Int?
+    var commentCount: Int?
     var likeFlag: Int?         // 1=已赞 0=未赞（蓝本 02-11 §4 乐观更新）
     let displayRange: Int?     // 1=全部 2=私密 3=朋友
+    let appId: Int?            // H5: appId > 0 的普通用户帖允许他人评论
 
     var id: String { "\(postId ?? -1)-\(createTime ?? "")" }
 
@@ -42,7 +43,7 @@ struct MomentPost: Codable, Identifiable, Hashable {
         case userId, nickname, icon, textContent, imgUrls, createTime
         case likeCount = "likeNum"
         case commentCount = "commentNum"
-        case likeFlag, displayRange
+        case likeFlag, displayRange, appId
     }
 }
 
@@ -110,7 +111,8 @@ extension MomentPost {
             likeCount: likeCount,
             commentCount: commentCount,
             likeFlag: likeFlag,
-            displayRange: 1
+            displayRange: 1,
+            appId: 1
         )
     }
 }

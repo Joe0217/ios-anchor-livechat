@@ -11,6 +11,7 @@ import SwiftUI
 /// → `ChatDetailContainer(peerYxAccId:, selfYxAccId:)`（home/work/LiveResult sheet 均已注册）。
 struct UserProfileView: View {
     @StateObject private var vm: UserProfileViewModel
+    @StateObject private var featureVM: UserProfileFeatureViewModel
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.dismiss) private var dismiss
     /// 账户级权限（userType 黑名单）—— P 项目权限管理系统 UI 层订阅点。
@@ -22,6 +23,7 @@ struct UserProfileView: View {
     /// 每次触发递增的 token，让 `.task(id:)` 自动取消上一次 sleep（review 建议-5）。
     @State private var reportSuccessToken: Int = 0
     @State private var galleryContext: MediaGalleryContext?
+    @State private var commentingPost: MomentPost?
 
     /// 若详情页是从私聊页 push 出来的，携带该私聊 peer 的 yxAccid。
     /// 「消息」按钮据此判断目标是否就是"上一层"—— 是则 pop 而非 push，避免详情↔聊天栈无限嵌套。
@@ -39,12 +41,17 @@ struct UserProfileView: View {
             networkErrorFallback: L10n.userProfileNetworkError,
             badUserIdFallback: L10n.userProfileBadUserId
         ))
+        _featureVM = StateObject(wrappedValue: UserProfileFeatureViewModel(userId: userId))
         self.originPeerYxAccId = originPeerYxAccId
     }
 
     var body: some View {
-        ZStack {
-            Theme.Palette.profileBackground.ignoresSafeArea()
+        ZStack(alignment: .top) {
+            userProfilePageBackground.ignoresSafeArea()
+            if let detail = vm.detail {
+                levelCover(detail: detail)
+                    .ignoresSafeArea(edges: .top)
+            }
             if permission.canProfileViewing {
                 content
             }
@@ -54,8 +61,7 @@ struct UserProfileView: View {
         .navigationBarBackButtonHidden(true)
         .enableSwipeBack()    // 自定义 leading 时保留左滑返回（trial #3 step 3 反悔 #8）
         .toolbar { toolbarContent }
-        .toolbarBackground(Theme.Palette.profileBackground, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .fullScreenCover(item: $galleryContext) { context in
             MediaGalleryView(urls: context.urls, startIndex: context.startIndex)
@@ -69,6 +75,11 @@ struct UserProfileView: View {
             // 首次进入触发拉取（idle / error 都可重拉，loading 中守护已在 VM 内）
             if case .loaded = vm.loadState { return }
             await vm.loadDetail()
+        }
+        .task(id: "\(permission.canVirtualItems)-\(permission.canProfileSocial)-\(vm.detail?.userId ?? "")") {
+            guard (permission.canVirtualItems || permission.canProfileSocial), vm.detail != nil else { return }
+            await featureVM.loadInitial(canVirtualItems: permission.canVirtualItems,
+                                        canProfileSocial: permission.canProfileSocial)
         }
         .onChange(of: scenePhase) { newPhase in
             // 后台时关菜单 + popup（R-8）
@@ -97,6 +108,14 @@ struct UserProfileView: View {
             .giftPanelSheetBackground()
             .presentationDetents([.medium, .fraction(0.8)])
         }
+        .sheet(item: $commentingPost) { post in
+            MomentCommentComposer { content in
+                guard let postId = post.postId else { return false }
+                return await featureVM.submitMomentComment(postId: postId, content: content)
+            }
+            .presentationDetents([.height(160)])
+            .presentationDragIndicator(.visible)
+        }
         // 菜单弹起
         .confirmationDialog("", isPresented: $showingMenu, titleVisibility: .hidden) {
             // 仅在 isBlocked != 1 + yxAccid 非 nil 时显示 Block 项（spec §1.4 / R-22）
@@ -105,7 +124,7 @@ struct UserProfileView: View {
                     vm.openBlockConfirm()
                 }
             }
-            Button(L10n.userProfileMenuReport) { showingReportSheet = true }
+            Button(L10n.userProfileMenuReport, role: .destructive) { showingReportSheet = true }
             Button(L10n.userProfileBlockConfirmCancel, role: .cancel) {}
         }
     }
@@ -129,20 +148,22 @@ struct UserProfileView: View {
             .accessibilityLabel(L10n.commonBack)
         }
         // 不显示昵称在 NavBar（H5 行为，标题为空）
-        ToolbarItemGroup(placement: .topBarTrailing) {
+        ToolbarItem(placement: .topBarTrailing) {
             if permission.canProfileViewing, vm.detail != nil {
-                if permission.canRelationshipActions {
-                    followButton
+                HStack(spacing: 4) {
+                    if permission.canRelationshipActions {
+                        followButton
+                    }
+                    Button {
+                        showingMenu = true
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .foregroundColor(.white)
+                            .frame(width: 24, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel(L10n.userProfileA11yMenu)
                 }
-                Button {
-                    showingMenu = true
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .foregroundColor(.white)
-                        .padding(8)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel(L10n.userProfileA11yMenu)
             }
         }
     }
@@ -152,12 +173,13 @@ struct UserProfileView: View {
             Task { await vm.toggleFollow() }
         } label: {
             HStack(spacing: Theme.Metric.userProfileFollowBtnIconGap) {
-                Image(systemName: (vm.detail?.followed == true) ? "checkmark" : "plus")
-                    .font(.system(size: Theme.Metric.userProfileFollowBtnIconSize - 2, weight: .bold))
-                    .foregroundColor(.white)
+                if vm.detail?.followed != true {
+                    CDNAssetImage("partyUserCardFollow")
+                        .frame(width: 18, height: 18)
+                }
                 Text((vm.detail?.followed == true) ? L10n.userProfileFollowing : L10n.userProfileFollow)
                     .font(Theme.Typography.userProfileFollowBtn)
-                    .foregroundColor(.white)
+                    .foregroundColor(vm.detail?.followed == true ? .white : Theme.Palette.accentYellow)
             }
             .padding(.horizontal, Theme.Metric.userProfileFollowBtnHPadding)
             .padding(.vertical, Theme.Metric.userProfileFollowBtnVPadding)
@@ -171,8 +193,6 @@ struct UserProfileView: View {
     @ViewBuilder
     private var followButtonBackground: some View {
         if vm.detail?.followed == true {
-            Theme.Palette.userProfileFollowingButton
-        } else {
             LinearGradient(
                 colors: [
                     Theme.Palette.userProfileFollowGradientStart,
@@ -181,6 +201,8 @@ struct UserProfileView: View {
                 startPoint: .leading,
                 endPoint: .trailing
             )
+        } else {
+            Color(red: 0x9E / 255, green: 0x7D / 255, blue: 0xDC / 255).opacity(0.9)
         }
     }
 
@@ -205,8 +227,9 @@ struct UserProfileView: View {
     }
 
     private func loadedContent(detail: UserDetail) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+        ZStack(alignment: .top) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
                 // 头像行（左：头像三色环 + 右：消息/拨打 40x40 圆形按钮 — H5 line 160-171 布局）
                 avatarRow(detail: detail)
                     .padding(.horizontal, Theme.Metric.userProfileScreenHPadding)
@@ -232,7 +255,7 @@ struct UserProfileView: View {
                 // 关注相关统计属于社交能力；107 只保留基础资料和安全处置入口。
                 if permission.canProfileSocial {
                     statsRow(detail: detail)
-                        .padding(.horizontal, Theme.Metric.userProfileScreenHPadding)
+                        .padding(.horizontal, 12)
                 }
 
                 let photos = detail.picList.filter {
@@ -263,23 +286,65 @@ struct UserProfileView: View {
                         .padding(.top, Theme.Metric.userProfileSectionVTop)
                 }
 
-                // 礼物墙（H5 gifts.vue：list 非空横向 grid 渲染；空 → 不显示整个区块）
-                if permission.canVirtualItems, !detail.giftList.isEmpty {
-                    giftWallSection(gifts: detail.giftList)
-                        .padding(.horizontal, Theme.Metric.userProfileScreenHPadding)
+                // H5 order is guardian -> honor -> gift wall.
+                if permission.canVirtualItems {
+                    honorWallSection
+                        .padding(.horizontal, 12)
+                        .padding(.top, Theme.Metric.userProfileSectionVTop)
+                }
+
+                // H5 gift wall has Lit / UnLit / All tabs and an independent endpoint.
+                if permission.canVirtualItems {
+                    giftWallSection
+                        .padding(.horizontal, 12)
+                        .padding(.top, Theme.Metric.userProfileSectionVTop)
+                }
+
+                // H5 hides the entire Moments block when the first page is empty.
+                if permission.canProfileSocial, !featureVM.moments.isEmpty {
+                    momentsSection
                         .padding(.top, Theme.Metric.userProfileSectionVTop)
                 }
 
                 Color.clear.frame(height: 32)
+                }
             }
+            .scrollIndicators(.hidden)
         }
-        .scrollIndicators(.hidden)
+    }
+
+    @ViewBuilder
+    private func levelCover(detail: UserDetail) -> some View {
+        if permission.canVirtualItems {
+            let level = Int(detail.levelName ?? "") ?? 0
+            let rangeStart = min(max(level / 10, 0), 10) * 10
+            let url = URL(string: "https://file.lovetravel.link/mstatic/user-profile/lv-bg-\(rangeStart).webp")
+            CachedAsyncImage(url: url, contentMode: .fill, persistent: true) {
+                userProfilePageBackground
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 188)
+            .overlay(alignment: .bottom) {
+                LinearGradient(
+                    colors: [Color.clear, userProfilePageBackground],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .frame(height: 80)
+            }
+            .clipped()
+            .allowsHitTesting(false)
+        }
+    }
+
+    private var userProfilePageBackground: Color {
+        Color(hex: 0x3A2585)
     }
 
     // MARK: - 头像行（左头像 + 右消息/拨打 圆形按钮，对齐 H5 CCommunicationBtns 位置）
 
     private func avatarRow(detail: UserDetail) -> some View {
-        HStack(alignment: .center, spacing: 0) {
+        HStack(alignment: .bottom, spacing: 0) {
             // 左：三色光环头像
             avatarSection(detail: detail)
             Spacer(minLength: 0)
@@ -295,7 +360,7 @@ struct UserProfileView: View {
                 // P 项目：userType 黑名单命中时隐藏（三层防护 UI 层）
                 if permission.canCall {
                     communicationButton(
-                        systemImage: "phone.fill",
+                        assetName: "liveListVideoCall",
                         a11yLabel: L10n.userProfileActionCall,
                         action: { Task { await initiateCall(detail: detail) } }
                     )
@@ -304,10 +369,11 @@ struct UserProfileView: View {
         }
     }
 
-    private func communicationButton(systemImage: String, a11yLabel: String,
+    private func communicationButton(assetName: String, a11yLabel: String,
                                      action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            communicationButtonLabel(systemImage: systemImage)
+            CDNAssetImage(assetName)
+                .frame(width: 40, height: 40)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(a11yLabel)
@@ -321,19 +387,19 @@ struct UserProfileView: View {
                 Button {
                     dismiss()
                 } label: {
-                    communicationButtonLabel(systemImage: "bubble.left.fill")
+                    CDNAssetImage("liveListChat").frame(width: 40, height: 40)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.userProfileActionMessage)
             } else {
                 NavigationLink(value: ChatFromProfileRoute(peerYxAccId: yx, sourceUserId: vm.userId)) {
-                    communicationButtonLabel(systemImage: "bubble.left.fill")
+                    CDNAssetImage("liveListChat").frame(width: 40, height: 40)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(L10n.userProfileActionMessage)
             }
         } else {
-            communicationButtonLabel(systemImage: "bubble.left.fill")
+            CDNAssetImage("liveListChat").frame(width: 40, height: 40)
                 .opacity(Theme.Metric.blocklistButtonDisabledOpacity)
                 .accessibilityLabel(L10n.userProfileActionMessage)
                 .accessibilityAddTraits(.isButton)
@@ -373,9 +439,12 @@ struct UserProfileView: View {
             AvatarView(urlString: detail.icon,
                        size: Theme.Metric.userProfileAvatarSize,
                        kind: .user)
+            if permission.canVirtualItems, let headFrame = detail.headFrame {
+                HeadFrameView(urlString: headFrame, size: 108)
+                    .allowsHitTesting(false)
+            }
         }
-        .frame(width: Theme.Metric.userProfileAvatarSize + 12,
-               height: Theme.Metric.userProfileAvatarSize + 12)
+        .frame(width: 108, height: 108)
         .accessibilityLabel(L10n.userProfileA11yAvatar)
     }
 
@@ -505,7 +574,7 @@ struct UserProfileView: View {
     }
 
     private func statsCard(sfIcon: String, tint: Color, value: Int, label: String) -> some View {
-        HStack(spacing: Theme.Metric.userProfileStatsIconToTextGap) {
+        HStack(spacing: 6) {
             Image(systemName: sfIcon)
                 .font(.system(size: Theme.Metric.userProfileStatsIconSize, weight: .semibold))
                 .foregroundColor(tint)
@@ -516,81 +585,208 @@ struct UserProfileView: View {
                 Text(label)
                     .font(Theme.Typography.userProfileStatsLabel)
                     .foregroundColor(Theme.Palette.userProfileStatsLabel)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             Spacer(minLength: 0)
         }
         .padding(Theme.Metric.userProfileStatsCardPadding)
+        .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: Theme.Metric.userProfileStatsCardRadius, style: .continuous)
-                .fill(Theme.Palette.userProfileStatsCardFill)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.white.opacity(0.1))
         )
     }
 
-    // MARK: - 礼物墙（H5 gifts.vue 还原：横向 grid + 35x35 icon + name + xCount）
+    // MARK: - Honor wall
 
-    private func giftWallSection(gifts: [Gift]) -> some View {
+    private var honorWallSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(L10n.userProfileGiftWallTitle)
-                .font(Theme.Typography.userProfileSection)
-                .foregroundColor(Theme.Palette.userProfileNickname)
-            // 竖向 grid：固定每行 5 列（trial #3 step 3 反悔 #9）
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5),
-                alignment: .leading,
-                spacing: 12
-            ) {
-                ForEach(gifts) { gift in
-                    giftCell(gift: gift)
+            profileSectionHeader(icon: "icon-glory", title: L10n.userProfileHonorWallTitle)
+            profileTabBar(UserPrivilegeType.allCases, selection: featureVM.privilegeType) { type in
+                featureVM.selectPrivilegeType(type)
+            } label: { type in
+                switch type {
+                case .badge: return L10n.userProfileHonorBadge
+                case .frame: return L10n.userProfileHonorFrame
+                case .vehicle: return L10n.userProfileHonorVehicle
                 }
             }
-            .padding(.vertical, 12)
             .padding(.horizontal, 12)
-            .background(
-                RoundedRectangle(cornerRadius: Theme.Metric.userProfilePlaceholderRadius, style: .continuous)
-                    .fill(Theme.Palette.userProfileStatsCardFill.opacity(0.5))   // H5 bg-[rgba(43,33,62,0.5)]
-            )
+            honorWallBody.padding(.horizontal, 12)
+        }
+        .padding(.vertical, 14)
+        .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    @ViewBuilder
+    private var honorWallBody: some View {
+        switch featureVM.privilegeState {
+        case .idle, .loading:
+            profileSectionProgress
+        case .error:
+            profileSectionEmpty(L10n.userProfileSectionLoadFailed)
+        case .loaded:
+            if featureVM.privilegeItems.isEmpty {
+                profileSectionEmpty(L10n.userProfileHonorEmpty)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 6) {
+                        ForEach(featureVM.privilegeItems) { item in
+                            privilegeCell(item)
+                        }
+                    }
+                }
+                .frame(height: 108)
+            }
         }
     }
 
-    private func giftCell(gift: Gift) -> some View {
-        VStack(spacing: 4) {
-            // 礼物 icon（cell 宽随 column 自适应；icon 取 cell 宽 80% 让视觉放大）
-            GeometryReader { proxy in
-                let size = proxy.size.width * 0.8
-                Group {
-                    if let s = gift.iconUrl, let url = URL(string: s) {
-                        CachedAsyncImage(url: url,
-                                         contentMode: .fit,
-                                         persistent: true,
-                                         cdn: (.gift, .fit)) {
-                            giftIconPlaceholder
+    private func privilegeCell(_ item: UserPrivilegeItem) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(item.obtained
+                      ? LinearGradient(colors: [Color(red: 55/255, green: 19/255, blue: 67/255),
+                                                Color(red: 137/255, green: 37/255, blue: 213/255)],
+                                       startPoint: .leading, endPoint: .trailing)
+                      : LinearGradient(colors: [Color.white.opacity(0.06)], startPoint: .leading, endPoint: .trailing))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(item.obtained ? Color.white : Color.clear, lineWidth: 0.5))
+            VStack(spacing: 6) {
+                CachedAsyncImage(url: item.imageURL.flatMap(URL.init(string:)), contentMode: .fit, persistent: true) {
+                    Color.clear
+                }
+                .frame(width: 58, height: 58)
+                .saturation(item.obtained ? 1 : 0)
+                .opacity(item.obtained ? 1 : 0.45)
+                if featureVM.privilegeType != .badge {
+                    Text(item.name)
+                        .font(.system(size: 11))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .frame(width: 66)
+                }
+            }
+            if item.wearStatus == 1 {
+                Text(L10n.userProfileHonorEquipped)
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 4)
+                    .frame(height: 18)
+                    .background(LinearGradient(colors: [.orange, .pink, .purple], startPoint: .leading, endPoint: .trailing), in: RoundedRectangle(cornerRadius: 6))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+            if !item.obtained {
+                    Image("UserProfileIconHonorLock")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 22, height: 22)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                    .padding(5)
+            }
+        }
+        .frame(width: 76, height: 97)
+    }
+
+    // MARK: - Gift wall
+
+    private var giftWallSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            profileSectionHeader(icon: "icon-gift-wall", title: L10n.userProfileGiftWallTitle)
+            profileTabBar(UserGiftWallTab.allCases, selection: featureVM.giftTab) { tab in
+                featureVM.selectGiftTab(tab)
+            } label: { tab in
+                switch tab {
+                case .lit: return L10n.userProfileGiftLit
+                case .unlit: return L10n.userProfileGiftUnlit
+                case .all: return L10n.userProfileGiftAll
+                }
+            }
+            .padding(.horizontal, 12)
+            giftWallBody.padding(.horizontal, 12)
+        }
+        .padding(.vertical, 14)
+        .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    @ViewBuilder
+    private var giftWallBody: some View {
+        switch featureVM.giftState {
+        case .idle, .loading:
+            profileSectionProgress
+        case .error:
+            profileSectionError(retry: featureVM.reloadGift)
+        case .loaded:
+            if featureVM.giftItems.isEmpty {
+                profileSectionEmpty(giftEmptyText)
+            } else {
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 4),
+                        spacing: 6
+                    ) {
+                        ForEach(featureVM.giftItems) { gift in
+                            giftCell(gift: gift)
                         }
-                    } else {
-                        giftIconPlaceholder
                     }
                 }
-                .frame(width: size, height: size)
-                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(height: 360)
             }
-            .aspectRatio(1, contentMode: .fit)
+        }
+    }
 
-            // 名称（H5 text-10 lh-12 white 50% truncate）
-            Text(gift.name ?? "")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(Theme.Palette.userProfileUid)
+    private var giftEmptyText: String {
+        switch featureVM.giftTab {
+        case .lit: return L10n.userProfileGiftEmptyLit
+        case .unlit: return L10n.userProfileGiftEmptyUnlit
+        case .all: return L10n.userProfileGiftEmptyAll
+        }
+    }
+
+    private func giftCell(gift: UserGiftWallItem) -> some View {
+        VStack(spacing: 4) {
+            ZStack(alignment: .topTrailing) {
+                if let url = gift.iconURL.flatMap(URL.init(string:)) {
+                    CachedAsyncImage(url: url, contentMode: .fit, persistent: true, cdn: (.gift, .fit)) {
+                        giftIconPlaceholder
+                    }
+                } else {
+                    giftIconPlaceholder
+                }
+                if gift.count > 0 {
+                    Text("x\(gift.count)")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+            }
+            .frame(height: 54)
+            .saturation(gift.lit ? 1 : 0)
+            .opacity(gift.lit ? 1 : 0.45)
+            Text(gift.name)
+                .font(.system(size: 11))
+                .foregroundColor(.white)
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)
-
-            // 数量 X N（H5 text-12 white font-500）
-            Text("X \(gift.count)")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
         }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 6)
+        .background {
+            if gift.lit {
+                LinearGradient(
+                    colors: [Color(red: 55/255, green: 19/255, blue: 67/255),
+                             Color(red: 137/255, green: 37/255, blue: 213/255)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            } else {
+                Color.white.opacity(0.06)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+        .overlay(RoundedRectangle(cornerRadius: 8).stroke(gift.lit ? Color.white : Color.clear, lineWidth: 0.5))
         .frame(maxWidth: .infinity)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(gift.name ?? L10n.userProfileA11yGiftFallback), \(gift.count)")
+        .accessibilityLabel("\(gift.name.isEmpty ? L10n.userProfileA11yGiftFallback : gift.name), \(gift.count)")
     }
 
     private var giftIconPlaceholder: some View {
@@ -600,6 +796,109 @@ struct UserProfileView: View {
                 .font(.system(size: 16))
                 .foregroundColor(.white.opacity(0.4))
         }
+    }
+
+    private func profileSectionHeader(icon: String, title: String) -> some View {
+        HStack(spacing: 5) {
+            Image(icon == "icon-glory" ? "UserProfileIconGlory" : "UserProfileIconGiftWall")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 30, height: 30)
+            Text(title)
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.white)
+        }
+        .padding(.horizontal, 15)
+    }
+
+    // MARK: - Moments
+
+    private var momentsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(L10n.userProfileMomentsTitle)
+                .font(Theme.Typography.userProfileSection)
+                .foregroundColor(.white)
+                .padding(.horizontal, Theme.Metric.userProfileScreenHPadding)
+            ForEach(featureVM.moments) { post in
+                MomentPostRow(
+                    post: post,
+                    onLikeTap: post.postId.map { id in { featureVM.toggleMomentLike(postId: id) } },
+                    onCommentTap: canComment(on: post) ? { commentingPost = post } : nil,
+                    showComment: true,
+                    onImageTap: { index in
+                        guard let urls = post.imgUrls, !urls.isEmpty else { return }
+                        galleryContext = MediaGalleryContext(urls: urls, startIndex: index)
+                    },
+                    translation: post.postId.flatMap { featureVM.momentTranslations[$0] },
+                    onTapTranslate: translationAction(for: post),
+                    isTranslating: post.postId.map { featureVM.translatingMomentIds.contains($0) } ?? false,
+                    commentRefreshToken: post.postId.flatMap { featureVM.momentCommentRefreshTokens[$0] } ?? 0
+                )
+            }
+        }
+    }
+
+    private func translationAction(for post: MomentPost) -> (() -> Void)? {
+        guard let id = post.postId, let text = post.textContent, !text.isEmpty else { return nil }
+        return { featureVM.translateMoment(postId: id, text: text) }
+    }
+
+    private func canComment(on post: MomentPost) -> Bool {
+        if let mine = SessionStore.shared.user?.userId, post.userId == mine { return true }
+        return (post.appId ?? 0) > 0
+    }
+
+    private func profileTabBar<Item: Identifiable & Equatable>(
+        _ items: [Item],
+        selection: Item,
+        action: @escaping (Item) -> Void,
+        label: @escaping (Item) -> String
+    ) -> some View {
+        HStack(spacing: 8) {
+            ForEach(items) { item in
+                Button { action(item) } label: {
+                    Text(label(item))
+                        .font(.system(size: 13, weight: item == selection ? .bold : .regular))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 14)
+                        .frame(height: 30)
+                        .background {
+                            if item == selection {
+                                LinearGradient(colors: [Color(red: 236/255, green: 21/255, blue: 1),
+                                                        Color(red: 170/255, green: 37/255, blue: 246/255)],
+                                               startPoint: .leading, endPoint: .trailing)
+                                    .clipShape(Capsule())
+                            }
+                        }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var profileSectionProgress: some View {
+        ProgressView().tint(.white).frame(maxWidth: .infinity).frame(height: 96)
+    }
+
+    private func profileSectionEmpty(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 13))
+            .foregroundColor(.white.opacity(0.55))
+            .frame(maxWidth: .infinity)
+            .frame(height: 96)
+    }
+
+    private func profileSectionError(retry: @escaping () -> Void) -> some View {
+        VStack(spacing: 10) {
+            Text(L10n.userProfileSectionLoadFailed)
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.55))
+            Button(L10n.commonRetry, action: retry)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 96)
     }
 
 
@@ -677,6 +976,51 @@ struct UserProfileView: View {
     }
 }
 
+private struct MomentCommentComposer: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var text: String = ""
+    @State private var isSubmitting: Bool = false
+    let onSubmit: (String) async -> Bool
+
+    var body: some View {
+        VStack(spacing: 14) {
+            TextField(L10n.chatInputTypeMessage, text: $text, axis: .vertical)
+                .lineLimit(1...3)
+                .textFieldStyle(.roundedBorder)
+                .submitLabel(.send)
+                .onSubmit { submit() }
+            HStack {
+                Button(L10n.userProfileBlockConfirmCancel) { dismiss() }
+                    .foregroundColor(.white.opacity(0.7))
+                Spacer()
+                Button(action: submit) {
+                    if isSubmitting {
+                        ProgressView().tint(.white)
+                    } else {
+                        Text(L10n.chatInputSend)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isSubmitting || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .background(Theme.Palette.profileBackground.ignoresSafeArea())
+    }
+
+    private func submit() {
+        guard !isSubmitting else { return }
+        let content = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return }
+        isSubmitting = true
+        Task {
+            let success = await onSubmit(content)
+            isSubmitting = false
+            if success { dismiss() }
+        }
+    }
+}
+
 // MARK: - 拉黑二次确认 dialog modifier
 
 private extension View {
@@ -732,7 +1076,7 @@ extension UserDetail {
                 Gift(giftId: 2, iconUrl: nil, name: "Heart", count: 5),
                 Gift(giftId: 3, iconUrl: nil, name: "Diamond", count: 1)
             ],
-            guardianList: [], picList: []
+            guardianList: [], picList: [], levelName: "38", headFrame: nil
         )
     }
 }

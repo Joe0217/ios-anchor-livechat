@@ -2247,6 +2247,20 @@ enum L10n {
     static var userProfileBlockFail: String         { localize("userProfile.block.fail", comment: "拉黑失败 toast") }
     static var userProfileGiftWallTitle: String     { localize("userProfile.giftWall.title", comment: "礼物墙区块标题") }
     static var userProfileGiftWallPlaceholder: String { localize("userProfile.giftWall.placeholder", comment: "礼物墙占位 coming soon") }
+    static var userProfileHonorWallTitle: String { localize("userProfile.honorWall.title", comment: "荣誉墙标题") }
+    static var userProfileHonorBadge: String { localize("userProfile.honorWall.badge", comment: "荣誉墙勋章 Tab") }
+    static var userProfileHonorFrame: String { localize("userProfile.honorWall.frame", comment: "荣誉墙头像框 Tab") }
+    static var userProfileHonorVehicle: String { localize("userProfile.honorWall.vehicle", comment: "荣誉墙座驾 Tab") }
+    static var userProfileHonorEmpty: String { localize("userProfile.honorWall.empty", comment: "荣誉墙空态") }
+    static var userProfileHonorEquipped: String { localize("userProfile.honorWall.equipped", comment: "荣誉墙佩戴态") }
+    static var userProfileGiftLit: String { localize("userProfile.giftWall.lit", comment: "礼物墙已点亮 Tab") }
+    static var userProfileGiftUnlit: String { localize("userProfile.giftWall.unlit", comment: "礼物墙未点亮 Tab") }
+    static var userProfileGiftAll: String { localize("userProfile.giftWall.all", comment: "礼物墙全部 Tab") }
+    static var userProfileGiftEmptyLit: String { localize("userProfile.giftWall.emptyLit", comment: "礼物墙已点亮空态") }
+    static var userProfileGiftEmptyUnlit: String { localize("userProfile.giftWall.emptyUnlit", comment: "礼物墙未点亮空态") }
+    static var userProfileGiftEmptyAll: String { localize("userProfile.giftWall.emptyAll", comment: "礼物墙全部空态") }
+    static var userProfileSectionLoadFailed: String { localize("userProfile.section.loadFailed", comment: "用户资料子区块加载失败") }
+    static var userProfileMomentsTitle: String { localize("userProfile.moments.title", comment: "用户动态标题") }
     static var userProfileActionMessage: String     { localize("userProfile.action.message", comment: "底部 ActionBar：私聊") }
     static var userProfileActionCall: String        { localize("userProfile.action.call", comment: "底部 ActionBar：通话") }
     static var userProfileNetworkError: String      { localize("userProfile.networkError", comment: "网络错误兜底") }

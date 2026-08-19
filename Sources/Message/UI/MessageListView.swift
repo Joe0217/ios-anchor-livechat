@@ -76,6 +76,7 @@ struct MessageListView: View {
                 categoryTabBar
                 content
             }
+            .padding(.horizontal, 16)
         }
         .task {
             if case .idle = store.state {
@@ -203,7 +204,7 @@ struct MessageListView: View {
                 tabButton(cat)
             }
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, 0)
         .padding(.vertical, 10)
     }
 
@@ -347,6 +348,7 @@ struct MessageListView: View {
                         Divider().padding(.leading, 76)
                     }
                 }
+                .padding(.horizontal, 0)
             }
             .refreshable { await store.load() }
         } else {
@@ -381,6 +383,7 @@ struct MessageListView: View {
                     Divider().padding(.leading, 76)
                 }
             }
+            .padding(.horizontal, 0)
         }
         .refreshable { await store.load() }
     }
