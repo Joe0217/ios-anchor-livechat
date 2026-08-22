@@ -45,6 +45,9 @@ struct RestrictedTabView: View {
             // sysMsg 58 push 只覆盖在线时的实时变化;进入 view 主动拉一次是**冷启动/长离线**的兜底路径。
             await session.refreshAuditStatus()
         }
+        .onChange(of: selection) { tab in
+            AnalyticsTracker.trackBehavior("进入\(tab == .news ? "news" : "mine")页")
+        }
     }
 
     /// 对齐 H5 `showTabbar = tabPathArray.includes(route.path)`：仅两个根页面显示底栏。

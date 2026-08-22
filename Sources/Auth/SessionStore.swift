@@ -28,6 +28,7 @@ final class SessionStore: ObservableObject {
     /// 的延迟 leave/destroy 覆盖新账号刚启动的共享 Agora/NIM 状态。
     private var runtimeCleanupTask: Task<Void, Never>?
     private var runtimeCleanupGeneration: UInt64 = 0
+    private var lastReportedAccountMode: Int?
 
     // MARK: - H M4：sysMsg 通道字段（C/J 期 UI 绑订）
 
@@ -188,6 +189,7 @@ final class SessionStore: ObservableObject {
 
         if DeletedAccountRegistry.contains(email) {
             pendingRegister = PendingRegister(email: email, password: password)
+            reportLoginOutcome(account: email, outcome: "跳转注册")
             RegisterAnalytics.report(.signUp)
             return
         }
@@ -217,9 +219,11 @@ final class SessionStore: ObservableObject {
                 errorMessage = L10n.authErrorNoToken
                 return
             }
+            reportLoginOutcome(account: email, outcome: "进入应用")
         } catch let e as APIError where e.code == "1005" {
             // 1005 = 账号未注册；suppressCodes 已让 APIClient 不 post 通知，此处安全设 pendingRegister 让 LoginView push 注册页
             pendingRegister = PendingRegister(email: email, password: password)
+            reportLoginOutcome(account: email, outcome: "跳转注册")
             RegisterAnalytics.report(.signUp)
         } catch let e as APIError {
             AppLogger.auth.error("login APIError code=\(e.code, privacy: .public) message=\(e.message, privacy: .private)")
@@ -227,6 +231,14 @@ final class SessionStore: ObservableObject {
         } catch {
             errorMessage = String(format: L10n.authErrorNetworkFormat, error.localizedDescription)
         }
+    }
+
+    private func reportLoginOutcome(account: String, outcome: String) {
+        let normalized = DeletedAccountRegistry.normalize(account)
+        AnalyticsTracker.trackBehavior("登录行为", properties: [
+            "account": normalized,
+            "login_status": outcome
+        ])
     }
 
     /// 为新会话准备首帧权限模式。完整登录/注册媒体优先；媒体缺失时读取同 userId
@@ -362,6 +374,7 @@ final class SessionStore: ObservableObject {
         authenticatedEmail = normalizedEmail
         _ = KeychainStore.setString(normalizedEmail, for: KeychainKey.authenticatedEmail)
         isLoggedIn = true
+        reportAccountModeIfNeeded(effectiveUserType)
         save()   // 内部会 AuthToken.value = token
         recordRecentLoginAccount(normalizedEmail)
         AnalyticsTracker.login(userId: sessionResult.userId)
@@ -680,8 +693,16 @@ final class SessionStore: ObservableObject {
         )
 
         user = refreshed
+        reportAccountModeIfNeeded(UserTypeExperience.effectiveUserType(userInfo: refreshed))
         save()
         AppLogger.auth.info("[Session] refreshAuditStatus OK userType=\(refreshed.userType ?? -1) valid=\(refreshed.valid ?? -1) onReview=\(refreshed.onReview == true) banAlways=\(refreshed.banAlways == true)")
+    }
+
+    /// 账号权限模式切换（例如全开放主播 ↔ 107 Party-only）。这不是 Party 房间模板切换。
+    private func reportAccountModeIfNeeded(_ mode: Int?) {
+        guard let mode, mode != lastReportedAccountMode else { return }
+        lastReportedAccountMode = mode
+        AnalyticsTracker.trackBehavior("账号模式切换", properties: ["model": mode])
     }
 
     /// RootView `.alert(item:)` dismissButton 回调；根据 applyStatus 分流 logout / refresh。
@@ -776,6 +797,7 @@ final class SessionStore: ObservableObject {
             AnchorInfoStore.shared.hydrateFromLogin(restoredUser, preserveCachedSnapshot: true)
             user = restoredUser
             isLoggedIn = true
+            reportAccountModeIfNeeded(UserTypeExperience.effectiveUserType(userInfo: restoredUser))
             save()
             AnalyticsTracker.login(userId: restoredUser.userId)
             CrashReporter.setUser(userID: restoredUser.userId)
@@ -807,6 +829,7 @@ final class SessionStore: ObservableObject {
             AnchorInfoStore.shared.hydrateFromLogin(restoredUser, preserveCachedSnapshot: true)
             user = restoredUser
             isLoggedIn = true
+            reportAccountModeIfNeeded(UserTypeExperience.effectiveUserType(userInfo: restoredUser))
             save()
             AnalyticsTracker.login(userId: restoredUser.userId)
             CrashReporter.setUser(userID: restoredUser.userId)

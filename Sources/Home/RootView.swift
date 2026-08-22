@@ -132,6 +132,15 @@ struct RootView: View {
                 }
             )
         }
+        .onChange(of: session.auditAlert?.id) { id in
+            if id != nil { AnalyticsTracker.trackBehavior("拉起审核结果弹窗") }
+        }
+        .onChange(of: autoOffline.showDialog) { shown in
+            if shown { AnalyticsTracker.trackBehavior("拉起自动离线弹窗") }
+        }
+        .onChange(of: inviteMessage.current?.id) { id in
+            if id != nil { AnalyticsTracker.trackBehavior("拉起邀请卡片") }
+        }
         .animation(.easeInOut(duration: 0.2), value: callStore.state)
         .animation(.easeInOut(duration: 0.2), value: robotCallStore.state)
         .animation(.easeInOut(duration: 0.15), value: autoOffline.showDialog)

@@ -159,6 +159,10 @@ struct PartyTabRootView: View {
                     }
             }
         }
+        .onAppear { AnalyticsTracker.trackBehavior("进入party大厅页") }
+        .onChange(of: pendingPasswordRoom?.id) { id in
+            if id != nil { AnalyticsTracker.trackBehavior("拉起密码房弹窗") }
+        }
     }
 
     // MARK: - Actions

@@ -211,6 +211,18 @@ struct PartyRoomView: View {
                 selfYxAccId: SessionStore.shared.user?.yxAccid ?? ""
             )
             .onChange(of: userCardForUserId, perform: trackPartyUserCardPresentation)
+            .onAppear { AnalyticsTracker.trackBehavior("进入party房间") }
+            .onChange(of: showSelfActions) { shown in if shown { AnalyticsTracker.trackBehavior("拉起麦位操作菜单") } }
+            .onChange(of: showError) { shown in if shown { AnalyticsTracker.trackBehavior("拉起房间错误弹窗") } }
+            .onChange(of: showAnnouncement) { shown in if shown { AnalyticsTracker.trackBehavior("拉起房间公告") } }
+            .onChange(of: showShareInviteSheet) { shown in if shown { AnalyticsTracker.trackBehavior("拉起房间分享邀请") } }
+            .onChange(of: showMoreActions) { shown in if shown { AnalyticsTracker.trackBehavior("拉起房间更多菜单") } }
+            .onChange(of: showExpressionPanel) { shown in if shown { AnalyticsTracker.trackBehavior("拉起表情面板") } }
+            .onChange(of: switchSeatPendingTarget?.id) { id in if id != nil { AnalyticsTracker.trackBehavior("拉起切换麦位确认") } }
+            .onChange(of: adminSeatActionsTarget?.id) { id in if id != nil { AnalyticsTracker.trackBehavior("拉起麦位管理弹窗") } }
+            .onChange(of: pendingApplySeatIndex) { value in if value != nil { AnalyticsTracker.trackBehavior("拉起申请上麦弹窗") } }
+            .onChange(of: approveSeatPickerCandidate?.id) { id in if id != nil { AnalyticsTracker.trackBehavior("拉起同意上麦弹窗") } }
+            .onChange(of: seatInvitePresentation?.id) { id in if id != nil { AnalyticsTracker.trackBehavior("拉起上麦邀请弹窗") } }
             .onChange(of: cornerBannerTrackingKey) { _ in
                 reportCornerBannerViewIfNeeded()
             }

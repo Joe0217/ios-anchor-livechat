@@ -25,6 +25,8 @@ enum AnalyticsTracker {
         TDAnalytics.start(withAppId: config.appId, serverUrl: config.serverURL)
         TDAnalytics.setSuperProperties(["#app_version": AppConfig.appVersion])
         started = true
+        TDAnalytics.track("c_log", properties: ["type": "hifunny"])
+        TDAnalytics.flush()
         AppLogger.net.info("[Analytics] ThinkingData started")
     }
 
@@ -50,6 +52,19 @@ enum AnalyticsTracker {
         if immediately {
             TDAnalytics.flush()
         }
+    }
+
+    /// 产品行为埋点：ThinkingData 事件名固定为 hifunny_log。
+    /// `behavior_name` 保存具体行为，避免与历史业务事件名混淆。
+    static func trackBehavior(_ behaviorName: String,
+                              properties: [String: Any] = [:],
+                              immediately: Bool = true) {
+        var enriched = properties
+        enriched["behavior_name"] = behaviorName
+        if enriched["model"] == nil {
+            enriched["model"] = SessionStore.effectiveUserTypeSnapshot ?? 107
+        }
+        track("hifunny_log", properties: enriched, immediately: immediately)
     }
 
     private static var isStarted: Bool {

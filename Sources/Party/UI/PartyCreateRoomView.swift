@@ -95,6 +95,16 @@ struct PartyCreateRoomView: View {
             await store.loadInitial()
             store.refreshPartyVideoCapability()
         }
+        .onAppear { AnalyticsTracker.trackBehavior("进入party创房页") }
+        .onChange(of: showModePicker) { shown in
+            if shown { AnalyticsTracker.trackBehavior("拉起创房模式弹窗") }
+        }
+        .onChange(of: showLanguagePicker) { shown in
+            if shown { AnalyticsTracker.trackBehavior("拉起创房语言弹窗") }
+        }
+        .onChange(of: showBackgroundPicker) { shown in
+            if shown { AnalyticsTracker.trackBehavior("拉起创房背景弹窗") }
+        }
         .onChange(of: permission.canPartyVideo) { allowed in
             // 账号被动态降为 107 时，关闭已打开的双房型 picker，避免用户停留在视频 tab。
             if !allowed { showModePicker = false }

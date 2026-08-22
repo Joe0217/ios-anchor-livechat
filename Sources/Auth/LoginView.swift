@@ -23,6 +23,7 @@ struct LoginView: View {
                 .onChange(of: session.pendingRegister) { pending in
                     if let p = pending {
                         registerStore.begin(email: p.email, password: p.password)
+                        AnalyticsTracker.trackBehavior("进入注册basicInfo页")
                         pathHolder.path.append(RegisterRoute.basicInfo)
                         session.pendingRegister = nil     // 消费掉
                     }

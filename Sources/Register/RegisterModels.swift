@@ -15,6 +15,17 @@ enum RegisterRoute: Hashable {
     case videoPreview
 }
 
+extension RegisterRoute {
+    var analyticsName: String {
+        switch self {
+        case .basicInfo: return "basicInfo"
+        case .required: return "required"
+        case .videoRecord: return "videoRecord"
+        case .videoPreview: return "videoPreview"
+        }
+    }
+}
+
 // MARK: - Country（getCountryList 响应元素）
 
 struct Country: Codable, Identifiable, Hashable {

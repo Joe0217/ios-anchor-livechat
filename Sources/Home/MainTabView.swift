@@ -226,6 +226,7 @@ struct MainTabView: View {
                 .ignoresSafeArea()
         }
         .onChange(of: isOnSubpageSignal) { newValue in
+            AnalyticsTracker.trackBehavior(newValue ? "进入\(selection.analyticsName)子页" : "返回\(selection.analyticsName)页")
             InviteMessageCenter.shared.updateDisplayContext(isAtRootPage: !newValue)
             RobotCallRouteGate.shared.update(isAtRootPage: !newValue)
             // L 里程碑：子页拦截 tip 弹窗（对齐 H5 c-goMatch 仅挂 home 页面语义 —— 直播间/详情页/开播设置等均不弹）
@@ -233,6 +234,7 @@ struct MainTabView: View {
             matchPopupCoordinator.updateBlockedByOtherPage(newValue)
         }
         .onChange(of: selection) { newValue in
+            AnalyticsTracker.trackBehavior("进入\(newValue.analyticsName)页")
             InviteMessageCenter.shared.updateDisplayContext(isAtRootPage: !isOnSubpageSignal)
             // 程序驱动切换（如 liveResultTransition 结束直播切 Work + 重建 workPath 为 [.liveResult]）
             // 必须跳过清 path，避免覆盖 action 内同帧刚设置的路径（review 202607091438 P1）
@@ -1403,6 +1405,18 @@ private struct PartyFloatingGIFView: View {
 /// （E-spec §6B v3：party 插第 3 位，居中焦点 tab，对齐主流直播 App"发现/派对"tab 中心突出模式）
 enum MainTab: CaseIterable {
     case home, messages, party, connections, beauty, work, profile
+
+    var analyticsName: String {
+        switch self {
+        case .home: return "home"
+        case .messages: return "message"
+        case .party: return "party"
+        case .connections: return "connections"
+        case .beauty: return "beauty"
+        case .work: return "work"
+        case .profile: return "profile"
+        }
+    }
 
     /// 未选中态切图（浅紫静态色调）
     var icon: String {
