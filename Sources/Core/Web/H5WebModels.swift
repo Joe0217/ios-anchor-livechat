@@ -240,6 +240,16 @@ struct H5RuntimeContext {
 }
 
 extension H5Page {
+    /// Externally hosted legal documents. The page is intentionally bridge-free;
+    /// legal content must never receive session credentials or native commands.
+    @MainActor
+    static func legalDocument(fragment: String, title: String) -> H5Page? {
+        guard let baseURL = AppConfig.webFeatureBaseURL else { return nil }
+        var url = baseURL.appendingPathComponent("support/index.html")
+        url = URL(string: url.absoluteString + "#" + fragment) ?? url
+        return H5Page(url: url, title: title, bridgeMode: .disabled, runtimeContext: .current())
+    }
+
     /// 三个嵌入功能共享受信任 origin、运行时认证和服务隔离标记。
     @MainActor
     static func embeddedFeature(_ feature: H5EmbeddedFeature, title: String) -> H5Page? {
