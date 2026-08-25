@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "ActiveTycoonTaskStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "ActiveTycoonTaskStore")
 
 /// Tab2 Active Tycoon Task 列表 store —— sheet 内 `@StateObject`(spec §1.1)。
 ///

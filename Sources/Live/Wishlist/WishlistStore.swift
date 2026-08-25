@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "WishlistStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "WishlistStore")
 
 /// 心愿单 store（对齐 H5 wishlist 数据流）
 @MainActor

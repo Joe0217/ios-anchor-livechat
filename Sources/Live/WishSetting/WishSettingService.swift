@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "WishSettingService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "WishSettingService")
 
 /// Wishlist 后端接口（对齐 H5 `src/api/live/wishlist.ts`）。
 ///

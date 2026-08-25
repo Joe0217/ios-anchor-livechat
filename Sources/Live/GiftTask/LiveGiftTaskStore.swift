@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveGiftTaskStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "LiveGiftTaskStore")
 
 /// 直播间礼物任务进度 store —— 由 [NIMChatroomManager](../NIMChatroomManager.swift) `let` 强所有,
 /// 与 `contributionStore` / `topRankStore` 同排(spec §1.1 v2 决策)。

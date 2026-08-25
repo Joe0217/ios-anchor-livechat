@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "app-config-store")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "app-config-store")
 
 /// H-3 横断基建：全局配置的 **有状态** 单例（对齐 H5 `useAppStore.AppConfig` + `homeStore.microsoftTranslatorConfig`）。
 ///

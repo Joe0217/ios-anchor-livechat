@@ -8,7 +8,7 @@ import os
 /// AVAssetWriter + AVAssetReader 精确控参数：AVVideoAverageBitRateKey = 2_500_000 + AVVideoProfileLevelH264HighAutoLevel。
 enum RegisterVideoCompressor {
 
-    private static let logger = Logger(subsystem: "com.anchor.livechat", category: "RegisterCompressor")
+    private static let logger = Logger(subsystem: "com.hilly.anchor", category: "RegisterCompressor")
 
     /// - parameter sourceUrl: 录制产出的 mov
     /// - parameter progressHandler: 0.0 → 1.0 主线程回调

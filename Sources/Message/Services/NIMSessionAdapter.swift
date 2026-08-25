@@ -20,7 +20,7 @@ import os
 @MainActor
 final class NIMSessionAdapter: NSObject, MessageSessionProviderProtocol {
 
-    private let logger = Logger(subsystem: "com.anchor.livechat", category: "NIMSessionAdapter")
+    private let logger = Logger(subsystem: "com.hilly.anchor", category: "NIMSessionAdapter")
 
     /// delegate 事件转发回 Store（Store init 通过 subscribe(_:) 注入）
     private var eventHandler: (@MainActor (MessageSessionEvent) -> Void)?

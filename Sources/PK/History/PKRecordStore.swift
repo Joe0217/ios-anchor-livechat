@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "PKRecordStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "PKRecordStore")
 
 /// PK 历史记录 sheet 状态机（对齐 H5 `pkHistoryPopup.vue` + useServerPagination hook）。
 ///

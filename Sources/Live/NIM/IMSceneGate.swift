@@ -14,7 +14,7 @@ final class IMSceneGate {
 
     static let shared = IMSceneGate()
 
-    nonisolated static let logger = Logger(subsystem: "com.anchor.livechat", category: "im-scene-gate")
+    nonisolated static let logger = Logger(subsystem: "com.hilly.anchor", category: "im-scene-gate")
 
     /// 当前活跃场景集。调试可观察用。
     private(set) var active: IMSceneFilter.ActiveScenes = []

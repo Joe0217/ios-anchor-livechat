@@ -1,7 +1,7 @@
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "GiftPlayerRouter")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "GiftPlayerRouter")
 
 /// 生产环境播放路由：按 URL 后缀分发 SVGA / MP4 到具体 player
 ///

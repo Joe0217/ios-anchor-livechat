@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "GiftAnimQueue")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "GiftAnimQueue")
 
 /// 送礼动画队列（对齐 H5 giftStore.giftQueue 模型）
 ///

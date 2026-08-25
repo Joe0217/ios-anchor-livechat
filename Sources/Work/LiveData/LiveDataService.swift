@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveDataService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "LiveDataService")
 
 /// Live Data 页数据层协议 — impl 生产走 [LiveDataService.shared]，单测/Preview 用 mock。
 protocol LiveDataServiceProtocol {

@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "UserCardService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "UserCardService")
 
 /// UserCard 数据源 protocol。
 ///

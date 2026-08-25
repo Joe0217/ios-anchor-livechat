@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "AppPictureStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "AppPictureStore")
 
 /// 全局图片配置单例：跨模块共享（首页 banner / 榜单 / 挂件 / 分类贴图 等复用同一接口）。
 ///

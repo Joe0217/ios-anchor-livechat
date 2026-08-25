@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "ReportUserService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "ReportUserService")
 
 /// 用户举报数据层（H-0 补齐）。
 ///

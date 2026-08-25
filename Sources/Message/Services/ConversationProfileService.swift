@@ -20,7 +20,7 @@ final class ConversationProfileService: ConversationProfileProviderProtocol {
     let batchFetcher: BatchFetcher
     let batchSize: Int
 
-    private let logger = Logger(subsystem: "com.anchor.livechat", category: "ConversationProfileService")
+    private let logger = Logger(subsystem: "com.hilly.anchor", category: "ConversationProfileService")
 
     init(batchFetcher: @escaping BatchFetcher, batchSize: Int = 100) {
         self.batchFetcher = batchFetcher
@@ -28,7 +28,7 @@ final class ConversationProfileService: ConversationProfileProviderProtocol {
     }
 
     static let shared: ConversationProfileService = ConversationProfileService(batchFetcher: { ids in
-        let sharedLogger = Logger(subsystem: "com.anchor.livechat", category: "ConversationProfileService")
+        let sharedLogger = Logger(subsystem: "com.hilly.anchor", category: "ConversationProfileService")
         sharedLogger.info("🟣 [Profile] request yxAccIds count=\(ids.count, privacy: .public)")
         let data = try await APIClient.shared.post("/api/anchor/batchQueryYxStat", arrayBody: ids)
         sharedLogger.info("🟣 [Profile] raw response bytes=\(data.count, privacy: .public)")

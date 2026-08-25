@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "PointsRankService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "PointsRankService")
 
 /// Phase E —— 积分排行榜 API 封装。对齐 H5 [`api/pointsRank/index.ts`](../../../../Desktop/HN/anchor-livechat-h5/src/api/pointsRank/index.ts)。
 ///

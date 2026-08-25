@@ -140,7 +140,7 @@ final class MessageSessionStore: ObservableObject {
     /// 请求把旧会话或资料重新写回内存。
     private var directMessagesAccessEpoch: UInt = 0
 
-    private let logger = Logger(subsystem: "com.anchor.livechat", category: "MessageSessionStore")
+    private let logger = Logger(subsystem: "com.hilly.anchor", category: "MessageSessionStore")
 
     // MARK: - init / teardown
 

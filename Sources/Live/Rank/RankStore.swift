@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "RankStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "RankStore")
 
 /// Rank sheet 状态机（对齐 H5 girlWeeklyRank.vue 双 Tab 各自加载）
 @MainActor

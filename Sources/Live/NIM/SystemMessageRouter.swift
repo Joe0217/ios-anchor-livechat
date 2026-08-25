@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "sys-msg-router")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "sys-msg-router")
 
 /// 系统消息路由（H 里程碑 spec §3.1）。
 ///

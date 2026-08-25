@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "PKService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "PKService")
 
 /// G 里程碑 spec §4：PK 接口层。
 ///

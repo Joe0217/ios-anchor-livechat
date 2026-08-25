@@ -18,7 +18,7 @@ final class PrimeLevelService: PrimeLevelProviderProtocol {
     let batchFetcher: BatchFetcher
     let batchSize: Int
 
-    private let logger = Logger(subsystem: "com.anchor.livechat", category: "PrimeLevelService")
+    private let logger = Logger(subsystem: "com.hilly.anchor", category: "PrimeLevelService")
 
     init(batchFetcher: @escaping BatchFetcher, batchSize: Int = 50) {
         self.batchFetcher = batchFetcher
@@ -27,7 +27,7 @@ final class PrimeLevelService: PrimeLevelProviderProtocol {
 
     /// 真实生产实例：调 `/api/anchor/messageLevelLimit`。
     static let shared: PrimeLevelService = PrimeLevelService(batchFetcher: { ids in
-        let sharedLogger = Logger(subsystem: "com.anchor.livechat", category: "PrimeLevelService")
+        let sharedLogger = Logger(subsystem: "com.hilly.anchor", category: "PrimeLevelService")
         sharedLogger.info("🟣 [Prime] request yxAccId count=\(ids.count, privacy: .public)")
         let body: [String: Any] = ["yxAccId": ids]
         let data = try await APIClient.shared.post("/api/anchor/messageLevelLimit", body: body)

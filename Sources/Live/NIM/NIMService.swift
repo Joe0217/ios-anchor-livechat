@@ -76,7 +76,7 @@ final class NIMService: NSObject, ObservableObject {
     static let shared = NIMService()
 
     /// nonisolated 让 setupOnce 等非 main actor 上下文也能日志输出
-    nonisolated static let logger = Logger(subsystem: "com.anchor.livechat", category: "nim-service")
+    nonisolated static let logger = Logger(subsystem: "com.hilly.anchor", category: "nim-service")
 
     private override init() {
         super.init()

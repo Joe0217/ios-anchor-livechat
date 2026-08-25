@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "OssUploadService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "OssUploadService")
 
 /// OSS PostObject 表单直传真实现（J spec §3.2 + INV1 / Step 2）。
 ///

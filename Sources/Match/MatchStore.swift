@@ -2,7 +2,7 @@ import Combine
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "MatchStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "MatchStore")
 
 // MARK: - CallStore observer 抽象（U3：解耦 MatchStore 与具体 CallStore 类型）
 

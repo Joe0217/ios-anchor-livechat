@@ -36,7 +36,7 @@ protocol WalletServicing {
 final class WalletService: WalletServicing {
     static let shared = WalletService()
 
-    private let logger = Logger(subsystem: "com.anchor.livechat", category: "Wallet")
+    private let logger = Logger(subsystem: "com.hilly.anchor", category: "Wallet")
     private let ossUploader: WalletOSSUploader
 
     init(ossUploader: WalletOSSUploader = WalletOSSUploader()) {

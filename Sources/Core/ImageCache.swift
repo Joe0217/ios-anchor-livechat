@@ -1,7 +1,7 @@
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "ImageCache")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "ImageCache")
 
 /// 全局远端图片缓存（NSCache 内存层 + URLSession 下载）。
 ///

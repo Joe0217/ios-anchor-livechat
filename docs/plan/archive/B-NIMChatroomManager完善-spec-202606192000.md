@@ -66,7 +66,7 @@ final class NIMChatroomManager: NSObject, ObservableObject {
 
     private let complianceParser: ComplianceMessageParser
     private let giftParser: GiftMessageParser
-    private let logger = Logger(subsystem: "com.anchor.livechat", category: "Chatroom")
+    private let logger = Logger(subsystem: "com.hilly.anchor", category: "Chatroom")
 }
 ```
 

@@ -3,7 +3,7 @@ import Combine
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "PKStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "PKStore")
 
 /// G 里程碑 spec §2：直播 PK 主态状态机。
 ///

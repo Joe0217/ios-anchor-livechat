@@ -3,7 +3,7 @@ import SwiftUI
 import Combine
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "AnchorInfoStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "AnchorInfoStore")
 
 /// 主播本人信息单例：跨 view 共享 + 持久化 + Task.detached 隔离请求生命周期。
 ///

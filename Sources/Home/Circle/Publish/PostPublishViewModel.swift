@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "PostPublishVM")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "PostPublishVM")
 
 /// 朋友圈发布页 ViewModel（J spec §4 状态机）。
 ///

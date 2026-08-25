@@ -3,7 +3,7 @@ import CoreVideo
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "Agora")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "Agora")
 
 /// 声网 RTC 管理（B 里程碑 spec §7）：引擎初始化 / 加入/离开频道 / 外部视频帧推送 / 远端渲染。
 ///
@@ -621,7 +621,7 @@ extension AgoraManager: AgoraRtcEngineDelegate {
             } else {
                 let prev = self.remoteSignalLevel
                 self.remoteSignalLevel = worst
-                // 只在 level 变化时 log（避免每 2s spam）。真机验收：查 Xcode Console filter subsystem=com.anchor.livechat category=Agora
+                // 只在 level 变化时 log（避免每 2s spam）。真机验收：查 Xcode Console filter subsystem=com.hilly.anchor category=Agora
                 if prev != worst {
                     logger.info("[networkQuality] remote uid=\(uid) worst=\(worst) tx=\(txQuality.rawValue) rx=\(rxQuality.rawValue)")
                 }

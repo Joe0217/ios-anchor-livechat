@@ -11,7 +11,7 @@
 
 | 词 | 说明 |
 |---|---|
-| `Hily` | App 显示名，bundle ID `com.anchor.livechat` 绑定 |
+| `Hily` | App 显示名，bundle ID `com.hilly.anchor` 绑定 |
 
 ### 1.2 SDK 厂商名（按行业惯例保留英文）
 

@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "MatchService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "MatchService")
 
 // MARK: - 数据层 protocol
 

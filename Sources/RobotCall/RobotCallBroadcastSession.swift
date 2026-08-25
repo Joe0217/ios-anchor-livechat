@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "robot-call-broadcast")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "robot-call-broadcast")
 
 /// 机器人来电期间的本机直播推流。
 ///

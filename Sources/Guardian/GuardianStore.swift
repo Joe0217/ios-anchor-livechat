@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let guardianStoreLogger = Logger(subsystem: "com.anchor.livechat", category: "GuardianStore")
+private let guardianStoreLogger = Logger(subsystem: "com.hilly.anchor", category: "GuardianStore")
 
 /// 直播顶部守护人数。H5 在进房和本房 146 广播到达后重拉 panel，此处保持同一节奏。
 @MainActor

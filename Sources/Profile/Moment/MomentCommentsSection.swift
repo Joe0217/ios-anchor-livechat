@@ -1,7 +1,7 @@
 import SwiftUI
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "MomentCommentsSection")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "MomentCommentsSection")
 
 /// 每条 post 底部的评论列表（对齐 H5 `circle/components/comments.vue`）。
 ///

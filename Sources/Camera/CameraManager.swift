@@ -6,7 +6,7 @@ import QuartzCore
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "Camera")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "Camera")
 
 /// 相机采集管线：前置摄像头 → BGRA 帧 → 美颜处理器 → subscribers 字典分发给每个 CameraPreview（v5.8）。
 ///
@@ -46,7 +46,7 @@ final class CameraManager: NSObject, ObservableObject {
     private let latestFrameLock = NSLock()
     private var latestProcessedFrame: CVPixelBuffer?
     private var latestProcessedFrameDate: Date?
-    private let snapshotQueue = DispatchQueue(label: "com.anchor.livechat.camera.snapshot")
+    private let snapshotQueue = DispatchQueue(label: "com.hilly.anchor.camera.snapshot")
     private let snapshotContext = CIContext(options: [.cacheIntermediates: false])
 
     /// 相机错误回调（LiveRoomView 注入；转发到 LiveStore.onCameraError）
@@ -112,8 +112,8 @@ final class CameraManager: NSObject, ObservableObject {
     private var lastPushedAt: TimeInterval = 0
 
     private let videoOutput = AVCaptureVideoDataOutput()
-    private let sessionQueue = DispatchQueue(label: "com.anchor.livechat.session")
-    private let videoQueue = DispatchQueue(label: "com.anchor.livechat.video")
+    private let sessionQueue = DispatchQueue(label: "com.hilly.anchor.session")
+    private let videoQueue = DispatchQueue(label: "com.hilly.anchor.video")
     /// C 里程碑：从 `let` 改 `var` 支持前后置切换；读写严格串行到 sessionQueue（configureIfNeeded /
     /// switchCameraPosition 均在此 queue 内）。UI 层不直读本字段，通过 CallStore.isUsingFrontCamera 派生。
     private var position: AVCaptureDevice.Position = .front

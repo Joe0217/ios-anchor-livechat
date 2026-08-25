@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "WishSettingSharedStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "WishSettingSharedStore")
 
 /// LiveSettings ↔ WishSetting 跨页中转 + App 重启保留（对齐 H5 `wishStore` pinia persist paths：
 /// `wishlist / promiseType / promiseTemplateId / promiseText / ruleChecked`）。

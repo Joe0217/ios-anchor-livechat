@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "GiftCatalogCache")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "GiftCatalogCache")
 
 /// 礼物列表 + 余额 in-memory 缓存单例。
 ///

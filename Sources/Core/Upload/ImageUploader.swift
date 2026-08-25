@@ -2,7 +2,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "ImageUploader")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "ImageUploader")
 
 /// 一站式图片上传 —— 通用能力（Sources/Core/Upload/）。
 ///

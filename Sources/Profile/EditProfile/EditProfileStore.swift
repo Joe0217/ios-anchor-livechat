@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "EditProfileStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "EditProfileStore")
 
 /// 用户资料编辑页状态机（I-spec §3 · Step 1a）。
 ///

@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "FollowListService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "FollowListService")
 
 /// 关注 / 粉丝 / 朋友 列表接口（对应 H5 `apiGetFriendList`）。
 /// 接口：`POST /api/user/v2/userFriend`，参数 `{type, pageSize, currentPage}`（蓝本 08 §3.2）。

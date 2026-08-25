@@ -26,7 +26,7 @@ enum CrashReporter {
         SentrySDK.start { options in
             options.dsn = dsn.absoluteString
             options.environment = AppConfig.crashReportingEnvironment
-            options.releaseName = "com.anchor.livechat@\(AppConfig.appVersion)"
+            options.releaseName = "com.hilly.anchor@\(AppConfig.appVersion)"
             options.sendDefaultPii = false
             options.attachStacktrace = true
             options.enableAutoSessionTracking = true

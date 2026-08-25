@@ -776,7 +776,7 @@ func endLive() async {
 
 ```swift
 import os
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "Live")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "Live")
 logger.info("...")
 logger.warning("...")
 logger.error("...")
@@ -843,7 +843,7 @@ LiveStore 是**主播端业务状态的唯一收口**——NIM 消息解析层�
 | 12 | rtcToken 取数 | 抓包确认 `/api/index/getAgoraRtmToken` 调用；声网 join 用其返回（**现状已对齐，回归验证而非新功能**） | 抓包 |
 | 13 | 开播前置校验 | title/cover 空 → toast；距上次下播 <60s → toast；IM 离线 → toast | UI 各场景验证 |
 | 14 | userType=2 主播 | 进 HomeView；userType=9 进 AgentRestricted；其他进 MineRestricted | 后端切账号验证 |
-| 15 | 日志无裸 print | Console.app 过滤 `subsystem:com.anchor.livechat`，所有 Live 日志可见，无裸 print | grep `Sources/Live/` `Sources/Camera/` 等无裸 print |
+| 15 | 日志无裸 print | Console.app 过滤 `subsystem:com.hilly.anchor`，所有 Live 日志可见，无裸 print | grep `Sources/Live/` `Sources/Camera/` 等无裸 print |
 
 **全部 15 项通过**方可关闭 B 里程碑，进 D。
 

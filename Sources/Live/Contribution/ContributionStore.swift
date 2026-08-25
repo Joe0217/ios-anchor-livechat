@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "ContributionStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "ContributionStore")
 
 /// Contribution sheet 状态机（对齐 H5 liveContributionPop.vue 双 Tab + 分页）
 @MainActor

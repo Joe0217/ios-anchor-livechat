@@ -2,7 +2,7 @@ import UIKit
 import YYEVA
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "YYEVAAnimationPlayer")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "YYEVAAnimationPlayer")
 
 /// YYEVA 真封装（Task 5）—— 单实例复用，onFinish 幂等
 ///

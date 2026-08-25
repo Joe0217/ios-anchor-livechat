@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "Party.Balance")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "Party.Balance")
 
 /// 派对房余额服务 protocol（H-5 spec §2.3）—— 单独文件承载 protocol + `PartyBalanceSource` wrapper 供 HilyTests 白名单可见。
 ///

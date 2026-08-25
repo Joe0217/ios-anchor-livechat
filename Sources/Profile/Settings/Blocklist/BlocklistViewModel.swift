@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "BlocklistVM")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "BlocklistVM")
 
 /// 黑名单列表 ViewModel（spec §3 + §4.4）。
 ///

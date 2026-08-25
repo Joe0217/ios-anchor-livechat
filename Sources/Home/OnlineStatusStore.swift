@@ -3,7 +3,7 @@ import SwiftUI
 import Combine
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "online-status")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "online-status")
 
 /// 主播首页顶部状态点 + Work 悬浮开关的共享 store。
 ///

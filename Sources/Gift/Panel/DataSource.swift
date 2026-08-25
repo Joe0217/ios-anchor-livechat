@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "GiftPanel.DataSource")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "GiftPanel.DataSource")
 
 /// 礼物面板 tab（对齐 v3 `getGiftList` grouping — spec §1.5 名映射表）。
 ///

@@ -8,7 +8,7 @@ import os
 /// - token / 用户输入 / 服务端响应等敏感字段须用 `\(value, privacy: .private)` 插值（Release 显示 `<private>`）
 /// - 一律走 logger.debug/info/notice/error，禁止留下裸 `print()`
 enum AppLogger {
-    private static let subsystem = Bundle.main.bundleIdentifier ?? "com.anchor.livechat"
+    private static let subsystem = Bundle.main.bundleIdentifier ?? "com.hilly.anchor"
 
     static let net = Logger(subsystem: subsystem, category: "network")
     static let auth = Logger(subsystem: subsystem, category: "auth")

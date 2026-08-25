@@ -3,7 +3,7 @@ import UIKit
 import SVGAPlayer
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "RemoteSVGAImageView")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "RemoteSVGAImageView")
 
 /// 远端 URL SVGA 循环动画 SwiftUI 组件（对齐 H5 `head-frame.vue` 逻辑）。
 ///

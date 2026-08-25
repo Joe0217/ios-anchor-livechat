@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "LevelService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "LevelService")
 
 /// 段位接口（蓝本 09 §277）。
 enum LevelService {

@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "AudiencePK")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "AudiencePK")
 
 /// H5 客态 PK 的只读状态。它只订阅和展示，不包含主播发起、邀请、结束 PK 的写操作。
 @MainActor

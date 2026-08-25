@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "PKNIMRouter")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "PKNIMRouter")
 
 /// G 里程碑 spec §5 / M4-1：把云信 PK 自定义消息解码并路由到 `PKStore`。
 ///

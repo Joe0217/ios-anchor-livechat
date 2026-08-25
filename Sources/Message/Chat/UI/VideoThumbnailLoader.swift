@@ -3,7 +3,7 @@ import AVFoundation
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "VideoThumbnailLoader")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "VideoThumbnailLoader")
 
 /// Batch 4：视频首帧异步提取 + 内存缓存（服务于私密相册视频 cell，无独立 coverUrl 时兜底）。
 ///

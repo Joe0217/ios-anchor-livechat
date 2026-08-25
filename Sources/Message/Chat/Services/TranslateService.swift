@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "translate-service")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "translate-service")
 
 /// H-3 消息翻译服务（spec §1.3 / §4.7）。
 ///

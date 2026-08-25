@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "LotteryService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "LotteryService")
 
 /// 当前活动抽奖 API。所有端点均来自现行 H5 `api/lottery/index.js` 的真实调用，
 /// 走主 APIClient 的 AES 鉴权通道；不复用历史 Android `expand/turntableGame/*` 轮询契约。

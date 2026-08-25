@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveStreamService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "LiveStreamService")
 
 /// Live 广场数据层。
 ///

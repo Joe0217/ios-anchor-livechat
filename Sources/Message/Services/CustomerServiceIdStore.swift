@@ -41,7 +41,7 @@ final class CustomerServiceIdStore: ObservableObject, CustomerServiceIdProviderP
     /// 并发入口共享同一个请求；后来的调用会等待结果，而不是提前返回并误判客服不可用。
     private var refreshTask: Task<Void, Never>?
     private var refreshGeneration: UInt = 0
-    private let logger = Logger(subsystem: "com.anchor.livechat", category: "CustomerServiceIdStore")
+    private let logger = Logger(subsystem: "com.hilly.anchor", category: "CustomerServiceIdStore")
 
     /// 生产默认：调 `/api/im/getCustomerServiceList`。
     /// 测试通过 `init(fetcher:)` 注入 mock。

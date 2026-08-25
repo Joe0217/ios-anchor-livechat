@@ -64,7 +64,7 @@ final class LiveSettingsStore: ObservableObject {
 
     private let session: SessionStore
     private let lock: LiveSettingsLock
-    private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveSettingsStore")
+    private let logger = Logger(subsystem: "com.hilly.anchor", category: "LiveSettingsStore")
 
     init(session: SessionStore = .shared, lock: LiveSettingsLock = .shared) {
         self.session = session

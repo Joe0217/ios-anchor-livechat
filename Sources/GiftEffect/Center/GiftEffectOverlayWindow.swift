@@ -2,7 +2,7 @@ import UIKit
 import SwiftUI
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "GiftEffectWindow")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "GiftEffectWindow")
 
 /// 独立 UIWindow overlay 层管理
 ///

@@ -3,7 +3,7 @@ import Foundation
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "MatchCameraSession")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "MatchCameraSession")
 
 /// L 里程碑：匹配态独立摄像头会话（`MatchCameraSessionProtocol` 具体实现）。
 ///

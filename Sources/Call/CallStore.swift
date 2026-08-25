@@ -643,7 +643,7 @@ final class CallStore: ObservableObject {
         }
         // Apple 文档推荐用专用 queue 避免回调被其他全局任务阻塞。qos 选 .userInitiated：
         // 网络变化是用户感知事件，闭包应尽快被调度（vs .utility 偏后台）。
-        m.start(queue: DispatchQueue(label: "com.anchor.livechat.nwpath", qos: .userInitiated))
+        m.start(queue: DispatchQueue(label: "com.hilly.anchor.nwpath", qos: .userInitiated))
         nwMonitor = m
         AppLogger.rtm.debug("📶 [CallStore] NWPathMonitor 已启动")
     }

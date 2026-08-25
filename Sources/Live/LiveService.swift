@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "LiveService")
 
 /// 心跳错误（B 里程碑 spec §3.3）。
 enum HeartbeatError: Error, Equatable {

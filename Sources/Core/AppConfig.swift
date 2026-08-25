@@ -109,7 +109,7 @@ enum AppConfig {
         #if HILY_TESTS
         return TestDefaults.value(for: key)
         #else
-        let logger = Logger(subsystem: "com.anchor.livechat", category: "AppConfig")
+        let logger = Logger(subsystem: "com.hilly.anchor", category: "AppConfig")
         logger.fault("AppConfig: \(key, privacy: .public) missing from Info.plist (xcconfig not configured for this build)")
         fatalError("AppConfig: \(key) missing from Info.plist (xcconfig not configured for this build)")
         #endif

@@ -323,8 +323,8 @@ final class FaceLivenessCameraController: NSObject, AVCaptureVideoDataOutputSamp
     fileprivate var onObservation: ((FaceLivenessObservation?) -> Void)?
     var onFailure: (() -> Void)?
 
-    private let sessionQueue = DispatchQueue(label: "com.anchor.livechat.wallet.face.session")
-    private let videoQueue = DispatchQueue(label: "com.anchor.livechat.wallet.face.video")
+    private let sessionQueue = DispatchQueue(label: "com.hilly.anchor.wallet.face.session")
+    private let videoQueue = DispatchQueue(label: "com.hilly.anchor.wallet.face.video")
     private let latestFrameLock = NSLock()
     private let context = CIContext()
     private var latestPixelBuffer: CVPixelBuffer?

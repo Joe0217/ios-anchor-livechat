@@ -57,7 +57,7 @@ final class CallRecordStore: ObservableObject {
     private var currentPage: Int = 0
     private var currentTask: Task<Void, Never>?
 
-    private let logger = Logger(subsystem: "com.anchor.livechat", category: "CallRecordStore")
+    private let logger = Logger(subsystem: "com.hilly.anchor", category: "CallRecordStore")
 
     /// `nonisolated` 是为了让 SwiftUI View 的属性初始化器 / init 默认值能在非 MainActor 上下文合法构造。
     /// init 体内仅赋值 `let` 字段（pageSize/fetcher），其他 @Published/存储属性走声明处默认值（`.idle`/0/nil），

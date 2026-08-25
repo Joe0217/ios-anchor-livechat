@@ -2,7 +2,7 @@ import Combine
 import SwiftUI
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "MatchTabView")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "MatchTabView")
 
 /// L 里程碑：Match tab 页面内容。
 ///

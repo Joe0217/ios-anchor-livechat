@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "AudienceLiveRoom")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "AudienceLiveRoom")
 
 /// 客态房间状态只管理入房接口与业务状态，不承载主播 LiveStore 的心跳、相机或下播副作用。
 @MainActor

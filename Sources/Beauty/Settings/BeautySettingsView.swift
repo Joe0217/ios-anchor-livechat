@@ -2,7 +2,7 @@ import Photos
 import SwiftUI
 import os
 
-private let beautyCameraLogger = Logger(subsystem: "com.anchor.livechat", category: "BeautyCamera")
+private let beautyCameraLogger = Logger(subsystem: "com.hilly.anchor", category: "BeautyCamera")
 
 enum BeautyStudioRoute: Hashable {
     case settings

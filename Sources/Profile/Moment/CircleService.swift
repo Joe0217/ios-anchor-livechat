@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "CircleService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "CircleService")
 
 /// 数据层 protocol — Store 通过它依赖，单测/步 1c Fakes 通过 mock instance 注入。
 ///

@@ -42,7 +42,7 @@ final class WishSettingStore: ObservableObject {
     var loadingPrivate: Bool { WishSettingSharedStore.shared.loadingPrivateTemplates }
 
     private var cancellables: Set<AnyCancellable> = []
-    private let logger = Logger(subsystem: "com.anchor.livechat", category: "WishSettingStore")
+    private let logger = Logger(subsystem: "com.hilly.anchor", category: "WishSettingStore")
 
     /// H5 `wishlist-free-text.vue` / `wishSetting/index.vue` 的真实限制。
     static let themeMaxLen: Int = 15

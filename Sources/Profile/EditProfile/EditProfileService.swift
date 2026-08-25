@@ -2,7 +2,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "EditProfileService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "EditProfileService")
 
 /// 用户资料编辑页真数据层实现（I-spec §4.1 · Step 1c）。
 ///

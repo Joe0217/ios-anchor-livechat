@@ -2,7 +2,7 @@ import UIKit
 import SVGAPlayer
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "SVGAAnimationPlayer")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "SVGAAnimationPlayer")
 
 /// SVGA 真封装（Task 5）—— 单实例复用，parser 缓存，onFinish 幂等
 ///

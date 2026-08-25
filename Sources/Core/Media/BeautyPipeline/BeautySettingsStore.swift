@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "BeautySettingsStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "BeautySettingsStore")
 
 /// 美颜参数共享 Store（K spec §3 + §6.1 #3）。
 ///

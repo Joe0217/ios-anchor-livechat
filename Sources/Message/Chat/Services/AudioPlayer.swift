@@ -3,7 +3,7 @@ import Combine
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "AudioPlayer")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "AudioPlayer")
 
 /// 语音消息播放器（H-2 spec §4，对齐 H5 `msgItem.vue:262-268`）。
 ///

@@ -3,7 +3,7 @@ import Foundation
 import NIMSDK
 import os
 
-private let chatLogger = Logger(subsystem: "com.anchor.livechat", category: "NIMChatAdapter")
+private let chatLogger = Logger(subsystem: "com.hilly.anchor", category: "NIMChatAdapter")
 
 /// P2P 消息级 SDK 桥（H-2 spec §0.4 + §3.1，red team #1 补齐）。
 ///

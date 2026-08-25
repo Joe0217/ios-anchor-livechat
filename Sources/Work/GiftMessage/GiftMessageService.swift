@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "GiftMessageService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "GiftMessageService")
 
 /// 私密媒体解锁业务数据层（H-2 spec §2.3 真实现，step 1c）。
 ///

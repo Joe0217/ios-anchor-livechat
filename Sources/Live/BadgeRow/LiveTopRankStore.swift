@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveTopRank")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "LiveTopRank")
 
 /// 顶部右侧送礼榜 Top 2 单条（对齐 H5 `liveStore.topRankList[]`）
 struct TopRankItem: Identifiable, Equatable {

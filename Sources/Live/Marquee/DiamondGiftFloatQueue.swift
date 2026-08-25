@@ -289,7 +289,7 @@ final class DiamondGiftStore: ObservableObject {
             activeList = merged.sorted { $0.id < $1.id }
             activeListSetAt = requestDate
         } catch {
-            Logger(subsystem: "com.anchor.livechat", category: "DiamondGift")
+            Logger(subsystem: "com.hilly.anchor", category: "DiamondGift")
                 .warning("refresh current failed room=\(roomId, privacy: .public) error=\(String(describing: error), privacy: .private)")
         }
     }
@@ -306,7 +306,7 @@ final class DiamondGiftStore: ObservableObject {
         } catch {
             guard winnersRequestToken == requestToken else { return }
             winners = []
-            Logger(subsystem: "com.anchor.livechat", category: "DiamondGift")
+            Logger(subsystem: "com.hilly.anchor", category: "DiamondGift")
                 .warning("load winners failed gift=\(giftId, privacy: .public) error=\(String(describing: error), privacy: .private)")
         }
         guard winnersRequestToken == requestToken else { return }

@@ -3,7 +3,7 @@ import UIKit
 import UserNotifications
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "BackgroundMonitor")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "BackgroundMonitor")
 
 /// 直播态"切后台超限强制下播"监控（B 里程碑增补 spec §2）。
 ///

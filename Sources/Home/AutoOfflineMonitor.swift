@@ -4,7 +4,7 @@ import Combine
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "auto-offline")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "auto-offline")
 
 /// 长时间无操作自动置离线（对齐 H5 `App.vue` useDynamicInactivityTimer）。
 ///

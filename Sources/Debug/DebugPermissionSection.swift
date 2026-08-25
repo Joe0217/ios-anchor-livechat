@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 import os
 
-private let debugCDNUploaderLogger = Logger(subsystem: "com.anchor.livechat", category: "cdn-upload")
+private let debugCDNUploaderLogger = Logger(subsystem: "com.hilly.anchor", category: "cdn-upload")
 
 /// DEBUG-only：Settings 页里的自动账号权限模式状态 section。
 ///

@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "FeedbackService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "FeedbackService")
 
 /// 反馈提交数据层。
 ///

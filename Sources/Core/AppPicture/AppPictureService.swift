@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "AppPictureService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "AppPictureService")
 
 /// 全局图片配置数据层。
 ///

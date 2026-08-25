@@ -137,7 +137,7 @@ final class LiveStore: ObservableObject {
     /// 否则下播接口慢/失败时 LiveRoomView 仍在，摄像头会继续占用。
     private weak var camera: CameraManager?
 
-    private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveStore")
+    private let logger = Logger(subsystem: "com.hilly.anchor", category: "LiveStore")
 
     init() {}
 }

@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "InviteService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "InviteService")
 
 protocol InviteServiceProtocol {
     func fetchDashboard() async throws -> InviteDashboard

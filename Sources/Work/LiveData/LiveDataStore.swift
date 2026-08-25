@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveDataStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "LiveDataStore")
 
 /// Live Data 页视图模型。状态机 ≤5 态，切期间时保留前一次 payload
 /// 供 View 展示"内容+overlay spinner"，避免闪空态（list-refresh-preserve-items rule §A）。

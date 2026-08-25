@@ -2,7 +2,7 @@ import AVFoundation
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "CallAudioSession")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "CallAudioSession")
 
 /// C-4 Wave2 gap-critic-004：通话音频会话 + 系统电话打断集中管理。
 ///

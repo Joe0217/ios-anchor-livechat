@@ -2,7 +2,7 @@ import Combine
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "MatchPopupCoordinator")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "MatchPopupCoordinator")
 
 /// L 里程碑：10 分钟提示弹窗调度器（对齐 H5 c-goMatch.vue handleShowMatchPopup + matchPopupTimer）。
 ///

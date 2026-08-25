@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "RouletteStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "RouletteStore")
 
 /// Roulette 状态机（对齐 H5 [liveRoulettePopup.vue](H5) 完整交互）
 ///

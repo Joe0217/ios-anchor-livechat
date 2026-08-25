@@ -3,7 +3,7 @@ import Combine
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "VoiceRecorder")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "VoiceRecorder")
 
 /// 语音录制器（H-2 spec §4.3，对齐 H5 `recording.vue` 60s 自动停止）。
 ///

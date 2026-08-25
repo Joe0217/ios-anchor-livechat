@@ -6,7 +6,7 @@ import XCTest
 final class UserDefaultsBeautyPersistenceTests: XCTestCase {
 
     private var suite: UserDefaults!
-    private let suiteName = "com.anchor.livechat.tests.beauty"
+    private let suiteName = "com.hilly.anchor.tests.beauty"
 
     override func setUp() {
         super.setUp()

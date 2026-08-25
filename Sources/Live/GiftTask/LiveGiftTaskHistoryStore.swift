@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveGiftTaskHistoryStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "LiveGiftTaskHistoryStore")
 
 /// Tab1 底部送礼历史分页无限滚动 store —— sheet 内 `@StateObject`(spec §1.1)。
 ///

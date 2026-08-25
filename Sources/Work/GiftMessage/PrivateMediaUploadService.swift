@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "PrivateMediaUploadService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "PrivateMediaUploadService")
 
 /// 私密媒体 OSS 上传服务（H-2 spec §2.3 / §5.2 真实现，step 1c）。
 ///

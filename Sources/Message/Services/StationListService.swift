@@ -16,7 +16,7 @@ final class StationListService: StationListProviderProtocol {
     let fetcher: Fetcher
     private let accessGate: AccessGate
 
-    private let logger = Logger(subsystem: "com.anchor.livechat", category: "StationListService")
+    private let logger = Logger(subsystem: "com.hilly.anchor", category: "StationListService")
 
     /// 已读 stationInfo.id 存储 key（UserDefaults）
     private static let readIdUserDefaultsKey = "hily.station.lastReadId"
@@ -32,7 +32,7 @@ final class StationListService: StationListProviderProtocol {
     /// 真实生产实例：调 `/api/sysmail/loadList`（top-level array 契约）。
     static let shared: StationListService = StationListService(
         fetcher: {
-            let sharedLogger = Logger(subsystem: "com.anchor.livechat", category: "StationListService")
+            let sharedLogger = Logger(subsystem: "com.hilly.anchor", category: "StationListService")
             let body: [String: Any] = ["pageSize": 1, "currentPage": 1]
             let data = try await APIClient.shared.post("/api/sysmail/loadList", body: body)
             sharedLogger.info("🟣 [Station] raw response bytes=\(data.count, privacy: .public)")

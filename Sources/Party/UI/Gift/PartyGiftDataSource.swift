@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "Party.GiftDataSource")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "Party.GiftDataSource")
 
 /// Party 房背包礼物。库存接口来自主 API，字段类型会在不同后端版本中混发 String / Number，
 /// 因此在模型层统一归一，避免一条异常库存记录导致整个背包列表不可用。

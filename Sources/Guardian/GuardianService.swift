@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let guardianLogger = Logger(subsystem: "com.anchor.livechat", category: "GuardianService")
+private let guardianLogger = Logger(subsystem: "com.hilly.anchor", category: "GuardianService")
 
 /// 主播守护只读数据源。购买、续费和升级是用户端能力，不能通过本协议暴露。
 protocol GuardianServiceProtocol: Sendable {

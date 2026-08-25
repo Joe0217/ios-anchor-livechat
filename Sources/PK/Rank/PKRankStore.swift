@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "PKRankStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "PKRankStore")
 
 /// PK 贡献榜 sheet 状态机（对齐 H5 pkRankListPopup.vue L45-73 `fetchRankList`）。
 ///

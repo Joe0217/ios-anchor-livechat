@@ -3,7 +3,7 @@ import UIKit
 import AVFoundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "LoopingVideoView")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "LoopingVideoView")
 
 /// 远端 mp4 无缝循环背景视频 SwiftUI 组件（v4 —— code-review 修复合并版）。
 ///

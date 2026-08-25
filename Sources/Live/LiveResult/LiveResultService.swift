@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveResultService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "LiveResultService")
 
 /// 直播结果页数据层。对齐 H5 `api/live/index.ts:63 queryLiveStat`。
 ///

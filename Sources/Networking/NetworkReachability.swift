@@ -3,7 +3,7 @@ import Network
 import Combine
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "NetworkReachability")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "NetworkReachability")
 
 /// 全局网络可达性 gate。
 ///
@@ -32,7 +32,7 @@ final class NetworkReachability {
     @Published private(set) var isReachable: Bool?
 
     private let monitor: NWPathMonitor
-    private let monitorQueue = DispatchQueue(label: "com.anchor.livechat.reachability", qos: .userInitiated)
+    private let monitorQueue = DispatchQueue(label: "com.hilly.anchor.reachability", qos: .userInitiated)
 
     private struct Waiter {
         let id: UUID

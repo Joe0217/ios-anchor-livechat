@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "UserCardStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "UserCardStore")
 
 /// UserCard 状态机。
 ///

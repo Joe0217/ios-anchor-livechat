@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "GiftMarqueeService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "GiftMarqueeService")
 
 /// 首页跑马灯数据层。
 ///

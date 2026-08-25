@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveContribution")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "LiveContribution")
 
 /// 直播间钻石收益 store（对齐 H5 `liveStore.currentLiveIncome`）
 ///

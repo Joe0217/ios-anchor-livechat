@@ -3,7 +3,7 @@ import AgoraRtcKit
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "NetworkMonitor")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "NetworkMonitor")
 
 /// 网络质量分层（G 里程碑 spec §3.5）：
 /// - `normal` 正常态，无降级

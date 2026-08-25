@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "InviteStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "InviteStore")
 
 @MainActor
 final class InviteStore: ObservableObject {

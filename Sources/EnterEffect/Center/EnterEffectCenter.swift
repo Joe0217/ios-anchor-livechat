@@ -3,7 +3,7 @@ import UIKit
 import Combine
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "EnterEffectCenter")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "EnterEffectCenter")
 
 /// EnterEffect 中央 current 独立 Bridge
 ///

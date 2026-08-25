@@ -2,7 +2,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "PublicVideoUploader")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "PublicVideoUploader")
 
 /// 一站式公开可见视频上传（Sources/Core/Upload/）。
 ///

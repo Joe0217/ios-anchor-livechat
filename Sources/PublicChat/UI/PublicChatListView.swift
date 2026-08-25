@@ -1,7 +1,7 @@
 import SwiftUI
 import os
 
-private let translateLogger = Logger(subsystem: "com.anchor.livechat", category: "public-chat-translate")
+private let translateLogger = Logger(subsystem: "com.hilly.anchor", category: "public-chat-translate")
 private let publicChatScrollCoordinateSpace = "PublicChatScroll"
 
 private struct PublicChatBottomOffsetPreferenceKey: PreferenceKey {

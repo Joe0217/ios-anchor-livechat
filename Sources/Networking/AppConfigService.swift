@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "app-config")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "app-config")
 
 /// 全局配置服务（对齐 H5 `/api/index/getConfigByKey`）。
 ///

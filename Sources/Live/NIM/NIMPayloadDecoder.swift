@@ -16,7 +16,7 @@ import os
 /// 不引 `NIMSDK`，可加入 `HilyTests` target 单测验证三态。
 enum NIMPayloadDecoder {
 
-    private static let logger = Logger(subsystem: "com.anchor.livechat", category: "nim-payload")
+    private static let logger = Logger(subsystem: "com.hilly.anchor", category: "nim-payload")
 
     /// 解析 NIM `remoteExt["data"]` 字段，返回业务字典。
     ///

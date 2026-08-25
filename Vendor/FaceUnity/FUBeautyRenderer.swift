@@ -3,7 +3,7 @@ import Foundation
 import FURenderKit
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "FUBeauty")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "FUBeauty")
 
 /// 相芯美颜处理器：实现 BeautyRenderer，把相机帧交给 FUManager(OC) 渲染。
 ///

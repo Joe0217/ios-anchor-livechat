@@ -2,7 +2,7 @@ import Combine
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "GiftPanel.Store")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "GiftPanel.Store")
 
 /// 公共礼物面板 store（spec §2.1）—— 状态机 + config-driven 分派 + 数据源调用。
 ///

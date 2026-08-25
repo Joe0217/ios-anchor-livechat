@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "PartyDataStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "PartyDataStore")
 
 /// Party Data 主看板视图模型。结构镜像 [LiveDataStore]（同 4 态 + previous 保留）。
 @MainActor

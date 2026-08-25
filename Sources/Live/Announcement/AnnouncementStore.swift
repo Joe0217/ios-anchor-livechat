@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "AnnouncementStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "AnnouncementStore")
 
 /// Announcement 状态机（对齐 H5 liveAnnouncementPopup.vue）
 @MainActor

@@ -2,7 +2,7 @@ import AgoraRtcKit
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "PK")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "PK")
 
 /// G 里程碑 M0：PK 频道独立 delegate。
 ///

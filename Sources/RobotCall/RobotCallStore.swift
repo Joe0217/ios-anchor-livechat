@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "robot-call")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "robot-call")
 
 /// 机器人来电只允许在底部 Tab 的根页面展示。
 ///

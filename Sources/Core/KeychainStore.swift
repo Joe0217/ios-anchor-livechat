@@ -16,7 +16,7 @@ enum KeychainStore {
     }
 
     private static var service: String {
-        Bundle.main.bundleIdentifier ?? "com.anchor.livechat"
+        Bundle.main.bundleIdentifier ?? "com.hilly.anchor"
     }
 
     @discardableResult

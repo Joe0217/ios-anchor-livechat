@@ -13,7 +13,7 @@ final class RegisterStore: ObservableObject {
     private static let placeholderReviewVideoURL = ReviewAccountModePolicy.placeholderReviewVideoURL
     private init() {}
 
-    private let logger = Logger(subsystem: "com.anchor.livechat", category: "RegisterStore")
+    private let logger = Logger(subsystem: "com.hilly.anchor", category: "RegisterStore")
 
     // MARK: - 表单持久字段（对齐 H5 register.js formData）
 

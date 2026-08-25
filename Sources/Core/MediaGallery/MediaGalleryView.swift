@@ -509,7 +509,7 @@ private struct MediaGalleryVideoPlayer: View {
     @State private var preloadTask: Task<Void, Never>?
 
     /// A1（P2-1）：AVAudioSession 配置失败时的日志（CarPlay/AirPlay 异常 / SDK 独占等场景）
-    private static let audioLogger = Logger(subsystem: "com.anchor.livechat", category: "MediaGalleryAudio")
+    private static let audioLogger = Logger(subsystem: "com.hilly.anchor", category: "MediaGalleryAudio")
 
     /// R1：区分"view dismount"与"app 切后台"——ScenePhase=.background 时 onDisappear 也会触发。
     /// 见 [.claude/rules/swiftui-camera-preview.md](../../../.claude/rules/swiftui-camera-preview.md) §6。

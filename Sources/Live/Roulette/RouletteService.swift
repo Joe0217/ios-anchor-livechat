@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "RouletteService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "RouletteService")
 
 /// Roulette 数据源 protocol（对齐 H5 [api/roulette/index.ts](H5) 4 endpoints）
 ///

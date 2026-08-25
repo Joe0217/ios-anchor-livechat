@@ -1,6 +1,6 @@
 name: Hily
 options:
-  bundleIdPrefix: com.hifunny
+  bundleIdPrefix: com.hilly
   deploymentTarget:
     iOS: "16.0"
   createIntermediateGroups: true
@@ -73,8 +73,9 @@ targets:
     settings:
       base:
         # 必须与当前 FaceUnity authpack 申请的 Bundle ID 一致。
-        PRODUCT_BUNDLE_IDENTIFIER: com.hifunny.party
-        PRODUCT_NAME: HiFunny
+        PRODUCT_BUNDLE_IDENTIFIER: com.hilly.anchor
+        PRODUCT_NAME: HillyFun
+        TARGETED_DEVICE_FAMILY: "1" # 主 target 仅支持 iPhone，防止 XcodeGen 默认生成 iPhone+iPad
         GENERATE_INFOPLIST_FILE: NO
         # 相芯美颜：OC 桥接头 + authpack.h/FUManager.h 所在目录
         SWIFT_OBJC_BRIDGING_HEADER: Vendor/FaceUnity/Hily-Bridging-Header.h
@@ -82,7 +83,7 @@ targets:
     info:
       path: Sources/Info.plist
       properties:
-        CFBundleDisplayName: HiFunny
+        CFBundleDisplayName: HillyFun
         CFBundleShortVersionString: "1.0.0"
         CFBundleVersion: "3"
         # 提审：本 app 仅使用 iOS 内置加密（HTTPS/系统 API），无自研专有加密 → 走加密豁免（5D992）
@@ -445,7 +446,7 @@ targets:
       - path: Sources/Party/Battle/Services/PartyBattleGlobalConfigParser.swift
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.hifunny.party.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.hilly.anchor.tests
         GENERATE_INFOPLIST_FILE: YES
         # logic test bundle：无宿主 app，xcodebuild test 直接在模拟器跑
         CODE_SIGNING_ALLOWED: NO

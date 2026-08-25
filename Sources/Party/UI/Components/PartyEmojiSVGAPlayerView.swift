@@ -3,7 +3,7 @@ import UIKit
 import SVGAPlayer
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "PartyEmojiSVGA")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "PartyEmojiSVGA")
 
 /// 派对房麦位 emoji SVGA 播放层（F 里程碑 · 2026-07-17）。
 ///

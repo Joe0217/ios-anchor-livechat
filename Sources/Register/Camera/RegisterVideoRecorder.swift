@@ -42,17 +42,17 @@ final class RegisterVideoRecorder: NSObject, ObservableObject {
     // ─── audio 采集（同一 session） ───
     private var micInput: AVCaptureDeviceInput?
     private var audioOutput: AVCaptureAudioDataOutput?
-    private let audioQueue = DispatchQueue(label: "com.anchor.livechat.register.audio")
+    private let audioQueue = DispatchQueue(label: "com.hilly.anchor.register.audio")
 
     // ─── AVAssetWriter pipeline（存 nonisolated 允许 writerQueue 串行访问） ───
-    private let writerQueue = DispatchQueue(label: "com.anchor.livechat.register.writer")
+    private let writerQueue = DispatchQueue(label: "com.hilly.anchor.register.writer")
     nonisolated(unsafe) private var writerBox: WriterBox?
     nonisolated(unsafe) private var pendingOutputUrl: URL?    // startRecording 时预设，handleVideoFrame 首帧建 writer 用
 
     private var subscribeKey: ObjectIdentifier?
     private var timer: Timer?
     private let maxDuration: TimeInterval = 20.0
-    private let logger = Logger(subsystem: "com.anchor.livechat", category: "RegisterRecorder")
+    private let logger = Logger(subsystem: "com.hilly.anchor", category: "RegisterRecorder")
 
     /// Writer 相关状态整合到一个 nonisolated struct，writerQueue 串行独占访问
     private final class WriterBox: @unchecked Sendable {

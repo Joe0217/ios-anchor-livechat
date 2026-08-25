@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "GiftEffectIntake")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "GiftEffectIntake")
 
 /// 4 场景 IM 消息统一入队入口
 ///

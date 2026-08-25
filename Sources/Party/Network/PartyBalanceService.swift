@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "Party.Balance")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "Party.Balance")
 
 /// `PartyBalanceService` 默认实作 —— 走 `/sapi/weidou/v1/client/gem/getBalance`（H-5 spec §0.2 Q3 候选）。
 ///

@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "FeedbackViewModel")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "FeedbackViewModel")
 
 /// 反馈页 ViewModel（对齐 H5 `src/views/settings/feedBack/index.vue`）。
 ///

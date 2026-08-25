@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "FollowListVM")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "FollowListVM")
 
 /// FollowList 列表数据源（segment 切换 + 分页 + loading/error 状态）。
 ///

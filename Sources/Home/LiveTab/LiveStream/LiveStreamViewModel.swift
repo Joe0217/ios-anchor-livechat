@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveStreamVM")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "LiveStreamVM")
 
 /// Live 广场 ViewModel（对齐 H5 `views/home/liveList.vue`）。
 ///

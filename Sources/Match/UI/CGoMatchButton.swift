@@ -1,7 +1,7 @@
 import SwiftUI
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "CGoMatchButton")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "CGoMatchButton")
 
 /// L 里程碑：匹配开关浮动按钮（对齐 H5 `c-goMatch.vue`）。
 ///

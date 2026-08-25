@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "Party.GiftBridge")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "Party.GiftBridge")
 
 /// 派对房礼物面板 Bridge（H-5 spec §4.2）——从 `PartyStore` 派生 `ReceiversConfig`。
 ///

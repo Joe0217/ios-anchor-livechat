@@ -57,7 +57,7 @@ final class LiveResultStore: ObservableObject {
         return Self.formatHMS(seconds: Int(diffMs / 1000))
     }
 
-    private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveResultStore")
+    private let logger = Logger(subsystem: "com.hilly.anchor", category: "LiveResultStore")
 
     init(range: (begin: Int64, end: Int64)?, endType: Int?) {
         self.range = range

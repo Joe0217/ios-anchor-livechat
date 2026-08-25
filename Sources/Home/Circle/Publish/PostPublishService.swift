@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "PostPublishService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "PostPublishService")
 
 /// 朋友圈发布业务真实现（J spec §3.3）。
 ///

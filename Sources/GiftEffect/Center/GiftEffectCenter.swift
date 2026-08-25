@@ -3,7 +3,7 @@ import UIKit
 import Combine
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "GiftEffectCenter")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "GiftEffectCenter")
 
 /// 中央大动画 bridge（2026-07-10 code-review E-4 修复）：
 /// 独立发布 current，Central Layer 只订阅本 bridge，避免 microToasts 变化触发 Central re-body。

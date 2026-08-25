@@ -2,7 +2,7 @@ import Foundation
 import CryptoKit
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "URLDiskCache")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "URLDiskCache")
 
 /// 远端媒体资源磁盘缓存。
 ///

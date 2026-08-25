@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "HeartbeatController")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "HeartbeatController")
 
 /// 直播心跳控制器（B 里程碑 spec §3）。
 ///

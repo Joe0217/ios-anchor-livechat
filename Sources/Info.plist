@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>HiFunny</string>
+	<string>HillyFun</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -74,9 +74,9 @@
 		<false/>
 	</dict>
 	<key>NSCameraUsageDescription</key>
-	<string>Camera access is used for beauty previews and taking profile photos that you choose to submit.</string>
+	<string>Used for beauty previews, taking photos, live streaming, calls, and withdrawal identity verification.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Microphone access is used when you choose to speak in a Party voice room.</string>
+	<string>Used for real-time audio/video calls, live streaming, and Party voice rooms.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Allow photo access to save pictures taken with the beauty camera.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "GiftMessageStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "GiftMessageStore")
 
 /// 私密媒体解锁 Store（H-2 spec §3 状态机 + 8 不变量）。
 ///

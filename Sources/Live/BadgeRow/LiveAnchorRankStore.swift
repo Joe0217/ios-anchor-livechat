@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "LiveAnchorRank")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "LiveAnchorRank")
 
 /// 主播顶部 Rank 徽章 store（对齐 H5 `liveRoomTopAnchorRank.vue`）
 ///

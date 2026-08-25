@@ -25,7 +25,7 @@ final class FollowUserListService: FollowUserListProviderProtocol {
     private var inflightGeneration: Int?
     private var dataGeneration = 0
 
-    private let logger = Logger(subsystem: "com.anchor.livechat", category: "FollowUserListService")
+    private let logger = Logger(subsystem: "com.hilly.anchor", category: "FollowUserListService")
 
     init(fetcher: @escaping Fetcher, cacheDurationSec: TimeInterval = 24 * 60 * 60) {
         self.fetcher = fetcher
@@ -34,7 +34,7 @@ final class FollowUserListService: FollowUserListProviderProtocol {
 
     static let shared: FollowUserListService = FollowUserListService(fetcher: {
         // H5 `useFollowUserList.js:41`：只传 type，后端返全部
-        let debugLogger = Logger(subsystem: "com.anchor.livechat", category: "FollowUserListService")
+        let debugLogger = Logger(subsystem: "com.hilly.anchor", category: "FollowUserListService")
         let data = try await APIClient.shared.post("/api/user/userFriend", body: ["type": 3])
         // v4 诊断：dump raw response（用户报 followList=0 但 H5 里明显有关注）
         let raw = String(data: data, encoding: .utf8) ?? "<not-utf8>"

@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "GiftService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "GiftService")
 
 /// 礼物相关接口（对齐 H5 `src/api/gift/index.ts:10` + `stores/modules/gift.js:157-160`）。
 ///

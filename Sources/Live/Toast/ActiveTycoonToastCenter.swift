@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "ActiveTycoonToast")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "ActiveTycoonToast")
 
 /// 活跃大 R 进房 Toast 中心 · 对齐 H5 §9.6 `handleActiveTycoonEnterToast`（live.js:713–739）。
 ///

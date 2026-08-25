@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "TaskCenterService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "TaskCenterService")
 
 /// Phase C —— 任务中心页 API 封装。对齐 H5 [`api/taskCenter/index.ts`](../../../../Desktop/HN/anchor-livechat-h5/src/api/taskCenter/index.ts) 与
 /// `/api/ranking/anchorRanking` 的 method + path 字面

@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "GiftMarqueeStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "GiftMarqueeStore")
 
 /// 首页跑马灯 store。
 ///

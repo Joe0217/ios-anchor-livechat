@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "ProfileService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "ProfileService")
 
 /// 主播个人中心相关接口（对应 H5 src/api/anchor + src/api/user）。
 /// 请求头里的 loginToken 由 APIClient 自动附带。

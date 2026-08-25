@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "UserProfileVM")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "UserProfileVM")
 
 /// 用户详情页 ViewModel（spec §3 全部 7 条不变量）。
 ///

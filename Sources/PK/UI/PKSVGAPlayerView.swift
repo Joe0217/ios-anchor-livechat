@@ -3,7 +3,7 @@ import UIKit
 import SVGAPlayer
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "PKSVGAPlayerView")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "PKSVGAPlayerView")
 
 /// PK 场景 SVGA 动画 SwiftUI 包装（CDN-only）。
 ///

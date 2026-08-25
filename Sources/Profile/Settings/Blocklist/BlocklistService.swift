@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "BlocklistService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "BlocklistService")
 
 /// 黑名单数据层（spec §4.1）。
 ///

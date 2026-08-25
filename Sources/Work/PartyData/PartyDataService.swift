@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "PartyDataService")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "PartyDataService")
 
 protocol PartyDataServiceProtocol {
     /// 主看板：`POST /api/anchor/party/data/board`（安卓 `HttpHelper.kt`:669）

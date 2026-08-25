@@ -1,7 +1,7 @@
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "MomentFeedStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "MomentFeedStore")
 
 /// Circle Moment 子 tab 的状态机 (A-spec §3.3)。
 ///

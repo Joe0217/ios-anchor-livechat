@@ -3,7 +3,7 @@ import Foundation
 import NIMSDK
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "GlobalP2PMessageObserver")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "GlobalP2PMessageObserver")
 
 /// 全局 P2P 自定义消息 observer（对齐 H5 `message.js:186-232` + `handleUserRechargeNotification`）。
 ///

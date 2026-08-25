@@ -2,7 +2,7 @@ import Combine
 import Foundation
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "LotteryStore")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "LotteryStore")
 
 /// 原生活动抽奖状态。中奖结果由 `userLottery` 同步返回，动画只负责展示，绝不轮询或重复提交。
 @MainActor

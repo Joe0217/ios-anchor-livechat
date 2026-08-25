@@ -2,7 +2,7 @@ import Foundation
 import Combine
 import os
 
-private let logger = Logger(subsystem: "com.anchor.livechat", category: "reply-points-store")
+private let logger = Logger(subsystem: "com.hilly.anchor", category: "reply-points-store")
 
 /// H-3 回复积分状态机（spec §2.3 / §4.4-4.6）。
 ///
