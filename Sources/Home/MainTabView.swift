@@ -250,6 +250,30 @@ struct MainTabView: View {
             // E-spec §0.2 F-16：Party 主 tab gate（大厅根页 + 子页都抑制 match tip 弹窗）
             matchPopupCoordinator.updatePartyTabBlocked(newValue == .party)
         }
+        // NavigationPath is the single source of truth for push/pop transitions in every tab.
+        // Tracking the depth change here covers all destinations (including routes added later)
+        // without adding fragile instrumentation to each individual screen.
+        .onChange(of: homePath.count) { newValue in
+            trackPageTransition(tab: .home, to: newValue)
+        }
+        .onChange(of: workPath.count) { newValue in
+            trackPageTransition(tab: .work, to: newValue)
+        }
+        .onChange(of: messagesPath.count) { newValue in
+            trackPageTransition(tab: .messages, to: newValue)
+        }
+        .onChange(of: connectionsPath.count) { newValue in
+            trackPageTransition(tab: .connections, to: newValue)
+        }
+        .onChange(of: beautyPath.count) { newValue in
+            trackPageTransition(tab: .beauty, to: newValue)
+        }
+        .onChange(of: partyPath.count) { newValue in
+            trackPageTransition(tab: .party, to: newValue)
+        }
+        .onChange(of: profilePath.count) { newValue in
+            trackPageTransition(tab: .profile, to: newValue)
+        }
         .onReceive(NotificationCenter.default.publisher(for: .inviteChatRequested)) { notification in
             guard let yxAccid = notification.userInfo?["yxAccid"] as? String,
                   !yxAccid.isEmpty else { return }
@@ -964,6 +988,16 @@ struct MainTabView: View {
         case .profile: break
         }
         selection = fallbackVisibleTab()
+    }
+
+    private func trackPageTransition(tab: MainTab, to newDepth: Int) {
+        // Clearing paths on a tab switch is state cleanup, not a user-visible
+        // page transition; only report changes in the currently visible tab.
+        guard selection == tab else { return }
+        AnalyticsTracker.trackBehavior("页面切换", properties: [
+            "page_name": tab.analyticsName,
+            "navigation_depth": newDepth
+        ])
     }
 
     private func fallbackVisibleTab() -> MainTab {

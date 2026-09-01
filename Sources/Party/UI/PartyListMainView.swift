@@ -687,13 +687,13 @@ struct PartyListMainView: View {
         guard permission.canPartyActivities,
               isPartyTabActive, activeTab == 0,
               exposedBannerIDs.insert(banner.id).inserted else { return }
-        PartyAnalytics.track("b_banner_party_view", properties: bannerTrackingProperties(banner))
-        PartyAnalytics.track("b_activity_view", properties: activityTrackingProperties(banner))
+        PartyAnalytics.track("h_banner_party_view", properties: bannerTrackingProperties(banner))
+        PartyAnalytics.track("h_activity_view", properties: activityTrackingProperties(banner))
     }
 
     private func reportBannerClick(_ banner: PartyHomeBanner) {
-        PartyAnalytics.track("b_banner_party_click", properties: bannerTrackingProperties(banner))
-        PartyAnalytics.track("b_activity_click", properties: activityTrackingProperties(banner))
+        PartyAnalytics.track("h_banner_party_click", properties: bannerTrackingProperties(banner))
+        PartyAnalytics.track("h_activity_click", properties: activityTrackingProperties(banner))
     }
 
     private func bannerTrackingProperties(_ banner: PartyHomeBanner) -> [String: Any] {

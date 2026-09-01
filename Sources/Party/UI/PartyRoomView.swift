@@ -1642,12 +1642,12 @@ struct PartyRoomView: View {
             },
             onQuickPhraseTap: sendQuickPhrase,
             onQuickPhrasesClose: {
-                quickPhrases.forEach { trackQuickPhrase("b_quick_msg_item_close", phrase: $0) }
+                quickPhrases.forEach { trackQuickPhrase("h_quick_msg_item_close", phrase: $0) }
                 areQuickPhrasesDismissed = true
             },
             onQuickPhraseSlide: { direction in
                 PartyAnalytics.track(
-                    "b_quick_msg_list_slide",
+                    "h_quick_msg_list_slide",
                     properties: quickPhraseTrackingProperties(["slide_direction": direction])
                 )
             }
@@ -1736,7 +1736,7 @@ struct PartyRoomView: View {
         properties["user_identity"] = UserTypeExperience.hasFullHostRealtimeCapability(
             SelfPermissionBridge.shared.effectiveUserTypeSnapshot
         ) ? "Anchor" : "User"
-        PartyAnalytics.track("b_video_invite_show", properties: properties)
+        PartyAnalytics.track("h_video_invite_show", properties: properties)
     }
 
     private func trackVideoInviteAction(_ action: String) {
@@ -1753,7 +1753,7 @@ struct PartyRoomView: View {
         properties["seat_index"] = invite.seatIndex
         properties["action"] = action
         properties["decision_ms"] = max(0, Int((Date().timeIntervalSince(videoInviteShownAt ?? Date())) * 1_000))
-        PartyAnalytics.track("b_video_invite_action", properties: properties)
+        PartyAnalytics.track("h_video_invite_action", properties: properties)
     }
 
     private func handleVideoSeatInviteResult(_ result: PartyVideoSeatInviteResult?) {
@@ -2016,7 +2016,7 @@ struct PartyRoomView: View {
             SelfPermissionBridge.shared.effectiveUserTypeSnapshot
         ) ? "Anchor" : "User"
         properties["blocked_count_in_session"] = videoSeatBlockedCount
-        PartyAnalytics.track("b_video_seat_blocked", properties: properties)
+        PartyAnalytics.track("h_video_seat_blocked", properties: properties)
     }
 
     // MARK: - v15 UserCard sheet(sheet 化后 helper computed 已删,挂载走 §.userCardSheet 一行 modifier)
@@ -2191,7 +2191,7 @@ struct PartyRoomView: View {
             areQuickPhrasesDismissed = false
             let trackingRoomID = store.roomInfo?.id ?? roomId
             if !quickPhrases.isEmpty, quickPhraseImpressionRoomID != trackingRoomID {
-                quickPhrases.forEach { trackQuickPhrase("b_quick_phrase_impression", phrase: $0) }
+                quickPhrases.forEach { trackQuickPhrase("h_quick_phrase_impression", phrase: $0) }
                 quickPhraseImpressionRoomID = trackingRoomID
             }
         } catch {
@@ -2204,7 +2204,7 @@ struct PartyRoomView: View {
     private func sendQuickPhrase(_ phrase: PartyQuickPhrase) {
         let content = phrase.content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty, store.roomState == .joined else { return }
-        trackQuickPhrase("b_quick_msg_item_click", phrase: phrase)
+        trackQuickPhrase("h_quick_msg_item_click", phrase: phrase)
         guard store.chat.sendText(content) else {
             AppToastCenter.shared.show(L10n.objectionableContentRejected)
             return
@@ -2267,7 +2267,7 @@ struct PartyRoomView: View {
         guard let userId, !userId.isEmpty,
               userId != String(SessionStore.shared.user?.userId ?? 0) else { return }
         PartyAnalytics.track(
-            "b_party_card_popup_show",
+            "h_party_card_popup_show",
             properties: [
                 "card_type": userCardPreview?.userType == 2 ? "anchor" : "user",
                 "target_uid": userId,
@@ -2278,7 +2278,7 @@ struct PartyRoomView: View {
 
     private func trackPartyUserCardChat(userId: String) {
         PartyAnalytics.track(
-            "b_party_card_chat_click",
+            "h_party_card_chat_click",
             properties: [
                 "target_uid": userId,
                 "msg": "Party房主播信息弹窗点击 chat 按钮",
@@ -2291,7 +2291,7 @@ struct PartyRoomView: View {
     private func handleCornerBannerTap(_ banner: PartyCornerBanner) {
         guard SelfPermissionBridge.shared.gate(.partyActivities, action: "partyCornerBanner") else { return }
         guard let rawURL = banner.directUrl, let url = URL(string: rawURL) else { return }
-        PartyAnalytics.track("b_activity_click", properties: cornerBannerActivityProperties(banner))
+        PartyAnalytics.track("h_activity_click", properties: cornerBannerActivityProperties(banner))
         presentActivityURL(url)
     }
 
@@ -2300,13 +2300,13 @@ struct PartyRoomView: View {
     private func handlePartyBannerTap(_ banner: PartyRoomBanner) {
         guard SelfPermissionBridge.shared.gate(.partyActivities, action: "partyRoomBanner") else { return }
         guard let rawURL = banner.directUrl, let url = URL(string: rawURL) else { return }
-        PartyAnalytics.track("b_activity_click", properties: partyBannerActivityProperties(banner))
+        PartyAnalytics.track("h_activity_click", properties: partyBannerActivityProperties(banner))
         presentActivityURL(url)
     }
 
     private func reportPartyBannerView(_ banner: PartyRoomBanner) {
         guard permission.canPartyActivities else { return }
-        PartyAnalytics.track("b_activity_view", properties: partyBannerActivityProperties(banner))
+        PartyAnalytics.track("h_activity_view", properties: partyBannerActivityProperties(banner))
     }
 
     private func partyBannerActivityProperties(_ banner: PartyRoomBanner) -> [String: Any] {
@@ -2342,7 +2342,7 @@ struct PartyRoomView: View {
               !cornerBannerTrackingKey.isEmpty,
               reportedCornerBannerKey != cornerBannerTrackingKey else { return }
         reportedCornerBannerKey = cornerBannerTrackingKey
-        PartyAnalytics.track("b_activity_view", properties: cornerBannerActivityProperties(banner))
+        PartyAnalytics.track("h_activity_view", properties: cornerBannerActivityProperties(banner))
     }
 
     private func cornerBannerActivityProperties(_ banner: PartyCornerBanner) -> [String: Any] {
@@ -2820,7 +2820,7 @@ struct PartyRoomView: View {
     /// H5 `party-tool-menu.vue` 聚合工具面板入口。
     private func handleToolMenuTap() {
         PartyAnalytics.track(
-            "b_party_menu_click",
+            "h_party_menu_click",
             properties: roomAnalyticsProperties()
         )
         showToolMenu = true
@@ -3314,11 +3314,11 @@ struct PartyRoomView: View {
                     onOpenLuckyNumberSettings: {
                         guard SelfPermissionBridge.shared.gate(.partyLuckyNumber, action: "partyLuckyNumberMenu") else { return }
                         PartyAnalytics.track(
-                            "b_lucky_number_view",
+                            "h_lucky_number_view",
                             properties: roomAnalyticsProperties()
                         )
                         PartyAnalytics.track(
-                            "b_lucky_number_setting_click",
+                            "h_lucky_number_setting_click",
                             properties: roomAnalyticsProperties()
                         )
                         pendingToolMenuPresentation = .luckyNumberSettings

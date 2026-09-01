@@ -980,7 +980,7 @@ extension PartyBattleStore {
             )
             properties["hostid"] = info?.ownerId ?? ""
             properties["pk_id"] = pkId
-            PartyAnalytics.track("b_battle_team_start", properties: properties)
+            PartyAnalytics.track("h_battle_team_start", properties: properties)
         }
 
         // 安卓端在 NIM 驱动状态变更后会 forceRefresh；1103 本身不保证携带完整 team/top3 快照。

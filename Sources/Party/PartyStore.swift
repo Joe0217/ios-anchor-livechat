@@ -533,7 +533,7 @@ final class PartyStore: ObservableObject {
         properties["path"] = path
         properties["result"] = "success"
         properties["seat_num"] = seat.seatIndex ?? -1
-        PartyAnalytics.track(seat.isVideoSeat ? "party_video_click" : "party_voice_click", properties: properties)
+        PartyAnalytics.track(seat.isVideoSeat ? "h_party_video_click" : "h_party_voice_click", properties: properties)
     }
 
     private func trackSelfMicLeave(_ seat: PartyRoomSeat, reason: String) {
@@ -557,7 +557,7 @@ final class PartyStore: ObservableObject {
         properties["reason"] = reason
         properties["duration"] = duration
         properties["seat_num"] = seat.seatIndex ?? -1
-        PartyAnalytics.track(seat.isVideoSeat ? "party_video_leave" : "party_voice_leave", properties: properties)
+        PartyAnalytics.track(seat.isVideoSeat ? "h_party_video_leave" : "h_party_voice_leave", properties: properties)
     }
 
     private init() {
@@ -1077,9 +1077,9 @@ final class PartyStore: ObservableObject {
             "seatIndex": seatIndex,
             "isTopX": true,
         ]
-        PartyAnalytics.track("partyRoomLeave", properties: properties)
+        PartyAnalytics.track("h_party_voice_leave", properties: properties)
         if wasOnVideoSeat {
-            PartyAnalytics.track("partyRoomVideoLeave", properties: properties)
+            PartyAnalytics.track("h_party_video_leave", properties: properties)
         }
     }
 
@@ -1096,7 +1096,7 @@ final class PartyStore: ObservableObject {
         properties["duration"] = max(0, Int(Date().timeIntervalSince(joinedAt)))
         properties["Gems"] = info.gemsTotal ?? 0
         properties["reason"] = reason
-        PartyAnalytics.track("partyRoom_leave", properties: properties)
+        PartyAnalytics.track("h_party_room_leave", properties: properties)
 
         if let status = PartyBattleStore.shared.state?.status,
            status == .selecting || status == .running {
@@ -1351,7 +1351,7 @@ final class PartyStore: ObservableObject {
             properties["resultKey"] = payloadData["resultKey"] as? String ?? ""
         }
         PartyAnalytics.track(
-            item.isPlayEmoji ? "b_playEmoji_success" : "b_sentEmoji_success",
+            item.isPlayEmoji ? "h_playEmoji_success" : "h_sentEmoji_success",
             properties: properties
         )
         AppLogger.party.info("[PartyStore] sendEmoji ok attachType=\(attachType, privacy: .public) emojiId=\(item.id, privacy: .public) isPlay=\(item.isPlayEmoji, privacy: .public)")
@@ -1524,7 +1524,7 @@ final class PartyStore: ObservableObject {
             properties["roomID"] = roomId
             properties["type"] = selfRole == .owner ? "roomOwner" : "roomAdmin"
             properties["isPlatformAdmin"] = roomInfo?.isPlatformAdmin == true
-            PartyAnalytics.track("b_party_singlemsg_delete", properties: properties)
+            PartyAnalytics.track("h_party_singlemsg_delete", properties: properties)
             return true
         } catch {
             AppLogger.party.error("[PartyStore] deletePartyMessage failed: \(String(describing: error), privacy: .private)")
@@ -1805,7 +1805,7 @@ final class PartyStore: ObservableObject {
             roomTempId: info.roomTempId
         )
         properties["seat_num"] = seatIndex
-        let event = mute ? "mute_Mic" : "Unmute_Mic"
+        let event = mute ? "h_mute_Mic" : "h_Unmute_Mic"
         do {
             try await PartyAPI.prohibitSeat(
                 roomId: info.id ?? "",
@@ -1897,6 +1897,11 @@ final class PartyStore: ObservableObject {
                     roomTempId: info.roomTempIdInt
                 )
                 videoSeatInviteCooldowns[candidate.userId] = Date().addingTimeInterval(30)
+                var properties = PartyAnalytics.roomProperties(roomId: info.id, ownerId: info.ownerId, roomTempId: info.roomTempId)
+                properties["host_id"] = SessionStore.shared.user?.userId ?? 0
+                properties["invitee_id"] = candidate.userId
+                properties["seat_index"] = seatIndex
+                PartyAnalytics.track("h_video_invite_send", properties: properties)
             } else {
                 try await PartyAPI.holdSeat(
                     roomId: info.id ?? "",
@@ -1980,7 +1985,7 @@ final class PartyStore: ObservableObject {
             )
             properties["admin_id"] = userId
             properties["admin_role"] = targetUserType == 2 ? "host" : "user"
-            PartyAnalytics.track(add ? "b_setAdmin_success" : "b_removeAdmin_success", properties: properties)
+            PartyAnalytics.track(add ? "h_setAdmin_success" : "h_removeAdmin_success", properties: properties)
             return true
         } catch let api as PartyAPIError {
             lastError = PartyRoomErrorMapper.map(api)
@@ -2016,7 +2021,7 @@ final class PartyStore: ObservableObject {
             )
             properties["kick_userid"] = targetUserId
             properties["kick_type"] = banType == 2 ? "permanent" : "temporary"
-            PartyAnalytics.track("b_kick_success", properties: properties)
+            PartyAnalytics.track("h_kick_success", properties: properties)
         } catch let api as PartyAPIError {
             lastError = PartyRoomErrorMapper.map(api)
         } catch {
@@ -2041,7 +2046,7 @@ final class PartyStore: ObservableObject {
             roomTempId: info.roomTempId
         )
         properties["seat_num"] = seatIndex
-        let event = lock ? "lock_Mic" : "Unlock_Mic"
+        let event = lock ? "h_lock_Mic" : "h_Unlock_Mic"
         do {
             try await PartyAPI.lockSeat(
                 roomId: info.id ?? "",
@@ -2100,7 +2105,7 @@ final class PartyStore: ObservableObject {
         )
         properties["Operation"] = enable ? "turnon" : "turnoff"
         // 对齐 H5：这是已生效的本地用户点击，不以异步接口成功与否定义点击漏斗。
-        PartyAnalytics.track(type == 1 ? "microphone_click" : "camera_click", properties: properties)
+        PartyAnalytics.track(type == 1 ? "h_microphone_click" : "h_camera_click", properties: properties)
         do {
             try await PartyAPI.updateMedia(
                 roomId: info.id ?? "",
@@ -2176,7 +2181,7 @@ final class PartyStore: ObservableObject {
         properties["seat_index"] = invite.seatIndex
         properties["camera_status"] = status
         properties["from_invite"] = true
-        PartyAnalytics.track("b_video_camera_auto_on", properties: properties)
+        PartyAnalytics.track("h_video_camera_auto_on", properties: properties)
     }
 
     /// 拒绝视频位邀请：调 `seat/respondInvite(action=2)`。
@@ -2687,7 +2692,7 @@ final class PartyStore: ObservableObject {
                 ownerId: info.ownerId,
                 roomTempId: String(tempId)
             )
-            PartyAnalytics.track("b_changeMode", properties: properties)
+            PartyAnalytics.track("h_changeMode", properties: properties)
             // 房主本地兜底：不等 IM 回执，立即触发 handleRoomModeChanged
             handleRoomModeChanged(newTempId: tempId, seats: nil, cause: .local)
         } catch {
@@ -2870,7 +2875,7 @@ final class PartyStore: ObservableObject {
                 roomTempId: info.roomTempId
             )
             properties["seat_num"] = seatIndex
-            PartyAnalytics.track("b_applySeat", properties: properties)
+            PartyAnalytics.track("h_applySeat", properties: properties)
             startApplyingTimeoutTask()
         } catch let api as PartyAPIError {
             if pendingMicEntry?.id == pendingEntry.id { pendingMicEntry = nil }
@@ -2908,7 +2913,7 @@ final class PartyStore: ObservableObject {
             applyingTimeoutTask = nil
             AppLogger.party.info("[PartyStore] cancelMyMicApplication ok")
             PartyAnalytics.track(
-                "b_applySeat_cancel",
+                "h_applySeat_cancel",
                 properties: PartyAnalytics.roomProperties(
                     roomId: info.id,
                     ownerId: info.ownerId,
@@ -3049,7 +3054,7 @@ final class PartyStore: ObservableObject {
             roomInfo = info.withUpdated(onSeatApplySwitch: enable)
             AppLogger.party.info("[PartyStore] updateOnSeatEnable ok enable=\(enable, privacy: .public)")
             PartyAnalytics.track(
-                enable ? "b_applySeat_open" : "b_applySeat_close",
+                enable ? "h_applySeat_open" : "h_applySeat_close",
                 properties: PartyAnalytics.roomProperties(
                     roomId: info.id,
                     ownerId: info.ownerId,
@@ -3655,7 +3660,7 @@ final class PartyStore: ObservableObject {
             roomTempId: info.roomTempId
         )
         properties["result"] = result
-        PartyAnalytics.track("lockRoom_setting", properties: properties)
+        PartyAnalytics.track("h_lockRoom_setting", properties: properties)
     }
 
     // MARK: - Room Mute (F 期便利功能, 2026-07-17)
@@ -4536,6 +4541,11 @@ extension PartyStore: PartyRoomChatManagerDelegate {
             return
         }
         lastInviteResult = result
+        var inviteProperties = PartyAnalytics.roomProperties(roomId: roomInfo?.id, ownerId: roomInfo?.ownerId, roomTempId: roomInfo?.roomTempId)
+        inviteProperties["host_id"] = SessionStore.shared.user?.userId ?? 0
+        inviteProperties["invitee_id"] = result.targetUserId ?? ""
+        inviteProperties["result"] = String(describing: result.kind)
+        PartyAnalytics.track("h_video_invite_result", properties: inviteProperties)
         if let targetUserId = result.targetUserId {
             videoSeatInviteCooldowns.removeValue(forKey: targetUserId)
         }

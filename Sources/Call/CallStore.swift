@@ -1228,6 +1228,7 @@ final class CallStore: ObservableObject {
 
         // 4) 接通率上报（被叫 answered）
         await reportRate(category: .answered, type: .callee, answerTime: info.sinceStartDuration, abnormal: 0)
+        AnalyticsTracker.trackBehavior("通话接听", properties: ["source": current.frontGameType.rawValue])
     }
 
     /// 被叫拒绝通话。
@@ -1237,6 +1238,7 @@ final class CallStore: ObservableObject {
         AppSoundPlayer.shared.stopIncomingCallRingtone()
         _ = await signaling.publish(buildMessage(action: .reject))
         sendCallNimSignal(.reject)
+        AnalyticsTracker.trackBehavior("通话拒绝", properties: ["source": current.frontGameType.rawValue])
         // H5 callInCancel L1119/1129：被叫主动拒接桶 answerTime=0
         await endLocally(reason: .localHangUp, rateCategory: .rejected, rateType: .callee, answerTime: 0, abnormal: 0)
     }
@@ -1257,6 +1259,7 @@ final class CallStore: ObservableObject {
             _ = await signaling.publish(buildMessage(action: .hangup))
         }
         sendCallNimSignal(.hangUp)
+        AnalyticsTracker.trackBehavior("通话挂断", properties: ["source": current.frontGameType.rawValue])
         await endLocally(reason: .localHangUp, rateCategory: nil, rateType: .caller, answerTime: 0, abnormal: 0)
     }
 

@@ -321,16 +321,16 @@ final class PartySuperWheelStore: ObservableObject {
         defer { isPerformingAction = false }
         do {
             try await PartyAPI.joinSuperWheel(roundId: wheelState.roundId)
-            PartyAnalytics.track("b_wheel_fill_click", properties: trackingProperties)
+            PartyAnalytics.track("h_wheel_fill_click", properties: trackingProperties)
             await loadState(roomId: wheelState.roomId, presentWhenActive: false)
             var resultProperties = trackingProperties
             resultProperties["state"] = "success"
-            PartyAnalytics.track("b_wheel_join_click", properties: resultProperties)
+            PartyAnalytics.track("h_wheel_join_click", properties: resultProperties)
         } catch {
             var resultProperties = trackingProperties
             resultProperties["state"] = "fail"
             resultProperties["reason"] = superWheelJoinFailureReason(error)
-            PartyAnalytics.track("b_wheel_join_click", properties: resultProperties)
+            PartyAnalytics.track("h_wheel_join_click", properties: resultProperties)
             AppLogger.party.notice("[SuperWheel] join failed: \(String(describing: error), privacy: .private)")
             AppToastCenter.shared.show(L10n.PartyRoom.superWheelActionFailed)
         }

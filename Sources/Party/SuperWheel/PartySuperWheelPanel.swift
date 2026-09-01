@@ -468,6 +468,6 @@ struct PartySuperWheelPanel: View {
         reportedFinalRoundID = state.roundId
         var properties = PartyAnalytics.roomProperties(roomId: state.roomId, ownerId: state.hostId)
         properties["dia"] = state.entryFee
-        PartyAnalytics.track("b_wheel_result_view", properties: properties)
+        PartyAnalytics.track("h_wheel_result_view", properties: properties)
     }
 }

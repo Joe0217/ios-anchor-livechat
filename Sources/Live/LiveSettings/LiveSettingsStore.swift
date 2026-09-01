@@ -195,6 +195,7 @@ final class LiveSettingsStore: ObservableObject {
                 promiseTemplateId: wishShared.promiseTemplateId == 0 ? nil : wishShared.promiseTemplateId,
                 promiseText: wishShared.promiseText.isEmpty ? nil : wishShared.promiseText
             )
+            AnalyticsTracker.trackBehavior("开播成功", properties: ["live_id": info.id ?? ""])
             guard let ch = info.agoraChannelId, !ch.isEmpty,
                   let tk = info.rtcToken, !tk.isEmpty else {
                 showErrorAndDismiss(L10n.livePrepareErrorNoChannel)

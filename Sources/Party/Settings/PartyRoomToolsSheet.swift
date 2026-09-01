@@ -782,7 +782,7 @@ final class PartyLuckyNumberStore: ObservableObject {
         defer { isGenerating = false }
         // 对齐 H5：用户有效点击即入队，不等待生成接口成功，且不阻塞请求。
         PartyAnalytics.track(
-            "b_lucky_number_click",
+            "h_lucky_number_click",
             properties: trackingProperties(roomId: roomId, hostId: hostId)
         )
         do {

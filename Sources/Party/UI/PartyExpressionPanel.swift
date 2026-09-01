@@ -38,7 +38,7 @@ struct PartyExpressionPanel: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .task {
             PartyAnalytics.track(
-                "b_emoji_panel_open",
+                "h_emoji_panel_open",
                 properties: PartyAnalytics.roomProperties(
                     roomId: store.roomInfo?.id,
                     ownerId: store.roomInfo?.ownerId,
@@ -228,7 +228,7 @@ struct PartyExpressionPanel: View {
             showToast(L10n.PartyRoom.emojiPlayError)
             return
         }
-        PartyAnalytics.track("b_emoji_mic_play", properties: ["emoji": item.id])
+        PartyAnalytics.track("h_emoji_mic_play", properties: ["emoji": item.id])
         store.sendEmoji(item)
         // 点选后即时关闭 sheet（对齐 H5 party-expression-popup.vue L98 close popup）
         dismiss()
@@ -253,7 +253,7 @@ struct PartyExpressionPanel: View {
             selectedClassIndex = index
         }
         PartyAnalytics.track(
-            "b_emoji_tab_switch",
+            "h_emoji_tab_switch",
             properties: [
                 "tabname": name,
                 "tabIndex": index,

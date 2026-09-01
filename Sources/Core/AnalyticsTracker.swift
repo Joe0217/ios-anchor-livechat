@@ -61,6 +61,16 @@ enum AnalyticsTracker {
             normalizedProperties["app_name"] = "HillyFun"
         }
         TDAnalytics.track(normalizedEvent, properties: normalizedProperties)
+        let mirrorsToBehavior = normalizedEvent == "partyRoom_enter"
+            || normalizedEvent.hasPrefix("h_party_video_")
+            || normalizedEvent.hasPrefix("h_party_voice_")
+            || normalizedEvent == "h_party_room_leave"
+        if mirrorsToBehavior {
+            var behaviorProperties = normalizedProperties
+            behaviorProperties["behavior_name"] = normalizedEvent
+            behaviorProperties["app_name"] = "HillyFun"
+            TDAnalytics.track("hifunny_log", properties: behaviorProperties)
+        }
         if immediately {
             TDAnalytics.flush()
         }
