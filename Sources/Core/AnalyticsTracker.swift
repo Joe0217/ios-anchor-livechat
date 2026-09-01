@@ -22,15 +22,14 @@ enum AnalyticsTracker {
             return
         }
 
-        // Keep SDK diagnostics enabled so release/TestFlight logs can confirm
-        // initialization and delivery without exposing credentials or payloads.
+        #if DEBUG
         TDAnalytics.enableLog(true)
+        #endif
         TDAnalytics.start(withAppId: config.appId, serverUrl: config.serverURL)
         TDAnalytics.setSuperProperties(["#app_version": AppConfig.appVersion])
         started = true
         track("hifunny_log", properties: [:], immediately: true)
         TDAnalytics.flush()
-        AppLogger.net.info("[Analytics] ThinkingData started; startup event=c_log flushed")
     }
 
     static func login(userId: Int?) {
@@ -51,7 +50,6 @@ enum AnalyticsTracker {
                       immediately: Bool = true) {
         start()
         guard isStarted else {
-            AppLogger.net.warning("[Analytics] dropped event=\(event, privacy: .public); SDK is not started")
             return
         }
         var normalizedProperties = properties
@@ -62,12 +60,9 @@ enum AnalyticsTracker {
         if normalizedEvent == "hifunny_log" {
             normalizedProperties["app_name"] = "HillyFun"
         }
-        let propertyNames = normalizedProperties.keys.sorted().joined(separator: ",")
-        AppLogger.net.info("[Analytics] track event=\(normalizedEvent, privacy: .public) properties=\(propertyNames, privacy: .public) immediate=\(immediately, privacy: .public)")
         TDAnalytics.track(normalizedEvent, properties: normalizedProperties)
         if immediately {
             TDAnalytics.flush()
-            AppLogger.net.info("[Analytics] flush event=\(normalizedEvent, privacy: .public)")
         }
     }
 
