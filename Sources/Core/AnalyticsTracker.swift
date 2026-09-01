@@ -28,7 +28,7 @@ enum AnalyticsTracker {
         TDAnalytics.start(withAppId: config.appId, serverUrl: config.serverURL)
         TDAnalytics.setSuperProperties(["#app_version": AppConfig.appVersion])
         started = true
-        TDAnalytics.track("c_log", properties: ["type": "hifunny"])
+        track("hifunny_log", properties: [:], immediately: true)
         TDAnalytics.flush()
         AppLogger.net.info("[Analytics] ThinkingData started; startup event=c_log flushed")
     }
@@ -54,12 +54,20 @@ enum AnalyticsTracker {
             AppLogger.net.warning("[Analytics] dropped event=\(event, privacy: .public); SDK is not started")
             return
         }
-        let propertyNames = properties.keys.sorted().joined(separator: ",")
-        AppLogger.net.info("[Analytics] track event=\(event, privacy: .public) properties=\(propertyNames, privacy: .public) immediate=\(immediately, privacy: .public)")
-        TDAnalytics.track(event, properties: properties)
+        var normalizedProperties = properties
+        let normalizedEvent = event == "c_log" ? "hifunny_log" : event
+        if event == "c_log" {
+            normalizedProperties.removeValue(forKey: "type")
+        }
+        if normalizedEvent == "hifunny_log" {
+            normalizedProperties["app_name"] = "HillyFun"
+        }
+        let propertyNames = normalizedProperties.keys.sorted().joined(separator: ",")
+        AppLogger.net.info("[Analytics] track event=\(normalizedEvent, privacy: .public) properties=\(propertyNames, privacy: .public) immediate=\(immediately, privacy: .public)")
+        TDAnalytics.track(normalizedEvent, properties: normalizedProperties)
         if immediately {
             TDAnalytics.flush()
-            AppLogger.net.info("[Analytics] flush event=\(event, privacy: .public)")
+            AppLogger.net.info("[Analytics] flush event=\(normalizedEvent, privacy: .public)")
         }
     }
 
