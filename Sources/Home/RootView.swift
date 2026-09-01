@@ -1,5 +1,49 @@
 import SwiftUI
 
+/// 短暂的应用内启动过渡层。它只覆盖界面，不参与业务初始化。
+private struct SplashView: View {
+    @State private var isAnimating = false
+    @State private var isVisible = true
+    let onFinished: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color(red: 0.025, green: 0.03, blue: 0.07).ignoresSafeArea()
+            ZStack {
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .stroke(Color(red: 1.0, green: 0.18, blue: 0.53).opacity(0.95 - Double(index) * 0.10), lineWidth: 1.5)
+                        .frame(width: 150 + CGFloat(index) * 54, height: 150 + CGFloat(index) * 54)
+                        .scaleEffect(isAnimating ? 1.12 : 0.78)
+                        .opacity(isAnimating ? 0.15 : 0.8)
+                        .animation(.easeOut(duration: 0.9).delay(Double(index) * 0.1), value: isAnimating)
+                }
+                Circle().fill(Color(red: 1.0, green: 0.18, blue: 0.53).opacity(0.48)).frame(width: 112, height: 112)
+                Image(systemName: "waveform.path.ecg")
+                    .font(.system(size: 38, weight: .medium))
+                    .foregroundStyle(Color(red: 1.0, green: 0.18, blue: 0.53))
+                    .rotationEffect(.degrees(isAnimating ? 360 : 0))
+                    .animation(.linear(duration: 1.15).repeatForever(autoreverses: false), value: isAnimating)
+            }
+            VStack(spacing: 10) {
+                Spacer()
+                Text("HILLYFUN").font(.system(size: 22, weight: .bold, design: .rounded)).tracking(4).foregroundStyle(.white)
+                Text("LIVE YOUR MOMENT").font(.system(size: 10, weight: .medium, design: .rounded)).tracking(2.5).foregroundStyle(.white.opacity(0.55))
+                Spacer().frame(height: 72)
+            }
+        }
+        .opacity(isVisible ? 1 : 0)
+        .task {
+            isAnimating = true
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.15)) { isVisible = false }
+            onFinished()
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 /// 根视图：按登录态和角色能力在登录、受限、主播主界面之间切换。
 /// `107` 是 Party-only 角色：可进入主界面，但不能启动完整主播实时能力。
 struct RootView: View {
@@ -16,6 +60,7 @@ struct RootView: View {
     /// v23（2026-07-13）code-review 修复：warmup Task 需要 cancel 入口
     /// 场景：快速 login→logout→login（token 失效重刷）→ 旧 Task 迟到对新 router 冗余 warmup + 与新 Task 双打
     @State private var warmupTask: Task<Void, Never>?
+    @State private var isSplashVisible = true
 
     var body: some View {
         // 2026-07-17 tap-fix diagnostic:确认用户实际进入的分支(RestrictedTabView vs MainTabView vs LoginView)
@@ -92,6 +137,12 @@ struct RootView: View {
             // 空态时内部只保留 Spacer 不拦截 hit test，出现时仅胶囊区域可交互
             GlobalErrorBanner()
                 .zIndex(300)
+
+            if isSplashVisible {
+                SplashView { isSplashVisible = false }
+                    .zIndex(1000)
+                    .transition(.opacity)
+            }
 
             // 美颜页会先 dismiss 再通过 MediaPermissionAlertCenter 请求提示。
             // 使用自定义模态层，避免与审核/通话的系统 alert 互相抢占而丢失提示。

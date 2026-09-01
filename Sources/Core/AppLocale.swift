@@ -14,6 +14,9 @@ enum AppLocale: String, CaseIterable {
     case en = "en"
     case ar = "ar"
     case tr = "tr"
+    case ru = "ru"
+    case es = "es"
+    case uk = "uk"
 
     var displayName: String {
         switch self {
@@ -21,6 +24,9 @@ enum AppLocale: String, CaseIterable {
         case .en: return "English"
         case .ar: return "العربية"
         case .tr: return "Türkçe"
+        case .ru: return "Русский"
+        case .es: return "Español"
+        case .uk: return "Українська"
         }
     }
 
@@ -55,7 +61,7 @@ final class AppLocaleStore: ObservableObject {
         current = newValue
     }
 
-    /// `.system` 解析到的具体渲染语言（en/ar/tr）。
+    /// `.system` 解析到的具体渲染语言。
     ///
     /// 关键坑：设过一次非系统语言后，`UserDefaults["AppleLanguages"]` 被 override，
     /// `Bundle.main.preferredLocalizations` / `Locale.preferredLanguages` 都会被污染
@@ -68,6 +74,9 @@ final class AppLocaleStore: ObservableObject {
         let raw = systemLangs?.first ?? Locale.current.language.languageCode?.identifier ?? "en"
         if raw.hasPrefix("ar") { return .ar }
         if raw.hasPrefix("tr") { return .tr }
+        if raw.hasPrefix("ru") { return .ru }
+        if raw.hasPrefix("es") { return .es }
+        if raw.hasPrefix("uk") || raw.hasPrefix("ua") { return .uk }
         return .en
     }
 

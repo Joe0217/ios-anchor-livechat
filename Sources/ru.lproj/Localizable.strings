@@ -1,0 +1,2421 @@
+/* HiFunny локализация приложения для ведущих
+
+   B 里程碑 spec §13 i18n 声明：B 阶段用 en 默认值占位；ar/tr 翻译由 J 里程碑收尾。
+   key 命名约定：模块.场景（lowerCamelCase 拼接）
+*/
+
+// MARK: - 强制下播原因（forceEnd reason UI 文案）
+"forceEnd.disconnected"      = "Соединение потеряно";
+"forceEnd.banned"            = "Нарушение правил аккаунта. Трансляция завершена";
+"forceEnd.cameraFailure"     = "Не удалось получить изображение с камеры";
+"forceEnd.noPermission"      = "Не удалось проверить разрешения";
+"forceEnd.weakNetwork"       = "Слишком слабое сетевое соединение";
+
+// MARK: - 切后台超限（BackgroundMonitor 预警 + 本地通知）
+"live.background.count_warning"      = "Вы покидали трансляцию %d/%d раз. После %d-го раза она завершится автоматически.";
+"live.background.cumulative_warning" = "Вы провели в фоне уже %d мин. Приближается лимит в 5 минут.";
+"live.background.notif.title"        = "Вернитесь к трансляции";
+"live.background.notif.body"         = "Если приложение останется в фоне, трансляция завершится автоматически.";
+
+// MARK: - 美颜降级
+"beauty.unavailable"         = "Эффекты красоты недоступны";
+
+// MARK: - 全局空态占位（EmptyStateView 默认文案）
+"common.emptyState.noContent" = "Пока нет содержимого";
+"content.moderation.rejected" = "Этот контент может нарушать правила сообщества. Измените его и попробуйте снова.";
+
+// MARK: - 网络弱网降级（v5 分层）
+"network.warning"            = "Нестабильная сеть. Включена низкая частота кадров";
+
+// MARK: - 开播前置校验
+"prepare.titleEmpty"         = "Введите название трансляции";
+"prepare.coverEmpty"         = "Добавьте обложку трансляции";
+"prepare.cooldown"           = "После завершения трансляции подождите 60 секунд";
+"prepare.imOffline"          = "Чат недоступен. Повторите попытку позже";
+
+// MARK: - 公屏
+"im.chatroom.reconnecting"   = "Повторное подключение к чату...";
+"im.chatroom.reconnected"    = "Чат снова подключён";
+"im.userJoined"              = "Пользователь вошёл в комнату";
+"im.sendGiftAction"          = "отправил(а)";
+"im.complianceWarningDefault" = "Ваш контент трансляции получил предупреждение";
+"im.anonymous"               = "Анонимный пользователь";
+
+// MARK: - Work 工作台（设计稿还原）
+"work.weeklyLevel"           = "Уровень за неделю";
+"work.detail"                = "Подробнее";
+"work.scorePrefix"           = "Баллы: ";
+"work.needMoreFormat"        = "(До повышения уровня осталось: %d)";
+
+"dataStatistics.navTitle"                    = "Статистика";
+"dataStatistics.bannerSubtitle"               = "Отслеживайте показатели и прогресс уровня";
+"dataStatistics.totalDislikeRate"             = "Общая доля дизлайков";
+"dataStatistics.offsetDislike"                = "Компенсировать дизлайк >";
+"dataStatistics.removeDislike"                = "Удалить дизлайк";
+"dataStatistics.removeDislikeDescription"     = "Каждую неделю вы можете использовать баллы, чтобы окончательно удалить дизлайки, с недельным лимитом. Если лимит превышен, нужно подождать до следующей недели, чтобы использовать баллы. Успевайте использовать баллы в течение недели — в начале новой недели они обнуляются.";
+"dataStatistics.dislikeRate"                  = "Доля дизлайков";
+"dataStatistics.dislikeRateDescription"       = "После завершения звонка пользователи ставят лайк или дизлайк. Дизлайки, связанные с типом ведущего, влияют на вашу долю дизлайков, которая отображается в профиле. Чтобы снизить количество дизлайков, больше общайтесь во время звонка или зарабатывайте баллы, отправляя сообщения. Баллы можно использовать для окончательного удаления дизлайков.";
+"dataStatistics.likes"                        = "Лайки";
+"dataStatistics.dislikes"                     = "Дизлайки";
+"dataStatistics.privateAndLiveOnly"           = "(Учитываются только приватные звонки и трансляции)";
+"dataStatistics.category"                     = "Категория";
+"dataStatistics.week"                         = "Неделя";
+"dataStatistics.levelAnswerRate"              = "Уровень ответов";
+"dataStatistics.levelAvgDuration"             = "Средняя длительность уровня";
+"dataStatistics.levelCalls"                   = "Звонки уровня";
+"dataStatistics.levelUpdateTime"              = "Время обновления уровня";
+"dataStatistics.currentLevelBenefits"         = "Привилегии текущего уровня";
+"dataStatistics.currentPoints"                = "Текущие баллы";
+"dataStatistics.remainingChancesFormat"       = "%@ баллов / Осталось попыток: %@";
+"dataStatistics.offset"                       = "Компенсировать";
+"dataStatistics.deductionSucceeded"           = "Один дизлайк компенсирован";
+"dataStatistics.deductionUnavailable"         = "Недостаточно баллов";
+
+"work.levelText.topHost"     = "Вы — топ‑ведущая";
+"work.levelText.keepSTier" = "Удерживайте уровень S, чтобы стать SS";
+"work.levelText.callTargetNotMet" = "Цель по звонкам не достигнута";
+"work.levelText.averageCallTime" = "Среднее время звонка: ";
+"work.levelText.nextLevel" = " (следующий уровень: ";
+
+"call.reconnect"             = "Повторить подключение";
+
+"autoOffline.title"          = "Проверка активности";
+"autoOffline.message"        = "Мы заметили, что вы неактивны какое-то время. Чтобы пропущенные звонки не повлияли на ваш рейтинг, статус изменён на «Не в сети». Чтобы вернуться в сеть, нажмите кнопку ниже.";
+"autoOffline.goOnline"       = "Выйти в онлайн";
+
+"setToBusy.title"            = "Сегодня вы заняты";
+"setToBusy.description"      = "Вы достигли дневного лимита звонков. Продолжайте через трансляцию или подбор.";
+"setToBusy.goLive"           = "Начать трансляцию";
+"setToBusy.goMatch"          = "К подбору";
+
+"work.onlineTime"            = "Время онлайн (д)";
+"work.avgCallDuration"       = "Средняя длительность звонка (за неделю)";
+"work.positiveRating"        = "Положительный рейтинг";
+"work.callsToday"            = "Звонки сегодня";
+"work.coins"                 = "Монеты";
+"work.diamonds"              = "Алмазы";
+"work.gems"                  = "Самоцветы";
+
+"work.todaysIncome"          = "Доход за сегодня";
+"work.withdrawal"            = "Вывод средств";
+"work.callIncomes"           = "Доход от звонков";
+"work.giftIncomes"           = "Доход от подарков";
+"work.taskIncomes"           = "Доход от заданий";
+"work.inviteIncomes"         = "Доход от приглашений";
+"work.otherIncomes"          = "Прочие доходы";
+"work.totalIncomes"          = "Общий доход";
+
+"work.tools"                 = "Инструменты";
+"work.online"                = "Онлайн";
+"work.online.on"             = "Вкл.";
+"work.online.off"            = "Выкл.";
+"work.offline"               = "Офлайн";
+
+// 工具图标标签
+"work.tool.goLive"           = "Начать трансляцию";
+"work.tool.match"            = "Матч";
+"work.tool.task"             = "Задание";
+"work.tool.beauty"           = "Красота";
+"work.tool.beautyCamera"     = "Камера красоты";
+"work.tool.points"           = "Баллы";
+"work.tool.giftMessage"      = "Сообщение о подарке";
+"work.tool.profileUpdate"    = "Обновить профиль";
+"work.tool.invite"           = "Пригласить";
+"work.tool.workingGuide"     = "Гид ведущего";
+"work.tool.props"            = "Реквизит";
+"work.tool.liveData"         = "Статистика трансляций";
+"work.tool.partyData"        = "Статистика Party";
+"work.tool.myGuardian"       = "Мой хранитель";
+"work.tool.starUser"         = "Звёздный пользователь";
+
+// Task Center 页（Phase C · 对齐 H5 views/task/index.vue）
+"task.center.navTitle"                = "Задания";
+"task.section.rankProgress"           = "Прогресс рейтинга";
+"task.section.taskProgress"           = "Прогресс задания";
+"task.cycle.daily"                    = "Ежедневно";
+"task.cycle.weekly"                   = "Еженедельно";
+"task.countdown.prefix"               = "Сброс через";
+"task.weekly.totalPoints"             = "Всего очков:";
+"task.legacy.limitedTime"             = "Ограниченное по времени задание";
+"task.legacy.allDay"                  = "Круглосуточное задание";
+"task.legacy.matchTip.title"          = "Напоминание";
+"task.legacy.matchTip.message"        = "Звонок по подбору должен длиться 20 с, чтобы выполнить задание";
+"task.myIncome"                       = "Мой доход";
+"task.myIntegral"                     = "Мои очки";
+"task.viewRank"                       = "Смотреть рейтинг";
+"task.rankLabel.globalIncome"         = "Глобальный доход";
+"task.rankLabel.points"               = "Баллы";
+"task.reset.prefix"                   = "Сброс задания:";
+"task.daysFormat"                     = "%dдн.";
+"task.go"                             = "Перейти";
+"task.tier.claim"                     = "Получить";
+"task.tier.claimed"                   = "Получено";
+"task.claimAll"                       = "Получить всё";
+"task.claim.success"                  = "Успешно получено";
+"task.claim.grantPending"             = "Награда выдаётся";
+"task.claim.allMultiTypeFormat"       = "Получено %d наград";
+"task.reward.gotIt"                   = "Понятно";
+"task.reward.mergedPrefix"            = "Всего";
+"task.active.tycoonTask"              = "Активное задание магната";
+"task.integralTask"                   = "Задание за очки";
+
+// Task 领奖弹窗 rewardType 描述(对齐 H5 REWARD_DESC_KEY 1-6)+ 空态 + OK
+"task.reward.diamond"                 = "Алмазы";
+"task.reward.gem"                     = "Самоцветы";
+"task.reward.prop"                    = "Реквизит";
+"task.reward.mount"                   = "Транспорт";
+"task.reward.frame"                   = "Рамка";
+"task.reward.points"                  = "Баллы";
+"task.module.noTasks"                 = "Пока нет заданий";
+"common.OK"                           = "ОК";
+
+// Points Rank(Phase E · 对齐 H5 pointsRank/index.vue)
+"points.rank.navTitle"                = "Рейтинги очков";
+"points.myPoints"                     = "Мои очки:";
+"points.rank.subtitle"                = "Рейтинг рассчитывает награды и обнуляет очки еженедельно";
+"points.rank.rules.title"             = "Правила очков";
+"points.rank.rules.content1"          = "1. Получайте 10 очков за каждый пост в друзьях";
+"points.rank.rules.content2"          = "2. Начните чат с пользователем, и, если он ответит, вы получите 10 очков";
+"points.rank.rules.content3"          = "3. Топ-5 ведущих по очкам получают награду в алмазах, начисление автоматически каждую неделю";
+"points.rank.rules.content4"          = "4. После еженедельного расчёта очки обнуляются";
+
+"work.invite.earnMoney"      = "Заработать";
+
+"work.offline.confirmMessage" = "Точно перейти в офлайн?";
+"work.offline.confirmYes"    = "Да, в офлайн";
+"work.offline.confirmNo"     = "Остаться в сети";
+
+// 底部 tab 标签
+"tab.home"                   = "Главная";
+"tab.circle"                 = "Круг";
+"tab.messages"               = "Сообщения";
+"tab.party"                  = "Party";
+"tab.connections"            = "Connections";
+"tab.beauty"                 = "Красота";
+"tab.work"                   = "Работа";
+"tab.profile"                = "Профиль";
+
+// MARK: - Home 顶部 4 tab（对齐 H5 homeConfig.ts → live/list/match/circle）
+"home.topTab.live"           = "Трансляция";
+"home.topTab.list"           = "Список";
+"home.topTab.match"          = "Матч";
+"home.topTab.circle"         = "Круг";
+"home.topTab.comingSoon"     = "Скоро";
+
+// Circle 朋友圈内 3 子 tab（trial #1）
+"home.circle.official.label"      = "Официальные";
+"home.circle.moment.label"        = "Момент";
+"home.circle.me.label"            = "Я";
+"home.circle.moment.error.title"  = "Не удалось загрузить моменты";
+"live.viewers"               = "зрителей";
+"live.rankBadge"             = "Рейтинг";
+"live.refresh"               = "Обновить";
+"live.onlineDot"             = "Онлайн";
+
+// Home ranking (/rank)
+"home.rank.title"            = "Рейтинг";
+"home.rank.charm"            = "Обаяние";
+"home.rank.wealth"           = "Богатство";
+"home.rank.couple"           = "Пара";
+"home.rank.day"              = "Ежедневно";
+"home.rank.week"             = "Еженедельно";
+"home.rank.month"            = "Месяц";
+"home.rank.rules"            = "Рейтинг";
+"home.rank.rules.text"       = "Рейтинг Обаяния определяется общим доходом ведущих в следующих сценариях платформы: доход от Приватных звонков и Трансляций. 1 единица дохода = 1 балл рейтинга. Рейтинг обновляется ежедневно и еженедельно.";
+"home.rank.rules.charm"      = "Рейтинг Обаяния определяется общим доходом ведущих в следующих сценариях платформы: доход от Приватных звонков и Трансляций. 1 единица дохода = 1 балл рейтинга. Рейтинг обновляется ежедневно и еженедельно.";
+"home.rank.rules.couple"     = "Рейтинг CP основан на общем количестве алмазов, потраченных между ведущим и пользователем в паре CP. ТОП-3 недельного рейтинга получают автоматические награды каждый понедельник.";
+"home.rank.myRanking"        = "Мой рейтинг";
+"home.rank.notRanked"        = "99+";
+"home.rank.noData"           = "Контент отсутствует";
+"home.rank.hostPlaceholder"  = "Имя ведущего";
+"home.rank.userPlaceholder"  = "Имя пользователя";
+"home.rank.mystery"          = "Тайна";
+"home.rank.notOnListYet"     = "Пока не в списке";
+"home.rank.keepSendingGifts" = "Дарите подарки и поднимайтесь в рейтинге!";
+"home.rank.cpWeeklyRewardFormat" = "Награда за ТОП-%d недельного рейтинга CP";
+
+// MARK: - List 子页（设计稿还原）
+"liveList.segment.online"    = "Онлайн";
+"liveList.segment.prime"     = "Prime";
+"liveList.action.chat"       = "Чат";
+"liveList.action.live"       = "Трансляция";
+"liveList.action.match"      = "Матч";
+"liveList.action.offline"    = "Офлайн";
+"liveList.action.videoCall"  = "Видеозвонок";
+"liveList.empty"             = "Пользователей пока нет";
+"liveList.end"               = "Больше нет";
+"liveList.loadMoreFailed"    = "Не удалось загрузить больше";
+"liveList.pullToRetry"       = "Потяните вниз, чтобы обновить";
+
+// MARK: - Live 广场（H5 liveList.vue 对齐）
+"liveStream.empty"           = "Сейчас нет трансляций";
+"liveStream.inPK"            = "В PK";
+"live.banner.a11y"           = "Баннер на главной";
+"gift.sendSuperRocket"       = "запускает супер-ракету";
+
+// MARK: - Profile 个人页（设计稿还原）
+"profile.settings"           = "Настройки";
+"profile.editName"           = "Изменить имя";
+"profile.idPrefix"           = "ID:";
+"profile.following"          = "Подписки";
+"profile.followers"          = "Подписчики";
+"profile.friends"            = "Друзья";
+"profile.completionHint"     = "95% пользователей предпочитают ведущих с заполненным профилем (заполнить)";
+"profile.tab.album"          = "Альбом";
+"profile.tab.gifts"          = "Подарки";
+"profile.tab.moment"         = "Моменты";
+"profile.photos.format"      = "Фото (%d/%d)";
+"profile.videos.format"      = "Видео (%d/%d)";
+"profile.cell.photo"         = "Фото";
+"profile.cell.video"         = "Видео";
+"profile.emptyPlaceholder"   = "Здесь пока пусто";
+"profile.loadFailed.format"  = "Не удалось загрузить профиль: %@";
+"profile.loading"            = "Загрузка...";
+"profile.retry"              = "Повторить";
+"profile.ratePerMin.format"  = "%d/мин";
+
+// MARK: - FollowList 关注/粉丝/朋友列表
+"followList.action.follow"     = "Подписаться";
+"followList.action.following"  = "Подписки";
+"followList.action.unfollow"   = "Отписаться";
+"followList.action.block"      = "Заблокировать";
+"followList.end"               = "Больше нет";
+"followList.empty"             = "Пользователей пока нет";
+"connections.support"                   = "Служба поддержки";
+"connections.support.subtitle"          = "Помощь с вашим аккаунтом";
+"connections.support.unavailable"       = "Служба поддержки недоступна. Попробуйте снова.";
+"connections.services"                  = "Сервисы";
+"beautyStudio.settings"                 = "Настройки красоты";
+"beautyStudio.camera"                   = "Камера красоты";
+"profile.media.reviewing"      = "На модерации";
+"profile.media.rejected"       = "Отклонено";
+"mediaPreview.close"           = "Закрыть";
+"mediaPreview.image"           = "Изображение";
+"mediaPreview.video"           = "Видео";
+"mediaPreview.positionFormat"  = "%1$d из %2$d";
+"mediaPreview.image.loadFailed" = "Не удалось загрузить изображение";
+"mediaPreview.image.retry"      = "Повторить";
+
+// MARK: - Settings 设置页
+"settings.title"               = "Настройки";
+"settings.section.account"     = "Аккаунт";
+"settings.section.general"     = "Общие";
+"settings.section.about"       = "О приложении";
+"settings.blocklist"           = "Чёрный список";
+"settings.language"            = "Язык";
+"settings.feedback"            = "Обратная связь";
+"settings.version"             = "Версия";
+"settings.tos"                 = "Пользовательское соглашение";
+"settings.privacy"             = "Политика конфиденциальности";
+"settings.logout"              = "Выйти";
+"settings.logoutConfirm"       = "Выйти из этого аккаунта?";
+"settings.deleteAccount"       = "Удалить аккаунт";
+"settings.deleteAccount.title" = "Удалить аккаунт навсегда";
+"settings.deleteAccount.description" = "Удаление аккаунта очистит сессию этого устройства. Свяжитесь со службой поддержки, чтобы запросить удаление данных аккаунта, хранящихся на наших серверах.";
+"settings.deleteAccount.consequence.profile" = "Ваша локальная сессия и данные аккаунта на этом устройстве будут очищены.";
+"settings.deleteAccount.consequence.content" = "Свяжитесь со службой поддержки, чтобы запросить удаление содержимого аккаунта, хранящегося на наших серверах.";
+"settings.deleteAccount.consequence.recovery" = "Вы будете выведены из аккаунта на этом устройстве. Свяжитесь со службой поддержки, если нужна помощь с удалением данных аккаунта.";
+"settings.deleteAccount.action" = "Удалить аккаунт";
+"settings.deleteAccount.confirm.title" = "Удалить аккаунт навсегда?";
+"settings.deleteAccount.confirm.message" = "Это очистит локальную сессию на этом устройстве. Чтобы запросить удаление данных аккаунта, хранящихся на наших серверах, свяжитесь со службой поддержки.";
+"settings.deleteAccount.confirm.action" = "Удалить навсегда";
+"settings.deleteAccount.unavailable" = "Удаление аккаунта пока недоступно. Попробуйте позже.";
+"settings.deleteAccount.failed" = "Не удалось удалить аккаунт. Попробуйте снова.";
+"settings.cancel"              = "Отмена";
+"settings.confirm"             = "Подтвердить";
+"settings.anchorPolicy"        = "Правила сообщества";
+"settings.clearCache"          = "Очистить кэш";
+"settings.clearCacheConfirm"   = "Точно очистить кэш?";
+"settings.clearCacheDone"      = "Кэш очищен";
+"settings.selectLanguage"      = "Выберите язык";
+"settings.feedbackComingSoon"  = "Скоро появится";
+
+// MARK: - Native 107 Party documents
+"settings.document.anchorPolicy.introduction" = "Настоящие правила сообщества применяются к возможностям HiFunny, ориентированным на Party, доступным для этого аккаунта, включая голосовые комнаты, чат публичной комнаты, эмоции, свободные взаимодействия, Connections, профили и одобренные фотографии профиля.";
+"settings.document.anchorPolicy.respect.title" = "Уважение в комнатах Party";
+"settings.document.anchorPolicy.respect.body" = "Используйте голос Party, чат публичной комнаты, эмоции, свободные кости и камень-ножницы-бумагу с уважением. Не преследуйте, не угрожайте, не запугивайте, не дискриминируйте и не проявляйте сексуального внимания к кому-либо.";
+"settings.document.anchorPolicy.content.title" = "Безопасный контент и профили";
+"settings.document.anchorPolicy.content.body" = "Используйте достоверные данные аккаунта и профиля. Аватары, фотографии профиля, видео для проверки, сообщения в комнатах и другой отправляемый контент должны принадлежать вам и не должны быть противоправными, содержать насилие, откровенно сексуальные материалы, эксплуатацию, обман или нарушать чужую конфиденциальность.";
+"settings.document.anchorPolicy.commercial.title" = "Никаких азартных игр или коммерческих злоупотреблений";
+"settings.document.anchorPolicy.commercial.body" = "Не используйте Party-комнаты, кости, «камень-ножницы-бумага» или любые бесплатные взаимодействия для ставок, призов, платежей, попрошайничества, мошенничества или иной коммерческой деятельности.";
+"settings.document.anchorPolicy.safety.title" = "Сохраняйте безопасность в комнате";
+"settings.document.anchorPolicy.safety.body" = "Не вовлекайте несовершеннолетних в контент для взрослых, не ищите контактов вне платформы для эксплуатации, не делитесь личными контактами, данными о личности или местоположении без согласия.";
+"settings.document.anchorPolicy.moderation.title" = "Модерация";
+"settings.document.anchorPolicy.moderation.body" = "Мы можем удалить отправленный контент, ограничить функции Party или Connections либо ограничить аккаунт при нарушении этих правил или действующего законодательства. Используйте Connections или Настройки, чтобы заблокировать аккаунт, связаться со службой поддержки или отправить отзыв.";
+
+"settings.document.agreement.introduction" = "Это соглашение описывает опыт HiFunny с акцентом на Party, доступный для этого аккаунта. Функции, не перечисленные ниже как доступные, не входят в этот опыт.";
+"settings.document.agreement.acceptance.title" = "Принятие";
+"settings.document.agreement.acceptance.body" = "Входя или используя HiFunny, вы соглашаетесь с этим соглашением, Правилами сообщества и применимым законодательством. Не используйте сервис там, где это запрещено законом.";
+"settings.document.agreement.scope.title" = "Доступные функции";
+"settings.document.agreement.scope.body" = "Для регистрации требуются аватар и хотя бы одна фотография профиля. При проверке шестизначного кода приглашения становится доступна запись видео для проверки, а для регистрации требуются шесть фотографий профиля и записанное видео для проверки. Этот аккаунт может использовать голосовые Party-комнаты, чат публичных комнат, эмоции, бесплатные кости и «камень-ножницы-бумага», списки Связей, профили и одобренные фотоальбомы, элементы управления подписками, отпиской и блокировкой, базовое редактирование профиля, аватара и фотографий, инструменты Эффектов красоты, отзывы, службу поддержки и Настройки. Прямые трансляции, звонки, личные сообщения, виртуальные подарки и валюта, кошелёк, вывод средств, лотереи и Lucky Number, Party-видео, Party-музыка, активности, платные и полуэкранные игры недоступны.";
+"settings.document.agreement.use.title" = "Использование сервиса";
+"settings.document.agreement.use.body" = "Используйте HiFunny только для законного личного социального общения и развлечения. Не обходите средства контроля доступа, не мешайте Party-комнатам, не автоматизируйте взаимодействия, не используйте бесплатные игры для ставок или призов, не собирайте информацию и не используйте сервис во вред другим.";
+"settings.document.agreement.content.title" = "Ваш контент";
+"settings.document.agreement.content.body" = "Вы несёте ответственность за данные профиля, аватар, фотографии, видео для проверки, сообщения в публичных комнатах, эмоции и бесплатные взаимодействия, которые отправляете. У вас должны быть права и разрешения для их публикации, и они должны соответствовать Правилам сообщества.";
+"settings.document.agreement.service.title" = "Доступность и обеспечение соблюдения";
+"settings.document.agreement.service.body" = "Мы можем поддерживать, изменять, приостанавливать или удалять доступные функции Party, Связей, профиля и поддержки, когда это необходимо для безопасности, соблюдения законодательства или работы сервиса. Нарушения могут привести к удалению контента, ограничению участия или ограничениям аккаунта.";
+"settings.document.agreement.account.title" = "Аккаунт и обратная связь";
+"settings.document.agreement.account.body" = "Храните учётные данные аккаунта в секрете и сообщайте о подозрении на несанкционированный доступ через Отзыв или службу поддержки. Профиль > Настройки содержит элементы управления профилем, приватностью, чёрным списком и аккаунтом. Удаление аккаунта на данный момент удаляет локальную сессию с этого устройства; свяжитесь со службой поддержки, чтобы запросить удаление данных аккаунта на наших серверах.";
+"settings.document.agreement.changes.title" = "Изменения соглашения";
+"settings.document.agreement.changes.body" = "Мы можем обновлять это соглашение по мере изменения сервиса или требований закона. Продолжение использования после обновления означает, что вы принимаете обновлённое соглашение.";
+
+"settings.document.privacy.introduction" = "Настоящая политика описывает, как обрабатывается информация в Party-ориентированном опыте HiFunny, доступном для этого аккаунта. HiFunny предназначен для людей 13 лет и старше, и мы не собираем сознательно персональные данные детей младше 13 лет.";
+"settings.document.privacy.data.title" = "Информация, которую мы обрабатываем";
+"settings.document.privacy.data.body" = "Мы обрабатываем данные регистрации и профиля, включая email, имя или никнейм, день рождения, страну, языки, аватар и фотографии профиля. Если вы вводите шестизначный пригласительный код, мы отправляем его на проверку; после успешной проверки при регистрации также обрабатываются шесть фотографий профиля и записанное вами видео для рассмотрения. Мы обрабатываем идентификаторы пользователя и устройства, отношения Connections и заблокированных аккаунтов, участие в комнатах Party, текст публичной комнаты, эмоции и результаты свободных взаимодействий, аудио голоса в Party, отзывы и обращения в поддержку, а также информацию о взаимодействии с продуктом, сбоях, производительности, предотвращении злоупотреблений и безопасности. Настройки красоты и эффекты предпросмотра обрабатываются на вашем устройстве; фотографии или видео загружаются только тогда, когда вы решаете их отправить.";
+"settings.document.privacy.use.title" = "Как мы используем информацию";
+"settings.document.privacy.use.body" = "Мы используем информацию для аутентификации и проверки регистрации, предоставления и редактирования профилей и одобренных фотоальбомов, работы голосовых комнат Party, чата публичной комнаты, эмоций и свободных взаимодействий, предоставления Connections, блокировки, отзывов и клиентской поддержки, предотвращения злоупотреблений, обеспечения безопасности и устранения неполадок сервиса, продуктовой аналитики, диагностики сбоев и проблем производительности, а также выполнения юридических обязательств. Мы не продаём персональные данные и не используем их для межприложенческой рекламы.";
+"settings.document.privacy.visibility.title" = "Что могут видеть другие участники";
+"settings.document.privacy.visibility.body" = "Ваш никнейм, аватар, основной профиль и одобренные фотографии профиля могут быть видны людям, которые могут открыть ваш профиль. Сообщения в публичной комнате, эмоции и свободные взаимодействия видны участникам этой комнаты Party, а ваш голос передаётся участникам комнаты, пока вы используете место с микрофоном. Не раскрывайте публично личные контакты, данные о личности, местоположении или другую конфиденциальную информацию.";
+"settings.document.privacy.sharing.title" = "Поставщики услуг и раскрытие информации";
+"settings.document.privacy.sharing.body" = "Мы используем поставщиков услуг, которые помогают работать доступным функциям: Agora для голоса Party, NIM для сообщений в публичной комнате, ThinkingData для продуктовой аналитики, Sentry для диагностики сбоев и производительности, а также поставщиков хостинга или CDN для медиафайлов профиля, видео для рассмотрения и вложений поддержки. Мы можем раскрывать информацию, если этого требует закон или для защиты пользователей, сервиса или общества.";
+"settings.document.privacy.security.title" = "Хранение и безопасность";
+"settings.document.privacy.security.body" = "Мы храним информацию об аккаунте, профиле, Party, Connections, поддержке и диагностике только столько, сколько необходимо для описанных целей и применимых обязательств. Мы применяем разумные меры защиты, но ни один онлайн-сервис не может гарантировать абсолютную безопасность.";
+"settings.document.privacy.choices.title" = "Ваши выборы и запросы";
+"settings.document.privacy.choices.body" = "Вы можете редактировать основную информацию профиля, аватар и фотографии, подписываться и отписываться от пользователей, управлять чёрным списком и разрешениями на камеру, микрофон и фотогалерею в Настройках iOS. Профиль > Настройки > Удалить аккаунт сейчас очищает локальный сеанс на этом устройстве. Свяжитесь со службой поддержки через Отзыв, чтобы запросить доступ, исправление или удаление данных аккаунта, хранящихся на наших сервисах, или задать вопрос о конфиденциальности.";
+
+// MARK: - Feedback 反馈表单页
+"feedback.type.appError"       = "Ошибка приложения";
+"feedback.type.accountError"   = "Ошибка аккаунта";
+"feedback.type.suggestion"     = "Предложение";
+"feedback.type.other"          = "Другое";
+"feedback.messagePlaceholder"  = "Введите";
+"feedback.emailPlaceholder"    = "Укажите ваш email";
+"feedback.wrongEmail"          = "Неверный адрес email";
+"feedback.submitSuccess"       = "Успешно";
+"feedback.submitFailed"        = "Не удалось отправить, попробуйте снова";
+
+// MARK: - LevelDetail 段位详情页
+"level.title"                  = "Детали уровня";
+"level.current"                = "Текущий уровень";
+"level.spectrum"               = "Спектр уровней";
+"profile.gifts.empty"          = "Пока нет подарков";
+
+// MARK: - J Publish (发布朋友圈)
+"publish.navTitle"           = "Пост";
+"publish.cancel"             = "Отмена";
+"publish.release"            = "Опубликовать";
+"publish.placeholder"        = "Введите то, что хотите сказать";
+"publish.charCountFormat"    = "%d/500";
+"publish.posting"            = "Публикация...";
+"publish.addImage"           = "Добавить изображение";
+"publish.mediaSource.photoLibrary" = "Фотобиблиотека";
+"publish.removeImage"        = "Удалить изображение";
+"publish.fabLabel"           = "Создать пост";
+"publish.discard.title"      = "Отменить публикацию?";
+"publish.discard.message"    = "Ваш контент будет потерян.";
+"publish.discard.confirm"    = "Отменить";
+"publish.discard.keep"       = "Продолжить редактирование";
+"publish.toast.textEmpty"    = "Введите содержимое";
+"publish.toast.noImages"     = "Добавьте хотя бы 1 изображение";
+"publish.toast.imageTooLarge" = "Изображение слишком большое (>10 МБ)";
+"publish.toast.photoLoadFailed" = "Не удалось загрузить выбранное фото. Попробуйте снова";
+"publish.toast.credentialFailed" = "Не удалось получить учётные данные для загрузки";
+"publish.toast.uploadFailed" = "Ошибка загрузки, повторите попытку";
+"publish.toast.createFailed" = "Не удалось опубликовать";
+"publish.toast.networkError" = "Ошибка сети, попробуйте снова";
+"publish.toast.success"      = "Успешно опубликовано";
+
+// MARK: - Auth 登录页
+"auth.title"                 = "Вход по email";
+"auth.envHint"               = "dev · anchor.cphub.link";
+"auth.email"                 = "Введите ваш email";
+"auth.password"              = "Введите пароль (не менее 8 символов)";
+"auth.login"                 = "Войти / Регистрация";
+"auth.loggingIn"             = "Вход...";
+"auth.forgetPassword"        = "Забыли пароль?";
+"auth.togglePasswordA11y"    = "Показать или скрыть пароль";
+"auth.consent.prefix"        = "Я прочитал(а) и согласен(на) с";
+"auth.consent.and"           = "и";
+"auth.consent.toggleA11y"    = "Согласиться с Пользовательским соглашением и Политикой конфиденциальности";
+"auth.clearEmailA11y"        = "Очистить email";
+"auth.clearPasswordA11y"     = "Очистить пароль";
+"auth.removeRecentAccountA11y" = "Удалить недавний аккаунт";
+
+// MARK: - LivePrepare 开播准备
+"livePrepare.navTitle"       = "Демо трансляции";
+"livePrepare.panelTitle"     = "Настройка трансляции";
+"livePrepare.titlePlaceholder" = "Название трансляции (по умолчанию — bio)";
+"livePrepare.defaultTitle"   = "Трансляция";
+"livePrepare.beautyToggle"   = "Красота";
+"livePrepare.sliderBlur"     = "Гладкость";
+"livePrepare.sliderWhiten"   = "Отбеливание";
+"livePrepare.sliderEyeEnlarge" = "Увеличение глаз";
+"livePrepare.sliderFaceThin" = "Сужение лица";
+"livePrepare.start"          = "Начать трансляцию";
+"livePrepare.starting"       = "Запуск...";
+"livePrepare.errorNoChannel" = "Ошибка: в ответе отсутствует канал или токен";
+"livePrepare.errorPrefix"    = "Ошибка: %@ (%@)";
+"livePrepare.errorGeneric"   = "Ошибка: %@";
+"livePrepare.guardUnverified" = "Ваш аккаунт ведущего ещё не одобрен.";
+"livePrepare.guardAgent"     = "Агентские аккаунты не могут начать трансляцию.";
+
+// MARK: - LiveSettings 直播设置页（对齐 H5 5 张 CCard；文案直译 H5 en.json）
+"liveSettings.navTitle"              = "Настройки трансляции";
+"liveSettings.bioTitle"              = "Описание трансляции";
+"liveSettings.bioIntro"              = "Будет показано на странице трансляции";
+"liveSettings.bioPlaceholder"        = "Введите...";
+"liveSettings.coverTitle"            = "Обложка трансляции";
+"liveSettings.privateCallTitle"      = "Настройка подарка на бесплатные 5 минут звонка";
+"liveSettings.privateCallIntro"      = "Настройте подарок, позволяющий пользователям звонить вам напрямую из комнаты трансляции. Этот подарок будет засчитан как доход от звонков, а не от подарков. Цена подарка покроет ваш доход за первые 5 минут звонка. После 5 минут доход рассчитывается по цене вашего звонка. Установите цену подарка в соответствии с ценой вашего звонка.";
+"liveSettings.wishlistTitle"         = "Список желаний трансляции";
+"liveSettings.wishlistIntro"         = "Выберите подарки для списка желаний трансляции. Если вы получите эти подарки во время трансляции, вам будут начислены дополнительные очки или алмазы. Примечание: эти подарки не должны совпадать с подарком для звонка.";
+"liveSettings.beautyTitle"           = "Настройки красоты";
+"liveSettings.goToSettings"          = "Перейти в настройки >>>";
+"liveSettings.comingSoon"            = "Скоро";
+"liveSettings.counterFormat"         = "%d/200";
+"liveSettings.coverUploadHint"       = "Нажмите, чтобы изменить";
+"liveSettings.coverUploading"        = "Загрузка...";
+"liveSettings.giftAddHint"           = "Нажмите, чтобы выбрать подарок";
+"liveSettings.giftRemove"            = "Удалить";
+
+// GiftPicker sheet
+"giftPicker.title"                   = "Выбрать подарок";
+"giftPicker.cancel"                  = "Отмена";
+"giftPicker.confirm"                 = "Подтвердить";
+"giftPicker.retry"                   = "Повторить";
+"giftPicker.empty"                   = "Нет доступных подарков";
+"giftPicker.send"                    = "Отправить";
+"giftPicker.all"                     = "Все";
+"giftPicker.recharge"                = "Пополнить";
+"giftPicker.recharge.toast"          = "Пополнение скоро появится";
+"giftPicker.sent.toast"              = "Подарок отправлен";
+"giftPicker.recipients.empty"        = "Никого нет на микрофоне";
+
+// MARK: - L-spec-愿望单设置页 v1（对齐 H5 wishSetting）
+"wishSetting.navTitle"               = "Настройка желаний";
+"wishSetting.record"                 = "История";
+"wishSetting.themeTitle"             = "Тема желания";
+"wishSetting.themeIntro"             = "Что вы обещаете сделать, когда пользователь исполнит ваше желание (макс. 15 символов)";
+"wishSetting.submit"                 = "Отправить";
+"wishSetting.selectTemplate"         = "Выбрать шаблон";
+"wishSetting.chooseTemplate"         = "Выберите шаблон";
+"wishSetting.type.noText"            = "Без текста";
+"wishSetting.type.common"            = "Общий шаблон";
+"wishSetting.type.private"           = "Личный шаблон";
+"wishSetting.noTemplateAvailable"    = "Нет доступных шаблонов";
+"wishSetting.added.format"           = "Добавлено %d/%d";
+"wishSetting.upTo.format"            = "До %d подарков желания";
+"wishSetting.giftCount"              = "Количество";
+"wishSetting.maxGiftNum"             = "Достигнут лимит подарков";
+"wishSetting.ruleTitle"              = "Правила обязательств по желаниям";
+"wishSetting.ruleAgree"              = "Внимательно прочитайте и согласитесь перед открытием списка желаний.";
+"wishSetting.ruleLink"               = "Правила обязательств по желаниям >>>";
+"wishSetting.ruleDoc"                = "Мы обязуемся использовать желания честно и искренне, а также соблюдать правила платформы. Любое нарушение может привести к ограничению аккаунта.";
+"wishSetting.save"                   = "Сохранить";
+"wishSetting.pleaseEnterTheme"       = "Введите тему";
+"wishSetting.themeMaxLen"            = "Тема не может превышать 15 символов";
+"wishSetting.submittedForReview"     = "Отправлено на проверку";
+"wishSetting.submitSuccess.title"    = "Отправлено успешно";
+"wishSetting.submitSuccess.subtitle" = "Мы получили вашу форму, она находится на проверке.";
+"wishSetting.submitSuccess.reviewStatus" = "Статус проверки";
+"wishSetting.submitSuccess.pendingReview" = "Ожидает проверки";
+"wishSetting.submitSuccess.reviewTime" = "Время проверки";
+"wishSetting.submitSuccess.reviewTimeValue" = "1–2 дня";
+"wishSetting.submitSuccess.notify"   = "Уведомление о результатах";
+"wishSetting.submitSuccess.notifyValue" = "Уведомление в приложении";
+"wishSetting.submitSuccess.tip"      = "После одобрения изменения вступят в силу при следующем запуске приложения.";
+"wishSetting.submitSuccess.goToWishlist" = "К моему списку желаний";
+"wishSetting.pleaseAgreeRule"        = "Согласитесь с правилами обязательств по желаниям";
+"wishSetting.pleaseAddGift"          = "Добавьте хотя бы один подарок желания";
+"wishSetting.pleasePickTemplate"     = "Выберите общий шаблон";
+"wishSetting.pleasePickPrivate"      = "Выберите личное обязательство";
+"wishSetting.saved"                  = "Сохранено";
+"wishSetting.reviewStatus"           = "Статус проверки";
+"wishSetting.reviewStatusIntro"      = "После одобрения личный шаблон будет виден пользователям.";
+"wishSetting.auditRecords"           = "История обязательств по желаниям";
+"wishSetting.audit.all"              = "Все";
+"wishSetting.audit.pending"          = "На рассмотрении";
+"wishSetting.audit.approved"         = "Одобрено";
+"wishSetting.audit.rejected"         = "Отклонено";
+"wishSetting.audit.empty"            = "Записей пока нет";
+"wishSetting.audit.rejectReason"     = "Причина отказа";
+"wishSetting.type.commonSub"         = "Подходит всем ведущим";
+"wishSetting.type.privateSub"        = "Видно только вам";
+"wishSetting.type.noTextSub"         = "Только обложка";
+"wishSetting.ruleAgreeShort"         = "Согласен(на)";
+"wishSetting.ruleFooter"             = "Мы обязуемся использовать подарки честно и искренне, а также соблюдать правила платформы.";
+
+// MARK: - 心愿承诺规范弹窗
+"wishRuleModal.title"                = "Правила обязательств по желаниям";
+"wishRuleModal.check"                = "Я прочитал(а) и согласен(на) с правилами выше";
+"wishRuleModal.agree"                = "Согласиться и опубликовать";
+"wishRuleModal.content"              = "Публикуя список желаний, вы обязуетесь выполнить обещанные награды для зрителей, исполнивших желание. Нарушения могут привести к блокировке аккаунта и лишению права на трансляции.";
+
+// MARK: - LiveRoom 直播间
+"liveRoom.permissionAlertTitle" = "Требуется доступ к камере";
+"liveRoom.permissionAlertOK" = "ОК";
+"liveRoom.permissionAlertMessage" = "Включите доступ к камере в Настройках → HiFunny → Камера";
+"mediaPermission.cameraRequired" = "Требуется доступ к камере. Включите его в настройках и перезапустите HiFunny, чтобы продолжить.";
+"mediaPermission.microphoneRequired" = "Требуется доступ к микрофону. Включите его в настройках и перезапустите HiFunny, чтобы продолжить.";
+"mediaPermission.liveRequired" = "Требуется доступ к камере и микрофону. Включите их в настройках и перезапустите HiFunny, чтобы продолжить.";
+"mediaPermission.photoLibraryAddRequired" = "Для сохранения снимков с камерой красоты требуется доступ к фото. Включите его в настройках, чтобы продолжить.";
+"mediaPermission.alertTitle" = "Требуются разрешения";
+"liveRoom.statusLiveFormat"  = "В эфире %@";
+"liveRoom.statusConnecting"  = "Подключение...";
+"liveRoom.status.idle"       = "Ожидание";
+"liveRoom.status.joined"     = "Трансляция";
+"liveRoom.status.failed"     = "Не удалось подключиться";
+"liveRoom.status.rtcErrorFormat" = "Ошибка RTC %d";
+"liveRoom.status.joinChannelFailedFormat" = "Не удалось войти в канал (%d)";
+"liveRoom.anchorDefault"     = "Ведущий";
+"liveRoom.toolBeauty"        = "Красота";
+"liveRoom.endLive"           = "Завершить трансляцию";
+"liveRoom.beautyPanelTitle"  = "Красота";
+
+/* LiveRoom design-restoration additions */
+"liveRoom.viewerCount.a11y"       = "Зрители онлайн";
+"liveRoom.close.a11y"             = "Закрыть комнату трансляции";
+"liveRoom.task.a11y"              = "Ежедневное задание";
+"liveRoom.contribution.a11y"      = "Вклад в трансляцию";
+"liveRoom.rankFormat"             = "№%d";
+"liveRoom.rankUnlisted"           = "Рейтинг";
+"liveRoom.rank.a11y"              = "Недельный рейтинг";
+"liveRoom.rank.tab.thisWeek"      = "Эта неделя";
+"liveRoom.rank.tab.lastWeek"      = "Прошлая неделя";
+"liveRoom.rank.tab.viewers"       = "Зрители";
+"liveRoom.rank.tab.topGifter"     = "Топ даритель";
+"liveRoom.rank.viewers.empty"     = "Пока нет зрителей";
+"liveRoom.rank.sheet.title"       = "Рейтинг";
+"liveRoom.rank.empty"             = "Пока нет данных рейтинга";
+"liveRoom.rank.errorRetry"        = "Не удалось загрузить. Нажмите, чтобы повторить.";
+"liveRoom.rank.ownMe"             = "Я";
+"liveRoom.rank.diffFormat"        = "%@ до следующего места";
+"liveRoom.rank.toNext"            = "До следующего места:";
+"liveRoom.retry"                  = "Повторить";
+"liveRoom.rank.tab.now"           = "Сейчас";
+"liveRoom.rank.tab.today"         = "Сегодня";
+"liveRoom.rank.tab.week"          = "Неделя";
+"liveRoom.rank.girlBanner"        = "Недельный рейтинг подарков";
+"liveRoom.contribution.sheet.title"       = "Вклад";
+"liveRoom.contribution.tab.ranking"       = "Рейтинг";
+"liveRoom.contribution.tab.record"        = "Записи о подарках";
+"liveRoom.contribution.currentLiveIncome" = "Доход текущей трансляции";
+"liveRoom.contribution.empty.ranking"     = "Пока нет данных о вкладе";
+"liveRoom.contribution.empty.record"      = "Пока нет записей о подарках";
+"liveRoom.contribution.errorRetry"        = "Не удалось загрузить. Нажмите, чтобы повторить.";
+"liveRoom.contribution.last90dFormat"     = "%@ (за 90 дней)";
+"liveRoom.contribution.last90d"           = "За 90 дней";
+"liveRoom.contribution.sentAction"        = "отправил";
+"liveRoom.setting.effect"                 = "Эффекты";
+"liveRoom.setting.announcement"           = "Объявление";
+"announcement.popup.title"                = "Управление анонсом";
+"announcement.popup.placeholder"          = "Введите анонс трансляции (до 120 символов)";
+"announcement.popup.save"                 = "Сохранить";
+"announcement.popup.saveSuccess"          = "Успешно сохранено";
+"announcement.popup.sensitiveWord"        = "Обнаружены запрещённые слова: %@";
+"announcement.popup.saving"               = "Сохранение...";
+
+// MARK: - UserCard 名片卡(对齐 H5 userCard.vue,主播端看用户场景)
+"userCard.title"                          = "Профиль";
+"userCard.follow"                         = "Подписаться";
+"userCard.unfollow"                       = "Вы подписаны";
+"userCard.block"                          = "Заблокировать";
+"userCard.unblock"                        = "Заблокировано";
+"userCard.followers"                      = "Подписчики";
+"userCard.following"                      = "Подписки";
+"userCard.giftWall"                       = "Отправить подарки";
+"userCard.errorRetry"                     = "Не удалось загрузить профиль";
+"userCard.message"                        = "Сообщение";
+"userCard.sendGift"                       = "Отправить подарок";
+"userCard.emptyGifts"                     = "Подарки ещё не отправлены!";
+"userCard.uidPrefix"                      = "UID: ";
+"userCard.unblockConfirm.title"           = "Удалить из списка блокировки";
+"userCard.unblockConfirm.message"         = "Удалить этого пользователя из списка блокировки?";
+"userCard.unblockConfirm.confirm"         = "Удалить";
+"userCard.unblockConfirm.cancel"          = "Отмена";
+"userCard.uidCopiedToast"                 = "UID скопирован в буфер обмена";
+"userCard.uidCopyA11y"                    = "Скопировать UID";
+"userCard.party.take"                     = "Занять";
+"userCard.party.mute"                     = "Заглушить";
+"userCard.party.unmute"                   = "Включить звук";
+"userCard.party.kickFromMic"              = "Выйти";
+"userCard.party.setAdmin"                 = "Назначить админом";
+"userCard.party.removeAdmin"              = "Убрать админа";
+"userCard.party.kick"                     = "Исключить";
+"userCard.party.kickHoursFormat"          = "%d ч.";
+"userCard.party.kickPermanent"            = "Навсегда";
+"userCard.party.kickConfirmMessage"       = "Точно исключить %@ из комнаты?";
+"userCard.party.kickConfirmButton"        = "Подтвердить";
+"userCard.party.kickSuccess"              = "Пользователь исключён";
+"userCard.party.setAdminSuccess"          = "Успешно назначен админом";
+"userCard.party.removeAdminSuccess"       = "Админ успешно снят";
+"userCard.blockSuccess"                   = "Заблокировано";
+"userCard.blockFail"                      = "Не удалось заблокировать, повторите попытку";
+"userCard.unblockSuccess"                 = "Удалено из списка блокировки";
+"userCard.unblockFail"                    = "Не удалось удалить, повторите попытку";
+
+"liveRoom.setting.sheet.title"            = "Настройки";
+"liveRoom.endConfirm.title"               = "Напоминание";
+"liveRoom.endConfirm.message"             = "Вы уверены, что хотите завершить трансляцию?";
+"liveRoom.endConfirm.confirm"             = "Подтвердить";
+"publicScreen.translate"                  = "Перевести";
+"publicScreen.translating"                = "Перевод...";
+"publicScreen.sentAction"                 = "Отправить";
+"publicScreen.enteredRoom"                = "вошёл(-ла) в комнату";
+"guardian.broadcast.became"               = "Стал(а) {level}-хранителем {anchor}!";
+"guardian.level.bronze"                   = "Бронза";
+"guardian.level.silver"                   = "Серебро";
+"guardian.level.gold"                     = "Золото";
+"guardian.title"                          = "Хранитель";
+"guardian.myGuardians"                    = "Мои хранители";
+"guardian.hisGuardians.format"            = "Его хранители (%d)";
+"guardian.rules.title"                    = "Правила статуса Хранителя";
+"guardian.topGuardian"                    = "Топ-Хранитель";
+"guardian.list.format"                    = "Список хранителей (%d чел.)";
+"guardian.beFirst"                        = "Станьте первым хранителем!";
+"guardian.waitForYour"                    = "Ждём вашего Хранителя";
+"guardian.noMore"                         = "Больше нет";
+"guardian.tab.gold"                       = "Gold";
+"guardian.tab.silver"                     = "Silver";
+"guardian.tab.bronze"                     = "Bronze";
+"guardian.privilege.badge"                = "Значок Хранителя";
+"guardian.privilege.frame"                = "Рамка";
+"guardian.privilege.chat"                 = "Облачко чата";
+"guardian.privilege.highlight"            = "Оповещение в комнате";
+"guardian.privilege.notice"               = "Уведомление о входе";
+"guardian.privilege.mount"                = "Транспорт";
+"guardian.privilege.gift"                 = "Подарки Хранителя";
+"guardian.day.7"                          = "7 дней";
+"guardian.day.30"                         = "30 дней";
+"guardian.day.365"                        = "365 дней";
+"guardian.save.format"                    = "Экономия %d%%";
+"guardian.preview.subtitle"               = "Эксклюзивно: %@ для Хранителей";
+"guardian.preview"                        = "Предпросмотр";
+"guardian.daysLeft.format"                = "%d дней";
+"guardian.rules.q1"                       = "1. Что такое статус Хранителя?";
+"guardian.rules.a1"                       = "Хранитель — это премиальный статус поддержки, который открывает пользователям эксклюзивные привилегии и позволяет поддерживать любимых ведущих. У ведущего может быть несколько хранителей, а пользователь может быть хранителем нескольких ведущих. Привилегии Хранителя действуют только в комнатах тех ведущих, которых пользователь охраняет.";
+"guardian.rules.q2"                       = "2. Как стать Хранителем?";
+"guardian.rules.a2"                       = "Пользователи приобретают статус Хранителя за алмазы. Пятьдесят процентов потраченных алмазов передаётся охраняемому ведущему. Существующий хранитель может продлить срок для того же ведущего.";
+"guardian.rules.q3"                       = "3. Уровни Хранителя";
+"guardian.rules.a3"                       = "Существует три уровня Хранителя. Более высокие уровни открывают больше эксклюзивных привилегий:";
+"guardian.rules.q4"                       = "4. Привилегии Хранителя";
+"guardian.rules.a4"                       = "Привилегии Хранителя включают:";
+"guardian.rules.q5"                       = "5. Срок действия";
+"guardian.rules.a5"                       = "Статус Хранителя действует выбранный период:";
+"guardian.rules.q6"                       = "6. Как формируется список Хранителей?";
+"guardian.rules.a6"                       = "Хранители ранжируются по следующим критериям:";
+"guardian.rules.levelExtra"               = "Пользователь может иметь несколько уровней для одного ведущего. Срок расходуется в порядке Gold > Silver > Bronze; более низкие уровни приостанавливаются, пока активен более высокий. Отображаемый значок и привилегии всегда соответствуют самому высокому активному уровню.";
+"guardian.rules.privilegesExtra"          = "Доступные привилегии могут различаться в зависимости от уровня Хранителя.";
+"guardian.rules.duration.7"               = "- 7 дней";
+"guardian.rules.duration.30"              = "- 30 дней";
+"guardian.rules.duration.365"             = "- 365 дней";
+"guardian.rules.durationExtra"            = "Оставшийся срок действия отображается на странице Хранителя.";
+"guardian.rules.rank.1"                   = "- Уровень Хранителя: Gold > Silver > Bronze";
+"guardian.rules.rank.2"                   = "- Оставшиеся дни статуса: больше дней — выше позиция в пределах одного уровня.";
+"guardian.rules.rank.3"                   = "- Алмазы, потраченные на ведущего за последние 30 дней.";
+"guardian.rules.rankExtra"                = "Хранитель с наивысшим рейтингом отображается вверху списка Хранителей.";
+"publicScreen.luckyWin"                   = "выиграл(а)";
+"publicScreen.luckyBySending"             = "отправив lucky";
+"publicScreen.wheelHit"                   = "выпало";
+"publicScreen.wheelOnTheWheel"            = "на колесе";
+"publicScreen.rpsWin"                     = "выиграл(а) в RPS";
+"publicScreen.luckyDiceWin"               = "выиграл(а) Lucky Dice";
+"publicScreen.rpsGet"                     = "получает";
+"publicScreen.wishlistTop1"               = "стал(а) TOP1 дарителем!";
+"publicScreen.pkTopContributors"          = "Спасибо всем фанатам, поддержавшим этот PK! Список поддержки:";
+"publicScreen.pkTop1"                     = "Top1";
+"publicScreen.pkTop2"                     = "Top2";
+"publicScreen.pkTop3"                     = "Top3";
+"publicScreen.diamondBoxSend"             = "отправил(а) алмазную коробку";
+"publicScreen.diamondBoxClaim"            = "получил(а)";
+"publicScreen.diamondBoxSettled"          = "топ распределено";
+"publicScreen.diamondBoxExpired"          = "алмазная коробка истекла, возврат";
+"live.activeTycoon.enterToast"            = "Активный магнат вошёл в комнату. Взаимодействуйте!";
+"liveRoom.rpsRules.title"                 = "Правила игры";
+"liveRoom.rpsRules.bestOf"                = "До %d побед";
+"liveRoom.rpsRules.perChallenge"          = "%d за вызов";
+"liveRoom.rpsRules.ties"                  = "Ничьи переигрываются";
+"liveRoom.rpsRules.medal"                 = "Победа приносит медаль на %d ч, максимум %d ч";
+"liveRoom.rpsRules.refund"                = "Возврат при аномальном выходе";
+"liveRoom.rpsRules.gotIt"                 = "Понятно";
+"liveRoom.mute.placeholder.system"        = "Вас заглушили";
+"liveRoom.mute.placeholder.host"          = "Заглушено ведущим";
+"liveRoom.mute.toast.system"              = "Вас заглушила система";
+"liveRoom.mute.toast.host"                = "Вас заглушил ведущий";
+"publicScreen.hi.actionA11y"              = "Варианты ответа";
+"publicScreen.hi.screen"                  = "Ответить в чате";
+"publicScreen.hi.msg"                     = "Открыть личный чат";
+"publicScreen.hi.msgUnavailable"          = "Личный чат недоступен для этого пользователя";
+"publicScreen.hi.replyPill"               = "Ответ для @%@";
+"common.cancel"                           = "Отмена";
+"liveRoom.underway.label"         = "В процессе";
+"liveRoom.privateCall.label"      = "Приватный звонок";
+"liveRoom.tool.pkDebug"           = "Отладка PK";
+"liveRoom.input.placeholder"      = "Поздоровайтесь...";
+"liveRoom.input.send.a11y"        = "Отправить сообщение";
+"liveRoom.comingSoon.task"        = "Список заданий скоро появится";
+"liveRoom.comingSoon.contribution" = "Детали вклада скоро появятся";
+"liveRoom.comingSoon.rank"        = "Недельный рейтинг скоро появится";
+"liveRoom.comingSoon.privateCall" = "Приватный звонок скоро появится";
+"liveRoom.comingSoon.gift"        = "Магазин подарков скоро появится";
+"liveRoom.roulette.a11y"          = "Интерактивное колесо";
+"liveRoom.comingSoon.roulette"    = "Интерактивное колесо скоро появится";
+
+/* Roulette intro popup & setting sheet (aligns H5 wheel.* + live.* namespace) */
+"liveRoom.roulette.intro.card1.title" = "Колесо";
+"liveRoom.roulette.intro.card1.body"  = "Зрители могут крутить колесо призов за алмазы. Больше вращений — выше вовлечённость аудитории и доход. Стример может настроить эксклюзивные интерактивные призы для себя и фанатов и включать или отключать функцию в любой момент в настройках трансляции.";
+"liveRoom.roulette.intro.next"        = "Далее";
+"liveRoom.roulette.setting.title"     = "Настроить колесо";
+"liveRoom.roulette.enable"            = "Включить колесо";
+"liveRoom.roulette.price"             = "Задать цену вращения";
+"liveRoom.roulette.sectors"           = "Настроить пункты";
+"liveRoom.roulette.sectors.empty"     = "Ожидает редактирования";
+"liveRoom.roulette.edit"              = "Редактировать колесо";
+"liveRoom.roulette.rules"             = "Правила игры";
+"liveRoom.roulette.errorRetry"        = "Не удалось загрузить. Попробуйте ещё раз.";
+
+/* Roulette v11: functional alignment with H5 (Wheel + RPS 2-card intro + Edit sub-sheet + Toast) */
+"liveRoom.roulette.intro.header"      = "Правила интерактивных игр";
+"liveRoom.roulette.intro.rps.title"   = "Камень, ножницы, бумага";
+"liveRoom.roulette.intro.rps.body"    = "Зрители платят алмазами, чтобы бросить вызов стримеру в «Камне-ножницах-бумаге». Система играет от имени стримера. За каждую победу стример получает медаль, что повышает вовлечённость фанатов и доход.";
+"liveRoom.roulette.closeWheel"        = "Закрыть колесо";
+"liveRoom.roulette.finishEditing"     = "Завершить редактирование";
+"liveRoom.roulette.edit.title"        = "Настроить пункты";
+"liveRoom.roulette.edit.confirm"      = "Подтвердить";
+"liveRoom.roulette.edit.enterItems"   = "Введите ваши пункты";
+"liveRoom.roulette.toast.started"     = "Колесо запущено";
+"liveRoom.roulette.toast.stopped"     = "Колесо остановлено";
+"liveRoom.roulette.toast.enterPrice"  = "Введите цену";
+
+/* LiveRoom H5 interaction alignment (2026-07-06 iteration 2) */
+"liveRoom.tool.message"           = "Сообщения";
+"liveRoom.tool.gift"              = "Подарки";
+"liveRoom.tool.setting"           = "Настройки";
+"liveRoom.comingSoon.message"     = "Чат скоро появится";
+"liveRoom.sheet.messagesTitle"    = "Сообщения";
+"liveRoom.setting.beauty"         = "Красота";
+"liveRoom.setting.endLive"        = "Завершить трансляцию";
+"liveRoom.pk.a11y.default"        = "Начать PK";
+"liveRoom.pk.a11y.matching"       = "Подбор соперника PK";
+"liveRoom.pk.a11y.invited"        = "Получено приглашение в PK";
+"liveRoom.pk.a11y.inPK"           = "В PK";
+"liveRoom.pk.a11y.punishing"      = "Наказание в PK";
+"liveRoom.comingSoon.pkInterrupt"  = "Подтверждение прерывания PK скоро появится";
+"liveRoom.comingSoon.pkDisconnect" = "Подтверждение отключения PK скоро появится";
+"liveRoom.privateCall.caption"    = "Приватный звонок";
+
+// MARK: - Call POC（调试态保留，上线前删除）
+"call.statusWaitingRemote"   = "Ожидание собеседника";
+"call.permissionTitle"       = "Требуется доступ к камере";
+"call.permissionMessage"     = "Включите в Настройках → Конфиденциальность → Камера";
+"call.channelLabel"          = "Канал";
+"call.channelPlaceholder"    = "Имя канала (должно совпадать)";
+"call.hangup"                = "Завершить";
+"call.connecting"            = "Соединение...";
+"call.join"                  = "Присоединиться";
+"call.beautyBannerPassthrough" = "Прямой предпросмотр · FaceUnity не подключён";
+"call.beautyBannerActive"    = "FaceUnity активен";
+"call.errorEmptyChannel"     = "Введите имя канала";
+"call.errorTokenFailed"      = "Не удалось получить токен";
+"call.errorConnectPrefix"    = "Ошибка подключения: %1$@ (%2$@)";
+"call.errorConnectGeneric"   = "Ошибка подключения: %@";
+"call.error.rtmTokenEmpty"     = "RTM-токен пуст";
+"call.error.invalidRemoteUserId" = "Неверный ID собеседника";
+"call.error.createFailed"      = "Не удалось начать звонок";
+"call.error.sendFailed"        = "Не удалось отправить сигнал вызова";
+"call.error.acceptFailed"      = "Не удалось отправить сигнал принятия";
+"call.error.rtcTokenFailed"    = "Не удалось получить RTC-токен";
+"call.error.rtcTokenFormat"    = "RTC-токен: %@";
+"call.action.chatInput"        = "Чат";
+"call.action.feedback"         = "Обратная связь";
+"call.emptyRoom.hangupTip"     = "Проблема со звонком, автоматическое завершение";
+"live.returnPopup.autoFormat"  = "Через %d сек. автоматический возврат к трансляции";
+"live.returnPopup.button"      = "Вернуться к трансляции";
+"call.error.remoteRejected"    = "Звонок отклонён";
+"call.error.remoteNoAnswer"    = "Нет ответа";
+"call.error.remoteBusy"        = "Пользователь занят";
+"call.error.localBusy"         = "Звонок уже идёт";
+"auth.sessionExpired"          = "Сессия истекла, войдите снова";
+
+// MARK: - Call 1v1 真实通话视图（CallView.swift）
+"call.waiting.answer"       = "Ожидание ответа...";
+"call.subtitle.callingOut"   = "Вызов...";
+"call.subtitle.incoming"     = "приглашает вас на видеозвонок";
+"call.action.cancel"         = "Отмена";
+"call.action.reject"         = "Отклонить";
+"call.action.accept"         = "Принять";
+"call.action.hangupBackToLive" = "Завершить и вернуться к трансляции";
+"call.action.hangup"         = "Завершить";
+// C-1 通话中控制按钮
+"call.action.micMute"                  = "Выключить микрофон";
+"call.action.micUnmute"                = "Включить микрофон";
+"call.action.switchCamera"             = "Перевернуть";
+"call.networkQuality.weak"             = "Плохая сеть — качество звонка может пострадать";
+// C-3 通话异常自检 alert
+"call.abnormal.userOffline.title"      = "Пользователь не в сети";
+"call.abnormal.userOffline.message"    = "Возможно, собеседник отключился. Завершить звонок?";
+"call.abnormal.networkUnstable.title"  = "Нестабильная сеть";
+"call.abnormal.networkUnstable.message" = "Нестабильная сеть. Тарификация приостановлена.";
+"call.abnormal.incomeZero.title"       = "Нет дохода";
+"call.abnormal.incomeZero.message"     = "Этот звонок длится более 2 минут без дохода.";
+"call.abnormal.endCall"                = "Завершить звонок";
+"call.abnormal.continue"               = "Продолжить";
+// C-4 Wave1 直播私call 300s 横幅 + 挂断确认
+"call.liveBanner.countdownFormat"      = "Примерно через %d сек. ваш доход за минуту звонка станет равным цене звонка.";
+"call.hangupConfirm.title"             = "Завершить звонок?";
+"call.hangupConfirm.cancel"            = "Отмена";
+// C-5 充值锁定流程
+"call.waitRecharge.bonusFormat"        = "Получите бонус %d 💎";
+"call.waitRecharge.countdownFormat"    = "%02dс";
+"call.congrats.title"                  = "Поздравляем!";
+"call.congrats.messageFormat"          = "Пользователь пополнил счёт — получите бонус %d 💎";
+"call.congrats.ok"                     = "OK";
+// C-4 Wave4 UI 布局对齐
+"call.action.askForGift"     = "Попросить подарок";
+"call.askForGift.rejected"   = "Пользователь отклонил запрос на подарок";
+"call.askForGift.waitingForReward" = "Ожидание награды...";
+// v22 PK 公屏（对齐 H5 pk notification start/succeed/failed/draw）
+"pk.pkNotificationStart"     = "PK начался! Отправляйте подарки в поддержку ведущего!🎁";
+"pk.pkResultWin"             = "🎉 %@ победил(а) %@ в этом PK";
+"pk.pkResultLose"            = "😭 %@ к сожалению проиграл(а) %@ в этом PK";
+"pk.pkResultDraw"            = "%@ и %@ сыграли вничью в этом PK";
+"call.action.more"           = "Ещё";
+"call.action.comingSoon"     = "Скоро";
+"call.remoteCameraOff"       = "Камера выключена";
+"call.liveBanner"            = "Приватный звонок в трансляции";
+
+/* 设计稿主播端.png 对齐（2026-07-09） */
+"call.signal.label.you"                = "Вы";
+"call.signal.label.user"               = "Пользователь";
+"call.waitState.rechargingFormat"      = "Пользователь пополняет счёт, подождите %d с.";
+"call.chat.input.placeholder"          = "Введите сообщение...";
+"call.chat.input.send"                 = "Отправить";
+
+// MARK: - Call HUD（H M4 sysMsg 写入 5 publishers 的可视化）
+"call.hud.incomeFormat"      = "💰 %d";
+"call.hud.giftIncomeFormat"  = "🎁 %d";
+"call.hud.waitBonusFormat"   = "Бонус пополнения +%d💎";
+"call.hud.remoteTextFormat"  = "%@";
+"call.hud.wait.startPay"     = "Пользователь оплачивает…";
+"call.hud.wait.paySuccess"   = "Пользователь успешно оплатил";
+"call.hud.wait.callTimeEnd"  = "Таймер звонка приостановлен";
+"call.hud.wait.payCancel"    = "Пользователь отменил оплату";
+
+// MARK: - LiveRoom 挂断后回直播倒计时覆盖层
+"liveRoom.callEndedTitle"    = "Звонок завершён";
+"liveRoom.returnCountdownFormat" = "Возврат в трансляцию через %d с";
+
+// MARK: - 服务层错误（被 View 显示）
+"auth.error.noToken"         = "Не удалось войти. Попробуйте снова.";
+"auth.error.requestFailed"   = "Не удалось продолжить. Проверьте данные и попробуйте снова.";
+"auth.error.networkFormat"   = "Ошибка сети: %@";
+"auth.error.sessionInvalidated" = "Сессия истекла или в аккаунт вошли с другого устройства. Пожалуйста, войдите снова.";
+"live.error.noCover"         = "Обложка трансляции ещё не задана. Настройте её в основном приложении.";
+// 全局顶部错误通知：envelope 解析失败（APIClient/PartyAPIClient/SapiTokenStore 共用；技术错误，三语言统一英文）
+"api.error.responseParseFailed" = "Ошибка ответа сервера";
+"api.error.network" = "Ошибка сети, проверьте подключение";
+"api.error.session" = "Сессия истекла, войдите снова";
+"api.error.serverFormat" = "Ошибка сервера (%d), попробуйте позже";
+"api.error.requestFailedFormat" = "Запрос не выполнен (%@)";
+
+// 公屏系统消息（用户在直播间内可见）
+"im.system.loginFailedFormat" = "Не удалось войти в IM: %@";
+"im.system.joinFailedFormat"  = "Не удалось присоединиться к чату: %@";
+"im.system.joined"            = "Вы вошли в чат";
+"im.system.giftPlaceholder"   = "[Подарок/Пользовательское сообщение]";
+
+// MARK: - G 直播 PK 玩法（26 条 + 强制下播/Toast 复用 B）
+"pk.entry.title"             = "Начать PK";
+"pk.entry.random"            = "Случайный PK";
+"pk.entry.invite"            = "Пригласить по ID";
+"pk.initiate.title"          = "Начать PK";
+"pk.matchingCard.hint"       = "Случайный подбор в рамках вашего ранга. Ожидаемое время подбора — 15 с.";
+"pk.matchingCard.matched"    = "Соперник успешно найден";
+"pk.matchingCard.searching"  = "Идёт поиск соперника";
+"pk.durationPicker.title"    = "Установите длительность PK";
+
+"pk.matching.title"          = "Подбор...";
+"pk.matching.subtitle"       = "Идёт поиск соперника";
+"pk.matching.cancel"         = "Отмена";
+"pk.matching.cancelled"      = "Подбор PK отменён";
+
+"pk.invite.title"            = "Начать PK";
+"pk.invite.placeholder"      = "UID соперника";
+"pk.invite.durationLabel"    = "Длительность PK";
+"pk.invite.send"             = "Отправить приглашение";
+"pk.invite.waiting"          = "Ожидание принятия...";
+"pk.invite.cancel"           = "Отменить приглашение";
+"pk.invite.duration3"        = "3 минуты";
+"pk.invite.duration5"        = "5 минут";
+"pk.invite.duration10"       = "10 минут";
+"pk.invite.duration15"       = "15 минут";
+
+"pk.invited.title"           = "Получено приглашение на PK";
+"pk.invited.accept"          = "Принять";
+"pk.invited.reject"          = "Отклонить";
+
+"pk.arena.endPK"             = "Завершить PK";
+"pk.punishing.title"         = "Наказание";
+"pk.punishing.endPunish"     = "Завершить";
+
+"pk.result.title"            = "PK завершён";
+"pk.result.confirm"          = "OK";
+
+"pk.toast.inviteRejectedFormat" = "%@ отклонил(а) ваше приглашение в PK";
+"pk.toast.inviteAcceptedFormat" = "%@ принял(а) ваше приглашение в PK";
+"pk.toast.inviteTimeout"        = "Приглашение в PK истекло";
+
+"pk.invite.searchPlaceholder"   = "UID или ник";
+"pk.invite.recommendTitle"      = "Рекомендуемые";
+"pk.invite.searchResultTitle"   = "Результаты поиска";
+"pk.invite.empty"               = "Нет данных";
+"pk.invite.acceptSwitch"        = "Принимать приглашения на PK";
+"pk.invite.btn.invite"          = "Пригласить";
+"pk.invite.btn.waiting"         = "Ожидание";
+"pk.invite.btn.pking"           = "PK идёт";
+"pk.invite.toast.busy"          = "Другая сторона занята, попробуйте позже";
+"pk.invite.toast.beingInvited"  = "Соперник обрабатывает другое приглашение на PK, попробуйте позже";
+"pk.invite.toast.self"          = "Нельзя пригласить себя";
+"pk.invite.toast.limit"         = "Лимит приглашений PK достигнут. Попробуйте позже";
+"pk.invite.toast.matching"      = "Соперник в поиске случайного PK, попробуйте позже";
+"pk.invite.toast.sent"          = "Приглашение на PK отправлено";
+
+/* PK popup H5 alignment (2026-07-06 iteration 3) */
+"pk.giveUp.title"               = "Сдать PK";
+"pk.giveUp.confirm"             = "Вы уверены, что хотите выйти из этого PK? В случае автоотключения результат PK будет засчитан как поражение";
+"pk.giveUp.action"              = "Сдаться";
+"pk.continuePK"                 = "Продолжить PK";
+"pk.pkEnded.title"              = "PK завершён";
+"pk.disconnect.action"          = "Отключить трансляцию";
+"pk.matchFailed.title"          = "Соперник пока не найден";
+"pk.matchFailed.hint1"          = "Упс, сейчас нет ведущих равной силы!";
+"pk.matchFailed.hint2"          = "Подбор отключён. Выберите конкретного ведущего для PK";
+"pk.matchFailed.initiate"       = "Начать PK";
+"pk.inviting.title"             = "Приглашение на PK...";
+"pk.waitingAcceptance"          = "Ожидание принятия PK";
+"pk.cancelInvitation"           = "Отменить приглашение на PK";
+"pk.punish.label"               = "Наказание";
+"pk.result.win"                 = "ПОБЕДА";
+"pk.result.lose"                = "ПОРАЖЕНИЕ";
+"pk.result.draw"                = "НИЧЬЯ";
+"pk.history.title"              = "История PK";
+"pk.rule.title"                 = "Правила PK";
+"pk.rank.title"                 = "Рейтинг PK";
+"pk.rank.sheet.title"           = "Список хранителей";
+"pk.rank.sheet.empty"           = "Нет данных";
+"pk.comingSoon"                 = "Скоро";
+"pk.countdownFormat"            = "%d с";
+"pk.opponent.mute"              = "Отключить звук соперника";
+"pk.opponent.unmute"            = "Включить звук соперника";
+
+// PK History record sheet (v23 2026-07-13, aligned with H5 pkHistoryPopup.vue)
+"pk.record.effectiveWinLabel"   = "Эффективные победы в PK за неделю";
+"pk.record.effectiveTipTitle"   = "Эффективные победы";
+"pk.record.effectiveTipMessage" = "Количество побед в PK на этой неделе с очками PK выше эффективного порога.";
+"pk.record.keepDaysFooter"      = "Хранятся записи за последние 30 дней";
+"pk.record.selfDefault"         = "Я";
+
+// MARK: - H IM 完善 错误文案（NIMServiceError.errorDescription）
+"im.error.loginFailedFormat"         = "Не удалось войти в IM (code=%@) %@";
+"im.error.tokenInvalid"              = "Сессия истекла, войдите снова";
+"im.error.kickedOut"                 = "Ваш аккаунт вошёл на другом устройстве";
+"im.error.chatroomEnterFailedFormat" = "Не удалось войти в чат (%@)";
+"im.error.networkErrorFormat"        = "Сетевая ошибка IM (%@)";
+"im.error.decodingFormat"            = "Не удалось разобрать сообщение: %@";
+
+// MARK: - Moment 动态卡片（Profile / Circle）
+"moment.relative.justNow"        = "Только что";
+"moment.relative.minutes.format" = "%dмин";
+"moment.relative.hours.format"   = "%dч";
+"moment.relative.days.format"    = "%dд";
+"moment.action.like"             = "Нравится";
+"moment.action.unlike"           = "Убрать лайк";
+"moment.action.delete"           = "Удалить";
+"moment.action.report"           = "Пожаловаться";
+"moment.delete.confirm.title"    = "Удалить эту запись?";
+"moment.delete.confirm.action"   = "Удалить";
+"moment.delete.confirm.cancel"   = "Отмена";
+
+/* MARK: Blocklist 黑名单列表（I-1） */
+"blocklist.title"                       = "Чёрный список";
+"blocklist.empty.description"           = "Если пользователь в чёрном списке, вы не будете получать от него сообщений.";
+"blocklist.removeConfirm.title"         = "Удалить из чёрного списка";
+"blocklist.removeConfirm.message"       = "Точно удалить пользователя из чёрного списка?";
+"blocklist.removeConfirm.action"        = "Удалить";
+"blocklist.removeConfirm.cancel"        = "Отмена";
+"blocklist.removeNetworkError"          = "Ошибка сети, попробуйте снова.";
+"blocklist.removeBadUserId"             = "Неверный ID пользователя";
+"blocklist.loadError.retry"             = "Не удалось загрузить, нажмите чтобы повторить";
+"blocklist.loadEnd"                     = "Конец списка";
+"blocklist.accessibility.removeButton"  = "Удалить из чёрного списка";
+"blocklist.accessibility.row"           = "Заблокированный пользователь %1$@, заблокирован %2$@";
+"blocklist.accessibility.rowNoDate"     = "Заблокированный пользователь %@";
+"blocklist.loadError.retryFormat"       = "%1$@ · %2$@";
+
+// MARK: - Message P2P 会话列表（H-1 MVP）
+"message.news.title"                    = "Новости";
+"message.clear.tabTitle"                = "Очистить все диалоги в этой вкладке?";
+"message.clear.tabConfirm"              = "Очистить";
+"message.category.flame"                = "Огонь";
+"message.category.stranger"             = "Незнакомец";
+"message.category.prime"                = "Prime";
+"message.empty.flame"                   = "Пока нет активных диалогов";
+"message.empty.stranger"                = "Нет сообщений от незнакомцев";
+"message.empty.prime"                   = "Пока нет премиум-участников";
+"message.loadError.retry"               = "Не удалось загрузить, нажмите для повтора";
+"message.action.stickTop"               = "Закрепить";
+"message.action.unstickTop"             = "Открепить";
+"message.action.delete"                 = "Удалить";
+"message.action.failedToast"            = "Действие не выполнено, попробуйте ещё раз";
+"massTexting.title"                     = "Массовая рассылка";
+"massTexting.contentTitle"              = "Содержание массовой рассылки";
+"massTexting.sendOneTap"                = "Отправить одним нажатием";
+"massTexting.loading"                   = "Загрузка сообщения...";
+"massTexting.retry"                     = "Повторить";
+"massTexting.sendSuccess"               = "Сообщение успешно отправлено";
+"massTexting.dailyLimitReached"         = "Достигнут дневной лимит. Возвращайтесь завтра.";
+"massTexting.refreshUnavailable"        = "Извините, библиотека сообщений недоступна. Обновите позже.";
+"massTexting.sendFailed"                = "Не удалось отправить. Попробуйте ещё раз.";
+"massTexting.loadFailed"                = "Не удалось загрузить сообщение. Попробуйте ещё раз.";
+"massTexting.noCopywriting"             = "Сейчас нет доступных сообщений.";
+"massTexting.refreshCopy"               = "Обновить сообщение";
+"massTexting.hint"                      = "Сообщение боссу в один клик!";
+"massTexting.remainingFormat"           = "Осталось сегодня: %d";
+"message.systemInbox.station"           = "Информация от площадки";
+"message.systemInbox.notification"      = "Системная информация";
+"message.systemInbox.admin"             = "Администратор";
+"message.systemInbox.comingSoon"        = "Подробности скоро";
+"stationPopup.read"                     = "Прочитано";
+"stationPopup.unread"                   = "Не прочитано";
+"stationPopup.alreadyRead"              = "Вы прочитали сообщение";
+"stationPopup.expirationDate"           = "Дата истечения";
+
+// Call Records 通话历史记录（对齐 H5 views/communication/records/list.vue）
+"callRecord.list.title"                 = "Общение";
+"callRecord.empty"                      = "Пока нет записей о звонках";
+"callRecord.loadingMore"                = "Загрузка...";
+"callRecord.noMoreData"                 = "Больше записей нет";
+"callRecord.source.match"               = "Матч";
+"callRecord.source.live"                = "Трансляция";
+"callRecord.source.private"             = "Приватный";
+"callRecord.reason.rejected"            = "Отклонён";
+"callRecord.reason.timeout"             = "Тайм-аут";
+"callRecord.reason.canceled"            = "Отменён";
+"callRecord.a11y.missed"                = "Пропущенный звонок";
+
+// Batch 6.1 回复积分 4 tip 文案（H5 蓝本 en.json:820-821 + chat/index.vue:43-44 硬编码）
+"chat.guideTip"        = "Общайтесь и получайте награды — начните чат сейчас!";
+"chat.stimulateTip"    = "Больше сообщений от него — разблокируйте дополнительные алмазы!";
+"chat.replyFastTip"    = "Ответьте быстро — двойные баллы! Только один раз.";
+"chat.replyRemindTip"  = "Система: Вы не отвечали более 15 минут. Главное: чем быстрее ответ, тем больше баллов. Ответьте в течение 12 часов, чтобы получить баллы. 1 час → x2, 30 мин → x3, 15 мин → x4 баллов!";
+
+// 首次进入私聊页 2 步引导（H5 guidance.vue）
+"chat.intro.step1"     = "Новая функция! Общайтесь и зарабатывайте алмазы";
+"chat.intro.step2"     = "Узнать подробности";
+// 云端历史拉空 toast
+"chat.historyExpired"  = "История чата истекла.";
+"chat.private.permissionDisabled" = "Ваше разрешение отключено.";
+"chat.private.auditing" = "На проверке";
+"chat.private.rejected" = "Отклонено";
+"chat.private.create" = "Создать приватное медиа";
+"chat.private.guide" = "Создайте приватное медиа, чтобы отправить его сюда.";
+// 文字气泡内翻译按钮
+"chat.translate"       = "Перевести";
+
+// S-7 Chat a11y labels
+"chat.a11y.audioPlay"             = "Воспроизвести голосовое %d сек.";
+"chat.a11y.audioPause"            = "Пауза голосового сообщения %d сек.";
+"chat.a11y.resend"                = "Отправить сообщение повторно";
+"chat.a11y.mediaImage"            = "Фото";
+"chat.a11y.mediaVideo"            = "Видео";
+
+// M-5 ChatInputBar 输入栏文案
+"chat.input.typeMessage"          = "Введите сообщение";
+"chat.input.holdToTalk"           = "Удерживайте для записи";
+"chat.input.send"                 = "Отправить";
+
+// M-6 DiaReceivePopup 钻石到账弹窗
+"dia.receive.congratulations"     = "Поздравляем";
+"dia.receive.unlockedAchievement" = "Достижение разблокировано";
+"dia.receive.get"                 = "Получить";
+"dia.receive.a11y.get"            = "Получить алмазы";
+"dia.receive.receivedDiamondsFormat" = "Получено алмазов: %d";
+
+// 系统通知会话文案（对齐 H5 systemMsg.vue + cpRankRewardMsg.vue）
+"chat.system.comingSoon"          = "Скоро";
+"chat.system.viewNow"             = "Посмотреть";
+"chat.system.checkCpRanking"      = "Посмотреть рейтинг Cp";
+"chat.system.appealClickHere"     = "нажмите здесь";
+"chat.system.appealSuccess"       = "Апелляция одобрена";
+"chat.system.durationPerm"        = "Навсегда";
+"chat.system.itemType.vehicle"    = "Транспорт";
+"chat.system.itemType.frame"      = "Рамка";
+"chat.system.itemType.entrance"   = "Вход";
+"chat.system.itemType.chatSkin"   = "Скин чата";
+"chat.system.itemType.cardFrame"  = "Рамка карточки";
+"chat.system.itemGetFormat"       = "Поздравляем! Вы получили【%1$@】【%2$@】* (%3$@). Найти в разделе «Мой профиль» > «Реквизит».";
+"chat.system.itemExpiredFormat"   = "Срок действия【%1$@】【%2$@】истёк";
+"chat.system.durationHourMinuteFormat" = "%1$d ч %2$d мин";
+"chat.system.durationHourFormat"       = "%1$d ч";
+"chat.system.durationMinuteFormat"     = "%1$d мин";
+"chat.system.rewardDiamondFormat"      = "Поздравляем! Вы получили Алмазы*%@";
+"chat.system.cpRankRewardMsgFormat"    = "Поздравляем! Вы получили награду TOP %d в еженедельном рейтинге CP.";
+
+// 语音录制过短
+"chat.voice.tooShort"  = "Слишком короткая запись";
+// 发送失败网络提示
+"chat.sendNetworkError" = "Ой, соединение не удалось! Проверьте сеть.";
+
+// v5 F-3 消息 preview 归一化
+"message.preview.image"                 = "[Изображение]";
+"message.preview.voice"                 = "[Голос]";
+"message.preview.video"                 = "[Видео]";
+"message.preview.location"              = "[Местоположение]";
+"message.preview.gift"                  = "[Подарок]";
+"message.preview.unknown"               = "[Неизвестно]";
+"message.preview.privatePhoto"          = "[Приватное фото]";
+"message.preview.privateVideo"          = "[Приватное видео]";
+"chat.refusedTip"                       = "Сообщение отправлено, но получатель его отклонил";
+"message.preview.callMissed"            = "Пропущен";
+"message.preview.callRejected"          = "Отклонён";
+"message.preview.callCancelled"         = "Отменён";
+// v5 F-4 通用操作
+"message.action.cancel"                 = "Отмена";
+// v5 F-5 时间
+"message.time.yesterday"                = "Вчера";
+// v5 F-6 a11y
+"message.a11y.online"                   = "Онлайн";
+"message.a11y.offline"                  = "Офлайн";
+"message.a11y.pinned"                   = "Закреплено";
+"message.a11y.vip"                      = "VIP";
+"message.a11y.activeTycoon"             = "Активный магнат";
+"message.a11y.unreadCountFormat"        = "%d непрочитанных";
+"message.a11y.levelFormat"              = "Уровень %@";
+
+// MARK: - E/F 派对房（spec §1.4 + H i18n 收尾）
+"party.defaultRoomName"                  = "Party-комната";
+"party.defaultUser"                      = "Пользователь";
+"party.defaultGift"                      = "Подарок";
+"party.cancel"                           = "Отмена";
+"party.retry"                            = "Повторить";
+"party.loading"                          = "Загрузка…";
+"party.ok"                               = "ОК";
+"party.alert.title"                      = "Уведомление";
+"party.onlineCount.format"               = "%d онлайн";
+
+"party.list.navTitle"                    = "Party-комнаты";
+"party.list.loadMore"                    = "Потяните вверх, чтобы загрузить ещё";
+"party.list.unnamed"                     = "Комната без названия";
+"party.list.error.loadFailedFormat"      = "Не удалось загрузить: %@";
+"party.list.error.decodeFormat"          = "Ошибка декодирования: %@";
+"party.list.createRoom"                  = "Создать комнату";
+"party.list.empty"                       = "Пока нет Party-комнат";
+"party.list.error.retry"                 = "Повторить";
+"party.list.welcomeFallback"             = "Добро пожаловать в мою комнату, давайте веселиться!";
+"party.list.pill.liveVoice"              = "Live+Voice";
+"party.list.pill.voice"                  = "Голос";
+"party.list.weeklyTop"                   = "Топ %d за неделю";
+"party.list.pill.languageFallback"       = "Английский";
+
+"party.tab.party"                        = "Party";
+"party.tab.follow"                       = "Подписаться";
+"party.tab.recent"                       = "Недавние";
+"party.language.all"                     = "Все";
+"party.rank.partyRich"                   = "PartyRich";
+"party.rank.room"                        = "Комната";
+"party.rank.rules.title"                 = "Введение";
+"party.rank.partyRich.rule1"             = "Рейтинг рассчитывается на основе очков подарков, отправленных пользователями в Party-комнатах, и обновляется ежедневно, еженедельно и ежемесячно.";
+"party.rank.partyRich.rule2"             = "1 алмаз = 1 очко рейтинга.";
+"party.rank.partyRich.rule3"             = "Чем выше общая сумма очков подарков в любой Party-комнате, тем выше рейтинг.";
+"party.rank.room.rule1"                  = "Рейтинг определяется общим количеством алмазов, полученных за подарки в Party-комнатах, с ежедневными, еженедельными и ежемесячными обновлениями.";
+"party.rank.room.rule2"                  = "1 алмаз = 1 очко рейтинга.";
+"party.rank.room.rule3"                  = "Чтобы повысить рейтинг, старайтесь получать больше подарков в своей Party-комнате.";
+"party.rank.period.thisWeek"             = "Эта неделя";
+"party.rank.period.lastWeek"             = "Прошлая неделя";
+"party.rank.period.thisMonth"            = "Этот месяц";
+"party.rank.period.lastMonth"            = "Прошлый месяц";
+"party.search.placeholder"               = "Поиск по названию комнаты / ID";
+"party.search.hint"                      = "";
+"party.search.noResults"                 = "";
+"party.comingSoon"                       = "Скоро";
+"party.myRoom"                           = "Моя комната";
+"party.password.alert.title"             = "Введите пароль комнаты";
+"party.password.alert.message"           = "Для входа в эту комнату нужен пароль.";
+"party.password.placeholder"             = "Пароль";
+"party.password.confirm"                 = "Войти";
+"party.password.cancel"                  = "Отмена";
+"party.enteringRoom"                     = "Вход в комнату…";
+
+"party.create.navTitle"                  = "Создать комнату";
+"party.create.submit"                    = "Создать";
+"party.create.confirm"                   = "Подтвердить";
+"party.create.name.placeholder"          = "Xxxxx's Room";
+"party.create.section.tagline"           = "Слоган комнаты";
+"party.create.tagline.placeholder"       = "Давайте пообщаемся и повеселимся вместе.";
+"party.create.section.language"          = "Язык комнаты";
+"party.create.section.mode"              = "Режим комнаты";
+"party.create.mode.voice"                = "Голос";
+"party.create.mode.liveVoice"            = "Видео + голос";
+"party.create.mode.lockFormat"           = "Режим блокировки Ур.%d";
+"party.create.mode.unlockFormat"         = "Режим разблокировки Ур.%d";
+"party.create.mode.lockedToastFormat"    = "Требуется Ур.%d";
+"party.create.section.background"        = "Фон комнаты";
+"party.create.bg.permanent"              = "Навсегда";
+"party.create.bg.empty"                  = "Фоны недоступны";
+"party.create.permissionDenied"          = "Обратитесь к администратору, чтобы разблокировать создание комнаты";
+// F 期 Live↔Party 互斥（对齐安卓 isLiveing||isPartying toast，2026-07-17）
+"party.mutex.blockedByLive"              = "Вы ведёте трансляцию. Завершите её, чтобы войти в Party-комнату.";
+"party.mutex.blockedByParty"             = "Вы в Party-комнате. Сначала выйдите, чтобы начать трансляцию.";
+// v8 派对房设置 + 房管管理（2026-07-13）
+"party.settings.navTitle"                = "Настройки комнаты";
+"party.settings.changeAvatar"            = "Сменить аватар комнаты";
+"party.settings.section.admin"           = "Админы";
+"party.settings.manageAdmins"            = "Управление админами";
+"party.settings.admin.empty"             = "Админов пока нет";
+"party.settings.admin.add"               = "Добавить";
+"party.settings.admin.remove"            = "Убрать админа";
+"party.settings.admin.addTitle"          = "Добавить админа";
+"party.settings.admin.addHint"           = "Введите ID пользователя, чтобы назначить админом.";
+"party.settings.admin.userIdPlaceholder" = "ID пользователя";
+// v8.1 Room Tools sheet
+"party.tools.title"                      = "Инструменты комнаты";
+"party.tool.lockRoom"                    = "Заблокировать комнату";
+"party.tool.music"                       = "Музыка";
+"party.music.title"                      = "Музыка";
+"party.music.playlist"                   = "Плейлист";
+"party.music.local"                      = "Локально";
+"party.music.liked"                      = "Понравилось";
+"party.music.empty"                      = "Нет доступной музыки";
+"party.music.edit"                       = "Изменить";
+"party.music.upload"                     = "Загрузить";
+"party.music.delete"                     = "Удалить";
+"party.music.selectAll"                  = "Выбрать всё";
+"party.music.invalidFormat"              = "Неподдерживаемый аудиоформат";
+"party.music.fileTooLarge"               = "Аудиофайлы должны быть не более 10 МБ";
+"party.music.uploadSucceeded"            = "Музыка загружена";
+"party.music.uploadFailed"               = "Не удалось загрузить музыку";
+"party.music.deleteSucceeded"            = "Музыка удалена";
+"party.music.deleteFailed"               = "Не удалось удалить музыку";
+"party.tool.settings"                    = "Настройки";
+"party.tool.micApplication"              = "Заявки на микрофон";
+"party.tool.roomMode"                    = "Режим комнаты";
+"party.tool.blocklist"                   = "Чёрный список";
+"party.tool.mcSeat"                      = "Место MC";
+"party.tool.privateCall"                 = "Приватный звонок";
+"party.tool.currencyExchange"            = "Валюта";
+"party.currency.exchangeTitle"           = "Валюта комнаты";
+"party.currency.balanceTitle"            = "Баланс";
+"party.currency.gems"                    = "Самоцветы";
+"party.currency.diamonds"                = "Алмазы";
+"party.currency.coins"                   = "Монеты";
+"party.currency.target"                  = "Обменять на";
+"party.currency.available"               = "Доступно";
+"party.currency.amountPlaceholder"       = "Введите сумму";
+"party.currency.all"                     = "Все";
+"party.currency.diamondRate"             = "1 самоцвет = 1 алмаз";
+"party.currency.coinRateHint"            = "Итоговая сумма монет определяется сервером.";
+"party.currency.exchangeAction"          = "Обменять";
+"party.currency.refresh"                 = "Обновить баланс";
+"party.currency.balanceLoadFailed"       = "Не удалось загрузить баланс";
+"party.currency.invalidAmount"           = "Введите положительное целое число Gems";
+"party.currency.insufficientBalance"     = "Недостаточно Gems";
+"party.currency.diamondExchangeSuccessFormat" = "%lld самоцветов обменяны на алмазы";
+"party.currency.coinExchangeSuccess"     = "Самоцветы обменяны на монеты";
+"party.currency.exchangeFailed"          = "Не удалось обменять";
+"party.currency.record"                  = "История";
+"party.currency.loadMore"                = "Загрузить ещё";
+"party.currency.recordEmpty"             = "Пока нет записей";
+"party.currency.recordLoadFailed"        = "Не удалось загрузить записи";
+"party.currency.explainTitle"            = "Пояснение:";
+"party.currency.gemHowToGet"             = "Как получить Gem";
+"party.currency.gemHowToGetDetail"       = "Получайте подарки в Party-комнате";
+"party.currency.gemUse"                  = "Как использовать Gem";
+"party.currency.gemUseCoinDetail"        = "Примечание: Gems можно обменять на монеты, которые доступны для вывода.";
+"party.currency.gemUseDiamondDetail"     = "Gem можно обменять на алмазы для трат";
+"party.privateCall.openConfirmLabel"     = "Открыть приватный звонок";
+"party.tool.comingSoon"                  = "Скоро";
+// F-spec §5.1 PartyPrivateCallSettingSheet
+"party.privateCall.settingTitle"         = "Party Call";
+"party.privateCall.enableToggleTitle"    = "Включить Party Call";
+"party.privateCall.giftSectionTitle"     = "Подарок для звонка";
+"party.privateCall.giftEmpty"            = "Подарки недоступны";
+"party.privateCall.loadError"            = "Не удалось загрузить, нажмите, чтобы повторить";
+"party.privateCall.saveSuccess"          = "Сохранено";
+"party.privateCall.saveFailed"           = "Не удалось сохранить, попробуйте ещё раз";
+"party.privateCall.seatBubble"           = "На звонке, скоро вернусь";
+"party.moreMenu.minimize"                = "Свернуть";
+"party.banner.scoreDouble"                = "Очки ×2";
+// E spec 2026-07-14 派对房 Blocklist（房主/管理员查看+解除房间维度黑名单）
+"party.blocklist.navTitle"               = "Чёрный список";
+"party.blocklist.empty"                  = "Заблокированных пользователей нет";
+"party.blocklist.loadError"              = "Не удалось загрузить чёрный список";
+"party.blocklist.loadErrorFormat"        = "Не удалось загрузить: %@";
+"party.blocklist.removeConfirmTitle"     = "Убрать из чёрного списка?";
+"party.blocklist.removeConfirmMessage"   = "Этот пользователь снова сможет входить в комнату.";
+"party.blocklist.removeSuccess"          = "Успешно убрано";
+"party.blocklist.removeFailed"           = "Не удалось убрать, попробуйте ещё раз";
+"party.blocklist.banTypePermanent"       = "Навсегда";
+"party.blocklist.autoUnbanFormat"        = "Авторазбан через %@";
+// E spec 2026-07-14 派对房加锁/解锁（4 位数字密码）
+"party.lockRoom.sheetTitle"              = "Заблокировать комнату";
+"party.lockRoom.sheetDescription"        = "Задайте 4-значный пароль для блокировки комнаты";
+"party.lockRoom.passwordPlaceholder"     = "Введите 4-значный пароль";
+"party.lockRoom.lockAction"              = "Заблокировать";
+"party.lockRoom.passwordInvalid"         = "Пароль должен состоять из 4 цифр";
+"party.lockRoom.lockSuccess"             = "Комната заблокирована";
+"party.lockRoom.unlockSuccess"           = "Комната разблокирована";
+"party.lockRoom.operationFailed"         = "Операция не удалась, попробуйте ещё раз";
+// E spec 2026-07-14 派对房 MC Seat（接待位）
+"party.mcSeat.sheetTitle"                = "Место MC";
+"party.mcSeat.submit"                    = "Назначить место MC";
+"party.mcSeat.tips"                      = "Место MC могут занять только владелец и админы";
+"party.mcSeat.badge"                     = "MC";
+"party.mcSeat.cannotTake"                = "Нельзя занять место MC";
+"party.mcSeat.change"                    = "Сменить MC";
+"party.mcSeat.confirmEmpty"              = "Сделать это свободное место местом MC?";
+"party.mcSeat.confirmPrivilegedFormat"   = "%@ сейчас администратор. Сделать это место местом MC?";
+"party.mcSeat.confirmNormalFormat"       = "%@ будет удалён с места. Сделать его местом MC?";
+"party.mcSeat.setSuccess"                = "Место MC установлено";
+"party.mcSeat.closeSuccess"              = "Место MC закрыто";
+"party.mcSeat.operationFailed"           = "Операция не удалась, попробуйте ещё раз";
+
+// v3（2026-07-15）Step 2 通知公屏系统消息
+"party.videoSeat.inviteAcceptedFormat"   = "%@ занял(а) видеоместо";
+"party.videoSeat.feedbackReject"         = "Приглашение на видеоместо отклонено";
+"party.videoSeat.feedbackTimeout"        = "Время приглашения на видеоместо истекло";
+"party.videoSeat.feedbackLeave"          = "Приглашённый пользователь покинул комнату";
+"party.videoSeat.feedbackOccupied"       = "Видеоместо уже занято";
+"party.videoSeat.feedbackAlreadyOn"      = "Приглашённый пользователь уже на месте";
+"party.videoSeat.feedbackJoinFailed"     = "Приглашённый пользователь не смог занять видеоместо";
+"party.authUpdate.setAdmin"              = "Вы назначены администратором комнаты";
+"party.authUpdate.removeAdmin"           = "Вы больше не администратор комнаты";
+"party.authUpdate.setAdminFormat"        = "%@ назначен администратором комнаты";
+"party.authUpdate.removeAdminFormat"     = "%@ снят с должности администратора комнаты";
+"party.roomAnnouncement.format"          = "Объявление комнаты: %@";
+"party.luckyNumber.drawFormat"           = "%1$@ выпало счастливое число %2$d";
+"party.luckyNumber.winFormat"            = "%1$@ выиграл счастливое число %2$d";
+"party.luckyNumber.matched"              = "Счастливое число совпало!";
+"party.luckyNumber.personalWinFormat"    = "Отлично! Вам выпало счастливое число %d";
+"party.create.section.name"              = "Название комнаты";
+"party.create.name.placeholder"          = "До 20 символов";
+"party.create.hint.needName"             = "Введите название комнаты, чтобы продолжить";
+"party.create.hint.needTagline"          = "Введите слоган, чтобы продолжить";
+"party.create.hint.needLanguage"         = "Выберите язык, чтобы продолжить";
+"party.create.hint.needTemplate"         = "Выберите шаблон, чтобы продолжить";
+"party.create.hint.needBackground"       = "Выберите фон, чтобы продолжить";
+"party.create.section.template"          = "Выбрать шаблон";
+"party.create.template.loading"          = "Загрузка шаблонов…";
+"party.create.template.empty"            = "В dev шаблоны недоступны";
+"party.create.template.fallbackFormat"   = "Шаблон %d";
+"party.create.template.detailFormat"     = "Мест %1$d · Видео %2$d · Голос %3$d";
+"party.create.error.templateLoad"        = "Не удалось загрузить шаблоны";
+"party.create.error.templateLoadFormat"  = "Не удалось загрузить шаблоны: %@";
+"party.create.error.noRoomId"            = "Сервер не вернул roomId";
+"party.create.error.failed"              = "Не удалось создать";
+"party.create.error.failedFormat"        = "Не удалось создать: %@";
+
+"party.invite.title"                     = "Приглашение на видео-место";
+"party.invite.accept"                    = "Принять";
+"party.invite.reject"                    = "Отклонить";
+"party.invite.messageFormat"             = "%1$@ пригласил вас на видео-место %2$d";
+"party.invite.expiresFormat"             = "Истекает через %d сек.";
+"party.seatInvite.title"                  = "Приглашение на микрофон";
+"party.seatInvite.empty"                  = "Нет пользователей онлайн";
+"party.seatInvite.joined"                 = "Присоединился";
+"party.seatInvite.inviting"               = "Приглашение";
+"party.selfActions.title"                = "Моё место";
+"party.selfActions.micOn"                = "Включить микрофон";
+"party.selfActions.micOff"               = "Выключить микрофон";
+"party.selfActions.camOn"                = "Включить камеру";
+"party.selfActions.camOff"               = "Выключить камеру";
+"party.selfActions.leaveSeat"            = "Покинуть место";
+"party.input.placeholder"                = "Скажите что-нибудь…";
+"party.gift.messageFormat"               = "🎁 %@ отправил %@ x%d";
+"party.giftEffect.sendsTo"               = "Отправляет";
+"party.giftEffect.peopleFormat"          = "%d чел.";
+
+"party.state.joined"                     = "Присоединился";
+"party.state.entering"                   = "Присоединение…";
+"party.state.leaving"                    = "Выход…";
+"party.state.ended"                      = "Покинули";
+
+"party.seat.empty"                       = "Свободное место";
+"party.seat.occupied"                    = "Пользователь на месте";
+"party.seat.muted"                       = "Без звука";
+
+"party.error.enterFailedFormat"          = "Не удалось войти: %@";
+"party.error.exitFailedFormat"           = "Не удалось выйти: %@";
+"party.error.seatOccupied"               = "Место занято";
+"party.error.seatEmpty"                  = "Место свободно";
+"party.error.banned"                     = "Аккаунт заблокирован";
+"party.error.levelInsufficient"          = "Недостаточный уровень";
+"party.error.networkLost"                = "Сеть отключена";
+"party.error.kicked"                     = "Исключён владельцем";
+"party.error.passwordWrong"              = "Неверный пароль комнаты";
+"party.error.mediaSwitchFailed"          = "Не удалось переключить микрофон/камеру";
+
+/* MARK: - E spec §3 Room Mode */
+"party.roomMode.sheetTitle"              = "Режим комнаты";
+"party.roomMode.liveAndVoiceTab"         = "Live+Voice";
+"party.roomMode.voiceOnlyTab"            = "Голос";
+"party.roomMode.videoOnlyTab"            = "Видео";
+"party.roomMode.confirmTitle"            = "Сменить режим комнаты?";
+"party.roomMode.confirmBody"             = "Все пользователи будут удалены с мест.";
+"party.roomMode.confirmSwitch"           = "Переключить";
+"party.roomMode.confirmCancel"           = "Отмена";
+"party.roomMode.upgradeGuide"            = "Достигните уровня %d, чтобы разблокировать этот режим";
+"party.roomMode.systemMsg"               = "Раскладка комнаты обновлена. Все пользователи удалены с мест. Выберите новое место, чтобы продолжить общение!";
+"party.roomMode.emptyState"              = "Режимы недоступны";
+"party.roomMode.loadError"               = "Не удалось загрузить режимы";
+
+/* MARK: - E spec §3 Mic Application */
+"party.micApplication.sheetTitle"        = "Список заявок";
+"party.micApplication.peopleApplyFormat" = "%d чел. подали заявку";
+"party.micApplication.emptyState"        = "Нет заявок";
+"party.micApplication.approve"           = "Одобрить";
+"party.micApplication.reject"            = "Отклонить";
+"party.micApplication.noSeatAvailable"   = "Свободных мест нет, дождитесь, пока кто-то освободит место";
+"party.micApplication.rejectedCooldown"  = "Попробуйте позже";
+"party.micApplication.rejectedByHost"    = "Ваша заявка на место отклонена";
+"party.micApplication.timeoutAutoGiveUp" = "Время заявки истекло";
+"party.micApplication.switchOnTitle"     = "Включить заявки на микрофон?";
+"party.micApplication.switchOffTitle"    = "Отключить заявки на микрофон?";
+"party.micApplication.switchOnBody"      = "Пользователи смогут подавать заявки на место. Каждую заявку нужно одобрять.";
+"party.micApplication.switchOffBody"     = "Пользователи больше не смогут запрашивать места.";
+"party.micApplication.switchOnSystemMsg" = "Заявки на микрофон включены";
+"party.micApplication.switchOffSystemMsg" = "Заявки на микрофон отключены";
+"party.micApplication.cancel"            = "Отменить";
+"party.micApplication.tapEmptySeatHint"  = "Нажмите на свободное место, чтобы подать заявку";
+"party.micApplication.submit"            = "Применить";
+"party.deleteMessage"                    = "Удалить сообщение";
+"party.deleteMessageConfirm"             = "Удалить это сообщение?";
+"party.messageDeleted"                   = "Сообщение удалено";
+"party.deleteMessageFailed"              = "Не удалось удалить сообщение";
+"party.approveSeatPicker.title"          = "Назначить место";
+"party.approveSeatPicker.subtitleFormat" = "На какое место одобрить %@?";
+"party.approveSeatPicker.seatNumberFormat" = "Место №%d";
+"party.approveSeatPicker.voiceSeat"      = "Голосовое место";
+"party.approveSeatPicker.videoSeat"      = "Видеоместо";
+
+/* MARK: - H-0 用户详情页 */
+"userProfile.uid.prefix"                 = "uid: ";
+"userProfile.like.label"                 = "Число лайков";
+"userProfile.favorite.label"             = "Число избранных";
+"userProfile.follow"                     = "Подписаться";
+"userProfile.following"                  = "Подписки";
+"userProfile.menu.report"                = "Пожаловаться";
+"userProfile.menu.block"                 = "Заблокировать";
+"userProfile.blockConfirm.title"         = "";
+"userProfile.blockConfirm.message"       = "Если пользователь в чёрном списке, вы больше не будете получать его сообщения.";
+"userProfile.blockConfirm.action"        = "Подтвердить";
+"userProfile.blockConfirm.cancel"        = "Отмена";
+"userProfile.block.success"              = "Добавлено в чёрный список.";
+"userProfile.block.fail"                 = "Не удалось добавить в чёрный список.";
+"userProfile.giftWall.title"             = "Стена подарков";
+"userProfile.giftWall.placeholder"       = "Стена подарков скоро появится";
+"userProfile.honorWall.title"            = "Стена почёта";
+"userProfile.honorWall.badge"            = "Значок";
+"userProfile.honorWall.frame"            = "Рамка";
+"userProfile.honorWall.vehicle"          = "Транспорт";
+"userProfile.honorWall.empty"            = "Пока нет предметов";
+"userProfile.honorWall.equipped"         = "Надето";
+"userProfile.giftWall.lit"               = "Зажжено";
+"userProfile.giftWall.unlit"             = "Не зажжено";
+"userProfile.giftWall.all"               = "Все";
+"userProfile.giftWall.emptyLit"          = "Пока нет зажжённых подарков";
+"userProfile.giftWall.emptyUnlit"        = "Все подарки зажжены";
+"userProfile.giftWall.emptyAll"          = "Пока нет подарков";
+"userProfile.section.loadFailed"         = "Не удалось загрузить";
+"userProfile.moments.title"              = "Моменты";
+"userProfile.action.message"             = "Сообщение";
+"userProfile.action.call"                = "Звонок";
+"userProfile.networkError"               = "Ошибка сети, повторите попытку.";
+"userProfile.badUserId"                  = "Недействительный ID пользователя";
+"userProfile.loadError.retry"            = "Повторить";
+"common.comingSoon"                      = "Скоро";
+"common.back"                            = "Назад";
+"common.followSuccess"                   = "Вы подписались";
+"common.unfollowSuccess"                 = "Вы отписались";
+// P1-6 (2026-07-14) 主播审核弹窗
+"common.kindReminder"                    = "Напоминание";
+"common.confirm"                         = "Подтвердить";
+"common.discard"                         = "Отменить";
+"common.close"                           = "Закрыть";
+"audit.passed.message"                   = "Поздравляем, ваша проверка одобрена. Пожалуйста, войдите в приложение снова.";
+"audit.rejected.fallback"                = "Ваша заявка на проверку отклонена.";
+"userProfile.a11y.avatar"                = "Аватар";
+"userProfile.a11y.menu"                  = "Другие опции";
+"userProfile.a11y.giftFallback"          = "Подарок";
+
+// Report sheet (对齐 H5 c-feedbackPopup type='userProfile' 分支)
+"report.title"                           = "Пожаловаться";
+"report.reason.incorrect"                = "Неверная информация";
+"report.reason.sexual"                   = "Сексуальный контент";
+"report.reason.harassment"               = "Домогательства или оскорбления";
+"report.reason.unreasonable"             = "Необоснованные требования";
+"report.description.label"               = "Подробное описание";
+"report.description.placeholder"         = "Опишите возникшую проблему";
+"report.success.toast"                   = "Отзыв успешно отправлен.";
+"common.other"                           = "Другое";
+"common.networkError"                    = "Сбой сетевого запроса";
+"common.retry"                           = "Повторить";
+"common.weekly"                          = "Еженедельно";
+"common.monthly"                         = "Ежемесячно";
+"common.thisWeek"                        = "Эта неделя";
+"common.lastWeek"                        = "Прошлая неделя";
+"common.thisMonth"                       = "Этот месяц";
+"common.lastMonth"                       = "Прошлый месяц";
+"common.twoMonthsAgo"                    = "2 месяца назад";
+"common.date"                            = "Дата";
+"common.income"                          = "Доход";
+
+// MARK: - Phase B 直播数据页
+"liveData.navTitle"                      = "Данные трансляции";
+"liveData.totalData"                     = "Общие данные";
+"liveData.totalDuration"                 = "Общая длительность";
+"liveData.totalIncome"                   = "Общий доход";
+"liveData.detailData"                    = "Подробные данные";
+"liveData.liveIncome"                    = "Доход от трансляции";
+"liveData.privateCallIncome"             = "Доход от приватных звонков";
+"liveData.liveDuration"                  = "Длительность трансляции";
+"liveData.timeRemaining"                 = "Осталось времени:";
+"liveData.days"                          = "дн.";
+"liveData.expand"                        = "Развернуть";
+"liveData.collapse"                      = "Свернуть";
+
+// Party Data 派对数据看板（对齐安卓 PartyRoomDataActivity）
+"partyData.navTitle"                     = "Статистика Party";
+"partyData.totalMicTime"                 = "Общее время в микрофоне";
+"partyData.micTime"                      = "Время в микрофоне";
+"partyData.totalIncome"                  = "Общий доход";
+"partyData.giftIncome"                   = "Доход от подарков в Party";
+"partyData.callIncome"                   = "Доход от Party-звонков";
+
+"partyData.rule.navTitle"                = "Правила статистики Party";
+"partyData.rule.section1"                = "Основная информация:";
+"partyData.rule.section2"                = "Правила подсчёта времени в микрофоне:";
+"partyData.rule.section3"                = "Состав дохода:";
+"partyData.rule.section4"                = "Правила отображения:";
+"partyData.rule.title1"                  = "Цикл обновления данных:";
+"partyData.rule.content1"                = "Данные Party обновляются периодически. За эту неделю / этот месяц показывается накопительная статистика в реальном времени; за прошлую неделю / прошлый месяц — итоговые суммы.";
+"partyData.rule.title2"                  = "Правила подсчёта:";
+"partyData.rule.content2"                = "Время в микрофоне учитывает накопленные секунды на голосовых и видеоместах во всех Party-комнатах за период.";
+"partyData.rule.title3"                  = "Источники дохода:";
+"partyData.rule.content3"                = "Доход от подарков в Party — это алмазы, полученные с подарков внутри Party-комнат. Доход от Party-звонков включает как оплату звонков, так и подарки, полученные во время Party-звонков.";
+"partyData.rule.title4"                  = "Правила отображения:";
+"partyData.rule.content4"                = "В ежедневном списке отображаются только даты с активностью. Суммы указаны в алмазах.";
+
+"party.micTimeDetail.title"              = "Время на микрофоне по комнатам";
+"party.micTime.total"                    = "Всего";
+"party.micTime.voice"                    = "Голос";
+"party.micTime.video"                    = "Видео";
+"party.micTime.empty"                    = "Пока нет данных о времени на микрофоне";
+
+// LiveData 规则 sheet（对齐 H5 liveRule/index.vue 默认分支）
+"liveData.rule.navTitle"                 = "Правила трансляции";
+"liveData.rule.section1"                 = "Основная информация:";
+"liveData.rule.section2"                 = "Обновление данных и цикл статистики:";
+"liveData.rule.section3"                 = "Правила расчёта дохода:";
+"liveData.rule.section4"                 = "Обработка исключений:";
+"liveData.rule.calcMethod"               = "2. Метод расчёта:";
+"liveData.rule.title1"                   = "1. Область применения:";
+"liveData.rule.title2"                   = "1. Частота обновления:";
+"liveData.rule.title3"                   = "2. Цикл статистики:";
+"liveData.rule.title4"                   = "1. Включённый доход:";
+"liveData.rule.title7"                   = "1. Задержка дохода:";
+"liveData.rule.title8"                   = "2. Спор по данным:";
+"liveData.rule.content1"                 = "Применимо к официальным трансляциям с нормальным видео и аудио, соответствующим правилам платформы и требованиям к допустимой длительности.";
+"liveData.rule.content2"                 = "Данные обновляются каждый час. Если трансляция длится более одного дня, длительность и доход от подарков учитываются в дате начала сессии.";
+"liveData.rule.content3"                 = "Поддерживается недельная и месячная статистика. Пользователи могут просматривать данные за последние две недели и последние три месяца. Данные обновляются автоматически по соответствующему циклу.";
+"liveData.rule.content4"                 = "Доход от подарков во время трансляции, доход от подарков во время приватных звонков и доход от расходования алмазов в приватных звонках.";
+"liveData.rule.content5"                 = "a. Доход трансляции = Доход от подарков во время трансляции (включая подарки в приватных звонках). b. Доход от приватных звонков = Алмазы, потраченные во время приватных звонков.";
+"liveData.rule.content7"                 = "Задержка обновления данных обычно не превышает 24 часов.";
+"liveData.rule.content8"                 = "Если у вас есть вопросы по данным, вы можете подать апелляцию в официальную поддержку для проверки.";
+
+// Work 底部 sysInfo 组件（对齐 H5 work/sysInfo.vue）
+"system.serverTime"                      = "Серверное время";
+"contact.officialWhatsapp"               = "Официальный WhatsApp: %@";
+"common.copySuccess"                     = "Скопировано";
+
+// MARK: - K 里程碑 美颜设置页
+"beautySettings.pageTitle"                                  = "Красота";
+"beautySettings.globalToggle"                               = "Красота";
+"beautySettings.resetDefaults"                              = "Сбросить";
+"beautySettings.done"                                       = "Готово";
+"beautySettings.tab.skin"                                   = "Кожа";
+"beautySettings.tab.shape"                                  = "Форма";
+"beautySettings.tab.filter"                                 = "Фильтр";
+"beautySettings.tab.sticker"                                = "Стикер";
+"beautySettings.banner.loading"                             = "Загрузка движка красоты...";
+"beautySettings.banner.unavailable"                         = "Движок красоты недоступен";
+"beautySettings.banner.interrupted"                         = "Предпросмотр приостановлен";
+"beautySettings.param.blur"                                 = "Гладкость";
+"beautySettings.param.whiten"                               = "Отбелить";
+"beautySettings.param.red"                                  = "Румянец";
+"beautySettings.param.clarity"                              = "Чёткость";
+"beautySettings.param.sharpen"                              = "Резкость";
+"beautySettings.param.faceThreed"                           = "3D";
+"beautySettings.param.eyeBright"                            = "Яркие глаза";
+"beautySettings.param.toothWhiten"                          = "Белые зубы";
+"beautySettings.param.removePouch"                          = "Под глазами";
+"beautySettings.param.removeNasolabialFolds"                = "Носогубные складки";
+"beautySettings.param.cheekV"                               = "V-образное лицо";
+"beautySettings.param.cheekNarrow"                          = "Уже лицо";
+"beautySettings.param.cheekShort"                           = "Короче лицо";
+"beautySettings.param.cheekSmall"                           = "Меньше лицо";
+"beautySettings.param.intensityCheekbones"                  = "Скулы";
+"beautySettings.param.intensityLowerJaw"                    = "Нижняя челюсть";
+"beautySettings.param.eyeEnlarging"                         = "Большие глаза";
+"beautySettings.param.intensityEyeCircle"                   = "Круглые глаза";
+"beautySettings.param.intensityChin"                        = "Подбородок";
+"beautySettings.param.intensityForehead"                    = "Лоб";
+"beautySettings.param.intensityNose"                        = "Тонкий нос";
+"beautySettings.param.intensityMouth"                       = "Рот";
+"beautySettings.param.intensityLipThick"                    = "Толщина губ";
+"beautySettings.param.intensityCanthus"                     = "Уголки глаз";
+"beautySettings.param.intensityEyeSpace"                    = "Расстояние между глазами";
+"beautySettings.filter.origin"                              = "Оригинал";
+"beautySettings.filter.ziran"                               = "Натуральный";
+"beautySettings.filter.zhiganhui"                           = "Текстура";
+"beautySettings.filter.mitao"                               = "Персик";
+"beautySettings.filter.bailiang"                            = "Яркий";
+"beautySettings.filter.fennen"                              = "Розовый";
+"beautySettings.filter.lengsediao"                          = "Холодный";
+"beautySettings.filter.nuansediao"                          = "Тёплый";
+"beautySettings.filter.gexing"                              = "Индивидуальность";
+"beautySettings.filter.xiaoqingxin"                         = "Свежий";
+"beautySettings.filter.heibai"                              = "Моно";
+"beautySettings.filter.levelLabel"                          = "Сила фильтра";
+"beautySettings.sticker.comingSoon"                         = "Стикеры скоро появятся";
+"beauty.error.authExpired"                                  = "Срок действия лицензии красоты истёк. Обновите приложение.";
+"beauty.error.bundleMissing"                                = "Ресурс красоты отсутствует.";
+"beauty.error.genericSetupFailed"                           = "Не удалось инициализировать движок красоты.";
+"beauty.error.setupTimeout"                                 = "Превышено время запуска движка красоты.";
+"beauty.error.persistenceDecodeFailed"                      = "Не удалось прочитать настройки красоты.";
+"beauty.error.persistenceWriteFailed"                       = "Не удалось сохранить настройки красоты.";
+"beautySettings.a11y.preview"                               = "Предпросмотр красоты";
+"beautySettings.a11y.sliderFormat"                          = "%@, значение %d";
+"beautySettings.recover"                                    = "Восстановить";
+"beautySettings.save"                                       = "Сохранить";
+
+/* MARK: - H-2 GiftMessage 私密媒体解锁（对齐 H5 secretMessage） */
+"giftMessage.navTitle"              = "Подарок-сообщение";
+"giftMessage.photoTitle"            = "Секретные фото-сообщения";
+"giftMessage.videoTitle"            = "Секретные видео-сообщения";
+"giftMessage.setGiftIntro"          = "Установите подарок, и после разблокировки вы получите подарок";
+"giftMessage.submit"                = "Отправить";
+"giftMessage.giftPicker.title"      = "Установите подарок, чтобы пользователи разблокировали ваше секретное сообщение";
+"giftMessage.giftPicker.loadFail"   = "Не удалось загрузить подарки";
+"giftMessage.reachedLimit"          = "Достигнут лимит";
+"giftMessage.selectGiftRequired"    = "Выберите подарок для всех элементов";
+"giftMessage.addMedia"              = "Добавить";
+"giftMessage.deleteItem"            = "Удалить";
+"giftMessage.networkErrorFallback"  = "Ошибка сети, попробуйте снова.";
+"giftMessage.unsupportedFile"       = "Файл не поддерживается";
+"giftMessage.uploading"             = "Загрузка...";
+"giftMessage.submitSucceed"         = "Отправлено успешно";
+"giftMessage.photoCountFormat"      = "(%d/%d)";
+"giftMessage.videoCountFormat"      = "(%d/%d)";
+"beautySettings.recoverConfirm.title"                       = "Сбросить настройки?";
+"beautySettings.recoverConfirm.message"                     = "Текущие настройки будут сброшены.";
+"beautySettings.recoverConfirm.yes"                         = "Сбросить";
+"beautySettings.recoverConfirm.no"                          = "Отмена";
+
+// X 按钮未保存丢弃弹窗（2026-07-03 对齐 H5 index.vue:199-210 goBack）
+"beautySettings.exitConfirm.title"                          = "Несохранённые изменения";
+"beautySettings.exitConfirm.message"                        = "Настройки красоты не сохранены. Точно хотите выйти?";
+"beautySettings.exitConfirm.discard"                        = "Выйти";
+"beautySettings.exitConfirm.continue"                       = "Продолжить";
+
+// Save 成功 toast（2026-07-03 对齐 H5 index.vue:155）
+"beautySettings.saveSuccess.toast"                          = "Сохранено!";
+"beautyCamera.capturePhoto"                                 = "Сделать фото";
+"beautyCamera.captureFailed"                                = "Не удалось сохранить фото. Попробуйте снова.";
+"beautyCamera.captureNoFrame"                               = "Камера готовится. Попробуйте снова.";
+
+// MARK: - Match tab（L 里程碑）
+
+// MARK: - 直播结果页（对齐 H5 locales/en.json live.*）
+"liveResult.title"               = "Трансляция завершена";
+"liveResult.durationLabel"       = "Длительность";
+"liveResult.weakNetworkNotice"   = "Из-за многократных проблем с вашей сетью.";
+"liveResult.card.liveData"       = "Данные трансляции";
+"liveResult.card.topGifters"     = "Топ дарителей";
+"liveResult.card.privateCalls"   = "Переходы в приватные звонки";
+"liveResult.viewers"             = "Зрители";
+"liveResult.followers"           = "Подписчики";
+"liveResult.gifters"             = "Дарители";
+"liveResult.diamonds"            = "Алмазы";
+"liveResult.more"                = "Ещё";
+"liveResult.empty"               = "Нет данных";
+"liveResult.loadFailed"          = "Не удалось получить данные.";
+"liveResult.retry"               = "Повторить";
+"liveResult.back"                = "Назад";
+"liveResult.follow"              = "Подписаться";
+"liveResult.message"             = "Сообщение";
+"liveResult.messageComingSoon"   = "Скоро";
+"liveResult.followSuccess"       = "Подписка оформлена";
+
+// MARK: - 首次开播规则页（严格对齐 H5 locales/en.json live.*）
+"firstLiveRule.navTitle"         = "";
+"firstLiveRule.beforeStartTitle" = "Прежде чем начать";
+"firstLiveRule.beforeStartDesc"  = "С помощью функции трансляции вы можете начать вещание и взаимодействовать со зрителями. Зрители могут поддерживать вас, отправляя виртуальные подарки, которые превращаются в ваш доход.\n\nКроме того, мы предоставляем ведущим дополнительные награды в зависимости от ежедневного времени трансляций и полученных подарков. Если вы соответствуете определённым стандартам, вы получите право на дополнительные награды. Подробности узнайте у своего агента или администратора.";
+"firstLiveRule.guidelinesTitle"  = "Правила прямых трансляций";
+"firstLiveRule.confirm"          = "Подтвердить";
+"firstLiveRule.guideline1.title" = "1. Запрещённый контент:";
+"firstLiveRule.guideline1.content" = "В комнатах трансляций запрещены насилие, порнография, вульгарность и политические темы.";
+"firstLiveRule.guideline2.title" = "2. Защита несовершеннолетних:";
+"firstLiveRule.guideline2.content" = "Несовершеннолетним запрещено появляться в кадре; за нарушение возможны санкции.";
+"firstLiveRule.guideline3.title" = "3. Культурная речь:";
+"firstLiveRule.guideline3.content" = "Избегайте нецензурной лексики, оскорблений и запугивания; распространяйте позитив.";
+"firstLiveRule.guideline4.title" = "4. Дресс-код:";
+"firstLiveRule.guideline4.content" = "Ведущие должны избегать откровенной или провокационной одежды.";
+"firstLiveRule.guideline5.title" = "5. Использование камеры:";
+"firstLiveRule.guideline5.content" = "Камеры должны оставаться под присмотром и активными во избежание санкций.";
+"firstLiveRule.guideline6.title" = "6. Стандарты качества:";
+"firstLiveRule.guideline6.content" = "Поддерживайте чёткую картинку и подходящий уровень звука.";
+"firstLiveRule.guideline7.title" = "7. Никаких приватных сделок:";
+"firstLiveRule.guideline7.content" = "Направлять пользователей во внешние каналы для сделок запрещено. Серьёзные нарушения могут привести к отмене права на трансляцию.";
+"match.marquee.callStarted"      = "Видеозвонок начался.";
+"match.marquee.empty"            = "Начните подбор, чтобы познакомиться с большим числом людей";
+"match.title.matchesFound"       = "Найдено подборов: %d!";
+"match.subtitle.description"     = "Ваши недавние подборы выше. Нажмите, чтобы начать чат и очаровать их звонком.";
+"match.userList.empty"           = "Пока нет подборов";
+"match.userCard.videoPrice"      = "%d/мин";
+"match.userCard.close"           = "Закрыть";
+"match.button.a11y.turnOn"       = "Включить подбор";
+"match.button.a11y.turnOff"      = "Выключить подбор";
+
+// Match toast 文案（MatchStore 状态迁移）
+"match.toast.networkError"       = "Ошибка сети, попробуйте ещё раз";
+"match.toast.noFaceDetected"     = "Лицо не обнаружено";
+"match.toast.exceedCount"        = "Достигнут дневной лимит подборов";
+"match.toast.turnOnFailed"       = "Не удалось включить подбор";
+"match.toast.turnOnSucceed"      = "Подбор включён";
+"match.toast.turnOffSucceed"     = "Подбор отключён";
+"match.toast.cameraStartFailed"  = "Не удалось запустить камеру";
+"match.toast.cameraUnavailable"  = "Камера недоступна";
+"match.toast.imOffline"          = "Переподключение, попробуйте ещё раз";
+"match.resumeAlert.title"        = "Возобновить подбор?";
+"match.resumeAlert.message"      = "Возобновить подбор?";
+"match.resumeAlert.confirm"      = "Возобновить";
+"match.resumeAlert.cancel"       = "Отмена";
+"match.marquee.a11y.callFormat"  = "%1$@ позвонил %2$@";
+
+// Match rule 弹窗（#3b 首次每日开启匹配的规则同意）
+"match.rule.title"               = "Правила подбора";
+"match.rule.detail1"             = "1. Каждый звонок включает проверку лица. Нарушения приводят к дневному запрету на подбор. Для подбора требуется, чтобы лицо было видно. Если оно не обнаружено, подбор будет приостановлен на 10 минут.";
+"match.rule.detail2"             = "2. Для звонков по подбору первые 20 секунд БЕСПЛАТНО. После 20 секунд взимается плата согласно вашей цене за звонок.";
+"match.rule.detail3"             = "3. После нескольких подборов вы можете получить награду алмазами в разделе «Задания».";
+"match.rule.detail4"             = "4. Пока собеседник пополняет счёт, звонок остаётся активным 30 секунд; после успешного пополнения тарификация продолжится по вашей поминутной ставке.";
+"match.rule.agree"               = "Согласен";
+
+// Match tip 弹窗（#3c 10 分钟未开启匹配提示）
+"match.tip.title"                = "Включите подбор, чтобы быстрее получать звонки и больше зарабатывать.";
+"match.tip.goMatch"              = "К подбору";
+"match.tip.noReminder"           = "Не напоминать сегодня";
+
+// Match face check & exit 弹窗（#3d）
+"match.face.notDetected.title"   = "Лицо не обнаружено";
+"match.face.notDetected.content" = "Пожалуйста, держите лицо в кадре во время подбора. Если лицо не обнаружено в течение 5 секунд, вас удалят из подбора.";
+"match.exit.title"               = "Вы удалены из подбора";
+"match.exit.content"             = "Ваше лицо не было обнаружено во время проверки. Вас удалили из пула подбора.";
+
+/* v10 (2026-07-08) Wishlist + 心愿达成飘屏 */
+"wishlist.progress.complete"     = "Выполнено";
+"wishlist.panel.title"           = "Список желаний %@ на этот раунд";
+"wishlist.panel.subtitle"        = "Помогите ведущей исполнить её маленькое желание и получите награду!";
+"wishlist.panel.empty"           = "В этой сессии список желаний не задан";
+"wishlist.panel.top6Title"       = "Топ дарителей";
+"wishlist.panel.top6Empty"       = "Показаны только топ‑6 по стоимости подарков";
+"wishlist.float.complete"        = "Желание выполнено,";
+"wishlist.float.thanks"          = "Спасибо, мой герой!";
+"wishlist.top1.prefix"           = "теперь мой";
+"wishlist.top1.suffix"           = "покровитель";
+
+/* EditProfile 用户资料编辑页（I 里程碑，对齐 H5 anchor-livechat-h5/src/views/profile/index.vue） */
+"editProfile.navTitle"                             = "Редактировать профиль";
+"editProfile.confirm"                              = "Сохранить";
+"editProfile.cancel"                               = "Отмена";
+
+"editProfile.section.basic.title"                  = "Основная информация";
+"editProfile.section.basic.hint"                   = "Заполните профиль, чтобы привлечь больше зрителей";
+"editProfile.section.photos.titleFormat"           = "Фото (%d/9)";
+"editProfile.section.videos.titleFormat"           = "Видео (%d/6)";
+"editProfile.section.callVideo.title"              = "Видео звонка";
+"editProfile.section.callVideo.hint"               = "Установите видео, которое проигрывается при входящем звонке";
+"editProfile.section.greetMsgs.title"              = "Приветственные сообщения";
+"editProfile.section.greetMsgs.hint"               = "Автоматически отправляется пользователю при соединении";
+"editProfile.section.greetMsgs.reviewingTitle"     = "На проверке";
+
+"editProfile.nickname.label"                       = "Никнейм";
+"editProfile.nickname.placeholder"                 = "Введите...";
+"editProfile.nickname.editTitle"                   = "Никнейм";
+"editProfile.nickname.wordCountFormat"             = "%d/15";
+
+"editProfile.bio.label"                            = "О себе";
+"editProfile.bio.placeholder"                      = "Введите...";
+"editProfile.bio.wordCountFormat"                  = "%d/200";
+
+"editProfile.greetMsg.addButton"                   = "Добавить";
+"editProfile.greetMsg.placeholder"                 = "Введите...";
+"editProfile.greetMsg.wordCountFormat"             = "%d/50";
+
+"editProfile.badge.inReview"                       = "На проверке";
+
+"editProfile.loadError.title"                      = "Не удалось загрузить";
+"editProfile.loadError.retry"                      = "Повторить";
+"editProfile.success.title"                        = "Отправлено на модерацию, подождите...";
+"editProfile.success.confirm"                      = "Подтвердить";
+"editProfile.discard.title"                        = "Отменить изменения?";
+"editProfile.discard.message"                      = "Несохранённые изменения будут потеряны.";
+"editProfile.discard.confirm"                      = "Отменить";
+"editProfile.discard.keep"                         = "Продолжить редактирование";
+"editProfile.sizeAlert.title"                      = "Не удалось загрузить";
+"editProfile.sizeAlert.ok"                         = "ОК";
+
+"editProfile.toast.photosLimit"                    = "Можно добавить не более 9 фото";
+"editProfile.toast.videosLimit"                    = "Можно добавить не более 6 видео";
+"editProfile.toast.uploading"                      = "загрузка...";
+"editProfile.toast.uploadFailed"                   = "Некоторые файлы не загрузились, попробуйте снова!";
+"editProfile.toast.uploadTimeout"                  = "Время загрузки истекло, попробуйте снова";
+"editProfile.toast.imageTooLarge"                  = "Изображение слишком большое (макс. 5 МБ)";
+"editProfile.toast.videoTooLarge"                  = "Видео слишком большое (макс. 20 МБ)";
+"editProfile.toast.videoFormatUnsupported"         = "Формат видео не поддерживается (только mp4/mov)";
+"editProfile.toast.avatarInReview"                 = "Аватар на проверке, подождите...";
+"editProfile.toast.nicknameInReview"               = "Извините, данные вашего профиля на проверке";
+"editProfile.toast.networkError"                   = "Ошибка сети, попробуйте снова";
+
+// MARK: - A-2 新主播注册流程一期（en；ar/tr Step 4 by /i18n translate）
+"register.title.basicInfo"                          = "Настройте профиль";
+"register.title.required"                           = "Заполните ваш Party-профиль";
+"register.title.videoGuide"                         = "Проверка профиля";
+"register.field.nickname"                           = "Никнейм";
+"register.field.birthday"                           = "Дата рождения";
+"register.field.country"                            = "Страна";
+"register.field.inviteCode"                         = "Код приглашения";
+"register.field.inviteCodeOptional"                 = "необязательно";
+"register.field.requiredFields"                     = "Заполните ваш Party-профиль";
+"register.field.yourLanguage"                       = "Языки в Party-комнатах (не более 4)";
+"register.field.selectLanguage"                     = "Выберите языки Party-комнат";
+"register.field.yourPhotos"                         = "Фото профиля (не менее %d)";
+"register.field.takeVideo"                          = "Видео для проверки профиля";
+"register.action.signUp"                            = "Продолжить";
+"register.action.upload"                            = "Отправить";
+"register.action.edit"                              = "Изменить";
+"register.action.rerecord"                          = "Перезаписать";
+"register.action.goToRecord"                        = "Перейти к записи";
+"register.action.confirmN"                          = "Подтвердить ( %d )";
+"register.action.cancel"                            = "Отмена";
+"register.action.languageTitle"                     = "Язык";
+"register.video.guideBody"                          = "Запишите и загрузите видео для проверки длиной %d секунд, чтобы завершить регистрацию с кодом приглашения.";
+"register.video.discardConfirm"                     = "Отменить запись? Запись будет потеряна.";
+"register.error.avatarRequired"                     = "Загрузите ваш аватар";
+"register.error.nicknameRequired"                   = "Введите никнейм";
+"register.error.birthdayRequired"                   = "Выберите дату рождения";
+"register.error.countryRequired"                    = "Выберите страну";
+"register.error.languageRequired"                   = "Выберите язык";
+"register.error.languageMax"                        = "Можно выбрать не более четырёх";
+"register.error.photosMin"                          = "Загрузите не менее %d фотографий профиля";
+"register.error.videoRequired"                      = "Запишите и загрузите видео для проверки.";
+"register.error.cameraDenied"                       = "Требуется доступ к камере. Включите его в Настройках.";
+"register.error.micDenied"                          = "Требуется доступ к микрофону. Включите его в Настройках.";
+"register.error.recordInterrupted"                  = "Запись прервана. Попробуйте снова.";
+"register.error.compressFailed"                     = "Не удалось обработать видео. Запишите заново.";
+"register.error.uploadFailed"                       = "Ошибка загрузки. Повторите попытку.";
+"register.error.imageTooLarge"                      = "Изображение слишком большое (макс. %d МБ). Выберите меньше.";
+"register.error.invalidInvitationCode"              = "Недействительный код приглашения.";
+"register.error.serverTemporary"                    = "Сервер временно недоступен. Попробуйте ещё раз.";
+
+/* MARK: - PartyRoom 房间内 UI (AnchorBar / ChatTabStrip / InputBar) */
+"partyRoom.idFormat"                     = "ID:%@";
+"partyRoom.welcomeFallback"              = "Добро пожаловать в мою комнату, повеселимся!";
+"partyRoom.a11y.follow"                  = "Подписаться";
+"partyRoom.a11y.following"               = "Подписки";
+"partyRoom.a11y.announcement"            = "Объявление";
+"partyRoom.a11y.share"                   = "Поделиться";
+"partyRoom.a11y.management"              = "Управление";
+"partyRoom.a11y.more"                    = "Ещё";
+"partyRoom.a11y.heat"                    = "Популярность";
+"partyRoom.a11y.viewers"                 = "Зрители";
+"partyRoom.a11y.wealthRank"              = "Рейтинг богатства";
+"partyRoom.a11y.honorRank"               = "Рейтинг чести";
+"partyRoom.a11y.pk"                      = "Начать PK";
+
+/* 顶栏 Rank / Viewers sheet（对齐 H5 room-rank.vue） */
+"partyRoom.rank.tab.contribution"        = "Вклад";
+"partyRoom.rank.tab.honor"               = "Честь";
+"partyRoom.rank.tab.gameTask"            = "Игровое задание";
+"partyRoom.rank.tab.daily"               = "Ежедневно";
+"partyRoom.rank.period.today"            = "Сегодня";
+"partyRoom.rank.period.yesterday"        = "Вчера";
+"partyRoom.rank.viewersTitle"            = "Зрители";
+"partyRoom.rank.emptyRank"               = "Рейтинга пока нет";
+"partyRoom.rank.emptyViewers"            = "Зрителей пока нет";
+"partyRoom.weeklyTask.title"             = "Еженедельное задание";
+"partyRoom.weeklyTask.liveTime"          = "Время в микрофоне";
+"partyRoom.weeklyTask.empty"             = "Сейчас нет еженедельных заданий";
+"partyRoom.weeklyTask.loadMore"          = "Показать ещё";
+"partyRoom.weeklyTask.reward.title"      = "Поздравляем";
+"partyRoom.weeklyTask.reward.confirm"    = "Понятно";
+"partyRoom.weeklyTask.reward.fallback"   = "Награда";
+"partyRoom.weeklyTask.giftHistory"       = "История подарков";
+"partyRoom.weeklyTask.reward"            = "Награда";
+"partyRoom.a11y.weeklyTask"              = "Еженедельное задание";
+"partyRoom.hotTask.title"                = "Задание популярной комнаты";
+"partyRoom.hotTask.missionRules"         = "Правила заданий Party";
+"partyRoom.hotTask.howToReward"          = "Как получить награду?";
+"partyRoom.hotTask.howToRewardDetail"    = "Получайте награды, выполняя время в микрофоне в Party-комнате из Топ-3.";
+"partyRoom.hotTask.howToRewardDetailFormat" = "Получайте награды, выполняя время в микрофоне в Party-комнате из Топ-%d.";
+"partyRoom.hotTask.micTime"              = "Время в микрофоне";
+"partyRoom.hotTask.micTimeDetail"        = "Получайте гемы за накопленное время в микрофоне.";
+"partyRoom.hotTask.giftsOnMic"           = "Подарки в микрофоне";
+"partyRoom.hotTask.giftsOnMicDetail"     = "Получайте гемы за подарки, полученные во время нахождения в микрофоне.";
+"partyRoom.hotTask.gems"                 = "Самоцветы";
+"partyRoom.hotTask.frame"                = "Кадр";
+"partyRoom.hotTask.notes"                = "Примечания";
+"partyRoom.hotTask.notesDetail"          = "Время в микрофоне засчитывается только когда ваше лицо видно на видео. Повторные нарушения могут лишить награды.";
+"partyRoom.hotTask.outOfTop"             = "Ваша комната вышла из Топ-3";
+"partyRoom.hotTask.outOfTopFormat"       = "Ваша комната вышла из Топ-%d";
+"partyRoom.hotTask.rewardTitle"          = "Поздравляем! Цель по времени в микрофоне достигнута";
+"partyRoom.hotTask.claim"                = "Получить";
+"partyRoom.hotTask.validHours"           = "Действует %d ч";
+"partyRoom.hotTask.faceWarning"          = "Держите лицо в кадре, чтобы продолжить получать награды.";
+"partyRoom.hotTask.faceLimitWarning"     = "Достигнут лимит распознавания лица. Прогресс задания в микрофоне приостановлен.";
+"partyRoom.hotRoomGuide.title"           = "Присоединиться к популярной комнате";
+"partyRoom.hotRoomGuide.action"          = "Перейти";
+"partyRoom.hotRoomGuide.message"         = "Перейти в целевую комнату, чтобы продолжить задание в микрофоне?";
+"partyRoom.hotRoomGuide.stay"            = "Остаться";
+"partyRoom.hotRoomGuide.jumpTop"         = "Перейти в Топ-3";
+"partyRoom.topRoomBonus.enter.title"     = "Открывайте видео в Party-комнате и получайте больше бонусов!";
+"partyRoom.topRoomBonus.enter.subtitleFormat" = "Только для Топ-%d популярных комнат";
+"partyRoom.topRoomBonus.enter.format"    = "Войти в ТОП-%d";
+"partyRoom.topRoomBonus.out.titleFormat" = "Ваша комната вышла из Топ-%d";
+"partyRoom.topRoomBonus.out.message"     = "Перейти в целевую комнату, чтобы продолжить задание в микрофоне?";
+"partyRoom.topRoomBonus.out.jumpFormat"  = "Перейти в ТОП-%d";
+"partyRoom.tab.all"                      = "Все";
+"partyRoom.tab.chat"                     = "Чат";
+"partyRoom.tab.gift"                     = "Подарок";
+"partyRoom.input.placeholder"            = "Скажи привет...";
+"partyRoom.a11y.emoji"                   = "Эмодзи";
+"partyRoom.a11y.speaker.on"              = "Динамик включён";
+"partyRoom.a11y.speaker.off"             = "Динамик выключен";
+"partyRoom.a11y.mic.on"                  = "Микрофон включён";
+"partyRoom.a11y.mic.off"                 = "Микрофон выключен";
+"partyRoom.a11y.game"                    = "Игры";
+"partyRoom.a11y.gift"                    = "Отправить подарок";
+
+/* F 里程碑 表情面板 (2026-07-17) */
+"partyRoom.emoji.loadFailed"             = "Не удалось загрузить эмодзи";
+"partyRoom.emoji.retry"                  = "Повторить";
+"partyRoom.emoji.playError"              = "Эмодзи недоступно";
+"partyRoom.emoji.onSeatRequired"         = "Займите место, чтобы использовать эмодзи";
+
+/* v9 PartyRoom biz logic */
+"partyRoom.announcement.title"           = "Объявление";
+"partyRoom.announcement.empty"           = "Объявлений пока нет";
+"partyRoom.announcement.close"           = "Закрыть";
+// F 期房主管理批 编辑通告（2026-07-17）
+"partyRoom.announcement.edit"            = "Изменить";
+"partyRoom.announcement.save"            = "Сохранить";
+"partyRoom.announcement.cancel"          = "Отмена";
+"partyRoom.announcement.placeholder"     = "Введите объявление комнаты";
+"partyRoom.announcement.saveSuccess"     = "Объявление сохранено";
+"partyRoom.announcement.saveFailed"      = "Не удалось сохранить объявление";
+"partyRoom.more.title"                   = "Ещё";
+"partyRoom.more.leave"                   = "Покинуть комнату";
+
+/* v12 PartyRoom footer bar (align livechat-h5 footer-wrap.vue) */
+"partyRoom.a11y.apply"                   = "Подать заявку на место";
+"partyRoom.a11y.message"                 = "Сообщения";
+"partyRoom.a11y.toolMenu"                = "Ещё инструменты";
+"partyRoom.apply.dialog.title"           = "Подать заявку на место?";
+"partyRoom.apply.confirm"                = "Применить";
+"partyRoom.toolMenu.title"               = "Ещё инструменты";
+"partyRoom.toolMenu.startPk"             = "Начать PK";
+"partyRoom.toolMenu.luckyNumber"         = "Счастливое число";
+"partyRoom.toolMenu.roomMute"            = "Заглушить комнату";
+// F 期便利功能 Room Mute toggle 状态化文案（2026-07-17）
+"partyRoom.toolMenu.roomMute.on"         = "Заглушить комнату";
+"partyRoom.toolMenu.roomMute.off"        = "Снять заглушение комнаты";
+"partyRoom.toolMenu.interactiveGames"    = "Интерактивные игры";
+"partyRoom.toolMenu.basicTools"          = "Основные инструменты";
+"partyRoom.toolMenu.pk"                  = "PK";
+"partyRoom.toolMenu.free"                = "Бесплатно";
+"partyRoom.toolMenu.settings"            = "Настройки";
+"partyRoom.toolMenu.luckyNumberSent"     = "Счастливое число отправлено";
+"partyRoom.toolMenu.range"               = "Диапазон";
+"partyRoom.toolMenu.setLuckyNumber"      = "Установить счастливое число";
+"partyRoom.toolMenu.allowAdmins"         = "Разрешить админам устанавливать счастливое число";
+"partyRoom.toolMenu.save"                = "Сохранить";
+"partyRoom.toolMenu.invalidLuckyNumber"  = "Введите корректное число";
+"partyRoom.toolMenu.luckyNumberSaved"    = "Счастливое число сохранено";
+"partyRoom.toolMenu.history"             = "История";
+"partyRoom.toolMenu.historyHint"         = "В этом списке отображаются записи пользователей комнаты, совпавших со счастливыми числами за последние 3 дня.";
+"partyRoom.toolMenu.noHistory"           = "Истории пока нет";
+"partyRoom.toolMenu.loadMore"            = "Показать ещё";
+// F 期便利功能 ShareLink 深链
+"partyRoom.share.messageFormat"          = "Присоединяйтесь к моей Party-комнате! %@";
+"party.shareInvite.title"                 = "Пригласить";
+"party.shareInvite.sent"                  = "Приглашение отправлено";
+"partyRoom.seat.locked"                  = "Место заблокировано";
+"partyRoom.seat.videoNeedsInvite"        = "Видеоместа требуют приглашения ведущего";
+"partyRoom.switchSeat.title"             = "Пересесть на это место?";
+"partyRoom.switchSeat.confirm"           = "Пересесть";
+"partyRoom.adminSeat.title"              = "Управление местом";
+"partyRoom.adminSeat.take"               = "Занять место";
+"partyRoom.adminSeat.switchHere"         = "Пересесть сюда";
+"partyRoom.adminSeat.lock"               = "Заблокировать место";
+"partyRoom.adminSeat.unlock"             = "Разблокировать место";
+
+// v25.1 (2026-07-17) LiveGiftTask · 三语真翻译从 H5 locales 迁移(user feedback: 文案要对齐 H5)
+"liveRoom.task.sheet.title"              = "Задание трансляции";
+"liveRoom.task.tab.liveGift"             = "Задание по подаркам";
+"liveRoom.task.tab.activeTycoon"         = "Задание Active Tycoon";
+"liveRoom.task.progress.title"           = "Прогресс задания";
+"liveRoom.task.progress.subtitle"        = "Дарите подарки девушке и помогите ей получить ежедневную награду";
+"liveRoom.task.history.title"            = "История за сегодня";
+"liveRoom.task.history.finished"         = "Больше данных нет";
+"liveRoom.task.history.error"            = "не удалось загрузить, нажмите для повтора";
+"liveRoom.task.tycoon.completed"         = "Завершено";
+"liveRoom.task.tycoon.empty"             = "Пока нет заданий";
+"liveRoom.task.tycoon.loading"           = "Загрузка...";
+"liveRoom.task.rules.button"             = "ОК";
+"liveRoom.task.rules.title.liveGift"     = "Правила задания по подаркам";
+"liveRoom.task.rules.title.tycoon"       = "Правила задания Active Tycoon";
+"liveRoom.task.rules.body.liveGift"      = "1. Целевые пользователи: все пользователи в комнате трансляции\n2. Действия прогресса: платные действия — подарки, розыгрыш, подключение в трансляции и приватный звонок\n3. Цикл сброса: расчёт по неделям, данные сбрасываются каждую неделю\n4. Расчёт прогресса: по соответствующим стандартам задания";
+"liveRoom.task.rules.body.tycoon"        = "1. Целевые пользователи: пользователи с меткой Active Tycoon\n2. Действия прогресса: платные действия помеченных пользователей — подарки, розыгрыш, подключение в трансляции и приватный звонок\n3. Цикл сброса: расчёт по неделям, данные сбрасываются каждую неделю\n4. Расчёт прогресса: по соответствующим стандартам задания";
+"liveRoom.roulette.tip"                  = "Включить колесо";
+
+"robotCall.incoming.title"               = "Новичок";
+"robotCall.incoming.support"             = "Официальная поддержка";
+"robotCall.incoming.waiting"             = "Ожидание ответа";
+"robotCall.action.accept"                = "Ответить";
+"robotCall.action.reject"                = "Отклонить";
+"robotCall.action.end"                   = "Завершить звонок";
+"robotCall.minimumDuration"              = "Длительность звонка должна быть не менее 10 секунд";
+"robotCall.acceptFailed"                 = "Не удалось принять этот звонок. Попробуйте позже.";
+"robotCall.reward.title"                 = "Поздравляем";
+"robotCall.noReward.title"               = "Продолжайте в том же духе";
+"robotCall.duration.format"              = "Длительность звонка: %@";
+"robotCall.reward.duration.format"       = "Текущая длительность звонка достигла: %@";
+"robotCall.reward.coins.format"          = "Получено монет: %@";
+"robotCall.reward.ok"                    = "OK";
+
+"paidBullet.dislike"                     = "Не нравится";
+"paidBullet.dislikeFailed"               = "Не удалось отправить дизлайк. Попробуйте ещё раз.";
+"paidBullet.earningsToast"               = "+%lld монет (платный буллет)";
+
+"diamondGift.grab"                       = "Схватить";
+"diamondGift.sendAction"                 = "отправил(а) набор алмазов!";
+"diamondGift.claimFormat"                = "%@ получил(а) %lld алмазов";
+"diamondGift.expiredFormat"              = "Срок действия набора алмазов истёк, %@ получил(а) возврат";
+"diamondGift.userFormat"                 = "Пользователь %@";
+"diamondGift.settledTitle"               = "Счастливый победитель";
+"diamondGift.viewDetails"                = "Подробнее";
+"diamondGift.rulesTitle"                 = "Правила";
+"diamondGift.rulesSectionA"              = "Зрители отправляют наборы алмазов в комнату трансляции.";
+"diamondGift.rulesSectionB"              = "После обратного отсчёта зрители могут получить свою долю до истечения срока действия набора.";
+"diamondGift.rulesSectionC"              = "Набор автоматически подводит итоги. Нерозібрані алмазы возвращаются, а лучшая доля объявляется.";
+"diamondGift.rulesATitle"                = "1. Что такое Lucky Bag?";
+"diamondGift.rulesA1"                    = "(1) В голосовых комнатах пользователи могут отправлять алмазы через «Красный конверт с алмазами». Все пользователи в комнате имеют шанс получить эти алмазы.";
+"diamondGift.rulesBTitle"                = "2. Как отправить Lucky Bag?";
+"diamondGift.rulesB1"                    = "(1) Выберите общее количество алмазов, число получателей и время начала для Lucky Bag, затем отправьте. После отправки все пользователи в комнате смогут получать пакеты.";
+"diamondGift.rulesB2"                    = "(2) Если через 10 минут после отправки Lucky Bag якісь алмази залишились нерозібраними, они автоматически возвращаются отправителю.";
+"diamondGift.rulesCTitle"                = "3. Прочее";
+"diamondGift.rulesC1"                    = "(1) Если несколько Lucky Bag отправлены одновременно в одной комнате, они раздаются последовательно в порядке отправки.";
+"diamondGift.rulesC2"                    = "(2) Алмазы, потраченные на отправку Lucky Bag, не учитываются в прогрессе уровня богатства пользователя.";
+"diamondGift.rulesC3"                    = "(3) После того как раунд Lucky Bag получен, пользователи могут посмотреть «Детали получения» в чате. Нерозібрані алмази автоматически возвращаются через 10 минут.";
+"diamondGift.rulesC4"                    = "(4) Платформа строго запрещает любые формы мошенничества. При обнаружении мошенничества платформа оставляет за собой право изъять все алмазы и награды Lucky Bag, полученные обманным путём.";
+"diamondGift.winnersTitle"               = "Победители";
+"diamondGift.topShare"                   = "Лучшая доля";
+"diamondGift.noWinners"                  = "Победителей пока нет";
+
+"invite.title"                           = "Пригласить";
+"invite.user"                            = "Пригласить пользователя";
+"invite.anchor"                          = "Пригласить ведущего";
+"invite.myRewards"                       = "Мои награды";
+"invite.totalBonus"                      = "Общий бонус за приглашения";
+"invite.last7Days"                        = "Приглашены за последние 7 дней";
+"invite.last7DaysUser"                    = "Приглашённые пользователи за последние 7 дней";
+"invite.last7DaysAnchor"                  = "Приглашённые ведущие за последние 7 дней";
+"invite.got"                              = "получено";
+"invite.rules"                           = "Правила приглашения";
+"invite.lifetimeReward"                  = "Одно приглашение — пожизненные бонусы";
+"invite.userRewardHintFormat"            = "Пригласите пользователей пополнить счёт и получите %@ алмазов в награду";
+"invite.anchorRewardHintFormat"          = "Поделитесь уникальным пригласительным кодом. Получайте %@ от дохода каждого приглашённого ведущего";
+"invite.userCommission"                  = "Комиссия пользователя";
+"invite.anchorCommission"                = "Комиссия ведущего";
+"invite.partyCommission"                 = "Комиссия Party";
+"invite.code"                            = "Пригласительный код";
+"invite.copyCode"                        = "Скопировать код";
+"invite.details"                         = "Подробнее";
+"invite.totalUsers"                      = "Всего приглашённых пользователей";
+"invite.totalAnchors"                    = "Всего приглашённых ведущих";
+"invite.cumulativeReward"                = "Совокупная награда";
+"invite.now"                             = "Пригласить";
+"invite.bigReward"                       = "Большая награда";
+"invite.copySuccess"                     = "Скопировано!";
+"invite.shareUnavailable"                = "Контент для отправки недоступен";
+"invite.shareUser"                       = "Пригласить пользователей";
+"invite.shareAnchor"                     = "Пригласить ведущих";
+"invite.saveAndShare"                    = "Сохранить и поделиться";
+"invite.copyLink"                        = "Копировать";
+"invite.share"                           = "Поделиться";
+"invite.showQRCode"                      = "Показать QR-код";
+"invite.idFormat"                        = "ID: %@";
+"invite.uidFormat"                       = "UID: %@";
+"invite.ruleUnavailable"                 = "Правила приглашения недоступны";
+"invite.faq"                             = "FAQ";
+"invite.policy"                          = "Политика";
+"invite.invitedUsers"                    = "Список приглашённых";
+"invite.rewardRecords"                   = "Детали наград";
+"invite.startDate"                       = "Дата начала";
+"invite.endDate"                         = "Дата окончания";
+"invite.applyDate"                       = "Применить";
+"invite.invalidDateRange"                = "Дата начала должна быть раньше даты окончания";
+"invite.dataDetails"                     = "Детали данных";
+"invite.period"                          = "Период";
+"invite.identifier"                      = "ID";
+"invite.userColumn"                      = "Пользователь";
+"invite.nickname"                        = "Никнейм";
+"invite.totalIncome"                     = "Общий доход";
+"invite.diamondIncome"                   = "Доход в алмазах";
+"invite.dailyOutputReward"               = "Ежедневная награда";
+"invite.accumulatedRewards"              = "Накопленные награды";
+"invite.invitationTime"                  = "Время приглашения";
+"invite.accumulatedRewardsDetail"        = "Накопленные награды";
+"invite.invitationTimeDetail"            = "Время приглашения";
+"invite.rewardQuantity"                  = "Размер награды";
+"invite.today"                           = "Сегодня";
+"invite.thisWeek"                        = "На этой неделе";
+"invite.lastWeek"                        = "Прошлая неделя";
+"invite.lastMonth"                       = "Прошлый месяц";
+"invite.referralIncomeReward"            = "Награда с реферального дохода";
+"invite.myDashboard"                     = "Моя панель";
+"invite.cumulativeOutputReward"          = "Совокупная итоговая награда";
+"invite.callIncome"                      = "Доход от звонков";
+"invite.giftIncome"                      = "Доход от подарков";
+"invite.connectionRate"                  = "Уровень соединения";
+"invite.currentRanking"                  = "Текущий рейтинг";
+"invite.currentLevel"                    = "Текущий уровень";
+"invite.onlineDuration"                  = "Время онлайн";
+"invite.totalCallDuration"               = "Общая длительность звонков";
+"invite.averageCallDuration"             = "Средняя длительность звонка";
+"invite.startChat"                       = "Начать чат";
+
+// MARK: - Native Wallet
+"wallet.title" = "Кошелёк";
+"wallet.balance" = "Мой баланс";
+"wallet.withdrawal" = "Вывод";
+"wallet.todayIncome" = "Доход за сегодня";
+"wallet.incomeDetails" = "Детали дохода";
+"wallet.filter.call" = "Звонок";
+"wallet.filter.gift" = "Подарок";
+"wallet.filter.task" = "Задание";
+"wallet.filter.invite" = "Пригласить";
+"wallet.filter.message" = "Сообщение";
+"wallet.filter.interaction" = "Взаимодействие";
+"wallet.filter.others" = "Прочее";
+"wallet.time" = "Время";
+"wallet.source" = "Источник";
+"wallet.user" = "Пользователь";
+"wallet.detail" = "Детали";
+"wallet.income" = "Доход";
+"wallet.withdrawCash" = "Вывести средства";
+"wallet.cashableBalance" = "Доступный к выводу баланс алмазов";
+"wallet.withdrawalBalance" = "Баланс для вывода";
+"wallet.weekIncomeDiamond" = "Доход за прошлую неделю";
+"wallet.inviteEntry" = "Приглашайте и получайте награды";
+"wallet.records" = "История выводов";
+"wallet.selectAccount" = "Выбрать счёт для вывода";
+"wallet.manageAccounts" = "Управлять счетами";
+"wallet.addAccount" = "Добавить счёт";
+"wallet.collection" = "Получение";
+"wallet.enterAmount" = "Введите сумму вывода";
+"wallet.availableBalance" = "Доступный к выводу баланс алмазов";
+"wallet.amountPlaceholder" = "Введите сумму";
+"wallet.estimatedReceive" = "Ожидаемое поступление";
+"wallet.withdrawalSummary" = "Сводка по выводу";
+"wallet.grossAmount" = "Сумма вывода";
+"wallet.fee" = "Комиссия за вывод";
+"wallet.finalAmount" = "Итоговая сумма вывода";
+"wallet.remainderReturned" = "алмазы менее $1 будут возвращены на ваш счёт";
+"wallet.cancel" = "Отмена";
+"wallet.confirm" = "Подтвердить";
+"wallet.collectionType" = "Тип получения";
+"wallet.collectionDetails" = "Данные получения";
+"wallet.accountName" = "Имя счёта";
+"wallet.accountIrreversible" = "Внимательно проверьте данные получения. Изменения возможны только через службу поддержки.";
+"wallet.digifinexMinimum" = "Минимум для вывода: $20";
+"wallet.epayMinimum" = "Минимум для вывода: $50";
+"wallet.uidPlaceholder" = "Введите UID сети";
+"wallet.addressPlaceholder" = "Введите адрес TRC20";
+"wallet.emailPlaceholder" = "Введите email для получения";
+"wallet.removeAccount" = "Удалить счёт";
+"wallet.remove" = "Удалить";
+"wallet.removeAccountDetail" = "Вы точно хотите удалить";
+"wallet.orderNumber" = "Номер заказа";
+"wallet.applicationStatus" = "Статус заявки";
+"wallet.reviewing" = "На рассмотрении";
+"wallet.paid" = "Выплачено";
+"wallet.rejected" = "Отклонено";
+"wallet.loadFailed" = "Не удалось загрузить данные кошелька. Повторите попытку.";
+"wallet.accountInfoRequired" = "Сначала заполните данные счёта.";
+"wallet.accountTypeInvalid" = "Этот тип получения недоступен.";
+"wallet.accountAdded" = "Счёт добавлен";
+"wallet.accountSaveFailed" = "Не удалось сохранить счёт. Повторите попытку.";
+"wallet.accountRemoved" = "Счёт удалён";
+"wallet.accountRemoveFailed" = "Не удалось удалить счёт. Повторите попытку.";
+"wallet.integerAmount" = "Сумма вывода должна быть целым числом.";
+"wallet.amountExceedsBalance" = "Сумма превышает доступный к выводу баланс.";
+"wallet.minimumDiamond" = "Каждый вывод должен быть не менее 200 алмазов.";
+"wallet.minimumRequestAmountFormat" = "Каждый вывод должен быть не менее %lld алмазов.";
+"wallet.minimumRate" = "Сумма должна быть не менее курса обмена алмазов.";
+"wallet.channelMinimum" = "Выбранный способ получения не соответствует минимальной сумме вывода.";
+"wallet.verificationCheckFailed" = "Не удалось проверить подтверждение личности. Повторите попытку.";
+"wallet.passwordSixDigits" = "Введите шестизначный пароль вывода.";
+"wallet.passwordSet" = "Пароль вывода установлен. Отправьте заявку снова, чтобы продолжить.";
+"wallet.withdrawalSubmitted" = "Заявка на вывод отправлена";
+"wallet.withdrawalSubmitFailed" = "Не удалось отправить заявку на вывод. Попробуйте снова.";
+"wallet.setPassword" = "Задать пароль вывода";
+"wallet.setPasswordDetail" = "Задайте шестизначный числовой пароль для будущих выводов.";
+"wallet.enterPassword" = "Введите пароль вывода";
+"wallet.enterPasswordDetail" = "Введите шестизначный пароль вывода, чтобы отправить заявку.";
+"wallet.passwordPlaceholder" = "Шестизначный пароль";
+"wallet.forgotPassword" = "Забыли пароль? Обратитесь в поддержку:";
+"wallet.livenessFailedTitle" = "Проверка лица не пройдена";
+"wallet.retry" = "Повторить";
+"wallet.livenessShakeTitle" = "Поверните голову";
+"wallet.livenessShakeDetail" = "Медленно поверните голову из стороны в сторону.";
+"wallet.livenessNodTitle" = "Кивните головой";
+"wallet.livenessNodDetail" = "Кивните головой один раз вверх и вниз.";
+"wallet.livenessFrontTitle" = "Лицом к камере";
+"wallet.livenessFrontDetail" = "Держите лицо по центру и неподвижно.";
+"wallet.livenessVerifying" = "Проверка вашего лица";
+"wallet.livenessVerifyingDetail" = "Загружаем защищённое фото и проверяем вашу личность.";
+"wallet.cameraPermissionRequired" = "Для подтверждения личности требуется разрешение камеры.";
+"wallet.livenessCameraUnavailable" = "Не удалось запустить камеру. Повторите попытку.";
+"wallet.livenessNoFace" = "Не удалось обнаружить одно чёткое лицо. Повторите попытку.";
+"wallet.livenessTimedOut" = "Время этого шага проверки истекло. Повторите попытку.";
+"wallet.livenessUploadFailed" = "Не удалось завершить проверку лица. Повторите попытку.";
+
+"party.battle.team" = "Командный бой";
+"party.battle.countdown" = "Отсчёт";
+"party.battle.start" = "START";
+"party.battle.none" = "Нет";
+"party.battle.live" = "Трансляция";
+"party.battle.redTeam" = "Красная команда";
+"party.battle.blueTeam" = "Синяя команда";
+"party.battle.redTeamWin" = "Победа красной команды";
+"party.battle.blueTeamWin" = "Победа синей команды";
+"party.battle.tie" = "Ничья";
+"party.battle.leading" = "Лидирует";
+"party.battle.iKnow" = "Понятно";
+"party.battle.cancel" = "Отмена";
+"party.battle.confirm" = "Подтвердить";
+"party.battle.rulesTitle" = "Правила командного боя";
+"party.battle.rule1" = "Ведущий начинает бой одним касанием; игроки на микрофоне делятся на синюю и красную команды.";
+"party.battle.rule2" = "Отправка подарков участникам красной команды добавляет очки красным; отправка подарков синим — синим.";
+"party.battle.rule3" = "Пользователи не могут менять команду на микрофоне во время боя; при выходе с микрофона их накопленные очки остаются у изначальной команды.";
+"party.battle.rule4" = "Все запросы на микрофон во время боя должны подтверждаться ведущим или администратором.";
+"party.battle.forceEndTitle" = "Досрочно завершить PK?";
+"party.battle.forceEndDesc" = "Досрочное завершение определит победителя по текущему общему счёту.";
+"party.battle.forceEndWillFormat" = "Победит %@.";
+"party.battle.forceEndTied" = "Сейчас ничья.";
+"party.battle.cooldownDesc" = "После окончания перезарядки вы снова сможете запустить командный бой.";
+"party.battle.cooldownAction" = "Итоги предыдущего боя";
+"party.battle.giftTabRed" = "Красные";
+"party.battle.giftTabBlue" = "Синие";
+"party.battle.initiateTitle" = "Запустить командный бой";
+"party.battle.modeLabel" = "Режим";
+"party.battle.modeTeamBattle" = "Командный бой (Красные против Синих)";
+"party.battle.timeLabel" = "Время";
+"party.battle.minutesFormat" = "%d мин";
+"party.battle.chooseSideLabel" = "Выбор стороны";
+"party.battle.joinSideOn" = "Войти";
+"party.battle.joinSideOff" = "Нейтрал";
+"party.battle.joinRed" = "К красным";
+"party.battle.joinBlue" = "К синим";
+"party.battle.initiateHintFormat" = "Игроков в лобби: %1$d · Готово к старту ≥ %2$dс после конца прошлого боя";
+"party.battle.initiateHint2Format" = "После подтверждения начнётся выбор команд длительностью %d сек. Игроки в лобби выбирают команды, а владелец комнаты нажимает START для начала боя.";
+"party.battle.selectingHostTitle" = "Отсчёт 60 сек или нажмите START";
+"party.battle.battleTime" = "Время боя";
+"party.battle.leadFormat" = "впереди на %d";
+"party.battle.lose" = "Поражение";
+"party.battle.giftGivingMvp" = "MVP по отправке подарков";
+"party.battle.giftReceiveMvp" = "MVP по получению подарков";
+"party.battle.totalGivenOutFormat" = "Всего отправлено %@";
+"party.battle.personalGiftReceivingFormat" = "Личных подарков получено %@";
+"party.battle.roomIdInvalid" = "Неверный ID комнаты";
+"party.battle.noTemplate" = "Шаблоны недоступны";
+"party.battle.alreadyEnded" = "PK уже завершён";
+"party.battle.startNowFailed" = "Не удалось начать";
+"party.battle.chatSelectingStartFormat" = "Комната запустила командный PK, бой начнётся через %d мин!";
+"party.battle.chatTeamWinFormat" = "%@ побеждает! Общий счёт";
+"party.battle.chatTie" = "Ничья!";
+"party.battle.chatForceEnd" = "Комната досрочно завершила PK";
+"party.battle.chatMvpFormat" = "MVP: %1$@ (%2$@) Личный подарок";
+"partyRoom.superWheel.title" = "Super Winner";
+"partyRoom.superWheel.unavailable" = "Эта игра сейчас недоступна";
+"partyRoom.superWheel.open" = "Открыть колесо";
+"partyRoom.superWheel.join" = "Войти";
+"partyRoom.superWheel.bet" = "Ставка";
+"partyRoom.superWheel.close" = "Закрыть колесо";
+"partyRoom.superWheel.pool" = "Банк";
+"partyRoom.superWheel.player" = "Игрок";
+"partyRoom.superWheel.waiting" = "Ожидание";
+"partyRoom.superWheel.signup" = "Записаться";
+"partyRoom.superWheel.preparing" = "Подготовка";
+"partyRoom.superWheel.betting" = "Ставки";
+"partyRoom.superWheel.spinning" = "Вращение";
+"partyRoom.superWheel.roundResult" = "Результат раунда";
+"partyRoom.superWheel.finalResult" = "Окончательный результат";
+"partyRoom.superWheel.outFormat" = "%@ выбывает";
+"partyRoom.superWheel.winnerFormat" = "%@ выигрывает %lld";
+"partyRoom.superWheel.actionFailed" = "Не удалось выполнить действие. Попробуйте ещё раз.";
+"partyRoom.superWheel.getReady" = "Приготовьтесь";
+"partyRoom.superWheel.joined" = "Участвует";
+"partyRoom.superWheel.spectating" = "Вы выбыли. Наблюдение";
+"partyRoom.superWheel.winningRatio" = "Коэффициент выигрыша";
+"partyRoom.superWheel.nextRound" = "Все игроки переходят в следующий раунд";
+"partyRoom.superWheel.rewardHint" = "Победитель получает 80% джекпота. Владелец комнаты получает 10%.";
+"partyRoom.superWheel.minPlayers" = "Ожидание других игроков";
+"partyRoom.superWheel.addBets" = "Делайте ставки!";
+"partyRoom.superWheel.entryFees" = "Плата за вход";
+"partyRoom.superWheel.loading" = "Загрузка";
+"partyRoom.superWheel.rulesTitle" = "Правила";
+"liveGift.firstGiftHeadline" = "{name} отправил(а) {streamer} первый подарок {gift}";
+"liveGift.firstGiftStreamer" = "Ведущий";
+"liveGift.firstGiftKick" = "Начните первый приветственный момент";
+"virtualProps.effectSwitch.tip" = "Переключатель эффектов здесь";
+
+"lottery.title" = "Розыгрыш удачи";
+"lottery.loadFailed" = "Не удалось загрузить активность. Попробуйте ещё раз.";
+"lottery.unsupportedPrizeLayout" = "Конфигурация призов этой активности недоступна.";
+"lottery.noPrizeReturned" = "Данные о призе не получены. Попробуйте позже.";
+"lottery.pleaseWait" = "Подождите...";
+"lottery.notStarted" = "Эта активность ещё не началась.";
+"lottery.ended" = "Эта активность завершена.";
+"lottery.insufficientChances" = "У вас недостаточно попыток для розыгрыша.";
+"lottery.drawFailed" = "Не удалось выполнить розыгрыш. Попробуйте позже.";
+"lottery.drawReconciled" = "Не удалось подтвердить результат розыгрыша. Данные активности обновлены.";
+"lottery.records" = "История выигрышей";
+"lottery.recordsLoadFailed" = "Не удалось загрузить историю выигрышей. Попробуйте ещё раз.";
+"lottery.recordsEmpty" = "Пока нет выигрышей";
+"lottery.recordsEnd" = "Больше записей нет";
+"lottery.oneTime" = "1 раз";
+"lottery.fiveTimes" = "5 раз";
+"lottery.draw" = "КРУТИТЬ";
+"lottery.congratulations" = "Поздравляем";
+"lottery.earnChancesHint" = "Отправляйте подарки в трансляциях и приватных звонках, чтобы получить больше попыток.";
+"lottery.earnChancesPartyHint" = "Отправляйте подарки в комнатах Party, чтобы получить больше попыток.";
+"lottery.go" = "Перейти";
+"lottery.insufficientTitle" = "Попытки закончились";
+"lottery.insufficientMessage" = "Дарите подарки в комнатах, чтобы получить больше попыток и продолжить ловить удачу!";
+"lottery.goPartyRoom" = "Перейти в Party-комнату";
+"lottery.goLiveRoom" = "Перейти в комнату трансляции";
+"lottery.noPartyRoomsAvailable" = "Нет доступных Party-комнат";
+"lottery.noLiveAvailable" = "Нет доступных трансляций";
+"lottery.roomNavigationFailed" = "Ошибка сети, попробуйте ещё раз.";
+"lottery.startsIn" = "Начинается через";
+"lottery.endsIn" = "Заканчивается через";
+"lottery.remainingChancesFormat" = "Осталось попыток: %d";
+"lottery.pointsNeededFormat" = "Нужно ещё %d очков для 1 попытки";
+"lottery.dailyLimitFormat" = "Достигнут дневной лимит попыток %d/%d";
+"lottery.dailyLimitReached" = "Достигнут дневной лимит попыток";
+"lottery.winnerFormat" = "%1$@ получил %2$@";
+"lottery.validDaysFormat" = "* %d дней";
+"lottery.quantityFormat" = "* %d";
+"content.moderation.checking" = "Проверка";
+"content.moderation.blocked" = "Заблокировано";

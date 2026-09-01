@@ -228,6 +228,9 @@ final class MomentFeedStore: ObservableObject {
             case .en: return "en"
             case .ar: return "ar"
             case .tr: return "tr"
+            case .ru: return "ru"
+            case .es: return "es"
+            case .uk: return "uk"
             case .system: return Locale.current.language.languageCode?.identifier ?? "en"
             }
         }()

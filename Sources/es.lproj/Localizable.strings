@@ -1,0 +1,2421 @@
+/* HiFunny 主播端本地化 stub（en 默认值）
+
+   B 里程碑 spec §13 i18n 声明：B 阶段用 en 默认值占位；ar/tr 翻译由 J 里程碑收尾。
+   key 命名约定：模块.场景（lowerCamelCase 拼接）
+*/
+
+// MARK: - 强制下播原因（forceEnd reason UI 文案）
+"forceEnd.disconnected"      = "Se perdió la conexión";
+"forceEnd.banned"            = "Incumplimiento de las normas. La transmisión terminó";
+"forceEnd.cameraFailure"     = "No se pudo acceder a la cámara";
+"forceEnd.noPermission"      = "No se pudieron comprobar los permisos";
+"forceEnd.weakNetwork"       = "La conexión de red es demasiado débil";
+
+// MARK: - 切后台超限（BackgroundMonitor 预警 + 本地通知）
+"live.background.count_warning"      = "Has salido de la transmisión %d/%d veces. Se cerrará automáticamente después de %d veces.";
+"live.background.cumulative_warning" = "Has estado en segundo plano %d minutos en total; te acercas al límite de 5 minutos.";
+"live.background.notif.title"        = "Vuelve a tu transmisión";
+"live.background.notif.body"         = "La transmisión terminará automáticamente si la aplicación permanece en segundo plano.";
+
+// MARK: - 美颜降级
+"beauty.unavailable"         = "Los efectos de belleza no están disponibles";
+
+// MARK: - 全局空态占位（EmptyStateView 默认文案）
+"common.emptyState.noContent" = "Aún no hay contenido";
+"content.moderation.rejected" = "Este contenido puede infringir nuestras Normas de la comunidad. Modifícalo e inténtalo de nuevo.";
+
+// MARK: - 网络弱网降级（v5 分层）
+"network.warning"            = "Red inestable. Se cambió a una frecuencia de imagen baja";
+
+// MARK: - 开播前置校验
+"prepare.titleEmpty"         = "Introduce un título para la transmisión";
+"prepare.coverEmpty"         = "Añade una portada para la transmisión";
+"prepare.cooldown"           = "Espera 60 segundos después de terminar la transmisión";
+"prepare.imOffline"          = "El chat no está disponible. Inténtalo de nuevo";
+
+// MARK: - 公屏
+"im.chatroom.reconnecting"   = "Reconectando al chat...";
+"im.chatroom.reconnected"    = "Chat reconectado";
+"im.userJoined"              = "Un usuario se unió a la sala";
+"im.sendGiftAction"          = "envió";
+"im.complianceWarningDefault" = "Tu contenido de la transmisión ha recibido una advertencia";
+"im.anonymous"               = "Usuario anónimo";
+
+// MARK: - Work 工作台（设计稿还原）
+"work.weeklyLevel"           = "Nivel semanal";
+"work.detail"                = "Detalles";
+"work.scorePrefix"           = "Puntuación: ";
+"work.needMoreFormat"        = "(Faltan %d para subir de nivel)";
+
+"dataStatistics.navTitle"                    = "Estadísticas";
+"dataStatistics.bannerSubtitle"               = "Sigue tu rendimiento y progreso de nivel";
+"dataStatistics.totalDislikeRate"             = "Tasa total de dislikes";
+"dataStatistics.offsetDislike"                = "Compensar dislike >";
+"dataStatistics.removeDislike"                = "Eliminar dislike";
+"dataStatistics.removeDislikeDescription"     = "Cada semana puedes usar puntos para eliminar dislikes de forma permanente, con un límite semanal. Si excedes el límite, tendrás que esperar a la próxima semana para canjear puntos. Completa tus compensaciones durante la semana, ya que los puntos se reinician al comienzo de cada semana nueva.";
+"dataStatistics.dislikeRate"                  = "Tasa de dislikes";
+"dataStatistics.dislikeRateDescription"       = "Los usuarios darán un like o dislike al terminar la llamada. Los dislikes relacionados con los tipos de presentador afectan tu tasa de dislikes, que se muestra en tu perfil. Para reducir dislikes, comunícate más durante la llamada o gana puntos enviando mensajes. Los puntos se pueden usar para eliminar dislikes permanentemente.";
+"dataStatistics.likes"                        = "Me gusta";
+"dataStatistics.dislikes"                     = "No me gusta";
+"dataStatistics.privateAndLiveOnly"           = "(Solo se calculan las llamadas privadas y en vivo)";
+"dataStatistics.category"                     = "Categoría";
+"dataStatistics.week"                         = "Semana";
+"dataStatistics.levelAnswerRate"              = "Tasa de respuesta por nivel";
+"dataStatistics.levelAvgDuration"             = "Duración promedio del nivel";
+"dataStatistics.levelCalls"                   = "Llamadas del nivel";
+"dataStatistics.levelUpdateTime"              = "Hora de actualización del nivel";
+"dataStatistics.currentLevelBenefits"         = "Beneficios del nivel actual";
+"dataStatistics.currentPoints"                = "Puntos actuales";
+"dataStatistics.remainingChancesFormat"       = "%@ puntos / %@ oportunidades restantes";
+"dataStatistics.offset"                       = "Compensar";
+"dataStatistics.deductionSucceeded"           = "Compensaste un dislike";
+"dataStatistics.deductionUnavailable"         = "Puntos insuficientes";
+
+"work.levelText.topHost"     = "Eres un presentador top";
+"work.levelText.keepSTier" = "Mantén el nivel S para convertirte en SS";
+"work.levelText.callTargetNotMet" = "No se alcanzó el objetivo de llamadas";
+"work.levelText.averageCallTime" = "Tiempo medio de llamada: ";
+"work.levelText.nextLevel" = " (siguiente nivel: ";
+
+"call.reconnect"             = "Reconectar";
+
+"autoOffline.title"          = "Verificación de actividad";
+"autoOffline.message"        = "Notamos que has estado inactiva un tiempo. Para evitar que las llamadas perdidas afecten tu calificación, tu estado se cambió a desconectado. Para volver a conectarte, toca el botón de abajo.";
+"autoOffline.goOnline"       = "Ponerse en línea";
+
+"setToBusy.title"            = "Ocupado por hoy";
+"setToBusy.description"      = "Has alcanzado el límite de llamadas de hoy. Continúa mediante transmisión o emparejamiento.";
+"setToBusy.goLive"           = "Iniciar transmisión";
+"setToBusy.goMatch"          = "Ir a Match";
+
+"work.onlineTime"            = "Tiempo en línea (d)";
+"work.avgCallDuration"       = "Duración media de llamada (esta semana)";
+"work.positiveRating"        = "Valoración positiva";
+"work.callsToday"            = "Llamadas de hoy";
+"work.coins"                 = "Monedas";
+"work.diamonds"              = "Diamantes";
+"work.gems"                  = "Gemas";
+
+"work.todaysIncome"          = "Ingresos de hoy";
+"work.withdrawal"            = "Retirar";
+"work.callIncomes"           = "Ingresos por llamadas";
+"work.giftIncomes"           = "Ingresos por regalos";
+"work.taskIncomes"           = "Ingresos por tareas";
+"work.inviteIncomes"         = "Ingresos por invitaciones";
+"work.otherIncomes"          = "Otros ingresos";
+"work.totalIncomes"          = "Ingresos totales";
+
+"work.tools"                 = "Herramientas";
+"work.online"                = "En línea";
+"work.online.on"             = "Activado";
+"work.online.off"            = "Desactivado";
+"work.offline"               = "Fuera de línea";
+
+// 工具图标标签
+"work.tool.goLive"           = "Iniciar transmisión";
+"work.tool.match"            = "Match";
+"work.tool.task"             = "Tarea";
+"work.tool.beauty"           = "Belleza";
+"work.tool.beautyCamera"     = "Cámara de belleza";
+"work.tool.points"           = "Puntos";
+"work.tool.giftMessage"      = "Mensaje de regalo";
+"work.tool.profileUpdate"    = "Actualizar perfil";
+"work.tool.invite"           = "Invitar";
+"work.tool.workingGuide"     = "Guía del anfitrión";
+"work.tool.props"            = "Accesorios";
+"work.tool.liveData"         = "Datos de transmisión";
+"work.tool.partyData"        = "Datos de Party";
+"work.tool.myGuardian"       = "Mi guardián";
+"work.tool.starUser"         = "Usuario estrella";
+
+// Task Center 页（Phase C · 对齐 H5 views/task/index.vue）
+"task.center.navTitle"                = "Tareas";
+"task.section.rankProgress"           = "Progreso de ranking";
+"task.section.taskProgress"           = "Progreso de la misión";
+"task.cycle.daily"                    = "Diario";
+"task.cycle.weekly"                   = "Semanal";
+"task.countdown.prefix"               = "Reinicio en";
+"task.weekly.totalPoints"             = "Puntos totales:";
+"task.legacy.limitedTime"             = "Misión por tiempo limitado";
+"task.legacy.allDay"                  = "Misión de todo el día";
+"task.legacy.matchTip.title"          = "Recordatorio";
+"task.legacy.matchTip.message"        = "La llamada de Match debe durar 20 s para completar la misión";
+"task.myIncome"                       = "Mis ingresos";
+"task.myIntegral"                     = "Mis puntos";
+"task.viewRank"                       = "Ver ranking";
+"task.rankLabel.globalIncome"         = "Ingresos globales";
+"task.rankLabel.points"               = "Puntos";
+"task.reset.prefix"                   = "Reinicio de misión:";
+"task.daysFormat"                     = "%ddías";
+"task.go"                             = "Ir";
+"task.tier.claim"                     = "Reclamar";
+"task.tier.claimed"                   = "Reclamado";
+"task.claimAll"                       = "Reclamar todo";
+"task.claim.success"                  = "Reclamado con éxito";
+"task.claim.grantPending"             = "La recompensa se está entregando";
+"task.claim.allMultiTypeFormat"       = "%d recompensas reclamadas";
+"task.reward.gotIt"                   = "Entendido";
+"task.reward.mergedPrefix"            = "Total";
+"task.active.tycoonTask"              = "Misión de magnate activa";
+"task.integralTask"                   = "Misión de puntos";
+
+// Task 领奖弹窗 rewardType 描述(对齐 H5 REWARD_DESC_KEY 1-6)+ 空态 + OK
+"task.reward.diamond"                 = "Diamantes";
+"task.reward.gem"                     = "Gemas";
+"task.reward.prop"                    = "Objeto";
+"task.reward.mount"                   = "Montura";
+"task.reward.frame"                   = "Marco";
+"task.reward.points"                  = "Puntos";
+"task.module.noTasks"                 = "Aún no hay misiones";
+"common.OK"                           = "OK";
+
+// Points Rank(Phase E · 对齐 H5 pointsRank/index.vue)
+"points.rank.navTitle"                = "Clasificaciones de puntos";
+"points.myPoints"                     = "Mis puntos:";
+"points.rank.subtitle"                = "Las clasificaciones liquidan recompensas y reinician los puntos semanalmente";
+"points.rank.rules.title"             = "Reglas de puntos";
+"points.rank.rules.content1"          = "1. Obtienes 10 puntos cada vez que publicas en tu círculo de amigos";
+"points.rank.rules.content2"          = "2. Inicia un chat con el usuario y, si responde, obtienes 10 puntos";
+"points.rank.rules.content3"          = "3. Los 5 mejores presentadores por puntos reciben recompensas en diamantes; se liquida y entrega automáticamente cada semana";
+"points.rank.rules.content4"          = "4. Tras la liquidación semanal, los puntos se restablecen a 0";
+
+"work.invite.earnMoney"      = "Gana dinero";
+
+"work.offline.confirmMessage" = "¿Seguro que quieres desconectarte?";
+"work.offline.confirmYes"    = "Sí, desconectar";
+"work.offline.confirmNo"     = "Seguir en línea";
+
+// 底部 tab 标签
+"tab.home"                   = "Inicio";
+"tab.circle"                 = "Círculo";
+"tab.messages"               = "Mensajes";
+"tab.party"                  = "Party";
+"tab.connections"            = "Connections";
+"tab.beauty"                 = "Belleza";
+"tab.work"                   = "Trabajo";
+"tab.profile"                = "Perfil";
+
+// MARK: - Home 顶部 4 tab（对齐 H5 homeConfig.ts → live/list/match/circle）
+"home.topTab.live"           = "En vivo";
+"home.topTab.list"           = "Lista";
+"home.topTab.match"          = "Match";
+"home.topTab.circle"         = "Círculo";
+"home.topTab.comingSoon"     = "Próximamente";
+
+// Circle 朋友圈内 3 子 tab（trial #1）
+"home.circle.official.label"      = "Oficial";
+"home.circle.moment.label"        = "Momento";
+"home.circle.me.label"            = "Yo";
+"home.circle.moment.error.title"  = "Error al cargar los momentos";
+"live.viewers"               = "espectadores";
+"live.rankBadge"             = "Clasificación";
+"live.refresh"               = "Actualizar";
+"live.onlineDot"             = "En línea";
+
+// Home ranking (/rank)
+"home.rank.title"            = "Clasificación";
+"home.rank.charm"            = "Carisma";
+"home.rank.wealth"           = "Riqueza";
+"home.rank.couple"           = "Pareja";
+"home.rank.day"              = "Diario";
+"home.rank.week"             = "Semanal";
+"home.rank.month"            = "Mensual";
+"home.rank.rules"            = "Clasificación";
+"home.rank.rules.text"       = "El ranking de Carisma se determina por los ingresos totales obtenidos por los presentadores en los siguientes escenarios de la plataforma: ingresos generados por Llamadas privadas y Transmisiones en vivo. 1 unidad de ingreso = 1 punto de ranking. El ranking se actualiza diaria y semanalmente.";
+"home.rank.rules.charm"      = "El ranking de Carisma se determina por los ingresos totales obtenidos por los presentadores en los siguientes escenarios de la plataforma: ingresos generados por Llamadas privadas y Transmisiones en vivo. 1 unidad de ingreso = 1 punto de ranking. El ranking se actualiza diaria y semanalmente.";
+"home.rank.rules.couple"     = "El ranking de CP se basa en el total de diamantes gastados entre un presentador y un usuario como pareja CP. Los TOP 3 del ranking semanal reciben recompensas automáticas cada lunes.";
+"home.rank.myRanking"        = "Mi ranking";
+"home.rank.notRanked"        = "99+";
+"home.rank.noData"           = "No hay contenido disponible";
+"home.rank.hostPlaceholder"  = "Nombre del presentador";
+"home.rank.userPlaceholder"  = "Nombre de usuario";
+"home.rank.mystery"          = "Misterio";
+"home.rank.notOnListYet"     = "Aún no en la lista";
+"home.rank.keepSendingGifts" = "¡Sigue enviando regalos y sube en el ranking!";
+"home.rank.cpWeeklyRewardFormat" = "Recompensa TOP %d del ranking semanal de CP";
+
+// MARK: - List 子页（设计稿还原）
+"liveList.segment.online"    = "En línea";
+"liveList.segment.prime"     = "Prime";
+"liveList.action.chat"       = "Chat";
+"liveList.action.live"       = "En vivo";
+"liveList.action.match"      = "Match";
+"liveList.action.offline"    = "Fuera de línea";
+"liveList.action.videoCall"  = "Videollamada";
+"liveList.empty"             = "Aún no hay usuarios";
+"liveList.end"               = "No hay más";
+"liveList.loadMoreFailed"    = "Error al cargar más";
+"liveList.pullToRetry"       = "Desliza hacia abajo para actualizar";
+
+// MARK: - Live 广场（H5 liveList.vue 对齐）
+"liveStream.empty"           = "No hay transmisiones ahora";
+"liveStream.inPK"            = "En PK";
+"live.banner.a11y"           = "Banner de inicio";
+"gift.sendSuperRocket"       = "lanza un super cohete";
+
+// MARK: - Profile 个人页（设计稿还原）
+"profile.settings"           = "Configuración";
+"profile.editName"           = "Editar nombre";
+"profile.idPrefix"           = "ID:";
+"profile.following"          = "Siguiendo";
+"profile.followers"          = "Seguidores";
+"profile.friends"            = "Amigos";
+"profile.completionHint"     = "El 95% de los usuarios prefieren presentadores con perfil (configurar)";
+"profile.tab.album"          = "Álbum";
+"profile.tab.gifts"          = "Regalos";
+"profile.tab.moment"         = "Momentos";
+"profile.photos.format"      = "Fotos (%d/%d)";
+"profile.videos.format"      = "Videos (%d/%d)";
+"profile.cell.photo"         = "Foto";
+"profile.cell.video"         = "Video";
+"profile.emptyPlaceholder"   = "Aún no hay nada aquí";
+"profile.loadFailed.format"  = "Error al cargar el perfil: %@";
+"profile.loading"            = "Cargando...";
+"profile.retry"              = "Reintentar";
+"profile.ratePerMin.format"  = "%d/min";
+
+// MARK: - FollowList 关注/粉丝/朋友列表
+"followList.action.follow"     = "Seguir";
+"followList.action.following"  = "Siguiendo";
+"followList.action.unfollow"   = "Dejar de seguir";
+"followList.action.block"      = "Bloquear";
+"followList.end"               = "No hay más";
+"followList.empty"             = "Aún no hay usuarios";
+"connections.support"                   = "Atención al cliente";
+"connections.support.subtitle"          = "Obtén ayuda con tu cuenta";
+"connections.support.unavailable"       = "La atención al cliente no está disponible. Inténtalo de nuevo.";
+"connections.services"                  = "Servicios";
+"beautyStudio.settings"                 = "Ajustes de belleza";
+"beautyStudio.camera"                   = "Cámara de belleza";
+"profile.media.reviewing"      = "En revisión";
+"profile.media.rejected"       = "Rechazado";
+"mediaPreview.close"           = "Cerrar";
+"mediaPreview.image"           = "Imagen";
+"mediaPreview.video"           = "Video";
+"mediaPreview.positionFormat"  = "%1$d de %2$d";
+"mediaPreview.image.loadFailed" = "No se pudo cargar la imagen";
+"mediaPreview.image.retry"      = "Reintentar";
+
+// MARK: - Settings 设置页
+"settings.title"               = "Configuración";
+"settings.section.account"     = "Cuenta";
+"settings.section.general"     = "General";
+"settings.section.about"       = "Acerca de";
+"settings.blocklist"           = "Lista de bloqueados";
+"settings.language"            = "Idioma";
+"settings.feedback"            = "Comentarios";
+"settings.version"             = "Versión";
+"settings.tos"                 = "Acuerdo de usuario";
+"settings.privacy"             = "Política de privacidad";
+"settings.logout"              = "Cerrar sesión";
+"settings.logoutConfirm"       = "¿Cerrar sesión de esta cuenta?";
+"settings.deleteAccount"       = "Eliminar cuenta";
+"settings.deleteAccount.title" = "Eliminar tu cuenta permanentemente";
+"settings.deleteAccount.description" = "Al eliminar tu cuenta se borrará la sesión de este dispositivo. Contacta con soporte para solicitar la eliminación de los datos de la cuenta almacenados en nuestros servicios.";
+"settings.deleteAccount.consequence.profile" = "Se borrarán tu sesión local y la información de la cuenta en este dispositivo.";
+"settings.deleteAccount.consequence.content" = "Contacta con soporte para solicitar la eliminación del contenido de la cuenta almacenado en nuestros servicios.";
+"settings.deleteAccount.consequence.recovery" = "Cerrarás sesión en este dispositivo. Contacta con soporte si necesitas ayuda con la eliminación de datos de la cuenta.";
+"settings.deleteAccount.action" = "Eliminar cuenta";
+"settings.deleteAccount.confirm.title" = "¿Eliminar la cuenta permanentemente?";
+"settings.deleteAccount.confirm.message" = "Esto borra la sesión local en este dispositivo. Para solicitar la eliminación de los datos de la cuenta almacenados en nuestros servicios, contacta con soporte.";
+"settings.deleteAccount.confirm.action" = "Eliminar permanentemente";
+"settings.deleteAccount.unavailable" = "La eliminación de la cuenta aún no está disponible. Inténtalo de nuevo más tarde.";
+"settings.deleteAccount.failed" = "No se pudo eliminar la cuenta. Inténtalo de nuevo.";
+"settings.cancel"              = "Cancelar";
+"settings.confirm"             = "Confirmar";
+"settings.anchorPolicy"        = "Normas de la comunidad";
+"settings.clearCache"          = "Borrar caché";
+"settings.clearCacheConfirm"   = "¿Seguro que quieres borrar la caché?";
+"settings.clearCacheDone"      = "Caché borrada";
+"settings.selectLanguage"      = "Selecciona un idioma";
+"settings.feedbackComingSoon"  = "Próximamente";
+
+// MARK: - Native 107 Party documents
+"settings.document.anchorPolicy.introduction" = "Estas Normas de la comunidad se aplican a la experiencia centrada en Party disponible para esta cuenta en HiFunny, incluidas salas de voz, chat de sala pública, expresiones, interacciones libres, Connections, perfiles y fotos de perfil aprobadas.";
+"settings.document.anchorPolicy.respect.title" = "Respeto en salas Party";
+"settings.document.anchorPolicy.respect.body" = "Usa la voz de Party, el chat de sala pública, las expresiones, los dados libres y piedra-papel-tijera con respeto. No acoses, amenaces, intimides, discrimines ni tengas conductas sexuales hacia nadie.";
+"settings.document.anchorPolicy.content.title" = "Contenido y perfiles seguros";
+"settings.document.anchorPolicy.content.body" = "Usa información de cuenta y perfil precisa. Las fotos de perfil, las fotos, los videos de revisión, los mensajes de sala y otro contenido enviado deben ser tuyos para compartir y no deben ser ilegales, violentos, sexualmente explícitos, explotadores, engañosos ni invadir la privacidad de otra persona.";
+"settings.document.anchorPolicy.commercial.title" = "Sin juegos de azar ni abuso comercial";
+"settings.document.anchorPolicy.commercial.body" = "No uses las salas Party, los dados, piedra-papel-tijera ni ninguna interacción gratuita para apuestas, premios, pagos, solicitación, fraude u otra actividad comercial.";
+"settings.document.anchorPolicy.safety.title" = "Mantén la sala segura";
+"settings.document.anchorPolicy.safety.body" = "No involucres a menores en contenido para adultos, no busques contactos fuera de la plataforma con fines de explotación ni compartas contactos privados, identidad o datos de ubicación sin consentimiento.";
+"settings.document.anchorPolicy.moderation.title" = "Moderación";
+"settings.document.anchorPolicy.moderation.body" = "Podemos eliminar el contenido enviado, restringir las funciones de Party o Connections, o limitar una cuenta cuando se infrinjan estas normas o la legislación aplicable. Usa Connections o Ajustes para bloquear una cuenta, contactar con soporte o enviar comentarios.";
+
+"settings.document.agreement.introduction" = "Este acuerdo cubre la experiencia HiFunny centrada en Party disponible para esta cuenta. Las funciones no listadas como disponibles a continuación no forman parte de esta experiencia.";
+"settings.document.agreement.acceptance.title" = "Aceptación";
+"settings.document.agreement.acceptance.body" = "Al iniciar sesión o usar HiFunny, aceptas este acuerdo, las Normas de la comunidad y la legislación aplicable. No uses el servicio donde no esté legalmente permitido.";
+"settings.document.agreement.scope.title" = "Funciones disponibles";
+"settings.document.agreement.scope.body" = "El registro requiere una foto de perfil y al menos una foto de perfil. Cuando se valida un código de invitación de seis caracteres, se habilita la grabación del video de revisión y el registro requiere seis fotos de perfil y un video de revisión grabado. Esta cuenta puede usar salas de voz Party, chat de salas públicas, expresiones, dados y piedra-papel-tijera gratuitos, listas de Conexiones, perfiles y álbumes de fotos aprobados, controles de seguir, dejar de seguir y bloquear, edición básica de perfil, foto de perfil y fotos, herramientas de belleza, comentarios, soporte y Ajustes. La transmisión en vivo, las llamadas, los mensajes directos entre personas, los regalos o monedas virtuales, la cartera, los retiros, las loterías o Lucky Number, el Party video, la Party música, las actividades, los juegos de pago y los juegos de media pantalla no están disponibles.";
+"settings.document.agreement.use.title" = "Uso del servicio";
+"settings.document.agreement.use.body" = "Usa HiFunny solo para interacción social personal lícita y entretenimiento. No eludas los controles de acceso, no interrumpas las salas Party, no automatices interacciones, no uses los juegos gratuitos para apuestas o premios, no extraigas información ni uses el servicio para dañar a otras personas.";
+"settings.document.agreement.content.title" = "Tu contenido";
+"settings.document.agreement.content.body" = "Eres responsable de los datos del perfil, la foto de perfil, las fotos, el video de revisión, los mensajes en salas públicas, las expresiones y las interacciones gratuitas que envíes. Debes tener los derechos y permisos necesarios para compartirlos y deben cumplir las Normas de la comunidad.";
+"settings.document.agreement.service.title" = "Disponibilidad del servicio y cumplimiento";
+"settings.document.agreement.service.body" = "Podemos mantener, cambiar, suspender o eliminar las funciones disponibles de Party, Conexiones, perfil y soporte cuando sea necesario por seguridad, cumplimiento legal u operación del servicio. Las infracciones pueden dar lugar a la eliminación de contenido, participación restringida o limitaciones de la cuenta.";
+"settings.document.agreement.account.title" = "Cuenta y comentarios";
+"settings.document.agreement.account.body" = "Mantén confidenciales las credenciales de tu cuenta e informa de sospechas de uso no autorizado mediante Comentarios o soporte. Perfil > Ajustes contiene los controles de perfil, privacidad, lista de bloqueados y cuenta. Eliminar cuenta actualmente elimina la sesión local de este dispositivo; contacta con soporte para solicitar la eliminación de los datos de la cuenta almacenados en nuestros servicios.";
+"settings.document.agreement.changes.title" = "Cambios en este acuerdo";
+"settings.document.agreement.changes.body" = "Podemos actualizar este acuerdo a medida que cambien el servicio o los requisitos legales. Si continúas usándolo tras una actualización, aceptas el acuerdo actualizado.";
+
+"settings.document.privacy.introduction" = "Esta política explica cómo se procesa la información para la experiencia de HiFunny centrada en Party disponible para esta cuenta. HiFunny está destinado a personas de 13 años o más, y no recopilamos conscientemente información personal de menores de 13 años.";
+"settings.document.privacy.data.title" = "Información que procesamos";
+"settings.document.privacy.data.body" = "Procesamos información de registro y perfil, incluidos correo electrónico, nombre o apodo, fecha de nacimiento, país, idiomas, avatar y fotos de perfil. Si introduces un código de invitación de seis caracteres, lo enviamos para validarlo; tras una validación exitosa, el registro también procesa seis fotos de perfil y el video de revisión que grabes. Procesamos identificadores de usuario y dispositivo, relaciones de Connections y cuentas bloqueadas, participación en salas Party, texto de sala pública, expresiones y resultados de interacciones libres, audio de voz de Party, comentarios y solicitudes de soporte, así como información de interacción con el producto, fallos, rendimiento, prevención de abusos y seguridad. Los ajustes de belleza y los efectos de vista previa se procesan en tu dispositivo; las fotos o videos se suben solo cuando decides enviarlos.";
+"settings.document.privacy.use.title" = "Cómo usamos la información";
+"settings.document.privacy.use.body" = "Usamos la información para autenticar y revisar el registro, proporcionar y editar perfiles y álbumes de fotos aprobados, operar las salas de voz Party, el chat de sala pública, las expresiones y las interacciones libres, ofrecer Connections, bloqueo, comentarios y atención al cliente, prevenir abusos, mantener y solucionar problemas del servicio, realizar analíticas de producto, diagnosticar fallos y problemas de rendimiento, y cumplir obligaciones legales. No vendemos información personal ni la usamos para publicidad entre aplicaciones.";
+"settings.document.privacy.visibility.title" = "Qué pueden ver otros participantes";
+"settings.document.privacy.visibility.body" = "Tu apodo, avatar, perfil básico y fotos de perfil aprobadas pueden ser visibles para las personas que puedan abrir tu perfil. Los mensajes de la sala pública, las expresiones y las interacciones libres son visibles para los participantes de esa sala Party, y tu voz se transmite a los participantes mientras uses un asiento con micrófono. No compartas públicamente contactos privados, identidad, ubicación u otra información sensible.";
+"settings.document.privacy.sharing.title" = "Proveedores de servicios y divulgación";
+"settings.document.privacy.sharing.body" = "Utilizamos proveedores de servicios que ayudan a operar las funciones disponibles: Agora para la voz de Party, NIM para los mensajes de la sala pública, ThinkingData para analíticas de producto, Sentry para diagnóstico de fallos y rendimiento, y proveedores de hosting o CDN para los medios del perfil, videos de revisión y adjuntos de soporte. Podemos divulgar información cuando lo requiera la ley o para proteger a los usuarios, el servicio o al público.";
+"settings.document.privacy.security.title" = "Retención y seguridad";
+"settings.document.privacy.security.body" = "Conservamos la información de cuenta, perfil, Party, Connections, soporte y diagnóstico solo durante el tiempo necesario para los fines descritos aquí y las obligaciones aplicables. Utilizamos medidas de protección razonables, pero ningún servicio en línea puede garantizar una seguridad absoluta.";
+"settings.document.privacy.choices.title" = "Tus opciones y solicitudes";
+"settings.document.privacy.choices.body" = "Puedes editar la información básica del perfil, el avatar y las fotos, seguir o dejar de seguir a usuarios, gestionar tu lista de bloqueados y gestionar los permisos de cámara, micrófono y fototeca en los Ajustes de iOS. Perfil > Ajustes > Eliminar cuenta actualmente borra la sesión local en este dispositivo. Contacta con soporte a través de Comentarios para solicitar acceso, corrección o eliminación de los datos de la cuenta almacenados en nuestros servicios o para hacer una consulta sobre privacidad.";
+
+// MARK: - Feedback 反馈表单页
+"feedback.type.appError"       = "Error de la app";
+"feedback.type.accountError"   = "Error de cuenta";
+"feedback.type.suggestion"     = "Sugerencia";
+"feedback.type.other"          = "Otro";
+"feedback.messagePlaceholder"  = "Ingresa";
+"feedback.emailPlaceholder"    = "Deja tu correo electrónico";
+"feedback.wrongEmail"          = "Correo electrónico incorrecto";
+"feedback.submitSuccess"       = "Éxito";
+"feedback.submitFailed"        = "Error al enviar, inténtalo de nuevo";
+
+// MARK: - LevelDetail 段位详情页
+"level.title"                  = "Detalles de nivel";
+"level.current"                = "Nivel actual";
+"level.spectrum"               = "Espectro de niveles";
+"profile.gifts.empty"          = "Aún no hay regalos";
+
+// MARK: - J Publish (发布朋友圈)
+"publish.navTitle"           = "Publicación";
+"publish.cancel"             = "Cancelar";
+"publish.release"            = "Publicar";
+"publish.placeholder"        = "Escribe lo que quieras decir";
+"publish.charCountFormat"    = "%d/500";
+"publish.posting"            = "Publicando...";
+"publish.addImage"           = "Añadir imagen";
+"publish.mediaSource.photoLibrary" = "Fototeca";
+"publish.removeImage"        = "Quitar imagen";
+"publish.fabLabel"           = "Crear publicación";
+"publish.discard.title"      = "¿Descartar publicación?";
+"publish.discard.message"    = "Perderás tu contenido.";
+"publish.discard.confirm"    = "Descartar";
+"publish.discard.keep"       = "Seguir editando";
+"publish.toast.textEmpty"    = "Ingresa el contenido";
+"publish.toast.noImages"     = "Añade al menos 1 imagen";
+"publish.toast.imageTooLarge" = "Imagen demasiado grande (>10 MB)";
+"publish.toast.photoLoadFailed" = "No se pudo cargar la foto seleccionada. Inténtalo de nuevo";
+"publish.toast.credentialFailed" = "No se pudo obtener la credencial de carga";
+"publish.toast.uploadFailed" = "Error de subida, vuelve a intentarlo";
+"publish.toast.createFailed" = "Error al publicar";
+"publish.toast.networkError" = "Error de red, inténtalo de nuevo";
+"publish.toast.success"      = "Publicado con éxito";
+
+// MARK: - Auth 登录页
+"auth.title"                 = "Iniciar sesión con correo";
+"auth.envHint"               = "dev · anchor.cphub.link";
+"auth.email"                 = "Ingresa tu correo electrónico";
+"auth.password"              = "Ingresa la contraseña (al menos 8 caracteres)";
+"auth.login"                 = "Iniciar sesión / Registrarse";
+"auth.loggingIn"             = "Iniciando sesión...";
+"auth.forgetPassword"        = "¿Olvidaste tu contraseña?";
+"auth.togglePasswordA11y"    = "Mostrar u ocultar contraseña";
+"auth.consent.prefix"        = "He leído y acepto";
+"auth.consent.and"           = "y";
+"auth.consent.toggleA11y"    = "Aceptar el Acuerdo de Usuario y la Política de Privacidad";
+"auth.clearEmailA11y"        = "Borrar correo";
+"auth.clearPasswordA11y"     = "Borrar contraseña";
+"auth.removeRecentAccountA11y" = "Eliminar cuenta reciente";
+
+// MARK: - LivePrepare 开播准备
+"livePrepare.navTitle"       = "Demo de transmisión";
+"livePrepare.panelTitle"     = "Configuración de transmisión";
+"livePrepare.titlePlaceholder" = "Título de transmisión (déjalo vacío para usar la bio predeterminada)";
+"livePrepare.defaultTitle"   = "En vivo";
+"livePrepare.beautyToggle"   = "Belleza";
+"livePrepare.sliderBlur"     = "Suavizado";
+"livePrepare.sliderWhiten"   = "Blanquear";
+"livePrepare.sliderEyeEnlarge" = "Agrandar ojos";
+"livePrepare.sliderFaceThin" = "Adelgazar rostro";
+"livePrepare.start"          = "Iniciar transmisión";
+"livePrepare.starting"       = "Iniciando...";
+"livePrepare.errorNoChannel" = "Error: falta el canal o el token en la respuesta";
+"livePrepare.errorPrefix"    = "Error: %@ (%@)";
+"livePrepare.errorGeneric"   = "Error: %@";
+"livePrepare.guardUnverified" = "Tu cuenta de presentador aún no está aprobada.";
+"livePrepare.guardAgent"     = "Las cuentas de agente no pueden iniciar una transmisión.";
+
+// MARK: - LiveSettings 直播设置页（对齐 H5 5 张 CCard；文案直译 H5 en.json）
+"liveSettings.navTitle"              = "Ajustes de transmisión";
+"liveSettings.bioTitle"              = "Biografía de transmisión";
+"liveSettings.bioIntro"              = "Se mostrará en la página de transmisión";
+"liveSettings.bioPlaceholder"        = "Ingresa...";
+"liveSettings.coverTitle"            = "Portada de transmisión";
+"liveSettings.privateCallTitle"      = "Configuración del regalo de llamada gratuita de 5 minutos";
+"liveSettings.privateCallIntro"      = "Configura un regalo que permita a los usuarios llamarte directamente en la sala de transmisión. Este regalo se contará como ingresos por llamada, no por regalo. El precio de este regalo cubrirá tus ingresos de los primeros 5 minutos de la llamada. Después de 5 minutos, los ingresos se basarán en el precio de tu llamada. Establece el precio de este regalo según el precio de tu llamada.";
+"liveSettings.wishlistTitle"         = "Lista de deseos de transmisión";
+"liveSettings.wishlistIntro"         = "Elige regalos para agregar a tu lista de deseos de transmisión. Si recibes estos regalos durante la transmisión, obtendrás puntos o diamantes extra. Nota: Estos regalos no pueden coincidir con el regalo de llamada en vivo.";
+"liveSettings.beautyTitle"           = "Ajustes de belleza";
+"liveSettings.goToSettings"          = "Ir a Ajustes >>>";
+"liveSettings.comingSoon"            = "Próximamente";
+"liveSettings.counterFormat"         = "%d/200";
+"liveSettings.coverUploadHint"       = "Toca para cambiar";
+"liveSettings.coverUploading"        = "Subiendo...";
+"liveSettings.giftAddHint"           = "Toca para seleccionar un regalo";
+"liveSettings.giftRemove"            = "Eliminar";
+
+// GiftPicker sheet
+"giftPicker.title"                   = "Seleccionar regalo";
+"giftPicker.cancel"                  = "Cancelar";
+"giftPicker.confirm"                 = "Confirmar";
+"giftPicker.retry"                   = "Reintentar";
+"giftPicker.empty"                   = "No hay regalos disponibles";
+"giftPicker.send"                    = "Enviar";
+"giftPicker.all"                     = "Todos";
+"giftPicker.recharge"                = "Recargar";
+"giftPicker.recharge.toast"          = "La recarga estará disponible pronto";
+"giftPicker.sent.toast"              = "Regalo enviado";
+"giftPicker.recipients.empty"        = "Nadie está en el micrófono";
+
+// MARK: - L-spec-愿望单设置页 v1（对齐 H5 wishSetting）
+"wishSetting.navTitle"               = "Configuración de deseos";
+"wishSetting.record"                 = "Historial";
+"wishSetting.themeTitle"             = "Tema del deseo";
+"wishSetting.themeIntro"             = "Lo que prometes hacer cuando el usuario cumpla tu deseo (máx. 15 caracteres)";
+"wishSetting.submit"                 = "Enviar";
+"wishSetting.selectTemplate"         = "Seleccionar plantilla";
+"wishSetting.chooseTemplate"         = "Elige una plantilla";
+"wishSetting.type.noText"            = "Sin texto";
+"wishSetting.type.common"            = "Plantilla común";
+"wishSetting.type.private"           = "Plantilla privada";
+"wishSetting.noTemplateAvailable"    = "No hay plantillas disponibles";
+"wishSetting.added.format"           = "Añadido %d/%d";
+"wishSetting.upTo.format"            = "Hasta %d regalos de deseo";
+"wishSetting.giftCount"              = "Cantidad";
+"wishSetting.maxGiftNum"             = "Se alcanzó el número máximo de regalos";
+"wishSetting.ruleTitle"              = "Pautas de compromiso de deseos";
+"wishSetting.ruleAgree"              = "Lee con atención y acepta antes de abrir tu lista de deseos.";
+"wishSetting.ruleLink"               = "Pautas de compromiso de deseos >>>";
+"wishSetting.ruleDoc"                = "Nos comprometemos a usar los deseos de forma justa y sincera, y a respetar las reglas de la plataforma. Cualquier infracción puede restringir la cuenta.";
+"wishSetting.save"                   = "Guardar";
+"wishSetting.pleaseEnterTheme"       = "Ingresa el tema";
+"wishSetting.themeMaxLen"            = "El tema no puede superar 15 caracteres";
+"wishSetting.submittedForReview"     = "Enviado para revisión";
+"wishSetting.submitSuccess.title"    = "Envío exitoso";
+"wishSetting.submitSuccess.subtitle" = "Hemos recibido tu formulario y está en revisión.";
+"wishSetting.submitSuccess.reviewStatus" = "Estado de revisión";
+"wishSetting.submitSuccess.pendingReview" = "Pendiente de revisión";
+"wishSetting.submitSuccess.reviewTime" = "Tiempo de revisión";
+"wishSetting.submitSuccess.reviewTimeValue" = "1-2 días";
+"wishSetting.submitSuccess.notify"   = "Notificación de resultados";
+"wishSetting.submitSuccess.notifyValue" = "Notificación en la app";
+"wishSetting.submitSuccess.tip"      = "Una vez aprobado, se aplicará la próxima vez que se inicie la app.";
+"wishSetting.submitSuccess.goToWishlist" = "Ir a mi lista de deseos";
+"wishSetting.pleaseAgreeRule"        = "Acepta las pautas de compromiso de deseos";
+"wishSetting.pleaseAddGift"          = "Añade al menos un regalo de deseo";
+"wishSetting.pleasePickTemplate"     = "Elige una plantilla común";
+"wishSetting.pleasePickPrivate"      = "Elige un compromiso privado";
+"wishSetting.saved"                  = "Guardado";
+"wishSetting.reviewStatus"           = "Estado de revisión";
+"wishSetting.reviewStatusIntro"      = "Una vez aprobada, la plantilla privada será visible para los usuarios.";
+"wishSetting.auditRecords"           = "Registros de compromisos de deseos";
+"wishSetting.audit.all"              = "Todo";
+"wishSetting.audit.pending"          = "Pendiente";
+"wishSetting.audit.approved"         = "Aprobado";
+"wishSetting.audit.rejected"         = "Rechazado";
+"wishSetting.audit.empty"            = "Aún no hay registros";
+"wishSetting.audit.rejectReason"     = "Motivo del rechazo";
+"wishSetting.type.commonSub"         = "Adecuado para todos los presentadores";
+"wishSetting.type.privateSub"        = "Visible solo para ti";
+"wishSetting.type.noTextSub"         = "Solo portada";
+"wishSetting.ruleAgreeShort"         = "Acepto";
+"wishSetting.ruleFooter"             = "Nos comprometemos a usar los regalos de forma justa y sincera, y a respetar las reglas de la plataforma.";
+
+// MARK: - 心愿承诺规范弹窗
+"wishRuleModal.title"                = "Pautas de compromiso de deseos";
+"wishRuleModal.check"                = "He leído y acepto las pautas anteriores";
+"wishRuleModal.agree"                = "Aceptar y publicar";
+"wishRuleModal.content"              = "Al publicar una lista de deseos, aceptas cumplir las recompensas prometidas a los espectadores que cumplan el deseo. Las infracciones pueden resultar en la suspensión de la cuenta y la pérdida de los derechos de transmisión.";
+
+// MARK: - LiveRoom 直播间
+"liveRoom.permissionAlertTitle" = "Se requiere permiso de cámara";
+"liveRoom.permissionAlertOK" = "OK";
+"liveRoom.permissionAlertMessage" = "Habilita el acceso a la cámara en Ajustes → HiFunny → Cámara";
+"mediaPermission.cameraRequired" = "Se requiere acceso a la cámara. Actívalo en Ajustes y reinicia HiFunny para continuar.";
+"mediaPermission.microphoneRequired" = "Se requiere acceso al micrófono. Actívalo en Ajustes y reinicia HiFunny para continuar.";
+"mediaPermission.liveRequired" = "Se requiere acceso a la cámara y al micrófono. Actívalos en Ajustes y reinicia HiFunny para continuar.";
+"mediaPermission.photoLibraryAddRequired" = "Se requiere acceso a las fotos para guardar las fotos de la cámara de belleza. Actívalo en Ajustes para continuar.";
+"mediaPermission.alertTitle" = "Permisos requeridos";
+"liveRoom.statusLiveFormat"  = "En vivo %@";
+"liveRoom.statusConnecting"  = "Conectando...";
+"liveRoom.status.idle"       = "Inactivo";
+"liveRoom.status.joined"     = "En vivo";
+"liveRoom.status.failed"     = "Conexión fallida";
+"liveRoom.status.rtcErrorFormat" = "Error de RTC %d";
+"liveRoom.status.joinChannelFailedFormat" = "Error al unirse al canal (%d)";
+"liveRoom.anchorDefault"     = "Presentador";
+"liveRoom.toolBeauty"        = "Belleza";
+"liveRoom.endLive"           = "Terminar transmisión";
+"liveRoom.beautyPanelTitle"  = "Belleza";
+
+/* LiveRoom design-restoration additions */
+"liveRoom.viewerCount.a11y"       = "Espectadores en línea";
+"liveRoom.close.a11y"             = "Cerrar sala de transmisión";
+"liveRoom.task.a11y"              = "Tarea diaria";
+"liveRoom.contribution.a11y"      = "Contribución de transmisión";
+"liveRoom.rankFormat"             = "N.º %d";
+"liveRoom.rankUnlisted"           = "Ranking";
+"liveRoom.rank.a11y"              = "Ranking semanal";
+"liveRoom.rank.tab.thisWeek"      = "Esta semana";
+"liveRoom.rank.tab.lastWeek"      = "Semana pasada";
+"liveRoom.rank.tab.viewers"       = "Espectadores";
+"liveRoom.rank.tab.topGifter"     = "Mejor regalador";
+"liveRoom.rank.viewers.empty"     = "Aún no hay espectadores";
+"liveRoom.rank.sheet.title"       = "Clasificación";
+"liveRoom.rank.empty"             = "Aún no hay datos del ranking";
+"liveRoom.rank.errorRetry"        = "Error al cargar. Toca para reintentar.";
+"liveRoom.rank.ownMe"             = "Yo";
+"liveRoom.rank.diffFormat"        = "%@ para el siguiente puesto";
+"liveRoom.rank.toNext"            = "Al siguiente puesto:";
+"liveRoom.retry"                  = "Reintentar";
+"liveRoom.rank.tab.now"           = "Ahora";
+"liveRoom.rank.tab.today"         = "Hoy";
+"liveRoom.rank.tab.week"          = "Semana";
+"liveRoom.rank.girlBanner"        = "Ranking semanal de regalos";
+"liveRoom.contribution.sheet.title"       = "Contribución";
+"liveRoom.contribution.tab.ranking"       = "Clasificación";
+"liveRoom.contribution.tab.record"        = "Registros de regalos";
+"liveRoom.contribution.currentLiveIncome" = "Ingresos de la transmisión actual";
+"liveRoom.contribution.empty.ranking"     = "Aún no hay datos de contribución";
+"liveRoom.contribution.empty.record"      = "Aún no hay registros de regalos";
+"liveRoom.contribution.errorRetry"        = "Error al cargar. Toca para reintentar.";
+"liveRoom.contribution.last90dFormat"     = "%@ (últimos 90 días)";
+"liveRoom.contribution.last90d"           = "Últimos 90 días";
+"liveRoom.contribution.sentAction"        = "envió";
+"liveRoom.setting.effect"                 = "Efectos";
+"liveRoom.setting.announcement"           = "Anuncio";
+"announcement.popup.title"                = "Gestión de anuncios";
+"announcement.popup.placeholder"          = "Ingresa tu anuncio de transmisión (hasta 120 caracteres)";
+"announcement.popup.save"                 = "Guardar";
+"announcement.popup.saveSuccess"          = "Guardado con éxito";
+"announcement.popup.sensitiveWord"        = "Palabras sensibles detectadas: %@";
+"announcement.popup.saving"               = "Guardando...";
+
+// MARK: - UserCard 名片卡(对齐 H5 userCard.vue,主播端看用户场景)
+"userCard.title"                          = "Perfil";
+"userCard.follow"                         = "Seguir";
+"userCard.unfollow"                       = "Siguiendo";
+"userCard.block"                          = "Bloquear";
+"userCard.unblock"                        = "Bloqueado";
+"userCard.followers"                      = "Seguidores";
+"userCard.following"                      = "Siguiendo";
+"userCard.giftWall"                       = "Enviar regalos";
+"userCard.errorRetry"                     = "No se pudo cargar el perfil";
+"userCard.message"                        = "Mensaje";
+"userCard.sendGift"                       = "Enviar regalo";
+"userCard.emptyGifts"                     = "¡Aún no se han enviado regalos!";
+"userCard.uidPrefix"                      = "UID: ";
+"userCard.unblockConfirm.title"           = "Eliminar de la lista de bloqueados";
+"userCard.unblockConfirm.message"         = "¿Seguro que quieres eliminar a este usuario de tu lista de bloqueados?";
+"userCard.unblockConfirm.confirm"         = "Eliminar";
+"userCard.unblockConfirm.cancel"          = "Cancelar";
+"userCard.uidCopiedToast"                 = "UID copiado al portapapeles";
+"userCard.uidCopyA11y"                    = "Copiar UID";
+"userCard.party.take"                     = "Tomar";
+"userCard.party.mute"                     = "Silenciar";
+"userCard.party.unmute"                   = "Reactivar audio";
+"userCard.party.kickFromMic"              = "Salir";
+"userCard.party.setAdmin"                 = "Establecer admin";
+"userCard.party.removeAdmin"              = "Quitar admin";
+"userCard.party.kick"                     = "Expulsar";
+"userCard.party.kickHoursFormat"          = "%d horas";
+"userCard.party.kickPermanent"            = "Permanente";
+"userCard.party.kickConfirmMessage"       = "¿Seguro que quieres expulsar a %@ de la sala?";
+"userCard.party.kickConfirmButton"        = "Confirmar";
+"userCard.party.kickSuccess"              = "Usuario expulsado";
+"userCard.party.setAdminSuccess"          = "Establecido como admin con éxito";
+"userCard.party.removeAdminSuccess"       = "Admin eliminado con éxito";
+"userCard.blockSuccess"                   = "Bloqueado";
+"userCard.blockFail"                      = "No se pudo bloquear, inténtalo de nuevo";
+"userCard.unblockSuccess"                 = "Eliminado de la lista de bloqueados";
+"userCard.unblockFail"                    = "No se pudo eliminar, inténtalo de nuevo";
+
+"liveRoom.setting.sheet.title"            = "Configuración";
+"liveRoom.endConfirm.title"               = "Recordatorio";
+"liveRoom.endConfirm.message"             = "¿Seguro que quieres terminar la transmisión?";
+"liveRoom.endConfirm.confirm"             = "Confirmar";
+"publicScreen.translate"                  = "Traducir";
+"publicScreen.translating"                = "Traduciendo...";
+"publicScreen.sentAction"                 = "Enviar";
+"publicScreen.enteredRoom"                = "entró a la sala";
+"guardian.broadcast.became"               = "¡Se convirtió en Guardián {level} de {anchor}!";
+"guardian.level.bronze"                   = "Bronce";
+"guardian.level.silver"                   = "Plata";
+"guardian.level.gold"                     = "Oro";
+"guardian.title"                          = "Guardián";
+"guardian.myGuardians"                    = "Mis guardianes";
+"guardian.hisGuardians.format"            = "Sus guardianes (%d)";
+"guardian.rules.title"                    = "Reglas de guardianía";
+"guardian.topGuardian"                    = "Guardián principal";
+"guardian.list.format"                    = "Lista de guardianes (%d personas)";
+"guardian.beFirst"                        = "¡Sé el primer guardián!";
+"guardian.waitForYour"                    = "Esperando a tu Guardián";
+"guardian.noMore"                         = "No hay más";
+"guardian.tab.gold"                       = "Gold";
+"guardian.tab.silver"                     = "Silver";
+"guardian.tab.bronze"                     = "Bronze";
+"guardian.privilege.badge"                = "Insignia de Guardián";
+"guardian.privilege.frame"                = "Marco";
+"guardian.privilege.chat"                 = "Burbuja de chat";
+"guardian.privilege.highlight"            = "Anuncio en sala";
+"guardian.privilege.notice"               = "Aviso de entrada";
+"guardian.privilege.mount"                = "Vehículos";
+"guardian.privilege.gift"                 = "Regalos de Guardián";
+"guardian.day.7"                          = "7 días";
+"guardian.day.30"                         = "30 días";
+"guardian.day.365"                        = "365 días";
+"guardian.save.format"                    = "Ahorra %d%%";
+"guardian.preview.subtitle"               = "Exclusivo %@ para Guardianes";
+"guardian.preview"                        = "Vista previa";
+"guardian.daysLeft.format"                = "%d días";
+"guardian.rules.q1"                       = "1. ¿Qué es la guardianía?";
+"guardian.rules.a1"                       = "Guardián es un estado de apoyo premium que permite a los usuarios desbloquear privilegios exclusivos y apoyar a sus presentadores favoritos. Un presentador puede tener varios guardianes y un usuario puede ser guardián de varios presentadores. Los privilegios de Guardián son válidos solo en las salas de los presentadores que protege.";
+"guardian.rules.q2"                       = "2. ¿Cómo convertirse en guardián?";
+"guardian.rules.a2"                       = "Los usuarios adquieren la guardianía con diamantes. El cincuenta por ciento de los diamantes gastados va al presentador protegido. Un guardián existente puede extender la duración para el mismo presentador.";
+"guardian.rules.q3"                       = "3. Niveles de Guardián";
+"guardian.rules.a3"                       = "Hay tres niveles de Guardián. Los niveles más altos desbloquean más privilegios exclusivos:";
+"guardian.rules.q4"                       = "4. Privilegios de Guardián";
+"guardian.rules.a4"                       = "Los privilegios de Guardián incluyen:";
+"guardian.rules.q5"                       = "5. Período de validez";
+"guardian.rules.a5"                       = "El estado de Guardián es válido durante la duración seleccionada:";
+"guardian.rules.q6"                       = "6. ¿Cómo se clasifica la lista de Guardianes?";
+"guardian.rules.a6"                       = "Los guardianes se clasifican según los siguientes criterios:";
+"guardian.rules.levelExtra"               = "Un usuario puede tener varios niveles para el mismo presentador. La duración se consume en orden Gold > Silver > Bronze; los niveles inferiores se pausan mientras un nivel superior esté activo. La insignia y los privilegios mostrados siempre corresponden al nivel activo más alto.";
+"guardian.rules.privilegesExtra"          = "Los privilegios disponibles pueden variar según el nivel de Guardián.";
+"guardian.rules.duration.7"               = "- 7 días";
+"guardian.rules.duration.30"              = "- 30 días";
+"guardian.rules.duration.365"             = "- 365 días";
+"guardian.rules.durationExtra"            = "El período de validez restante se muestra en la página de Guardián.";
+"guardian.rules.rank.1"                   = "- Nivel de Guardián: Gold > Silver > Bronze";
+"guardian.rules.rank.2"                   = "- Días restantes de Guardián: más días, mejor posición dentro del mismo nivel.";
+"guardian.rules.rank.3"                   = "- Diamantes gastados en el presentador en los últimos 30 días.";
+"guardian.rules.rankExtra"                = "El Guardián con la clasificación más alta aparece en la parte superior de la lista de Guardianes.";
+"publicScreen.luckyWin"                   = "gana";
+"publicScreen.luckyBySending"             = "al enviar lucky";
+"publicScreen.wheelHit"                   = "acertó";
+"publicScreen.wheelOnTheWheel"            = "en la ruleta";
+"publicScreen.rpsWin"                     = "gana en RPS";
+"publicScreen.luckyDiceWin"               = "gana Lucky Dice";
+"publicScreen.rpsGet"                     = "obtiene";
+"publicScreen.wishlistTop1"               = "¡se convirtió en el regalador TOP1!";
+"publicScreen.pkTopContributors"          = "¡Gracias a todos los fans que apoyaron este PK! La lista de apoyo:";
+"publicScreen.pkTop1"                     = "Top1";
+"publicScreen.pkTop2"                     = "Top2";
+"publicScreen.pkTop3"                     = "Top3";
+"publicScreen.diamondBoxSend"             = "envió una caja de diamantes";
+"publicScreen.diamondBoxClaim"            = "reclamado";
+"publicScreen.diamondBoxSettled"          = "repartido entre el top";
+"publicScreen.diamondBoxExpired"          = "caja de diamantes expirada, reembolso";
+"live.activeTycoon.enterToast"            = "Un Tycoon activo ha entrado en la sala. ¡Interactúa ahora!";
+"liveRoom.rpsRules.title"                 = "Reglas del juego";
+"liveRoom.rpsRules.bestOf"                = "Al mejor de %d rondas";
+"liveRoom.rpsRules.perChallenge"          = "%d por desafío";
+"liveRoom.rpsRules.ties"                  = "Los empates se rejugarán";
+"liveRoom.rpsRules.medal"                 = "Ganar otorga medalla de %dh, tope %dh en total";
+"liveRoom.rpsRules.refund"                = "Reembolso al salir anormalmente";
+"liveRoom.rpsRules.gotIt"                 = "Entendido";
+"liveRoom.mute.placeholder.system"        = "Has sido silenciado";
+"liveRoom.mute.placeholder.host"          = "Silenciado por el presentador";
+"liveRoom.mute.toast.system"              = "El sistema te ha silenciado";
+"liveRoom.mute.toast.host"                = "El presentador te ha silenciado";
+"publicScreen.hi.actionA11y"              = "Opciones de respuesta";
+"publicScreen.hi.screen"                  = "Responder en pantalla";
+"publicScreen.hi.msg"                     = "Abrir chat privado";
+"publicScreen.hi.msgUnavailable"          = "Chat privado no disponible para este usuario";
+"publicScreen.hi.replyPill"               = "Respondiendo a @%@";
+"common.cancel"                           = "Cancelar";
+"liveRoom.underway.label"         = "En curso";
+"liveRoom.privateCall.label"      = "Llamada privada";
+"liveRoom.tool.pkDebug"           = "Depuración de PK";
+"liveRoom.input.placeholder"      = "Saluda...";
+"liveRoom.input.send.a11y"        = "Enviar mensaje";
+"liveRoom.comingSoon.task"        = "Lista de tareas próximamente";
+"liveRoom.comingSoon.contribution" = "Detalles de contribución próximamente";
+"liveRoom.comingSoon.rank"        = "Ranking semanal próximamente";
+"liveRoom.comingSoon.privateCall" = "Llamada privada próximamente";
+"liveRoom.comingSoon.gift"        = "Tienda de regalos próximamente";
+"liveRoom.roulette.a11y"          = "Rueda interactiva";
+"liveRoom.comingSoon.roulette"    = "Rueda interactiva próximamente";
+
+/* Roulette intro popup & setting sheet (aligns H5 wheel.* + live.* namespace) */
+"liveRoom.roulette.intro.card1.title" = "Rueda";
+"liveRoom.roulette.intro.card1.body"  = "Los espectadores pueden girar la rueda de premios gastando diamantes. Más giros significan mayor participación de la audiencia e ingresos. Los streamers pueden configurar premios interactivos exclusivos para ellos y sus fans, y activar o desactivar esta función en cualquier momento en los ajustes de la transmisión.";
+"liveRoom.roulette.intro.next"        = "Siguiente";
+"liveRoom.roulette.setting.title"     = "Configurar rueda interactiva";
+"liveRoom.roulette.enable"            = "Activar rueda";
+"liveRoom.roulette.price"             = "Establecer precio del giro";
+"liveRoom.roulette.sectors"           = "Configurar elementos de interacción";
+"liveRoom.roulette.sectors.empty"     = "Pendiente de edición";
+"liveRoom.roulette.edit"              = "Editar rueda";
+"liveRoom.roulette.rules"             = "Reglas del juego";
+"liveRoom.roulette.errorRetry"        = "Error al cargar. Inténtalo de nuevo.";
+
+/* Roulette v11: functional alignment with H5 (Wheel + RPS 2-card intro + Edit sub-sheet + Toast) */
+"liveRoom.roulette.intro.header"      = "Reglas de los juegos interactivos";
+"liveRoom.roulette.intro.rps.title"   = "Piedra, papel o tijeras";
+"liveRoom.roulette.intro.rps.body"    = "Los espectadores pagan diamantes para desafiar al streamer a Piedra, Papel o Tijeras. El sistema juega en nombre del streamer. Cada victoria le da al streamer una medalla, aumentando la participación de fans e ingresos.";
+"liveRoom.roulette.closeWheel"        = "Cerrar rueda";
+"liveRoom.roulette.finishEditing"     = "Terminar edición";
+"liveRoom.roulette.edit.title"        = "Configurar elementos de interacción";
+"liveRoom.roulette.edit.confirm"      = "Confirmar";
+"liveRoom.roulette.edit.enterItems"   = "Ingresa tus elementos";
+"liveRoom.roulette.toast.started"     = "Rueda iniciada";
+"liveRoom.roulette.toast.stopped"     = "Rueda detenida";
+"liveRoom.roulette.toast.enterPrice"  = "Ingresa el precio";
+
+/* LiveRoom H5 interaction alignment (2026-07-06 iteration 2) */
+"liveRoom.tool.message"           = "Mensajes";
+"liveRoom.tool.gift"              = "Regalos";
+"liveRoom.tool.setting"           = "Configuración";
+"liveRoom.comingSoon.message"     = "Bandeja de chat próximamente";
+"liveRoom.sheet.messagesTitle"    = "Mensajes";
+"liveRoom.setting.beauty"         = "Belleza";
+"liveRoom.setting.endLive"        = "Terminar transmisión";
+"liveRoom.pk.a11y.default"        = "Iniciar PK";
+"liveRoom.pk.a11y.matching"       = "Buscando oponente de PK";
+"liveRoom.pk.a11y.invited"        = "Invitación a PK recibida";
+"liveRoom.pk.a11y.inPK"           = "En PK";
+"liveRoom.pk.a11y.punishing"      = "Castigo de PK";
+"liveRoom.comingSoon.pkInterrupt"  = "Confirmación de interrupción de PK próximamente";
+"liveRoom.comingSoon.pkDisconnect" = "Confirmación de desconexión de PK próximamente";
+"liveRoom.privateCall.caption"    = "Llamada privada";
+
+// MARK: - Call POC（调试态保留，上线前删除）
+"call.statusWaitingRemote"   = "Esperando al otro usuario";
+"call.permissionTitle"       = "Se requiere permiso de cámara";
+"call.permissionMessage"     = "Actívalo en Ajustes → Privacidad → Cámara";
+"call.channelLabel"          = "Canal";
+"call.channelPlaceholder"    = "Nombre del canal (debe coincidir)";
+"call.hangup"                = "Colgar";
+"call.connecting"            = "Conectando...";
+"call.join"                  = "Unirse";
+"call.beautyBannerPassthrough" = "Vista previa directa · FaceUnity no integrado";
+"call.beautyBannerActive"    = "FaceUnity activo";
+"call.errorEmptyChannel"     = "Ingresa el nombre del canal";
+"call.errorTokenFailed"      = "Error al obtener el token";
+"call.errorConnectPrefix"    = "Error de conexión: %1$@ (%2$@)";
+"call.errorConnectGeneric"   = "Error de conexión: %@";
+"call.error.rtmTokenEmpty"     = "El token RTM está vacío";
+"call.error.invalidRemoteUserId" = "ID de usuario remoto no válido";
+"call.error.createFailed"      = "Error al iniciar la llamada";
+"call.error.sendFailed"        = "Error al enviar la señal de llamada";
+"call.error.acceptFailed"      = "Error al enviar la señal de aceptación";
+"call.error.rtcTokenFailed"    = "Error al obtener el token RTC";
+"call.error.rtcTokenFormat"    = "Token RTC: %@";
+"call.action.chatInput"        = "Chat";
+"call.action.feedback"         = "Comentarios";
+"call.emptyRoom.hangupTip"     = "Llamada anómala, se colgará automáticamente";
+"live.returnPopup.autoFormat"  = "En %d segundos volverá automáticamente a la transmisión";
+"live.returnPopup.button"      = "Volver a la transmisión";
+"call.error.remoteRejected"    = "Llamada rechazada";
+"call.error.remoteNoAnswer"    = "Sin respuesta";
+"call.error.remoteBusy"        = "Usuario ocupado";
+"call.error.localBusy"         = "Ya hay una llamada en curso";
+"auth.sessionExpired"          = "La sesión ha expirado, inicia sesión de nuevo";
+
+// MARK: - Call 1v1 真实通话视图（CallView.swift）
+"call.waiting.answer"       = "Esperando respuesta...";
+"call.subtitle.callingOut"   = "Llamando...";
+"call.subtitle.incoming"     = "te está invitando a una videollamada";
+"call.action.cancel"         = "Cancelar";
+"call.action.reject"         = "Rechazar";
+"call.action.accept"         = "Aceptar";
+"call.action.hangupBackToLive" = "Colgar y volver a la transmisión";
+"call.action.hangup"         = "Colgar";
+// C-1 通话中控制按钮
+"call.action.micMute"                  = "Silenciar";
+"call.action.micUnmute"                = "Activar micro";
+"call.action.switchCamera"             = "Voltear";
+"call.networkQuality.weak"             = "Red débil — la calidad de la llamada puede verse afectada";
+// C-3 通话异常自检 alert
+"call.abnormal.userOffline.title"      = "Usuario desconectado";
+"call.abnormal.userOffline.message"    = "Es posible que el otro usuario se haya desconectado. ¿Quieres terminar la llamada?";
+"call.abnormal.networkUnstable.title"  = "Red inestable";
+"call.abnormal.networkUnstable.message" = "Tu red es inestable. La facturación se ha pausado.";
+"call.abnormal.incomeZero.title"       = "Sin ingresos";
+"call.abnormal.incomeZero.message"     = "Esta llamada ha durado más de 2 minutos sin ingresos.";
+"call.abnormal.endCall"                = "Terminar llamada";
+"call.abnormal.continue"               = "Continuar";
+// C-4 Wave1 直播私call 300s 横幅 + 挂断确认
+"call.liveBanner.countdownFormat"      = "En aproximadamente %d segundos, tus ingresos por minuto igualarán el precio de tu llamada.";
+"call.hangupConfirm.title"             = "¿Terminar esta llamada?";
+"call.hangupConfirm.cancel"            = "Cancelar";
+// C-5 充值锁定流程
+"call.waitRecharge.bonusFormat"        = "Obtén %d 💎 de bono";
+"call.waitRecharge.countdownFormat"    = "%02ds";
+"call.congrats.title"                  = "¡Felicidades!";
+"call.congrats.messageFormat"          = "El usuario ha recargado — obtén tu bono de %d 💎";
+"call.congrats.ok"                     = "OK";
+// C-4 Wave4 UI 布局对齐
+"call.action.askForGift"     = "Pedir regalo";
+"call.askForGift.rejected"   = "El usuario rechazó tu solicitud de regalo";
+"call.askForGift.waitingForReward" = "Esperando recompensa...";
+// v22 PK 公屏（对齐 H5 pk notification start/succeed/failed/draw）
+"pk.pkNotificationStart"     = "¡El PK ha comenzado! ¡Envía regalos para apoyar al presentador!🎁";
+"pk.pkResultWin"             = "🎉 %@ derrotó a %@ en este PK";
+"pk.pkResultLose"            = "😭 %@ lamentablemente perdió ante %@ en este PK";
+"pk.pkResultDraw"            = "%@ y %@ empataron en este PK";
+"call.action.more"           = "Más";
+"call.action.comingSoon"     = "Próximamente";
+"call.remoteCameraOff"       = "Cámara apagada";
+"call.liveBanner"            = "Llamada privada en curso en la transmisión";
+
+/* 设计稿主播端.png 对齐（2026-07-09） */
+"call.signal.label.you"                = "Tú";
+"call.signal.label.user"               = "Usuario";
+"call.waitState.rechargingFormat"      = "El usuario está recargando, espera %d s.";
+"call.chat.input.placeholder"          = "Escribe un mensaje...";
+"call.chat.input.send"                 = "Enviar";
+
+// MARK: - Call HUD（H M4 sysMsg 写入 5 publishers 的可视化）
+"call.hud.incomeFormat"      = "💰 %d";
+"call.hud.giftIncomeFormat"  = "🎁 %d";
+"call.hud.waitBonusFormat"   = "Bono de recarga +%d💎";
+"call.hud.remoteTextFormat"  = "%@";
+"call.hud.wait.startPay"     = "El usuario está pagando…";
+"call.hud.wait.paySuccess"   = "El usuario pagó con éxito";
+"call.hud.wait.callTimeEnd"  = "Temporizador de llamada pausado";
+"call.hud.wait.payCancel"    = "El usuario canceló el pago";
+
+// MARK: - LiveRoom 挂断后回直播倒计时覆盖层
+"liveRoom.callEndedTitle"    = "Llamada finalizada";
+"liveRoom.returnCountdownFormat" = "Volviendo a la transmisión en %ds";
+
+// MARK: - 服务层错误（被 View 显示）
+"auth.error.noToken"         = "No se pudo iniciar sesión. Inténtalo de nuevo.";
+"auth.error.requestFailed"   = "No se pudo continuar. Verifica tu información e inténtalo de nuevo.";
+"auth.error.networkFormat"   = "Error de red: %@";
+"auth.error.sessionInvalidated" = "Tu sesión ha expirado o tu cuenta fue iniciada en otro lugar. Inicia sesión de nuevo.";
+"live.error.noCover"         = "Aún no has configurado una portada de transmisión. Configúrala primero en la app principal.";
+// 全局顶部错误通知：envelope 解析失败（APIClient/PartyAPIClient/SapiTokenStore 共用；技术错误，三语言统一英文）
+"api.error.responseParseFailed" = "Error de respuesta del servidor";
+"api.error.network" = "Error de red, comprueba tu conexión";
+"api.error.session" = "La sesión ha expirado, inicia sesión de nuevo";
+"api.error.serverFormat" = "Error del servidor (%d), inténtalo más tarde";
+"api.error.requestFailedFormat" = "Solicitud fallida (%@)";
+
+// 公屏系统消息（用户在直播间内可见）
+"im.system.loginFailedFormat" = "Error al iniciar sesión en IM: %@";
+"im.system.joinFailedFormat"  = "Error al unirse a la sala de chat: %@";
+"im.system.joined"            = "Te has unido a la sala de chat";
+"im.system.giftPlaceholder"   = "[Regalo/Mensaje personalizado]";
+
+// MARK: - G 直播 PK 玩法（26 条 + 强制下播/Toast 复用 B）
+"pk.entry.title"             = "Iniciar PK";
+"pk.entry.random"            = "PK aleatorio";
+"pk.entry.invite"            = "Invitar por ID";
+"pk.initiate.title"          = "Iniciar PK";
+"pk.matchingCard.hint"       = "Emparejamientos aleatorios dentro de tu rango. Tiempo estimado: 15 s.";
+"pk.matchingCard.matched"    = "Oponente emparejado con éxito";
+"pk.matchingCard.searching"  = "Buscando un oponente";
+"pk.durationPicker.title"    = "Fija la duración del PK";
+
+"pk.matching.title"          = "Emparejando...";
+"pk.matching.subtitle"       = "Buscando un oponente";
+"pk.matching.cancel"         = "Cancelar";
+"pk.matching.cancelled"      = "Emparejamiento de PK cancelado";
+
+"pk.invite.title"            = "Iniciar PK";
+"pk.invite.placeholder"      = "UID del oponente";
+"pk.invite.durationLabel"    = "Duración del PK";
+"pk.invite.send"             = "Enviar invitación";
+"pk.invite.waiting"          = "Esperando aceptación...";
+"pk.invite.cancel"           = "Cancelar invitación";
+"pk.invite.duration3"        = "3 minutos";
+"pk.invite.duration5"        = "5 minutos";
+"pk.invite.duration10"       = "10 minutos";
+"pk.invite.duration15"       = "15 minutos";
+
+"pk.invited.title"           = "Invitación de PK recibida";
+"pk.invited.accept"          = "Aceptar";
+"pk.invited.reject"          = "Rechazar";
+
+"pk.arena.endPK"             = "Terminar PK";
+"pk.punishing.title"         = "Castigo";
+"pk.punishing.endPunish"     = "Terminar";
+
+"pk.result.title"            = "PK terminado";
+"pk.result.confirm"          = "OK";
+
+"pk.toast.inviteRejectedFormat" = "%@ rechazó tu invitación al PK";
+"pk.toast.inviteAcceptedFormat" = "%@ aceptó tu invitación al PK";
+"pk.toast.inviteTimeout"        = "La invitación al PK ha expirado";
+
+"pk.invite.searchPlaceholder"   = "UID o apodo";
+"pk.invite.recommendTitle"      = "Recomendados";
+"pk.invite.searchResultTitle"   = "Resultados de búsqueda";
+"pk.invite.empty"               = "Sin datos";
+"pk.invite.acceptSwitch"        = "Aceptar invitaciones de PK";
+"pk.invite.btn.invite"          = "Invitar";
+"pk.invite.btn.waiting"         = "Esperando";
+"pk.invite.btn.pking"           = "En PK";
+"pk.invite.toast.busy"          = "La otra parte está ocupada, inténtalo más tarde";
+"pk.invite.toast.beingInvited"  = "El oponente está procesando otra invitación de PK, inténtalo más tarde";
+"pk.invite.toast.self"          = "No puedes invitarte a ti mismo";
+"pk.invite.toast.limit"         = "Se alcanzó el límite de invitaciones de PK. Inténtalo más tarde";
+"pk.invite.toast.matching"      = "El oponente está en emparejamiento de PK aleatorio, inténtalo más tarde";
+"pk.invite.toast.sent"          = "Invitación de PK enviada";
+
+/* PK popup H5 alignment (2026-07-06 iteration 3) */
+"pk.giveUp.title"               = "Rendirse en el PK";
+"pk.giveUp.confirm"             = "¿Seguro que quieres abandonar este PK? Si te desconectan automáticamente, el resultado del PK será una derrota";
+"pk.giveUp.action"              = "Rendirse";
+"pk.continuePK"                 = "Continuar PK";
+"pk.pkEnded.title"              = "PK terminado";
+"pk.disconnect.action"          = "Desconectar transmisión";
+"pk.matchFailed.title"          = "No se encontró oponente por ahora";
+"pk.matchFailed.hint1"          = "¡Vaya, no hay presentadores de igual fuerza disponibles ahora!";
+"pk.matchFailed.hint2"          = "Emparejamiento desactivado. Elige un presentador específico para el PK";
+"pk.matchFailed.initiate"       = "Iniciar PK";
+"pk.inviting.title"             = "Invitando a PK...";
+"pk.waitingAcceptance"          = "Esperando aceptación del PK";
+"pk.cancelInvitation"           = "Cancelar invitación a PK";
+"pk.punish.label"               = "Castigo";
+"pk.result.win"                 = "VICTORIA";
+"pk.result.lose"                = "DERROTA";
+"pk.result.draw"                = "EMPATE";
+"pk.history.title"              = "Historial de PK";
+"pk.rule.title"                 = "Reglas del PK";
+"pk.rank.title"                 = "Ranking de PK";
+"pk.rank.sheet.title"           = "Lista de fans guardianes";
+"pk.rank.sheet.empty"           = "Sin datos";
+"pk.comingSoon"                 = "Próximamente";
+"pk.countdownFormat"            = "%d s";
+"pk.opponent.mute"              = "Silenciar al oponente";
+"pk.opponent.unmute"            = "Activar sonido del oponente";
+
+// PK History record sheet (v23 2026-07-13, aligned with H5 pkHistoryPopup.vue)
+"pk.record.effectiveWinLabel"   = "Victorias efectivas de PK esta semana";
+"pk.record.effectiveTipTitle"   = "Victorias efectivas";
+"pk.record.effectiveTipMessage" = "Número de PK ganados esta semana con puntuación de PK por encima del umbral efectivo.";
+"pk.record.keepDaysFooter"      = "Se conservan los registros de los últimos 30 días";
+"pk.record.selfDefault"         = "Yo";
+
+// MARK: - H IM 完善 错误文案（NIMServiceError.errorDescription）
+"im.error.loginFailedFormat"         = "Error al iniciar sesión en IM (code=%@) %@";
+"im.error.tokenInvalid"              = "La sesión ha expirado, inicia sesión de nuevo";
+"im.error.kickedOut"                 = "Tu cuenta ha iniciado sesión en otro dispositivo";
+"im.error.chatroomEnterFailedFormat" = "Error al entrar en la sala de chat (%@)";
+"im.error.networkErrorFormat"        = "Error de red de IM (%@)";
+"im.error.decodingFormat"            = "Error al analizar el mensaje: %@";
+
+// MARK: - Moment 动态卡片（Profile / Circle）
+"moment.relative.justNow"        = "Justo ahora";
+"moment.relative.minutes.format" = "%dm";
+"moment.relative.hours.format"   = "%dh";
+"moment.relative.days.format"    = "%dd";
+"moment.action.like"             = "Me gusta";
+"moment.action.unlike"           = "Ya no me gusta";
+"moment.action.delete"           = "Eliminar";
+"moment.action.report"           = "Denunciar";
+"moment.delete.confirm.title"    = "¿Eliminar esta publicación?";
+"moment.delete.confirm.action"   = "Eliminar";
+"moment.delete.confirm.cancel"   = "Cancelar";
+
+/* MARK: Blocklist 黑名单列表（I-1） */
+"blocklist.title"                       = "Lista de bloqueo";
+"blocklist.empty.description"           = "Si un usuario está en la lista de bloqueo, no sabrás nada de él.";
+"blocklist.removeConfirm.title"         = "Quitar de la lista de bloqueo";
+"blocklist.removeConfirm.message"       = "¿Seguro que quieres quitar a este usuario de la lista de bloqueo?";
+"blocklist.removeConfirm.action"        = "Eliminar";
+"blocklist.removeConfirm.cancel"        = "Cancelar";
+"blocklist.removeNetworkError"          = "Error de red, inténtalo de nuevo.";
+"blocklist.removeBadUserId"             = "ID de usuario no válido";
+"blocklist.loadError.retry"             = "Error al cargar, toca para reintentar";
+"blocklist.loadEnd"                     = "Fin de la lista";
+"blocklist.accessibility.removeButton"  = "Quitar de la lista de bloqueo";
+"blocklist.accessibility.row"           = "Usuario bloqueado %1$@, bloqueado el %2$@";
+"blocklist.accessibility.rowNoDate"     = "Usuario bloqueado %@";
+"blocklist.loadError.retryFormat"       = "%1$@ · %2$@";
+
+// MARK: - Message P2P 会话列表（H-1 MVP）
+"message.news.title"                    = "Novedades";
+"message.clear.tabTitle"                = "¿Borrar todas las conversaciones de esta pestaña?";
+"message.clear.tabConfirm"              = "Borrar";
+"message.category.flame"                = "Flama";
+"message.category.stranger"             = "Desconocido";
+"message.category.prime"                = "Prime";
+"message.empty.flame"                   = "Aún no hay conversaciones activas";
+"message.empty.stranger"                = "No hay mensajes de desconocidos";
+"message.empty.prime"                   = "Aún no hay miembros premium";
+"message.loadError.retry"               = "No se pudo cargar, toca para reintentar";
+"message.action.stickTop"               = "Fijar";
+"message.action.unstickTop"             = "Desfijar";
+"message.action.delete"                 = "Eliminar";
+"message.action.failedToast"            = "La acción falló, inténtalo de nuevo";
+"massTexting.title"                     = "Mensaje masivo";
+"massTexting.contentTitle"              = "Contenido de tu mensaje masivo";
+"massTexting.sendOneTap"                = "Enviar con un toque";
+"massTexting.loading"                   = "Cargando mensaje...";
+"massTexting.retry"                     = "Reintentar";
+"massTexting.sendSuccess"               = "Mensaje enviado correctamente";
+"massTexting.dailyLimitReached"         = "Límite diario alcanzado. Vuelve mañana.";
+"massTexting.refreshUnavailable"        = "Lo sentimos, la biblioteca de mensajes no está disponible. Actualiza más tarde.";
+"massTexting.sendFailed"                = "Error al enviar. Inténtalo de nuevo.";
+"massTexting.loadFailed"                = "No se pudo cargar un mensaje. Inténtalo de nuevo.";
+"massTexting.noCopywriting"             = "No hay ningún mensaje disponible en este momento.";
+"massTexting.refreshCopy"               = "Actualizar mensaje";
+"massTexting.hint"                      = "¡Mensaje al jefe con un clic!";
+"massTexting.remainingFormat"           = "%d restantes hoy";
+"message.systemInbox.station"           = "Información de la plataforma";
+"message.systemInbox.notification"      = "Información del sistema";
+"message.systemInbox.admin"             = "Administrador";
+"message.systemInbox.comingSoon"        = "Detalles próximamente";
+"stationPopup.read"                     = "Leído";
+"stationPopup.unread"                   = "No leído";
+"stationPopup.alreadyRead"              = "Ya has leído el mensaje";
+"stationPopup.expirationDate"           = "Fecha de vencimiento";
+
+// Call Records 通话历史记录（对齐 H5 views/communication/records/list.vue）
+"callRecord.list.title"                 = "Comunicación";
+"callRecord.empty"                      = "Aún no hay registros de llamadas";
+"callRecord.loadingMore"                = "Cargando...";
+"callRecord.noMoreData"                 = "No hay más registros";
+"callRecord.source.match"               = "Match";
+"callRecord.source.live"                = "En vivo";
+"callRecord.source.private"             = "Privada";
+"callRecord.reason.rejected"            = "Rechazada";
+"callRecord.reason.timeout"             = "Tiempo agotado";
+"callRecord.reason.canceled"            = "Cancelada";
+"callRecord.a11y.missed"                = "Llamada perdida";
+
+// Batch 6.1 回复积分 4 tip 文案（H5 蓝本 en.json:820-821 + chat/index.vue:43-44 硬编码）
+"chat.guideTip"        = "Chatea para ganar recompensas — ¡empieza a chatear ahora!";
+"chat.stimulateTip"    = "¡Más mensajes de él — desbloquea diamantes extra!";
+"chat.replyFastTip"    = "¡Responde rápido para ganar el doble de puntos! Solo una vez.";
+"chat.replyRemindTip"  = "Sistema: No has respondido en más de 15 minutos. Lo más importante: respuestas más rápidas = más puntos. Responde en 12 h para ganar puntos. 1 h → x2, 30 min → x3, 15 min → x4 puntos!";
+
+// 首次进入私聊页 2 步引导（H5 guidance.vue）
+"chat.intro.step1"     = "¡Nueva función! Chatea con usuarios y gana diamantes";
+"chat.intro.step2"     = "Ver más detalles";
+// 云端历史拉空 toast
+"chat.historyExpired"  = "El historial de este chat ha expirado.";
+"chat.private.permissionDisabled" = "Tu permiso ha sido desactivado.";
+"chat.private.auditing" = "En revisión";
+"chat.private.rejected" = "Rechazado";
+"chat.private.create" = "Crear medios privados";
+"chat.private.guide" = "Crea medios privados para enviarlos aquí.";
+// 文字气泡内翻译按钮
+"chat.translate"       = "Traducir";
+
+// S-7 Chat a11y labels
+"chat.a11y.audioPlay"             = "Reproducir voz %d segundos";
+"chat.a11y.audioPause"            = "Pausar voz %d segundos";
+"chat.a11y.resend"                = "Reenviar mensaje fallido";
+"chat.a11y.mediaImage"            = "Foto";
+"chat.a11y.mediaVideo"            = "Video";
+
+// M-5 ChatInputBar 输入栏文案
+"chat.input.typeMessage"          = "Escribe un mensaje";
+"chat.input.holdToTalk"           = "Mantén para hablar";
+"chat.input.send"                 = "Enviar";
+
+// M-6 DiaReceivePopup 钻石到账弹窗
+"dia.receive.congratulations"     = "Felicidades";
+"dia.receive.unlockedAchievement" = "Logro desbloqueado";
+"dia.receive.get"                 = "Obtener";
+"dia.receive.a11y.get"            = "Obtener diamantes";
+"dia.receive.receivedDiamondsFormat" = "Recibiste %d diamantes";
+
+// 系统通知会话文案（对齐 H5 systemMsg.vue + cpRankRewardMsg.vue）
+"chat.system.comingSoon"          = "Próximamente";
+"chat.system.viewNow"             = "Ver ahora";
+"chat.system.checkCpRanking"      = "Ver el ranking Cp";
+"chat.system.appealClickHere"     = "haz clic aquí";
+"chat.system.appealSuccess"       = "Apelación aprobada";
+"chat.system.durationPerm"        = "Permanente";
+"chat.system.itemType.vehicle"    = "Vehículo";
+"chat.system.itemType.frame"      = "Marco";
+"chat.system.itemType.entrance"   = "Entrada";
+"chat.system.itemType.chatSkin"   = "Tema de chat";
+"chat.system.itemType.cardFrame"  = "Marco de tarjeta";
+"chat.system.itemGetFormat"       = "¡Felicidades! Recibiste【%1$@】【%2$@】* (%3$@). Puedes verlo en Perfil > Objetos.";
+"chat.system.itemExpiredFormat"   = "Tu【%1$@】【%2$@】ha caducado";
+"chat.system.durationHourMinuteFormat" = "%1$d horas %2$d minutos";
+"chat.system.durationHourFormat"       = "%1$d horas";
+"chat.system.durationMinuteFormat"     = "%1$d minutos";
+"chat.system.rewardDiamondFormat"      = "¡Felicidades! Recibiste Diamantes*%@";
+"chat.system.cpRankRewardMsgFormat"    = "¡Felicidades! Recibiste la recompensa TOP %d del Ranking Semanal CP.";
+
+// 语音录制过短
+"chat.voice.tooShort"  = "La grabación es demasiado corta";
+// 发送失败网络提示
+"chat.sendNetworkError" = "¡Ups, la conexión falló! Revisa tu red.";
+
+// v5 F-3 消息 preview 归一化
+"message.preview.image"                 = "[Imagen]";
+"message.preview.voice"                 = "[Voz]";
+"message.preview.video"                 = "[Video]";
+"message.preview.location"              = "[Ubicación]";
+"message.preview.gift"                  = "[Regalo]";
+"message.preview.unknown"               = "[Desconocido]";
+"message.preview.privatePhoto"          = "[Foto privada]";
+"message.preview.privateVideo"          = "[Video privado]";
+"chat.refusedTip"                       = "El mensaje se envió, pero la otra persona lo rechazó";
+"message.preview.callMissed"            = "Perdida";
+"message.preview.callRejected"          = "Rechazada";
+"message.preview.callCancelled"         = "Cancelada";
+// v5 F-4 通用操作
+"message.action.cancel"                 = "Cancelar";
+// v5 F-5 时间
+"message.time.yesterday"                = "Ayer";
+// v5 F-6 a11y
+"message.a11y.online"                   = "En línea";
+"message.a11y.offline"                  = "Fuera de línea";
+"message.a11y.pinned"                   = "Fijado";
+"message.a11y.vip"                      = "VIP";
+"message.a11y.activeTycoon"             = "Magnate activo";
+"message.a11y.unreadCountFormat"        = "%d sin leer";
+"message.a11y.levelFormat"              = "Nivel %@";
+
+// MARK: - E/F 派对房（spec §1.4 + H i18n 收尾）
+"party.defaultRoomName"                  = "Sala Party";
+"party.defaultUser"                      = "Usuario";
+"party.defaultGift"                      = "Regalo";
+"party.cancel"                           = "Cancelar";
+"party.retry"                            = "Reintentar";
+"party.loading"                          = "Cargando…";
+"party.ok"                               = "OK";
+"party.alert.title"                      = "Aviso";
+"party.onlineCount.format"               = "%d en línea";
+
+"party.list.navTitle"                    = "Salas Party";
+"party.list.loadMore"                    = "Desliza hacia arriba para cargar más";
+"party.list.unnamed"                     = "Sala sin nombre";
+"party.list.error.loadFailedFormat"      = "Error al cargar: %@";
+"party.list.error.decodeFormat"          = "Error al decodificar: %@";
+"party.list.createRoom"                  = "Crear sala";
+"party.list.empty"                       = "Aún no hay salas Party";
+"party.list.error.retry"                 = "Reintentar";
+"party.list.welcomeFallback"             = "¡Bienvenido a mi sala, divirtámonos!";
+"party.list.pill.liveVoice"              = "Live+Voice";
+"party.list.pill.voice"                  = "Voz";
+"party.list.weeklyTop"                   = "Top %d semanal";
+"party.list.pill.languageFallback"       = "Inglés";
+
+"party.tab.party"                        = "Party";
+"party.tab.follow"                       = "Seguir";
+"party.tab.recent"                       = "Recientes";
+"party.language.all"                     = "Todos";
+"party.rank.partyRich"                   = "PartyRich";
+"party.rank.room"                        = "Sala";
+"party.rank.rules.title"                 = "Introducción";
+"party.rank.partyRich.rule1"             = "Los rankings se calculan según los puntos de los regalos enviados por los usuarios en las salas Party, con actualizaciones diarias, semanales y mensuales.";
+"party.rank.partyRich.rule2"             = "1 diamante = 1 punto de ranking.";
+"party.rank.partyRich.rule3"             = "Cuanto mayores sean los puntos totales de regalos en cualquier sala Party, mayor será el ranking.";
+"party.rank.room.rule1"                  = "Los rankings se determinan por el total de diamantes recibidos por regalos en salas Party, con actualizaciones diarias, semanales y mensuales.";
+"party.rank.room.rule2"                  = "1 diamante = 1 punto de ranking.";
+"party.rank.room.rule3"                  = "Para mejorar tu ranking, enfócate en recibir más regalos en tu sala Party.";
+"party.rank.period.thisWeek"             = "Esta semana";
+"party.rank.period.lastWeek"             = "Semana pasada";
+"party.rank.period.thisMonth"            = "Este mes";
+"party.rank.period.lastMonth"            = "Mes pasado";
+"party.search.placeholder"               = "Buscar por nombre de sala / id";
+"party.search.hint"                      = "";
+"party.search.noResults"                 = "";
+"party.comingSoon"                       = "Próximamente";
+"party.myRoom"                           = "Mi sala";
+"party.password.alert.title"             = "Ingresa la contraseña de la sala";
+"party.password.alert.message"           = "Esta sala requiere una contraseña para entrar.";
+"party.password.placeholder"             = "Contraseña";
+"party.password.confirm"                 = "Entrar";
+"party.password.cancel"                  = "Cancelar";
+"party.enteringRoom"                     = "Entrando a la sala…";
+
+"party.create.navTitle"                  = "Crear mi sala";
+"party.create.submit"                    = "Crear";
+"party.create.confirm"                   = "Confirmar";
+"party.create.name.placeholder"          = "Xxxxx's Room";
+"party.create.section.tagline"           = "Eslogan de la sala";
+"party.create.tagline.placeholder"       = "Charlemos y divirtámonos juntos.";
+"party.create.section.language"          = "Idioma de la sala";
+"party.create.section.mode"              = "Modo de la sala";
+"party.create.mode.voice"                = "Voz";
+"party.create.mode.liveVoice"            = "En vivo + Voz";
+"party.create.mode.lockFormat"           = "Modo bloqueado Nv.%d";
+"party.create.mode.unlockFormat"         = "Modo desbloqueado Nv.%d";
+"party.create.mode.lockedToastFormat"    = "Se requiere Nv.%d";
+"party.create.section.background"        = "Fondo de la sala";
+"party.create.bg.permanent"              = "Permanente";
+"party.create.bg.empty"                  = "No hay fondos disponibles";
+"party.create.permissionDenied"          = "Contacta al administrador para desbloquear la creación de salas";
+// F 期 Live↔Party 互斥（对齐安卓 isLiveing||isPartying toast，2026-07-17）
+"party.mutex.blockedByLive"              = "Estás transmitiendo en vivo. Termina la transmisión para entrar a una sala Party.";
+"party.mutex.blockedByParty"             = "Estás en una sala Party. Sal primero para iniciar transmisión.";
+// v8 派对房设置 + 房管管理（2026-07-13）
+"party.settings.navTitle"                = "Ajustes de la sala";
+"party.settings.changeAvatar"            = "Cambiar avatar de la sala";
+"party.settings.section.admin"           = "Administradores";
+"party.settings.manageAdmins"            = "Gestionar administradores";
+"party.settings.admin.empty"             = "Aún no hay administradores";
+"party.settings.admin.add"               = "Añadir";
+"party.settings.admin.remove"            = "Quitar administrador";
+"party.settings.admin.addTitle"          = "Añadir administrador";
+"party.settings.admin.addHint"           = "Ingresa el ID del usuario para promoverlo a administrador.";
+"party.settings.admin.userIdPlaceholder" = "ID de usuario";
+// v8.1 Room Tools sheet
+"party.tools.title"                      = "Herramientas de sala";
+"party.tool.lockRoom"                    = "Bloquear sala";
+"party.tool.music"                       = "Música";
+"party.music.title"                      = "Música";
+"party.music.playlist"                   = "Lista de reproducción";
+"party.music.local"                      = "Local";
+"party.music.liked"                      = "Me gusta";
+"party.music.empty"                      = "No hay música disponible";
+"party.music.edit"                       = "Editar";
+"party.music.upload"                     = "Subir";
+"party.music.delete"                     = "Eliminar";
+"party.music.selectAll"                  = "Seleccionar todo";
+"party.music.invalidFormat"              = "Formato de audio no compatible";
+"party.music.fileTooLarge"               = "Los archivos de audio deben ser de 10 MB o menos";
+"party.music.uploadSucceeded"            = "Música subida";
+"party.music.uploadFailed"               = "Error al subir música";
+"party.music.deleteSucceeded"            = "Música eliminada";
+"party.music.deleteFailed"               = "Error al eliminar música";
+"party.tool.settings"                    = "Configuración";
+"party.tool.micApplication"              = "Solicitud de mic";
+"party.tool.roomMode"                    = "Modo de sala";
+"party.tool.blocklist"                   = "Lista de bloqueados";
+"party.tool.mcSeat"                      = "Asiento MC";
+"party.tool.privateCall"                 = "Llamada privada";
+"party.tool.currencyExchange"            = "Moneda";
+"party.currency.exchangeTitle"           = "Moneda de la sala";
+"party.currency.balanceTitle"            = "Saldo";
+"party.currency.gems"                    = "Gemas";
+"party.currency.diamonds"                = "Diamantes";
+"party.currency.coins"                   = "Monedas";
+"party.currency.target"                  = "Intercambiar por";
+"party.currency.available"               = "Disponible";
+"party.currency.amountPlaceholder"       = "Ingresa la cantidad";
+"party.currency.all"                     = "Todo";
+"party.currency.diamondRate"             = "1 gema = 1 diamante";
+"party.currency.coinRateHint"            = "El monto final de monedas lo determina el servidor.";
+"party.currency.exchangeAction"          = "Intercambiar";
+"party.currency.refresh"                 = "Actualizar saldo";
+"party.currency.balanceLoadFailed"       = "No se pudo cargar tu saldo";
+"party.currency.invalidAmount"           = "Ingresa un número entero positivo de Gems";
+"party.currency.insufficientBalance"     = "Gems insuficientes";
+"party.currency.diamondExchangeSuccessFormat" = "%lld gemas cambiadas por diamantes";
+"party.currency.coinExchangeSuccess"     = "Gemas cambiadas por monedas";
+"party.currency.exchangeFailed"          = "Error al intercambiar";
+"party.currency.record"                  = "Historial";
+"party.currency.loadMore"                = "Cargar más";
+"party.currency.recordEmpty"             = "Aún no hay registros";
+"party.currency.recordLoadFailed"        = "No se pudieron cargar los registros";
+"party.currency.explainTitle"            = "Explicación:";
+"party.currency.gemHowToGet"             = "Cómo obtener Gem";
+"party.currency.gemHowToGetDetail"       = "Recibe regalos en la sala Party";
+"party.currency.gemUse"                  = "Uso de Gem";
+"party.currency.gemUseCoinDetail"        = "Nota: los Gems se pueden intercambiar por monedas, que se pueden usar para retirar.";
+"party.currency.gemUseDiamondDetail"     = "Gem se puede intercambiar por diamantes para gastar";
+"party.privateCall.openConfirmLabel"     = "Abrir llamada privada";
+"party.tool.comingSoon"                  = "Próximamente";
+// F-spec §5.1 PartyPrivateCallSettingSheet
+"party.privateCall.settingTitle"         = "Party Call";
+"party.privateCall.enableToggleTitle"    = "Activar Party Call";
+"party.privateCall.giftSectionTitle"     = "Regalo de llamada";
+"party.privateCall.giftEmpty"            = "No hay regalos disponibles";
+"party.privateCall.loadError"            = "Error al cargar, toca para reintentar";
+"party.privateCall.saveSuccess"          = "Guardado";
+"party.privateCall.saveFailed"           = "Error al guardar, inténtalo de nuevo";
+"party.privateCall.seatBubble"           = "En una llamada, vuelvo pronto";
+"party.moreMenu.minimize"                = "Minimizar";
+"party.banner.scoreDouble"                = "Puntos ×2";
+// E spec 2026-07-14 派对房 Blocklist（房主/管理员查看+解除房间维度黑名单）
+"party.blocklist.navTitle"               = "Lista de bloqueados";
+"party.blocklist.empty"                  = "No hay usuarios bloqueados";
+"party.blocklist.loadError"              = "No se pudo cargar la lista de bloqueados";
+"party.blocklist.loadErrorFormat"        = "No se pudo cargar: %@";
+"party.blocklist.removeConfirmTitle"     = "¿Quitar de la lista de bloqueados?";
+"party.blocklist.removeConfirmMessage"   = "Este usuario podrá volver a entrar en la sala.";
+"party.blocklist.removeSuccess"          = "Eliminado correctamente";
+"party.blocklist.removeFailed"           = "No se pudo eliminar, inténtalo de nuevo";
+"party.blocklist.banTypePermanent"       = "Permanente";
+"party.blocklist.autoUnbanFormat"        = "Desbloqueo automático en %@";
+// E spec 2026-07-14 派对房加锁/解锁（4 位数字密码）
+"party.lockRoom.sheetTitle"              = "Bloquear sala";
+"party.lockRoom.sheetDescription"        = "Establece una contraseña de 4 dígitos para bloquear la sala";
+"party.lockRoom.passwordPlaceholder"     = "Ingresa contraseña de 4 dígitos";
+"party.lockRoom.lockAction"              = "Bloquear";
+"party.lockRoom.passwordInvalid"         = "La contraseña debe tener 4 dígitos";
+"party.lockRoom.lockSuccess"             = "Sala bloqueada";
+"party.lockRoom.unlockSuccess"           = "Sala desbloqueada";
+"party.lockRoom.operationFailed"         = "Operación fallida, inténtalo de nuevo";
+// E spec 2026-07-14 派对房 MC Seat（接待位）
+"party.mcSeat.sheetTitle"                = "Asiento MC";
+"party.mcSeat.submit"                    = "Establecer asiento MC";
+"party.mcSeat.tips"                      = "Solo el propietario y los administradores pueden tomar el asiento MC";
+"party.mcSeat.badge"                     = "MC";
+"party.mcSeat.cannotTake"                = "No puedes tomar el asiento MC";
+"party.mcSeat.change"                    = "Cambiar MC";
+"party.mcSeat.confirmEmpty"              = "¿Establecer este asiento vacío como asiento MC?";
+"party.mcSeat.confirmPrivilegedFormat"   = "%@ es actualmente un administrador. ¿Establecer este asiento como asiento MC?";
+"party.mcSeat.confirmNormalFormat"       = "%@ será retirado del asiento. ¿Establecer este asiento como asiento MC?";
+"party.mcSeat.setSuccess"                = "Asiento MC establecido";
+"party.mcSeat.closeSuccess"              = "Asiento MC cerrado";
+"party.mcSeat.operationFailed"           = "Operación fallida, inténtalo de nuevo";
+
+// v3（2026-07-15）Step 2 通知公屏系统消息
+"party.videoSeat.inviteAcceptedFormat"   = "%@ se unió al asiento de video";
+"party.videoSeat.feedbackReject"         = "Se rechazó la invitación al asiento de video";
+"party.videoSeat.feedbackTimeout"        = "Se agotó el tiempo de la invitación al asiento de video";
+"party.videoSeat.feedbackLeave"          = "El usuario invitado salió de la sala";
+"party.videoSeat.feedbackOccupied"       = "El asiento de video ya está ocupado";
+"party.videoSeat.feedbackAlreadyOn"      = "El usuario invitado ya está en un asiento";
+"party.videoSeat.feedbackJoinFailed"     = "El usuario invitado no pudo unirse al asiento de video";
+"party.authUpdate.setAdmin"              = "Se te ha designado administrador de la sala";
+"party.authUpdate.removeAdmin"           = "Ya no eres administrador de la sala";
+"party.authUpdate.setAdminFormat"        = "%@ ha sido designado administrador de la sala";
+"party.authUpdate.removeAdminFormat"     = "%@ ya no es administrador de la sala";
+"party.roomAnnouncement.format"          = "Anuncio de la sala: %@";
+"party.luckyNumber.drawFormat"           = "%1$@ sacó el número de la suerte %2$d";
+"party.luckyNumber.winFormat"            = "%1$@ ganó el número de la suerte %2$d";
+"party.luckyNumber.matched"              = "¡Coincidió con el número de la suerte!";
+"party.luckyNumber.personalWinFormat"    = "¡Fantástico! Coincidiste con el número de la suerte %d";
+"party.create.section.name"              = "Nombre de la sala";
+"party.create.name.placeholder"          = "Hasta 20 caracteres";
+"party.create.hint.needName"             = "Ingresa el nombre de la sala para continuar";
+"party.create.hint.needTagline"          = "Ingresa un eslogan para continuar";
+"party.create.hint.needLanguage"         = "Selecciona un idioma para continuar";
+"party.create.hint.needTemplate"         = "Selecciona una plantilla para continuar";
+"party.create.hint.needBackground"       = "Selecciona un fondo para continuar";
+"party.create.section.template"          = "Seleccionar plantilla";
+"party.create.template.loading"          = "Cargando plantillas…";
+"party.create.template.empty"            = "No hay plantillas disponibles en dev";
+"party.create.template.fallbackFormat"   = "Plantilla %d";
+"party.create.template.detailFormat"     = "Asientos %1$d · Video %2$d · Voz %3$d";
+"party.create.error.templateLoad"        = "No se pudieron cargar las plantillas";
+"party.create.error.templateLoadFormat"  = "No se pudieron cargar las plantillas: %@";
+"party.create.error.noRoomId"            = "El servidor no devolvió roomId";
+"party.create.error.failed"              = "No se pudo crear";
+"party.create.error.failedFormat"        = "No se pudo crear: %@";
+
+"party.invite.title"                     = "Invitación al asiento de video";
+"party.invite.accept"                    = "Aceptar";
+"party.invite.reject"                    = "Rechazar";
+"party.invite.messageFormat"             = "%1$@ te invitó al asiento de video %2$d";
+"party.invite.expiresFormat"             = "Expira en %d segundos";
+"party.seatInvite.title"                  = "Invitación al mic";
+"party.seatInvite.empty"                  = "No hay usuarios en línea";
+"party.seatInvite.joined"                 = "Unido";
+"party.seatInvite.inviting"               = "Invitando";
+"party.selfActions.title"                = "Mi asiento";
+"party.selfActions.micOn"                = "Encender mic";
+"party.selfActions.micOff"               = "Apagar mic";
+"party.selfActions.camOn"                = "Encender cámara";
+"party.selfActions.camOff"               = "Apagar cámara";
+"party.selfActions.leaveSeat"            = "Salir del asiento";
+"party.input.placeholder"                = "Di algo…";
+"party.gift.messageFormat"               = "🎁 %@ envió %@ x%d";
+"party.giftEffect.sendsTo"               = "Envía a";
+"party.giftEffect.peopleFormat"          = "%d personas";
+
+"party.state.joined"                     = "Unido";
+"party.state.entering"                   = "Uniéndose…";
+"party.state.leaving"                    = "Saliendo…";
+"party.state.ended"                      = "Saliste";
+
+"party.seat.empty"                       = "Asiento vacío";
+"party.seat.occupied"                    = "Usuario sentado";
+"party.seat.muted"                       = "Silenciado";
+
+"party.error.enterFailedFormat"          = "Error al entrar: %@";
+"party.error.exitFailedFormat"           = "Error al salir: %@";
+"party.error.seatOccupied"               = "El asiento está ocupado";
+"party.error.seatEmpty"                  = "El asiento está vacío";
+"party.error.banned"                     = "Cuenta bloqueada";
+"party.error.levelInsufficient"          = "Nivel insuficiente";
+"party.error.networkLost"                = "Red desconectada";
+"party.error.kicked"                     = "Expulsado por el anfitrión";
+"party.error.passwordWrong"              = "Contraseña de sala incorrecta";
+"party.error.mediaSwitchFailed"          = "Error al cambiar mic/cámara";
+
+/* MARK: - E spec §3 Room Mode */
+"party.roomMode.sheetTitle"              = "Modo de sala";
+"party.roomMode.liveAndVoiceTab"         = "Live+Voice";
+"party.roomMode.voiceOnlyTab"            = "Voz";
+"party.roomMode.videoOnlyTab"            = "Video";
+"party.roomMode.confirmTitle"            = "¿Cambiar modo de sala?";
+"party.roomMode.confirmBody"             = "Todos los usuarios serán retirados de los asientos.";
+"party.roomMode.confirmSwitch"           = "Cambiar";
+"party.roomMode.confirmCancel"           = "Cancelar";
+"party.roomMode.upgradeGuide"            = "Alcanza el nivel %d para desbloquear este modo";
+"party.roomMode.systemMsg"               = "El diseño de la sala se actualizó. Todos los usuarios han sido retirados de los asientos. ¡Selecciona un nuevo asiento para seguir chateando!";
+"party.roomMode.emptyState"              = "No hay modos disponibles";
+"party.roomMode.loadError"               = "Error al cargar modos";
+
+/* MARK: - E spec §3 Mic Application */
+"party.micApplication.sheetTitle"        = "Lista de solicitudes";
+"party.micApplication.peopleApplyFormat" = "%d personas solicitando";
+"party.micApplication.emptyState"        = "Sin solicitudes";
+"party.micApplication.approve"           = "Aprobar";
+"party.micApplication.reject"            = "Rechazar";
+"party.micApplication.noSeatAvailable"   = "No hay asientos disponibles, espera a que alguien salga";
+"party.micApplication.rejectedCooldown"  = "Inténtalo más tarde";
+"party.micApplication.rejectedByHost"    = "Tu solicitud de asiento fue rechazada";
+"party.micApplication.timeoutAutoGiveUp" = "Solicitud expirada";
+"party.micApplication.switchOnTitle"     = "¿Activar solicitudes de mic?";
+"party.micApplication.switchOffTitle"    = "¿Desactivar solicitudes de mic?";
+"party.micApplication.switchOnBody"      = "Los usuarios podrán solicitar unirse a un asiento. Tendrás que aprobar cada solicitud.";
+"party.micApplication.switchOffBody"     = "Los usuarios ya no podrán solicitar asientos.";
+"party.micApplication.switchOnSystemMsg" = "Solicitudes de mic activadas";
+"party.micApplication.switchOffSystemMsg" = "Se retiró la solicitud de mic";
+"party.micApplication.cancel"            = "Cancelar";
+"party.micApplication.tapEmptySeatHint"  = "Toca un asiento vacío para solicitar";
+"party.micApplication.submit"            = "Aplicar";
+"party.deleteMessage"                    = "Eliminar mensaje";
+"party.deleteMessageConfirm"             = "¿Eliminar este mensaje?";
+"party.messageDeleted"                   = "Mensaje eliminado";
+"party.deleteMessageFailed"              = "Error al eliminar el mensaje";
+"party.approveSeatPicker.title"          = "Asignar asiento";
+"party.approveSeatPicker.subtitleFormat" = "¿A qué asiento aprobar a %@?";
+"party.approveSeatPicker.seatNumberFormat" = "Asiento #%d";
+"party.approveSeatPicker.voiceSeat"      = "Asiento con voz";
+"party.approveSeatPicker.videoSeat"      = "Asiento con video";
+
+/* MARK: - H-0 用户详情页 */
+"userProfile.uid.prefix"                 = "uid: ";
+"userProfile.like.label"                 = "Número de Me gusta";
+"userProfile.favorite.label"             = "Número de favoritos";
+"userProfile.follow"                     = "Seguir";
+"userProfile.following"                  = "Siguiendo";
+"userProfile.menu.report"                = "Denunciar";
+"userProfile.menu.block"                 = "Bloquear";
+"userProfile.blockConfirm.title"         = "";
+"userProfile.blockConfirm.message"       = "Cuando bloqueas a un usuario, ya no recibirás sus mensajes.";
+"userProfile.blockConfirm.action"        = "Confirmar";
+"userProfile.blockConfirm.cancel"        = "Cancelar";
+"userProfile.block.success"              = "Añadido a la lista negra.";
+"userProfile.block.fail"                 = "No se pudo añadir a la lista negra.";
+"userProfile.giftWall.title"             = "Muro de regalos";
+"userProfile.giftWall.placeholder"       = "Muro de regalos próximamente";
+"userProfile.honorWall.title"            = "Muro de honor";
+"userProfile.honorWall.badge"            = "Insignia";
+"userProfile.honorWall.frame"            = "Marco";
+"userProfile.honorWall.vehicle"          = "Vehículo";
+"userProfile.honorWall.empty"            = "Aún no hay elementos";
+"userProfile.honorWall.equipped"         = "Equipado";
+"userProfile.giftWall.lit"               = "Encendido";
+"userProfile.giftWall.unlit"             = "Sin encender";
+"userProfile.giftWall.all"               = "Todos";
+"userProfile.giftWall.emptyLit"          = "Aún no hay regalos encendidos";
+"userProfile.giftWall.emptyUnlit"        = "Todos los regalos encendidos";
+"userProfile.giftWall.emptyAll"          = "Aún no hay regalos";
+"userProfile.section.loadFailed"         = "No se pudo cargar";
+"userProfile.moments.title"              = "Momentos";
+"userProfile.action.message"             = "Mensaje";
+"userProfile.action.call"                = "Llamada";
+"userProfile.networkError"               = "Error de red, inténtalo de nuevo.";
+"userProfile.badUserId"                  = "ID de usuario no válido";
+"userProfile.loadError.retry"            = "Reintentar";
+"common.comingSoon"                      = "Próximamente";
+"common.back"                            = "Atrás";
+"common.followSuccess"                   = "Siguiendo";
+"common.unfollowSuccess"                 = "Dejaste de seguir";
+// P1-6 (2026-07-14) 主播审核弹窗
+"common.kindReminder"                    = "Recordatorio";
+"common.confirm"                         = "Confirmar";
+"common.discard"                         = "Descartar";
+"common.close"                           = "Cerrar";
+"audit.passed.message"                   = "¡Felicidades! Tu revisión ha sido aprobada. Vuelve a iniciar sesión en la app.";
+"audit.rejected.fallback"                = "Tu revisión fue rechazada.";
+"userProfile.a11y.avatar"                = "Avatar";
+"userProfile.a11y.menu"                  = "Más opciones";
+"userProfile.a11y.giftFallback"          = "Regalo";
+
+// Report sheet (对齐 H5 c-feedbackPopup type='userProfile' 分支)
+"report.title"                           = "Denunciar";
+"report.reason.incorrect"                = "Información incorrecta";
+"report.reason.sexual"                   = "Contenido sexual";
+"report.reason.harassment"               = "Acoso o lenguaje ofensivo";
+"report.reason.unreasonable"             = "Exigencias irrazonables";
+"report.description.label"               = "Descripción detallada";
+"report.description.placeholder"         = "Describe el problema encontrado";
+"report.success.toast"                   = "Comentario enviado con éxito.";
+"common.other"                           = "Otro";
+"common.networkError"                    = "Error de red";
+"common.retry"                           = "Reintentar";
+"common.weekly"                          = "Semanal";
+"common.monthly"                         = "Mensual";
+"common.thisWeek"                        = "Esta semana";
+"common.lastWeek"                        = "Semana pasada";
+"common.thisMonth"                       = "Este mes";
+"common.lastMonth"                       = "Mes pasado";
+"common.twoMonthsAgo"                    = "Hace 2 meses";
+"common.date"                            = "Fecha";
+"common.income"                          = "Ingresos";
+
+// MARK: - Phase B 直播数据页
+"liveData.navTitle"                      = "Datos de transmisión";
+"liveData.totalData"                     = "Datos totales";
+"liveData.totalDuration"                 = "Duración total";
+"liveData.totalIncome"                   = "Ingresos totales";
+"liveData.detailData"                    = "Datos detallados";
+"liveData.liveIncome"                    = "Ingresos de transmisión";
+"liveData.privateCallIncome"             = "Ingresos por llamadas privadas";
+"liveData.liveDuration"                  = "Duración de transmisión";
+"liveData.timeRemaining"                 = "Tiempo restante:";
+"liveData.days"                          = "días";
+"liveData.expand"                        = "Expandir";
+"liveData.collapse"                      = "Contraer";
+
+// Party Data 派对数据看板（对齐安卓 PartyRoomDataActivity）
+"partyData.navTitle"                     = "Datos de Party";
+"partyData.totalMicTime"                 = "Tiempo total en micrófono";
+"partyData.micTime"                      = "Tiempo en micrófono";
+"partyData.totalIncome"                  = "Ingresos totales";
+"partyData.giftIncome"                   = "Ingresos de regalos de Party";
+"partyData.callIncome"                   = "Ingresos de Partycall";
+
+"partyData.rule.navTitle"                = "Reglas de datos de Party";
+"partyData.rule.section1"                = "Información básica:";
+"partyData.rule.section2"                = "Reglas de estadística del tiempo en micrófono:";
+"partyData.rule.section3"                = "Composición de ingresos:";
+"partyData.rule.section4"                = "Reglas de visualización:";
+"partyData.rule.title1"                  = "Ciclo de actualización de datos:";
+"partyData.rule.content1"                = "Los datos de Party se actualizan periódicamente. Esta semana / este mes muestran datos acumulados en tiempo real; la semana pasada / el mes pasado muestran los totales finales.";
+"partyData.rule.title2"                  = "Reglas estadísticas:";
+"partyData.rule.content2"                = "El tiempo en micrófono cuenta los segundos acumulados en asientos de voz y video en todas las salas Party durante el periodo.";
+"partyData.rule.title3"                  = "Fuentes de ingresos:";
+"partyData.rule.content3"                = "Los ingresos de regalos de Party son diamantes recibidos de regalos dentro de las salas Party. Los ingresos de Partycall incluyen tanto la facturación de llamadas como los regalos recibidos durante las llamadas Party.";
+"partyData.rule.title4"                  = "Reglas de visualización:";
+"partyData.rule.content4"                = "Solo se muestran en la lista diaria las fechas con actividad. Los montos se muestran en diamantes.";
+
+"party.micTimeDetail.title"              = "Tiempo de mic por sala";
+"party.micTime.total"                    = "Total";
+"party.micTime.voice"                    = "Voz";
+"party.micTime.video"                    = "Video";
+"party.micTime.empty"                    = "Aún no hay datos de tiempo de mic";
+
+// LiveData 规则 sheet（对齐 H5 liveRule/index.vue 默认分支）
+"liveData.rule.navTitle"                 = "Reglas de transmisión";
+"liveData.rule.section1"                 = "Información básica:";
+"liveData.rule.section2"                 = "Actualización de datos y ciclo estadístico:";
+"liveData.rule.section3"                 = "Reglas de cálculo de ingresos:";
+"liveData.rule.section4"                 = "Manejo de excepciones:";
+"liveData.rule.calcMethod"               = "2. Método de cálculo:";
+"liveData.rule.title1"                   = "1. Ámbito de aplicación:";
+"liveData.rule.title2"                   = "1. Frecuencia de actualización:";
+"liveData.rule.title3"                   = "2. Ciclo estadístico:";
+"liveData.rule.title4"                   = "1. Ingresos incluidos:";
+"liveData.rule.title7"                   = "1. Retraso en los ingresos:";
+"liveData.rule.title8"                   = "2. Disputa de datos:";
+"liveData.rule.content1"                 = "Aplica a sesiones oficiales de transmisión con vídeo y audio normales, que cumplen las directrices de transmisión de la plataforma y los requisitos de duración válida.";
+"liveData.rule.content2"                 = "Los datos se actualizan cada hora. Para transmisiones que se extienden más de un día, la duración y los ingresos por regalos se calculan bajo la fecha de inicio de la sesión.";
+"liveData.rule.content3"                 = "Admite estadísticas semanales y mensuales. Los usuarios pueden ver los datos de las últimas dos semanas y los últimos tres meses. Los datos se actualizan automáticamente según el ciclo correspondiente.";
+"liveData.rule.content4"                 = "Ingresos por regalos durante la transmisión, ingresos por regalos durante las llamadas privadas e ingresos por gasto de diamantes en llamadas privadas.";
+"liveData.rule.content5"                 = "a. Ingresos de transmisión = Ingresos por regalos durante la transmisión (incluyendo regalos de llamadas privadas). b. Ingresos por llamadas privadas = Diamantes consumidos durante las llamadas privadas.";
+"liveData.rule.content7"                 = "El retraso en la actualización de datos generalmente no supera las 24 horas.";
+"liveData.rule.content8"                 = "Si tienes preguntas sobre los datos, puedes presentar una apelación al servicio de atención al cliente oficial para su verificación.";
+
+// Work 底部 sysInfo 组件（对齐 H5 work/sysInfo.vue）
+"system.serverTime"                      = "Hora del servidor";
+"contact.officialWhatsapp"               = "WhatsApp oficial: %@";
+"common.copySuccess"                     = "Copiado";
+
+// MARK: - K 里程碑 美颜设置页
+"beautySettings.pageTitle"                                  = "Belleza";
+"beautySettings.globalToggle"                               = "Belleza";
+"beautySettings.resetDefaults"                              = "Restablecer";
+"beautySettings.done"                                       = "Listo";
+"beautySettings.tab.skin"                                   = "Piel";
+"beautySettings.tab.shape"                                  = "Forma";
+"beautySettings.tab.filter"                                 = "Filtro";
+"beautySettings.tab.sticker"                                = "Sticker";
+"beautySettings.banner.loading"                             = "Cargando motor de belleza...";
+"beautySettings.banner.unavailable"                         = "Motor de belleza no disponible";
+"beautySettings.banner.interrupted"                         = "Vista previa pausada";
+"beautySettings.param.blur"                                 = "Suavizar";
+"beautySettings.param.whiten"                               = "Blanquear";
+"beautySettings.param.red"                                  = "Rubor";
+"beautySettings.param.clarity"                              = "Claridad";
+"beautySettings.param.sharpen"                              = "Nitidez";
+"beautySettings.param.faceThreed"                           = "3D";
+"beautySettings.param.eyeBright"                            = "Ojos brillantes";
+"beautySettings.param.toothWhiten"                          = "Dientes blancos";
+"beautySettings.param.removePouch"                          = "Ojeras";
+"beautySettings.param.removeNasolabialFolds"                = "Líneas de expresión";
+"beautySettings.param.cheekV"                               = "Cara en V";
+"beautySettings.param.cheekNarrow"                          = "Estrecho";
+"beautySettings.param.cheekShort"                           = "Cara corta";
+"beautySettings.param.cheekSmall"                           = "Cara pequeña";
+"beautySettings.param.intensityCheekbones"                  = "Pómulos";
+"beautySettings.param.intensityLowerJaw"                    = "Mandíbula";
+"beautySettings.param.eyeEnlarging"                         = "Ojos grandes";
+"beautySettings.param.intensityEyeCircle"                   = "Ojos redondos";
+"beautySettings.param.intensityChin"                        = "Barbilla";
+"beautySettings.param.intensityForehead"                    = "Frente";
+"beautySettings.param.intensityNose"                        = "Nariz fina";
+"beautySettings.param.intensityMouth"                       = "Boca";
+"beautySettings.param.intensityLipThick"                    = "Grosor de labios";
+"beautySettings.param.intensityCanthus"                     = "Rabillo del ojo";
+"beautySettings.param.intensityEyeSpace"                    = "Distancia entre ojos";
+"beautySettings.filter.origin"                              = "Original";
+"beautySettings.filter.ziran"                               = "Natural";
+"beautySettings.filter.zhiganhui"                           = "Textura";
+"beautySettings.filter.mitao"                               = "Melocotón";
+"beautySettings.filter.bailiang"                            = "Brillante";
+"beautySettings.filter.fennen"                              = "Rosa";
+"beautySettings.filter.lengsediao"                          = "Frío";
+"beautySettings.filter.nuansediao"                          = "Cálido";
+"beautySettings.filter.gexing"                              = "Personalidad";
+"beautySettings.filter.xiaoqingxin"                         = "Fresco";
+"beautySettings.filter.heibai"                              = "Mono";
+"beautySettings.filter.levelLabel"                          = "Intensidad del filtro";
+"beautySettings.sticker.comingSoon"                         = "Stickers próximamente";
+"beauty.error.authExpired"                                  = "La licencia de belleza ha expirado. Actualiza la aplicación.";
+"beauty.error.bundleMissing"                                = "Falta el recurso de belleza.";
+"beauty.error.genericSetupFailed"                           = "No se pudo iniciar el motor de belleza.";
+"beauty.error.setupTimeout"                                 = "Se agotó el tiempo de inicio del motor de belleza.";
+"beauty.error.persistenceDecodeFailed"                      = "No se pudo leer la configuración de belleza.";
+"beauty.error.persistenceWriteFailed"                       = "No se pudo guardar la configuración de belleza.";
+"beautySettings.a11y.preview"                               = "Vista previa de belleza";
+"beautySettings.a11y.sliderFormat"                          = "%@, valor %d";
+"beautySettings.recover"                                    = "Restablecer";
+"beautySettings.save"                                       = "Guardar";
+
+/* MARK: - H-2 GiftMessage 私密媒体解锁（对齐 H5 secretMessage） */
+"giftMessage.navTitle"              = "Mensaje de regalo";
+"giftMessage.photoTitle"            = "Mensajes de foto secretos";
+"giftMessage.videoTitle"            = "Mensajes de video secretos";
+"giftMessage.setGiftIntro"          = "Establece un regalo y al desbloquear, recibirás el regalo";
+"giftMessage.submit"                = "Enviar";
+"giftMessage.giftPicker.title"      = "Establece un regalo para que los usuarios desbloqueen tu mensaje secreto";
+"giftMessage.giftPicker.loadFail"   = "Error al cargar los regalos";
+"giftMessage.reachedLimit"          = "Límite alcanzado";
+"giftMessage.selectGiftRequired"    = "Selecciona un regalo para todos los elementos";
+"giftMessage.addMedia"              = "Añadir";
+"giftMessage.deleteItem"            = "Eliminar";
+"giftMessage.networkErrorFallback"  = "Error de red, inténtalo de nuevo.";
+"giftMessage.unsupportedFile"       = "Archivo no compatible";
+"giftMessage.uploading"             = "Subiendo...";
+"giftMessage.submitSucceed"         = "Envío exitoso";
+"giftMessage.photoCountFormat"      = "(%d/%d)";
+"giftMessage.videoCountFormat"      = "(%d/%d)";
+"beautySettings.recoverConfirm.title"                       = "¿Restablecer ajustes?";
+"beautySettings.recoverConfirm.message"                     = "Los ajustes actuales se borrarán.";
+"beautySettings.recoverConfirm.yes"                         = "Restablecer";
+"beautySettings.recoverConfirm.no"                          = "Cancelar";
+
+// X 按钮未保存丢弃弹窗（2026-07-03 对齐 H5 index.vue:199-210 goBack）
+"beautySettings.exitConfirm.title"                          = "Cambios sin guardar";
+"beautySettings.exitConfirm.message"                        = "Tus ajustes de belleza no se han guardado. ¿Seguro que quieres salir?";
+"beautySettings.exitConfirm.discard"                        = "Salir";
+"beautySettings.exitConfirm.continue"                       = "Seguir editando";
+
+// Save 成功 toast（2026-07-03 对齐 H5 index.vue:155）
+"beautySettings.saveSuccess.toast"                          = "¡Guardado!";
+"beautyCamera.capturePhoto"                                 = "Tomar foto";
+"beautyCamera.captureFailed"                                = "No se pudo guardar la foto. Inténtalo de nuevo.";
+"beautyCamera.captureNoFrame"                               = "La cámara se está preparando. Inténtalo de nuevo.";
+
+// MARK: - Match tab（L 里程碑）
+
+// MARK: - 直播结果页（对齐 H5 locales/en.json live.*）
+"liveResult.title"               = "Transmisión finalizada";
+"liveResult.durationLabel"       = "Duración";
+"liveResult.weakNetworkNotice"   = "Debido a que tu red falló muchas veces.";
+"liveResult.card.liveData"       = "Datos de transmisión";
+"liveResult.card.topGifters"     = "Mejores regaladores";
+"liveResult.card.privateCalls"   = "De transmisión a llamadas privadas";
+"liveResult.viewers"             = "Espectadores";
+"liveResult.followers"           = "Seguidores";
+"liveResult.gifters"             = "Regaladores";
+"liveResult.diamonds"            = "Diamantes";
+"liveResult.more"                = "Más";
+"liveResult.empty"               = "Sin datos";
+"liveResult.loadFailed"          = "No se pudieron obtener los datos.";
+"liveResult.retry"               = "Reintentar";
+"liveResult.back"                = "Atrás";
+"liveResult.follow"              = "Seguir";
+"liveResult.message"             = "Mensaje";
+"liveResult.messageComingSoon"   = "Próximamente";
+"liveResult.followSuccess"       = "Siguiendo";
+
+// MARK: - 首次开播规则页（严格对齐 H5 locales/en.json live.*）
+"firstLiveRule.navTitle"         = "";
+"firstLiveRule.beforeStartTitle" = "Antes de comenzar";
+"firstLiveRule.beforeStartDesc"  = "A través de nuestra función de transmisión en vivo, puedes iniciar una transmisión e interactuar con tu audiencia. Los espectadores pueden apoyarte enviando regalos virtuales, que se convertirán en ganancias para ti.\n\nAdemás, ofrecemos recompensas adicionales a los transmisores según las horas diarias de transmisión y la cantidad de regalos recibidos. Si cumples ciertos estándares, serás elegible para recompensas adicionales. Para más detalles, consulta a tu agente o administrador.";
+"firstLiveRule.guidelinesTitle"  = "Guía de transmisiones en vivo";
+"firstLiveRule.confirm"          = "Confirmar";
+"firstLiveRule.guideline1.title" = "1. Contenido prohibido:";
+"firstLiveRule.guideline1.content" = "No se permite violencia, pornografía, vulgaridad ni temas políticos en las salas en vivo.";
+"firstLiveRule.guideline2.title" = "2. Protección de menores:";
+"firstLiveRule.guideline2.content" = "Los menores no pueden aparecer en pantalla; las infracciones pueden resultar en sanciones.";
+"firstLiveRule.guideline3.title" = "3. Lenguaje civilizado:";
+"firstLiveRule.guideline3.content" = "Evita lenguaje soez, insultos o intimidación; promueve energía positiva.";
+"firstLiveRule.guideline4.title" = "4. Código de vestimenta:";
+"firstLiveRule.guideline4.content" = "Los transmisores deben evitar ropa reveladora o provocativa.";
+"firstLiveRule.guideline5.title" = "5. Uso de la cámara:";
+"firstLiveRule.guideline5.content" = "Las cámaras deben permanecer atendidas y activas para evitar sanciones.";
+"firstLiveRule.guideline6.title" = "6. Estándares de calidad:";
+"firstLiveRule.guideline6.content" = "Mantén una imagen clara y niveles de sonido adecuados.";
+"firstLiveRule.guideline7.title" = "7. Sin transacciones privadas:";
+"firstLiveRule.guideline7.content" = "Está prohibido dirigir a los usuarios a canales externos para transacciones. Las infracciones graves pueden llevar a la cancelación de tus privilegios de transmisión.";
+"match.marquee.callStarted"      = "Videollamada iniciada.";
+"match.marquee.empty"            = "Empieza a emparejarte para conocer a más personas";
+"match.title.matchesFound"       = "¡%d emparejamientos encontrados!";
+"match.subtitle.description"     = "Tus emparejamientos recientes están arriba. Toca para chatear y convencerlos de que te llamen.";
+"match.userList.empty"           = "Aún no hay emparejamientos";
+"match.userCard.videoPrice"      = "%d/min";
+"match.userCard.close"           = "Cerrar";
+"match.button.a11y.turnOn"       = "Activar emparejamiento";
+"match.button.a11y.turnOff"      = "Desactivar emparejamiento";
+
+// Match toast 文案（MatchStore 状态迁移）
+"match.toast.networkError"       = "Error de red, inténtalo de nuevo";
+"match.toast.noFaceDetected"     = "Rostro no detectado";
+"match.toast.exceedCount"        = "Se alcanzó el límite diario de emparejamientos";
+"match.toast.turnOnFailed"       = "No se pudo activar el emparejamiento";
+"match.toast.turnOnSucceed"      = "Emparejamiento activado";
+"match.toast.turnOffSucceed"     = "Emparejamiento desactivado";
+"match.toast.cameraStartFailed"  = "No se pudo iniciar la cámara";
+"match.toast.cameraUnavailable"  = "Cámara no disponible";
+"match.toast.imOffline"          = "Reconectando, inténtalo de nuevo";
+"match.resumeAlert.title"        = "¿Reanudar emparejamiento?";
+"match.resumeAlert.message"      = "¿Quieres reanudar el emparejamiento?";
+"match.resumeAlert.confirm"      = "Reanudar";
+"match.resumeAlert.cancel"       = "Cancelar";
+"match.marquee.a11y.callFormat"  = "%1$@ llamó a %2$@";
+
+// Match rule 弹窗（#3b 首次每日开启匹配的规则同意）
+"match.rule.title"               = "Reglas de emparejamiento";
+"match.rule.detail1"             = "1. Cada llamada incluye detección facial. Las infracciones provocan un bloqueo de un día para el emparejamiento. Se requiere que el rostro esté visible para emparejarse. Si no se detecta, los privilegios de emparejamiento se pausarán durante 10 minutos.";
+"match.rule.detail2"             = "2. En las llamadas por emparejamiento, los primeros 20 segundos son GRATIS. Después de 20 segundos, se aplicarán cargos según tu precio de llamada.";
+"match.rule.detail3"             = "3. Tras varios emparejamientos, puedes reclamar recompensas de diamantes en 'Tareas'.";
+"match.rule.detail4"             = "4. Mientras la otra persona recarga, la llamada permanecerá conectada durante 30 segundos; una vez que su recarga se complete, la facturación continuará según tu tarifa por minuto.";
+"match.rule.agree"               = "Aceptar";
+
+// Match tip 弹窗（#3c 10 分钟未开启匹配提示）
+"match.tip.title"                = "Activa el emparejamiento para recibir llamadas más rápido y ganar más.";
+"match.tip.goMatch"              = "Ir a emparejar";
+"match.tip.noReminder"           = "No recordarme hoy";
+
+// Match face check & exit 弹窗（#3d）
+"match.face.notDetected.title"   = "Rostro no detectado";
+"match.face.notDetected.content" = "Mantén tu rostro visible durante el emparejamiento. Si no se detecta en 5 segundos, se te eliminará del emparejamiento.";
+"match.exit.title"               = "Eliminado del emparejamiento";
+"match.exit.content"             = "No se detectó tu rostro durante la verificación. Se te ha eliminado del grupo de emparejamiento.";
+
+/* v10 (2026-07-08) Wishlist + 心愿达成飘屏 */
+"wishlist.progress.complete"     = "Completo";
+"wishlist.panel.title"           = "Lista de deseos de %@ para esta ronda";
+"wishlist.panel.subtitle"        = "¡Ayuda al presentador a cumplir su pequeño deseo y gana recompensas!";
+"wishlist.panel.empty"           = "No hay lista de deseos en esta sesión";
+"wishlist.panel.top6Title"       = "Principales donadores";
+"wishlist.panel.top6Empty"       = "Solo se muestran los 6 principales por valor de regalo";
+"wishlist.float.complete"        = "Deseo cumplido,";
+"wishlist.float.thanks"          = "¡Gracias, mi héroe!";
+"wishlist.top1.prefix"           = "ahora es mi";
+"wishlist.top1.suffix"           = "seguidor";
+
+/* EditProfile 用户资料编辑页（I 里程碑，对齐 H5 anchor-livechat-h5/src/views/profile/index.vue） */
+"editProfile.navTitle"                             = "Editar perfil";
+"editProfile.confirm"                              = "Guardar";
+"editProfile.cancel"                               = "Cancelar";
+
+"editProfile.section.basic.title"                  = "Información básica";
+"editProfile.section.basic.hint"                   = "Completa tu perfil para atraer más espectadores";
+"editProfile.section.photos.titleFormat"           = "Fotos (%d/9)";
+"editProfile.section.videos.titleFormat"           = "Videos (%d/6)";
+"editProfile.section.callVideo.title"              = "Video de llamada";
+"editProfile.section.callVideo.hint"               = "Configura un video que se reproduce al recibir una llamada";
+"editProfile.section.greetMsgs.title"              = "Mensajes de bienvenida";
+"editProfile.section.greetMsgs.hint"               = "Se envía automáticamente al conectar la llamada";
+"editProfile.section.greetMsgs.reviewingTitle"     = "En revisión";
+
+"editProfile.nickname.label"                       = "Apodo";
+"editProfile.nickname.placeholder"                 = "Ingresa...";
+"editProfile.nickname.editTitle"                   = "Apodo";
+"editProfile.nickname.wordCountFormat"             = "%d/15";
+
+"editProfile.bio.label"                            = "Biografía";
+"editProfile.bio.placeholder"                      = "Ingresa...";
+"editProfile.bio.wordCountFormat"                  = "%d/200";
+
+"editProfile.greetMsg.addButton"                   = "Añadir";
+"editProfile.greetMsg.placeholder"                 = "Ingresa...";
+"editProfile.greetMsg.wordCountFormat"             = "%d/50";
+
+"editProfile.badge.inReview"                       = "En revisión";
+
+"editProfile.loadError.title"                      = "Error al cargar";
+"editProfile.loadError.retry"                      = "Reintentar";
+"editProfile.success.title"                        = "Enviado para aprobación, espera...";
+"editProfile.success.confirm"                      = "Confirmar";
+"editProfile.discard.title"                        = "¿Descartar cambios?";
+"editProfile.discard.message"                      = "Se perderán los cambios no guardados.";
+"editProfile.discard.confirm"                      = "Descartar";
+"editProfile.discard.keep"                         = "Seguir editando";
+"editProfile.sizeAlert.title"                      = "No se puede subir";
+"editProfile.sizeAlert.ok"                         = "OK";
+
+"editProfile.toast.photosLimit"                    = "Solo puedes agregar hasta 9 fotos";
+"editProfile.toast.videosLimit"                    = "Solo puedes agregar hasta 6 videos";
+"editProfile.toast.uploading"                      = "subiendo...";
+"editProfile.toast.uploadFailed"                   = "Falló la subida de algunos archivos, ¡inténtalo de nuevo!";
+"editProfile.toast.uploadTimeout"                  = "Tiempo de subida agotado, inténtalo de nuevo";
+"editProfile.toast.imageTooLarge"                  = "La imagen es demasiado grande (máx. 5 MB)";
+"editProfile.toast.videoTooLarge"                  = "El video es demasiado grande (máx. 20 MB)";
+"editProfile.toast.videoFormatUnsupported"         = "Formato de video no compatible (solo mp4/mov)";
+"editProfile.toast.avatarInReview"                 = "El avatar está en revisión, espera...";
+"editProfile.toast.nicknameInReview"               = "Lo sentimos, los datos de tu perfil están en revisión";
+"editProfile.toast.networkError"                   = "Error de red, inténtalo de nuevo";
+
+// MARK: - A-2 新主播注册流程一期（en；ar/tr Step 4 by /i18n translate）
+"register.title.basicInfo"                          = "Configura tu perfil";
+"register.title.required"                           = "Completa tu perfil de Party";
+"register.title.videoGuide"                         = "Revisión del perfil";
+"register.field.nickname"                           = "Apodo";
+"register.field.birthday"                           = "Fecha de nacimiento";
+"register.field.country"                            = "País";
+"register.field.inviteCode"                         = "Código de invitación";
+"register.field.inviteCodeOptional"                 = "opcional";
+"register.field.requiredFields"                     = "Completa tu perfil de Party";
+"register.field.yourLanguage"                       = "Idiomas usados en salas Party (máximo 4)";
+"register.field.selectLanguage"                     = "Selecciona los idiomas de las salas Party";
+"register.field.yourPhotos"                         = "Fotos de perfil (al menos %d)";
+"register.field.takeVideo"                          = "Video de revisión del perfil";
+"register.action.signUp"                            = "Continuar";
+"register.action.upload"                            = "Enviar";
+"register.action.edit"                              = "Editar";
+"register.action.rerecord"                          = "Volver a grabar";
+"register.action.goToRecord"                        = "Ir a grabar";
+"register.action.confirmN"                          = "Confirmar ( %d )";
+"register.action.cancel"                            = "Cancelar";
+"register.action.languageTitle"                     = "Idioma";
+"register.video.guideBody"                          = "Graba y sube un video de revisión de %d segundos para completar el registro con el código de invitación.";
+"register.video.discardConfirm"                     = "¿Descartar la grabación? Se perderá la grabación.";
+"register.error.avatarRequired"                     = "Sube tu foto de perfil";
+"register.error.nicknameRequired"                   = "Ingresa tu apodo";
+"register.error.birthdayRequired"                   = "Selecciona tu fecha de nacimiento";
+"register.error.countryRequired"                    = "Selecciona tu país";
+"register.error.languageRequired"                   = "Selecciona tu idioma";
+"register.error.languageMax"                        = "Solo puedes elegir cuatro";
+"register.error.photosMin"                          = "Sube al menos %d fotos de perfil";
+"register.error.videoRequired"                      = "Graba y sube un video de revisión.";
+"register.error.cameraDenied"                       = "Se requiere acceso a la cámara. Actívalo en Ajustes.";
+"register.error.micDenied"                          = "Se requiere acceso al micrófono. Actívalo en Ajustes.";
+"register.error.recordInterrupted"                  = "Grabación interrumpida. Vuelve a intentarlo.";
+"register.error.compressFailed"                     = "Error al procesar el video. Vuelve a grabar.";
+"register.error.uploadFailed"                       = "Error al subir. Vuelve a intentarlo.";
+"register.error.imageTooLarge"                      = "La imagen es demasiado grande (máx. %d MB). Elige una más pequeña.";
+"register.error.invalidInvitationCode"              = "Código de invitación no válido.";
+"register.error.serverTemporary"                    = "Servidor temporalmente no disponible. Inténtalo de nuevo.";
+
+/* MARK: - PartyRoom 房间内 UI (AnchorBar / ChatTabStrip / InputBar) */
+"partyRoom.idFormat"                     = "ID:%@";
+"partyRoom.welcomeFallback"              = "¡Bienvenidos a mi sala, divirtámonos!";
+"partyRoom.a11y.follow"                  = "Seguir";
+"partyRoom.a11y.following"               = "Siguiendo";
+"partyRoom.a11y.announcement"            = "Anuncio";
+"partyRoom.a11y.share"                   = "Compartir";
+"partyRoom.a11y.management"              = "Gestión";
+"partyRoom.a11y.more"                    = "Más";
+"partyRoom.a11y.heat"                    = "Popularidad";
+"partyRoom.a11y.viewers"                 = "Espectadores";
+"partyRoom.a11y.wealthRank"              = "Ranking de riqueza";
+"partyRoom.a11y.honorRank"               = "Ranking de honor";
+"partyRoom.a11y.pk"                      = "Iniciar PK";
+
+/* 顶栏 Rank / Viewers sheet（对齐 H5 room-rank.vue） */
+"partyRoom.rank.tab.contribution"        = "Contribución";
+"partyRoom.rank.tab.honor"               = "Honor";
+"partyRoom.rank.tab.gameTask"            = "Misión de juego";
+"partyRoom.rank.tab.daily"               = "Diario";
+"partyRoom.rank.period.today"            = "Hoy";
+"partyRoom.rank.period.yesterday"        = "Ayer";
+"partyRoom.rank.viewersTitle"            = "Espectadores";
+"partyRoom.rank.emptyRank"               = "Aún no hay ranking";
+"partyRoom.rank.emptyViewers"            = "Aún no hay espectadores";
+"partyRoom.weeklyTask.title"             = "Misión semanal";
+"partyRoom.weeklyTask.liveTime"          = "Tiempo en micrófono";
+"partyRoom.weeklyTask.empty"             = "Ahora no hay misiones semanales";
+"partyRoom.weeklyTask.loadMore"          = "Ver más";
+"partyRoom.weeklyTask.reward.title"      = "Felicidades";
+"partyRoom.weeklyTask.reward.confirm"    = "Entendido";
+"partyRoom.weeklyTask.reward.fallback"   = "Recompensa";
+"partyRoom.weeklyTask.giftHistory"       = "Historial de regalos";
+"partyRoom.weeklyTask.reward"            = "Recompensa";
+"partyRoom.a11y.weeklyTask"              = "Misión semanal";
+"partyRoom.hotTask.title"                = "Misión de sala popular";
+"partyRoom.hotTask.missionRules"         = "Reglas de misiones de Party";
+"partyRoom.hotTask.howToReward"          = "¿Cómo obtener la recompensa?";
+"partyRoom.hotTask.howToRewardDetail"    = "Gana recompensas completando tiempo en micrófono en una sala Party del Top 3.";
+"partyRoom.hotTask.howToRewardDetailFormat" = "Gana recompensas completando tiempo en micrófono en una sala Party del Top %d.";
+"partyRoom.hotTask.micTime"              = "Tiempo en micrófono";
+"partyRoom.hotTask.micTimeDetail"        = "Gana gemas por el tiempo acumulado en micrófono.";
+"partyRoom.hotTask.giftsOnMic"           = "Regalos en micrófono";
+"partyRoom.hotTask.giftsOnMicDetail"     = "Gana gemas con los regalos recibidos mientras estás en micrófono.";
+"partyRoom.hotTask.gems"                 = "Gemas";
+"partyRoom.hotTask.frame"                = "Cuadro";
+"partyRoom.hotTask.notes"                = "Notas";
+"partyRoom.hotTask.notesDetail"          = "El tiempo en micrófono se cuenta solo mientras tu rostro esté visible en el video. Los fallos repetidos pueden hacerte perder la recompensa.";
+"partyRoom.hotTask.outOfTop"             = "Tu sala salió del Top 3";
+"partyRoom.hotTask.outOfTopFormat"       = "Tu sala salió del Top %d";
+"partyRoom.hotTask.rewardTitle"          = "¡Felicidades! Alcanzaste la meta de tiempo en micrófono";
+"partyRoom.hotTask.claim"                = "Reclamar";
+"partyRoom.hotTask.validHours"           = "Válido %d h";
+"partyRoom.hotTask.faceWarning"          = "Mantén tu rostro visible en el video para seguir ganando recompensas.";
+"partyRoom.hotTask.faceLimitWarning"     = "Se alcanzó el límite de detección facial. El progreso de la misión en micrófono está en pausa.";
+"partyRoom.hotRoomGuide.title"           = "Únete a una sala popular";
+"partyRoom.hotRoomGuide.action"          = "Ir ahora";
+"partyRoom.hotRoomGuide.message"         = "¿Ir a la sala objetivo para continuar tu misión en micrófono?";
+"partyRoom.hotRoomGuide.stay"            = "Quedarme";
+"partyRoom.hotRoomGuide.jumpTop"         = "Ir al Top 3";
+"partyRoom.topRoomBonus.enter.title"     = "¡Abre el video en la sala Party y consigue más bonus!";
+"partyRoom.topRoomBonus.enter.subtitleFormat" = "Solo para las Top %d salas populares";
+"partyRoom.topRoomBonus.enter.format"    = "Entrar al TOP %d";
+"partyRoom.topRoomBonus.out.titleFormat" = "Tu sala salió del Top %d";
+"partyRoom.topRoomBonus.out.message"     = "¿Ir a la sala objetivo para continuar tu misión en micrófono?";
+"partyRoom.topRoomBonus.out.jumpFormat"  = "Ir al TOP %d";
+"partyRoom.tab.all"                      = "Todo";
+"partyRoom.tab.chat"                     = "Chat";
+"partyRoom.tab.gift"                     = "Regalo";
+"partyRoom.input.placeholder"            = "Saluda...";
+"partyRoom.a11y.emoji"                   = "Emoji";
+"partyRoom.a11y.speaker.on"              = "Altavoz encendido";
+"partyRoom.a11y.speaker.off"             = "Altavoz apagado";
+"partyRoom.a11y.mic.on"                  = "Micrófono encendido";
+"partyRoom.a11y.mic.off"                 = "Micrófono apagado";
+"partyRoom.a11y.game"                    = "Juegos";
+"partyRoom.a11y.gift"                    = "Enviar regalo";
+
+/* F 里程碑 表情面板 (2026-07-17) */
+"partyRoom.emoji.loadFailed"             = "No se pudieron cargar los emojis";
+"partyRoom.emoji.retry"                  = "Reintentar";
+"partyRoom.emoji.playError"              = "Emoji no disponible";
+"partyRoom.emoji.onSeatRequired"         = "Ocupa un asiento para usar emojis";
+
+/* v9 PartyRoom biz logic */
+"partyRoom.announcement.title"           = "Anuncio";
+"partyRoom.announcement.empty"           = "Aún no hay anuncios";
+"partyRoom.announcement.close"           = "Cerrar";
+// F 期房主管理批 编辑通告（2026-07-17）
+"partyRoom.announcement.edit"            = "Editar";
+"partyRoom.announcement.save"            = "Guardar";
+"partyRoom.announcement.cancel"          = "Cancelar";
+"partyRoom.announcement.placeholder"     = "Ingresa el anuncio de la sala";
+"partyRoom.announcement.saveSuccess"     = "Anuncio guardado";
+"partyRoom.announcement.saveFailed"      = "No se pudo guardar el anuncio";
+"partyRoom.more.title"                   = "Más";
+"partyRoom.more.leave"                   = "Salir de la sala";
+
+/* v12 PartyRoom footer bar (align livechat-h5 footer-wrap.vue) */
+"partyRoom.a11y.apply"                   = "Solicitar asiento";
+"partyRoom.a11y.message"                 = "Mensajes";
+"partyRoom.a11y.toolMenu"                = "Más herramientas";
+"partyRoom.apply.dialog.title"           = "¿Solicitar un asiento?";
+"partyRoom.apply.confirm"                = "Aplicar";
+"partyRoom.toolMenu.title"               = "Más herramientas";
+"partyRoom.toolMenu.startPk"             = "Iniciar PK";
+"partyRoom.toolMenu.luckyNumber"         = "Número de la suerte";
+"partyRoom.toolMenu.roomMute"            = "Silenciar sala";
+// F 期便利功能 Room Mute toggle 状态化文案（2026-07-17）
+"partyRoom.toolMenu.roomMute.on"         = "Silenciar sala";
+"partyRoom.toolMenu.roomMute.off"        = "Reactivar sala";
+"partyRoom.toolMenu.interactiveGames"    = "Juegos interactivos";
+"partyRoom.toolMenu.basicTools"          = "Herramientas básicas";
+"partyRoom.toolMenu.pk"                  = "PK";
+"partyRoom.toolMenu.free"                = "Gratis";
+"partyRoom.toolMenu.settings"            = "Configuración";
+"partyRoom.toolMenu.luckyNumberSent"     = "Número de la suerte enviado";
+"partyRoom.toolMenu.range"               = "Rango";
+"partyRoom.toolMenu.setLuckyNumber"      = "Fijar el número de la suerte";
+"partyRoom.toolMenu.allowAdmins"         = "Permitir a los administradores fijar el número de la suerte";
+"partyRoom.toolMenu.save"                = "Guardar";
+"partyRoom.toolMenu.invalidLuckyNumber"  = "Ingresa un número válido";
+"partyRoom.toolMenu.luckyNumberSaved"    = "Número de la suerte guardado";
+"partyRoom.toolMenu.history"             = "Historial";
+"partyRoom.toolMenu.historyHint"         = "Esta lista muestra los registros de usuarios en la sala que coincidieron con los números de la suerte en los últimos 3 días.";
+"partyRoom.toolMenu.noHistory"           = "Aún no hay historial";
+"partyRoom.toolMenu.loadMore"            = "Ver más";
+// F 期便利功能 ShareLink 深链
+"partyRoom.share.messageFormat"          = "¡Únete a mi sala Party! %@";
+"party.shareInvite.title"                 = "Invitar";
+"party.shareInvite.sent"                  = "Invitación enviada";
+"partyRoom.seat.locked"                  = "El asiento está bloqueado";
+"partyRoom.seat.videoNeedsInvite"        = "Los asientos de video requieren invitación del presentador";
+"partyRoom.switchSeat.title"             = "¿Cambiar a este asiento?";
+"partyRoom.switchSeat.confirm"           = "Cambiar";
+"partyRoom.adminSeat.title"              = "Gestionar asiento";
+"partyRoom.adminSeat.take"               = "Ocupar asiento";
+"partyRoom.adminSeat.switchHere"         = "Cambiar aquí";
+"partyRoom.adminSeat.lock"               = "Bloquear asiento";
+"partyRoom.adminSeat.unlock"             = "Desbloquear asiento";
+
+// v25.1 (2026-07-17) LiveGiftTask · 三语真翻译从 H5 locales 迁移(user feedback: 文案要对齐 H5)
+"liveRoom.task.sheet.title"              = "Tarea de transmisión";
+"liveRoom.task.tab.liveGift"             = "Tarea de regalos en vivo";
+"liveRoom.task.tab.activeTycoon"         = "Tarea Active Tycoon";
+"liveRoom.task.progress.title"           = "Progreso de la tarea";
+"liveRoom.task.progress.subtitle"        = "Envía regalos a la chica y ayúdala a obtener la recompensa diaria";
+"liveRoom.task.history.title"            = "Historial de hoy";
+"liveRoom.task.history.finished"         = "No hay más datos";
+"liveRoom.task.history.error"            = "error al cargar, toca para reintentar";
+"liveRoom.task.tycoon.completed"         = "Completado";
+"liveRoom.task.tycoon.empty"             = "Aún no hay tareas";
+"liveRoom.task.tycoon.loading"           = "Cargando...";
+"liveRoom.task.rules.button"             = "OK";
+"liveRoom.task.rules.title.liveGift"     = "Reglas de la tarea de regalos en vivo";
+"liveRoom.task.rules.title.tycoon"       = "Reglas de la tarea Active Tycoon";
+"liveRoom.task.rules.body.liveGift"      = "1. Usuarios objetivo: Todos los usuarios en la sala de transmisión\n2. Comportamiento de progreso: Actividades de pago incluyendo regalos, sorteo, conexión en vivo y llamada privada\n3. Ciclo de reinicio: Cálculo semanal, los datos se reinician cada semana\n4. Cálculo del progreso: Se calcula según los estándares de la tarea";
+"liveRoom.task.rules.body.tycoon"        = "1. Usuarios objetivo: Usuarios etiquetados como Active Tycoon\n2. Comportamiento de progreso: Actividades de pago de usuarios etiquetados incluyendo regalos, sorteo, conexión en vivo y llamada privada\n3. Ciclo de reinicio: Cálculo semanal, los datos se reinician cada semana\n4. Cálculo del progreso: Se calcula según los estándares de la tarea";
+"liveRoom.roulette.tip"                  = "Activar rueda";
+
+"robotCall.incoming.title"               = "Novato";
+"robotCall.incoming.support"             = "Soporte oficial";
+"robotCall.incoming.waiting"             = "Esperando respuesta";
+"robotCall.action.accept"                = "Responder";
+"robotCall.action.reject"                = "Rechazar";
+"robotCall.action.end"                   = "Finalizar llamada";
+"robotCall.minimumDuration"              = "La duración de la llamada no puede ser inferior a 10 segundos";
+"robotCall.acceptFailed"                 = "No se pudo responder esta llamada. Inténtalo de nuevo más tarde.";
+"robotCall.reward.title"                 = "Felicidades";
+"robotCall.noReward.title"               = "Sigue así";
+"robotCall.duration.format"              = "Duración de la llamada: %@";
+"robotCall.reward.duration.format"       = "La duración actual de la llamada ha alcanzado: %@";
+"robotCall.reward.coins.format"          = "Monedas ganadas: %@";
+"robotCall.reward.ok"                    = "OK";
+
+"paidBullet.dislike"                     = "No me gusta";
+"paidBullet.dislikeFailed"               = "No se pudo enviar el «no me gusta». Inténtalo de nuevo.";
+"paidBullet.earningsToast"               = "+%lld monedas (Bullet pagado)";
+
+"diamondGift.grab"                       = "Reclamar";
+"diamondGift.sendAction"                 = "envió una bolsa de diamantes!";
+"diamondGift.claimFormat"                = "%@ reclamó %lld diamantes";
+"diamondGift.expiredFormat"              = "La bolsa de diamantes caducó, %@ recibió un reembolso";
+"diamondGift.userFormat"                 = "Usuario %@";
+"diamondGift.settledTitle"               = "El ganador afortunado";
+"diamondGift.viewDetails"                = "Ver detalles";
+"diamondGift.rulesTitle"                 = "Reglas";
+"diamondGift.rulesSectionA"              = "Los espectadores envían paquetes de regalo de diamantes a la sala de transmisión.";
+"diamondGift.rulesSectionB"              = "Tras la cuenta regresiva de preparación, los espectadores pueden reclamar una parte hasta que caduque el paquete.";
+"diamondGift.rulesSectionC"              = "El paquete de regalo se liquida automáticamente. Los diamantes no reclamados se reembolsan y se anuncia la parte más alta.";
+"diamondGift.rulesATitle"                = "1. ¿Qué es Lucky Bag?";
+"diamondGift.rulesA1"                    = "(1) En las salas de chat de voz, los usuarios pueden enviar diamantes mediante \"Bolsa Roja de Diamantes\". Todos los usuarios presentes en la sala tienen la oportunidad de reclamar esos diamantes.";
+"diamondGift.rulesBTitle"                = "2. ¿Cómo envío un Lucky Bag?";
+"diamondGift.rulesB1"                    = "(1) Selecciona el total de diamantes, la cantidad de destinatarios y la hora de inicio del Lucky Bag, y luego envíalo. Una vez enviado, todos los usuarios en la sala pueden comenzar a reclamar los paquetes.";
+"diamondGift.rulesB2"                    = "(2) Si algún diamante de un Lucky Bag permanece sin reclamar 10 minutos después de enviarse, se reembolsará automáticamente al usuario que envió el paquete.";
+"diamondGift.rulesCTitle"                = "3. Otras notas";
+"diamondGift.rulesC1"                    = "(1) Si se envían varios Lucky Bag simultáneamente en una sala, se distribuirán en el orden en que fueron enviados.";
+"diamondGift.rulesC2"                    = "(2) Los diamantes consumidos al enviar un Lucky Bag no contribuyen al progreso del Nivel de Riqueza del usuario.";
+"diamondGift.rulesC3"                    = "(3) Una vez reclamada una ronda de Lucky Bag, los usuarios pueden ver los \"Detalles de la Reclamación\" en el chat público. Los diamantes no reclamados de un Lucky Bag se reembolsarán automáticamente después de 10 minutos.";
+"diamondGift.rulesC4"                    = "(4) La plataforma prohíbe estrictamente cualquier forma de trampa. Si se detecta trampa, la plataforma se reserva el derecho de recuperar todos los diamantes y recompensas de Lucky Bag obtenidos por el usuario mediante tales medios fraudulentos.";
+"diamondGift.winnersTitle"               = "Ganadores";
+"diamondGift.topShare"                   = "Mayor parte";
+"diamondGift.noWinners"                  = "Aún no hay ganadores";
+
+"invite.title"                           = "Invitar";
+"invite.user"                            = "Invitar usuario";
+"invite.anchor"                          = "Invitar a presentador";
+"invite.myRewards"                       = "Mis recompensas";
+"invite.totalBonus"                      = "Bono total de invitaciones";
+"invite.last7Days"                        = "Invitados en los últimos 7 días";
+"invite.last7DaysUser"                    = "Usuarios invitados en los últimos 7 días";
+"invite.last7DaysAnchor"                  = "Presentadores invitados en los últimos 7 días";
+"invite.got"                              = "obtenido";
+"invite.rules"                           = "Reglas de invitación";
+"invite.lifetimeReward"                  = "Una invitación, beneficios de por vida";
+"invite.userRewardHintFormat"            = "Invita a usuarios a recargar y recibe %@ de recompensa en diamantes";
+"invite.anchorRewardHintFormat"          = "Comparte tu código de invitación único. Obtén %@ de los ingresos de cada presentador que traigas";
+"invite.userCommission"                  = "Comisión del usuario";
+"invite.anchorCommission"                = "Comisión del presentador";
+"invite.partyCommission"                 = "Comisión de sala Party";
+"invite.code"                            = "Código de invitación";
+"invite.copyCode"                        = "Copiar código de invitación";
+"invite.details"                         = "Detalles";
+"invite.totalUsers"                      = "Total de usuarios invitados";
+"invite.totalAnchors"                    = "Total de presentadores invitados";
+"invite.cumulativeReward"                = "Recompensa acumulada";
+"invite.now"                             = "Invitar ahora";
+"invite.bigReward"                       = "Gran recompensa";
+"invite.copySuccess"                     = "¡Copiado!";
+"invite.shareUnavailable"                = "El contenido para compartir no está disponible";
+"invite.shareUser"                       = "Invitar usuarios";
+"invite.shareAnchor"                     = "Invitar presentadores";
+"invite.saveAndShare"                    = "Guardar y compartir";
+"invite.copyLink"                        = "Copiar";
+"invite.share"                           = "Compartir";
+"invite.showQRCode"                      = "Mostrar código QR";
+"invite.idFormat"                        = "ID: %@";
+"invite.uidFormat"                       = "UID: %@";
+"invite.ruleUnavailable"                 = "No hay reglas de invitación disponibles";
+"invite.faq"                             = "FAQ";
+"invite.policy"                          = "Política";
+"invite.invitedUsers"                    = "Lista de usuarios invitados";
+"invite.rewardRecords"                   = "Detalles de recompensas";
+"invite.startDate"                       = "Fecha de inicio";
+"invite.endDate"                         = "Fecha de finalización";
+"invite.applyDate"                       = "Aplicar";
+"invite.invalidDateRange"                = "La fecha de inicio debe ser anterior a la de finalización";
+"invite.dataDetails"                     = "Detalles de datos";
+"invite.period"                          = "Período";
+"invite.identifier"                      = "ID";
+"invite.userColumn"                      = "Usuario";
+"invite.nickname"                        = "Apodo";
+"invite.totalIncome"                     = "Ingresos totales";
+"invite.diamondIncome"                   = "Ingresos en diamantes";
+"invite.dailyOutputReward"               = "Recompensa diaria";
+"invite.accumulatedRewards"              = "Recompensas acumuladas";
+"invite.invitationTime"                  = "Hora de invitación";
+"invite.accumulatedRewardsDetail"        = "Recompensas acumuladas";
+"invite.invitationTimeDetail"            = "Hora de invitación";
+"invite.rewardQuantity"                  = "Cantidad de recompensa";
+"invite.today"                           = "Hoy";
+"invite.thisWeek"                        = "Esta semana";
+"invite.lastWeek"                        = "Semana pasada";
+"invite.lastMonth"                       = "Mes pasado";
+"invite.referralIncomeReward"            = "Recompensa por ingresos de referidos";
+"invite.myDashboard"                     = "Mi panel";
+"invite.cumulativeOutputReward"          = "Recompensa acumulada total";
+"invite.callIncome"                      = "Ingresos por llamadas";
+"invite.giftIncome"                      = "Ingresos por regalos";
+"invite.connectionRate"                  = "Tasa de conexión";
+"invite.currentRanking"                  = "Ranking actual";
+"invite.currentLevel"                    = "Nivel actual";
+"invite.onlineDuration"                  = "Tiempo en línea";
+"invite.totalCallDuration"               = "Duración total de llamadas";
+"invite.averageCallDuration"             = "Duración media de llamada";
+"invite.startChat"                       = "Iniciar chat";
+
+// MARK: - Native Wallet
+"wallet.title" = "Cartera";
+"wallet.balance" = "Mi saldo";
+"wallet.withdrawal" = "Retiro";
+"wallet.todayIncome" = "Ingresos de hoy";
+"wallet.incomeDetails" = "Detalles de ingresos";
+"wallet.filter.call" = "Llamada";
+"wallet.filter.gift" = "Regalo";
+"wallet.filter.task" = "Misión";
+"wallet.filter.invite" = "Invitar";
+"wallet.filter.message" = "Mensaje";
+"wallet.filter.interaction" = "Interacción";
+"wallet.filter.others" = "Otros";
+"wallet.time" = "Hora";
+"wallet.source" = "Fuente";
+"wallet.user" = "Usuario";
+"wallet.detail" = "Detalle";
+"wallet.income" = "Ingresos";
+"wallet.withdrawCash" = "Retirar efectivo";
+"wallet.cashableBalance" = "Saldo de diamantes retirable";
+"wallet.withdrawalBalance" = "Saldo para retirar";
+"wallet.weekIncomeDiamond" = "Ingresos de la semana pasada";
+"wallet.inviteEntry" = "Invita y gana recompensas";
+"wallet.records" = "Historial de retiros";
+"wallet.selectAccount" = "Seleccionar cuenta de retiro";
+"wallet.manageAccounts" = "Gestionar cuentas";
+"wallet.addAccount" = "Añadir cuenta";
+"wallet.collection" = "Cobro";
+"wallet.enterAmount" = "Introduce el monto de retiro";
+"wallet.availableBalance" = "Saldo de diamantes retirable";
+"wallet.amountPlaceholder" = "Introduce un monto";
+"wallet.estimatedReceive" = "Recepción estimada";
+"wallet.withdrawalSummary" = "Resumen del retiro";
+"wallet.grossAmount" = "Monto de retiro";
+"wallet.fee" = "Comisión de retiro";
+"wallet.finalAmount" = "Monto final de retiro";
+"wallet.remainderReturned" = "los diamantes por debajo de $1 se devolverán a tu cuenta";
+"wallet.cancel" = "Cancelar";
+"wallet.confirm" = "Confirmar";
+"wallet.collectionType" = "Tipo de cobro";
+"wallet.collectionDetails" = "Detalles de cobro";
+"wallet.accountName" = "Nombre de la cuenta";
+"wallet.accountIrreversible" = "Revisa cuidadosamente la información de cobro. Los cambios requieren atención al cliente.";
+"wallet.digifinexMinimum" = "Retiro mínimo: $20";
+"wallet.epayMinimum" = "Retiro mínimo: $50";
+"wallet.uidPlaceholder" = "Introduce el UID de la cadena";
+"wallet.addressPlaceholder" = "Introduce la dirección TRC20";
+"wallet.emailPlaceholder" = "Introduce el correo de cobro";
+"wallet.removeAccount" = "Eliminar cuenta";
+"wallet.remove" = "Eliminar";
+"wallet.removeAccountDetail" = "¿Seguro que quieres eliminar";
+"wallet.orderNumber" = "Número de pedido";
+"wallet.applicationStatus" = "Estado de la solicitud";
+"wallet.reviewing" = "En revisión";
+"wallet.paid" = "Pagado";
+"wallet.rejected" = "Rechazado";
+"wallet.loadFailed" = "No se pudieron cargar los datos de la cartera. Inténtalo de nuevo.";
+"wallet.accountInfoRequired" = "Rellena primero la información de la cuenta.";
+"wallet.accountTypeInvalid" = "Este tipo de cobro no está disponible.";
+"wallet.accountAdded" = "Cuenta añadida";
+"wallet.accountSaveFailed" = "No se pudo guardar la cuenta. Inténtalo de nuevo.";
+"wallet.accountRemoved" = "Cuenta eliminada";
+"wallet.accountRemoveFailed" = "No se pudo eliminar la cuenta. Inténtalo de nuevo.";
+"wallet.integerAmount" = "El monto de retiro debe ser un número entero.";
+"wallet.amountExceedsBalance" = "El monto supera tu saldo retirable.";
+"wallet.minimumDiamond" = "Cada retiro debe ser de al menos 200 diamantes.";
+"wallet.minimumRequestAmountFormat" = "Cada retiro debe ser de al menos %lld diamantes.";
+"wallet.minimumRate" = "El monto debe ser al menos la tasa de cambio de diamantes.";
+"wallet.channelMinimum" = "El método de cobro seleccionado no cumple con el monto mínimo de retiro.";
+"wallet.verificationCheckFailed" = "No se pudo verificar la identidad. Inténtalo de nuevo.";
+"wallet.passwordSixDigits" = "Introduce una contraseña de retiro de seis dígitos.";
+"wallet.passwordSet" = "Contraseña de retiro establecida. Envía el retiro de nuevo para continuar.";
+"wallet.withdrawalSubmitted" = "Solicitud de retiro enviada";
+"wallet.withdrawalSubmitFailed" = "No se pudo enviar el retiro. Inténtalo de nuevo.";
+"wallet.setPassword" = "Establecer contraseña de retiro";
+"wallet.setPasswordDetail" = "Establece una contraseña numérica de seis dígitos para futuros retiros.";
+"wallet.enterPassword" = "Introduce la contraseña de retiro";
+"wallet.enterPasswordDetail" = "Introduce tu contraseña de retiro de seis dígitos para enviar esta solicitud.";
+"wallet.passwordPlaceholder" = "Contraseña de seis dígitos";
+"wallet.forgotPassword" = "¿Olvidaste tu contraseña? Contacta con soporte:";
+"wallet.livenessFailedTitle" = "Verificación facial fallida";
+"wallet.retry" = "Reintentar";
+"wallet.livenessShakeTitle" = "Gira la cabeza";
+"wallet.livenessShakeDetail" = "Gira lentamente la cabeza de un lado al otro.";
+"wallet.livenessNodTitle" = "Asiente con la cabeza";
+"wallet.livenessNodDetail" = "Mueve la cabeza arriba y abajo una vez.";
+"wallet.livenessFrontTitle" = "Mira a la cámara";
+"wallet.livenessFrontDetail" = "Mantén el rostro centrado y quieto.";
+"wallet.livenessVerifying" = "Verificando tu rostro";
+"wallet.livenessVerifyingDetail" = "Subiendo la foto segura y verificando tu identidad.";
+"wallet.cameraPermissionRequired" = "Se requiere permiso de cámara para verificar la identidad.";
+"wallet.livenessCameraUnavailable" = "No se pudo iniciar la cámara. Inténtalo de nuevo.";
+"wallet.livenessNoFace" = "No pudimos detectar un rostro claro. Inténtalo de nuevo.";
+"wallet.livenessTimedOut" = "Este paso de verificación caducó. Inténtalo de nuevo.";
+"wallet.livenessUploadFailed" = "No se pudo completar la verificación facial. Inténtalo de nuevo.";
+
+"party.battle.team" = "Equipo de batalla";
+"party.battle.countdown" = "Cuenta atrás";
+"party.battle.start" = "START";
+"party.battle.none" = "Ninguno";
+"party.battle.live" = "En vivo";
+"party.battle.redTeam" = "Equipo Rojo";
+"party.battle.blueTeam" = "Equipo Azul";
+"party.battle.redTeamWin" = "Gana el Equipo Rojo";
+"party.battle.blueTeamWin" = "Gana el Equipo Azul";
+"party.battle.tie" = "Empate";
+"party.battle.leading" = "Al frente";
+"party.battle.iKnow" = "Entendido";
+"party.battle.cancel" = "Cancelar";
+"party.battle.confirm" = "Confirmar";
+"party.battle.rulesTitle" = "Reglas del equipo de batalla";
+"party.battle.rule1" = "El anfitrión inicia la partida con un solo toque; los jugadores en el micrófono se dividen en Equipo Azul y Equipo Rojo.";
+"party.battle.rule2" = "Enviar regalos a los miembros del Equipo Rojo suma puntos al Equipo Rojo; enviar regalos a los del Equipo Azul suma puntos al Equipo Azul.";
+"party.battle.rule3" = "Los usuarios no pueden cambiar de equipo mientras están en el micrófono durante la competición; si abandonan el micrófono, su puntaje histórico permanece en su equipo original.";
+"party.battle.rule4" = "Todas las solicitudes para hablar por el micrófono durante la competición deben ser aprobadas por el anfitrión o el administrador.";
+"party.battle.forceEndTitle" = "¿Seguro que quieres terminar el PK antes de tiempo?";
+"party.battle.forceEndDesc" = "La finalización anticipada determinará al ganador según el puntaje total actual.";
+"party.battle.forceEndWillFormat" = "Ganará %@.";
+"party.battle.forceEndTied" = "Actualmente hay empate.";
+"party.battle.cooldownDesc" = "Cuando termine el enfriamiento, podrás iniciar otro equipo de batalla.";
+"party.battle.cooldownAction" = "Ver liquidación anterior";
+"party.battle.giftTabRed" = "Rojo";
+"party.battle.giftTabBlue" = "Azul";
+"party.battle.initiateTitle" = "Iniciar equipo de batalla";
+"party.battle.modeLabel" = "Modo";
+"party.battle.modeTeamBattle" = "Batalla por equipos (Rojo vs. Azul)";
+"party.battle.timeLabel" = "Hora";
+"party.battle.minutesFormat" = "%d minutos";
+"party.battle.chooseSideLabel" = "Elegir mi bando";
+"party.battle.joinSideOn" = "Unirse";
+"party.battle.joinSideOff" = "Neutral";
+"party.battle.joinRed" = "Unirse al Rojo";
+"party.battle.joinBlue" = "Unirse al Azul";
+"party.battle.initiateHintFormat" = "%1$d jugadores en el lobby · Listo para comenzar ≥ %2$d s desde el fin de la última partida";
+"party.battle.initiateHint2Format" = "Tras confirmar, comienza una fase de selección de equipo de %d segundos. Los jugadores en el lobby eligen sus equipos y el dueño de la sala pulsa START para iniciar la partida.";
+"party.battle.selectingHostTitle" = "Cuenta atrás de 60 s o pulsa START";
+"party.battle.battleTime" = "Tiempo de batalla";
+"party.battle.leadFormat" = "ventaja %d";
+"party.battle.lose" = "Derrota";
+"party.battle.giftGivingMvp" = "MVP por regalar";
+"party.battle.giftReceiveMvp" = "MVP por recibir regalos";
+"party.battle.totalGivenOutFormat" = "Total enviado %@";
+"party.battle.personalGiftReceivingFormat" = "Regalo personal recibiendo %@";
+"party.battle.roomIdInvalid" = "ID de sala no válido";
+"party.battle.noTemplate" = "No hay plantillas disponibles";
+"party.battle.alreadyEnded" = "PK ya finalizado";
+"party.battle.startNowFailed" = "No se pudo iniciar";
+"party.battle.chatSelectingStartFormat" = "La sala inició un PK por equipos, ¡la batalla comenzará en %d minutos!";
+"party.battle.chatTeamWinFormat" = "¡Gana %@! Puntaje total";
+"party.battle.chatTie" = "¡Es un empate!";
+"party.battle.chatForceEnd" = "La sala terminó este PK antes de tiempo";
+"party.battle.chatMvpFormat" = "MVP: %1$@ (%2$@) Regalo personal";
+"partyRoom.superWheel.title" = "Super Winner";
+"partyRoom.superWheel.unavailable" = "Este juego no está disponible actualmente";
+"partyRoom.superWheel.open" = "Abrir ruleta";
+"partyRoom.superWheel.join" = "Unirse";
+"partyRoom.superWheel.bet" = "Apuesta";
+"partyRoom.superWheel.close" = "Cerrar ruleta";
+"partyRoom.superWheel.pool" = "Bote";
+"partyRoom.superWheel.player" = "Jugador";
+"partyRoom.superWheel.waiting" = "Esperando";
+"partyRoom.superWheel.signup" = "Inscribirse";
+"partyRoom.superWheel.preparing" = "Preparando";
+"partyRoom.superWheel.betting" = "Apostando";
+"partyRoom.superWheel.spinning" = "Girando";
+"partyRoom.superWheel.roundResult" = "Resultado de la ronda";
+"partyRoom.superWheel.finalResult" = "Resultado final";
+"partyRoom.superWheel.outFormat" = "%@ está fuera";
+"partyRoom.superWheel.winnerFormat" = "%@ gana %lld";
+"partyRoom.superWheel.actionFailed" = "No se pudo completar esta acción. Inténtalo de nuevo.";
+"partyRoom.superWheel.getReady" = "Prepárate";
+"partyRoom.superWheel.joined" = "Unido";
+"partyRoom.superWheel.spectating" = "Estás fuera. Espectando";
+"partyRoom.superWheel.winningRatio" = "Ratio de ganancia";
+"partyRoom.superWheel.nextRound" = "Todos los jugadores pasan a la siguiente ronda";
+"partyRoom.superWheel.rewardHint" = "El ganador recibe el 80% del bote. El dueño de la sala recibe el 10%.";
+"partyRoom.superWheel.minPlayers" = "Esperando a más jugadores";
+"partyRoom.superWheel.addBets" = "¡Añade apuestas!";
+"partyRoom.superWheel.entryFees" = "Cuota de entrada";
+"partyRoom.superWheel.loading" = "Cargando";
+"partyRoom.superWheel.rulesTitle" = "Reglas";
+"liveGift.firstGiftHeadline" = "{name} envió a {streamer} el primer regalo {gift}";
+"liveGift.firstGiftStreamer" = "Presentador";
+"liveGift.firstGiftKick" = "Da el primer saludo del momento";
+"virtualProps.effectSwitch.tip" = "Interruptor de efectos aquí";
+
+"lottery.title" = "Sorteo de la suerte";
+"lottery.loadFailed" = "No se pudo cargar esta actividad. Inténtalo de nuevo.";
+"lottery.unsupportedPrizeLayout" = "La configuración de premios de esta actividad no está disponible.";
+"lottery.noPrizeReturned" = "No se devolvieron datos del premio. Inténtalo más tarde.";
+"lottery.pleaseWait" = "Espera...";
+"lottery.notStarted" = "Esta actividad aún no ha comenzado.";
+"lottery.ended" = "Esta actividad ha terminado.";
+"lottery.insufficientChances" = "No tienes suficientes oportunidades de sorteo.";
+"lottery.drawFailed" = "No se pudo completar el sorteo. Inténtalo más tarde.";
+"lottery.drawReconciled" = "No se pudo confirmar el resultado del sorteo. Tus datos de actividad se han actualizado.";
+"lottery.records" = "Registro de premios";
+"lottery.recordsLoadFailed" = "No se pudo cargar el registro de premios. Inténtalo de nuevo.";
+"lottery.recordsEmpty" = "Aún no hay premios ganados";
+"lottery.recordsEnd" = "No hay más registros";
+"lottery.oneTime" = "1 vez";
+"lottery.fiveTimes" = "5 veces";
+"lottery.draw" = "GIRAR";
+"lottery.congratulations" = "Felicidades";
+"lottery.earnChancesHint" = "Envía regalos en transmisiones y llamadas privadas para ganar más oportunidades.";
+"lottery.earnChancesPartyHint" = "Envía regalos en salas Party para ganar más oportunidades.";
+"lottery.go" = "Ir";
+"lottery.insufficientTitle" = "Sin oportunidades de sorteo";
+"lottery.insufficientMessage" = "¡Envía regalos en las salas para ganar más oportunidades y sigue con tu racha de suerte!";
+"lottery.goPartyRoom" = "Ir a la sala Party";
+"lottery.goLiveRoom" = "Ir a la sala de transmisión";
+"lottery.noPartyRoomsAvailable" = "No hay salas Party disponibles";
+"lottery.noLiveAvailable" = "No hay transmisiones disponibles";
+"lottery.roomNavigationFailed" = "Error de red, inténtalo de nuevo.";
+"lottery.startsIn" = "Comienza en";
+"lottery.endsIn" = "Termina en";
+"lottery.remainingChancesFormat" = "Oportunidades restantes: %d";
+"lottery.pointsNeededFormat" = "Necesitas %d puntos más para 1 oportunidad de sorteo";
+"lottery.dailyLimitFormat" = "Límite diario de intentos alcanzado %d/%d";
+"lottery.dailyLimitReached" = "Límite diario de intentos alcanzado";
+"lottery.winnerFormat" = "%1$@ obtuvo %2$@";
+"lottery.validDaysFormat" = "* %d días";
+"lottery.quantityFormat" = "* %d";
+"content.moderation.checking" = "Verificando";
+"content.moderation.blocked" = "Bloqueado";

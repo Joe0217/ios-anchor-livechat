@@ -1,0 +1,7 @@
+/* Info.plist 权限弹窗文案本地化（en）
+ * iOS 弹相机/麦克风权限时显示这里的文案，覆盖 project.yml 里的 Info.plist 兜底值
+ */
+"NSCameraUsageDescription"     = "La cámara se usa para efectos de belleza, fotos, transmisiones, llamadas y verificar tu identidad para retirar fondos.";
+"NSMicrophoneUsageDescription" = "El micrófono se usa para llamadas de audio y vídeo, transmisiones y salas de voz Party.";
+"NSPhotoLibraryUsageDescription" = "El acceso a Fotos se usa para subir el avatar y las fotos de perfil necesarias durante el registro.";
+"NSPhotoLibraryAddUsageDescription" = "Permite guardar las fotos tomadas con la cámara de belleza.";

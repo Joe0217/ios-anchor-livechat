@@ -1,0 +1,2421 @@
+/* HiFunny 主播端本地化 stub（en 默认值）
+
+   B 里程碑 spec §13 i18n 声明：B 阶段用 en 默认值占位；ar/tr 翻译由 J 里程碑收尾。
+   key 命名约定：模块.场景（lowerCamelCase 拼接）
+*/
+
+// MARK: - 强制下播原因（forceEnd reason UI 文案）
+"forceEnd.disconnected"      = "З’єднання втрачено";
+"forceEnd.banned"            = "Порушення правил акаунта. Трансляцію завершено";
+"forceEnd.cameraFailure"     = "Не вдалося отримати зображення з камери";
+"forceEnd.noPermission"      = "Не вдалося перевірити дозволи";
+"forceEnd.weakNetwork"       = "Занадто слабке мережеве з’єднання";
+
+// MARK: - 切后台超限（BackgroundMonitor 预警 + 本地通知）
+"live.background.count_warning"      = "Ви залишали трансляцію %d/%d разів. Після %d-го разу її буде завершено автоматично.";
+"live.background.cumulative_warning" = "Ви загалом перебували у фоні %d хв. Наближається ліміт у 5 хвилин.";
+"live.background.notif.title"        = "Поверніться до трансляції";
+"live.background.notif.body"         = "Якщо застосунок залишиться у фоні, трансляцію буде завершено автоматично.";
+
+// MARK: - 美颜降级
+"beauty.unavailable"         = "Ефекти краси недоступні";
+
+// MARK: - 全局空态占位（EmptyStateView 默认文案）
+"common.emptyState.noContent" = "Поки що немає вмісту";
+"content.moderation.rejected" = "Цей контент може порушувати правила спільноти. Відредагуйте його та спробуйте ще раз.";
+
+// MARK: - 网络弱网降级（v5 分层）
+"network.warning"            = "Нестабільна мережа. Увімкнено низьку частоту кадрів";
+
+// MARK: - 开播前置校验
+"prepare.titleEmpty"         = "Введіть назву трансляції";
+"prepare.coverEmpty"         = "Додайте обкладинку трансляції";
+"prepare.cooldown"           = "Після завершення трансляції зачекайте 60 секунд";
+"prepare.imOffline"          = "Чат недоступний. Повторіть спробу пізніше";
+
+// MARK: - 公屏
+"im.chatroom.reconnecting"   = "Повторне підключення до чату...";
+"im.chatroom.reconnected"    = "Чат знову підключено";
+"im.userJoined"              = "Користувач увійшов до кімнати";
+"im.sendGiftAction"          = "надіслав(ла)";
+"im.complianceWarningDefault" = "Ваш контент трансляції отримав попередження";
+"im.anonymous"               = "Анонімний користувач";
+
+// MARK: - Work 工作台（设计稿还原）
+"work.weeklyLevel"           = "Тижневий рівень";
+"work.detail"                = "Деталі";
+"work.scorePrefix"           = "Бали: ";
+"work.needMoreFormat"        = "(До підвищення рівня потрібно ще %d)";
+
+"dataStatistics.navTitle"                    = "Статистика";
+"dataStatistics.bannerSubtitle"               = "Відстежуйте показники та прогрес рівня";
+"dataStatistics.totalDislikeRate"             = "Загальна частка дизлайків";
+"dataStatistics.offsetDislike"                = "Компенсувати дизлайк >";
+"dataStatistics.removeDislike"                = "Видалити дизлайк";
+"dataStatistics.removeDislikeDescription"     = "Щотижня ви можете використовувати бали, щоб остаточно видалити дизлайки, з тижневим лімітом. Якщо ліміт перевищено, потрібно зачекати до наступного тижня, щоб використати бали. Встигайте використати бали протягом тижня — на початку нового тижня вони обнуляються.";
+"dataStatistics.dislikeRate"                  = "Частка дизлайків";
+"dataStatistics.dislikeRateDescription"       = "Після завершення дзвінка користувачі ставлять лайк або дизлайк. Дизлайки, пов'язані з типом ведучого, впливають на вашу частку дизлайків, яка показана в профілі. Щоб зменшити кількість дизлайків, більше спілкуйтеся під час дзвінка або заробляйте бали, надсилаючи повідомлення. Бали можна використати для остаточного видалення дизлайків.";
+"dataStatistics.likes"                        = "Вподобання";
+"dataStatistics.dislikes"                     = "Не подобається";
+"dataStatistics.privateAndLiveOnly"           = "(Враховуються лише приватні дзвінки та трансляції)";
+"dataStatistics.category"                     = "Категорія";
+"dataStatistics.week"                         = "Тиждень";
+"dataStatistics.levelAnswerRate"              = "Рівень відповідей";
+"dataStatistics.levelAvgDuration"             = "Середня тривалість рівня";
+"dataStatistics.levelCalls"                   = "Дзвінки рівня";
+"dataStatistics.levelUpdateTime"              = "Час оновлення рівня";
+"dataStatistics.currentLevelBenefits"         = "Привілеї поточного рівня";
+"dataStatistics.currentPoints"                = "Поточні бали";
+"dataStatistics.remainingChancesFormat"       = "%@ балів / Залишилось спроб: %@";
+"dataStatistics.offset"                       = "Компенсувати";
+"dataStatistics.deductionSucceeded"           = "Один дизлайк компенсовано";
+"dataStatistics.deductionUnavailable"         = "Недостатньо балів";
+
+"work.levelText.topHost"     = "Ви — топ‑ведуча";
+"work.levelText.keepSTier" = "Утримуйте рівень S, щоб стати SS";
+"work.levelText.callTargetNotMet" = "Мету за дзвінками не досягнуто";
+"work.levelText.averageCallTime" = "Середній час дзвінка: ";
+"work.levelText.nextLevel" = " (наступний рівень: ";
+
+"call.reconnect"             = "Повторно підключитися";
+
+"autoOffline.title"          = "Перевірка активності";
+"autoOffline.message"        = "Ми помітили, що ви деякий час неактивні. Щоб пропущені дзвінки не вплинули на ваш рейтинг, статус змінено на «Не в мережі». Щоб повернутись у мережу, натисніть кнопку нижче.";
+"autoOffline.goOnline"       = "Вийти онлайн";
+
+"setToBusy.title"            = "Сьогодні ви зайняті";
+"setToBusy.description"      = "Ви досягли денного ліміту дзвінків. Продовжуйте через трансляцію або підбір.";
+"setToBusy.goLive"           = "Почати трансляцію";
+"setToBusy.goMatch"          = "До підбору";
+
+"work.onlineTime"            = "Час у мережі (д)";
+"work.avgCallDuration"       = "Середня тривалість дзвінка (цього тижня)";
+"work.positiveRating"        = "Позитивний рейтинг";
+"work.callsToday"            = "Дзвінки сьогодні";
+"work.coins"                 = "Монети";
+"work.diamonds"              = "Діаманти";
+"work.gems"                  = "Самоцвіти";
+
+"work.todaysIncome"          = "Дохід за сьогодні";
+"work.withdrawal"            = "Виведення коштів";
+"work.callIncomes"           = "Дохід від дзвінків";
+"work.giftIncomes"           = "Дохід від подарунків";
+"work.taskIncomes"           = "Дохід від завдань";
+"work.inviteIncomes"         = "Дохід від запрошень";
+"work.otherIncomes"          = "Інші доходи";
+"work.totalIncomes"          = "Загальний дохід";
+
+"work.tools"                 = "Інструменти";
+"work.online"                = "Онлайн";
+"work.online.on"             = "Увімк.";
+"work.online.off"            = "Вимк.";
+"work.offline"               = "Офлайн";
+
+// 工具图标标签
+"work.tool.goLive"           = "Почати трансляцію";
+"work.tool.match"            = "Матч";
+"work.tool.task"             = "Завдання";
+"work.tool.beauty"           = "Краса";
+"work.tool.beautyCamera"     = "Камера краси";
+"work.tool.points"           = "Бали";
+"work.tool.giftMessage"      = "Повідомлення про подарунок";
+"work.tool.profileUpdate"    = "Оновити профіль";
+"work.tool.invite"           = "Запросити";
+"work.tool.workingGuide"     = "Гід ведучого";
+"work.tool.props"            = "Реквізит";
+"work.tool.liveData"         = "Статистика трансляцій";
+"work.tool.partyData"        = "Статистика Party";
+"work.tool.myGuardian"       = "Мій охоронець";
+"work.tool.starUser"         = "Зірковий користувач";
+
+// Task Center 页（Phase C · 对齐 H5 views/task/index.vue）
+"task.center.navTitle"                = "Завдання";
+"task.section.rankProgress"           = "Прогрес рейтингу";
+"task.section.taskProgress"           = "Прогрес завдання";
+"task.cycle.daily"                    = "Щодня";
+"task.cycle.weekly"                   = "Щотижня";
+"task.countdown.prefix"               = "Скидання через";
+"task.weekly.totalPoints"             = "Усього балів:";
+"task.legacy.limitedTime"             = "Завдання з обмеженим часом";
+"task.legacy.allDay"                  = "Цілодобове завдання";
+"task.legacy.matchTip.title"          = "Нагадування";
+"task.legacy.matchTip.message"        = "Дзвінок за підбором має тривати 20 с, щоб виконати завдання";
+"task.myIncome"                       = "Мій дохід";
+"task.myIntegral"                     = "Мої бали";
+"task.viewRank"                       = "Дивитися рейтинг";
+"task.rankLabel.globalIncome"         = "Глобальний дохід";
+"task.rankLabel.points"               = "Бали";
+"task.reset.prefix"                   = "Скидання завдання:";
+"task.daysFormat"                     = "%dдн.";
+"task.go"                             = "Перейти";
+"task.tier.claim"                     = "Отримати";
+"task.tier.claimed"                   = "Отримано";
+"task.claimAll"                       = "Отримати все";
+"task.claim.success"                  = "Успішно отримано";
+"task.claim.grantPending"             = "Нагорода видається";
+"task.claim.allMultiTypeFormat"       = "Отримано %d нагород";
+"task.reward.gotIt"                   = "Зрозуміло";
+"task.reward.mergedPrefix"            = "Усього";
+"task.active.tycoonTask"              = "Активне завдання магната";
+"task.integralTask"                   = "Завдання за бали";
+
+// Task 领奖弹窗 rewardType 描述(对齐 H5 REWARD_DESC_KEY 1-6)+ 空态 + OK
+"task.reward.diamond"                 = "Діаманти";
+"task.reward.gem"                     = "Самоцвіти";
+"task.reward.prop"                    = "Реквізит";
+"task.reward.mount"                   = "Транспорт";
+"task.reward.frame"                   = "Рамка";
+"task.reward.points"                  = "Бали";
+"task.module.noTasks"                 = "Поки немає завдань";
+"common.OK"                           = "ОК";
+
+// Points Rank(Phase E · 对齐 H5 pointsRank/index.vue)
+"points.rank.navTitle"                = "Рейтинги очок";
+"points.myPoints"                     = "Мої очки:";
+"points.rank.subtitle"                = "Рейтинг нараховує нагороди та обнуляє очки щотижня";
+"points.rank.rules.title"             = "Правила очок";
+"points.rank.rules.content1"          = "1. Отримуйте 10 очок за кожен пост у колі друзів";
+"points.rank.rules.content2"          = "2. Розпочніть чат із користувачем, і, якщо він відповість, ви отримаєте 10 очок";
+"points.rank.rules.content3"          = "3. Топ-5 ведучих за очками отримують нагороду в алмазах, автоматичне нарахування щотижня";
+"points.rank.rules.content4"          = "4. Після щотижневого розрахунку очки обнуляються";
+
+"work.invite.earnMoney"      = "Заробити";
+
+"work.offline.confirmMessage" = "Точно перейти в офлайн?";
+"work.offline.confirmYes"    = "Так, в офлайн";
+"work.offline.confirmNo"     = "Залишитись в мережі";
+
+// 底部 tab 标签
+"tab.home"                   = "Головна";
+"tab.circle"                 = "Коло";
+"tab.messages"               = "Повідомлення";
+"tab.party"                  = "Party";
+"tab.connections"            = "Connections";
+"tab.beauty"                 = "Краса";
+"tab.work"                   = "Робота";
+"tab.profile"                = "Профіль";
+
+// MARK: - Home 顶部 4 tab（对齐 H5 homeConfig.ts → live/list/match/circle）
+"home.topTab.live"           = "Трансляція";
+"home.topTab.list"           = "Список";
+"home.topTab.match"          = "Матч";
+"home.topTab.circle"         = "Коло";
+"home.topTab.comingSoon"     = "Незабаром";
+
+// Circle 朋友圈内 3 子 tab（trial #1）
+"home.circle.official.label"      = "Офіційні";
+"home.circle.moment.label"        = "Момент";
+"home.circle.me.label"            = "Я";
+"home.circle.moment.error.title"  = "Не вдалося завантажити моменти";
+"live.viewers"               = "глядачів";
+"live.rankBadge"             = "Рейтинг";
+"live.refresh"               = "Оновити";
+"live.onlineDot"             = "Онлайн";
+
+// Home ranking (/rank)
+"home.rank.title"            = "Рейтинг";
+"home.rank.charm"            = "Чарівність";
+"home.rank.wealth"           = "Багатство";
+"home.rank.couple"           = "Пара";
+"home.rank.day"              = "Щодня";
+"home.rank.week"             = "Щотижня";
+"home.rank.month"            = "Місяць";
+"home.rank.rules"            = "Рейтинг";
+"home.rank.rules.text"       = "Рейтинг Чарівності визначається загальним доходом ведучих у таких сценаріях платформи: дохід від Приватних дзвінків і Трансляцій. 1 одиниця доходу = 1 бал рейтингу. Рейтинг оновлюється щодня та щотижня.";
+"home.rank.rules.charm"      = "Рейтинг Чарівності визначається загальним доходом ведучих у таких сценаріях платформи: дохід від Приватних дзвінків і Трансляцій. 1 одиниця доходу = 1 бал рейтингу. Рейтинг оновлюється щодня та щотижня.";
+"home.rank.rules.couple"     = "Рейтинг CP базується на загальній кількості алмазів, витрачених між ведучим і користувачем у парі CP. ТОП-3 тижневого рейтингу отримують автоматичні нагороди щопонеділка.";
+"home.rank.myRanking"        = "Мій рейтинг";
+"home.rank.notRanked"        = "99+";
+"home.rank.noData"           = "Контент відсутній";
+"home.rank.hostPlaceholder"  = "Ім'я ведучого";
+"home.rank.userPlaceholder"  = "Ім'я користувача";
+"home.rank.mystery"          = "Таємниця";
+"home.rank.notOnListYet"     = "Ще не в списку";
+"home.rank.keepSendingGifts" = "Даруйте подарунки та підіймайтеся в рейтингу!";
+"home.rank.cpWeeklyRewardFormat" = "Нагорода за ТОП-%d тижневого рейтингу CP";
+
+// MARK: - List 子页（设计稿还原）
+"liveList.segment.online"    = "Онлайн";
+"liveList.segment.prime"     = "Prime";
+"liveList.action.chat"       = "Чат";
+"liveList.action.live"       = "Трансляція";
+"liveList.action.match"      = "Матч";
+"liveList.action.offline"    = "Офлайн";
+"liveList.action.videoCall"  = "Відеодзвінок";
+"liveList.empty"             = "Користувачів поки немає";
+"liveList.end"               = "Більше немає";
+"liveList.loadMoreFailed"    = "Не вдалося завантажити більше";
+"liveList.pullToRetry"       = "Потягніть донизу, щоб оновити";
+
+// MARK: - Live 广场（H5 liveList.vue 对齐）
+"liveStream.empty"           = "Зараз немає трансляцій";
+"liveStream.inPK"            = "У PK";
+"live.banner.a11y"           = "Банер на головній";
+"gift.sendSuperRocket"       = "запускає супер-ракету";
+
+// MARK: - Profile 个人页（设计稿还原）
+"profile.settings"           = "Налаштування";
+"profile.editName"           = "Змінити ім'я";
+"profile.idPrefix"           = "ID:";
+"profile.following"          = "Підписки";
+"profile.followers"          = "Підписники";
+"profile.friends"            = "Друзі";
+"profile.completionHint"     = "95% користувачів обирають ведучих із заповненим профілем (заповнити)";
+"profile.tab.album"          = "Альбом";
+"profile.tab.gifts"          = "Подарунки";
+"profile.tab.moment"         = "Моменти";
+"profile.photos.format"      = "Фото (%d/%d)";
+"profile.videos.format"      = "Відео (%d/%d)";
+"profile.cell.photo"         = "Фото";
+"profile.cell.video"         = "Відео";
+"profile.emptyPlaceholder"   = "Тут поки порожньо";
+"profile.loadFailed.format"  = "Не вдалося завантажити профіль: %@";
+"profile.loading"            = "Завантаження...";
+"profile.retry"              = "Повторити";
+"profile.ratePerMin.format"  = "%d/хв";
+
+// MARK: - FollowList 关注/粉丝/朋友列表
+"followList.action.follow"     = "Підписатися";
+"followList.action.following"  = "Підписки";
+"followList.action.unfollow"   = "Відписатися";
+"followList.action.block"      = "Заблокувати";
+"followList.end"               = "Більше немає";
+"followList.empty"             = "Користувачів поки немає";
+"connections.support"                   = "Служба підтримки";
+"connections.support.subtitle"          = "Допомога з вашим обліковим записом";
+"connections.support.unavailable"       = "Служба підтримки недоступна. Спробуйте ще раз.";
+"connections.services"                  = "Сервіси";
+"beautyStudio.settings"                 = "Налаштування краси";
+"beautyStudio.camera"                   = "Камера краси";
+"profile.media.reviewing"      = "На модерації";
+"profile.media.rejected"       = "Відхилено";
+"mediaPreview.close"           = "Закрити";
+"mediaPreview.image"           = "Зображення";
+"mediaPreview.video"           = "Відео";
+"mediaPreview.positionFormat"  = "%1$d з %2$d";
+"mediaPreview.image.loadFailed" = "Не вдалося завантажити зображення";
+"mediaPreview.image.retry"      = "Повторити";
+
+// MARK: - Settings 设置页
+"settings.title"               = "Налаштування";
+"settings.section.account"     = "Акаунт";
+"settings.section.general"     = "Загальні";
+"settings.section.about"       = "Про застосунок";
+"settings.blocklist"           = "Список блокувань";
+"settings.language"            = "Мова";
+"settings.feedback"            = "Відгук";
+"settings.version"             = "Версія";
+"settings.tos"                 = "Угода користувача";
+"settings.privacy"             = "Політика конфіденційності";
+"settings.logout"              = "Вийти";
+"settings.logoutConfirm"       = "Вийти з цього акаунта?";
+"settings.deleteAccount"       = "Видалити акаунт";
+"settings.deleteAccount.title" = "Видалити обліковий запис назавжди";
+"settings.deleteAccount.description" = "Видалення облікового запису очистить сесію цього пристрою. Зверніться до служби підтримки, щоб запитати видалення даних облікового запису, що зберігаються на наших сервісах.";
+"settings.deleteAccount.consequence.profile" = "Вашу локальну сесію та дані облікового запису на цьому пристрої буде очищено.";
+"settings.deleteAccount.consequence.content" = "Зверніться до служби підтримки, щоб запитати видалення вмісту облікового запису, що зберігається на наших сервісах.";
+"settings.deleteAccount.consequence.recovery" = "Ви вийдете з облікового запису на цьому пристрої. Зверніться до служби підтримки, якщо потрібна допомога з видаленням даних облікового запису.";
+"settings.deleteAccount.action" = "Видалити акаунт";
+"settings.deleteAccount.confirm.title" = "Видалити обліковий запис назавжди?";
+"settings.deleteAccount.confirm.message" = "Це очистить локальну сесію на цьому пристрої. Щоб запитати видалення даних облікового запису, які зберігаються на наших сервісах, зверніться до служби підтримки.";
+"settings.deleteAccount.confirm.action" = "Видалити назавжди";
+"settings.deleteAccount.unavailable" = "Видалення облікового запису поки недоступне. Спробуйте пізніше.";
+"settings.deleteAccount.failed" = "Не вдалося видалити обліковий запис. Спробуйте ще раз.";
+"settings.cancel"              = "Скасувати";
+"settings.confirm"             = "Підтвердити";
+"settings.anchorPolicy"        = "Правила спільноти";
+"settings.clearCache"          = "Очистити кеш";
+"settings.clearCacheConfirm"   = "Точно очистити кеш?";
+"settings.clearCacheDone"      = "Кеш очищено";
+"settings.selectLanguage"      = "Виберіть мову";
+"settings.feedbackComingSoon"  = "Незабаром";
+
+// MARK: - Native 107 Party documents
+"settings.document.anchorPolicy.introduction" = "Ці Правила спільноти застосовуються до Party-орієнтованого досвіду в HiFunny, доступного для цього акаунта, включно з голосовими кімнатами, чатом публічної кімнати, емоціями, вільними взаємодіями, Connections, профілями та схваленими фото профілю.";
+"settings.document.anchorPolicy.respect.title" = "Повага у кімнатах Party";
+"settings.document.anchorPolicy.respect.body" = "Використовуйте голос Party, чат публічної кімнати, емоції, вільні кубики та камінь-ножиці-папір з повагою. Не переслідуйте, не погрожуйте, не залякуйте, не дискримінуйте та не проявляйте сексуальної уваги до когось.";
+"settings.document.anchorPolicy.content.title" = "Безпечний контент і профілі";
+"settings.document.anchorPolicy.content.body" = "Використовуйте достовірні дані облікового запису та профілю. Аватари, фотографії профілю, відео для перевірки, повідомлення в кімнатах та інший надісланий вміст мають належати вам і не повинні бути протиправними, містити насильство, відверто сексуальні матеріали, експлуатацію, обман чи порушувати чужу приватність.";
+"settings.document.anchorPolicy.commercial.title" = "Жодних азартних ігор і комерційних зловживань";
+"settings.document.anchorPolicy.commercial.body" = "Не використовуйте кімнати Party, кубики, «камінь-ножиці-папір» або будь-які безкоштовні взаємодії для ставок, призів, платежів, вимагання, шахрайства чи іншої комерційної діяльності.";
+"settings.document.anchorPolicy.safety.title" = "Тримайте кімнату в безпеці";
+"settings.document.anchorPolicy.safety.body" = "Не залучайте неповнолітніх до контенту для дорослих, не шукайте контактів поза платформою з метою експлуатації та не діліться приватними контактами, особистими даними чи місцезнаходженням без згоди.";
+"settings.document.anchorPolicy.moderation.title" = "Модерація";
+"settings.document.anchorPolicy.moderation.body" = "Ми можемо видалити надісланий контент, обмежити функції Party або Connections чи обмежити акаунт у разі порушення цих правил або чинного законодавства. Використовуйте Connections або Налаштування, щоб заблокувати акаунт, звернутися до підтримки або надіслати відгук.";
+
+"settings.document.agreement.introduction" = "Ця угода охоплює орієнтований на Party досвід HiFunny, доступний для цього облікового запису. Функції, не перелічені нижче як доступні, не входять до цього досвіду.";
+"settings.document.agreement.acceptance.title" = "Прийняття";
+"settings.document.agreement.acceptance.body" = "Входячи або використовуючи HiFunny, ви погоджуєтеся з цією угодою, Правилами спільноти та чинним законодавством. Не використовуйте сервіс там, де це заборонено законом.";
+"settings.document.agreement.scope.title" = "Доступні функції";
+"settings.document.agreement.scope.body" = "Для реєстрації потрібні аватар і принаймні одна фотографія профілю. Після перевірки шестисимвольного коду запрошення стає доступним запис відео для перевірки, а для реєстрації потрібні шість фотографій профілю та записане відео для перевірки. Цей обліковий запис може використовувати голосові кімнати Party, чат публічних кімнат, емоції, безкоштовні кубики та «камінь-ножиці-папір», списки З'єднань, профілі та схвалені фотоальбоми, елементи керування підписками, відпискою й блокуванням, базове редагування профілю, аватара та фотографій, інструменти Ефектів краси, відгуки, службу підтримки та Налаштування. Прямі трансляції, дзвінки, особисті повідомлення, віртуальні подарунки та валюта, гаманець, виведення коштів, лотереї та Lucky Number, Party-відео, Party-музика, активності, платні та напівекранні ігри недоступні.";
+"settings.document.agreement.use.title" = "Використання сервісу";
+"settings.document.agreement.use.body" = "Використовуйте HiFunny лише для законної особистої соціальної взаємодії та розваг. Не обходьте засоби контролю доступу, не заважайте кімнатам Party, не автоматизуйте взаємодії, не використовуйте безкоштовні ігри для ставок чи призів, не збирайте інформацію та не використовуйте сервіс на шкоду іншим.";
+"settings.document.agreement.content.title" = "Ваш вміст";
+"settings.document.agreement.content.body" = "Ви відповідальні за дані профілю, аватар, фотографії, відео для перевірки, повідомлення в публічних кімнатах, емоції та безкоштовні взаємодії, які надсилаєте. Ви повинні мати права та дозволи для їх публікації, і вони мають відповідати Правилам спільноти.";
+"settings.document.agreement.service.title" = "Доступність сервісу та забезпечення дотримання";
+"settings.document.agreement.service.body" = "Ми можемо підтримувати, змінювати, призупиняти або видаляти доступні функції Party, З'єднань, профілю та підтримки, коли це необхідно для безпеки, дотримання законодавства або роботи сервісу. Порушення можуть призвести до видалення вмісту, обмеження участі або обмежень облікового запису.";
+"settings.document.agreement.account.title" = "Обліковий запис і зворотний зв'язок";
+"settings.document.agreement.account.body" = "Тримайте облікові дані свого облікового запису в таємниці та повідомляйте про підозри на несанкціонований доступ через Відгук або службу підтримки. Профіль > Налаштування містить елементи керування профілем, приватністю, списком блокувань і обліковим записом. Видалення облікового запису наразі видаляє локальну сесію з цього пристрою; зверніться до служби підтримки, щоб запитати видалення даних облікового запису на наших сервісах.";
+"settings.document.agreement.changes.title" = "Зміни в цій угоді";
+"settings.document.agreement.changes.body" = "Ми можемо оновлювати цю угоду в міру змін сервісу або вимог закону. Продовження використання після оновлення означає, що ви приймаєте оновлену угоду.";
+
+"settings.document.privacy.introduction" = "Ця політика пояснює, як обробляється інформація для Party-орієнтованого досвіду HiFunny, доступного для цього акаунта. HiFunny призначений для людей віком від 13 років, і ми свідомо не збираємо особисту інформацію дітей молодше 13 років.";
+"settings.document.privacy.data.title" = "Інформація, яку ми обробляємо";
+"settings.document.privacy.data.body" = "Ми обробляємо дані реєстрації та профілю, зокрема електронну пошту, ім'я або нікнейм, день народження, країну, мови, аватар і фото профілю. Якщо ви вводите шестисимвольний код запрошення, ми надсилаємо його на перевірку; після успішної перевірки реєстрація також обробляє шість фото профілю та записане вами відео для розгляду. Ми обробляємо ідентифікатори користувача та пристрою, зв'язки Connections і заблокованих акаунтів, участь у кімнатах Party, текст публічної кімнати, емоції та результати вільних взаємодій, аудіо голосу Party, відгуки та звернення до підтримки, а також інформацію про взаємодію з продуктом, збої, продуктивність, запобігання зловживанням і безпеку. Налаштування краси та ефекти попереднього перегляду обробляються на вашому пристрої; фото чи відео завантажуються лише коли ви вирішуєте їх надіслати.";
+"settings.document.privacy.use.title" = "Як ми використовуємо інформацію";
+"settings.document.privacy.use.body" = "Ми використовуємо інформацію для автентифікації та перевірки реєстрації, надання та редагування профілів і схвалених фотоальбомів, роботи голосових кімнат Party, чату публічної кімнати, емоцій та вільних взаємодій, надання Connections, блокування, відгуків та клієнтської підтримки, запобігання зловживанням, забезпечення безпеки та усунення несправностей сервісу, продуктової аналітики, діагностики збоїв і проблем продуктивності та виконання юридичних зобов'язань. Ми не продаємо особисту інформацію і не використовуємо її для міжзастосункової реклами.";
+"settings.document.privacy.visibility.title" = "Що можуть бачити інші учасники";
+"settings.document.privacy.visibility.body" = "Ваш нікнейм, аватар, базовий профіль і схвалені фото профілю можуть бути видимі людям, які можуть відкрити ваш профіль. Повідомлення публічної кімнати, емоції та вільні взаємодії видимі учасникам цієї кімнати Party, а ваш голос передається учасникам кімнати, поки ви використовуєте місце з мікрофоном. Не діліться публічно приватними контактами, особистими даними, місцезнаходженням чи іншою конфіденційною інформацією.";
+"settings.document.privacy.sharing.title" = "Постачальники послуг і розкриття інформації";
+"settings.document.privacy.sharing.body" = "Ми використовуємо постачальників послуг, які допомагають працювати доступним функціям: Agora для голосу Party, NIM для повідомлень у публічній кімнаті, ThinkingData для продуктової аналітики, Sentry для діагностики збоїв і продуктивності, а також постачальників хостингу або CDN для медіа профілю, відео для розгляду та вкладень підтримки. Ми можемо розкривати інформацію, якщо цього вимагає закон або для захисту користувачів, сервісу чи суспільства.";
+"settings.document.privacy.security.title" = "Зберігання та безпека";
+"settings.document.privacy.security.body" = "Ми зберігаємо інформацію про акаунт, профіль, Party, Connections, підтримку та діагностику лише стільки, скільки потрібно для описаних цілей та відповідних зобов'язань. Ми використовуємо розумні заходи захисту, але жоден онлайн-сервіс не може гарантувати абсолютну безпеку.";
+"settings.document.privacy.choices.title" = "Ваш вибір і запити";
+"settings.document.privacy.choices.body" = "Ви можете редагувати базову інформацію профілю, аватар і фото, підписуватися чи відписуватися від користувачів, керувати списком блокування, а також дозволами на камеру, мікрофон і фотомедіатеку в Налаштуваннях iOS. Профіль > Налаштування > Видалити акаунт наразі очищає локальний сеанс на цьому пристрої. Зверніться до підтримки через Відгук, щоб запросити доступ, виправлення чи видалення даних акаунта, що зберігаються в наших сервісах, або поставити запитання про конфіденційність.";
+
+// MARK: - Feedback 反馈表单页
+"feedback.type.appError"       = "Помилка застосунку";
+"feedback.type.accountError"   = "Помилка облікового запису";
+"feedback.type.suggestion"     = "Пропозиція";
+"feedback.type.other"          = "Інше";
+"feedback.messagePlaceholder"  = "Введіть";
+"feedback.emailPlaceholder"    = "Вкажіть вашу електронну пошту";
+"feedback.wrongEmail"          = "Неправильна адреса електронної пошти";
+"feedback.submitSuccess"       = "Успішно";
+"feedback.submitFailed"        = "Не вдалося надіслати, спробуйте ще раз";
+
+// MARK: - LevelDetail 段位详情页
+"level.title"                  = "Деталі рівня";
+"level.current"                = "Поточний рівень";
+"level.spectrum"               = "Спектр рівнів";
+"profile.gifts.empty"          = "Подарунків поки немає";
+
+// MARK: - J Publish (发布朋友圈)
+"publish.navTitle"           = "Допис";
+"publish.cancel"             = "Скасувати";
+"publish.release"            = "Опублікувати";
+"publish.placeholder"        = "Введіть, що хочете сказати";
+"publish.charCountFormat"    = "%d/500";
+"publish.posting"            = "Публікація...";
+"publish.addImage"           = "Додати зображення";
+"publish.mediaSource.photoLibrary" = "Фотобібліотека";
+"publish.removeImage"        = "Видалити зображення";
+"publish.fabLabel"           = "Створити допис";
+"publish.discard.title"      = "Скасувати публікацію?";
+"publish.discard.message"    = "Ваш вміст буде втрачено.";
+"publish.discard.confirm"    = "Відхилити";
+"publish.discard.keep"       = "Продовжити редагування";
+"publish.toast.textEmpty"    = "Введіть вміст";
+"publish.toast.noImages"     = "Додайте принаймні 1 зображення";
+"publish.toast.imageTooLarge" = "Зображення завелике (>10 МБ)";
+"publish.toast.photoLoadFailed" = "Не вдалося завантажити вибране фото. Спробуйте ще раз";
+"publish.toast.credentialFailed" = "Не вдалося отримати облікові дані для завантаження";
+"publish.toast.uploadFailed" = "Не вдалося завантажити, спробуйте ще раз";
+"publish.toast.createFailed" = "Не вдалося опублікувати";
+"publish.toast.networkError" = "Помилка мережі, спробуйте ще раз";
+"publish.toast.success"      = "Успішно опубліковано";
+
+// MARK: - Auth 登录页
+"auth.title"                 = "Вхід через email";
+"auth.envHint"               = "dev · anchor.cphub.link";
+"auth.email"                 = "Введіть ваш email";
+"auth.password"              = "Введіть пароль (щонайменше 8 символів)";
+"auth.login"                 = "Увійти / Реєстрація";
+"auth.loggingIn"             = "Вхід...";
+"auth.forgetPassword"        = "Забули пароль?";
+"auth.togglePasswordA11y"    = "Показати або приховати пароль";
+"auth.consent.prefix"        = "Я прочитав(ла) та погоджуюсь з";
+"auth.consent.and"           = "та";
+"auth.consent.toggleA11y"    = "Погодитись з Угодою користувача та Політикою конфіденційності";
+"auth.clearEmailA11y"        = "Очистити email";
+"auth.clearPasswordA11y"     = "Очистити пароль";
+"auth.removeRecentAccountA11y" = "Видалити недавній акаунт";
+
+// MARK: - LivePrepare 开播准备
+"livePrepare.navTitle"       = "Демо трансляції";
+"livePrepare.panelTitle"     = "Налаштування трансляції";
+"livePrepare.titlePlaceholder" = "Назва трансляції (за замовчуванням — bio)";
+"livePrepare.defaultTitle"   = "Трансляція";
+"livePrepare.beautyToggle"   = "Краса";
+"livePrepare.sliderBlur"     = "Гладкість";
+"livePrepare.sliderWhiten"   = "Відбілювання";
+"livePrepare.sliderEyeEnlarge" = "Збільшення очей";
+"livePrepare.sliderFaceThin" = "Звуження обличчя";
+"livePrepare.start"          = "Почати трансляцію";
+"livePrepare.starting"       = "Запуск...";
+"livePrepare.errorNoChannel" = "Помилка: у відповіді відсутній канал або токен";
+"livePrepare.errorPrefix"    = "Помилка: %@ (%@)";
+"livePrepare.errorGeneric"   = "Помилка: %@";
+"livePrepare.guardUnverified" = "Ваш акаунт ведучого ще не схвалено.";
+"livePrepare.guardAgent"     = "Агентські акаунти не можуть почати трансляцію.";
+
+// MARK: - LiveSettings 直播设置页（对齐 H5 5 张 CCard；文案直译 H5 en.json）
+"liveSettings.navTitle"              = "Налаштування трансляції";
+"liveSettings.bioTitle"              = "Опис трансляції";
+"liveSettings.bioIntro"              = "Буде показано на сторінці трансляції";
+"liveSettings.bioPlaceholder"        = "Введіть...";
+"liveSettings.coverTitle"            = "Обкладинка трансляції";
+"liveSettings.privateCallTitle"      = "Налаштування подарунка на безкоштовні 5 хвилин дзвінка";
+"liveSettings.privateCallIntro"      = "Налаштуйте подарунок, що дозволяє користувачам телефонувати вам безпосередньо з кімнати трансляції. Цей подарунок буде зараховано як дохід від дзвінків, а не від подарунків. Ціна цього подарунка покриє ваш дохід за перші 5 хвилин дзвінка. Після 5 хвилин дохід рахуватиметься за ціною вашого дзвінка. Встановіть ціну подарунка відповідно до ціни вашого дзвінка.";
+"liveSettings.wishlistTitle"         = "Список бажань трансляції";
+"liveSettings.wishlistIntro"         = "Виберіть подарунки для списку бажань трансляції. Якщо ви отримаєте ці подарунки під час трансляції, вам нарахують додаткові бали або алмази. Примітка: ці подарунки не повинні збігатися з подарунком для дзвінка.";
+"liveSettings.beautyTitle"           = "Налаштування краси";
+"liveSettings.goToSettings"          = "Перейти до налаштувань >>>";
+"liveSettings.comingSoon"            = "Незабаром";
+"liveSettings.counterFormat"         = "%d/200";
+"liveSettings.coverUploadHint"       = "Торкніться, щоб змінити";
+"liveSettings.coverUploading"        = "Завантаження...";
+"liveSettings.giftAddHint"           = "Торкніться, щоб вибрати подарунок";
+"liveSettings.giftRemove"            = "Видалити";
+
+// GiftPicker sheet
+"giftPicker.title"                   = "Вибрати подарунок";
+"giftPicker.cancel"                  = "Скасувати";
+"giftPicker.confirm"                 = "Підтвердити";
+"giftPicker.retry"                   = "Повторити";
+"giftPicker.empty"                   = "Немає доступних подарунків";
+"giftPicker.send"                    = "Надіслати";
+"giftPicker.all"                     = "Усі";
+"giftPicker.recharge"                = "Поповнити";
+"giftPicker.recharge.toast"          = "Поповнення скоро з'явиться";
+"giftPicker.sent.toast"              = "Подарунок надіслано";
+"giftPicker.recipients.empty"        = "Нікого немає на мікрофоні";
+
+// MARK: - L-spec-愿望单设置页 v1（对齐 H5 wishSetting）
+"wishSetting.navTitle"               = "Налаштування бажань";
+"wishSetting.record"                 = "Історія";
+"wishSetting.themeTitle"             = "Тема бажання";
+"wishSetting.themeIntro"             = "Що ви обіцяєте зробити, коли користувач виконає ваше бажання (макс. 15 символів)";
+"wishSetting.submit"                 = "Надіслати";
+"wishSetting.selectTemplate"         = "Обрати шаблон";
+"wishSetting.chooseTemplate"         = "Оберіть шаблон";
+"wishSetting.type.noText"            = "Без тексту";
+"wishSetting.type.common"            = "Загальний шаблон";
+"wishSetting.type.private"           = "Приватний шаблон";
+"wishSetting.noTemplateAvailable"    = "Немає доступних шаблонів";
+"wishSetting.added.format"           = "Додано %d/%d";
+"wishSetting.upTo.format"            = "До %d подарунків бажання";
+"wishSetting.giftCount"              = "Кількість";
+"wishSetting.maxGiftNum"             = "Досягнуто максимальної кількості подарунків";
+"wishSetting.ruleTitle"              = "Правила зобов'язань щодо бажань";
+"wishSetting.ruleAgree"              = "Уважно прочитайте та погодьтесь перед відкриттям списку бажань.";
+"wishSetting.ruleLink"               = "Правила зобов'язань щодо бажань >>>";
+"wishSetting.ruleDoc"                = "Ми зобов'язуємось використовувати бажання чесно та щиро, а також дотримуватись правил платформи. Будь-яке порушення може призвести до обмежень акаунта.";
+"wishSetting.save"                   = "Зберегти";
+"wishSetting.pleaseEnterTheme"       = "Введіть тему";
+"wishSetting.themeMaxLen"            = "Тема не може перевищувати 15 символів";
+"wishSetting.submittedForReview"     = "Надіслано на перевірку";
+"wishSetting.submitSuccess.title"    = "Успішно надіслано";
+"wishSetting.submitSuccess.subtitle" = "Ми отримали вашу форму, вона на перевірці.";
+"wishSetting.submitSuccess.reviewStatus" = "Статус перевірки";
+"wishSetting.submitSuccess.pendingReview" = "Очікує перевірки";
+"wishSetting.submitSuccess.reviewTime" = "Час перевірки";
+"wishSetting.submitSuccess.reviewTimeValue" = "1–2 дні";
+"wishSetting.submitSuccess.notify"   = "Сповіщення про результати";
+"wishSetting.submitSuccess.notifyValue" = "Сповіщення в застосунку";
+"wishSetting.submitSuccess.tip"      = "Після схвалення зміни набудуть чинності під час наступного запуску застосунку.";
+"wishSetting.submitSuccess.goToWishlist" = "До мого списку бажань";
+"wishSetting.pleaseAgreeRule"        = "Погодьтесь з правилами зобов'язань щодо бажань";
+"wishSetting.pleaseAddGift"          = "Додайте хоча б один подарунок бажання";
+"wishSetting.pleasePickTemplate"     = "Оберіть загальний шаблон";
+"wishSetting.pleasePickPrivate"      = "Оберіть приватне зобов'язання";
+"wishSetting.saved"                  = "Збережено";
+"wishSetting.reviewStatus"           = "Статус перевірки";
+"wishSetting.reviewStatusIntro"      = "Після схвалення приватний шаблон буде видно користувачам.";
+"wishSetting.auditRecords"           = "Історія зобов'язань щодо бажань";
+"wishSetting.audit.all"              = "Усі";
+"wishSetting.audit.pending"          = "На розгляді";
+"wishSetting.audit.approved"         = "Схвалено";
+"wishSetting.audit.rejected"         = "Відхилено";
+"wishSetting.audit.empty"            = "Записів ще немає";
+"wishSetting.audit.rejectReason"     = "Причина відхилення";
+"wishSetting.type.commonSub"         = "Підходить усім ведучим";
+"wishSetting.type.privateSub"        = "Видно лише вам";
+"wishSetting.type.noTextSub"         = "Лише обкладинка";
+"wishSetting.ruleAgreeShort"         = "Погоджуюсь";
+"wishSetting.ruleFooter"             = "Ми зобов'язуємось використовувати подарунки чесно та щиро, а також дотримуватись правил платформи.";
+
+// MARK: - 心愿承诺规范弹窗
+"wishRuleModal.title"                = "Правила зобов'язань щодо бажань";
+"wishRuleModal.check"                = "Я прочитав(ла) і погоджуюсь з правилами вище";
+"wishRuleModal.agree"                = "Погодитись і опублікувати";
+"wishRuleModal.content"              = "Публікуючи список бажань, ви зобов'язуєтесь виконати обіцяні винагороди для глядачів, які виконали бажання. Порушення можуть призвести до блокування акаунта та втрати права на трансляції.";
+
+// MARK: - LiveRoom 直播间
+"liveRoom.permissionAlertTitle" = "Потрібен дозвіл на камеру";
+"liveRoom.permissionAlertOK" = "OK";
+"liveRoom.permissionAlertMessage" = "Увімкніть доступ до камери в Налаштуваннях → HiFunny → Камера";
+"mediaPermission.cameraRequired" = "Потрібен доступ до камери. Увімкніть його в налаштуваннях і перезапустіть HiFunny, щоб продовжити.";
+"mediaPermission.microphoneRequired" = "Потрібен доступ до мікрофона. Увімкніть його в налаштуваннях і перезапустіть HiFunny, щоб продовжити.";
+"mediaPermission.liveRequired" = "Потрібен доступ до камери та мікрофона. Увімкніть їх у налаштуваннях і перезапустіть HiFunny, щоб продовжити.";
+"mediaPermission.photoLibraryAddRequired" = "Для збереження знімків з камери краси потрібен доступ до фото. Увімкніть його в налаштуваннях, щоб продовжити.";
+"mediaPermission.alertTitle" = "Потрібні дозволи";
+"liveRoom.statusLiveFormat"  = "В ефірі %@";
+"liveRoom.statusConnecting"  = "З'єднання...";
+"liveRoom.status.idle"       = "Очікування";
+"liveRoom.status.joined"     = "Трансляція";
+"liveRoom.status.failed"     = "Не вдалося з'єднатися";
+"liveRoom.status.rtcErrorFormat" = "Помилка RTC %d";
+"liveRoom.status.joinChannelFailedFormat" = "Не вдалося приєднатися до каналу (%d)";
+"liveRoom.anchorDefault"     = "Ведучий";
+"liveRoom.toolBeauty"        = "Краса";
+"liveRoom.endLive"           = "Завершити трансляцію";
+"liveRoom.beautyPanelTitle"  = "Краса";
+
+/* LiveRoom design-restoration additions */
+"liveRoom.viewerCount.a11y"       = "Глядачі онлайн";
+"liveRoom.close.a11y"             = "Закрити кімнату трансляції";
+"liveRoom.task.a11y"              = "Щоденне завдання";
+"liveRoom.contribution.a11y"      = "Внесок у трансляцію";
+"liveRoom.rankFormat"             = "№%d";
+"liveRoom.rankUnlisted"           = "Рейтинг";
+"liveRoom.rank.a11y"              = "Тижневий рейтинг";
+"liveRoom.rank.tab.thisWeek"      = "Цей тиждень";
+"liveRoom.rank.tab.lastWeek"      = "Минулий тиждень";
+"liveRoom.rank.tab.viewers"       = "Глядачі";
+"liveRoom.rank.tab.topGifter"     = "Топ дарувальник";
+"liveRoom.rank.viewers.empty"     = "Ще немає глядачів";
+"liveRoom.rank.sheet.title"       = "Рейтинг";
+"liveRoom.rank.empty"             = "Ще немає даних рейтингу";
+"liveRoom.rank.errorRetry"        = "Не вдалося завантажити. Торкніться, щоб повторити.";
+"liveRoom.rank.ownMe"             = "Я";
+"liveRoom.rank.diffFormat"        = "%@ до наступного місця";
+"liveRoom.rank.toNext"            = "До наступного місця:";
+"liveRoom.retry"                  = "Повторити";
+"liveRoom.rank.tab.now"           = "Зараз";
+"liveRoom.rank.tab.today"         = "Сьогодні";
+"liveRoom.rank.tab.week"          = "Тиждень";
+"liveRoom.rank.girlBanner"        = "Тижневий рейтинг подарунків";
+"liveRoom.contribution.sheet.title"       = "Внесок";
+"liveRoom.contribution.tab.ranking"       = "Рейтинг";
+"liveRoom.contribution.tab.record"        = "Записи про подарунки";
+"liveRoom.contribution.currentLiveIncome" = "Дохід поточної трансляції";
+"liveRoom.contribution.empty.ranking"     = "Ще немає даних про внесок";
+"liveRoom.contribution.empty.record"      = "Ще немає записів про подарунки";
+"liveRoom.contribution.errorRetry"        = "Не вдалося завантажити. Торкніться, щоб повторити.";
+"liveRoom.contribution.last90dFormat"     = "%@ (за 90 днів)";
+"liveRoom.contribution.last90d"           = "За 90 днів";
+"liveRoom.contribution.sentAction"        = "надіслав";
+"liveRoom.setting.effect"                 = "Ефекти";
+"liveRoom.setting.announcement"           = "Оголошення";
+"announcement.popup.title"                = "Керування анонсом";
+"announcement.popup.placeholder"          = "Введіть анонс трансляції (до 120 символів)";
+"announcement.popup.save"                 = "Зберегти";
+"announcement.popup.saveSuccess"          = "Успішно збережено";
+"announcement.popup.sensitiveWord"        = "Виявлено заборонені слова: %@";
+"announcement.popup.saving"               = "Збереження...";
+
+// MARK: - UserCard 名片卡(对齐 H5 userCard.vue,主播端看用户场景)
+"userCard.title"                          = "Профіль";
+"userCard.follow"                         = "Підписатися";
+"userCard.unfollow"                       = "Ви підписані";
+"userCard.block"                          = "Заблокувати";
+"userCard.unblock"                        = "Заблоковано";
+"userCard.followers"                      = "Підписники";
+"userCard.following"                      = "Підписки";
+"userCard.giftWall"                       = "Надіслати подарунки";
+"userCard.errorRetry"                     = "Не вдалося завантажити профіль";
+"userCard.message"                        = "Повідомлення";
+"userCard.sendGift"                       = "Надіслати подарунок";
+"userCard.emptyGifts"                     = "Подарунків ще не надіслано!";
+"userCard.uidPrefix"                      = "UID: ";
+"userCard.unblockConfirm.title"           = "Видалити зі списку блокування";
+"userCard.unblockConfirm.message"         = "Видалити цього користувача зі списку блокування?";
+"userCard.unblockConfirm.confirm"         = "Видалити";
+"userCard.unblockConfirm.cancel"          = "Скасувати";
+"userCard.uidCopiedToast"                 = "UID скопійовано в буфер обміну";
+"userCard.uidCopyA11y"                    = "Скопіювати UID";
+"userCard.party.take"                     = "Зайняти";
+"userCard.party.mute"                     = "Заглушити";
+"userCard.party.unmute"                   = "Увімкнути звук";
+"userCard.party.kickFromMic"              = "Вийти";
+"userCard.party.setAdmin"                 = "Призначити адміном";
+"userCard.party.removeAdmin"              = "Зняти адміна";
+"userCard.party.kick"                     = "Виключити";
+"userCard.party.kickHoursFormat"          = "%d год.";
+"userCard.party.kickPermanent"            = "Назавжди";
+"userCard.party.kickConfirmMessage"       = "Точно виключити %@ з кімнати?";
+"userCard.party.kickConfirmButton"        = "Підтвердити";
+"userCard.party.kickSuccess"              = "Користувача виключено";
+"userCard.party.setAdminSuccess"          = "Успішно призначено адміном";
+"userCard.party.removeAdminSuccess"       = "Адміна успішно знято";
+"userCard.blockSuccess"                   = "Заблоковано";
+"userCard.blockFail"                      = "Не вдалося заблокувати, спробуйте ще раз";
+"userCard.unblockSuccess"                 = "Видалено зі списку блокування";
+"userCard.unblockFail"                    = "Не вдалося видалити, спробуйте ще раз";
+
+"liveRoom.setting.sheet.title"            = "Налаштування";
+"liveRoom.endConfirm.title"               = "Нагадування";
+"liveRoom.endConfirm.message"             = "Ви впевнені, що хочете завершити трансляцію?";
+"liveRoom.endConfirm.confirm"             = "Підтвердити";
+"publicScreen.translate"                  = "Перекласти";
+"publicScreen.translating"                = "Переклад...";
+"publicScreen.sentAction"                 = "Надіслати";
+"publicScreen.enteredRoom"                = "увійшов(-ла) до кімнати";
+"guardian.broadcast.became"               = "Став(-ла) охоронцем рівня {level} для {anchor}!";
+"guardian.level.bronze"                   = "Бронза";
+"guardian.level.silver"                   = "Срібло";
+"guardian.level.gold"                     = "Золото";
+"guardian.title"                          = "Хранитель";
+"guardian.myGuardians"                    = "Мої охоронці";
+"guardian.hisGuardians.format"            = "Його охоронці (%d)";
+"guardian.rules.title"                    = "Правила статусу Хранителя";
+"guardian.topGuardian"                    = "Топ-Хранитель";
+"guardian.list.format"                    = "Список охоронців (%d осіб)";
+"guardian.beFirst"                        = "Станьте першим охоронцем!";
+"guardian.waitForYour"                    = "Очікуємо вашого Хранителя";
+"guardian.noMore"                         = "Більше немає";
+"guardian.tab.gold"                       = "Gold";
+"guardian.tab.silver"                     = "Silver";
+"guardian.tab.bronze"                     = "Bronze";
+"guardian.privilege.badge"                = "Значок Хранителя";
+"guardian.privilege.frame"                = "Рамка";
+"guardian.privilege.chat"                 = "Хмаринка чату";
+"guardian.privilege.highlight"            = "Оголошення в кімнаті";
+"guardian.privilege.notice"               = "Сповіщення про вхід";
+"guardian.privilege.mount"                = "Транспорт";
+"guardian.privilege.gift"                 = "Подарунки Хранителя";
+"guardian.day.7"                          = "7 днів";
+"guardian.day.30"                         = "30 днів";
+"guardian.day.365"                        = "365 днів";
+"guardian.save.format"                    = "Економія %d%%";
+"guardian.preview.subtitle"               = "Ексклюзивно: %@ для Хранителів";
+"guardian.preview"                        = "Попередній перегляд";
+"guardian.daysLeft.format"                = "%d днів";
+"guardian.rules.q1"                       = "1. Що таке статус Хранителя?";
+"guardian.rules.a1"                       = "Хранитель — це преміальний статус підтримки, який дозволяє користувачам розблокувати ексклюзивні привілеї та підтримувати улюблених ведучих. У ведучого може бути кілька хранителів, а користувач може бути хранителем кількох ведучих. Привілеї Хранителя діють лише в кімнатах тих ведучих, яких користувач охороняє.";
+"guardian.rules.q2"                       = "2. Як стати Хранителем?";
+"guardian.rules.a2"                       = "Користувачі купують статус Хранителя за алмази. П'ятдесят відсотків витрачених алмазів передається ведучому, якого охороняють. Наявний хранитель може продовжити термін для того ж ведучого.";
+"guardian.rules.q3"                       = "3. Рівні Хранителя";
+"guardian.rules.a3"                       = "Існує три рівні Хранителя. Вищі рівні відкривають більше ексклюзивних привілеїв:";
+"guardian.rules.q4"                       = "4. Привілеї Хранителя";
+"guardian.rules.a4"                       = "Привілеї Хранителя включають:";
+"guardian.rules.q5"                       = "5. Термін дії";
+"guardian.rules.a5"                       = "Статус Хранителя діє протягом обраного періоду:";
+"guardian.rules.q6"                       = "6. Як формується список Хранителів?";
+"guardian.rules.a6"                       = "Хранителі ранжуються за такими критеріями:";
+"guardian.rules.levelExtra"               = "Користувач може мати кілька рівнів для одного ведучого. Термін витрачається в порядку Gold > Silver > Bronze; нижчі рівні призупиняються, поки активний вищий. Відображуваний значок і привілеї завжди відповідають найвищому активному рівню.";
+"guardian.rules.privilegesExtra"          = "Доступні привілеї можуть відрізнятися залежно від рівня Хранителя.";
+"guardian.rules.duration.7"               = "- 7 днів";
+"guardian.rules.duration.30"              = "- 30 днів";
+"guardian.rules.duration.365"             = "- 365 днів";
+"guardian.rules.durationExtra"            = "Залишок терміну дії відображається на сторінці Хранителя.";
+"guardian.rules.rank.1"                   = "- Рівень Хранителя: Gold > Silver > Bronze";
+"guardian.rules.rank.2"                   = "- Залишок днів статусу: більше днів — вища позиція в межах одного рівня.";
+"guardian.rules.rank.3"                   = "- Алмази, витрачені на ведучого за останні 30 днів.";
+"guardian.rules.rankExtra"                = "Хранитель із найвищим рейтингом відображається вгорі списку Хранителів.";
+"publicScreen.luckyWin"                   = "виграв(-ла)";
+"publicScreen.luckyBySending"             = "надіславши lucky";
+"publicScreen.wheelHit"                   = "випало";
+"publicScreen.wheelOnTheWheel"            = "на колесі";
+"publicScreen.rpsWin"                     = "виграв(-ла) у RPS";
+"publicScreen.luckyDiceWin"               = "виграв(-ла) Lucky Dice";
+"publicScreen.rpsGet"                     = "отримує";
+"publicScreen.wishlistTop1"               = "став(-ла) TOP1 дарувальником!";
+"publicScreen.pkTopContributors"          = "Дякуємо всім фанатам, які підтримали цей PK! Список підтримки:";
+"publicScreen.pkTop1"                     = "Top1";
+"publicScreen.pkTop2"                     = "Top2";
+"publicScreen.pkTop3"                     = "Top3";
+"publicScreen.diamondBoxSend"             = "надіслав(-ла) діамантову скриньку";
+"publicScreen.diamondBoxClaim"            = "отримав(-ла)";
+"publicScreen.diamondBoxSettled"          = "топ розподілено";
+"publicScreen.diamondBoxExpired"          = "діамантова скринька минула, повернення";
+"live.activeTycoon.enterToast"            = "Активний магнат увійшов до кімнати. Взаємодійте зараз!";
+"liveRoom.rpsRules.title"                 = "Правила гри";
+"liveRoom.rpsRules.bestOf"                = "До %d перемог";
+"liveRoom.rpsRules.perChallenge"          = "%d за виклик";
+"liveRoom.rpsRules.ties"                  = "Нічиї переграються";
+"liveRoom.rpsRules.medal"                 = "Перемога дає медаль на %d год, максимум %d год";
+"liveRoom.rpsRules.refund"                = "Повернення при аномальному виході";
+"liveRoom.rpsRules.gotIt"                 = "Зрозуміло";
+"liveRoom.mute.placeholder.system"        = "Вас заглушили";
+"liveRoom.mute.placeholder.host"          = "Заглушено ведучим";
+"liveRoom.mute.toast.system"              = "Система заглушила вас";
+"liveRoom.mute.toast.host"                = "Ведучий заглушив вас";
+"publicScreen.hi.actionA11y"              = "Варіанти відповіді";
+"publicScreen.hi.screen"                  = "Відповісти в чаті";
+"publicScreen.hi.msg"                     = "Відкрити приватний чат";
+"publicScreen.hi.msgUnavailable"          = "Приватний чат недоступний для цього користувача";
+"publicScreen.hi.replyPill"               = "Відповідь для @%@";
+"common.cancel"                           = "Скасувати";
+"liveRoom.underway.label"         = "У процесі";
+"liveRoom.privateCall.label"      = "Приватний дзвінок";
+"liveRoom.tool.pkDebug"           = "Налагодження PK";
+"liveRoom.input.placeholder"      = "Привітайтеся...";
+"liveRoom.input.send.a11y"        = "Надіслати повідомлення";
+"liveRoom.comingSoon.task"        = "Список завдань незабаром";
+"liveRoom.comingSoon.contribution" = "Деталі внеску незабаром";
+"liveRoom.comingSoon.rank"        = "Тижневий рейтинг незабаром";
+"liveRoom.comingSoon.privateCall" = "Приватний дзвінок незабаром";
+"liveRoom.comingSoon.gift"        = "Магазин подарунків незабаром";
+"liveRoom.roulette.a11y"          = "Інтерактивне колесо";
+"liveRoom.comingSoon.roulette"    = "Інтерактивне колесо незабаром";
+
+/* Roulette intro popup & setting sheet (aligns H5 wheel.* + live.* namespace) */
+"liveRoom.roulette.intro.card1.title" = "Колесо";
+"liveRoom.roulette.intro.card1.body"  = "Глядачі можуть крутити колесо призів за алмази. Більше обертань — вища залученість аудиторії та дохід. Стример може налаштувати ексклюзивні інтерактивні призи для себе та фанатів і вмикати або вимикати функцію будь-коли в налаштуваннях трансляції.";
+"liveRoom.roulette.intro.next"        = "Далі";
+"liveRoom.roulette.setting.title"     = "Налаштувати колесо";
+"liveRoom.roulette.enable"            = "Увімкнути колесо";
+"liveRoom.roulette.price"             = "Задати ціну обертання";
+"liveRoom.roulette.sectors"           = "Налаштувати пункти";
+"liveRoom.roulette.sectors.empty"     = "Очікує редагування";
+"liveRoom.roulette.edit"              = "Редагувати колесо";
+"liveRoom.roulette.rules"             = "Правила гри";
+"liveRoom.roulette.errorRetry"        = "Не вдалося завантажити. Спробуйте ще раз.";
+
+/* Roulette v11: functional alignment with H5 (Wheel + RPS 2-card intro + Edit sub-sheet + Toast) */
+"liveRoom.roulette.intro.header"      = "Правила інтерактивних ігор";
+"liveRoom.roulette.intro.rps.title"   = "Камінь, ножиці, папір";
+"liveRoom.roulette.intro.rps.body"    = "Глядачі платять алмазами, щоб кинути виклик стримеру в «Камінь-ножиці-папір». Система грає від імені стримера. За кожну перемогу стример отримує медаль, що підвищує залученість фанатів та дохід.";
+"liveRoom.roulette.closeWheel"        = "Закрити колесо";
+"liveRoom.roulette.finishEditing"     = "Завершити редагування";
+"liveRoom.roulette.edit.title"        = "Налаштувати пункти";
+"liveRoom.roulette.edit.confirm"      = "Підтвердити";
+"liveRoom.roulette.edit.enterItems"   = "Введіть ваші пункти";
+"liveRoom.roulette.toast.started"     = "Колесо запущено";
+"liveRoom.roulette.toast.stopped"     = "Колесо зупинено";
+"liveRoom.roulette.toast.enterPrice"  = "Введіть ціну";
+
+/* LiveRoom H5 interaction alignment (2026-07-06 iteration 2) */
+"liveRoom.tool.message"           = "Повідомлення";
+"liveRoom.tool.gift"              = "Подарунки";
+"liveRoom.tool.setting"           = "Налаштування";
+"liveRoom.comingSoon.message"     = "Чат незабаром";
+"liveRoom.sheet.messagesTitle"    = "Повідомлення";
+"liveRoom.setting.beauty"         = "Краса";
+"liveRoom.setting.endLive"        = "Завершити трансляцію";
+"liveRoom.pk.a11y.default"        = "Почати PK";
+"liveRoom.pk.a11y.matching"       = "Підбір суперника PK";
+"liveRoom.pk.a11y.invited"        = "Отримано запрошення до PK";
+"liveRoom.pk.a11y.inPK"           = "У PK";
+"liveRoom.pk.a11y.punishing"      = "Покарання в PK";
+"liveRoom.comingSoon.pkInterrupt"  = "Підтвердження переривання PK незабаром";
+"liveRoom.comingSoon.pkDisconnect" = "Підтвердження відключення PK незабаром";
+"liveRoom.privateCall.caption"    = "Приватний дзвінок";
+
+// MARK: - Call POC（调试态保留，上线前删除）
+"call.statusWaitingRemote"   = "Очікування співрозмовника";
+"call.permissionTitle"       = "Потрібен дозвіл на камеру";
+"call.permissionMessage"     = "Увімкніть у Налаштуваннях → Конфіденційність → Камера";
+"call.channelLabel"          = "Канал";
+"call.channelPlaceholder"    = "Ім'я каналу (має збігатися)";
+"call.hangup"                = "Завершити";
+"call.connecting"            = "З'єднання...";
+"call.join"                  = "Приєднатись";
+"call.beautyBannerPassthrough" = "Прямий перегляд · FaceUnity не інтегровано";
+"call.beautyBannerActive"    = "FaceUnity активний";
+"call.errorEmptyChannel"     = "Введіть ім'я каналу";
+"call.errorTokenFailed"      = "Не вдалося отримати токен";
+"call.errorConnectPrefix"    = "Помилка підключення: %1$@ (%2$@)";
+"call.errorConnectGeneric"   = "Помилка підключення: %@";
+"call.error.rtmTokenEmpty"     = "RTM-токен порожній";
+"call.error.invalidRemoteUserId" = "Невірний ID співрозмовника";
+"call.error.createFailed"      = "Не вдалося розпочати дзвінок";
+"call.error.sendFailed"        = "Не вдалося надіслати сигнал виклику";
+"call.error.acceptFailed"      = "Не вдалося надіслати сигнал прийняття";
+"call.error.rtcTokenFailed"    = "Не вдалося отримати RTC-токен";
+"call.error.rtcTokenFormat"    = "RTC-токен: %@";
+"call.action.chatInput"        = "Чат";
+"call.action.feedback"         = "Відгук";
+"call.emptyRoom.hangupTip"     = "Проблема з дзвінком, буде завершено автоматично";
+"live.returnPopup.autoFormat"  = "Через %d с автоматичне повернення до трансляції";
+"live.returnPopup.button"      = "Повернутися до трансляції";
+"call.error.remoteRejected"    = "Дзвінок відхилено";
+"call.error.remoteNoAnswer"    = "Немає відповіді";
+"call.error.remoteBusy"        = "Користувач зайнятий";
+"call.error.localBusy"         = "Дзвінок уже триває";
+"auth.sessionExpired"          = "Сесія завершилася, увійдіть знову";
+
+// MARK: - Call 1v1 真实通话视图（CallView.swift）
+"call.waiting.answer"       = "Очікування відповіді...";
+"call.subtitle.callingOut"   = "Виклик...";
+"call.subtitle.incoming"     = "запрошує вас на відеодзвінок";
+"call.action.cancel"         = "Скасувати";
+"call.action.reject"         = "Відхилити";
+"call.action.accept"         = "Прийняти";
+"call.action.hangupBackToLive" = "Завершити та повернутись до трансляції";
+"call.action.hangup"         = "Завершити";
+// C-1 通话中控制按钮
+"call.action.micMute"                  = "Вимкнути мікрофон";
+"call.action.micUnmute"                = "Увімкнути мікрофон";
+"call.action.switchCamera"             = "Перевернути";
+"call.networkQuality.weak"             = "Погана мережа — якість дзвінка може погіршитися";
+// C-3 通话异常自检 alert
+"call.abnormal.userOffline.title"      = "Користувач не в мережі";
+"call.abnormal.userOffline.message"    = "Можливо, співрозмовник від'єднався. Завершити дзвінок?";
+"call.abnormal.networkUnstable.title"  = "Нестабільна мережа";
+"call.abnormal.networkUnstable.message" = "Мережа нестабільна. Тарифікацію призупинено.";
+"call.abnormal.incomeZero.title"       = "Немає доходу";
+"call.abnormal.incomeZero.message"     = "Цей дзвінок триває понад 2 хвилини без доходу.";
+"call.abnormal.endCall"                = "Завершити дзвінок";
+"call.abnormal.continue"               = "Продовжити";
+// C-4 Wave1 直播私call 300s 横幅 + 挂断确认
+"call.liveBanner.countdownFormat"      = "Приблизно через %d с ваш дохід за хвилину дзвінка дорівнюватиме ціні дзвінка.";
+"call.hangupConfirm.title"             = "Завершити цей дзвінок?";
+"call.hangupConfirm.cancel"            = "Скасувати";
+// C-5 充值锁定流程
+"call.waitRecharge.bonusFormat"        = "Отримайте бонус %d 💎";
+"call.waitRecharge.countdownFormat"    = "%02dс";
+"call.congrats.title"                  = "Вітаємо!";
+"call.congrats.messageFormat"          = "Користувач поповнив рахунок — отримайте бонус %d 💎";
+"call.congrats.ok"                     = "OK";
+// C-4 Wave4 UI 布局对齐
+"call.action.askForGift"     = "Попросити подарунок";
+"call.askForGift.rejected"   = "Користувач відхилив ваш запит на подарунок";
+"call.askForGift.waitingForReward" = "Очікування нагороди...";
+// v22 PK 公屏（对齐 H5 pk notification start/succeed/failed/draw）
+"pk.pkNotificationStart"     = "PK розпочався! Надсилайте подарунки на підтримку ведучого!🎁";
+"pk.pkResultWin"             = "🎉 %@ переміг(-ла) %@ в цьому PK";
+"pk.pkResultLose"            = "😭 %@ на жаль програв(-ла) %@ в цьому PK";
+"pk.pkResultDraw"            = "%@ і %@ зіграли внічию в цьому PK";
+"call.action.more"           = "Ще";
+"call.action.comingSoon"     = "Незабаром";
+"call.remoteCameraOff"       = "Камеру вимкнено";
+"call.liveBanner"            = "Приватний дзвінок під час трансляції";
+
+/* 设计稿主播端.png 对齐（2026-07-09） */
+"call.signal.label.you"                = "Ви";
+"call.signal.label.user"               = "Користувач";
+"call.waitState.rechargingFormat"      = "Користувач поповнює рахунок, зачекайте %d с.";
+"call.chat.input.placeholder"          = "Введіть повідомлення...";
+"call.chat.input.send"                 = "Надіслати";
+
+// MARK: - Call HUD（H M4 sysMsg 写入 5 publishers 的可视化）
+"call.hud.incomeFormat"      = "💰 %d";
+"call.hud.giftIncomeFormat"  = "🎁 %d";
+"call.hud.waitBonusFormat"   = "Бонус поповнення +%d💎";
+"call.hud.remoteTextFormat"  = "%@";
+"call.hud.wait.startPay"     = "Користувач оплачує…";
+"call.hud.wait.paySuccess"   = "Користувач успішно оплатив";
+"call.hud.wait.callTimeEnd"  = "Таймер дзвінка призупинено";
+"call.hud.wait.payCancel"    = "Користувач скасував оплату";
+
+// MARK: - LiveRoom 挂断后回直播倒计时覆盖层
+"liveRoom.callEndedTitle"    = "Дзвінок завершено";
+"liveRoom.returnCountdownFormat" = "Повернення до трансляції через %d с";
+
+// MARK: - 服务层错误（被 View 显示）
+"auth.error.noToken"         = "Не вдалося увійти. Спробуйте ще раз.";
+"auth.error.requestFailed"   = "Не вдалося продовжити. Перевірте дані та спробуйте знову.";
+"auth.error.networkFormat"   = "Помилка мережі: %@";
+"auth.error.sessionInvalidated" = "Сесію завершено або у ваш акаунт увійшли в іншому місці. Будь ласка, увійдіть знову.";
+"live.error.noCover"         = "Обкладинка трансляції ще не задана. Спочатку налаштуйте її в основному застосунку.";
+// 全局顶部错误通知：envelope 解析失败（APIClient/PartyAPIClient/SapiTokenStore 共用；技术错误，三语言统一英文）
+"api.error.responseParseFailed" = "Помилка відповіді сервера";
+"api.error.network" = "Помилка мережі, перевірте підключення";
+"api.error.session" = "Сесія завершилася, увійдіть знову";
+"api.error.serverFormat" = "Помилка сервера (%d), спробуйте пізніше";
+"api.error.requestFailedFormat" = "Запит не виконано (%@)";
+
+// 公屏系统消息（用户在直播间内可见）
+"im.system.loginFailedFormat" = "Не вдалося увійти в IM: %@";
+"im.system.joinFailedFormat"  = "Не вдалося приєднатися до чату: %@";
+"im.system.joined"            = "Ви увійшли в чат";
+"im.system.giftPlaceholder"   = "[Подарунок/Користувацьке повідомлення]";
+
+// MARK: - G 直播 PK 玩法（26 条 + 强制下播/Toast 复用 B）
+"pk.entry.title"             = "Почати PK";
+"pk.entry.random"            = "Випадковий PK";
+"pk.entry.invite"            = "Запросити за ID";
+"pk.initiate.title"          = "Почати PK";
+"pk.matchingCard.hint"       = "Випадковий підбір у межах вашого рангу. Орієнтовний час — 15 с.";
+"pk.matchingCard.matched"    = "Суперника успішно знайдено";
+"pk.matchingCard.searching"  = "Пошук суперника";
+"pk.durationPicker.title"    = "Встановіть тривалість PK";
+
+"pk.matching.title"          = "Підбір...";
+"pk.matching.subtitle"       = "Пошук суперника";
+"pk.matching.cancel"         = "Скасувати";
+"pk.matching.cancelled"      = "Підбір PK скасовано";
+
+"pk.invite.title"            = "Почати PK";
+"pk.invite.placeholder"      = "UID суперника";
+"pk.invite.durationLabel"    = "Тривалість PK";
+"pk.invite.send"             = "Надіслати запрошення";
+"pk.invite.waiting"          = "Очікування прийняття...";
+"pk.invite.cancel"           = "Скасувати запрошення";
+"pk.invite.duration3"        = "3 хвилини";
+"pk.invite.duration5"        = "5 хвилин";
+"pk.invite.duration10"       = "10 хвилин";
+"pk.invite.duration15"       = "15 хвилин";
+
+"pk.invited.title"           = "Отримано запрошення на PK";
+"pk.invited.accept"          = "Прийняти";
+"pk.invited.reject"          = "Відхилити";
+
+"pk.arena.endPK"             = "Завершити PK";
+"pk.punishing.title"         = "Покарання";
+"pk.punishing.endPunish"     = "Завершити";
+
+"pk.result.title"            = "PK завершено";
+"pk.result.confirm"          = "OK";
+
+"pk.toast.inviteRejectedFormat" = "%@ відхилив(-ла) ваше запрошення на PK";
+"pk.toast.inviteAcceptedFormat" = "%@ прийняв(-ла) ваше запрошення на PK";
+"pk.toast.inviteTimeout"        = "Термін запрошення на PK минув";
+
+"pk.invite.searchPlaceholder"   = "UID або нікнейм";
+"pk.invite.recommendTitle"      = "Рекомендовані";
+"pk.invite.searchResultTitle"   = "Результати пошуку";
+"pk.invite.empty"               = "Немає даних";
+"pk.invite.acceptSwitch"        = "Приймати запрошення на PK";
+"pk.invite.btn.invite"          = "Запросити";
+"pk.invite.btn.waiting"         = "Очікування";
+"pk.invite.btn.pking"           = "PK триває";
+"pk.invite.toast.busy"          = "Інша сторона зайнята, спробуйте пізніше";
+"pk.invite.toast.beingInvited"  = "Суперник обробляє інше запрошення на PK, спробуйте пізніше";
+"pk.invite.toast.self"          = "Не можна запросити себе";
+"pk.invite.toast.limit"         = "Досягнуто ліміту запрошень PK. Спробуйте пізніше";
+"pk.invite.toast.matching"      = "Суперник у пошуку випадкового PK, спробуйте пізніше";
+"pk.invite.toast.sent"          = "Запрошення на PK надіслано";
+
+/* PK popup H5 alignment (2026-07-06 iteration 3) */
+"pk.giveUp.title"               = "Здатися в PK";
+"pk.giveUp.confirm"             = "Ви впевнені, що хочете вийти з цього PK? У разі автовідключення результат PK буде зараховано як поразку";
+"pk.giveUp.action"              = "Здатися";
+"pk.continuePK"                 = "Продовжити PK";
+"pk.pkEnded.title"              = "PK завершено";
+"pk.disconnect.action"          = "Відключити трансляцію";
+"pk.matchFailed.title"          = "Суперника поки не знайдено";
+"pk.matchFailed.hint1"          = "Упс, зараз немає ведучих рівної сили!";
+"pk.matchFailed.hint2"          = "Підбір вимкнено. Оберіть конкретного ведучого для PK";
+"pk.matchFailed.initiate"       = "Почати PK";
+"pk.inviting.title"             = "Запрошення на PK...";
+"pk.waitingAcceptance"          = "Очікування прийняття PK";
+"pk.cancelInvitation"           = "Скасувати запрошення на PK";
+"pk.punish.label"               = "Покарання";
+"pk.result.win"                 = "ПЕРЕМОГА";
+"pk.result.lose"                = "ПОРАЗКА";
+"pk.result.draw"                = "НІЧИЯ";
+"pk.history.title"              = "Історія PK";
+"pk.rule.title"                 = "Правила PK";
+"pk.rank.title"                 = "Рейтинг PK";
+"pk.rank.sheet.title"           = "Список хранителів";
+"pk.rank.sheet.empty"           = "Немає даних";
+"pk.comingSoon"                 = "Незабаром";
+"pk.countdownFormat"            = "%d с";
+"pk.opponent.mute"              = "Вимкнути звук суперника";
+"pk.opponent.unmute"            = "Увімкнути звук суперника";
+
+// PK History record sheet (v23 2026-07-13, aligned with H5 pkHistoryPopup.vue)
+"pk.record.effectiveWinLabel"   = "Ефективні перемоги в PK за тиждень";
+"pk.record.effectiveTipTitle"   = "Ефективні перемоги";
+"pk.record.effectiveTipMessage" = "Кількість перемог у PK цього тижня з очками PK вище ефективного порогу.";
+"pk.record.keepDaysFooter"      = "Зберігаються записи за останні 30 днів";
+"pk.record.selfDefault"         = "Я";
+
+// MARK: - H IM 完善 错误文案（NIMServiceError.errorDescription）
+"im.error.loginFailedFormat"         = "Не вдалося увійти в IM (code=%@) %@";
+"im.error.tokenInvalid"              = "Сесія закінчилася, увійдіть знову";
+"im.error.kickedOut"                 = "Ваш акаунт увійшов на іншому пристрої";
+"im.error.chatroomEnterFailedFormat" = "Не вдалося увійти в чат (%@)";
+"im.error.networkErrorFormat"        = "Мережева помилка IM (%@)";
+"im.error.decodingFormat"            = "Не вдалося обробити повідомлення: %@";
+
+// MARK: - Moment 动态卡片（Profile / Circle）
+"moment.relative.justNow"        = "Щойно";
+"moment.relative.minutes.format" = "%dхв";
+"moment.relative.hours.format"   = "%dг";
+"moment.relative.days.format"    = "%dд";
+"moment.action.like"             = "Подобається";
+"moment.action.unlike"           = "Прибрати вподобання";
+"moment.action.delete"           = "Видалити";
+"moment.action.report"           = "Поскаржитися";
+"moment.delete.confirm.title"    = "Видалити цей запис?";
+"moment.delete.confirm.action"   = "Видалити";
+"moment.delete.confirm.cancel"   = "Скасувати";
+
+/* MARK: Blocklist 黑名单列表（I-1） */
+"blocklist.title"                       = "Список блокування";
+"blocklist.empty.description"           = "Якщо користувача в чорному списку, ви не отримуватимете від нього повідомлень.";
+"blocklist.removeConfirm.title"         = "Видалити зі списку блокування";
+"blocklist.removeConfirm.message"       = "Дійсно видалити цього користувача зі списку блокування?";
+"blocklist.removeConfirm.action"        = "Видалити";
+"blocklist.removeConfirm.cancel"        = "Скасувати";
+"blocklist.removeNetworkError"          = "Помилка мережі, спробуйте ще раз.";
+"blocklist.removeBadUserId"             = "Невірний ID користувача";
+"blocklist.loadError.retry"             = "Не вдалося завантажити, натисніть, щоб повторити";
+"blocklist.loadEnd"                     = "Кінець списку";
+"blocklist.accessibility.removeButton"  = "Видалити зі списку блокування";
+"blocklist.accessibility.row"           = "Заблокований користувач %1$@, заблоковано %2$@";
+"blocklist.accessibility.rowNoDate"     = "Заблокований користувач %@";
+"blocklist.loadError.retryFormat"       = "%1$@ · %2$@";
+
+// MARK: - Message P2P 会话列表（H-1 MVP）
+"message.news.title"                    = "Новини";
+"message.clear.tabTitle"                = "Очистити всі діалоги на цій вкладці?";
+"message.clear.tabConfirm"              = "Очистити";
+"message.category.flame"                = "Полум'я";
+"message.category.stranger"             = "Незнайомець";
+"message.category.prime"                = "Prime";
+"message.empty.flame"                   = "Поки немає активних діалогів";
+"message.empty.stranger"                = "Немає повідомлень від незнайомців";
+"message.empty.prime"                   = "Поки немає преміум-учасників";
+"message.loadError.retry"               = "Не вдалося завантажити, натисніть для повтору";
+"message.action.stickTop"               = "Закріпити";
+"message.action.unstickTop"             = "Відкріпити";
+"message.action.delete"                 = "Видалити";
+"message.action.failedToast"            = "Дію не виконано, спробуйте ще раз";
+"massTexting.title"                     = "Масова розсилка";
+"massTexting.contentTitle"              = "Вміст масової розсилки";
+"massTexting.sendOneTap"                = "Надіслати одним натисканням";
+"massTexting.loading"                   = "Завантаження повідомлення...";
+"massTexting.retry"                     = "Повторити";
+"massTexting.sendSuccess"               = "Повідомлення успішно надіслано";
+"massTexting.dailyLimitReached"         = "Досягнуто денний ліміт. Поверніться завтра.";
+"massTexting.refreshUnavailable"        = "Вибачте, бібліотека повідомлень недоступна. Оновіть пізніше.";
+"massTexting.sendFailed"                = "Не вдалося надіслати. Спробуйте ще раз.";
+"massTexting.loadFailed"                = "Не вдалося завантажити повідомлення. Спробуйте ще раз.";
+"massTexting.noCopywriting"             = "Зараз немає доступних повідомлень.";
+"massTexting.refreshCopy"               = "Оновити повідомлення";
+"massTexting.hint"                      = "Повідомлення босу в один клік!";
+"massTexting.remainingFormat"           = "Залишилося сьогодні: %d";
+"message.systemInbox.station"           = "Інформація від платформи";
+"message.systemInbox.notification"      = "Системна інформація";
+"message.systemInbox.admin"             = "Адміністратор";
+"message.systemInbox.comingSoon"        = "Подробиці незабаром";
+"stationPopup.read"                     = "Прочитано";
+"stationPopup.unread"                   = "Непрочитано";
+"stationPopup.alreadyRead"              = "Ви прочитали повідомлення";
+"stationPopup.expirationDate"           = "Дата закінчення";
+
+// Call Records 通话历史记录（对齐 H5 views/communication/records/list.vue）
+"callRecord.list.title"                 = "Спілкування";
+"callRecord.empty"                      = "Записів про дзвінки ще немає";
+"callRecord.loadingMore"                = "Завантаження...";
+"callRecord.noMoreData"                 = "Більше записів немає";
+"callRecord.source.match"               = "Матч";
+"callRecord.source.live"                = "Трансляція";
+"callRecord.source.private"             = "Приватний";
+"callRecord.reason.rejected"            = "Відхилено";
+"callRecord.reason.timeout"             = "Час вичерпано";
+"callRecord.reason.canceled"            = "Скасовано";
+"callRecord.a11y.missed"                = "Пропущений дзвінок";
+
+// Batch 6.1 回复积分 4 tip 文案（H5 蓝本 en.json:820-821 + chat/index.vue:43-44 硬编码）
+"chat.guideTip"        = "Спілкуйтесь та отримуйте нагороди — почніть чат зараз!";
+"chat.stimulateTip"    = "Більше повідомлень від нього — розблокуйте додаткові алмази!";
+"chat.replyFastTip"    = "Відповідайте швидко — подвійні бали! Тільки один раз.";
+"chat.replyRemindTip"  = "Система: Ви не відповідали більше 15 хвилин. Найголовніше: швидші відповіді = більше балів. Відповідайте протягом 12 год, щоб отримати бали. 1 год → x2, 30 хв → x3, 15 хв → x4 балів!";
+
+// 首次进入私聊页 2 步引导（H5 guidance.vue）
+"chat.intro.step1"     = "Нова функція! Спілкуйтесь з користувачами та заробляйте алмази";
+"chat.intro.step2"     = "Дізнатися більше";
+// 云端历史拉空 toast
+"chat.historyExpired"  = "Історія чату застаріла.";
+"chat.private.permissionDisabled" = "Ваш дозвіл вимкнено.";
+"chat.private.auditing" = "На перевірці";
+"chat.private.rejected" = "Відхилено";
+"chat.private.create" = "Створити приватне медіа";
+"chat.private.guide" = "Створіть приватне медіа, щоб надіслати його сюди.";
+// 文字气泡内翻译按钮
+"chat.translate"       = "Перекласти";
+
+// S-7 Chat a11y labels
+"chat.a11y.audioPlay"             = "Відтворити голосове %d с";
+"chat.a11y.audioPause"            = "Пауза голосового %d с";
+"chat.a11y.resend"                = "Надіслати повідомлення повторно";
+"chat.a11y.mediaImage"            = "Фото";
+"chat.a11y.mediaVideo"            = "Відео";
+
+// M-5 ChatInputBar 输入栏文案
+"chat.input.typeMessage"          = "Введіть повідомлення";
+"chat.input.holdToTalk"           = "Утримуйте, щоб говорити";
+"chat.input.send"                 = "Надіслати";
+
+// M-6 DiaReceivePopup 钻石到账弹窗
+"dia.receive.congratulations"     = "Вітаємо";
+"dia.receive.unlockedAchievement" = "Досягнення розблоковано";
+"dia.receive.get"                 = "Отримати";
+"dia.receive.a11y.get"            = "Отримати алмази";
+"dia.receive.receivedDiamondsFormat" = "Отримано алмазів: %d";
+
+// 系统通知会话文案（对齐 H5 systemMsg.vue + cpRankRewardMsg.vue）
+"chat.system.comingSoon"          = "Незабаром";
+"chat.system.viewNow"             = "Переглянути";
+"chat.system.checkCpRanking"      = "Переглянути рейтинг Cp";
+"chat.system.appealClickHere"     = "натисніть тут";
+"chat.system.appealSuccess"       = "Апеляцію задоволено";
+"chat.system.durationPerm"        = "Назавжди";
+"chat.system.itemType.vehicle"    = "Транспорт";
+"chat.system.itemType.frame"      = "Рамка";
+"chat.system.itemType.entrance"   = "Вхід";
+"chat.system.itemType.chatSkin"   = "Скін чату";
+"chat.system.itemType.cardFrame"  = "Рамка картки";
+"chat.system.itemGetFormat"       = "Вітаємо! Ви отримали【%1$@】【%2$@】* (%3$@). Знайти в «Мій профіль» > «Реквізит».";
+"chat.system.itemExpiredFormat"   = "Термін дії【%1$@】【%2$@】закінчився";
+"chat.system.durationHourMinuteFormat" = "%1$d год %2$d хв";
+"chat.system.durationHourFormat"       = "%1$d год";
+"chat.system.durationMinuteFormat"     = "%1$d хв";
+"chat.system.rewardDiamondFormat"      = "Вітаємо! Ви отримали Алмази*%@";
+"chat.system.cpRankRewardMsgFormat"    = "Вітаємо! Ви отримали нагороду TOP %d у щотижневому рейтингу CP.";
+
+// 语音录制过短
+"chat.voice.tooShort"  = "Запис занадто короткий";
+// 发送失败网络提示
+"chat.sendNetworkError" = "Ой, з'єднання не вдалося! Перевірте мережу.";
+
+// v5 F-3 消息 preview 归一化
+"message.preview.image"                 = "[Зображення]";
+"message.preview.voice"                 = "[Голос]";
+"message.preview.video"                 = "[Відео]";
+"message.preview.location"              = "[Місцезнаходження]";
+"message.preview.gift"                  = "[Подарунок]";
+"message.preview.unknown"               = "[Невідомо]";
+"message.preview.privatePhoto"          = "[Приватне фото]";
+"message.preview.privateVideo"          = "[Приватне відео]";
+"chat.refusedTip"                       = "Повідомлення надіслано, але отримувач його відхилив";
+"message.preview.callMissed"            = "Пропущено";
+"message.preview.callRejected"          = "Відхилено";
+"message.preview.callCancelled"         = "Скасовано";
+// v5 F-4 通用操作
+"message.action.cancel"                 = "Скасувати";
+// v5 F-5 时间
+"message.time.yesterday"                = "Вчора";
+// v5 F-6 a11y
+"message.a11y.online"                   = "Онлайн";
+"message.a11y.offline"                  = "Офлайн";
+"message.a11y.pinned"                   = "Закріплено";
+"message.a11y.vip"                      = "VIP";
+"message.a11y.activeTycoon"             = "Активний магнат";
+"message.a11y.unreadCountFormat"        = "%d непрочитаних";
+"message.a11y.levelFormat"              = "Рівень %@";
+
+// MARK: - E/F 派对房（spec §1.4 + H i18n 收尾）
+"party.defaultRoomName"                  = "Party-кімната";
+"party.defaultUser"                      = "Користувач";
+"party.defaultGift"                      = "Подарунок";
+"party.cancel"                           = "Скасувати";
+"party.retry"                            = "Повторити";
+"party.loading"                          = "Завантаження…";
+"party.ok"                               = "ОК";
+"party.alert.title"                      = "Повідомлення";
+"party.onlineCount.format"               = "%d у мережі";
+
+"party.list.navTitle"                    = "Party-кімнати";
+"party.list.loadMore"                    = "Потягніть угору, щоб завантажити ще";
+"party.list.unnamed"                     = "Кімната без назви";
+"party.list.error.loadFailedFormat"      = "Не вдалося завантажити: %@";
+"party.list.error.decodeFormat"          = "Помилка декодування: %@";
+"party.list.createRoom"                  = "Створити кімнату";
+"party.list.empty"                       = "Party-кімнат ще немає";
+"party.list.error.retry"                 = "Повторити";
+"party.list.welcomeFallback"             = "Ласкаво просимо до моєї кімнати, повеселімося!";
+"party.list.pill.liveVoice"              = "Live+Voice";
+"party.list.pill.voice"                  = "Голос";
+"party.list.weeklyTop"                   = "Топ %d за тиждень";
+"party.list.pill.languageFallback"       = "Англійська";
+
+"party.tab.party"                        = "Party";
+"party.tab.follow"                       = "Підписатися";
+"party.tab.recent"                       = "Нещодавні";
+"party.language.all"                     = "Усі";
+"party.rank.partyRich"                   = "PartyRich";
+"party.rank.room"                        = "Кімната";
+"party.rank.rules.title"                 = "Вступ";
+"party.rank.partyRich.rule1"             = "Рейтинг розраховується на основі балів подарунків, надісланих користувачами в Party-кімнатах, і оновлюється щоденно, щотижня та щомісяця.";
+"party.rank.partyRich.rule2"             = "1 алмаз = 1 бал рейтингу.";
+"party.rank.partyRich.rule3"             = "Чим вища загальна сума балів подарунків у будь-якій Party-кімнаті, тим вищий рейтинг.";
+"party.rank.room.rule1"                  = "Рейтинг визначається загальною кількістю алмазів, отриманих за подарунки в Party-кімнатах, зі щоденними, щотижневими та щомісячними оновленнями.";
+"party.rank.room.rule2"                  = "1 алмаз = 1 бал рейтингу.";
+"party.rank.room.rule3"                  = "Щоб підвищити рейтинг, намагайтеся отримувати більше подарунків у своїй Party-кімнаті.";
+"party.rank.period.thisWeek"             = "Цей тиждень";
+"party.rank.period.lastWeek"             = "Минулий тиждень";
+"party.rank.period.thisMonth"            = "Цей місяць";
+"party.rank.period.lastMonth"            = "Минулий місяць";
+"party.search.placeholder"               = "Пошук за назвою кімнати / ID";
+"party.search.hint"                      = "";
+"party.search.noResults"                 = "";
+"party.comingSoon"                       = "Незабаром";
+"party.myRoom"                           = "Моя кімната";
+"party.password.alert.title"             = "Введіть пароль кімнати";
+"party.password.alert.message"           = "Для входу в цю кімнату потрібен пароль.";
+"party.password.placeholder"             = "Пароль";
+"party.password.confirm"                 = "Увійти";
+"party.password.cancel"                  = "Скасувати";
+"party.enteringRoom"                     = "Вхід у кімнату…";
+
+"party.create.navTitle"                  = "Створити кімнату";
+"party.create.submit"                    = "Створити";
+"party.create.confirm"                   = "Підтвердити";
+"party.create.name.placeholder"          = "Xxxxx's Room";
+"party.create.section.tagline"           = "Слоган кімнати";
+"party.create.tagline.placeholder"       = "Поспілкуймося та повеселімося разом.";
+"party.create.section.language"          = "Мова кімнати";
+"party.create.section.mode"              = "Режим кімнати";
+"party.create.mode.voice"                = "Голос";
+"party.create.mode.liveVoice"            = "Відео + голос";
+"party.create.mode.lockFormat"           = "Режим блокування Рів.%d";
+"party.create.mode.unlockFormat"         = "Режим розблокування Рів.%d";
+"party.create.mode.lockedToastFormat"    = "Потрібен Рів.%d";
+"party.create.section.background"        = "Фон кімнати";
+"party.create.bg.permanent"              = "Назавжди";
+"party.create.bg.empty"                  = "Фони недоступні";
+"party.create.permissionDenied"          = "Зверніться до адміністратора, щоб розблокувати створення кімнат";
+// F 期 Live↔Party 互斥（对齐安卓 isLiveing||isPartying toast，2026-07-17）
+"party.mutex.blockedByLive"              = "Ви ведете трансляцію. Завершіть її, щоб увійти в Party-кімнату.";
+"party.mutex.blockedByParty"             = "Ви в Party-кімнаті. Спочатку вийдіть, щоб почати трансляцію.";
+// v8 派对房设置 + 房管管理（2026-07-13）
+"party.settings.navTitle"                = "Налаштування кімнати";
+"party.settings.changeAvatar"            = "Змінити аватар кімнати";
+"party.settings.section.admin"           = "Адміністратори";
+"party.settings.manageAdmins"            = "Керування адміністраторами";
+"party.settings.admin.empty"             = "Адміністраторів ще немає";
+"party.settings.admin.add"               = "Додати";
+"party.settings.admin.remove"            = "Прибрати адміністратора";
+"party.settings.admin.addTitle"          = "Додати адміністратора";
+"party.settings.admin.addHint"           = "Введіть ID користувача, щоб призначити адміністратором.";
+"party.settings.admin.userIdPlaceholder" = "ID користувача";
+// v8.1 Room Tools sheet
+"party.tools.title"                      = "Інструменти кімнати";
+"party.tool.lockRoom"                    = "Заблокувати кімнату";
+"party.tool.music"                       = "Музика";
+"party.music.title"                      = "Музика";
+"party.music.playlist"                   = "Плейлист";
+"party.music.local"                      = "Локально";
+"party.music.liked"                      = "Уподобане";
+"party.music.empty"                      = "Немає доступної музики";
+"party.music.edit"                       = "Редагувати";
+"party.music.upload"                     = "Завантажити";
+"party.music.delete"                     = "Видалити";
+"party.music.selectAll"                  = "Вибрати все";
+"party.music.invalidFormat"              = "Непідтримуваний аудіоформат";
+"party.music.fileTooLarge"               = "Аудіофайли мають бути не більше 10 МБ";
+"party.music.uploadSucceeded"            = "Музику завантажено";
+"party.music.uploadFailed"               = "Не вдалося завантажити музику";
+"party.music.deleteSucceeded"            = "Музику видалено";
+"party.music.deleteFailed"               = "Не вдалося видалити музику";
+"party.tool.settings"                    = "Налаштування";
+"party.tool.micApplication"              = "Заявки на мікрофон";
+"party.tool.roomMode"                    = "Режим кімнати";
+"party.tool.blocklist"                   = "Чорний список";
+"party.tool.mcSeat"                      = "Місце MC";
+"party.tool.privateCall"                 = "Приватний дзвінок";
+"party.tool.currencyExchange"            = "Валюта";
+"party.currency.exchangeTitle"           = "Валюта кімнати";
+"party.currency.balanceTitle"            = "Баланс";
+"party.currency.gems"                    = "Самоцвіти";
+"party.currency.diamonds"                = "Діаманти";
+"party.currency.coins"                   = "Монети";
+"party.currency.target"                  = "Обміняти на";
+"party.currency.available"               = "Доступно";
+"party.currency.amountPlaceholder"       = "Введіть суму";
+"party.currency.all"                     = "Усі";
+"party.currency.diamondRate"             = "1 самоцвіт = 1 алмаз";
+"party.currency.coinRateHint"            = "Остаточну суму монет визначає сервер.";
+"party.currency.exchangeAction"          = "Обміняти";
+"party.currency.refresh"                 = "Оновити баланс";
+"party.currency.balanceLoadFailed"       = "Не вдалося завантажити баланс";
+"party.currency.invalidAmount"           = "Введіть додатне ціле число Gems";
+"party.currency.insufficientBalance"     = "Недостатньо Gems";
+"party.currency.diamondExchangeSuccessFormat" = "%lld самоцвітів обміняно на алмази";
+"party.currency.coinExchangeSuccess"     = "Самоцвіти обміняно на монети";
+"party.currency.exchangeFailed"          = "Не вдалося обміняти";
+"party.currency.record"                  = "Історія";
+"party.currency.loadMore"                = "Завантажити ще";
+"party.currency.recordEmpty"             = "Записів ще немає";
+"party.currency.recordLoadFailed"        = "Не вдалося завантажити записи";
+"party.currency.explainTitle"            = "Пояснення:";
+"party.currency.gemHowToGet"             = "Як отримати Gem";
+"party.currency.gemHowToGetDetail"       = "Отримуйте подарунки в Party-кімнаті";
+"party.currency.gemUse"                  = "Використання Gem";
+"party.currency.gemUseCoinDetail"        = "Примітка: Gems можна обміняти на монети, які доступні для виведення.";
+"party.currency.gemUseDiamondDetail"     = "Gem можна обміняти на алмази для витрат";
+"party.privateCall.openConfirmLabel"     = "Відкрити приватний дзвінок";
+"party.tool.comingSoon"                  = "Незабаром";
+// F-spec §5.1 PartyPrivateCallSettingSheet
+"party.privateCall.settingTitle"         = "Party Call";
+"party.privateCall.enableToggleTitle"    = "Увімкнути Party Call";
+"party.privateCall.giftSectionTitle"     = "Подарунок для дзвінка";
+"party.privateCall.giftEmpty"            = "Подарунки недоступні";
+"party.privateCall.loadError"            = "Не вдалося завантажити, натисніть, щоб повторити";
+"party.privateCall.saveSuccess"          = "Збережено";
+"party.privateCall.saveFailed"           = "Не вдалося зберегти, спробуйте ще раз";
+"party.privateCall.seatBubble"           = "На дзвінку, скоро повернуся";
+"party.moreMenu.minimize"                = "Згорнути";
+"party.banner.scoreDouble"                = "Очки ×2";
+// E spec 2026-07-14 派对房 Blocklist（房主/管理员查看+解除房间维度黑名单）
+"party.blocklist.navTitle"               = "Список блокування";
+"party.blocklist.empty"                  = "Заблокованих користувачів немає";
+"party.blocklist.loadError"              = "Не вдалося завантажити список блокування";
+"party.blocklist.loadErrorFormat"        = "Не вдалося завантажити: %@";
+"party.blocklist.removeConfirmTitle"     = "Прибрати зі списку блокування?";
+"party.blocklist.removeConfirmMessage"   = "Цей користувач знову зможе заходити в кімнату.";
+"party.blocklist.removeSuccess"          = "Успішно прибрано";
+"party.blocklist.removeFailed"           = "Не вдалося прибрати, спробуйте ще раз";
+"party.blocklist.banTypePermanent"       = "Назавжди";
+"party.blocklist.autoUnbanFormat"        = "Автовиведення з блоку через %@";
+// E spec 2026-07-14 派对房加锁/解锁（4 位数字密码）
+"party.lockRoom.sheetTitle"              = "Заблокувати кімнату";
+"party.lockRoom.sheetDescription"        = "Встановіть 4-значний пароль для блокування кімнати";
+"party.lockRoom.passwordPlaceholder"     = "Введіть 4-значний пароль";
+"party.lockRoom.lockAction"              = "Заблокувати";
+"party.lockRoom.passwordInvalid"         = "Пароль має містити 4 цифри";
+"party.lockRoom.lockSuccess"             = "Кімнату заблоковано";
+"party.lockRoom.unlockSuccess"           = "Кімнату розблоковано";
+"party.lockRoom.operationFailed"         = "Операція не вдалася, спробуйте ще раз";
+// E spec 2026-07-14 派对房 MC Seat（接待位）
+"party.mcSeat.sheetTitle"                = "Місце MC";
+"party.mcSeat.submit"                    = "Призначити місце MC";
+"party.mcSeat.tips"                      = "Місце MC можуть зайняти лише власник та адміністратори";
+"party.mcSeat.badge"                     = "MC";
+"party.mcSeat.cannotTake"                = "Неможливо зайняти місце MC";
+"party.mcSeat.change"                    = "Змінити MC";
+"party.mcSeat.confirmEmpty"              = "Зробити це вільне місце місцем MC?";
+"party.mcSeat.confirmPrivilegedFormat"   = "%@ зараз адміністратор. Зробити це місце місцем MC?";
+"party.mcSeat.confirmNormalFormat"       = "%@ буде видалено з місця. Зробити це місце місцем MC?";
+"party.mcSeat.setSuccess"                = "Місце MC встановлено";
+"party.mcSeat.closeSuccess"              = "Місце MC закрито";
+"party.mcSeat.operationFailed"           = "Операція не вдалася, спробуйте ще раз";
+
+// v3（2026-07-15）Step 2 通知公屏系统消息
+"party.videoSeat.inviteAcceptedFormat"   = "%@ зайняв(ла) відеомісце";
+"party.videoSeat.feedbackReject"         = "Запрошення на відеомісце відхилено";
+"party.videoSeat.feedbackTimeout"        = "Час запрошення на відеомісце вичерпано";
+"party.videoSeat.feedbackLeave"          = "Запрошений користувач залишив кімнату";
+"party.videoSeat.feedbackOccupied"       = "Відеомісце вже зайнято";
+"party.videoSeat.feedbackAlreadyOn"      = "Запрошений користувач вже на місці";
+"party.videoSeat.feedbackJoinFailed"     = "Запрошений користувач не зміг зайняти відеомісце";
+"party.authUpdate.setAdmin"              = "Вас призначено адміністратором кімнати";
+"party.authUpdate.removeAdmin"           = "Ви більше не адміністратор кімнати";
+"party.authUpdate.setAdminFormat"        = "%@ призначено адміністратором кімнати";
+"party.authUpdate.removeAdminFormat"     = "%@ знято з посади адміністратора кімнати";
+"party.roomAnnouncement.format"          = "Оголошення кімнати: %@";
+"party.luckyNumber.drawFormat"           = "%1$@ випало щасливе число %2$d";
+"party.luckyNumber.winFormat"            = "%1$@ виграв щасливе число %2$d";
+"party.luckyNumber.matched"              = "Щасливе число збіглося!";
+"party.luckyNumber.personalWinFormat"    = "Чудово! Вам випало щасливе число %d";
+"party.create.section.name"              = "Назва кімнати";
+"party.create.name.placeholder"          = "До 20 символів";
+"party.create.hint.needName"             = "Введіть назву кімнати, щоб продовжити";
+"party.create.hint.needTagline"          = "Введіть слоган, щоб продовжити";
+"party.create.hint.needLanguage"         = "Виберіть мову, щоб продовжити";
+"party.create.hint.needTemplate"         = "Виберіть шаблон, щоб продовжити";
+"party.create.hint.needBackground"       = "Виберіть фон, щоб продовжити";
+"party.create.section.template"          = "Обрати шаблон";
+"party.create.template.loading"          = "Завантаження шаблонів…";
+"party.create.template.empty"            = "У dev шаблони недоступні";
+"party.create.template.fallbackFormat"   = "Шаблон %d";
+"party.create.template.detailFormat"     = "Місць %1$d · Відео %2$d · Голос %3$d";
+"party.create.error.templateLoad"        = "Не вдалося завантажити шаблони";
+"party.create.error.templateLoadFormat"  = "Не вдалося завантажити шаблони: %@";
+"party.create.error.noRoomId"            = "Сервер не повернув roomId";
+"party.create.error.failed"              = "Не вдалося створити";
+"party.create.error.failedFormat"        = "Не вдалося створити: %@";
+
+"party.invite.title"                     = "Запрошення на відео-місце";
+"party.invite.accept"                    = "Прийняти";
+"party.invite.reject"                    = "Відхилити";
+"party.invite.messageFormat"             = "%1$@ запросив вас на відео-місце %2$d";
+"party.invite.expiresFormat"             = "Спливає через %d с";
+"party.seatInvite.title"                  = "Запрошення на мікрофон";
+"party.seatInvite.empty"                  = "Немає користувачів у мережі";
+"party.seatInvite.joined"                 = "Приєднався";
+"party.seatInvite.inviting"               = "Запрошення";
+"party.selfActions.title"                = "Моє місце";
+"party.selfActions.micOn"                = "Увімкнути мікрофон";
+"party.selfActions.micOff"               = "Вимкнути мікрофон";
+"party.selfActions.camOn"                = "Увімкнути камеру";
+"party.selfActions.camOff"               = "Вимкнути камеру";
+"party.selfActions.leaveSeat"            = "Залишити місце";
+"party.input.placeholder"                = "Скажіть щось…";
+"party.gift.messageFormat"               = "🎁 %@ відправив %@ x%d";
+"party.giftEffect.sendsTo"               = "Надсилає";
+"party.giftEffect.peopleFormat"          = "%d осіб";
+
+"party.state.joined"                     = "Приєднався";
+"party.state.entering"                   = "Приєднання…";
+"party.state.leaving"                    = "Вихід…";
+"party.state.ended"                      = "Залишили";
+
+"party.seat.empty"                       = "Вільне місце";
+"party.seat.occupied"                    = "Користувач на місці";
+"party.seat.muted"                       = "Без звуку";
+
+"party.error.enterFailedFormat"          = "Не вдалося увійти: %@";
+"party.error.exitFailedFormat"           = "Не вдалося вийти: %@";
+"party.error.seatOccupied"               = "Місце зайняте";
+"party.error.seatEmpty"                  = "Місце вільне";
+"party.error.banned"                     = "Обліковий запис заблоковано";
+"party.error.levelInsufficient"          = "Недостатній рівень";
+"party.error.networkLost"                = "Мережу відключено";
+"party.error.kicked"                     = "Виключено власником";
+"party.error.passwordWrong"              = "Невірний пароль кімнати";
+"party.error.mediaSwitchFailed"          = "Не вдалося перемкнути мікрофон/камеру";
+
+/* MARK: - E spec §3 Room Mode */
+"party.roomMode.sheetTitle"              = "Режим кімнати";
+"party.roomMode.liveAndVoiceTab"         = "Live+Voice";
+"party.roomMode.voiceOnlyTab"            = "Голос";
+"party.roomMode.videoOnlyTab"            = "Відео";
+"party.roomMode.confirmTitle"            = "Змінити режим кімнати?";
+"party.roomMode.confirmBody"             = "Усіх користувачів буде видалено з місць.";
+"party.roomMode.confirmSwitch"           = "Перемкнути";
+"party.roomMode.confirmCancel"           = "Скасувати";
+"party.roomMode.upgradeGuide"            = "Досягніть рівня %d, щоб розблокувати цей режим";
+"party.roomMode.systemMsg"               = "Розкладку кімнати оновлено. Усіх користувачів видалено з місць. Виберіть нове місце, щоб продовжити спілкування!";
+"party.roomMode.emptyState"              = "Режими недоступні";
+"party.roomMode.loadError"               = "Не вдалося завантажити режими";
+
+/* MARK: - E spec §3 Mic Application */
+"party.micApplication.sheetTitle"        = "Список заявок";
+"party.micApplication.peopleApplyFormat" = "%d осіб подали заявку";
+"party.micApplication.emptyState"        = "Немає заявок";
+"party.micApplication.approve"           = "Схвалити";
+"party.micApplication.reject"            = "Відхилити";
+"party.micApplication.noSeatAvailable"   = "Вільних місць немає, зачекайте, поки хтось звільнить місце";
+"party.micApplication.rejectedCooldown"  = "Спробуйте пізніше";
+"party.micApplication.rejectedByHost"    = "Вашу заявку на місце відхилено";
+"party.micApplication.timeoutAutoGiveUp" = "Час заявки вичерпано";
+"party.micApplication.switchOnTitle"     = "Увімкнути заявки на мікрофон?";
+"party.micApplication.switchOffTitle"    = "Вимкнути заявки на мікрофон?";
+"party.micApplication.switchOnBody"      = "Користувачі зможуть подавати заявки на місце. Кожну заявку потрібно схвалювати.";
+"party.micApplication.switchOffBody"     = "Користувачі більше не зможуть запитувати місця.";
+"party.micApplication.switchOnSystemMsg" = "Заявки на мікрофон увімкнено";
+"party.micApplication.switchOffSystemMsg" = "Заявки на мікрофон вимкнено";
+"party.micApplication.cancel"            = "Скасувати";
+"party.micApplication.tapEmptySeatHint"  = "Натисніть на вільне місце, щоб подати заявку";
+"party.micApplication.submit"            = "Застосувати";
+"party.deleteMessage"                    = "Видалити повідомлення";
+"party.deleteMessageConfirm"             = "Видалити це повідомлення?";
+"party.messageDeleted"                   = "Повідомлення видалено";
+"party.deleteMessageFailed"              = "Не вдалося видалити повідомлення";
+"party.approveSeatPicker.title"          = "Призначити місце";
+"party.approveSeatPicker.subtitleFormat" = "На яке місце схвалити %@?";
+"party.approveSeatPicker.seatNumberFormat" = "Місце №%d";
+"party.approveSeatPicker.voiceSeat"      = "Голосове місце";
+"party.approveSeatPicker.videoSeat"      = "Відеомісце";
+
+/* MARK: - H-0 用户详情页 */
+"userProfile.uid.prefix"                 = "uid: ";
+"userProfile.like.label"                 = "Кількість лайків";
+"userProfile.favorite.label"             = "Кількість обраних";
+"userProfile.follow"                     = "Підписатися";
+"userProfile.following"                  = "Підписки";
+"userProfile.menu.report"                = "Поскаржитися";
+"userProfile.menu.block"                 = "Заблокувати";
+"userProfile.blockConfirm.title"         = "";
+"userProfile.blockConfirm.message"       = "Якщо користувач у чорному списку, ви більше не отримуватимете його повідомлень.";
+"userProfile.blockConfirm.action"        = "Підтвердити";
+"userProfile.blockConfirm.cancel"        = "Скасувати";
+"userProfile.block.success"              = "Додано до чорного списку.";
+"userProfile.block.fail"                 = "Не вдалося додати до чорного списку.";
+"userProfile.giftWall.title"             = "Стіна подарунків";
+"userProfile.giftWall.placeholder"       = "Стіна подарунків незабаром";
+"userProfile.honorWall.title"            = "Стіна пошани";
+"userProfile.honorWall.badge"            = "Значок";
+"userProfile.honorWall.frame"            = "Рамка";
+"userProfile.honorWall.vehicle"          = "Транспорт";
+"userProfile.honorWall.empty"            = "Поки немає елементів";
+"userProfile.honorWall.equipped"         = "Одягнено";
+"userProfile.giftWall.lit"               = "Засвічено";
+"userProfile.giftWall.unlit"             = "Не засвічено";
+"userProfile.giftWall.all"               = "Усі";
+"userProfile.giftWall.emptyLit"          = "Поки немає засвічених подарунків";
+"userProfile.giftWall.emptyUnlit"        = "Усі подарунки засвічені";
+"userProfile.giftWall.emptyAll"          = "Поки немає подарунків";
+"userProfile.section.loadFailed"         = "Не вдалося завантажити";
+"userProfile.moments.title"              = "Моменти";
+"userProfile.action.message"             = "Повідомлення";
+"userProfile.action.call"                = "Дзвінок";
+"userProfile.networkError"               = "Помилка мережі, спробуйте ще раз.";
+"userProfile.badUserId"                  = "Недійсний ID користувача";
+"userProfile.loadError.retry"            = "Повторити";
+"common.comingSoon"                      = "Незабаром";
+"common.back"                            = "Назад";
+"common.followSuccess"                   = "Ви підписалися";
+"common.unfollowSuccess"                 = "Ви відписалися";
+// P1-6 (2026-07-14) 主播审核弹窗
+"common.kindReminder"                    = "Нагадування";
+"common.confirm"                         = "Підтвердити";
+"common.discard"                         = "Відхилити";
+"common.close"                           = "Закрити";
+"audit.passed.message"                   = "Вітаємо, вашу перевірку схвалено. Будь ласка, увійдіть у застосунок знову.";
+"audit.rejected.fallback"                = "Вашу заявку на перевірку відхилено.";
+"userProfile.a11y.avatar"                = "Аватар";
+"userProfile.a11y.menu"                  = "Більше опцій";
+"userProfile.a11y.giftFallback"          = "Подарунок";
+
+// Report sheet (对齐 H5 c-feedbackPopup type='userProfile' 分支)
+"report.title"                           = "Поскаржитися";
+"report.reason.incorrect"                = "Невірна інформація";
+"report.reason.sexual"                   = "Сексуальний вміст";
+"report.reason.harassment"               = "Домагання або образи";
+"report.reason.unreasonable"             = "Необґрунтовані вимоги";
+"report.description.label"               = "Детальний опис";
+"report.description.placeholder"         = "Опишіть виниклу проблему";
+"report.success.toast"                   = "Відгук успішно надіслано.";
+"common.other"                           = "Інше";
+"common.networkError"                    = "Помилка мережевого запиту";
+"common.retry"                           = "Повторити";
+"common.weekly"                          = "Щотижня";
+"common.monthly"                         = "Щомісяця";
+"common.thisWeek"                        = "Цей тиждень";
+"common.lastWeek"                        = "Минулий тиждень";
+"common.thisMonth"                       = "Цей місяць";
+"common.lastMonth"                       = "Минулий місяць";
+"common.twoMonthsAgo"                    = "2 місяці тому";
+"common.date"                            = "Дата";
+"common.income"                          = "Дохід";
+
+// MARK: - Phase B 直播数据页
+"liveData.navTitle"                      = "Дані трансляції";
+"liveData.totalData"                     = "Загальні дані";
+"liveData.totalDuration"                 = "Загальна тривалість";
+"liveData.totalIncome"                   = "Загальний дохід";
+"liveData.detailData"                    = "Детальні дані";
+"liveData.liveIncome"                    = "Дохід від трансляції";
+"liveData.privateCallIncome"             = "Дохід від приватних дзвінків";
+"liveData.liveDuration"                  = "Тривалість трансляції";
+"liveData.timeRemaining"                 = "Залишилося часу:";
+"liveData.days"                          = "дн.";
+"liveData.expand"                        = "Розгорнути";
+"liveData.collapse"                      = "Згорнути";
+
+// Party Data 派对数据看板（对齐安卓 PartyRoomDataActivity）
+"partyData.navTitle"                     = "Статистика Party";
+"partyData.totalMicTime"                 = "Загальний час у мікрофоні";
+"partyData.micTime"                      = "Час у мікрофоні";
+"partyData.totalIncome"                  = "Загальний дохід";
+"partyData.giftIncome"                   = "Дохід від подарунків у Party";
+"partyData.callIncome"                   = "Дохід від Party-дзвінків";
+
+"partyData.rule.navTitle"                = "Правила статистики Party";
+"partyData.rule.section1"                = "Основна інформація:";
+"partyData.rule.section2"                = "Правила підрахунку часу в мікрофоні:";
+"partyData.rule.section3"                = "Склад доходу:";
+"partyData.rule.section4"                = "Правила відображення:";
+"partyData.rule.title1"                  = "Цикл оновлення даних:";
+"partyData.rule.content1"                = "Дані Party оновлюються періодично. За цей тиждень / цей місяць відображається накопичена статистика в реальному часі; за минулий тиждень / минулий місяць — підсумкові суми.";
+"partyData.rule.title2"                  = "Правила підрахунку:";
+"partyData.rule.content2"                = "Час у мікрофоні враховує накопичені секунди на голосових і відеомісцях у всіх Party-кімнатах за період.";
+"partyData.rule.title3"                  = "Джерела доходу:";
+"partyData.rule.content3"                = "Дохід від подарунків у Party — це алмази, отримані з подарунків усередині Party-кімнат. Дохід від Party-дзвінків включає як оплату дзвінків, так і подарунки, отримані під час Party-дзвінків.";
+"partyData.rule.title4"                  = "Правила відображення:";
+"partyData.rule.content4"                = "У щоденному списку відображаються лише дати з активністю. Суми вказано в алмазах.";
+
+"party.micTimeDetail.title"              = "Час на мікрофоні за кімнатами";
+"party.micTime.total"                    = "Усього";
+"party.micTime.voice"                    = "Голос";
+"party.micTime.video"                    = "Відео";
+"party.micTime.empty"                    = "Даних про час на мікрофоні ще немає";
+
+// LiveData 规则 sheet（对齐 H5 liveRule/index.vue 默认分支）
+"liveData.rule.navTitle"                 = "Правила трансляції";
+"liveData.rule.section1"                 = "Основна інформація:";
+"liveData.rule.section2"                 = "Оновлення даних і цикл статистики:";
+"liveData.rule.section3"                 = "Правила розрахунку доходу:";
+"liveData.rule.section4"                 = "Обробка винятків:";
+"liveData.rule.calcMethod"               = "2. Метод розрахунку:";
+"liveData.rule.title1"                   = "1. Сфера застосування:";
+"liveData.rule.title2"                   = "1. Частота оновлення:";
+"liveData.rule.title3"                   = "2. Цикл статистики:";
+"liveData.rule.title4"                   = "1. Включений дохід:";
+"liveData.rule.title7"                   = "1. Затримка доходу:";
+"liveData.rule.title8"                   = "2. Спір щодо даних:";
+"liveData.rule.content1"                 = "Застосовується до офіційних трансляцій з нормальним відео та аудіо, які відповідають правилам платформи та вимогам щодо припустимої тривалості.";
+"liveData.rule.content2"                 = "Дані оновлюються щогодини. Для трансляцій, що тривають довше одного дня, тривалість і дохід від подарунків обліковуються за датою початку сесії.";
+"liveData.rule.content3"                 = "Підтримується тижнева та місячна статистика. Користувачі можуть переглядати дані за останні два тижні та останні три місяці. Дані оновлюються автоматично за відповідним циклом.";
+"liveData.rule.content4"                 = "Дохід від подарунків під час трансляції, дохід від подарунків під час приватних дзвінків та дохід від витрачання алмазів у приватних дзвінках.";
+"liveData.rule.content5"                 = "a. Дохід трансляції = Дохід від подарунків під час трансляції (включно з подарунками у приватних дзвінках). b. Дохід від приватних дзвінків = Алмази, витрачені під час приватних дзвінків.";
+"liveData.rule.content7"                 = "Затримка оновлення даних зазвичай не перевищує 24 годин.";
+"liveData.rule.content8"                 = "Якщо у вас є питання щодо даних, ви можете подати апеляцію в офіційну підтримку для перевірки.";
+
+// Work 底部 sysInfo 组件（对齐 H5 work/sysInfo.vue）
+"system.serverTime"                      = "Час сервера";
+"contact.officialWhatsapp"               = "Офіційний WhatsApp: %@";
+"common.copySuccess"                     = "Скопійовано";
+
+// MARK: - K 里程碑 美颜设置页
+"beautySettings.pageTitle"                                  = "Краса";
+"beautySettings.globalToggle"                               = "Краса";
+"beautySettings.resetDefaults"                              = "Скинути";
+"beautySettings.done"                                       = "Готово";
+"beautySettings.tab.skin"                                   = "Шкіра";
+"beautySettings.tab.shape"                                  = "Форма";
+"beautySettings.tab.filter"                                 = "Фільтр";
+"beautySettings.tab.sticker"                                = "Стікер";
+"beautySettings.banner.loading"                             = "Завантаження рушія краси...";
+"beautySettings.banner.unavailable"                         = "Рушій краси недоступний";
+"beautySettings.banner.interrupted"                         = "Попередній перегляд призупинено";
+"beautySettings.param.blur"                                 = "Гладкість";
+"beautySettings.param.whiten"                               = "Відбілити";
+"beautySettings.param.red"                                  = "Рум'янець";
+"beautySettings.param.clarity"                              = "Чіткість";
+"beautySettings.param.sharpen"                              = "Різкість";
+"beautySettings.param.faceThreed"                           = "3D";
+"beautySettings.param.eyeBright"                            = "Яскраві очі";
+"beautySettings.param.toothWhiten"                          = "Білі зуби";
+"beautySettings.param.removePouch"                          = "Під очима";
+"beautySettings.param.removeNasolabialFolds"                = "Носогубні складки";
+"beautySettings.param.cheekV"                               = "V-подібне обличчя";
+"beautySettings.param.cheekNarrow"                          = "Вужче обличчя";
+"beautySettings.param.cheekShort"                           = "Коротше обличчя";
+"beautySettings.param.cheekSmall"                           = "Менше обличчя";
+"beautySettings.param.intensityCheekbones"                  = "Вилиці";
+"beautySettings.param.intensityLowerJaw"                    = "Нижня щелепа";
+"beautySettings.param.eyeEnlarging"                         = "Великі очі";
+"beautySettings.param.intensityEyeCircle"                   = "Круглі очі";
+"beautySettings.param.intensityChin"                        = "Підборіддя";
+"beautySettings.param.intensityForehead"                    = "Лоб";
+"beautySettings.param.intensityNose"                        = "Тонкий ніс";
+"beautySettings.param.intensityMouth"                       = "Рот";
+"beautySettings.param.intensityLipThick"                    = "Товщина губ";
+"beautySettings.param.intensityCanthus"                     = "Куточки очей";
+"beautySettings.param.intensityEyeSpace"                    = "Відстань між очима";
+"beautySettings.filter.origin"                              = "Оригінал";
+"beautySettings.filter.ziran"                               = "Натуральний";
+"beautySettings.filter.zhiganhui"                           = "Текстура";
+"beautySettings.filter.mitao"                               = "Персик";
+"beautySettings.filter.bailiang"                            = "Яскравий";
+"beautySettings.filter.fennen"                              = "Рожевий";
+"beautySettings.filter.lengsediao"                          = "Холодний";
+"beautySettings.filter.nuansediao"                          = "Теплий";
+"beautySettings.filter.gexing"                              = "Індивідуальність";
+"beautySettings.filter.xiaoqingxin"                         = "Свіжий";
+"beautySettings.filter.heibai"                              = "Моно";
+"beautySettings.filter.levelLabel"                          = "Сила фільтра";
+"beautySettings.sticker.comingSoon"                         = "Стікери скоро з'являться";
+"beauty.error.authExpired"                                  = "Термін дії ліцензії краси закінчився. Оновіть застосунок.";
+"beauty.error.bundleMissing"                                = "Ресурс краси відсутній.";
+"beauty.error.genericSetupFailed"                           = "Не вдалося ініціалізувати рушій краси.";
+"beauty.error.setupTimeout"                                 = "Перевищено час запуску рушія краси.";
+"beauty.error.persistenceDecodeFailed"                      = "Не вдалося прочитати налаштування краси.";
+"beauty.error.persistenceWriteFailed"                       = "Не вдалося зберегти налаштування краси.";
+"beautySettings.a11y.preview"                               = "Попередній перегляд краси";
+"beautySettings.a11y.sliderFormat"                          = "%@, значення %d";
+"beautySettings.recover"                                    = "Відновити";
+"beautySettings.save"                                       = "Зберегти";
+
+/* MARK: - H-2 GiftMessage 私密媒体解锁（对齐 H5 secretMessage） */
+"giftMessage.navTitle"              = "Подарунок-повідомлення";
+"giftMessage.photoTitle"            = "Секретні фото-повідомлення";
+"giftMessage.videoTitle"            = "Секретні відео-повідомлення";
+"giftMessage.setGiftIntro"          = "Встановіть подарунок, і після розблокування ви отримаєте подарунок";
+"giftMessage.submit"                = "Надіслати";
+"giftMessage.giftPicker.title"      = "Встановіть подарунок, щоб користувачі розблокували ваше секретне повідомлення";
+"giftMessage.giftPicker.loadFail"   = "Не вдалося завантажити подарунки";
+"giftMessage.reachedLimit"          = "Досягнуто ліміту";
+"giftMessage.selectGiftRequired"    = "Виберіть подарунок для всіх елементів";
+"giftMessage.addMedia"              = "Додати";
+"giftMessage.deleteItem"            = "Видалити";
+"giftMessage.networkErrorFallback"  = "Помилка мережі, спробуйте ще раз.";
+"giftMessage.unsupportedFile"       = "Файл не підтримується";
+"giftMessage.uploading"             = "Завантаження...";
+"giftMessage.submitSucceed"         = "Надіслано успішно";
+"giftMessage.photoCountFormat"      = "(%d/%d)";
+"giftMessage.videoCountFormat"      = "(%d/%d)";
+"beautySettings.recoverConfirm.title"                       = "Скинути налаштування?";
+"beautySettings.recoverConfirm.message"                     = "Поточні налаштування буде скинуто.";
+"beautySettings.recoverConfirm.yes"                         = "Скинути";
+"beautySettings.recoverConfirm.no"                          = "Скасувати";
+
+// X 按钮未保存丢弃弹窗（2026-07-03 对齐 H5 index.vue:199-210 goBack）
+"beautySettings.exitConfirm.title"                          = "Незбережені зміни";
+"beautySettings.exitConfirm.message"                        = "Налаштування краси не збережено. Дійсно хочете вийти?";
+"beautySettings.exitConfirm.discard"                        = "Вийти";
+"beautySettings.exitConfirm.continue"                       = "Продовжити";
+
+// Save 成功 toast（2026-07-03 对齐 H5 index.vue:155）
+"beautySettings.saveSuccess.toast"                          = "Збережено!";
+"beautyCamera.capturePhoto"                                 = "Зробити фото";
+"beautyCamera.captureFailed"                                = "Не вдалося зберегти фото. Спробуйте ще раз.";
+"beautyCamera.captureNoFrame"                               = "Камера готується. Спробуйте ще раз.";
+
+// MARK: - Match tab（L 里程碑）
+
+// MARK: - 直播结果页（对齐 H5 locales/en.json live.*）
+"liveResult.title"               = "Трансляція завершена";
+"liveResult.durationLabel"       = "Тривалість";
+"liveResult.weakNetworkNotice"   = "Через багаторазові проблеми з вашою мережею.";
+"liveResult.card.liveData"       = "Дані трансляції";
+"liveResult.card.topGifters"     = "Топ дарувальників";
+"liveResult.card.privateCalls"   = "Переходи в приватні дзвінки";
+"liveResult.viewers"             = "Глядачі";
+"liveResult.followers"           = "Підписники";
+"liveResult.gifters"             = "Дарувальники";
+"liveResult.diamonds"            = "Діаманти";
+"liveResult.more"                = "Більше";
+"liveResult.empty"               = "Немає даних";
+"liveResult.loadFailed"          = "Не вдалося отримати дані.";
+"liveResult.retry"               = "Повторити";
+"liveResult.back"                = "Назад";
+"liveResult.follow"              = "Підписатися";
+"liveResult.message"             = "Повідомлення";
+"liveResult.messageComingSoon"   = "Незабаром";
+"liveResult.followSuccess"       = "Підписано";
+
+// MARK: - 首次开播规则页（严格对齐 H5 locales/en.json live.*）
+"firstLiveRule.navTitle"         = "";
+"firstLiveRule.beforeStartTitle" = "Перш ніж почати";
+"firstLiveRule.beforeStartDesc"  = "За допомогою функції трансляції ви можете почати трансляцію та взаємодіяти з аудиторією. Глядачі можуть підтримувати вас, надсилаючи віртуальні подарунки, які перетворюються на ваш дохід.\n\nКрім того, ми надаємо ведучим додаткові нагороди залежно від щоденного часу трансляцій та отриманих подарунків. Якщо ви відповідаєте певним стандартам, ви отримаєте право на додаткові нагороди. Подробиці дізнайтеся у свого агента або адміністратора.";
+"firstLiveRule.guidelinesTitle"  = "Правила прямих трансляцій";
+"firstLiveRule.confirm"          = "Підтвердити";
+"firstLiveRule.guideline1.title" = "1. Заборонений контент:";
+"firstLiveRule.guideline1.content" = "У кімнатах трансляцій заборонено насильство, порнографію, вульгарність і політичні теми.";
+"firstLiveRule.guideline2.title" = "2. Захист неповнолітніх:";
+"firstLiveRule.guideline2.content" = "Неповнолітнім заборонено з'являтися в кадрі; за порушення можливі санкції.";
+"firstLiveRule.guideline3.title" = "3. Культурне мовлення:";
+"firstLiveRule.guideline3.content" = "Уникайте нецензурної лексики, образ та залякування; поширюйте позитив.";
+"firstLiveRule.guideline4.title" = "4. Дрес-код:";
+"firstLiveRule.guideline4.content" = "Ведучі повинні уникати відвертого або провокаційного одягу.";
+"firstLiveRule.guideline5.title" = "5. Використання камери:";
+"firstLiveRule.guideline5.content" = "Камери повинні залишатися під наглядом та активними, щоб уникнути санкцій.";
+"firstLiveRule.guideline6.title" = "6. Стандарти якості:";
+"firstLiveRule.guideline6.content" = "Підтримуйте чітке зображення та належний рівень звуку.";
+"firstLiveRule.guideline7.title" = "7. Жодних приватних угод:";
+"firstLiveRule.guideline7.content" = "Спрямовувати користувачів на зовнішні канали для угод заборонено. Серйозні порушення можуть призвести до скасування права на трансляцію.";
+"match.marquee.callStarted"      = "Відеодзвінок розпочато.";
+"match.marquee.empty"            = "Розпочніть підбір, щоб познайомитися з більшою кількістю людей";
+"match.title.matchesFound"       = "Знайдено підборів: %d!";
+"match.subtitle.description"     = "Ваші нещодавні підбори вгорі. Натисніть, щоб почати чат і зачарувати їх на дзвінок.";
+"match.userList.empty"           = "Поки немає підборів";
+"match.userCard.videoPrice"      = "%d/хв";
+"match.userCard.close"           = "Закрити";
+"match.button.a11y.turnOn"       = "Увімкнути підбір";
+"match.button.a11y.turnOff"      = "Вимкнути підбір";
+
+// Match toast 文案（MatchStore 状态迁移）
+"match.toast.networkError"       = "Помилка мережі, спробуйте ще раз";
+"match.toast.noFaceDetected"     = "Обличчя не виявлено";
+"match.toast.exceedCount"        = "Досягнуто денного ліміту підборів";
+"match.toast.turnOnFailed"       = "Не вдалося увімкнути підбір";
+"match.toast.turnOnSucceed"      = "Підбір увімкнено";
+"match.toast.turnOffSucceed"     = "Підбір вимкнено";
+"match.toast.cameraStartFailed"  = "Не вдалося запустити камеру";
+"match.toast.cameraUnavailable"  = "Камера недоступна";
+"match.toast.imOffline"          = "Перепідключення, спробуйте ще раз";
+"match.resumeAlert.title"        = "Відновити підбір?";
+"match.resumeAlert.message"      = "Відновити підбір?";
+"match.resumeAlert.confirm"      = "Відновити";
+"match.resumeAlert.cancel"       = "Скасувати";
+"match.marquee.a11y.callFormat"  = "%1$@ зателефонував %2$@";
+
+// Match rule 弹窗（#3b 首次每日开启匹配的规则同意）
+"match.rule.title"               = "Правила підбору";
+"match.rule.detail1"             = "1. Кожен дзвінок містить перевірку обличчя. Порушення призводять до денної заборони на підбір. Для підбору потрібно, щоб обличчя було видно. Якщо його не виявлено, підбір буде призупинено на 10 хвилин.";
+"match.rule.detail2"             = "2. Для дзвінків через підбір перші 20 секунд БЕЗКОШТОВНО. Після 20 секунд стягується плата згідно з вашою ціною за дзвінок.";
+"match.rule.detail3"             = "3. Після кількох підборів ви можете отримати нагороду алмазами в розділі «Завдання».";
+"match.rule.detail4"             = "4. Поки співрозмовник поповнює рахунок, дзвінок залишається активним 30 секунд; після успішного поповнення тарифікація продовжиться за вашою похвилинною ставкою.";
+"match.rule.agree"               = "Погоджуюсь";
+
+// Match tip 弹窗（#3c 10 分钟未开启匹配提示）
+"match.tip.title"                = "Увімкніть підбір, щоб швидше отримувати дзвінки та більше заробляти.";
+"match.tip.goMatch"              = "До підбору";
+"match.tip.noReminder"           = "Не нагадувати сьогодні";
+
+// Match face check & exit 弹窗（#3d）
+"match.face.notDetected.title"   = "Обличчя не виявлено";
+"match.face.notDetected.content" = "Тримайте обличчя в кадрі під час підбору. Якщо обличчя не буде виявлено протягом 5 секунд, вас буде вилучено з підбору.";
+"match.exit.title"               = "Вас вилучено з підбору";
+"match.exit.content"             = "Ваше обличчя не виявлено під час перевірки. Вас видалено з пулу підбору.";
+
+/* v10 (2026-07-08) Wishlist + 心愿达成飘屏 */
+"wishlist.progress.complete"     = "Виконано";
+"wishlist.panel.title"           = "Список бажань %@ на цей раунд";
+"wishlist.panel.subtitle"        = "Допоможіть ведучій виконати її маленьке бажання й отримайте винагороду!";
+"wishlist.panel.empty"           = "У цій сесії список бажань не задано";
+"wishlist.panel.top6Title"       = "Топ дарувальників";
+"wishlist.panel.top6Empty"       = "Показано лише топ‑6 за вартістю подарунків";
+"wishlist.float.complete"        = "Бажання виконано,";
+"wishlist.float.thanks"          = "Дякую, мій герою!";
+"wishlist.top1.prefix"           = "тепер мій";
+"wishlist.top1.suffix"           = "покровитель";
+
+/* EditProfile 用户资料编辑页（I 里程碑，对齐 H5 anchor-livechat-h5/src/views/profile/index.vue） */
+"editProfile.navTitle"                             = "Редагувати профіль";
+"editProfile.confirm"                              = "Зберегти";
+"editProfile.cancel"                               = "Скасувати";
+
+"editProfile.section.basic.title"                  = "Основна інформація";
+"editProfile.section.basic.hint"                   = "Заповніть профіль, щоб залучити більше глядачів";
+"editProfile.section.photos.titleFormat"           = "Фото (%d/9)";
+"editProfile.section.videos.titleFormat"           = "Відео (%d/6)";
+"editProfile.section.callVideo.title"              = "Відео дзвінка";
+"editProfile.section.callVideo.hint"               = "Встановіть відео, яке відтворюється під час вхідного дзвінка";
+"editProfile.section.greetMsgs.title"              = "Привітальні повідомлення";
+"editProfile.section.greetMsgs.hint"               = "Автоматично надсилається користувачу при з'єднанні";
+"editProfile.section.greetMsgs.reviewingTitle"     = "На перевірці";
+
+"editProfile.nickname.label"                       = "Нікнейм";
+"editProfile.nickname.placeholder"                 = "Введіть...";
+"editProfile.nickname.editTitle"                   = "Нікнейм";
+"editProfile.nickname.wordCountFormat"             = "%d/15";
+
+"editProfile.bio.label"                            = "Про себе";
+"editProfile.bio.placeholder"                      = "Введіть...";
+"editProfile.bio.wordCountFormat"                  = "%d/200";
+
+"editProfile.greetMsg.addButton"                   = "Додати";
+"editProfile.greetMsg.placeholder"                 = "Введіть...";
+"editProfile.greetMsg.wordCountFormat"             = "%d/50";
+
+"editProfile.badge.inReview"                       = "На перевірці";
+
+"editProfile.loadError.title"                      = "Не вдалося завантажити";
+"editProfile.loadError.retry"                      = "Повторити";
+"editProfile.success.title"                        = "Надіслано на модерацію, зачекайте...";
+"editProfile.success.confirm"                      = "Підтвердити";
+"editProfile.discard.title"                        = "Відхилити зміни?";
+"editProfile.discard.message"                      = "Незбережені зміни буде втрачено.";
+"editProfile.discard.confirm"                      = "Відхилити";
+"editProfile.discard.keep"                         = "Продовжити редагування";
+"editProfile.sizeAlert.title"                      = "Не вдалося завантажити";
+"editProfile.sizeAlert.ok"                         = "ОК";
+
+"editProfile.toast.photosLimit"                    = "Можна додати не більше 9 фото";
+"editProfile.toast.videosLimit"                    = "Можна додати не більше 6 відео";
+"editProfile.toast.uploading"                      = "завантаження...";
+"editProfile.toast.uploadFailed"                   = "Деякі файли не завантажилися, спробуйте ще раз!";
+"editProfile.toast.uploadTimeout"                  = "Час завантаження вичерпано, спробуйте ще раз";
+"editProfile.toast.imageTooLarge"                  = "Зображення завелике (макс. 5 МБ)";
+"editProfile.toast.videoTooLarge"                  = "Відео завелике (макс. 20 МБ)";
+"editProfile.toast.videoFormatUnsupported"         = "Формат відео не підтримується (лише mp4/mov)";
+"editProfile.toast.avatarInReview"                 = "Аватар на перевірці, зачекайте...";
+"editProfile.toast.nicknameInReview"               = "Вибачте, дані вашого профілю на перевірці";
+"editProfile.toast.networkError"                   = "Помилка мережі, спробуйте ще раз";
+
+// MARK: - A-2 新主播注册流程一期（en；ar/tr Step 4 by /i18n translate）
+"register.title.basicInfo"                          = "Налаштуйте профіль";
+"register.title.required"                           = "Заповніть свій Party-профіль";
+"register.title.videoGuide"                         = "Перевірка профілю";
+"register.field.nickname"                           = "Нікнейм";
+"register.field.birthday"                           = "Дата народження";
+"register.field.country"                            = "Країна";
+"register.field.inviteCode"                         = "Код запрошення";
+"register.field.inviteCodeOptional"                 = "необов'язково";
+"register.field.requiredFields"                     = "Заповніть свій Party-профіль";
+"register.field.yourLanguage"                       = "Мови у кімнатах Party (не більше 4)";
+"register.field.selectLanguage"                     = "Оберіть мови кімнат Party";
+"register.field.yourPhotos"                         = "Фото профілю (принаймні %d)";
+"register.field.takeVideo"                          = "Відео для перевірки профілю";
+"register.action.signUp"                            = "Продовжити";
+"register.action.upload"                            = "Надіслати";
+"register.action.edit"                              = "Редагувати";
+"register.action.rerecord"                          = "Перезаписати";
+"register.action.goToRecord"                        = "Перейти до запису";
+"register.action.confirmN"                          = "Підтвердити ( %d )";
+"register.action.cancel"                            = "Скасувати";
+"register.action.languageTitle"                     = "Мова";
+"register.video.guideBody"                          = "Запишіть і завантажте відео для перевірки тривалістю %d секунд, щоб завершити реєстрацію з кодом запрошення.";
+"register.video.discardConfirm"                     = "Скасувати запис? Запис буде втрачено.";
+"register.error.avatarRequired"                     = "Завантажте свій аватар";
+"register.error.nicknameRequired"                   = "Введіть нікнейм";
+"register.error.birthdayRequired"                   = "Оберіть дату народження";
+"register.error.countryRequired"                    = "Оберіть країну";
+"register.error.languageRequired"                   = "Оберіть мову";
+"register.error.languageMax"                        = "Можна обрати не більше чотирьох";
+"register.error.photosMin"                          = "Завантажте принаймні %d фотографій профілю";
+"register.error.videoRequired"                      = "Запишіть і завантажте відео для перевірки.";
+"register.error.cameraDenied"                       = "Потрібен доступ до камери. Увімкніть його в Налаштуваннях.";
+"register.error.micDenied"                          = "Потрібен доступ до мікрофона. Увімкніть його в Налаштуваннях.";
+"register.error.recordInterrupted"                  = "Запис перервано. Спробуйте ще раз.";
+"register.error.compressFailed"                     = "Не вдалося обробити відео. Запишіть заново.";
+"register.error.uploadFailed"                       = "Не вдалося завантажити. Спробуйте ще раз.";
+"register.error.imageTooLarge"                      = "Зображення завелике (макс. %d МБ). Оберіть менше.";
+"register.error.invalidInvitationCode"              = "Недійсний код запрошення.";
+"register.error.serverTemporary"                    = "Сервер тимчасово недоступний. Спробуйте ще раз.";
+
+/* MARK: - PartyRoom 房间内 UI (AnchorBar / ChatTabStrip / InputBar) */
+"partyRoom.idFormat"                     = "ID:%@";
+"partyRoom.welcomeFallback"              = "Ласкаво просимо до моєї кімнати, повеселимося!";
+"partyRoom.a11y.follow"                  = "Підписатися";
+"partyRoom.a11y.following"               = "Підписки";
+"partyRoom.a11y.announcement"            = "Оголошення";
+"partyRoom.a11y.share"                   = "Поділитися";
+"partyRoom.a11y.management"              = "Керування";
+"partyRoom.a11y.more"                    = "Ще";
+"partyRoom.a11y.heat"                    = "Популярність";
+"partyRoom.a11y.viewers"                 = "Глядачі";
+"partyRoom.a11y.wealthRank"              = "Рейтинг багатства";
+"partyRoom.a11y.honorRank"               = "Рейтинг честі";
+"partyRoom.a11y.pk"                      = "Почати PK";
+
+/* 顶栏 Rank / Viewers sheet（对齐 H5 room-rank.vue） */
+"partyRoom.rank.tab.contribution"        = "Внесок";
+"partyRoom.rank.tab.honor"               = "Честь";
+"partyRoom.rank.tab.gameTask"            = "Ігрове завдання";
+"partyRoom.rank.tab.daily"               = "Щодня";
+"partyRoom.rank.period.today"            = "Сьогодні";
+"partyRoom.rank.period.yesterday"        = "Вчора";
+"partyRoom.rank.viewersTitle"            = "Глядачі";
+"partyRoom.rank.emptyRank"               = "Рейтингу поки немає";
+"partyRoom.rank.emptyViewers"            = "Глядачів поки немає";
+"partyRoom.weeklyTask.title"             = "Щотижневе завдання";
+"partyRoom.weeklyTask.liveTime"          = "Час у мікрофоні";
+"partyRoom.weeklyTask.empty"             = "Зараз немає щотижневих завдань";
+"partyRoom.weeklyTask.loadMore"          = "Показати ще";
+"partyRoom.weeklyTask.reward.title"      = "Вітаємо";
+"partyRoom.weeklyTask.reward.confirm"    = "Зрозуміло";
+"partyRoom.weeklyTask.reward.fallback"   = "Нагорода";
+"partyRoom.weeklyTask.giftHistory"       = "Історія подарунків";
+"partyRoom.weeklyTask.reward"            = "Нагорода";
+"partyRoom.a11y.weeklyTask"              = "Щотижневе завдання";
+"partyRoom.hotTask.title"                = "Завдання популярної кімнати";
+"partyRoom.hotTask.missionRules"         = "Правила завдань Party";
+"partyRoom.hotTask.howToReward"          = "Як отримати нагороду?";
+"partyRoom.hotTask.howToRewardDetail"    = "Отримуйте нагороди, виконуючи час у мікрофоні в Party-кімнаті з Топ-3.";
+"partyRoom.hotTask.howToRewardDetailFormat" = "Отримуйте нагороди, виконуючи час у мікрофоні в Party-кімнаті з Топ-%d.";
+"partyRoom.hotTask.micTime"              = "Час у мікрофоні";
+"partyRoom.hotTask.micTimeDetail"        = "Отримуйте геми за накопичений час у мікрофоні.";
+"partyRoom.hotTask.giftsOnMic"           = "Подарунки в мікрофоні";
+"partyRoom.hotTask.giftsOnMicDetail"     = "Отримуйте геми за подарунки, отримані під час перебування в мікрофоні.";
+"partyRoom.hotTask.gems"                 = "Самоцвіти";
+"partyRoom.hotTask.frame"                = "Кадр";
+"partyRoom.hotTask.notes"                = "Примітки";
+"partyRoom.hotTask.notesDetail"          = "Час у мікрофоні зараховується лише коли ваше обличчя видно на відео. Повторні порушення можуть позбавити нагороди.";
+"partyRoom.hotTask.outOfTop"             = "Ваша кімната вийшла з Топ-3";
+"partyRoom.hotTask.outOfTopFormat"       = "Ваша кімната вийшла з Топ-%d";
+"partyRoom.hotTask.rewardTitle"          = "Вітаємо! Мету за часом у мікрофоні досягнуто";
+"partyRoom.hotTask.claim"                = "Отримати";
+"partyRoom.hotTask.validHours"           = "Дійсно %d год";
+"partyRoom.hotTask.faceWarning"          = "Тримайте обличчя в кадрі, щоб продовжити отримувати нагороди.";
+"partyRoom.hotTask.faceLimitWarning"     = "Досягнуто ліміту розпізнавання обличчя. Прогрес завдання в мікрофоні призупинено.";
+"partyRoom.hotRoomGuide.title"           = "Приєднатися до популярної кімнати";
+"partyRoom.hotRoomGuide.action"          = "Перейти";
+"partyRoom.hotRoomGuide.message"         = "Перейти в цільову кімнату, щоб продовжити завдання в мікрофоні?";
+"partyRoom.hotRoomGuide.stay"            = "Залишитись";
+"partyRoom.hotRoomGuide.jumpTop"         = "Перейти в Топ-3";
+"partyRoom.topRoomBonus.enter.title"     = "Відкривайте відео в Party-кімнаті та отримуйте більше бонусів!";
+"partyRoom.topRoomBonus.enter.subtitleFormat" = "Лише для Топ-%d популярних кімнат";
+"partyRoom.topRoomBonus.enter.format"    = "Увійти в ТОП-%d";
+"partyRoom.topRoomBonus.out.titleFormat" = "Ваша кімната вийшла з Топ-%d";
+"partyRoom.topRoomBonus.out.message"     = "Перейти в цільову кімнату, щоб продовжити завдання в мікрофоні?";
+"partyRoom.topRoomBonus.out.jumpFormat"  = "Перейти в ТОП-%d";
+"partyRoom.tab.all"                      = "Усі";
+"partyRoom.tab.chat"                     = "Чат";
+"partyRoom.tab.gift"                     = "Подарунок";
+"partyRoom.input.placeholder"            = "Скажи привіт...";
+"partyRoom.a11y.emoji"                   = "Емодзі";
+"partyRoom.a11y.speaker.on"              = "Динамік увімкнено";
+"partyRoom.a11y.speaker.off"             = "Динамік вимкнено";
+"partyRoom.a11y.mic.on"                  = "Мікрофон увімкнено";
+"partyRoom.a11y.mic.off"                 = "Мікрофон вимкнено";
+"partyRoom.a11y.game"                    = "Ігри";
+"partyRoom.a11y.gift"                    = "Надіслати подарунок";
+
+/* F 里程碑 表情面板 (2026-07-17) */
+"partyRoom.emoji.loadFailed"             = "Не вдалося завантажити емодзі";
+"partyRoom.emoji.retry"                  = "Повторити";
+"partyRoom.emoji.playError"              = "Емодзі недоступне";
+"partyRoom.emoji.onSeatRequired"         = "Займіть місце, щоб використовувати емодзі";
+
+/* v9 PartyRoom biz logic */
+"partyRoom.announcement.title"           = "Оголошення";
+"partyRoom.announcement.empty"           = "Оголошень поки немає";
+"partyRoom.announcement.close"           = "Закрити";
+// F 期房主管理批 编辑通告（2026-07-17）
+"partyRoom.announcement.edit"            = "Редагувати";
+"partyRoom.announcement.save"            = "Зберегти";
+"partyRoom.announcement.cancel"          = "Скасувати";
+"partyRoom.announcement.placeholder"     = "Введіть оголошення кімнати";
+"partyRoom.announcement.saveSuccess"     = "Оголошення збережено";
+"partyRoom.announcement.saveFailed"      = "Не вдалося зберегти оголошення";
+"partyRoom.more.title"                   = "Ще";
+"partyRoom.more.leave"                   = "Покинути кімнату";
+
+/* v12 PartyRoom footer bar (align livechat-h5 footer-wrap.vue) */
+"partyRoom.a11y.apply"                   = "Подати заявку на місце";
+"partyRoom.a11y.message"                 = "Повідомлення";
+"partyRoom.a11y.toolMenu"                = "Ще інструменти";
+"partyRoom.apply.dialog.title"           = "Подати заявку на місце?";
+"partyRoom.apply.confirm"                = "Застосувати";
+"partyRoom.toolMenu.title"               = "Ще інструменти";
+"partyRoom.toolMenu.startPk"             = "Почати PK";
+"partyRoom.toolMenu.luckyNumber"         = "Щасливе число";
+"partyRoom.toolMenu.roomMute"            = "Заглушити кімнату";
+// F 期便利功能 Room Mute toggle 状态化文案（2026-07-17）
+"partyRoom.toolMenu.roomMute.on"         = "Заглушити кімнату";
+"partyRoom.toolMenu.roomMute.off"        = "Зняти заглушення кімнати";
+"partyRoom.toolMenu.interactiveGames"    = "Інтерактивні ігри";
+"partyRoom.toolMenu.basicTools"          = "Основні інструменти";
+"partyRoom.toolMenu.pk"                  = "PK";
+"partyRoom.toolMenu.free"                = "Безкоштовно";
+"partyRoom.toolMenu.settings"            = "Налаштування";
+"partyRoom.toolMenu.luckyNumberSent"     = "Щасливе число надіслано";
+"partyRoom.toolMenu.range"               = "Діапазон";
+"partyRoom.toolMenu.setLuckyNumber"      = "Встановити щасливе число";
+"partyRoom.toolMenu.allowAdmins"         = "Дозволити адмінам встановлювати щасливе число";
+"partyRoom.toolMenu.save"                = "Зберегти";
+"partyRoom.toolMenu.invalidLuckyNumber"  = "Введіть коректне число";
+"partyRoom.toolMenu.luckyNumberSaved"    = "Щасливе число збережено";
+"partyRoom.toolMenu.history"             = "Історія";
+"partyRoom.toolMenu.historyHint"         = "У цьому списку відображаються записи користувачів кімнати, які збіглися зі щасливими числами за останні 3 дні.";
+"partyRoom.toolMenu.noHistory"           = "Історії поки немає";
+"partyRoom.toolMenu.loadMore"            = "Показати ще";
+// F 期便利功能 ShareLink 深链
+"partyRoom.share.messageFormat"          = "Приєднуйтесь до моєї Party-кімнати! %@";
+"party.shareInvite.title"                 = "Запросити";
+"party.shareInvite.sent"                  = "Запрошення надіслано";
+"partyRoom.seat.locked"                  = "Місце заблоковано";
+"partyRoom.seat.videoNeedsInvite"        = "Відеомісця потребують запрошення ведучого";
+"partyRoom.switchSeat.title"             = "Пересісти на це місце?";
+"partyRoom.switchSeat.confirm"           = "Пересісти";
+"partyRoom.adminSeat.title"              = "Керування місцем";
+"partyRoom.adminSeat.take"               = "Зайняти місце";
+"partyRoom.adminSeat.switchHere"         = "Пересісти сюди";
+"partyRoom.adminSeat.lock"               = "Заблокувати місце";
+"partyRoom.adminSeat.unlock"             = "Розблокувати місце";
+
+// v25.1 (2026-07-17) LiveGiftTask · 三语真翻译从 H5 locales 迁移(user feedback: 文案要对齐 H5)
+"liveRoom.task.sheet.title"              = "Завдання трансляції";
+"liveRoom.task.tab.liveGift"             = "Завдання з подарунків";
+"liveRoom.task.tab.activeTycoon"         = "Завдання Active Tycoon";
+"liveRoom.task.progress.title"           = "Прогрес завдання";
+"liveRoom.task.progress.subtitle"        = "Даруйте подарунки дівчині та допоможіть їй отримати щоденну нагороду";
+"liveRoom.task.history.title"            = "Історія за сьогодні";
+"liveRoom.task.history.finished"         = "Більше даних немає";
+"liveRoom.task.history.error"            = "не вдалося завантажити, торкніться для повтору";
+"liveRoom.task.tycoon.completed"         = "Завершено";
+"liveRoom.task.tycoon.empty"             = "Ще немає завдань";
+"liveRoom.task.tycoon.loading"           = "Завантаження...";
+"liveRoom.task.rules.button"             = "OK";
+"liveRoom.task.rules.title.liveGift"     = "Правила завдання з подарунків";
+"liveRoom.task.rules.title.tycoon"       = "Правила завдання Active Tycoon";
+"liveRoom.task.rules.body.liveGift"      = "1. Цільові користувачі: всі користувачі в кімнаті трансляції\n2. Дії прогресу: платні дії — подарунки, розіграш, підключення в трансляції та приватний дзвінок\n3. Цикл скидання: розрахунок по тижнях, дані скидаються щотижня\n4. Розрахунок прогресу: за відповідними стандартами завдання";
+"liveRoom.task.rules.body.tycoon"        = "1. Цільові користувачі: користувачі з міткою Active Tycoon\n2. Дії прогресу: платні дії помічених користувачів — подарунки, розіграш, підключення в трансляції та приватний дзвінок\n3. Цикл скидання: розрахунок по тижнях, дані скидаються щотижня\n4. Розрахунок прогресу: за відповідними стандартами завдання";
+"liveRoom.roulette.tip"                  = "Увімкнути колесо";
+
+"robotCall.incoming.title"               = "Новачок";
+"robotCall.incoming.support"             = "Офіційна підтримка";
+"robotCall.incoming.waiting"             = "Очікування відповіді";
+"robotCall.action.accept"                = "Відповісти";
+"robotCall.action.reject"                = "Відхилити";
+"robotCall.action.end"                   = "Завершити дзвінок";
+"robotCall.minimumDuration"              = "Тривалість дзвінка має бути не менше 10 секунд";
+"robotCall.acceptFailed"                 = "Не вдалося прийняти цей дзвінок. Спробуйте пізніше.";
+"robotCall.reward.title"                 = "Вітаємо";
+"robotCall.noReward.title"               = "Продовжуйте в тому ж дусі";
+"robotCall.duration.format"              = "Тривалість дзвінка: %@";
+"robotCall.reward.duration.format"       = "Поточна тривалість дзвінка досягла: %@";
+"robotCall.reward.coins.format"          = "Отримано монет: %@";
+"robotCall.reward.ok"                    = "OK";
+
+"paidBullet.dislike"                     = "Не подобається";
+"paidBullet.dislikeFailed"               = "Не вдалося надіслати дизлайк. Спробуйте ще раз.";
+"paidBullet.earningsToast"               = "+%lld монет (платний буллет)";
+
+"diamondGift.grab"                       = "Схопити";
+"diamondGift.sendAction"                 = "надіслав(-ла) набір алмазів!";
+"diamondGift.claimFormat"                = "%@ отримав(-ла) %lld алмазів";
+"diamondGift.expiredFormat"              = "Термін дії набору алмазів закінчився, %@ отримав(-ла) повернення";
+"diamondGift.userFormat"                 = "Користувач %@";
+"diamondGift.settledTitle"               = "Щасливий переможець";
+"diamondGift.viewDetails"                = "Докладніше";
+"diamondGift.rulesTitle"                 = "Правила";
+"diamondGift.rulesSectionA"              = "Глядачі надсилають набори алмазів у кімнату трансляції.";
+"diamondGift.rulesSectionB"              = "Після відліку розігріву глядачі можуть отримати свою частку до закінчення терміну дії набору.";
+"diamondGift.rulesSectionC"              = "Набір автоматично підбиває підсумки. Нерозібрані алмази повертаються, а найбільша частка оголошується.";
+"diamondGift.rulesATitle"                = "1. Що таке Lucky Bag?";
+"diamondGift.rulesA1"                    = "(1) У голосових кімнатах користувачі можуть надсилати алмази через «Червоний конверт з алмазами». Усі присутні в кімнаті мають шанс отримати ці алмази.";
+"diamondGift.rulesBTitle"                = "2. Як надіслати Lucky Bag?";
+"diamondGift.rulesB1"                    = "(1) Виберіть загальну кількість алмазів, кількість отримувачів і час початку для Lucky Bag, потім надішліть. Після надсилання всі користувачі в кімнаті зможуть отримувати пакети.";
+"diamondGift.rulesB2"                    = "(2) Якщо через 10 хвилин після надсилання Lucky Bag якісь алмази залишились нерозібраними, вони автоматично повертаються відправнику.";
+"diamondGift.rulesCTitle"                = "3. Інше";
+"diamondGift.rulesC1"                    = "(1) Якщо кілька Lucky Bag надіслано одночасно в одній кімнаті, вони роздаються послідовно в порядку надсилання.";
+"diamondGift.rulesC2"                    = "(2) Алмази, витрачені на надсилання Lucky Bag, не враховуються у прогресі рівня багатства користувача.";
+"diamondGift.rulesC3"                    = "(3) Після того як раунд Lucky Bag отримано, користувачі можуть переглянути «Деталі отримання» в чаті. Нерозібрані алмази автоматично повертаються через 10 хвилин.";
+"diamondGift.rulesC4"                    = "(4) Платформа суворо забороняє будь-які форми шахрайства. У разі виявлення шахрайства платформа залишає за собою право повернути всі алмази та нагороди Lucky Bag, отримані шахрайським шляхом.";
+"diamondGift.winnersTitle"               = "Переможці";
+"diamondGift.topShare"                   = "Найбільша частка";
+"diamondGift.noWinners"                  = "Переможців поки немає";
+
+"invite.title"                           = "Запросити";
+"invite.user"                            = "Запросити користувача";
+"invite.anchor"                          = "Запросити ведучого";
+"invite.myRewards"                       = "Мої нагороди";
+"invite.totalBonus"                      = "Загальний бонус за запрошення";
+"invite.last7Days"                        = "Запрошені за останні 7 днів";
+"invite.last7DaysUser"                    = "Запрошені користувачі за останні 7 днів";
+"invite.last7DaysAnchor"                  = "Запрошені ведучі за останні 7 днів";
+"invite.got"                              = "отримано";
+"invite.rules"                           = "Правила запрошення";
+"invite.lifetimeReward"                  = "Одне запрошення — довічні бонуси";
+"invite.userRewardHintFormat"            = "Запросіть користувачів поповнити рахунок і отримайте %@ алмазів у нагороду";
+"invite.anchorRewardHintFormat"          = "Поділіться унікальним запрошувальним кодом. Отримуйте %@ від доходу кожного запрошеного ведучого";
+"invite.userCommission"                  = "Комісія користувача";
+"invite.anchorCommission"                = "Комісія ведучого";
+"invite.partyCommission"                 = "Комісія Party";
+"invite.code"                            = "Запрошувальний код";
+"invite.copyCode"                        = "Скопіювати код";
+"invite.details"                         = "Деталі";
+"invite.totalUsers"                      = "Всього запрошених користувачів";
+"invite.totalAnchors"                    = "Всього запрошених ведучих";
+"invite.cumulativeReward"                = "Сукупна нагорода";
+"invite.now"                             = "Запросити";
+"invite.bigReward"                       = "Велика нагорода";
+"invite.copySuccess"                     = "Скопійовано!";
+"invite.shareUnavailable"                = "Контент для надсилання недоступний";
+"invite.shareUser"                       = "Запросити користувачів";
+"invite.shareAnchor"                     = "Запросити ведучих";
+"invite.saveAndShare"                    = "Зберегти та поділитися";
+"invite.copyLink"                        = "Копіювати";
+"invite.share"                           = "Поділитися";
+"invite.showQRCode"                      = "Показати QR-код";
+"invite.idFormat"                        = "ID: %@";
+"invite.uidFormat"                       = "UID: %@";
+"invite.ruleUnavailable"                 = "Правила запрошення недоступні";
+"invite.faq"                             = "FAQ";
+"invite.policy"                          = "Політика";
+"invite.invitedUsers"                    = "Список запрошених";
+"invite.rewardRecords"                   = "Деталі нагород";
+"invite.startDate"                       = "Дата початку";
+"invite.endDate"                         = "Дата завершення";
+"invite.applyDate"                       = "Застосувати";
+"invite.invalidDateRange"                = "Дата початку має бути раніше дати завершення";
+"invite.dataDetails"                     = "Деталі даних";
+"invite.period"                          = "Період";
+"invite.identifier"                      = "ID";
+"invite.userColumn"                      = "Користувач";
+"invite.nickname"                        = "Нікнейм";
+"invite.totalIncome"                     = "Загальний дохід";
+"invite.diamondIncome"                   = "Дохід в алмазах";
+"invite.dailyOutputReward"               = "Щоденна нагорода";
+"invite.accumulatedRewards"              = "Накопичені нагороди";
+"invite.invitationTime"                  = "Час запрошення";
+"invite.accumulatedRewardsDetail"        = "Накопичені нагороди";
+"invite.invitationTimeDetail"            = "Час запрошення";
+"invite.rewardQuantity"                  = "Розмір нагороди";
+"invite.today"                           = "Сьогодні";
+"invite.thisWeek"                        = "Цього тижня";
+"invite.lastWeek"                        = "Минулий тиждень";
+"invite.lastMonth"                       = "Минулий місяць";
+"invite.referralIncomeReward"            = "Нагорода з реферального доходу";
+"invite.myDashboard"                     = "Моя панель";
+"invite.cumulativeOutputReward"          = "Сукупна підсумкова нагорода";
+"invite.callIncome"                      = "Дохід від дзвінків";
+"invite.giftIncome"                      = "Дохід від подарунків";
+"invite.connectionRate"                  = "Рівень з'єднання";
+"invite.currentRanking"                  = "Поточний рейтинг";
+"invite.currentLevel"                    = "Поточний рівень";
+"invite.onlineDuration"                  = "Час у мережі";
+"invite.totalCallDuration"               = "Загальна тривалість дзвінків";
+"invite.averageCallDuration"             = "Середня тривалість дзвінка";
+"invite.startChat"                       = "Почати чат";
+
+// MARK: - Native Wallet
+"wallet.title" = "Гаманець";
+"wallet.balance" = "Мій баланс";
+"wallet.withdrawal" = "Виведення";
+"wallet.todayIncome" = "Дохід за сьогодні";
+"wallet.incomeDetails" = "Деталі доходу";
+"wallet.filter.call" = "Дзвінок";
+"wallet.filter.gift" = "Подарунок";
+"wallet.filter.task" = "Завдання";
+"wallet.filter.invite" = "Запросити";
+"wallet.filter.message" = "Повідомлення";
+"wallet.filter.interaction" = "Взаємодія";
+"wallet.filter.others" = "Інше";
+"wallet.time" = "Час";
+"wallet.source" = "Джерело";
+"wallet.user" = "Користувач";
+"wallet.detail" = "Деталі";
+"wallet.income" = "Дохід";
+"wallet.withdrawCash" = "Вивести кошти";
+"wallet.cashableBalance" = "Доступний до виведення баланс алмазів";
+"wallet.withdrawalBalance" = "Баланс для виведення";
+"wallet.weekIncomeDiamond" = "Дохід за минулий тиждень";
+"wallet.inviteEntry" = "Запрошуйте та отримуйте нагороди";
+"wallet.records" = "Історія виведень";
+"wallet.selectAccount" = "Обрати рахунок для виведення";
+"wallet.manageAccounts" = "Керувати рахунками";
+"wallet.addAccount" = "Додати рахунок";
+"wallet.collection" = "Отримання";
+"wallet.enterAmount" = "Введіть суму виведення";
+"wallet.availableBalance" = "Доступний до виведення баланс алмазів";
+"wallet.amountPlaceholder" = "Введіть суму";
+"wallet.estimatedReceive" = "Очікуване надходження";
+"wallet.withdrawalSummary" = "Підсумок виведення";
+"wallet.grossAmount" = "Сума виведення";
+"wallet.fee" = "Комісія за виведення";
+"wallet.finalAmount" = "Підсумкова сума виведення";
+"wallet.remainderReturned" = "алмази менше $1 будуть повернуті на ваш рахунок";
+"wallet.cancel" = "Скасувати";
+"wallet.confirm" = "Підтвердити";
+"wallet.collectionType" = "Тип отримання";
+"wallet.collectionDetails" = "Дані отримання";
+"wallet.accountName" = "Ім'я рахунку";
+"wallet.accountIrreversible" = "Уважно перевірте дані отримання. Зміни потребують звернення до підтримки.";
+"wallet.digifinexMinimum" = "Мінімум для виведення: $20";
+"wallet.epayMinimum" = "Мінімум для виведення: $50";
+"wallet.uidPlaceholder" = "Введіть UID мережі";
+"wallet.addressPlaceholder" = "Введіть адресу TRC20";
+"wallet.emailPlaceholder" = "Введіть email для отримання";
+"wallet.removeAccount" = "Видалити рахунок";
+"wallet.remove" = "Видалити";
+"wallet.removeAccountDetail" = "Ви впевнені, що хочете видалити";
+"wallet.orderNumber" = "Номер замовлення";
+"wallet.applicationStatus" = "Статус заявки";
+"wallet.reviewing" = "На розгляді";
+"wallet.paid" = "Виплачено";
+"wallet.rejected" = "Відхилено";
+"wallet.loadFailed" = "Не вдалося завантажити дані гаманця. Спробуйте ще раз.";
+"wallet.accountInfoRequired" = "Спочатку заповніть дані рахунку.";
+"wallet.accountTypeInvalid" = "Цей тип отримання недоступний.";
+"wallet.accountAdded" = "Рахунок додано";
+"wallet.accountSaveFailed" = "Не вдалося зберегти рахунок. Спробуйте ще раз.";
+"wallet.accountRemoved" = "Рахунок видалено";
+"wallet.accountRemoveFailed" = "Не вдалося видалити рахунок. Спробуйте ще раз.";
+"wallet.integerAmount" = "Сума виведення має бути цілим числом.";
+"wallet.amountExceedsBalance" = "Сума перевищує ваш доступний до виведення баланс.";
+"wallet.minimumDiamond" = "Кожне виведення має бути не менше 200 алмазів.";
+"wallet.minimumRequestAmountFormat" = "Кожне виведення має бути не менше %lld алмазів.";
+"wallet.minimumRate" = "Сума має бути не менше курсу обміну алмазів.";
+"wallet.channelMinimum" = "Обраний спосіб отримання не відповідає мінімальній сумі виведення.";
+"wallet.verificationCheckFailed" = "Не вдалося перевірити підтвердження особи. Спробуйте ще раз.";
+"wallet.passwordSixDigits" = "Введіть шестизначний пароль виведення.";
+"wallet.passwordSet" = "Пароль виведення встановлено. Надішліть заявку ще раз, щоб продовжити.";
+"wallet.withdrawalSubmitted" = "Заявку на виведення надіслано";
+"wallet.withdrawalSubmitFailed" = "Не вдалося надіслати заявку на виведення. Спробуйте ще раз.";
+"wallet.setPassword" = "Задати пароль виведення";
+"wallet.setPasswordDetail" = "Задайте шестизначний числовий пароль для майбутніх виведень.";
+"wallet.enterPassword" = "Введіть пароль виведення";
+"wallet.enterPasswordDetail" = "Введіть шестизначний пароль виведення, щоб надіслати цю заявку.";
+"wallet.passwordPlaceholder" = "Шестизначний пароль";
+"wallet.forgotPassword" = "Забули пароль? Зверніться до підтримки:";
+"wallet.livenessFailedTitle" = "Перевірку обличчя не пройдено";
+"wallet.retry" = "Повторити";
+"wallet.livenessShakeTitle" = "Поверніть голову";
+"wallet.livenessShakeDetail" = "Повільно поверніть голову з боку в бік.";
+"wallet.livenessNodTitle" = "Кивніть головою";
+"wallet.livenessNodDetail" = "Кивніть головою один раз вгору і вниз.";
+"wallet.livenessFrontTitle" = "Обличчям до камери";
+"wallet.livenessFrontDetail" = "Тримайте обличчя по центру та нерухомо.";
+"wallet.livenessVerifying" = "Перевірка вашого обличчя";
+"wallet.livenessVerifyingDetail" = "Завантажуємо захищене фото та перевіряємо вашу особу.";
+"wallet.cameraPermissionRequired" = "Для підтвердження особи потрібен дозвіл камери.";
+"wallet.livenessCameraUnavailable" = "Не вдалося запустити камеру. Спробуйте ще раз.";
+"wallet.livenessNoFace" = "Не вдалося виявити одне чітке обличчя. Спробуйте ще раз.";
+"wallet.livenessTimedOut" = "Час цього кроку перевірки вичерпано. Спробуйте ще раз.";
+"wallet.livenessUploadFailed" = "Не вдалося завершити перевірку обличчя. Спробуйте ще раз.";
+
+"party.battle.team" = "Командний бій";
+"party.battle.countdown" = "Відлік";
+"party.battle.start" = "START";
+"party.battle.none" = "Немає";
+"party.battle.live" = "Трансляція";
+"party.battle.redTeam" = "Червона команда";
+"party.battle.blueTeam" = "Синя команда";
+"party.battle.redTeamWin" = "Перемога червоної команди";
+"party.battle.blueTeamWin" = "Перемога синьої команди";
+"party.battle.tie" = "Нічия";
+"party.battle.leading" = "Лідирує";
+"party.battle.iKnow" = "Зрозуміло";
+"party.battle.cancel" = "Скасувати";
+"party.battle.confirm" = "Підтвердити";
+"party.battle.rulesTitle" = "Правила командного бою";
+"party.battle.rule1" = "Ведучий розпочинає бій одним дотиком; гравці на мікрофоні діляться на синю та червону команди.";
+"party.battle.rule2" = "Надсилання подарунків учасникам червоної команди додає очки червоним; надсилання подарунків синім — синім.";
+"party.battle.rule3" = "Користувачі не можуть змінювати команду на мікрофоні під час бою; якщо вони залишають мікрофон, їх накопичені очки залишаються за початковою командою.";
+"party.battle.rule4" = "Всі запити на мікрофон під час бою мають підтверджуватися ведучим або адміністратором.";
+"party.battle.forceEndTitle" = "Достроково завершити PK?";
+"party.battle.forceEndDesc" = "Дострокове завершення визначить переможця за поточним загальним рахунком.";
+"party.battle.forceEndWillFormat" = "Переможе %@.";
+"party.battle.forceEndTied" = "Зараз нічия.";
+"party.battle.cooldownDesc" = "Після завершення перезарядки ви знову зможете запустити командний бій.";
+"party.battle.cooldownAction" = "Підсумки попереднього бою";
+"party.battle.giftTabRed" = "Червоні";
+"party.battle.giftTabBlue" = "Сині";
+"party.battle.initiateTitle" = "Запустити командний бій";
+"party.battle.modeLabel" = "Режим";
+"party.battle.modeTeamBattle" = "Командний бій (Червоні проти Синіх)";
+"party.battle.timeLabel" = "Час";
+"party.battle.minutesFormat" = "%d хв";
+"party.battle.chooseSideLabel" = "Вибір сторони";
+"party.battle.joinSideOn" = "Приєднатися";
+"party.battle.joinSideOff" = "Нейтрал";
+"party.battle.joinRed" = "До червоних";
+"party.battle.joinBlue" = "До синіх";
+"party.battle.initiateHintFormat" = "Гравців у лобі: %1$d · Готово до старту ≥ %2$dс після завершення попереднього бою";
+"party.battle.initiateHint2Format" = "Після підтвердження розпочнеться вибір команд тривалістю %d сек. Гравці в лобі обирають команди, а власник кімнати натискає START, щоб розпочати бій.";
+"party.battle.selectingHostTitle" = "Відлік 60 с або натисніть START";
+"party.battle.battleTime" = "Час бою";
+"party.battle.leadFormat" = "попереду на %d";
+"party.battle.lose" = "Поразка";
+"party.battle.giftGivingMvp" = "MVP з дарування";
+"party.battle.giftReceiveMvp" = "MVP з отримання";
+"party.battle.totalGivenOutFormat" = "Всього надіслано %@";
+"party.battle.personalGiftReceivingFormat" = "Особистих подарунків отримано %@";
+"party.battle.roomIdInvalid" = "Недійсний ID кімнати";
+"party.battle.noTemplate" = "Шаблони недоступні";
+"party.battle.alreadyEnded" = "PK вже завершено";
+"party.battle.startNowFailed" = "Не вдалося розпочати";
+"party.battle.chatSelectingStartFormat" = "Кімната запустила командний PK, бій розпочнеться через %d хв!";
+"party.battle.chatTeamWinFormat" = "%@ перемагає! Загальний рахунок";
+"party.battle.chatTie" = "Нічия!";
+"party.battle.chatForceEnd" = "Кімната достроково завершила PK";
+"party.battle.chatMvpFormat" = "MVP: %1$@ (%2$@) Особистий подарунок";
+"partyRoom.superWheel.title" = "Super Winner";
+"partyRoom.superWheel.unavailable" = "Ця гра зараз недоступна";
+"partyRoom.superWheel.open" = "Відкрити колесо";
+"partyRoom.superWheel.join" = "Приєднатися";
+"partyRoom.superWheel.bet" = "Ставка";
+"partyRoom.superWheel.close" = "Закрити колесо";
+"partyRoom.superWheel.pool" = "Банк";
+"partyRoom.superWheel.player" = "Гравець";
+"partyRoom.superWheel.waiting" = "Очікування";
+"partyRoom.superWheel.signup" = "Записатися";
+"partyRoom.superWheel.preparing" = "Підготовка";
+"partyRoom.superWheel.betting" = "Ставки";
+"partyRoom.superWheel.spinning" = "Обертання";
+"partyRoom.superWheel.roundResult" = "Результат раунду";
+"partyRoom.superWheel.finalResult" = "Остаточний результат";
+"partyRoom.superWheel.outFormat" = "%@ вибуває";
+"partyRoom.superWheel.winnerFormat" = "%@ виграє %lld";
+"partyRoom.superWheel.actionFailed" = "Не вдалося виконати дію. Спробуйте ще раз.";
+"partyRoom.superWheel.getReady" = "Приготуйтесь";
+"partyRoom.superWheel.joined" = "Приєднався";
+"partyRoom.superWheel.spectating" = "Ви вибули. Спостереження";
+"partyRoom.superWheel.winningRatio" = "Коефіцієнт виграшу";
+"partyRoom.superWheel.nextRound" = "Усі гравці переходять до наступного раунду";
+"partyRoom.superWheel.rewardHint" = "Переможець отримує 80% джекпоту. Власник кімнати отримує 10%.";
+"partyRoom.superWheel.minPlayers" = "Очікування інших гравців";
+"partyRoom.superWheel.addBets" = "Робіть ставки!";
+"partyRoom.superWheel.entryFees" = "Плата за вхід";
+"partyRoom.superWheel.loading" = "Завантаження";
+"partyRoom.superWheel.rulesTitle" = "Правила";
+"liveGift.firstGiftHeadline" = "{name} надіслав(-ла) {streamer} перший подарунок {gift}";
+"liveGift.firstGiftStreamer" = "Ведучий";
+"liveGift.firstGiftKick" = "Розпочніть перший вітальний момент";
+"virtualProps.effectSwitch.tip" = "Перемикач ефектів тут";
+
+"lottery.title" = "Розіграш удачі";
+"lottery.loadFailed" = "Не вдалося завантажити активність. Спробуйте ще раз.";
+"lottery.unsupportedPrizeLayout" = "Конфігурація призів цієї активності недоступна.";
+"lottery.noPrizeReturned" = "Дані про приз не отримано. Спробуйте пізніше.";
+"lottery.pleaseWait" = "Зачекайте...";
+"lottery.notStarted" = "Ця активність ще не почалася.";
+"lottery.ended" = "Цю активність завершено.";
+"lottery.insufficientChances" = "У вас недостатньо спроб для розіграшу.";
+"lottery.drawFailed" = "Не вдалося виконати розіграш. Спробуйте пізніше.";
+"lottery.drawReconciled" = "Не вдалося підтвердити результат розіграшу. Дані активності оновлено.";
+"lottery.records" = "Історія виграшів";
+"lottery.recordsLoadFailed" = "Не вдалося завантажити історію виграшів. Спробуйте ще раз.";
+"lottery.recordsEmpty" = "Ще немає виграшів";
+"lottery.recordsEnd" = "Більше записів немає";
+"lottery.oneTime" = "1 раз";
+"lottery.fiveTimes" = "5 разів";
+"lottery.draw" = "КРУТИТИ";
+"lottery.congratulations" = "Вітаємо";
+"lottery.earnChancesHint" = "Надсилайте подарунки в трансляціях і приватних дзвінках, щоб отримати більше спроб.";
+"lottery.earnChancesPartyHint" = "Надсилайте подарунки в кімнатах Party, щоб отримати більше спроб.";
+"lottery.go" = "Перейти";
+"lottery.insufficientTitle" = "Спроби закінчилися";
+"lottery.insufficientMessage" = "Даруйте подарунки в кімнатах, щоб отримати більше спроб і продовжити ловити удачу!";
+"lottery.goPartyRoom" = "Перейти в кімнату Party";
+"lottery.goLiveRoom" = "Перейти в кімнату трансляції";
+"lottery.noPartyRoomsAvailable" = "Немає доступних кімнат Party";
+"lottery.noLiveAvailable" = "Немає доступних трансляцій";
+"lottery.roomNavigationFailed" = "Помилка мережі, спробуйте ще раз.";
+"lottery.startsIn" = "Починається через";
+"lottery.endsIn" = "Закінчується через";
+"lottery.remainingChancesFormat" = "Залишилося спроб: %d";
+"lottery.pointsNeededFormat" = "Потрібно ще %d балів для 1 спроби";
+"lottery.dailyLimitFormat" = "Досягнуто денний ліміт спроб %d/%d";
+"lottery.dailyLimitReached" = "Досягнуто денний ліміт спроб";
+"lottery.winnerFormat" = "%1$@ отримав %2$@";
+"lottery.validDaysFormat" = "* %d днів";
+"lottery.quantityFormat" = "* %d";
+"content.moderation.checking" = "Перевірка";
+"content.moderation.blocked" = "Заблоковано";

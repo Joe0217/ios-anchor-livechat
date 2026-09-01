@@ -25,7 +25,7 @@ fileprivate func localize(_ key: String, comment: String = "") -> String {
 
 /// i18n 本地化 key 中转（B 里程碑 spec §13 i18n 声明）。
 ///
-/// 三语言目录就绪：en/ar/tr 均有 Localizable.strings 完整翻译。
+/// 本地化目录：en/ar/tr/ru/es/uk 均有 Localizable.strings 资源。
 /// 引入 SwiftGen 后本文件可自动生成；B 阶段手工维护。
 enum L10n {
     // 强制下播原因（UI 文案）
