@@ -26,8 +26,7 @@ struct MineRestrictedView: View {
     private let whatsappPhone = "+86 185 0202 7264"
 
     var body: some View {
-        let _ = AppLogger.auth.info("[MineRestrictedView] body eval")
-        return NavigationStack(path: $pathHolder.path) {
+        NavigationStack(path: $pathHolder.path) {
             content
                 .navigationBarHidden(true)
                 .navigationDestination(for: RegisterRoute.self) { route in

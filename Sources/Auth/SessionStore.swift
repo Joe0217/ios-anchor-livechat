@@ -187,13 +187,6 @@ final class SessionStore: ObservableObject {
 
         await waitForRuntimeCleanup()
 
-        if DeletedAccountRegistry.contains(email) {
-            pendingRegister = PendingRegister(email: email, password: password)
-            reportLoginOutcome(account: email, outcome: "跳转注册")
-            RegisterAnalytics.report(.signUp)
-            return
-        }
-
         let pwd = CryptoUtil.loginPassword(password)
         do {
             let data = try await APIClient.shared.post(

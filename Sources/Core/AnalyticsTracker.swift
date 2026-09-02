@@ -8,27 +8,21 @@ import ThinkingSDK
 enum AnalyticsTracker {
     private static let lock = NSLock()
     private static var started = false
-    private static var reportedMissingConfiguration = false
 
     static func start() {
         lock.lock()
         defer { lock.unlock() }
         guard !started else { return }
         guard let config = AppConfig.thinkingDataConfiguration else {
-            if !reportedMissingConfiguration {
-                reportedMissingConfiguration = true
-                AppLogger.net.warning("[Analytics] ThinkingData disabled: configuration is unavailable")
-            }
             return
         }
 
-        #if DEBUG
-        TDAnalytics.enableLog(true)
-        #endif
         TDAnalytics.start(withAppId: config.appId, serverUrl: config.serverURL)
         TDAnalytics.setSuperProperties(["#app_version": AppConfig.appVersion])
         started = true
-        track("hifunny_log", properties: [:], immediately: true)
+        // `start()` owns `lock`; calling the public `track()` here would re-enter
+        // `start()` and deadlock on the non-recursive NSLock during app launch.
+        TDAnalytics.track("hifunny_log", properties: ["app_name": "HillyFun"])
         TDAnalytics.flush()
     }
 

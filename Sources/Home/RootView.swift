@@ -63,9 +63,7 @@ struct RootView: View {
     @State private var isSplashVisible = true
 
     var body: some View {
-        // 2026-07-17 tap-fix diagnostic:确认用户实际进入的分支(RestrictedTabView vs MainTabView vs LoginView)
-        let _ = AppLogger.auth.info("[RootView] body eval: isLoggedIn=\(session.isLoggedIn, privacy: .public) isRestricted=\(self.isRestricted, privacy: .public) effectiveUserType=\(self.effectiveUserType ?? -999, privacy: .public)")
-        return ZStack {
+        ZStack {
             if !session.isLoggedIn {
                 LoginView()
             } else if isAgency {
