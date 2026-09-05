@@ -5,11 +5,11 @@ import os
 /// Release builds keep the logging call sites source-compatible while dropping
 /// every AppLogger message before it reaches the unified logging system.
 struct ReleaseLogSink {
-    @inline(__always) func debug(_ message: OSLogMessage) {}
-    @inline(__always) func info(_ message: OSLogMessage) {}
-    @inline(__always) func notice(_ message: OSLogMessage) {}
-    @inline(__always) func warning(_ message: OSLogMessage) {}
-    @inline(__always) func error(_ message: OSLogMessage) {}
+    @_transparent func debug(_ message: OSLogMessage) {}
+    @_transparent func info(_ message: OSLogMessage) {}
+    @_transparent func notice(_ message: OSLogMessage) {}
+    @_transparent func warning(_ message: OSLogMessage) {}
+    @_transparent func error(_ message: OSLogMessage) {}
 }
 #endif
 
