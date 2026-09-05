@@ -5,9 +5,9 @@ import SwiftUI
 struct LiveDataSummaryCard: View {
     let dateType: LiveDataDateType
     let totalDurationSeconds: Int
-    let totalIncomeDiamonds: Int
-    let liveIncomeDiamonds: Int
-    let privateCallIncomeDiamonds: Int
+    let totalIncomeDiamonds: String
+    let liveIncomeDiamonds: String
+    let privateCallIncomeDiamonds: String
     /// tap 下拉按钮回调 —— 父层展示下拉菜单（保持 dropdown 与 card 分离，Sheet/Popover 由父层挂）
     let onDropdownTap: () -> Void
     /// dropdown 打开态（旋转箭头）
@@ -107,7 +107,7 @@ struct LiveDataSummaryCard: View {
                    label: L10n.liveDataTotalDuration)
 
             metric(iconName: "coins",
-                   value: "\(totalIncomeDiamonds)",
+                   value: totalIncomeDiamonds,
                    valueColor: Color(hex: 0xF9991A),
                    label: L10n.liveDataTotalIncome)
 
@@ -173,14 +173,14 @@ struct LiveDataSummaryCard: View {
         }
     }
 
-    private func breakdownItem(value: Int, label: String) -> some View {
+    private func breakdownItem(value: String, label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
                 CDNAssetImage("coins")
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 14, height: 14)
-                Text("\(value)")
+                Text(value)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(.white)
             }

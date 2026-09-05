@@ -18,17 +18,16 @@ final class LiveDataService: LiveDataServiceProtocol {
     private init() {}
 
     func fetchLiveData(dateType: LiveDataDateType) async throws -> LiveDataResponse {
-        // 保守传 String —— H5 `api/liveData/index.ts` interface 声明 `dateType: string`
-        // （agent-recon-field-names-unverified rule:H5 TS 声明与实际调用点 queryType 数字不一致，
-        //  后端严格性未知，String 兼容面更广，首次真机再核对）
+        // H5 实际调用点传入 queryType 数字；保持 JSON 参数类型一致。
         let data = try await APIClient.shared.post(
             "/api/anchor/live/authorLiveData",
-            body: ["dateType": String(dateType.rawValue)]
+            body: ["dateType": dateType.rawValue]
         )
         // 收益/时长属主播资金流水敏感数据 —— 对齐 APIClient 三层保护：#if DEBUG + .debug 级 + .private
         #if DEBUG
         let raw = String(data: data, encoding: .utf8) ?? "<binary>"
         logger.debug("fetchLiveData dateType=\(dateType.rawValue, privacy: .public) raw=\(raw, privacy: .private)")
+        print("[LiveData] authorLiveData dateType=\(dateType.rawValue) response=\(raw)")
         #endif
         return try JSONDecoder().decode(LiveDataResponse.self, from: data)
     }

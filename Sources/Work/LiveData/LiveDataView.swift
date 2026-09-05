@@ -86,9 +86,9 @@ struct LiveDataView: View {
             LiveDataSummaryCard(
                 dateType: vm.dateType,
                 totalDurationSeconds: payload.totalDurationSecondsCount,
-                totalIncomeDiamonds: payload.totalIncomeDiamondsCount,
-                liveIncomeDiamonds: payload.liveIncomeDiamondsCount,
-                privateCallIncomeDiamonds: payload.privateCallIncomeDiamondsCount,
+                totalIncomeDiamonds: LiveDataFormatter.money(payload.totalIncomeDiamondsCount),
+                liveIncomeDiamonds: LiveDataFormatter.money(payload.liveIncomeDiamondsCount),
+                privateCallIncomeDiamonds: LiveDataFormatter.money(payload.privateCallIncomeDiamondsCount),
                 onDropdownTap: { showDropdown.toggle() },
                 dropdownExpanded: showDropdown
             )

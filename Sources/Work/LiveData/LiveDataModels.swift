@@ -47,9 +47,9 @@ enum LiveDataDateType: Int, CaseIterable, Hashable {
 /// 若真机首次拉取发现字段名偏差 → 加 CodingKeys alias（agent-recon-field-names-unverified rule）。
 struct LiveDataResponse: Decodable {
     let totalDurationSecondsCount: Int
-    let totalIncomeDiamondsCount: Int
-    let liveIncomeDiamondsCount: Int
-    let privateCallIncomeDiamondsCount: Int
+    let totalIncomeDiamondsCount: Decimal
+    let liveIncomeDiamondsCount: Decimal
+    let privateCallIncomeDiamondsCount: Decimal
     /// 当前 dateType 对应期间的剩余秒数（this week 到周日 24:00 之类）。仅 isCurrent=true 时有意义；
     /// 非当前期间后端可能不发（H5 index.vue:79 `res.remainingTime * 1000` undefined 时 NaN 客户端静默兼容）
     let remainingTime: Int
@@ -58,9 +58,9 @@ struct LiveDataResponse: Decodable {
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         totalDurationSecondsCount = (try? c.decodeIfPresent(Int.self, forKey: .totalDurationSecondsCount)) ?? 0
-        totalIncomeDiamondsCount = (try? c.decodeIfPresent(Int.self, forKey: .totalIncomeDiamondsCount)) ?? 0
-        liveIncomeDiamondsCount = (try? c.decodeIfPresent(Int.self, forKey: .liveIncomeDiamondsCount)) ?? 0
-        privateCallIncomeDiamondsCount = (try? c.decodeIfPresent(Int.self, forKey: .privateCallIncomeDiamondsCount)) ?? 0
+        totalIncomeDiamondsCount = c.decimalValue(forKey: .totalIncomeDiamondsCount)
+        liveIncomeDiamondsCount = c.decimalValue(forKey: .liveIncomeDiamondsCount)
+        privateCallIncomeDiamondsCount = c.decimalValue(forKey: .privateCallIncomeDiamondsCount)
         remainingTime = (try? c.decodeIfPresent(Int.self, forKey: .remainingTime)) ?? 0
         dataList = try? c.decodeIfPresent([LiveDataDay].self, forKey: .dataList)
     }
@@ -82,9 +82,9 @@ struct LiveDataDay: Decodable, Identifiable, Hashable {
     /// 日期字符串（如 "2026-07-14"，H5 不解析直接展示）
     let statDate: String
     let totalDurationSeconds: Int
-    let totalIncomeDiamonds: Int
-    let liveIncomeDiamonds: Int
-    let privateCallIncomeDiamonds: Int
+    let totalIncomeDiamonds: Decimal
+    let liveIncomeDiamonds: Decimal
+    let privateCallIncomeDiamonds: Decimal
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -102,9 +102,9 @@ struct LiveDataDay: Decodable, Identifiable, Hashable {
         // → privateCallIncomeDiamonds=null；对齐 H5 index.vue:326-376 逐 item `|| 0` 兜底）；
         // 严格 decode 会让单日 null 撒毒整个 dataList array（Swift array decode 是原子的）→ 整月列表消失。
         totalDurationSeconds = (try? c.decodeIfPresent(Int.self, forKey: .totalDurationSeconds)) ?? 0
-        totalIncomeDiamonds = (try? c.decodeIfPresent(Int.self, forKey: .totalIncomeDiamonds)) ?? 0
-        liveIncomeDiamonds = (try? c.decodeIfPresent(Int.self, forKey: .liveIncomeDiamonds)) ?? 0
-        privateCallIncomeDiamonds = (try? c.decodeIfPresent(Int.self, forKey: .privateCallIncomeDiamonds)) ?? 0
+        totalIncomeDiamonds = c.decimalValue(forKey: .totalIncomeDiamonds)
+        liveIncomeDiamonds = c.decimalValue(forKey: .liveIncomeDiamonds)
+        privateCallIncomeDiamonds = c.decimalValue(forKey: .privateCallIncomeDiamonds)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -129,6 +129,12 @@ struct MoneyBagResponse: Decodable {
 // MARK: - 展示 helpers
 
 enum LiveDataFormatter {
+    static func money(_ value: Decimal) -> String {
+        let formatter = NumberFormatter()
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: value as NSDecimalNumber) ?? "0"
+    }
     /// 秒 → HH:MM:SS（对齐 H5 `secondsToTime`）
     static func hhmmss(_ seconds: Int) -> String {
         let s = max(0, seconds)
@@ -136,5 +142,13 @@ enum LiveDataFormatter {
         let m = (s % 3600) / 60
         let sec = s % 60
         return String(format: "%02d:%02d:%02d", h, m, sec)
+    }
+}
+
+private extension KeyedDecodingContainer {
+    func decimalValue(forKey key: Key) -> Decimal {
+        if let value = try? decodeIfPresent(Decimal.self, forKey: key) { return value }
+        if let value = try? decodeIfPresent(String.self, forKey: key), let decimal = Decimal(string: value) { return decimal }
+        return 0
     }
 }

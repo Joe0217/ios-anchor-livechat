@@ -46,7 +46,7 @@ struct LiveDataDateRow: View {
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 14, height: 14)
-                    Text("\(day.totalIncomeDiamonds)")
+                    Text(LiveDataFormatter.money(day.totalIncomeDiamonds))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Color(hex: 0xF9991A))
                 }
@@ -93,10 +93,10 @@ struct LiveDataDateRow: View {
                 .frame(maxWidth: .infinity, alignment: .trailing)
 
             HStack(spacing: 12) {
-                item(value: day.liveIncomeDiamonds, label: L10n.liveDataLiveIncome)
+                item(value: LiveDataFormatter.money(day.liveIncomeDiamonds), label: L10n.liveDataLiveIncome)
                 // P 项目权限管理 v2：canCall=false 时隐 Private Call Income（仅 canLive=true+canCall=false 组合可达）
                 if permission.canCall {
-                    item(value: day.privateCallIncomeDiamonds, label: L10n.liveDataPrivateCallIncome)
+                    item(value: LiveDataFormatter.money(day.privateCallIncomeDiamonds), label: L10n.liveDataPrivateCallIncome)
                 }
             }
             .padding(20)  // 对齐 H5 line 356 `p-20`
@@ -106,7 +106,7 @@ struct LiveDataDateRow: View {
         }
     }
 
-    private func item(value: Int, label: String) -> some View {
+    private func item(value: String, label: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 4) {
                 CDNAssetImage("coins")
