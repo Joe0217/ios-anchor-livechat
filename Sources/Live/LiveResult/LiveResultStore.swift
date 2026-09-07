@@ -35,7 +35,7 @@ final class LiveResultStore: ObservableObject {
     /// 强制下播原因的红字提示文案。
     ///
     /// - H5 蓝本只显示弱网一种（`forceEndReason=='5'`）；iOS 侧扩展显示**所有强制下播原因**
-    ///   （对齐 LiveState.ForceEndReason 5 种：2 违规 / 4 断连 / 5 相机 / 6 无权限 / 7 弱网），
+    ///   （对齐 LiveState.ForceEndReason：2 违规 / 4 断连 / 5 相机 / 6 无权限 / 7 弱网 / 8 未露脸），
     ///   与 H5 略有分歧但更完整。用户主动下播 endType=1 不显示（属正常下播非"强制"）。
     /// - 复用 [L10n.forceEnd*](../../L10n.swift) 5 个既有 key（LiveState.swift `ForceEndReason` 已定义映射）
     var forceEndNoticeText: String? {
@@ -46,6 +46,7 @@ final class LiveResultStore: ObservableObject {
         case 5: return L10n.forceEndCameraFailure     // 相机采集失败 >20s
         case 6: return L10n.forceEndNoPermission      // 心跳 2001
         case 7: return L10n.forceEndWeakNetwork       // 弱网 ≥30 次
+        case 8: return L10n.forceEndNoFace            // 连续未露脸
         default: return nil                            // endType=1 正常下播 / unknown
         }
     }

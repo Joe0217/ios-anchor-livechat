@@ -440,6 +440,10 @@
 "livePrepare.titlePlaceholder" = "Yayın başlığı (boş bırakırsanız varsayılan biyografi kullanılır)";
 "livePrepare.defaultTitle"   = "Canlı";
 "livePrepare.beautyToggle"   = "Güzellik";
+"live.faceCheck.title" = "Yüz algılanmadı";
+"live.faceCheck.message" = "Yüz algılanmadı. Yayına devam etmek için lütfen yüzünüzü görünür tutun.";
+"common.confirm" = "Tamam";
+"forceEnd.noFace" = "Uzun süre yüz algılanmadığı için yayın sonlandırıldı.";
 "livePrepare.sliderBlur"     = "Pürüzsüz";
 "livePrepare.sliderWhiten"   = "Beyazlat";
 "livePrepare.sliderEyeEnlarge" = "Göz Büyüt";

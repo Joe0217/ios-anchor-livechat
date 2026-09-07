@@ -440,6 +440,10 @@
 "livePrepare.titlePlaceholder" = "عنوان البث (اتركه فارغًا للنبذة الافتراضية)";
 "livePrepare.defaultTitle"   = "بث";
 "livePrepare.beautyToggle"   = "الفلتر";
+"live.faceCheck.title" = "لم يتم اكتشاف وجه";
+"live.faceCheck.message" = "لم يتم اكتشاف وجه. يرجى إبقاء وجهك ظاهرًا لمواصلة البث.";
+"common.confirm" = "حسنًا";
+"forceEnd.noFace" = "انتهى البث لعدم اكتشاف وجه لفترة طويلة.";
 "livePrepare.sliderBlur"     = "نعومة";
 "livePrepare.sliderWhiten"   = "تبييض";
 "livePrepare.sliderEyeEnlarge" = "تكبير العيون";

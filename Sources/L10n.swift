@@ -34,6 +34,10 @@ enum L10n {
     static var forceEndCameraFailure: String { localize("forceEnd.cameraFailure", comment: "相机采集失败") }
     static var forceEndNoPermission: String { localize("forceEnd.noPermission", comment: "权限校验失败") }
     static var forceEndWeakNetwork: String { localize("forceEnd.weakNetwork", comment: "网络环境过差") }
+    static var forceEndNoFace: String { localize("forceEnd.noFace", comment: "长时间未露脸") }
+    static var liveFaceCheckTitle: String { localize("live.faceCheck.title", comment: "未检测到人脸") }
+    static var liveFaceCheckMessage: String { localize("live.faceCheck.message", comment: "请露脸以继续直播") }
+    static var commonConfirm: String { localize("common.confirm", comment: "确认") }
 
     // 切后台超限（BackgroundMonitor 预警 + 本地通知，B 里程碑增补 spec §3）
     /// %d 已切次数 / %d 上限次数

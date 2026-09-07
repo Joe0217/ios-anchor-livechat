@@ -437,6 +437,10 @@
 "livePrepare.titlePlaceholder" = "Live title (leave empty for default bio)";
 "livePrepare.defaultTitle"   = "Live";
 "livePrepare.beautyToggle"   = "Beauty";
+"live.faceCheck.title" = "Face not detected";
+"live.faceCheck.message" = "No face detected. Please keep your face visible to continue streaming.";
+"common.confirm" = "OK";
+"forceEnd.noFace" = "Live ended because no face was detected for too long.";
 "livePrepare.sliderBlur"     = "Smooth";
 "livePrepare.sliderWhiten"   = "Whiten";
 "livePrepare.sliderEyeEnlarge" = "Eye Enlarge";

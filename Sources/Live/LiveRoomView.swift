@@ -181,6 +181,11 @@ struct LiveRoomView: View {
                    isPresented: $showEndLiveConfirm,
                    actions: { endLiveConfirmActions },
                    message: { endLiveConfirmMessage })
+            .alert(L10n.liveFaceCheckTitle, isPresented: $store.faceCheckReminderPresented) {
+                Button(L10n.commonConfirm) { store.faceCheckReminderPresented = false }
+            } message: {
+                Text(L10n.liveFaceCheckMessage)
+            }
             .onAppear(perform: handleMainOnAppear)
             .onDisappear(perform: handleOnDisappear)
             .onChange(of: store.state, perform: handleStoreStateChange)
@@ -193,6 +198,7 @@ struct LiveRoomView: View {
             .animation(.easeInOut(duration: 0.2), value: callState)
             .onReceive(callStore.$state, perform: handleCallStateChange)
             .onReceive(store.$privateCallOpen, perform: handlePrivateCallOpenChange)
+            .onReceive(beauty.$enabled) { store.setBeautyEnabled($0) }
             .animation(.easeInOut(duration: 0.2), value: store.isWaitingReturnLive)
             // Task 9：GiftEffect / EnterEffect scope 均用 yxRoomId（云信房间 id）
             .giftEffectScene(.live, scopeId: roomInfo.yxRoomId.map(String.init) ?? "")
@@ -820,6 +826,11 @@ struct LiveRoomView: View {
         // M2：声网双向 wire（token 续期 + networkQuality 转发）
         // v5.1：同时注入 camera 让 monitor degrade 时节流推帧
         store.wire(agora, camera: camera)
+        store.setBeautyEnabled(beauty.enabled)
+        Task {
+            let config = await AppConfigService.fetchFaceCheckConfig()
+            await MainActor.run { store.configureFaceCheck(config) }
+        }
 
         authorized = true
         camera.start()

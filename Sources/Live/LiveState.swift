@@ -21,6 +21,7 @@ enum ForceEndReason: Equatable {
     case cameraFailure      // endType=5  CameraManager 持续失败 >20s
     case noPermission       // endType=6  心跳 2001
     case weakNetwork        // endType=7  NetworkQualityMonitor v5 分层（连续语义）：连续 ≥10 降级 15fps / 连续 ≥30 下播 / 连续 ≥5 恢复
+    case noFace             // endType=8  连续未露脸自动下播
 
     /// endType 数字码（对齐安卓；用户主动下播 endType=1 不入本枚举）
     /// backgroundExceeded 与 disconnected 共享 code=4：后台超限本质是"App 挂起 → 心跳停 → 断连"。
@@ -33,6 +34,7 @@ enum ForceEndReason: Equatable {
         case .cameraFailure:       return 5
         case .noPermission:        return 6
         case .weakNetwork:         return 7
+        case .noFace:              return 8
         }
     }
 
@@ -47,6 +49,7 @@ enum ForceEndReason: Equatable {
         case .weakNetwork:         return 2
         case .backgroundExceeded:  return 2
         case .disconnected:        return 1
+        case .noFace:              return 2
         }
     }
 }

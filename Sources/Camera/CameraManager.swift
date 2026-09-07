@@ -29,6 +29,9 @@ final class CameraManager: NSObject, ObservableObject {
     var renderer: BeautyRenderer
     /// 美颜是否降级（init 时确定，供 LiveRoomView 注入 store 后通知）
     let isBeautyFallback: Bool
+    /// 相芯逐帧人脸结果适配器；仅在相芯渲染成功时写入。
+    let faceDetectionAdapter = LatestFaceDetectionAdapter()
+    private var didInvalidateFaceResult = false
 
     /// v5.8：多订阅者模型替代 v5.7 单闭包 onFrame。
     ///
@@ -489,6 +492,15 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         if now - lastPushedAt < interval { return }
         lastPushedAt = now
         let processed = renderer.process(pixelBuffer)
+        if !isBeautyFallback {
+            didInvalidateFaceResult = false
+            faceDetectionAdapter.publish(hasFace: FUManager.shared().hasFaceDetected(), at: CACurrentMediaTime())
+        } else {
+            if !didInvalidateFaceResult {
+                faceDetectionAdapter.invalidate()
+                didInvalidateFaceResult = true
+            }
+        }
         latestFrameLock.lock()
         latestProcessedFrame = processed
         latestProcessedFrameDate = Date()

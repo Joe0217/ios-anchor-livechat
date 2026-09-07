@@ -62,6 +62,7 @@ final class LiveStore: ObservableObject {
 
     // ─── 美颜可用性（§6 fallback；M2 接入）─────
     @Published private(set) var beautyAvailable: Bool = true
+    @Published var faceCheckReminderPresented: Bool = false
 
     // ─── 权限拒绝对外提示（M2 接入）─────────────
     @Published var permissionDeniedAlert: Bool = false
@@ -115,6 +116,8 @@ final class LiveStore: ObservableObject {
 
     // ─── 并发原子标志（§2.5 同步 CAS）───────────
     private var inFlightEnd: Bool = false
+    private var faceCheck: LiveFaceCheckCoordinator?
+    private var beautyEnabled = true
 
     // ─── 子模块（lazy 避免 init 内 self 循环）───
     private lazy var heartbeat: HeartbeatController = HeartbeatController(store: self)
@@ -182,6 +185,39 @@ extension LiveStore {
         agora.networkMonitor = monitor
         monitor.agora = agora
         monitor.camera = camera
+        elapsedTimerStore.onTick = { [weak self] in self?.onFaceCheckTick() }
+    }
+
+    func configureFaceCheck(_ config: LiveAnchorFaceCheckConfig?) {
+        faceCheck?.stop(); faceCheck = nil; faceCheckReminderPresented = false
+        guard let config, let uid = SessionStore.shared.user?.userId, !config.whiteList.contains(uid) else { return }
+        let coordinator = LiveFaceCheckCoordinator(config: config)
+        coordinator.start(startedAtMonotonic: MonotonicClock.now)
+        faceCheck = coordinator
+    }
+
+    func setBeautyEnabled(_ enabled: Bool) { beautyEnabled = enabled; if !enabled { faceCheck?.pause() } }
+
+    private func onFaceCheckTick() {
+        guard let faceCheck, let camera else { return }
+        let runtime = LiveFaceRuntimeState(isLiving: state == .living,
+                                           isBeautyEnabled: beautyEnabled && beautyAvailable,
+                                           isBeautyCameraActive: camera.session.isRunning && !camera.isBeautyFallback,
+                                           isInOneToOneCall: callState != 0 || isWaitingReturnLive,
+                                           isLiveEnding: state != .living)
+        let events = faceCheck.onLiveTick(now: MonotonicClock.now, runtime: runtime, latest: camera.faceDetectionAdapter.latestResult)
+        for event in events {
+            switch event {
+            case .showReminder: faceCheckReminderPresented = true; AnalyticsTracker.track("live_noface_check", properties: ["type": "popup_show"])
+            case .closeReminder: faceCheckReminderPresented = false
+            case .restarted: faceCheckReminderPresented = false; AnalyticsTracker.track("live_noface_check", properties: ["type": "time_restart"])
+            case .fixedNoFace: AnalyticsTracker.track("live_noface_check", properties: ["type": "fixed_noface"])
+            case .autoStop:
+                faceCheckReminderPresented = false
+                AnalyticsTracker.track("live_noface_check", properties: ["type": "live_end"])
+                Task { await self.forceEnd(reason: .noFace) }
+            }
+        }
     }
 
     // MARK: - B3 禁言状态机 入口方法
@@ -324,6 +360,7 @@ extension LiveStore {
     }
 
     private func teardown() async {
+        faceCheck?.stop(); faceCheck = nil; faceCheckReminderPresented = false
         await deactivateLocalMedia()
         heartbeat.stop()
         monitor.stop()
@@ -737,6 +774,7 @@ extension LiveStore: CallStoreObserver {
 final class LiveTimerStore: ObservableObject {
     @Published private(set) var elapsedSeconds: Int = 0
     private var task: Task<Void, Never>?
+    var onTick: (() -> Void)?
 
     /// 启动 1Hz 计时（不重置 elapsedSeconds，支持暂停-恢复）。
     /// 重复调 start 幂等：先 cancel 旧 task 再起新 task。
@@ -748,6 +786,7 @@ final class LiveTimerStore: ObservableObject {
                 // 复查 202607012202 S-11：外部释放后立即退出 loop，避免每秒 nil 写空转
                 guard let self, !Task.isCancelled else { return }
                 self.elapsedSeconds += 1
+                self.onTick?()
             }
         }
     }
