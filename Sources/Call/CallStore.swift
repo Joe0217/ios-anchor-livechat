@@ -816,6 +816,9 @@ final class CallStore: ObservableObject {
         current = info
         state = .calling
 
+        // 更新网络监控场景
+        agora.updateCallNetworkScene(.direct)
+
         // 3) 启动 30s 超时（H5 _autoCancelCall(true)）
         startCallOutTimeout()
 
@@ -930,6 +933,9 @@ final class CallStore: ObservableObject {
         current = info
         state = .calling
 
+        // 更新网络监控场景
+        agora.updateCallNetworkScene(.direct)
+
         // 2) 立刻发 Accept
         let ok = await signaling.publish(buildMessage(action: .accept))
         guard isCallLifecycleCurrent(signaling: signaling) else { return }
@@ -1025,6 +1031,9 @@ final class CallStore: ObservableObject {
         info.callStartTime = Date().timeIntervalSince1970 * 1000
         current = info
         state = .calling
+
+        // 更新网络监控场景
+        agora.updateCallNetworkScene(.live)
 
         // 2) 立刻发 Accept（publish 失败必须收尾，避免主叫永等不到 Accept）
         let ok = await signaling.publish(buildMessage(action: .accept))
@@ -1126,6 +1135,9 @@ final class CallStore: ObservableObject {
         info.callStartTime = Date().timeIntervalSince1970 * 1000
         current = info
         state = .calling
+
+        // 更新网络监控场景
+        agora.updateCallNetworkScene(.party)
 
         // 2) 立刻发 Accept（publish 失败必须收尾，避免主叫永等不到 Accept）
         let ok = await signaling.publish(buildMessage(action: .accept))
@@ -1917,6 +1929,9 @@ extension CallStore: CallSignalingDelegate {
         state = .calling
         startCallInTimeout()
 
+        // 更新网络监控场景（初始为 direct，后续可能通过 source 更新为 match）
+        agora.updateCallNetworkScene(.direct)
+
         // 3s 超时拉对方资料（失败仅影响 UI 展示，不影响接通能力）
         let profileLifecycle = lifecycleContext
         Task { @MainActor in
@@ -1928,6 +1943,13 @@ extension CallStore: CallSignalingDelegate {
                 // L 里程碑：无条件 assign source —— MatchStore 订阅此字段实时判定 matchState 迁移。
                 // 若 source=='matchV4' → MatchStore 转 .matchingCalling；非 matchV4 → .matchingSuspended
                 self.lastJoinCallSource = r.source
+
+                // 匹配通话：更新 frontGameType 和网络监控场景
+                if r.source == "matchV4" {
+                    self.current.frontGameType = .match
+                    self.agora.updateCallNetworkScene(.match)
+                }
+
                 guard self.state != .idle, self.state != .ended, self.state != .failed,
                       self.current.callId == msg.callId,
                       self.current.channelId == fromRoomId else { return }

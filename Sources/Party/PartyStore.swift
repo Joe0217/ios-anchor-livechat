@@ -3950,6 +3950,11 @@ extension PartyStore: PartyRTCEngineDelegate {
             await self?.reloadSeatListFromServer()
         }
     }
+
+    /// 网络质量监控：提供当前房间 ID（用于埋点上报）
+    func partyRTCEngineRoomId(_ engine: PartyRTCEngine) -> String? {
+        return roomInfo?.id
+    }
 }
 
 // MARK: - v15 声纹派生查询

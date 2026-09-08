@@ -42,6 +42,9 @@ final class PartyRTCEngine: NSObject, ObservableObject {
 
     weak var delegate: PartyRTCEngineDelegate?
 
+    /// 网络质量监控器（仅上报埋点，不强制下麦）
+    private var networkTracker: NetworkQualityTracker?
+
     private var engine: AgoraRtcEngineKit?
 
     /// leave channel 异步等待句柄（D v5.4 模式）
@@ -127,6 +130,11 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         kit.enableAudioVolumeIndication(500, smooth: 3, reportVad: false)
 
         engine = kit
+
+        // 初始化网络质量监控器
+        networkTracker = NetworkQualityTracker(scene: "party", roomIdProvider: { [weak self] in
+            self?.delegate?.partyRTCEngineRoomId?(self!)
+        })
 
         let option = AgoraRtcChannelMediaOptions()
         option.clientRoleType = .audience
@@ -414,6 +422,11 @@ final class PartyRTCEngine: NSObject, ObservableObject {
     @MainActor
     func leave() async {
         resetPendingSpeakingUids()
+
+        // 重置网络质量监控器
+        networkTracker?.reset()
+        networkTracker = nil
+
         guard let engine else { return }
 
         // P0-1：进 leave 立即作废 pushFrame 快照，防止 didLeave 回调返回前 captureOutput 仍在推帧到正在销毁的 channel
@@ -527,6 +540,19 @@ extension PartyRTCEngine: AgoraRtcEngineDelegate {
         }
     }
 
+    func rtcEngine(_ engine: AgoraRtcEngineKit,
+                   networkQuality uid: UInt,
+                   txQuality: AgoraNetworkQuality,
+                   rxQuality: AgoraNetworkQuality) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            // 只监控本地网络质量（uid == 0）
+            if uid == 0 {
+                self.networkTracker?.report(tx: txQuality, rx: rxQuality)
+            }
+        }
+    }
+
     func rtcEngine(_ engine: AgoraRtcEngineKit, connectionChangedTo state: AgoraConnectionState, reason: AgoraConnectionChangedReason) {
         AppLogger.party.notice("[PartyRTC] connection state=\(state.rawValue, privacy: .public) reason=\(reason.rawValue, privacy: .public)")
         // 被踢 / 永久断开：通知 PartyStore（M4 内对接 forceLeaveRoom）
@@ -621,6 +647,8 @@ protocol PartyRTCEngineDelegate: AnyObject {
     /// F 期断线重连（2026-07-17）：Agora 从 `.disconnected/.reconnecting` 回到 `.connected` 时触发
     /// PartyStore 收到后应全量重拉 seatList 对账（对齐蓝本 §5）
     func partyRTCEngineDidReconnect(_ engine: PartyRTCEngine)
+    /// 网络质量监控：提供当前房间 ID（用于埋点上报）
+    @MainActor @objc optional func partyRTCEngineRoomId(_ engine: PartyRTCEngine) -> String?
 }
 
 // v15：给非声纹感知的实现方兜底空实现（PartyStore 会真实现，其他 delegate 无需强制）

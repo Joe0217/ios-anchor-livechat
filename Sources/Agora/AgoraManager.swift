@@ -83,6 +83,9 @@ final class AgoraManager: NSObject, ObservableObject {
     /// （通话中若 LiveStore=.living 则是直播私 call 场景，两侧观察的是同一 RTC 通道质量）。
     @MainActor var callNetworkQualityHandler: ((Int) -> Void)?
 
+    /// 通话网络质量监控器（仅上报埋点，不强制挂断）
+    private var callNetworkTracker: NetworkQualityTracker?
+
     private var engine: AgoraRtcEngineKit?
     private let externalTrackId: UInt = 0
 
@@ -160,6 +163,13 @@ final class AgoraManager: NSObject, ObservableObject {
         }
         kit.setDefaultAudioRouteToSpeakerphone(true)
 
+        // 通话场景初始化网络质量监控器（根据 frontGameType 区分场景）
+        // 注意：此时 CallStore 的 frontGameType 可能还未设置，需要在后续动态更新
+        if profile == .communication {
+            // 默认先用 direct_call，后续通过 updateCallNetworkScene 动态更新
+            callNetworkTracker = NetworkQualityTracker(scene: "direct_call")
+        }
+
         let option = AgoraRtcChannelMediaOptions()
         option.clientRoleType = role == .broadcaster ? .broadcaster : .audience
         option.publishCustomVideoTrack = role == .broadcaster
@@ -179,6 +189,29 @@ final class AgoraManager: NSObject, ObservableObject {
             state = .failed
             message = String(format: L10n.liveRoomStatusJoinChannelFailedFormat, ret)
         }
+    }
+
+    /// 更新通话网络监控场景（CallStore 设置 frontGameType 后调用）
+    func updateCallNetworkScene(_ frontGameType: CallFrontGameType) {
+        let scene: String
+        switch frontGameType {
+        case .direct:
+            scene = "direct_call"
+        case .match:
+            scene = "match_call"
+        case .live:
+            scene = "live_call"
+        case .bot:
+            scene = "bot_call"
+        case .party:
+            scene = "party_call"
+        @unknown default:
+            scene = "direct_call"
+        }
+
+        // 重新创建监控器（scene 变更需要重建）
+        callNetworkTracker = NetworkQualityTracker(scene: scene)
+        logger.info("callNetworkScene updated: \(scene)")
     }
 
     // MARK: - 推帧
@@ -228,6 +261,11 @@ final class AgoraManager: NSObject, ObservableObject {
     @MainActor
     func leave() async {
         guard let engine = engine else { return }
+
+        // 重置通话网络质量监控器
+        callNetworkTracker?.reset()
+        callNetworkTracker = nil
+
         let option = AgoraRtcChannelMediaOptions()
         option.publishCustomVideoTrack = false
         option.publishMicrophoneTrack = false
@@ -600,7 +638,7 @@ extension AgoraManager: AgoraRtcEngineDelegate {
     }
 
     /// 网络质量回调（spec §4.1 + C 里程碑通话 UI signalColumn）：
-    /// - `uid == 0` = 本地：派 NetworkQualityMonitor.report（弱网降级）+ callNetworkQualityHandler（CallStore）+ 派 UI localSignalLevel
+    /// - `uid == 0` = 本地：派 NetworkQualityMonitor.report（直播弱网降级）+ callNetworkTracker（通话埋点）+ callNetworkQualityHandler（CallStore）+ 派 UI localSignalLevel
     /// - `uid != 0` = 远端：仅派 UI remoteSignalLevel（不参与弱网降级）
     /// 每 ~2s 触发一次；raw 值越大越差（0 unknown / 1 excellent / … / 6 down）
     func rtcEngine(_ engine: AgoraRtcEngineKit,
@@ -613,7 +651,11 @@ extension AgoraManager: AgoraRtcEngineDelegate {
             if uid == 0 {
                 let prev = self.localSignalLevel
                 self.localSignalLevel = worst
+                // 直播场景：NetworkQualityMonitor（带强制下播逻辑）
                 self.networkMonitor?.report(tx: txQuality, rx: rxQuality)
+                // 通话场景：NetworkQualityTracker（仅上报埋点）
+                self.callNetworkTracker?.report(tx: txQuality, rx: rxQuality)
+                // 通话场景：旧的 callNetworkQualityHandler（保留兼容）
                 self.callNetworkQualityHandler?(worst)
                 if prev != worst {
                     logger.info("[networkQuality] local worst=\(worst) tx=\(txQuality.rawValue) rx=\(rxQuality.rawValue)")

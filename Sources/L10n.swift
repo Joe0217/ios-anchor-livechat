@@ -2277,7 +2277,6 @@ enum L10n {
     static var commonUnfollowSuccess: String        { localize("common.unfollowSuccess", comment: "取消关注成功 toast") }
     // P1-6（2026-07-14）主播审核弹窗
     static var commonKindReminder: String           { localize("common.kindReminder", comment: "通用弹窗提示 title（对齐 H5 Vant showDialog 默认）") }
-    static var commonConfirm: String                { localize("common.confirm", comment: "通用 Confirm 按钮") }
     static var commonDiscard: String                { localize("common.discard", comment: "通用放弃按钮") }
     static var commonClose: String                  { localize("common.close", comment: "通用关闭按钮 accessibility label") }
     static var auditPassedMessage: String           { localize("audit.passed.message", comment: "主播审核通过 alert 文案（H5 固定英文原文）") }

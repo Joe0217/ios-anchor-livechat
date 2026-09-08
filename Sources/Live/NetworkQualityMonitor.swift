@@ -49,6 +49,10 @@ final class NetworkDebugStore: ObservableObject {
 /// - **连续** ≥30 次（≈60s，中间任一次质量 ≤4 即清零重计）→ **强制下播**：endType=7（v5 修订；原 spec ≥10 次对齐安卓被反悔）
 /// - 降级期间**连续** ≥5 次质量 ≤4（≈10s）→ **恢复**：清 toast + 编码 fps 15→30
 ///
+/// **监控维度**：
+/// - **RTC 质量**：声网 SDK 的 networkQuality 回调（端到端质量）
+/// - **系统网络**：iOS 系统的网络连接状态（WiFi/4G、信号强度等）
+///
 /// PK 期间（G 里程碑）使用 pause/resume，保留计数。
 @MainActor
 final class NetworkQualityMonitor: ObservableObject {
@@ -69,6 +73,9 @@ final class NetworkQualityMonitor: ObservableObject {
     weak var agora: AgoraManager?
     /// v5.1 弱网降级时同时节流 CameraManager 推帧（避免相机 30fps 推但编码器只要 15fps 导致堆积卡顿）
     weak var camera: CameraManager?
+
+    /// 系统级网络监控器
+    private let systemMonitor = SystemNetworkMonitor()
 
     private(set) var isRunning: Bool = false
     private var status: Status = .normal
@@ -228,6 +235,16 @@ final class NetworkQualityMonitor: ObservableObject {
         agora?.applyEncoderQuality(.low)
         camera?.targetFPS = 15                    // v5.1：相机推帧同步降到 15fps 防堆积
         store?.setNetworkWarning(L10n.networkWarning)
+
+        // 网络质量差埋点（补充系统网络信息）
+        var properties: [String: Any] = [
+            "scene": "live",
+            "consecutive_bad_count": consecutiveBadCount,
+            "total_reports": totalReports,
+            "action": "degrade"
+        ]
+        properties.merge(systemMonitor.getNetworkProperties()) { (_, new) in new }
+        AnalyticsTracker.trackBehavior("网络质量差", properties: properties)
     }
 
     private func recover() {
@@ -236,12 +253,31 @@ final class NetworkQualityMonitor: ObservableObject {
         agora?.applyEncoderQuality(.normal)
         camera?.targetFPS = 30                    // v5.1：相机推帧恢复 30fps
         store?.setNetworkWarning(nil)
+
+        // 网络恢复埋点（补充系统网络信息）
+        var properties: [String: Any] = [
+            "scene": "live",
+            "previous_bad_count": consecutiveBadCount,
+            "total_reports": totalReports
+        ]
+        properties.merge(systemMonitor.getNetworkProperties()) { (_, new) in new }
+        AnalyticsTracker.trackBehavior("网络恢复", properties: properties)
     }
 
     private func endLive() {
         logger.error("network bad ≥\(self.endThreshold) → forceEnd weakNetwork")
         currentLevel = .weakSevere
-        // TODO: ThinkingData 接入后真实埋点 c_log_networkBad（J 里程碑）
+
+        // 网络质量差埋点（强制下播，补充系统网络信息）
+        var properties: [String: Any] = [
+            "scene": "live",
+            "consecutive_bad_count": consecutiveBadCount,
+            "total_reports": totalReports,
+            "action": "force_end"
+        ]
+        properties.merge(systemMonitor.getNetworkProperties()) { (_, new) in new }
+        AnalyticsTracker.trackBehavior("网络质量差", properties: properties)
+
         Task { [weak self] in
             await self?.store?.forceEnd(reason: .weakNetwork, subSource: "network_bad_30")
         }

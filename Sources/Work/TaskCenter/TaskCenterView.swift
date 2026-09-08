@@ -19,7 +19,7 @@ struct TaskCenterView: View {
     @Environment(\.rankProgressAction) private var rankProgressAction
 
     var body: some View {
-        ScrollView {
+        ScrollView(.vertical, showsIndicators: false) {
             ZStack(alignment: .top) {
                 // 顶部粉紫渐变背景 —— `.resizable()` + 仅 height 拉伸铺满宽度,不用 aspectRatio(.fill)
                 // 避免图片按 aspect ratio 撑到超出屏宽 → ZStack 宽度被拉大 → VStack 内容溢出
