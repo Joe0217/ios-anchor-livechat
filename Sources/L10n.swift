@@ -2972,3 +2972,26 @@ enum L10n {
         static var startChat: String { localize("invite.startChat", comment: "开始聊天") }
     }
 }
+
+extension L10n {
+    enum Email {
+        static func text(_ key: String) -> String { localize("emailAccount." + key) }
+        static func error(_ error: Error) -> String {
+            guard let api = error as? APIError else { return text("networkError") }
+            switch api.code {
+            case "1039": return text("cooldown")
+            case "1042": return text("wrongCode")
+            case "1046", "2089": return text("invalidLogin")
+            case "1087": return text("exists")
+            case "1088": return text("sendFailed")
+            case "1100": return text("blacklisted")
+            case "2016": return text("limited")
+            case "2084": return text("expired")
+            case "2085", "2086": return api.message.isEmpty ? text("requestFailed") : api.message
+            case "2087": return text("passwordMismatch")
+            case "2088": return text("passwordRule")
+            default: return text("requestFailed")
+            }
+        }
+    }
+}

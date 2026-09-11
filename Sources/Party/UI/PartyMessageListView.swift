@@ -192,6 +192,7 @@ struct PartyMessageListView: View {
             case .ru: return "ru"
             case .es: return "es"
             case .uk: return "uk"
+            case .hi: return "hi"
             case .system: return Locale.current.language.languageCode?.identifier ?? "en"
             }
         }()

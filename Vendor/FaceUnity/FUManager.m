@@ -1,5 +1,6 @@
 #import "FUManager.h"
 #import "authpack.h"
+#import <os/log.h>
 @import FURenderKit;
 
 // 注意：以下 API 基于相芯 Nama iOS SDK 8.x。不同 SDK 版本类名/方法可能略有差异，
@@ -33,6 +34,8 @@
         FUSetupConfig *config = [[FUSetupConfig alloc] init];
         config.authPack = FUAuthPackMake((void *)g_auth_package, (int)sizeof(g_auth_package));
         [FURenderKit setupWithSetupConfig:config];
+        os_log(OS_LOG_DEFAULT, "[FaceUnity] SDK version: %{public}@",
+               [FURenderKit getVersion]);
 
         // 2) 加载人脸 AI 模型
         NSString *aiFacePath = [[NSBundle mainBundle] pathForResource:@"ai_face_processor" ofType:@"bundle"];

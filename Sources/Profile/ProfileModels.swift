@@ -69,7 +69,7 @@ struct AnchorInfo: Codable {
     let anchorIncomeMap: AnchorIncomeMap?
 
     // A-2 新增（v3 BLOCK-2 修：供注册被拒重录 hydrate 回填；H5 `type.ts` L67/78/115/195 等多处 mineInfo 类型声明字段名推）
-    let email: String?             // 注册用邮箱；H5 `type.ts:67` `email?: string` / L195 `email: string`
+    var email: String?             // 注册用邮箱；H5 `type.ts:67` `email?: string` / L195 `email: string`
     /// birthday："yyyy-MM-dd" 或 number timestamp（H5 type.ts:21/51 声明 number / L78/115 声明 string，后端混发）；
     /// Finding #8 修 2026-07-10：Codable init(from:) 里通过 `KeyedDecodingContainer.decodeFlexibleString` String/Int/Double 兼容 decode，对齐 rule ios-decode-userid-compat.md
     let birthday: String?

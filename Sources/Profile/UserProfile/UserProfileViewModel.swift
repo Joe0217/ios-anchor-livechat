@@ -346,6 +346,7 @@ final class UserProfileFeatureViewModel: ObservableObject {
         case .ru: language = "ru"
         case .es: language = "es"
         case .uk: language = "uk"
+        case .hi: language = "hi"
         case .system: language = Locale.current.language.languageCode?.identifier ?? "en"
         }
         Task {

@@ -14,6 +14,9 @@ import UIKit
 struct SettingsView: View {
     @EnvironmentObject private var session: SessionStore
     @Environment(\.dismiss) private var dismiss
+    @StateObject private var emailStore = EmailAccountEntryStore()
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var emailFlow: EmailEntryRoute?
     @State private var showLogoutConfirm = false
     @State private var showClearCacheConfirm = false
     @State private var toastMessage: String?
@@ -59,12 +62,31 @@ struct SettingsView: View {
             Button(L10n.settingsCancel, role: .cancel) {}
         }
         .overlay(alignment: .top) { toastOverlay }
+        .task(id: session.sessionGeneration) { await emailStore.refresh() }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active { Task { await emailStore.refresh() } }
+        }
+        .sheet(item: $emailFlow, onDismiss: { Task { await emailStore.refresh() } }) { route in
+            EmailAccountView(mode: route == .verify ? .verify : .change)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .anchorEmailRebindSuccess)) { event in
+            emailFlow = nil
+            showToast(L10n.Email.text((event.userInfo?["changed"] as? Bool == true) ? "changeSuccess" : "verifySuccess"))
+            Task { await emailStore.refresh() }
+        }
     }
 
     // MARK: - Sections
 
     private var accountSection: some View {
         Section(L10n.settingsSectionAccount) {
+            if let email = emailStore.info?.email, !email.isEmpty {
+                Text(email).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+            if let info = emailStore.info, !info.isVerified {
+                settingsRow(icon: "envelope", title: L10n.Email.text("verifyEmail")) { emailFlow = .verify }
+            }
+            settingsRow(icon: "envelope", title: L10n.Email.text("changeEmail")) { emailFlow = .change }
             settingsRow(icon: "doc.text.magnifyingglass", title: L10n.settingsAnchorPolicy) {
                 path.append(ProfileRoute.anchorPolicy)
             }
@@ -378,4 +400,9 @@ struct AccountDeletionView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
+}
+
+private enum EmailEntryRoute: String, Identifiable {
+    case verify, change
+    var id: String { rawValue }
 }

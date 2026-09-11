@@ -20,6 +20,41 @@ final class APIClientTests: XCTestCase {
         super.tearDown()
     }
 
+    func testEmailRebind_preservesUnencryptedScalarToken() async throws {
+        MockURLProtocol.handler = { req in
+            (Self.ok200(req.url!), Self.envelope(code: "0000", resultHex: "fixture-refreshed-session"))
+        }
+        let result = try await client.post("/api/anchor/email/rebind/submit")
+        XCTAssertEqual(try JSONDecoder().decode(String.self, from: result), "fixture-refreshed-session")
+    }
+
+    func testEmailCurrent_silentFailureStillInvalidatesSession() async {
+        let invalidation = expectation(forNotification: .apiSessionInvalidated, object: nil)
+        MockURLProtocol.handler = { req in
+            (Self.ok200(req.url!), Self.envelope(code: "1005", resultHex: nil))
+        }
+        do {
+            _ = try await client.post("/api/anchor/email/current", suppressCodes: ["*"])
+            XCTFail("Expected session invalidation")
+        } catch let error as APIError {
+            XCTAssertEqual(error.code, "1005")
+        } catch { XCTFail("Unexpected error: \(error)") }
+        await fulfillment(of: [invalidation], timeout: 1)
+    }
+
+    func testTokenRotationUpdatesCurrentRequests() throws {
+        let previous = AuthToken.value
+        defer { AuthToken.value = previous }
+        AuthToken.value = "fixture-original-session"
+        let oldRequest = APIRequestAuthContext(explicitToken: nil)
+        AuthToken.value = "fixture-refreshed-session"
+        XCTAssertEqual(AuthToken.value, "fixture-refreshed-session")
+        XCTAssertThrowsError(try oldRequest.ensureCurrent()) { error in
+            XCTAssertTrue(error is CancellationError)
+        }
+        XCTAssertNoThrow(try APIRequestAuthContext(explicitToken: nil).ensureCurrent())
+    }
+
     // MARK: - \u{8bf7}\u{6c42}\u{4f53}\u{52a0}\u{5bc6}：JSON \u{2192} AES-CBC \u{2192} Base64
 
     func testPost_bodyIsAESBase64EncryptedJSON() async throws {
@@ -29,7 +64,7 @@ final class APIClientTests: XCTestCase {
         }
 
         let body: [String: Any] = ["account": "test@example.com", "password": "abc"]
-        _ = try await client.post("/api/login/v4/login", body: body)
+        _ = try await client.post("/api/user/v5/login", body: body)
 
         // \u{9a8c}\u{8bc1}：\u{6293}\u{5230}\u{7684} httpBody \u{80fd}\u{7528} CryptoUtil \u{53cd}\u{5411}\u{89e3}\u{56de}\u{539f} JSON
         guard let captured = MockURLProtocol.lastRequest,

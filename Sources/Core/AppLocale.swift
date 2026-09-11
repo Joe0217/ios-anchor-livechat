@@ -17,6 +17,7 @@ enum AppLocale: String, CaseIterable {
     case ru = "ru"
     case es = "es"
     case uk = "uk"
+    case hi = "hi"
 
     var displayName: String {
         switch self {
@@ -27,6 +28,7 @@ enum AppLocale: String, CaseIterable {
         case .ru: return "Русский"
         case .es: return "Español"
         case .uk: return "Українська"
+        case .hi: return "हिन्दी"
         }
     }
 
@@ -72,6 +74,7 @@ final class AppLocaleStore: ObservableObject {
         let systemLangs = UserDefaults.standard
             .persistentDomain(forName: UserDefaults.globalDomain)?["AppleLanguages"] as? [String]
         let raw = systemLangs?.first ?? Locale.current.language.languageCode?.identifier ?? "en"
+        if raw.hasPrefix("hi") { return .hi }
         if raw.hasPrefix("ar") { return .ar }
         if raw.hasPrefix("tr") { return .tr }
         if raw.hasPrefix("ru") { return .ru }

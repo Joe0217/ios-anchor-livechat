@@ -11,6 +11,8 @@ struct LoginView: View {
     @StateObject private var pathHolder = RegisterPathHolder.shared
     @StateObject private var registerStore = RegisterStore.shared
 
+    @State private var showEmailRegistration = false
+    @State private var registrationReady = false
     @State private var email = ""
     @State private var password = ""
     @State private var isPasswordRevealed = false
@@ -22,9 +24,8 @@ struct LoginView: View {
             loginContent
                 .onChange(of: session.pendingRegister) { pending in
                     if let p = pending {
-                        registerStore.begin(email: p.email, password: p.password)
-                        AnalyticsTracker.trackBehavior("进入注册basicInfo页")
-                        pathHolder.path.append(RegisterRoute.basicInfo)
+                        email = p.email
+                        showEmailRegistration = true
                         session.pendingRegister = nil     // 消费掉
                     }
                 }
@@ -49,6 +50,36 @@ struct LoginView: View {
                     }
                 }
         }
+        .sheet(isPresented: $showEmailRegistration, onDismiss: {
+            if registrationReady {
+                registrationReady = false
+                pathHolder.path.append(RegisterRoute.basicInfo)
+            }
+        }) {
+            EmailAccountView(mode: .registration, email: email, onRegistration: { address, secret, ticket, expiry in
+                registerStore.beginVerified(email: address, password: secret, ticket: ticket, expiresAt: expiry)
+                email = address
+                registrationReady = true
+            }, onLogin: { address in
+                email = address
+                session.errorMessage = L10n.Email.text("exists")
+            })
+        }
+        .onChange(of: registerStore.returnToEmailLogin) { required in
+            if required {
+                email = registerStore.email
+                pathHolder.reset()
+                registerStore.reset()
+                session.errorMessage = L10n.Email.text("exists")
+            }
+        }
+        .onChange(of: registerStore.needsEmailVerification) { required in
+            if required {
+                email = registerStore.email
+                pathHolder.reset()
+                showEmailRegistration = true
+            }
+        }
     }
 
     private var loginContent: some View {
@@ -68,6 +99,7 @@ struct LoginView: View {
                         Spacer().frame(height: 24)
                         loginButton
                             .id(LoginScrollTarget.loginButton)
+                        registerButton
                         Spacer(minLength: 24)
                     }
                     .padding(.horizontal, Theme.Metric.authScreenHPadding)
@@ -84,15 +116,13 @@ struct LoginView: View {
                 }
             }
         }
-        .onAppear(perform: fillDebugPasswordIfNeeded)
-    }
-
-    private func fillDebugPasswordIfNeeded() {
-        #if DEBUG
-        if password.isEmpty {
-            password = "12345678"
+        .onChange(of: password) { value in
+            if value.count > 20 { password = String(value.prefix(20)) }
         }
-        #endif
+        .onChange(of: email) { value in
+            let cleaned = String(EmailAccountRules.clean(value).prefix(100))
+            if cleaned != value { email = cleaned }
+        }
     }
 
     // MARK: - 组件
@@ -114,11 +144,12 @@ struct LoginView: View {
     }
 
     private var titleImage: some View {
-        CDNAssetImage("authLoginTitle")
-            .resizable()
-            .scaledToFit()
-            .frame(height: Theme.Metric.authTitleHeight)
-            .accessibilityLabel(L10n.authTitle)
+        VStack(spacing: 8) {
+            Text(L10n.Email.text("dailyTitle"))
+                .font(.system(size: 32, weight: .heavy))
+                .foregroundStyle(LinearGradient(colors: [Color(red: 1, green: 0.92, blue: 0.52), Color(red: 0.41, green: 0.82, blue: 1)], startPoint: .leading, endPoint: .trailing))
+            Text(L10n.Email.text("wealthSubtitle")).foregroundStyle(.white.opacity(0.8))
+        }.frame(maxWidth: .infinity)
     }
 
     private var emailField: some View {
@@ -324,6 +355,22 @@ struct LoginView: View {
         .disabled(!loginButtonEnabled)
     }
 
+    private var registerButton: some View {
+        Button {
+            guard hasAcceptedLegalTerms else { return }
+            showEmailRegistration = true
+            RegisterAnalytics.report(.signUp)
+        } label: {
+            Text(L10n.Email.text("signUp"))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.Palette.authLoginButton)
+                .frame(maxWidth: .infinity).frame(height: 44)
+        }
+        .buttonStyle(.plain)
+        .disabled(!hasAcceptedLegalTerms || session.isLoading)
+        .opacity(hasAcceptedLegalTerms ? 1 : 0.5)
+    }
+
     private var legalConsent: some View {
         HStack(alignment: .top, spacing: 10) {
             Button {
@@ -380,6 +427,7 @@ struct LoginView: View {
     // MARK: - 动作
 
     private func handleLogin() {
+        email = EmailAccountRules.clean(email)
         Task { await session.login(email: email, password: password) }
     }
 

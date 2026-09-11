@@ -75,6 +75,7 @@ struct ProfileView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background { backgroundLayer }
+        .emailVerificationReminder()
         // 状态 banner：仅 error 时出现（loading 由系统下拉刷新自带指示器承担，不再叠 banner）
         .overlay(alignment: .top) {
             statusBanner

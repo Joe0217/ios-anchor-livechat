@@ -8,6 +8,13 @@ import Foundation
 /// - 已核对 H5 register/index.vue L56 `hostReSubmitView({ ...formData })` + L73 `hostRegisterV2({ ...formData })` 及 CountryPickerSheet.fetch 调用点均 `.then` 走 http.post → iOS 用 `.post()` 对齐
 /// - T1c.8 e2e 真接口若返 `code=1111`（method 错）或 `code!='0000'`（body 字段错）→ 立即回查 H5 store 层调用
 enum RegisterService {
+    static func applyEmailRegistration(body: RegisterSubmitBody, ticket: String) async throws -> LoginResult {
+        var fields = body.toDict()
+        fields["ticket"] = ticket
+        let data = try await APIClient.shared.post("/api/user/v5/apply", body: fields, token: "",
+                                                   suppressCodes: EmailAccountRules.handledCodes)
+        return try LoginResult.decodeNetworkResponse(from: data, source: "email-register")
+    }
 
     /// 注册前校验 6 位邀请码。1076 或网络/解析异常由上层按“无有效邀请码”处理，不阻断注册。
     static func checkInviteCode(_ inviteCode: String) async throws -> Bool {
@@ -46,12 +53,12 @@ enum RegisterService {
     /// 本地模拟删除账号完成资料流程后，直接恢复原服务端账号登录，不重复创建账号。
     static func loginDeletedAccount(email: String, password: String) async throws -> LoginResult {
         let data = try await APIClient.shared.post(
-            "/api/login/v4/login",
+            "/api/user/v5/login",
             body: [
                 "email": email,
                 "password": CryptoUtil.loginPassword(password),
             ],
-            suppressCodes: ["1005"]
+            token: "", suppressCodes: EmailAccountRules.handledCodes.union(["1005"])
         )
         return try LoginResult.decodeNetworkResponse(from: data, source: "deleted-account-login")
     }

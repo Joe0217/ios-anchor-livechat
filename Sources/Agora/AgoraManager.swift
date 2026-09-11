@@ -84,7 +84,7 @@ final class AgoraManager: NSObject, ObservableObject {
     @MainActor var callNetworkQualityHandler: ((Int) -> Void)?
 
     /// 通话网络质量监控器（仅上报埋点，不强制挂断）
-    private var callNetworkTracker: NetworkQualityTracker?
+    @MainActor private var callNetworkTracker: NetworkQualityTracker?
 
     private var engine: AgoraRtcEngineKit?
     private let externalTrackId: UInt = 0
@@ -125,6 +125,7 @@ final class AgoraManager: NSObject, ObservableObject {
 
     // MARK: - 加入
 
+    @MainActor
     func join(channelId: String,
               token: String,
               uid: UInt,
@@ -192,6 +193,7 @@ final class AgoraManager: NSObject, ObservableObject {
     }
 
     /// 更新通话网络监控场景（CallStore 设置 frontGameType 后调用）
+    @MainActor
     func updateCallNetworkScene(_ frontGameType: CallFrontGameType) {
         let scene: String
         switch frontGameType {

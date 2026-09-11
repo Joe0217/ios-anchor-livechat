@@ -338,7 +338,7 @@ private struct LoginModeRawEvidence {
 /// 也覆盖到 `type` 字段。真机首次登录后打 log 抓取真实字段名,若与 userType/type 都不匹配再补 alias。
 struct LoginResult: Codable {
     let userId: Int?
-    let token: String?
+    var token: String?
     let loginUuid: String?
     let yxAccid: String?      // 云信 IM 账号
     let imToken: String?      // 云信 IM token

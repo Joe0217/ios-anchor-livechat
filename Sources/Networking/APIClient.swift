@@ -32,6 +32,7 @@ final class APIClient {
 
     /// POST 请求。body 会被 JSON 序列化 → AES → Base64 作为原始 body 发送。
     /// 返回解密后的 result JSON 数据（供 Codable 解码）；非 0000 抛 APIError。
+    /// suppressCodes 包含 "*" 时静默附属信息的错误提示，但仍处理 1004/1005 会话失效。
     ///
     /// - parameter suppressCodes: 对指定错误码**不** post `.apiSessionInvalidated` 通知
     ///   （对齐 A-2 spec §1.3 v3：login 挂 code=1005 用于跳注册页时须传 `["1005"]`，
@@ -90,7 +91,7 @@ final class APIClient {
             if GlobalErrorBannerNotify.isCancellation(error) { throw error }
             AppLogger.net.error("network error path=\(path, privacy: .public): \(String(describing: error), privacy: .public)")
             #if !HILY_TESTS
-            GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: path)
+            if !suppressCodes.contains("*") { GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: path) }
             #endif
             throw error
         }
@@ -149,7 +150,7 @@ final class APIClient {
             if GlobalErrorBannerNotify.isCancellation(error) { throw error }
             AppLogger.net.error("network error path=\(path, privacy: .public): \(String(describing: error), privacy: .public)")
             #if !HILY_TESTS
-            GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: path)
+            if !suppressCodes.contains("*") { GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: path) }
             #endif
             throw error
         }
@@ -200,7 +201,7 @@ final class APIClient {
             if GlobalErrorBannerNotify.isCancellation(error) { throw error }
             AppLogger.net.error("network error path=\(path, privacy: .public): \(String(describing: error), privacy: .public)")
             #if !HILY_TESTS
-            GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: path)
+            if !suppressCodes.contains("*") { GlobalErrorBannerNotify.post(message: L10n.apiNetworkError, path: path) }
             #endif
             throw error
         }
@@ -245,7 +246,7 @@ final class APIClient {
             let isNon2xx = !(200...299).contains(sc)
             #if !HILY_TESTS
             let bannerMsg = isNon2xx ? L10n.apiServerErrorFormat(sc) : L10n.apiResponseParseFailed
-            GlobalErrorBannerNotify.post(message: bannerMsg, path: path, status: sc)
+            if !suppressCodes.contains("*") { GlobalErrorBannerNotify.post(message: bannerMsg, path: path, status: sc) }
             #endif
             #if HILY_TESTS
             throw APIError(code: "-1", message: isNon2xx ? "HTTP \(sc)" : "response parse failed")
@@ -271,7 +272,7 @@ final class APIClient {
             // 业务码非 0000：post 通用 banner（后端 message 优先，空则用 code 兜底避免落 parse-failure 文案）；
             // suppressCodes 里的码不弹；1004/1005 由 SessionStore observer 独立处理
             #if !HILY_TESTS
-            if !suppressCodes.contains(code) && code != "1004" && code != "1005" {
+            if !suppressCodes.contains("*") && !suppressCodes.contains(code) && code != "1004" && code != "1005" {
                 let bannerMsg = message.isEmpty ? L10n.apiRequestFailedFormat(code) : message
                 GlobalErrorBannerNotify.post(message: bannerMsg, path: path, status: httpStatus ?? 0)
             }
@@ -283,6 +284,10 @@ final class APIClient {
            let decrypted = CryptoUtil.aesDecryptFromHex(hex),
            let out = decrypted.data(using: .utf8) {
             return out
+        }
+        // Email rebind returns a scalar token on unencrypted response deployments.
+        if path == "/api/anchor/email/rebind/submit", let raw = env["result"] as? String {
+            return try JSONEncoder().encode(raw)
         }
         if let raw = env["result"], JSONSerialization.isValidJSONObject(raw) {
             return (try? JSONSerialization.data(withJSONObject: raw)) ?? Data("null".utf8)
@@ -422,11 +427,15 @@ enum AuthToken {
     private static let legacyKey = "auth.token.v1"
     /// getter 包含 v1 -> v2 复合迁移，必须与 logout setter 串行，避免旧 token 在清理后写回。
     private static let lock = NSLock()
+    // A rotated token must take effect even if Keychain temporarily refuses writes.
+    private static var hasMemoryValue = false
+    private static var memoryValue: String?
 
     static var value: String? {
         get {
             lock.lock()
             defer { lock.unlock() }
+            if hasMemoryValue { return memoryValue }
             if let v = KeychainStore.getString(for: key) { return v }
             // 一次性迁移：旧 UserDefaults 残留 → Keychain，迁完清旧
             if let legacy = UserDefaults.standard.string(forKey: legacyKey), !legacy.isEmpty {
@@ -437,17 +446,17 @@ enum AuthToken {
             }
             return nil
         }
-        set {
-            lock.lock()
-            defer { lock.unlock() }
-            // 无论登录写入还是登出清空，都终结 v1 迁移源；否则 logout 删除 v2 后，
-            // 下一次 getter 会把旧账号的 legacy token 再次迁回 Keychain。
-            UserDefaults.standard.removeObject(forKey: legacyKey)
-            if let v = newValue, !v.isEmpty {
-                KeychainStore.setString(v, for: key)
-            } else {
-                KeychainStore.remove(for: key)
-            }
-        }
+        set { update(newValue) }
+    }
+
+    @discardableResult
+    static func update(_ newValue: String?) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        hasMemoryValue = true
+        memoryValue = newValue.flatMap { $0.isEmpty ? nil : $0 }
+        UserDefaults.standard.removeObject(forKey: legacyKey)
+        if let value = memoryValue { return KeychainStore.setString(value, for: key) }
+        return KeychainStore.remove(for: key)
     }
 }

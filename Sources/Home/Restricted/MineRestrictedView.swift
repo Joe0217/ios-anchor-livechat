@@ -61,6 +61,7 @@ struct MineRestrictedView: View {
         // 系统颜色必须在 dark colorScheme 下渲染成白色系,否则 light mode 用户看到黑字黑底(ProfileMediaGrid
         // 标题用 Theme.Palette.profileSection=Color.white,但 SwiftUI 系统颜色需靠 colorScheme 触发)。
         .preferredColorScheme(.dark)
+        .emailVerificationReminder()
         .onAppear(perform: syncTabBarVisibility)
         .onChange(of: pathHolder.path.isEmpty) { _ in syncTabBarVisibility() }
     }

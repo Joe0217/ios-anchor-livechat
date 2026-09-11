@@ -516,6 +516,16 @@ final class AnchorInfoStore: ObservableObject {
         }
     }
 
+    func updateVerifiedEmail(_ email: String, userID: Int) {
+        // Invalidate older profile fetches before updating both cached snapshots.
+        reloadEpoch += 1
+        inflightTask?.cancel()
+        inflightTask = nil
+        if info?.userId == userID { info?.email = email }
+        if mine?.userId == userID { mine?.email = email }
+        saveToDisk()
+    }
+
     private func saveToDisk() {
         let snap = CachedSnapshot(
             info: info, mine: mine,

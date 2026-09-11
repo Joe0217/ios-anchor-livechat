@@ -181,6 +181,11 @@ final class SessionStore: ObservableObject {
     }
 
     func login(email: String, password: String) async {
+        guard !isLoading else { return }
+        let email = EmailAccountRules.normalized(email)
+        guard EmailAccountRules.validEmail(email) else { errorMessage = L10n.Email.text("invalidEmail"); return }
+        guard EmailAccountRules.validLoginPassword(password) else { errorMessage = L10n.Email.text("loginPasswordRule"); return }
+        let generation = sessionGeneration
         isLoading = true
         errorMessage = ""
         defer { isLoading = false }
@@ -190,11 +195,20 @@ final class SessionStore: ObservableObject {
         let pwd = CryptoUtil.loginPassword(password)
         do {
             let data = try await APIClient.shared.post(
-                "/api/login/v4/login",
+                "/api/user/v5/login",
                 body: ["email": email, "password": pwd],
-                suppressCodes: ["1005"]                     // A-2 spec §3.2 v3 BLOCK-1：让 1005 走 catch 分流未注册跳注册，而非被 observer logout 拦截
+                token: "",
+                suppressCodes: EmailAccountRules.handledCodes.union(["1005"])
             )
+            guard sessionGeneration == generation else { return }
+            if String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) == "null" {
+                errorMessage = L10n.Email.text("startRegister")
+                pendingRegister = PendingRegister(email: email, password: "")
+                RegisterAnalytics.report(.signUp)
+                return
+            }
             let result = try LoginResult.decodeNetworkResponse(from: data, source: "login")
+            guard result.userType != 9 else { errorMessage = L10n.Email.text("agentBlocked"); return }
             guard let token = result.token, !token.isEmpty else {
                 errorMessage = L10n.authErrorNoToken
                 return
@@ -213,16 +227,13 @@ final class SessionStore: ObservableObject {
                 return
             }
             reportLoginOutcome(account: email, outcome: "进入应用")
-        } catch let e as APIError where e.code == "1005" {
-            // 1005 = 账号未注册；suppressCodes 已让 APIClient 不 post 通知，此处安全设 pendingRegister 让 LoginView push 注册页
-            pendingRegister = PendingRegister(email: email, password: password)
-            reportLoginOutcome(account: email, outcome: "跳转注册")
-            RegisterAnalytics.report(.signUp)
         } catch let e as APIError {
             AppLogger.auth.error("login APIError code=\(e.code, privacy: .public) message=\(e.message, privacy: .private)")
-            errorMessage = L10n.authErrorRequestFailed
+            guard sessionGeneration == generation else { return }
+            errorMessage = e.code == "1005" ? L10n.Email.text("invalidLogin") : L10n.Email.error(e)
         } catch {
-            errorMessage = String(format: L10n.authErrorNetworkFormat, error.localizedDescription)
+            guard sessionGeneration == generation, !GlobalErrorBannerNotify.isCancellation(error) else { return }
+            errorMessage = L10n.Email.error(error)
         }
     }
 
@@ -345,13 +356,16 @@ final class SessionStore: ObservableObject {
     /// - returns: true = 登录状态已建立；false = token 缺失，调用方决定文案
     @discardableResult
     func applyLogin(_ result: LoginResult, email: String) async -> Bool {
+        let expectedGeneration = sessionGeneration
         await waitForRuntimeCleanup()
+        guard sessionGeneration == expectedGeneration else { return false }
         guard let token = result.token, !token.isEmpty else { return false }
         let normalizedEmail = DeletedAccountRegistry.normalize(email)
         guard !normalizedEmail.isEmpty else { return false }
         // 每次交互式登录都重新计算：本次响应优先，缺失时只读取当前 userId 的模式缓存；
         // 全新账号连缓存也没有时，在发布登录态前补拉本人资料，避免先展示 107 再热切。
         let initialMode = await resolvingInteractivePermissionMode(for: result, token: token)
+        guard sessionGeneration == expectedGeneration else { return false }
         let sessionResult = initialMode.user
         // 先失效上一账号的资料请求，再发布当前登录用户。
         AnchorInfoStore.shared.hydrateFromLogin(sessionResult)
@@ -715,6 +729,27 @@ final class SessionStore: ObservableObject {
     }
 
     // MARK: - 持久化
+
+    /// Refresh authentication in place: do not restart IM/RTC or change account permissions.
+    func applyEmailRebind(token: String, email: String, password: String, expectedGeneration: UUID) throws {
+        guard sessionGeneration == expectedGeneration, var updated = user,
+              let userID = updated.userId, !token.isEmpty else { throw CancellationError() }
+        updated.token = token
+        let data = try JSONEncoder().encode(updated)
+        let persisted = KeychainStore.setData(data, for: storeKey)
+        // The server already invalidated the old token: always replace the in-memory identity.
+        user = updated
+        let tokenSaved = AuthToken.update(token)
+        authenticatedEmail = EmailAccountRules.normalized(email)
+        let emailSaved = KeychainStore.setString(authenticatedEmail ?? "", for: KeychainKey.authenticatedEmail)
+        let passwordSaved = KeychainStore.setString(password, for: KeychainKey.pendingRegisterPassword)
+        recordRecentLoginAccount(authenticatedEmail ?? "")
+        AnchorInfoStore.shared.updateVerifiedEmail(authenticatedEmail ?? "", userID: userID)
+        if !persisted || !tokenSaved || !emailSaved || !passwordSaved {
+            // Keep the working new session but tell the user that automatic restoration is unavailable.
+            GlobalErrorBannerNotify.post(message: L10n.Email.text("storageWarning"), path: "/api/anchor/email/rebind/submit")
+        }
+    }
 
     private func save() {
         guard let user, let data = try? JSONEncoder().encode(user) else { return }

@@ -17,6 +17,12 @@ final class RegisterStore: ObservableObject {
 
     // MARK: - 表单持久字段（对齐 H5 register.js formData）
 
+    @Published var returnToEmailLogin = false
+    @Published var needsEmailVerification = false
+    private var submissionEpoch = UUID()
+    private var emailTicket = ""
+    private var emailTicketExpiresAt: Date?
+    private var verifiedEmail = ""
     @Published var email: String = ""           // login catch 1005 时携入
     @Published var password: String = ""        // 明文；submit 时走 CryptoUtil.loginPassword 转两次 MD5 upper
     @Published var iconUrl: String? = nil
@@ -80,6 +86,18 @@ final class RegisterStore: ObservableObject {
         self.password = password
         self.isResubmit = false
         logger.info("[RegisterStore] begin firstTime email=\(email, privacy: .private)")
+    }
+
+    func beginVerified(email: String, password: String, ticket: String, expiresAt: Date) {
+        if !needsEmailVerification { reset() }
+        self.email = email
+        self.password = password
+        self.verifiedEmail = EmailAccountRules.normalized(email)
+        self.emailTicket = ticket
+        self.emailTicketExpiresAt = expiresAt
+        self.needsEmailVerification = false
+        self.isResubmit = false
+        self.submitError = nil
     }
 
     /// 被拒重录进入前：MineRestrictedView 直接携当前已加载的 mineInfo + Keychain cached password。
@@ -152,10 +170,16 @@ final class RegisterStore: ObservableObject {
 
     /// 冷启动清 / logout 清 / 注册成功清
     func reset() {
+        submissionEpoch = UUID()
         inviteValidationGeneration &+= 1
         inviteValidationTask?.cancel()
         inviteValidationTask = nil
         email = ""
+        emailTicket = ""
+        emailTicketExpiresAt = nil
+        verifiedEmail = ""
+        needsEmailVerification = false
+        returnToEmailLogin = false
         password = ""
         iconUrl = nil
         nickname = ""
@@ -252,12 +276,32 @@ final class RegisterStore: ObservableObject {
     /// spec §3.3 v3 完整流：build body → API 调用 → applyLogin bool 守卫 → 清 Keychain → reset → 依 isLoggedIn 走 RootView 分流
     func submit() async {
         guard !isSubmitting else { return }
+        if !isResubmit {
+            guard !emailTicket.isEmpty, let expiry = emailTicketExpiresAt, expiry > Date(),
+                  verifiedEmail == EmailAccountRules.normalized(email) else {
+                submitError = L10n.Email.text("expired")
+                needsEmailVerification = true
+                return
+            }
+            guard EmailAccountRules.validNewPassword(password) else {
+                submitError = L10n.Email.text("passwordRule")
+                return
+            }
+        }
+        let epoch = submissionEpoch
+        let sessionGeneration = SessionStore.shared.sessionGeneration
         isSubmitting = true
         submitError = nil
-        defer { isSubmitting = false }
+        defer { if submissionEpoch == epoch { isSubmitting = false } }
 
         guard let hasValidInviteCode = await resolveInviteCodeForSubmission() else {
             submitError = L10n.authErrorRequestFailed
+            return
+        }
+        guard epoch == submissionEpoch, sessionGeneration == SessionStore.shared.sessionGeneration else { return }
+        if !isResubmit, (emailTicketExpiresAt ?? .distantPast) <= Date() {
+            submitError = L10n.Email.text("expired")
+            needsEmailVerification = true
             return
         }
         if ObjectionableContentFilter.containsObjectionableContent(nickname) {
@@ -306,9 +350,10 @@ final class RegisterStore: ObservableObject {
             } else {
                 result = try await (isResubmit
                     ? RegisterService.reSubmitView(body: body)
-                    : RegisterService.registerV2(body: body))
+                    : RegisterService.applyEmailRegistration(body: body, ticket: emailTicket))
             }
 
+            guard epoch == submissionEpoch, sessionGeneration == SessionStore.shared.sessionGeneration else { return }
             if isDeletedAccount {
                 guard let token = result.token, !token.isEmpty else {
                     submitError = L10n.authErrorNoToken
@@ -343,10 +388,21 @@ final class RegisterStore: ObservableObject {
             // 再进 MineRestrictedView → NavigationStack 从 shared path 恢复直接跳到 videoPreview。
             RegisterPathHolder.shared.reset()
         } catch let e as APIError {
+            guard epoch == submissionEpoch, sessionGeneration == SessionStore.shared.sessionGeneration else { return }
             // 2026-07-12 修：APIError code=-1 是 iOS 内部客户端错误（envelope 解析失败——服务端空 body / 非 JSON / gateway 崩溃）
             // 而非后端业务码；e.message 是内部化文案 "Server response error"，用户看到不 actionable
             // 换成友好 retry 文案，对齐 H5 拦截器 line 133-152 error 分支的 status-mapped 友好文案精神
-            if e.code == "1076" {
+            if e.code == "1087" {
+                submitError = L10n.Email.text("exists")
+                returnToEmailLogin = true
+            } else if e.code == "2084" {
+                emailTicket = ""
+                emailTicketExpiresAt = nil
+                submitError = L10n.Email.text("expired")
+                needsEmailVerification = true
+            } else if EmailAccountRules.handledCodes.contains(e.code) {
+                submitError = L10n.Email.error(e)
+            } else if e.code == "1076" {
                 submitError = L10n.Register.errorInvalidInvitationCode
             } else if e.code == "-1" {
                 submitError = L10n.Register.errorServerTemporary
@@ -355,6 +411,8 @@ final class RegisterStore: ObservableObject {
             }
             logger.error("[RegisterStore] submit APIError code=\(e.code, privacy: .public) msg=\(e.message, privacy: .public)")
         } catch {
+            guard epoch == submissionEpoch, sessionGeneration == SessionStore.shared.sessionGeneration,
+                  !GlobalErrorBannerNotify.isCancellation(error) else { return }
             submitError = String(format: L10n.authErrorNetworkFormat, error.localizedDescription)
             logger.error("[RegisterStore] submit network error \(error.localizedDescription, privacy: .public)")
         }

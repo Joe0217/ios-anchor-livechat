@@ -133,7 +133,8 @@ final class PartyRTCEngine: NSObject, ObservableObject {
 
         // 初始化网络质量监控器
         networkTracker = NetworkQualityTracker(scene: "party", roomIdProvider: { [weak self] in
-            self?.delegate?.partyRTCEngineRoomId?(self!)
+            guard let self else { return nil }
+            return self.delegate?.partyRTCEngineRoomId(self)
         })
 
         let option = AgoraRtcChannelMediaOptions()
@@ -648,11 +649,12 @@ protocol PartyRTCEngineDelegate: AnyObject {
     /// PartyStore 收到后应全量重拉 seatList 对账（对齐蓝本 §5）
     func partyRTCEngineDidReconnect(_ engine: PartyRTCEngine)
     /// 网络质量监控：提供当前房间 ID（用于埋点上报）
-    @MainActor @objc optional func partyRTCEngineRoomId(_ engine: PartyRTCEngine) -> String?
+    func partyRTCEngineRoomId(_ engine: PartyRTCEngine) -> String?
 }
 
 // v15：给非声纹感知的实现方兜底空实现（PartyStore 会真实现，其他 delegate 无需强制）
 extension PartyRTCEngineDelegate {
+    func partyRTCEngineRoomId(_ engine: PartyRTCEngine) -> String? { nil }
     func partyRTCEngine(_ engine: PartyRTCEngine, didUpdateSpeakingUids uids: Set<UInt>) {}
     func partyRTCEngineDidReconnect(_ engine: PartyRTCEngine) {}
 }
