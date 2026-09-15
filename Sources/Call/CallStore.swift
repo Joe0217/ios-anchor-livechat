@@ -37,6 +37,10 @@ final class CallStore: ObservableObject {
         // didSet 在 @Published publish 之后调用，满足 SwiftUI 渲染先于业务回调的顺序。
         didSet {
             guard oldValue != state else { return }
+            FaceBusinessAnalytics.update("call", active: state == .connected) { [weak self] in
+                guard let self else { return [:] }
+                return ["scene": String(self.current.frontGameType.rawValue), "call_id": self.current.callId, "opponent_id": self.current.remoteUserId, "channel_id": self.current.channelId]
+            }
             updateAppSoundsForStateTransition()
             // F refactor：多观察者数组（原单 weak var observer 已改为 NSHashTable，spec §3.4 P0-2）
             notifyObservers { $0.callStore(self, stateDidChange: state, previous: oldValue) }
@@ -75,6 +79,14 @@ final class CallStore: ObservableObject {
 
     /// 机器人通话在 `createCall` 网络请求期间也必须视为真人通话忙碌，防止两个流程抢占 Agora 单例。
     var blocksRobotCall: Bool { state != .idle || isStartingDirectCall }
+
+    /// 通话行为埋点公共字段，覆盖直播私 call、派对房私 call、匹配通话等全部场景。
+    private var callLogProperties: [String: Any] {
+        var properties: [String: Any] = ["source": current.frontGameType.rawValue, "_include_network": true]
+        if !current.callId.isEmpty { properties["call_id"] = current.callId }
+        if current.remoteUserId > 0 { properties["opponent_id"] = current.remoteUserId }
+        return properties
+    }
 
     /// IM 场景闸门 wiring：state 离开/进入 .idle 同步 IMSceneGate（通话相关 sysMsg 过滤）。
     ///
@@ -830,6 +842,7 @@ final class CallStore: ObservableObject {
 
         // 5) 发 RTM VideoCall（H5 await _publishMessage）
         let ok = await signaling.publish(buildMessage(action: .videoCall))
+        AnalyticsTracker.trackAgora("call_signal_result", scene: String(info.frontGameType.rawValue), properties: ["call_id": info.callId, "opponent_id": info.remoteUserId, "success": ok])
         guard isCallLifecycleCurrent(signaling: signaling),
               state == .calling,
               current.callId == info.callId else { return }
@@ -1240,7 +1253,7 @@ final class CallStore: ObservableObject {
 
         // 4) 接通率上报（被叫 answered）
         await reportRate(category: .answered, type: .callee, answerTime: info.sinceStartDuration, abnormal: 0)
-        AnalyticsTracker.trackBehavior("通话接听", properties: ["source": current.frontGameType.rawValue])
+        AnalyticsTracker.trackBehavior("通话接听", properties: callLogProperties)
     }
 
     /// 被叫拒绝通话。
@@ -1250,7 +1263,7 @@ final class CallStore: ObservableObject {
         AppSoundPlayer.shared.stopIncomingCallRingtone()
         _ = await signaling.publish(buildMessage(action: .reject))
         sendCallNimSignal(.reject)
-        AnalyticsTracker.trackBehavior("通话拒绝", properties: ["source": current.frontGameType.rawValue])
+        AnalyticsTracker.trackBehavior("通话拒绝", properties: callLogProperties)
         // H5 callInCancel L1119/1129：被叫主动拒接桶 answerTime=0
         await endLocally(reason: .localHangUp, rateCategory: .rejected, rateType: .callee, answerTime: 0, abnormal: 0)
     }
@@ -1271,7 +1284,7 @@ final class CallStore: ObservableObject {
             _ = await signaling.publish(buildMessage(action: .hangup))
         }
         sendCallNimSignal(.hangUp)
-        AnalyticsTracker.trackBehavior("通话挂断", properties: ["source": current.frontGameType.rawValue])
+        AnalyticsTracker.trackBehavior("通话挂断", properties: callLogProperties)
         await endLocally(reason: .localHangUp, rateCategory: nil, rateType: .caller, answerTime: 0, abnormal: 0)
     }
 
@@ -1534,6 +1547,7 @@ final class CallStore: ObservableObject {
     // state=.ended、agora 已 leave。如果 token 拿回后无脑 agora.join，会创建一个游离的 RTC 通道
     // 没有清理路径。所以拿到 token 后必须再次校验 state 仍处于"应当继续 join"的阶段。
     private func joinRtc(channel: String, rateType: CallRateType) async {
+        AnalyticsTracker.trackAgora("call_rtc_join_request", scene: String(current.frontGameType.rawValue), properties: ["channel_id": channel, "call_id": current.callId, "opponent_id": current.remoteUserId])
         let stateBeforeAwait = state
         guard let lifecycle = lifecycleContext,
               isCallLifecycleCurrent() else { return }
@@ -1543,6 +1557,7 @@ final class CallStore: ObservableObject {
                   lifecycleContext == lifecycle,
                   isCallLifecycleCurrent() else { return }
             guard let rtcToken = tokenRes.rtcToken, !rtcToken.isEmpty else {
+                AnalyticsTracker.trackAgora("call_rtc_join_failed", scene: String(current.frontGameType.rawValue), properties: ["call_id": current.callId, "opponent_id": current.remoteUserId, "reason": "missing_token"])
                 lastError = L10n.callErrorRtcTokenFailed
                 await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, answerTime: 0, abnormal: 1)
                 return
@@ -1555,14 +1570,17 @@ final class CallStore: ObservableObject {
                 AppLogger.call.debug("📍 [CallStore] joinRtc 拿到 token 后 state 已是 \(self.state.rawValue, privacy: .public)（之前=\(stateBeforeAwait.rawValue, privacy: .public)）→ 放弃 join")
                 return
             }
+            agora.setAnalyticsContext(scene: String(current.frontGameType.rawValue), properties: ["call_id": current.callId, "opponent_id": current.remoteUserId, "channel_id": channel])
             agora.join(channelId: channel, token: rtcToken, uid: UInt(myUserId), profile: .communication)
         } catch let e as APIError {
             guard isStartContextCurrent(lifecycle), lifecycleContext == lifecycle else { return }
             lastError = String(format: L10n.callErrorRtcTokenFormat, e.message)
+            AnalyticsTracker.trackAgora("call_rtc_join_failed", scene: String(current.frontGameType.rawValue), properties: ["call_id": current.callId, "opponent_id": current.remoteUserId, "error_code": e.code])
             await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, answerTime: 0, abnormal: 1)
         } catch {
             guard isStartContextCurrent(lifecycle), lifecycleContext == lifecycle else { return }
             lastError = String(format: L10n.callErrorRtcTokenFormat, error.localizedDescription)
+            AnalyticsTracker.trackAgora("call_rtc_join_failed", scene: String(current.frontGameType.rawValue), properties: ["call_id": current.callId, "opponent_id": current.remoteUserId, "error_code": (error as NSError).code])
             await endLocally(reason: .beginCallError, rateCategory: nil, rateType: rateType, answerTime: 0, abnormal: 1)
         }
     }
@@ -1579,6 +1597,7 @@ final class CallStore: ObservableObject {
             return
         }
         isEndingCall = true
+        AnalyticsTracker.trackAgora("call_end", scene: String(current.frontGameType.rawValue), properties: ["call_id": current.callId, "opponent_id": current.remoteUserId, "reason": reason.rawValue, "abnormal": abnormal, "duration": callElapsed])
         AppSoundPlayer.shared.stopIncomingCallRingtone()
         // 【归因日志】通话结束入口统一记录：谁触发 + 触发时上下文
         // 用于排查"自动结束"：搜索 🔴 [endLocally] 一眼看到 reason + 触发路径栈

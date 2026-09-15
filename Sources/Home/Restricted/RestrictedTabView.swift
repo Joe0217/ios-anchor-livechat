@@ -46,7 +46,7 @@ struct RestrictedTabView: View {
             await session.refreshAuditStatus()
         }
         .onChange(of: selection) { tab in
-            AnalyticsTracker.trackBehavior("进入\(tab == .news ? "news" : "mine")页")
+            AnalyticsTracker.trackBehavior("页面切换", properties: ["action": "switch_tab", "page_name": tab == .news ? "news" : "mine"])
         }
     }
 

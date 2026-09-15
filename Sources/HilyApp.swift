@@ -8,6 +8,7 @@ struct HilyApp: App {
 
     init() {
         AnalyticsTracker.start()
+        AnalyticsTracker.trackAppLifecycle("app_launch")
         CrashReporter.start()
 
         // 全局 URLCache：内存 50MB + 磁盘 500MB。
@@ -59,6 +60,8 @@ struct HilyApp: App {
             RootView()
                 .environmentObject(session)
                 .preferredColorScheme(.dark)
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.didEnterBackgroundNotification)) { _ in AnalyticsTracker.trackAppLifecycle("app_background") }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in AnalyticsTracker.trackAppLifecycle("app_foreground") }
         }
     }
 }

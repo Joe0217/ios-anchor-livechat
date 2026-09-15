@@ -23,6 +23,17 @@ import UIKit
 /// 远端音频**禁止**用 `muteRemoteAudioStream`（订阅层取消，解禁后首帧丢失）；
 /// 必须用 `adjustUserPlaybackSignalVolume(uid, 0/100)` 在播放端静音。
 final class PartyRTCEngine: NSObject, ObservableObject {
+    private let analyticsLock = NSLock()
+    private var analyticsChannel = ""
+    private var lastSeatAnalyticsCode: Int32?
+    private func trackRTC(_ name: String, properties: [String: Any] = [:]) {
+        analyticsLock.lock()
+        let channel = analyticsChannel
+        analyticsLock.unlock()
+        var p = properties
+        p["channel_id"] = channel
+        AnalyticsTracker.trackAgora(name, scene: "party", properties: p)
+    }
 
     enum State: Equatable {
         case idle
@@ -105,6 +116,10 @@ final class PartyRTCEngine: NSObject, ObservableObject {
             AppLogger.party.notice("[PartyRTC] already engaged, skip join")
             return
         }
+        analyticsLock.lock()
+        analyticsChannel = channelId
+        analyticsLock.unlock()
+        AnalyticsTracker.trackAgoraStart("party", properties: ["channel_id": channelId])
         resetPendingSpeakingUids()
 
         let config = AgoraRtcEngineConfig()
@@ -133,7 +148,8 @@ final class PartyRTCEngine: NSObject, ObservableObject {
 
         // 初始化网络质量监控器
         networkTracker = NetworkQualityTracker(scene: "party", roomIdProvider: { [weak self] in
-            self?.delegate?.partyRTCEngineRoomId?(self!)
+            guard let self else { return nil }
+            return self.delegate?.partyRTCEngineRoomId(self)
         })
 
         let option = AgoraRtcChannelMediaOptions()
@@ -147,6 +163,7 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         state = .joining
         AppLogger.party.info("[PartyRTC] joinChannel ch=\(channelId, privacy: .public) uid=\(uid, privacy: .public)")
         let ret = kit.joinChannel(byToken: token, channelId: channelId, uid: uid, mediaOptions: option)
+        trackRTC("agora_join_result", properties: ["channel_id": channelId, "error_code": ret])
         if ret != 0 {
             AppLogger.party.error("[PartyRTC] joinChannel failed ret=\(ret, privacy: .public)")
             state = .failed("joinChannel: \(ret)")
@@ -169,13 +186,21 @@ final class PartyRTCEngine: NSObject, ObservableObject {
         option.publishMicrophoneTrack = true
         // 视频位的 publishCustomVideoTrack 在 enableVideoSeat 内开；107 只保留语音发布。
         option.publishCustomVideoTrack = seatType == .video && partyVideoCapabilityEnabled
-        engine.updateChannel(with: option)
+        let result = engine.updateChannel(with: option)
+        if lastSeatAnalyticsCode != result {
+            lastSeatAnalyticsCode = result
+            trackRTC("party_seat_media_result", properties: ["error_code": result, "seat_type": seatType.rawValue])
+        }
         AppLogger.party.info("[PartyRTC] upperSeat seatType=\(seatType.rawValue, privacy: .public)")
     }
 
     /// 自己下麦：切 audience + 关闭本地音频/视频。
     @MainActor
     func downSeat() {
+        if lastSeatAnalyticsCode != nil {
+            trackRTC("party_seat_media_left")
+            lastSeatAnalyticsCode = nil
+        }
         guard let engine else { return }
         engine.setClientRole(.audience)
         engine.enableLocalAudio(false)
@@ -450,7 +475,8 @@ final class PartyRTCEngine: NSObject, ObservableObject {
                 return
             }
             leaveContinuation = cont
-            engine.leaveChannel(nil)
+            let leaveCode = engine.leaveChannel(nil)
+            trackRTC("agora_leave_result", properties: ["error_code": leaveCode])
             // 500ms 兜底：极小概率 SDK 漏调 didLeaveChannelWith
             // 二轮复查 wfpw5v1us：保存 Task 句柄，didLeaveChannelWith 正常 resume 时 cancel，避免 Task 泄漏 + 多余日志
             leaveTimeoutTask = Task { @MainActor [weak self] in
@@ -460,6 +486,7 @@ final class PartyRTCEngine: NSObject, ObservableObject {
                     self.leaveContinuation = nil
                     c.resume()
                     AppLogger.party.notice("[PartyRTC] leave 500ms timeout, fallback resume")
+                    self.trackRTC("agora_leave_timeout")
                 }
             }
         }
@@ -485,9 +512,26 @@ final class PartyRTCEngine: NSObject, ObservableObject {
 // MARK: - AgoraRtcEngineDelegate
 
 extension PartyRTCEngine: AgoraRtcEngineDelegate {
+    func rtcEngine(_ engine: AgoraRtcEngineKit, firstLocalAudioFramePublished elapsed: Int) {
+        trackRTC("agora_audio_published", properties: ["elapsed_ms": elapsed])
+    }
+
+    func rtcEngine(_ engine: AgoraRtcEngineKit, firstLocalVideoFramePublishedWithElapsed elapsed: Int, sourceType: AgoraVideoSourceType) {
+        trackRTC("agora_video_published", properties: ["elapsed_ms": elapsed, "source_type": sourceType.rawValue])
+    }
+
+    func rtcEngine(_ engine: AgoraRtcEngineKit, firstRemoteAudioFrameOfUid uid: UInt, elapsed: Int) {
+        trackRTC("agora_remote_audio_received", properties: ["remote_uid": uid, "elapsed_ms": elapsed])
+    }
+
+    func rtcEngine(_ engine: AgoraRtcEngineKit, firstRemoteVideoFrameOfUid uid: UInt, size: CGSize, elapsed: Int) {
+        trackRTC("agora_remote_video_rendered", properties: ["remote_uid": uid, "elapsed_ms": elapsed])
+    }
+
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didJoinChannel channel: String, withUid uid: UInt, elapsed: Int) {
         AppLogger.party.info("[PartyRTC] didJoin ch=\(channel, privacy: .public) uid=\(uid, privacy: .public) elapsed=\(elapsed, privacy: .public)ms")
+        trackRTC("agora_local_joined", properties: ["channel_id": channel])
         // P1-4：weak self 避 SDK 回调 backlog 持有旧实例（D v5.3.2 同源）
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -498,6 +542,7 @@ extension PartyRTCEngine: AgoraRtcEngineDelegate {
     }
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didJoinedOfUid uid: UInt, elapsed: Int) {
+        trackRTC("agora_remote_joined", properties: ["remote_uid": uid])
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.remoteUids.insert(uid)
@@ -506,6 +551,7 @@ extension PartyRTCEngine: AgoraRtcEngineDelegate {
     }
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didOfflineOfUid uid: UInt, reason: AgoraUserOfflineReason) {
+        trackRTC("agora_remote_left", properties: ["remote_uid": uid, "reason": reason.rawValue])
         Task { @MainActor [weak self] in
             guard let self else { return }
             self.remoteUids.remove(uid)
@@ -515,6 +561,7 @@ extension PartyRTCEngine: AgoraRtcEngineDelegate {
     }
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didLeaveChannelWith stats: AgoraChannelStats) {
+        trackRTC("agora_local_left", properties: ["duration": stats.duration])
         AppLogger.party.info("[PartyRTC] didLeave duration=\(stats.duration, privacy: .public)s")
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -529,6 +576,7 @@ extension PartyRTCEngine: AgoraRtcEngineDelegate {
     }
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didOccurError errorCode: AgoraErrorCode) {
+        trackRTC("agora_error", properties: ["error_code": errorCode.rawValue])
         AppLogger.party.error("[PartyRTC] error code=\(errorCode.rawValue, privacy: .public)")
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -554,6 +602,7 @@ extension PartyRTCEngine: AgoraRtcEngineDelegate {
     }
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, connectionChangedTo state: AgoraConnectionState, reason: AgoraConnectionChangedReason) {
+        trackRTC("agora_connection_state", properties: ["state": state.rawValue, "reason": reason.rawValue])
         AppLogger.party.notice("[PartyRTC] connection state=\(state.rawValue, privacy: .public) reason=\(reason.rawValue, privacy: .public)")
         // 被踢 / 永久断开：通知 PartyStore（M4 内对接 forceLeaveRoom）
         if reason == .reasonBannedByServer {
@@ -648,11 +697,12 @@ protocol PartyRTCEngineDelegate: AnyObject {
     /// PartyStore 收到后应全量重拉 seatList 对账（对齐蓝本 §5）
     func partyRTCEngineDidReconnect(_ engine: PartyRTCEngine)
     /// 网络质量监控：提供当前房间 ID（用于埋点上报）
-    @MainActor @objc optional func partyRTCEngineRoomId(_ engine: PartyRTCEngine) -> String?
+    func partyRTCEngineRoomId(_ engine: PartyRTCEngine) -> String?
 }
 
 // v15：给非声纹感知的实现方兜底空实现（PartyStore 会真实现，其他 delegate 无需强制）
 extension PartyRTCEngineDelegate {
+    func partyRTCEngineRoomId(_ engine: PartyRTCEngine) -> String? { nil }
     func partyRTCEngine(_ engine: PartyRTCEngine, didUpdateSpeakingUids uids: Set<UInt>) {}
     func partyRTCEngineDidReconnect(_ engine: PartyRTCEngine) {}
 }

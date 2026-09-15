@@ -494,10 +494,13 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         let processed = renderer.process(pixelBuffer)
         if !isBeautyFallback {
             didInvalidateFaceResult = false
-            faceDetectionAdapter.publish(hasFace: FUManager.shared().hasFaceDetected(), at: CACurrentMediaTime())
+            let hasFace = FUManager.shared().hasFaceDetected()
+            faceDetectionAdapter.publish(hasFace: hasFace, at: CACurrentMediaTime())
+            LatestFaceDetectionAdapter.analytics.publish(hasFace: hasFace, at: ProcessInfo.processInfo.systemUptime)
         } else {
             if !didInvalidateFaceResult {
                 faceDetectionAdapter.invalidate()
+                LatestFaceDetectionAdapter.analytics.invalidate()
                 didInvalidateFaceResult = true
             }
         }

@@ -116,11 +116,15 @@ final class CallSignaling: NSObject {
     /// `TextDecoder.decode(ArrayBuffer)` 会报"parameter 1 is not of type 'ArrayBuffer'"。
     @discardableResult
     func publish(_ message: CallMessage) async -> Bool {
+        let tracking: [String: Any] = ["call_id": message.callId, "opponent_id": message.remoteUserId, "action": message.messageAction]
+        AnalyticsTracker.trackAgora("call_signal_request", scene: "call", properties: tracking)
         guard let client else {
+            AnalyticsTracker.trackAgora("call_signal_unavailable", scene: "call", properties: tracking)
             AppLogger.rtm.notice("⚠️ [Signaling] publish 跳过：client 未就绪 action=\(message.messageAction, privacy: .public)")
             return false
         }
         guard let data = try? JSONEncoder().encode(message) else {
+            AnalyticsTracker.trackAgora("call_signal_encode_failed", scene: "call", properties: tracking)
             AppLogger.rtm.notice("⚠️ [Signaling] encode CallMessage 失败 action=\(message.messageAction, privacy: .public)")
             return false
         }
@@ -135,10 +139,12 @@ final class CallSignaling: NSObject {
                     if let err {
                         AppLogger.rtm.notice("⚠️ [Signaling] publish 失败 action=\(message.messageAction, privacy: .public) to=\(toUserId, privacy: .public) code=\(err.errorCode.rawValue, privacy: .public) msg=\(err.reason, privacy: .private)")
                         self.reconnect.triggerReconnect(reason: "publish_failed_\(err.errorCode.rawValue)")
+                        AnalyticsTracker.trackAgora("call_signal_failed", scene: "call", properties: ["call_id": message.callId, "opponent_id": message.remoteUserId, "action": message.messageAction, "error_code": err.errorCode.rawValue])
                         cont.resume(returning: false)
                     } else {
                         AppLogger.rtm.debug("📤 [Signaling] publish 成功 action=\(message.messageAction, privacy: .public) to=\(toUserId, privacy: .public) ch=\(message.fromRoomId ?? "-", privacy: .public) callId=\(message.callId, privacy: .public) bytes=\(data.count, privacy: .public)")
                         cont.resume(returning: true)
+                        AnalyticsTracker.trackAgora("call_signal_success", scene: "call", properties: ["call_id": message.callId, "opponent_id": message.remoteUserId, "action": message.messageAction])
                     }
                 }
             }

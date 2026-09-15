@@ -54,8 +54,11 @@ final class SystemNetworkMonitor {
 
     /// 更新网络状态
     private func updateNetworkState(path: NWPath) {
+        currentRadioTech = "unknown"
         // 网络连接类型
-        if path.usesInterfaceType(.wifi) {
+        if path.status != .satisfied {
+            currentNetworkType = "none"
+        } else if path.usesInterfaceType(.wifi) {
             currentNetworkType = "wifi"
         } else if path.usesInterfaceType(.cellular) {
             currentNetworkType = "cellular"

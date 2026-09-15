@@ -665,7 +665,9 @@ enum PartyAPI {
             "isAnchor": true,
         ]
         if let v = password { body["password"] = v }
-        let data = try await PartyAPIClient.shared.post("\(pathPrefix)/room/enter", body: body, suppressCodes: roomBusinessSuppress)
+        let data = try await AnalyticsTracker.operation("party_enter", scene: "party", properties: ["room_id": roomId]) {
+            try await PartyAPIClient.shared.post("\(pathPrefix)/room/enter", body: body, suppressCodes: roomBusinessSuppress)
+        }
         // F-spec 真机 log：查后端是否在 enter 响应里返 partyPrivateCallOpen / partyCallGiftId 两字段
         let rawPreview = String(data: data, encoding: .utf8) ?? "<binary>"
         AppLogger.party.info("[PartyAPI] enterRoom raw=\(rawPreview, privacy: .private)")
@@ -765,6 +767,7 @@ enum PartyAPI {
     /// 调用方从 `PartyRoomInfo.roomTempId(String?)` 转：`Int(info.roomTempId ?? "1") ?? 1`。
     /// 排队 vs 直接占座由服务端按"房内角色 + 申请开关"决定，调用方需能处理「已入队」返回。
     static func onSeat(roomId: String, seatIndex: Int, yxRoomId: String, roomTempId: Int) async throws -> String {
+        return try await AnalyticsTracker.operation("party_seat_application", scene: "party", properties: ["room_id": roomId, "seat_index": seatIndex]) {
         let data = try await PartyAPIClient.shared.post(
             "\(pathPrefix)/seat/onSeat",
             body: [
@@ -777,9 +780,11 @@ enum PartyAPI {
         )
         if let s = try? decoder.decode(String.self, from: data) { return s }
         return String(data: data, encoding: .utf8) ?? ""
+        }
     }
 
     static func downSeat(roomId: String, seatIndex: Int, yxRoomId: String, roomTempId: Int) async throws {
+        try await AnalyticsTracker.operation("party_down_seat", scene: "party", properties: ["room_id": roomId, "seat_index": seatIndex]) {
         _ = try await PartyAPIClient.shared.post(
             "\(pathPrefix)/seat/downSeat",
             body: [
@@ -790,6 +795,7 @@ enum PartyAPI {
             ],
             suppressCodes: roomBusinessSuppress
         )
+        }
     }
 
     /// 禁麦/解禁麦（房主/房管专用；对齐 H5 apiPartyProhibitSeat + usePartyHooks.js:1157 `feachProhibitSeat`）。

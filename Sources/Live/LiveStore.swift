@@ -27,6 +27,7 @@ final class LiveStore: ObservableObject {
             // 详见 Sources/Live/NIM/IMSceneFilter.swift §设计核心。
             let wasLiving = (oldValue == .living)
             let isLiving = (state == .living)
+            FaceBusinessAnalytics.update("live", active: isLiving) { [weak self] in ["scene": "live", "live_id": self?.roomId ?? 0, "channel_id": self?.agoraChannelId ?? ""] }
             if !wasLiving && isLiving {
                 IMSceneGate.shared.enter(.live)
             } else if wasLiving && !isLiving {

@@ -226,7 +226,6 @@ struct MainTabView: View {
                 .ignoresSafeArea()
         }
         .onChange(of: isOnSubpageSignal) { newValue in
-            AnalyticsTracker.trackBehavior(newValue ? "进入\(selection.analyticsName)子页" : "返回\(selection.analyticsName)页")
             InviteMessageCenter.shared.updateDisplayContext(isAtRootPage: !newValue)
             RobotCallRouteGate.shared.update(isAtRootPage: !newValue)
             // L 里程碑：子页拦截 tip 弹窗（对齐 H5 c-goMatch 仅挂 home 页面语义 —— 直播间/详情页/开播设置等均不弹）
@@ -234,7 +233,7 @@ struct MainTabView: View {
             matchPopupCoordinator.updateBlockedByOtherPage(newValue)
         }
         .onChange(of: selection) { newValue in
-            AnalyticsTracker.trackBehavior("进入\(newValue.analyticsName)页")
+            AnalyticsTracker.trackBehavior("页面切换", properties: ["action": "switch_tab", "page_name": newValue.analyticsName])
             InviteMessageCenter.shared.updateDisplayContext(isAtRootPage: !isOnSubpageSignal)
             // 程序驱动切换（如 liveResultTransition 结束直播切 Work + 重建 workPath 为 [.liveResult]）
             // 必须跳过清 path，避免覆盖 action 内同帧刚设置的路径（review 202607091438 P1）

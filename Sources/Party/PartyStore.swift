@@ -72,6 +72,11 @@ final class PartyStore: ObservableObject {
             // 详见 Sources/Live/NIM/IMSceneFilter.swift §设计核心。
             let wasJoined = (oldValue == .joined)
             let isJoined = (roomState == .joined)
+            FaceBusinessAnalytics.update("party", active: isJoined) { [weak self] in
+                var p = PartyAnalytics.roomProperties(roomId: self?.roomInfo?.id, ownerId: self?.roomInfo?.ownerId, roomTempId: self?.roomInfo?.roomTempId)
+                p["scene"] = "party"
+                return p
+            }
             if !wasJoined && isJoined {
                 IMSceneGate.shared.enter(.party)
             } else if wasJoined && !isJoined {
@@ -654,6 +659,7 @@ final class PartyStore: ObservableObject {
                 guard isCurrentRoomEntry(entryGeneration, roomId: roomId) else { return }
                 pendingRoomEntryId = nil
                 let mapped = PartyRoomErrorMapper.map(api)
+                WSHeartbeat.shared.clearPartyContext()
                 roomState = .ended
                 lastError = mapped
                 AppLogger.party.error("[PartyStore] enter HTTP failed: \(api.localizedDescription, privacy: .private)")
@@ -661,6 +667,7 @@ final class PartyStore: ObservableObject {
             } catch let dec as DecodingError {
                 guard isCurrentRoomEntry(entryGeneration, roomId: roomId) else { return }
                 pendingRoomEntryId = nil
+                WSHeartbeat.shared.clearPartyContext()
                 roomState = .ended
                 let detail = "enter 解码: \(dec)"
                 lastError = .enterFailed(underlying: detail)
@@ -669,6 +676,7 @@ final class PartyStore: ObservableObject {
             } catch {
                 guard isCurrentRoomEntry(entryGeneration, roomId: roomId) else { return }
                 pendingRoomEntryId = nil
+                WSHeartbeat.shared.clearPartyContext()
                 roomState = .ended
                 lastError = .enterFailed(underlying: error.localizedDescription)
                 AppLogger.party.error("[PartyStore] enter unknown error: \(String(describing: error), privacy: .public)")
@@ -873,6 +881,10 @@ final class PartyStore: ObservableObject {
         )
 
         roomState = .leaving
+        // 先清除心跳中的 Party 房上下文，再等待 RTC/HTTP 退房。
+        // 否则这些异步步骤期间仍会携带旧 roomId，服务端会继续续期
+        // user:party:room:status，导致用户端拨号误判主播仍在 Party 房。
+        WSHeartbeat.shared.clearPartyContext()
         endPartySessionDependencies(roomId: roomInfo?.id)
         chat.clearDeferredMessages()
         isMinimized = false
@@ -892,9 +904,7 @@ final class PartyStore: ObservableObject {
             }
         }
 
-        // HTTP 已完成，再清 WS 上下文并退出 Party 聊天室。
-        // 即使 HTTP 失败也要清上下文，避免本端继续续期已经离开的 Party 房。
-        WSHeartbeat.shared.clearPartyContext()
+        // HTTP 已完成后退出 Party 聊天室；心跳上下文已在流程开始时清理。
         chat.leave()
 
         resetState()
@@ -925,6 +935,8 @@ final class PartyStore: ObservableObject {
         )
 
         roomState = .leaving
+        // 强制退房同样必须先清上下文，避免等待 RTC/HTTP 时继续续期旧房间状态。
+        WSHeartbeat.shared.clearPartyContext()
         endPartySessionDependencies(roomId: roomInfo?.id)
         chat.clearDeferredMessages()
         isMinimized = false
@@ -939,7 +951,6 @@ final class PartyStore: ObservableObject {
         if !roomIdBiz.isEmpty, !yxRoomId.isEmpty {
             _ = try? await PartyAPI.exitRoom(roomId: roomIdBiz, seatIndex: mySeatIndex, yxRoomId: yxRoomId)
         }
-        WSHeartbeat.shared.clearPartyContext()
         chat.leave()
         resetState()
         roomState = .ended

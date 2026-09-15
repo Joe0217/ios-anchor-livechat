@@ -17,6 +17,7 @@ enum AppConfig {
     static var appId: String       { plistString("HilyAppID") }
     static var ocpApimKey: String  { plistString("HilyOcpApimKey") }
     static var appVersion: String  { plistString("HilyAppVersion") }
+    static var buildVersion: String { Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "0" }
 
     // MARK: - 云信 NIM
     static var nimAppKey: String   { plistString("HilyNIMAppKey") }

@@ -47,6 +47,9 @@ final class RobotCallBroadcastSession {
                 agora?.pushFrame(pixelBuffer)
             }
             camera.start()
+            let context: [String: Any] = ["scene": "bot", "call_id": invite.recordId, "opponent_id": invite.displayUserId, "channel_id": channelId]
+            agora.setAnalyticsContext(scene: "bot", properties: context)
+            FaceBusinessAnalytics.update("bot", active: true) { context }
             agora.join(channelId: channelId, token: token, uid: UInt(userId))
             logger.info("started record=\(invite.recordId, privacy: .private) channel=\(channelId, privacy: .private)")
         } catch is CancellationError {
@@ -57,6 +60,7 @@ final class RobotCallBroadcastSession {
     }
 
     func stop() async {
+        FaceBusinessAnalytics.update("bot", active: false) { [:] }
         if let stopTask {
             await stopTask.value
             return
