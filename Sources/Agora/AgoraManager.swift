@@ -12,6 +12,29 @@ private let logger = Logger(subsystem: "com.hilly.anchor", category: "Agora")
 /// - `tokenPrivilegeWillExpire` 真正续期（拉新 token → renewToken）
 /// - 109/110 error code 同链路；续期失败 → store.forceEnd(.disconnected)
 final class AgoraManager: NSObject, ObservableObject {
+    private let analyticsLock = NSLock()
+    private var analyticsScene = "live"
+    private var analyticsProperties: [String: Any] = [:]
+    private var analyticsGeneration = 0
+
+    func setAnalyticsContext(scene: String, properties: [String: Any]) {
+        analyticsLock.lock()
+        analyticsScene = scene
+        analyticsProperties = properties
+        analyticsGeneration &+= 1
+        analyticsLock.unlock()
+    }
+
+    private func trackRTC(_ name: String, properties: [String: Any] = [:]) {
+        analyticsLock.lock()
+        let scene = analyticsScene
+        var snapshot = analyticsProperties
+        let generation = analyticsGeneration
+        analyticsLock.unlock()
+        snapshot["session_generation"] = generation
+        snapshot.merge(properties) { _, value in value }
+        AnalyticsTracker.trackAgora(name, scene: scene, properties: snapshot)
+    }
     /// 主播推流与客态观看使用同一 RTC 引擎，但 channel media options 完全不同。
     /// 把角色显式收在这里，避免客态误发布本地音视频或初始化外部视频帧来源。
     enum JoinRole: Equatable {
@@ -132,6 +155,14 @@ final class AgoraManager: NSObject, ObservableObject {
               profile: AgoraChannelProfile = .liveBroadcasting,
               role: JoinRole = .broadcaster) {
         guard engine == nil else { return }
+        analyticsLock.lock()
+        analyticsGeneration &+= 1
+        analyticsProperties["channel_id"] = channelId
+        if profile != .communication && analyticsProperties["call_id"] == nil {
+            analyticsScene = role == .audience ? "live_audience" : "live"
+            analyticsProperties = ["channel_id": channelId]
+        }
+        analyticsLock.unlock()
 
         let config = AgoraRtcEngineConfig()
         config.appId = AgoraConfig.appId
@@ -181,10 +212,12 @@ final class AgoraManager: NSObject, ObservableObject {
         state = .joining
         message = ""
         logger.info("joinChannel channel=\(channelId) uid=\(uid) role=\(role == .broadcaster ? "broadcaster" : "audience")")
+        trackRTC("agora_start", properties: ["channel_id": channelId])
         let ret = kit.joinChannel(byToken: token,
                                   channelId: channelId,
                                   uid: uid,
                                   mediaOptions: option)
+        trackRTC("agora_join_result", properties: ["channel_id": channelId, "error_code": ret])
         if ret != 0 {
             logger.error("joinChannel failed ret=\(ret)")
             state = .failed
@@ -262,6 +295,7 @@ final class AgoraManager: NSObject, ObservableObject {
     /// 500ms 兜底防 SDK 漏调回调。
     @MainActor
     func leave() async {
+        trackRTC("agora_leave_request")
         guard let engine = engine else { return }
 
         // 重置通话网络质量监控器
@@ -283,7 +317,8 @@ final class AgoraManager: NSObject, ObservableObject {
                 return
             }
             leaveContinuation = cont
-            engine.leaveChannel(nil)
+            let leaveCode = engine.leaveChannel(nil)
+            trackRTC("agora_leave_result", properties: ["error_code": leaveCode])
             // 500ms 兜底：SDK 极小概率漏调 didLeaveChannelWith，避免永久挂起
             Task { @MainActor [weak self] in
                 try? await Task.sleep(nanoseconds: 500_000_000)
@@ -292,12 +327,14 @@ final class AgoraManager: NSObject, ObservableObject {
                     self.leaveContinuation = nil
                     c.resume()
                     logger.warning("leaveChannel didLeaveChannel 回调 500ms 超时，由兜底 resume")
+                    self.trackRTC("agora_leave_timeout")
                 }
             }
         }
 
         // 不再调用 AgoraRtcEngineKit.destroy()——保留 SDK 单例供后续 join 复用
         self.engine = nil
+        setAnalyticsContext(scene: "live", properties: [:])
         state = .idle
         remoteUid = 0
         isRemoteVideoOff = false  // C-4 Wave4 C 组 gap-010：leave 时 reset
@@ -332,6 +369,7 @@ final class AgoraManager: NSObject, ObservableObject {
     /// - 长跑验证（M0-3）：renewToken 是否自动覆盖 PK connection；失败则改逐 connection renewTokenEx（R10）
     @MainActor
     func joinPKOpposite(channel: String, oppositeUid: UInt, token: String, ownUid: UInt) async throws {
+        AnalyticsTracker.trackAgora("pk_join_request", scene: "pk", properties: ["channel_id": channel, "remote_uid": oppositeUid])
         guard let engine else { throw AgoraError.engineNotReady }
 
         // 幂等：channel 已在 pkConnections 直接返回
@@ -373,6 +411,7 @@ final class AgoraManager: NSObject, ObservableObject {
                                        delegate: delegate,
                                        mediaOptions: option,
                                        joinSuccess: nil)
+        AnalyticsTracker.trackAgora("pk_join_result", scene: "pk", properties: ["channel_id": channel, "error_code": ret])
         if ret != 0 {
             logger.error("joinChannelEx PK failed channel=\(channel) ret=\(ret)")
             pkLock.lock()
@@ -391,6 +430,7 @@ final class AgoraManager: NSObject, ObservableObject {
     /// - 兜底与回调任一先到都安全：resumeLeavePKContinuation 在锁内 removeValue 拿 cont 才 resume
     @MainActor
     func leavePKOpposite(channel: String) async {
+        AnalyticsTracker.trackAgora("pk_leave_request", scene: "pk", properties: ["channel_id": channel])
         guard let engine else { return }
 
         pkLock.lock()
@@ -409,12 +449,20 @@ final class AgoraManager: NSObject, ObservableObject {
             leavePKContinuations[channel] = cont
             pkLock.unlock()
 
-            _ = engine.leaveChannelEx(connection, leaveChannelBlock: nil)
+            let leaveCode = engine.leaveChannelEx(connection, leaveChannelBlock: nil)
+            AnalyticsTracker.trackAgora("pk_leave_result", scene: "pk", properties: ["channel_id": channel, "error_code": leaveCode])
 
             // 500ms 兜底：若 didLeaveChannelExWith 漏调，由本兜底 resume 同 channel 的 continuation
             Task { @MainActor [weak self] in
                 try? await Task.sleep(nanoseconds: 500_000_000)
-                self?.resumeLeavePKContinuation(channel: channel)
+                guard let self else { return }
+                self.pkLock.lock()
+                let pending = self.leavePKContinuations[channel] != nil
+                self.pkLock.unlock()
+                if pending {
+                    AnalyticsTracker.trackAgora("pk_leave_timeout", scene: "pk", properties: ["channel_id": channel])
+                }
+                self.resumeLeavePKContinuation(channel: channel)
             }
         }
 
@@ -558,8 +606,29 @@ final class AgoraManager: NSObject, ObservableObject {
 // MARK: - 声网回调
 
 extension AgoraManager: AgoraRtcEngineDelegate {
+    func rtcEngine(_ engine: AgoraRtcEngineKit, connectionChangedTo state: AgoraConnectionState, reason: AgoraConnectionChangedReason) {
+        trackRTC("agora_connection_state", properties: ["state": state.rawValue, "reason": reason.rawValue])
+    }
+
+    func rtcEngine(_ engine: AgoraRtcEngineKit, firstLocalAudioFramePublished elapsed: Int) {
+        trackRTC("agora_audio_published", properties: ["elapsed_ms": elapsed])
+    }
+
+    func rtcEngine(_ engine: AgoraRtcEngineKit, firstLocalVideoFramePublishedWithElapsed elapsed: Int, sourceType: AgoraVideoSourceType) {
+        trackRTC("agora_video_published", properties: ["elapsed_ms": elapsed, "source_type": sourceType.rawValue])
+    }
+
+    func rtcEngine(_ engine: AgoraRtcEngineKit, firstRemoteAudioFrameOfUid uid: UInt, elapsed: Int) {
+        trackRTC("agora_remote_audio_received", properties: ["remote_uid": uid, "elapsed_ms": elapsed])
+    }
+
+    func rtcEngine(_ engine: AgoraRtcEngineKit, firstRemoteVideoFrameOfUid uid: UInt, size: CGSize, elapsed: Int) {
+        trackRTC("agora_remote_video_rendered", properties: ["remote_uid": uid, "elapsed_ms": elapsed])
+    }
+
     func rtcEngine(_ engine: AgoraRtcEngineKit, didJoinChannel channel: String, withUid uid: UInt, elapsed: Int) {
         logger.info("local joined channel=\(channel) uid=\(uid) elapsed=\(elapsed)ms")
+        trackRTC("agora_local_joined", properties: ["channel_id": channel])
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.state = .joined
@@ -569,6 +638,7 @@ extension AgoraManager: AgoraRtcEngineDelegate {
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didJoinedOfUid uid: UInt, elapsed: Int) {
         logger.info("remote joined uid=\(uid)")
+        trackRTC("agora_remote_joined", properties: ["remote_uid": uid])
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.remoteUid = uid
@@ -581,6 +651,7 @@ extension AgoraManager: AgoraRtcEngineDelegate {
     }
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didOfflineOfUid uid: UInt, reason: AgoraUserOfflineReason) {
+        trackRTC("agora_remote_left", properties: ["remote_uid": uid, "reason": reason.rawValue])
         // 【归因日志】远端离开 RTC 频道：reason=0 (quit) / 1 (dropped) / 2 (becomeAudience)
         // 用户主动挂断 = 0；网络断连=1；1v1 场景不会出现 2
         logger.notice("🔴 [Agora] didOfflineOfUid uid=\(uid) reason=\(reason.rawValue) currentRemoteUid=\(self.remoteUid)")
@@ -620,6 +691,7 @@ extension AgoraManager: AgoraRtcEngineDelegate {
     }
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didOccurError errorCode: AgoraErrorCode) {
+        trackRTC("agora_error", properties: ["error_code": errorCode.rawValue])
         logger.error("RTC error code \(errorCode.rawValue)")
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
@@ -675,6 +747,7 @@ extension AgoraManager: AgoraRtcEngineDelegate {
 
     /// D 里程碑修复（v5.4）：本地 leave channel 完成回调 → resume leave() 内的 continuation
     func rtcEngine(_ engine: AgoraRtcEngineKit, didLeaveChannelWith stats: AgoraChannelStats) {
+        trackRTC("agora_local_left", properties: ["duration": stats.duration])
         logger.info("local left channel duration=\(stats.duration)s")
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }

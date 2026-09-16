@@ -161,6 +161,7 @@ final class LiveSettingsStore: ObservableObject {
         }
 
         state = .starting
+        AnalyticsTracker.trackAgora("live_start_request", scene: "live")
         lock.lock()
 
         // 先进入 starting 并锁住界面，再弹系统授权框。否则多个 tap 可在 await 返回后并发建房。
@@ -196,6 +197,7 @@ final class LiveSettingsStore: ObservableObject {
                 promiseText: wishShared.promiseText.isEmpty ? nil : wishShared.promiseText
             )
             AnalyticsTracker.trackBehavior("开播成功", properties: ["live_id": info.id ?? ""])
+            AnalyticsTracker.trackAgora("live_start_success", scene: "live", properties: ["live_id": info.id ?? ""])
             guard let ch = info.agoraChannelId, !ch.isEmpty,
                   let tk = info.rtcToken, !tk.isEmpty else {
                 showErrorAndDismiss(L10n.livePrepareErrorNoChannel)
@@ -205,20 +207,24 @@ final class LiveSettingsStore: ObservableObject {
             // 保持 .starting；View 侦测 roomInfo 非 nil 触发 push；LiveRoomView 接管后本 View 消失
         } catch let e as APIError {
             if e.code == "1004" || e.code == "1005" {
+                AnalyticsTracker.trackAgora("live_start_failed", scene: "live", properties: ["error_code": e.code])
                 // SessionStore 会处理登出流程 —— 本页短路 return（不写 errorMessage，避免与 SessionStore.errorMessage 双错）
                 state = .editing  // 让 View 从 disabled 恢复；但 SessionStore.isLoggedIn 会驱动 RootView 跳登录
                 lock.unlock()
                 return
             }
             if e.code == "-1" {
+                AnalyticsTracker.trackAgora("live_start_failed", scene: "live", properties: ["error_code": e.code])
                 // 红队 🔴#4：LiveService 层 cover fail-safe（getMyLiveRoom 二拉时 cover 空）
                 showErrorAndDismiss(L10n.liveErrorNoCover)
                 return
             }
             // 接口报错（含 code=1111 request.failed）：toast 提示后自动 pop
+            AnalyticsTracker.trackAgora("live_start_failed", scene: "live", properties: ["error_code": e.code])
             showErrorAndDismiss(String(format: L10n.livePrepareErrorPrefix, e.message, e.code))
         } catch {
             showErrorAndDismiss(String(format: L10n.livePrepareErrorGeneric, error.localizedDescription))
+            AnalyticsTracker.trackAgora("live_start_failed", scene: "live", properties: ["error_code": (error as NSError).code])
         }
     }
 

@@ -13,6 +13,7 @@ protocol FaceDetectionAdapter: AnyObject {
 
 /// 线程安全的最新结果容器；SDK 回调只写入这里，业务 tick 在主线程读取。
 final class LatestFaceDetectionAdapter: FaceDetectionAdapter {
+    static let analytics = LatestFaceDetectionAdapter()
     private let lock = NSLock()
     private var result: FaceDetectionResult?
     var latestResult: FaceDetectionResult? { lock.withLock { result } }
@@ -23,4 +24,3 @@ final class LatestFaceDetectionAdapter: FaceDetectionAdapter {
 private extension NSLock {
     func withLock<T>(_ body: () -> T) -> T { lock(); defer { unlock() }; return body() }
 }
-

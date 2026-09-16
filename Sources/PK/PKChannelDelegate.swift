@@ -17,6 +17,16 @@ private let logger = Logger(subsystem: "com.hilly.anchor", category: "PK")
 /// - `didLeaveChannelWith` 在多频道场景下被 SDK 改派为 `didLeaveChannelExWith`（4.x SDK 头文件确认）；
 ///   两个回调都收，由 owner 按 channel 维度 resume 对应的 `leavePKContinuations[channel]`
 final class PKChannelDelegate: NSObject, AgoraRtcEngineDelegate {
+    private let analyticsLock = NSLock()
+    private var didReportLeave = false
+
+    private func reportLeave(duration: UInt) {
+        analyticsLock.lock()
+        guard !didReportLeave else { analyticsLock.unlock(); return }
+        didReportLeave = true
+        analyticsLock.unlock()
+        AnalyticsTracker.trackAgora("pk_local_left", scene: "pk", properties: ["channel_id": channel, "duration": duration])
+    }
     weak var owner: AgoraManager?
     let channel: String
     let oppositeUid: UInt
@@ -31,11 +41,16 @@ final class PKChannelDelegate: NSObject, AgoraRtcEngineDelegate {
     }
 
     // MARK: - 远端事件（仅响应本 PK 频道）
+    func rtcEngine(_ engine: AgoraRtcEngineKit, connectionChangedTo state: AgoraConnectionState, reason: AgoraConnectionChangedReason) {
+        AnalyticsTracker.trackAgora("agora_connection_state", scene: "pk", properties: ["channel_id": channel, "state": state.rawValue, "reason": reason.rawValue])
+    }
+
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didJoinedOfUid uid: UInt, elapsed: Int) {
         // 多频道场景 SDK 不直接告知 channel 归属，仅靠期望 uid 过滤
         guard uid == oppositeUid else { return }
         logger.info("PK remote joined channel=\(self.channel) uid=\(uid) elapsed=\(elapsed)ms")
+        AnalyticsTracker.trackAgora("pk_remote_joined", scene: "pk", properties: ["channel_id": channel, "remote_uid": uid])
         DispatchQueue.main.async { [weak self] in
             guard let self, let owner = self.owner else { return }
             guard let conn = owner.pkConnection(forChannel: self.channel) else {
@@ -54,6 +69,7 @@ final class PKChannelDelegate: NSObject, AgoraRtcEngineDelegate {
     func rtcEngine(_ engine: AgoraRtcEngineKit, didOfflineOfUid uid: UInt, reason: AgoraUserOfflineReason) {
         guard uid == oppositeUid else { return }
         logger.info("PK remote offline channel=\(self.channel) uid=\(uid) reason=\(reason.rawValue)")
+        AnalyticsTracker.trackAgora("pk_remote_left", scene: "pk", properties: ["channel_id": channel, "remote_uid": uid, "reason": reason.rawValue])
         DispatchQueue.main.async { [weak self] in
             guard let self, let owner = self.owner else { return }
             guard let conn = owner.pkConnection(forChannel: self.channel) else { return }
@@ -71,18 +87,32 @@ final class PKChannelDelegate: NSObject, AgoraRtcEngineDelegate {
                    localUid: UInt) {
         guard channelId == channel else { return }
         logger.info("PK leftEx channel=\(channelId) duration=\(stats.duration)s")
+        reportLeave(duration: stats.duration)
         owner?.resumeLeavePKContinuation(channel: channelId)
     }
 
     /// 兜底：若 SDK 走单频道 didLeaveChannelWith 回调（多 connection 旧版本/边界场景），按本 delegate 的 channel resume
     func rtcEngine(_ engine: AgoraRtcEngineKit, didLeaveChannelWith stats: AgoraChannelStats) {
         logger.info("PK leftFallback channel=\(self.channel) duration=\(stats.duration)s")
+        reportLeave(duration: stats.duration)
         owner?.resumeLeavePKContinuation(channel: channel)
     }
 
     // MARK: - 错误
+    func rtcEngine(_ engine: AgoraRtcEngineKit, didJoinChannel channel: String, withUid uid: UInt, elapsed: Int) {
+        AnalyticsTracker.trackAgora("pk_local_joined", scene: "pk", properties: ["channel_id": channel, "elapsed_ms": elapsed])
+    }
+
+    func rtcEngine(_ engine: AgoraRtcEngineKit, firstRemoteAudioFrameOfUid uid: UInt, elapsed: Int) {
+        AnalyticsTracker.trackAgora("agora_remote_audio_received", scene: "pk", properties: ["channel_id": channel, "remote_uid": uid, "elapsed_ms": elapsed])
+    }
+
+    func rtcEngine(_ engine: AgoraRtcEngineKit, firstRemoteVideoFrameOfUid uid: UInt, size: CGSize, elapsed: Int) {
+        AnalyticsTracker.trackAgora("agora_remote_video_rendered", scene: "pk", properties: ["channel_id": channel, "remote_uid": uid, "elapsed_ms": elapsed])
+    }
 
     func rtcEngine(_ engine: AgoraRtcEngineKit, didOccurError errorCode: AgoraErrorCode) {
+        AnalyticsTracker.trackAgora("agora_error", scene: "pk", properties: ["channel_id": channel, "error_code": errorCode.rawValue])
         logger.error("PK channel error channel=\(self.channel) code=\(errorCode.rawValue)")
         // M0 仅日志；token 续期 + 业务降级留 M2/M3 接入
     }

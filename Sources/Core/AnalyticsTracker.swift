@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import ThinkingSDK
 
 /// 数数 ThinkingData 的唯一接入点。
@@ -6,8 +7,58 @@ import ThinkingSDK
 /// 未配置本机 xcconfig 时静默停用，不影响业务链路。默认事件即时 flush；RTC/IM 高频的
 /// Party 事件通过 `PartyAnalytics` 改用 SDK 批量发送。
 enum AnalyticsTracker {
+    static func operation<T>(_ name: String, scene: String, properties: [String: Any], perform: () async throws -> T) async rethrows -> T {
+        trackAgora(name + "_request", scene: scene, properties: properties)
+        do {
+            let result = try await perform()
+            trackAgora(name + "_success", scene: scene, properties: properties)
+            return result
+        } catch {
+            var failure = properties
+            failure["error_code"] = (error as? APIError)?.code ?? String((error as NSError).code)
+            trackAgora(name + "_failed", scene: scene, properties: failure)
+            throw error
+        }
+    }
     private static let lock = NSLock()
     private static var started = false
+    @MainActor private static var connections: [String: (state: Int, reason: Int)] = [:]
+    static func trackAgora(_ name: String, scene: String, properties: [String: Any] = [:]) {
+        var p = properties
+        p["scene"] = scene
+        p["_include_network"] = true
+        let snapshot = p
+        DispatchQueue.main.async {
+            var enriched = snapshot
+            if name == "agora_connection_state", let stateNumber = snapshot["state"] as? NSNumber {
+                let state = stateNumber.intValue
+                let key = scene + ":" + (snapshot["channel_id"] as? String ?? "")
+                let previous = connections[key]
+                let reason = (snapshot["reason"] as? NSNumber)?.intValue ?? -1
+                if previous?.state == state && previous?.reason == reason { return }
+                connections[key] = (state, reason)
+                enriched["connection_status"] = state == 4 ? "reconnecting" : state == 5 ? (previous?.state == 4 ? "reconnect_failed" : "failed") : state == 1 ? "disconnected" : state == 3 ? (previous?.state == 4 ? "reconnected" : "connected") : "connecting"
+                if state == 1 || state == 5 { connections.removeValue(forKey: key) }
+            }
+            trackBehavior(name, properties: enriched, immediately: false)
+        }
+    }
+    static func trackAgoraStart(_ scene: String, properties: [String: Any] = [:]) { trackAgora("agora_start", scene: scene, properties: properties) }
+    @MainActor private static let networkMonitor = SystemNetworkMonitor()
+    @MainActor static func trackAppLifecycle(_ name: String) {
+        var p = networkProperties()
+        p["behavior_name"] = name
+        if name == "app_launch" {
+            p["app_version"] = AppConfig.appVersion
+            p["app_build"] = AppConfig.buildVersion
+        }
+        track("hifunny_log", properties: p)
+    }
+
+    @MainActor private static func networkProperties() -> [String: Any] {
+        ["network_type": networkMonitor.currentNetworkType,
+         "network_signal": networkMonitor.currentNetworkType == "cellular" ? networkMonitor.currentRadioTech : "unknown"]
+    }
 
     static func start() {
         lock.lock()
@@ -53,6 +104,15 @@ enum AnalyticsTracker {
         }
         if normalizedEvent == "hifunny_log" {
             normalizedProperties["app_name"] = "HillyFun"
+            if normalizedProperties.removeValue(forKey: "_include_network") != nil {
+                let snapshot = normalizedProperties
+                DispatchQueue.main.async {
+                    var enriched = snapshot
+                    enriched.merge(networkProperties()) { current, _ in current }
+                    track(normalizedEvent, properties: enriched, immediately: immediately)
+                }
+                return
+            }
         }
         TDAnalytics.track(normalizedEvent, properties: normalizedProperties)
         let mirrorsToBehavior = normalizedEvent == "partyRoom_enter"
@@ -121,5 +181,40 @@ enum PartyAnalytics {
             properties["modeNum"] = roomTempId
         }
         return properties
+    }
+}
+
+/// Business sampling only; never runs face detection or controls media resources.
+@MainActor
+enum FaceBusinessAnalytics {
+    private static var sources: [String: () -> [String: Any]] = [:]
+    private static var task: Task<Void, Never>?
+
+    static func update(_ scene: String, active: Bool, properties: @escaping () -> [String: Any]) {
+        sources[scene] = active ? properties : nil
+        if sources.isEmpty {
+            task?.cancel()
+            task = nil
+        } else if task == nil {
+            task = Task {
+                while !Task.isCancelled {
+                    do { try await Task.sleep(nanoseconds: 30_000_000_000) } catch { return }
+                    guard !Task.isCancelled else { return }
+                    guard UIApplication.shared.applicationState == .active else { continue }
+                    // A private call suspends the room's video pipeline.
+                    let selected = sources["call"] != nil ? ["call"] : Array(sources.keys)
+                    for scene in selected {
+                        guard let source = sources[scene] else { continue }
+                        var p = source()
+                        p["scene"] = p["scene"] ?? scene
+                        let result = LatestFaceDetectionAdapter.analytics.latestResult
+                        let fresh = result.map { ProcessInfo.processInfo.systemUptime - $0.detectedAt < 3 } ?? false
+                        p["face_status"] = fresh ? (result?.hasFace == true ? "face" : "no_face") : "unknown"
+                        p["_include_network"] = true
+                        AnalyticsTracker.trackBehavior("face_check", properties: p, immediately: false)
+                    }
+                }
+            }
+        }
     }
 }
