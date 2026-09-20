@@ -2,6 +2,10 @@ import Foundation
 
 /// DM-20260731-001: registration and authenticated rebind have separate tickets.
 enum EmailAccountRules {
+    // Temporary rollout: keep authenticated email verification, pause v5 login/registration.
+    static let verifiedRegistrationEnabled = false
+    static var loginPath: String { verifiedRegistrationEnabled ? "/api/user/v5/login" : "/api/login/v4/login" }
+
     static func clean(_ value: String) -> String {
         value.replacingOccurrences(of: "[\\p{C}\\p{Z}]", with: "", options: .regularExpression)
     }

@@ -195,7 +195,7 @@ final class SessionStore: ObservableObject {
         let pwd = CryptoUtil.loginPassword(password)
         do {
             let data = try await APIClient.shared.post(
-                "/api/user/v5/login",
+                EmailAccountRules.loginPath,
                 body: ["email": email, "password": pwd],
                 token: "",
                 suppressCodes: EmailAccountRules.handledCodes.union(["1005"])
@@ -203,7 +203,7 @@ final class SessionStore: ObservableObject {
             guard sessionGeneration == generation else { return }
             if String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) == "null" {
                 errorMessage = L10n.Email.text("startRegister")
-                pendingRegister = PendingRegister(email: email, password: "")
+                pendingRegister = PendingRegister(email: email, password: password)
                 RegisterAnalytics.report(.signUp)
                 return
             }
@@ -230,6 +230,11 @@ final class SessionStore: ObservableObject {
         } catch let e as APIError {
             AppLogger.auth.error("login APIError code=\(e.code, privacy: .public) message=\(e.message, privacy: .private)")
             guard sessionGeneration == generation else { return }
+            if e.code == "1005", !EmailAccountRules.verifiedRegistrationEnabled {
+                pendingRegister = PendingRegister(email: email, password: password)
+                RegisterAnalytics.report(.signUp)
+                return
+            }
             errorMessage = e.code == "1005" ? L10n.Email.text("invalidLogin") : L10n.Email.error(e)
         } catch {
             guard sessionGeneration == generation, !GlobalErrorBannerNotify.isCancellation(error) else { return }

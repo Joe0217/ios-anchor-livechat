@@ -276,7 +276,7 @@ final class RegisterStore: ObservableObject {
     /// spec §3.3 v3 完整流：build body → API 调用 → applyLogin bool 守卫 → 清 Keychain → reset → 依 isLoggedIn 走 RootView 分流
     func submit() async {
         guard !isSubmitting else { return }
-        if !isResubmit {
+        if !isResubmit, EmailAccountRules.verifiedRegistrationEnabled {
             guard !emailTicket.isEmpty, let expiry = emailTicketExpiresAt, expiry > Date(),
                   verifiedEmail == EmailAccountRules.normalized(email) else {
                 submitError = L10n.Email.text("expired")
@@ -299,7 +299,7 @@ final class RegisterStore: ObservableObject {
             return
         }
         guard epoch == submissionEpoch, sessionGeneration == SessionStore.shared.sessionGeneration else { return }
-        if !isResubmit, (emailTicketExpiresAt ?? .distantPast) <= Date() {
+        if !isResubmit, EmailAccountRules.verifiedRegistrationEnabled, (emailTicketExpiresAt ?? .distantPast) <= Date() {
             submitError = L10n.Email.text("expired")
             needsEmailVerification = true
             return
@@ -347,6 +347,8 @@ final class RegisterStore: ObservableObject {
             let result: LoginResult
             if isDeletedAccount {
                 result = try await RegisterService.loginDeletedAccount(email: email, password: password)
+            } else if !isResubmit, !EmailAccountRules.verifiedRegistrationEnabled {
+                result = try await RegisterService.registerV2(body: body)
             } else {
                 result = try await (isResubmit
                     ? RegisterService.reSubmitView(body: body)
@@ -395,7 +397,7 @@ final class RegisterStore: ObservableObject {
             if e.code == "1087" {
                 submitError = L10n.Email.text("exists")
                 returnToEmailLogin = true
-            } else if e.code == "2084" {
+            } else if e.code == "2084", EmailAccountRules.verifiedRegistrationEnabled {
                 emailTicket = ""
                 emailTicketExpiresAt = nil
                 submitError = L10n.Email.text("expired")

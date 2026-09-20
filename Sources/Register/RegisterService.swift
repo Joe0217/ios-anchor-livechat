@@ -53,7 +53,7 @@ enum RegisterService {
     /// 本地模拟删除账号完成资料流程后，直接恢复原服务端账号登录，不重复创建账号。
     static func loginDeletedAccount(email: String, password: String) async throws -> LoginResult {
         let data = try await APIClient.shared.post(
-            "/api/user/v5/login",
+            EmailAccountRules.loginPath,
             body: [
                 "email": email,
                 "password": CryptoUtil.loginPassword(password),

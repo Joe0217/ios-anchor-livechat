@@ -25,7 +25,13 @@ struct LoginView: View {
                 .onChange(of: session.pendingRegister) { pending in
                     if let p = pending {
                         email = p.email
-                        showEmailRegistration = true
+                        if EmailAccountRules.verifiedRegistrationEnabled {
+                            showEmailRegistration = true
+                        } else {
+                            registerStore.begin(email: p.email, password: p.password)
+                            AnalyticsTracker.trackBehavior("进入注册basicInfo页")
+                            pathHolder.path.append(RegisterRoute.basicInfo)
+                        }
                         session.pendingRegister = nil     // 消费掉
                     }
                 }
@@ -74,7 +80,7 @@ struct LoginView: View {
             }
         }
         .onChange(of: registerStore.needsEmailVerification) { required in
-            if required {
+            if required, EmailAccountRules.verifiedRegistrationEnabled {
                 email = registerStore.email
                 pathHolder.reset()
                 showEmailRegistration = true
@@ -99,7 +105,7 @@ struct LoginView: View {
                         Spacer().frame(height: 24)
                         loginButton
                             .id(LoginScrollTarget.loginButton)
-                        registerButton
+                        if EmailAccountRules.verifiedRegistrationEnabled { registerButton }
                         Spacer(minLength: 24)
                     }
                     .padding(.horizontal, Theme.Metric.authScreenHPadding)
