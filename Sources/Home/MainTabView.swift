@@ -541,7 +541,7 @@ struct MainTabView: View {
                                     }
                                 })
                         case .wallet:
-                            H5EmbeddedFeatureContainerView(feature: .wallet, title: L10n.Wallet.title)
+                            WalletView()
                         case .invite(let source):
                             // 历史 H5 Invite 入口，原生实现上线后不再执行：
                             // H5EmbeddedFeatureContainerView(feature: .invite, title: L10n.toolInvite)
@@ -767,7 +767,7 @@ struct MainTabView: View {
                                         }
                                     })
                             case .wallet:
-                                H5EmbeddedFeatureContainerView(feature: .wallet, title: L10n.Wallet.title)
+                                WalletView()
                             case .invite(let source):
                                 // 旧实现：完整复用 H5 Invite。保留注释作为紧急回退参考；
                                 // 新实现直接走原生 API，避免把主会话 token 暴露给 WebView。
