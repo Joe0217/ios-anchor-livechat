@@ -72,6 +72,7 @@ final class PartyAPIClient {
         suppressCodes: Set<String> = [],
         authContext: APIRequestAuthContext
     ) async throws -> Data {
+        guard !NativeSessionGate.isSuspended else { throw CancellationError() }
         try authContext.ensureCurrent()
         // 首次冷启动前等到系统「允许使用无线数据」权限对话框通过再发请求(10s 超时兜底走原错误路径)
         await NetworkReachability.shared.waitUntilReachable()

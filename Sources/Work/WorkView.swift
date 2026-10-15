@@ -237,6 +237,9 @@ enum WorkRoute: Hashable {
     case inviteAnchorDashboard
     case pointsRank         // Phase E：Points Rank 页
     case anchorGuide        // Phase F：Anchor Guide 培训中心页
+#if DEBUG
+    case debugWebView       // Debug-only webview smoke test
+#endif
     case partyData          // Downloads UI 新增（H5 蓝本无此入口），未来落地页替换 ComingSoon
     case myGuardian         // H5 My Guardians：主播自己的守护者全屏只读榜单
     case dataStatistics     // Work 顶部 Detail（对齐 H5 /dataStatistics）
@@ -279,6 +282,85 @@ struct WorkComingSoonView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 }
+
+#if DEBUG
+import WebKit
+
+/// Debug-only test page for validating the workbench WebView entry.
+struct DebugWebView: View {
+    var body: some View {
+        DebugWebViewRepresentable(url: Self.makeURL())
+            .ignoresSafeArea(edges: .bottom)
+            .navigationTitle("WebView Test")
+            .navigationBarTitleDisplayMode(.inline)
+            .preferredColorScheme(.light)
+            .task {
+                await DebugWebViewSessionGuard.pauseNativeSession()
+            }
+    }
+
+    private static func makeURL() -> URL {
+        let base = URL(string: "https://bp-dynamic.netlify.app/")!
+        let user = SessionStore.shared.user
+        let payload: [String: Any] = [
+            "token": user?.token ?? "",
+            "timestamp": Int(Date().timeIntervalSince1970 * 1000),
+            "loginUuid": user?.loginUuid ?? ""
+        ]
+        guard JSONSerialization.isValidJSONObject(payload),
+              let data = try? JSONSerialization.data(withJSONObject: payload),
+              let json = String(data: data, encoding: .utf8),
+              let openParams = CryptoUtil.aesEncryptToHex(json),
+              var components = URLComponents(url: base, resolvingAgainstBaseURL: false) else {
+            return base
+        }
+        components.queryItems = [
+            URLQueryItem(name: "openParams", value: openParams),
+            URLQueryItem(name: "appId", value: AppConfig.appId)
+        ]
+        return components.url ?? base
+    }
+}
+
+@MainActor
+private enum DebugWebViewSessionGuard {
+    private static var didPause = false
+
+    static func pauseNativeSession() async {
+        guard !didPause else { return }
+        didPause = true
+        NativeSessionGate.suspend()
+        await LiveSessionRegistry.shared.stopForSessionEnd()
+        WSHeartbeat.shared.stop()
+        NIMOnlineKeeper.shared.stop()
+        await NIMService.shared.logout()
+        AgoraManager.destroyEngine()
+        AppLogger.net.notice("[DebugWebView] native session paused before H5 login")
+    }
+}
+
+private struct DebugWebViewRepresentable: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .default()
+        configuration.allowsInlineMediaPlayback = true
+        configuration.mediaTypesRequiringUserActionForPlayback = []
+        configuration.applicationNameForUserAgent = "HilyIOS/\(UIDevice.current.systemVersion)"
+        let webView = WKWebView(frame: .zero, configuration: configuration)
+        webView.navigationDelegate = context.coordinator
+        webView.allowsBackForwardNavigationGestures = true
+        AppLogger.net.debug("[DebugWebView] opening URL: \(url.absoluteString, privacy: .public)")
+        webView.load(URLRequest(url: url))
+        return webView
+    }
+
+    func updateUIView(_ webView: WKWebView, context: Context) {}
+    func makeCoordinator() -> Coordinator { Coordinator() }
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {}
+}
+#endif
 
 #Preview {
     WorkView(path: .constant(NavigationPath()))

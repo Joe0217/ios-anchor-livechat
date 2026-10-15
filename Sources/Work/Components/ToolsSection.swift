@@ -43,6 +43,9 @@ struct ToolsSection: View {
             // H5 Work 页使用 guardian.myGuardians（复数），与入口所展示的守护者列表一致。
             ("toolMyGuardian", L10n.guardianMyGuardians),
         ]
+#if DEBUG
+        arr.append(("toolWorkingGuide", "WebView Test"))
+#endif
         // 107 Party-only 账号不应通过工作台看到私密付费内容、虚拟道具或守护者权益。
         if !permission.canVirtualItems || !permission.canGiftSending {
             let restrictedIcons: Set<String> = ["toolGiftMessage", "toolBackpack", "toolMyGuardian"]
@@ -124,6 +127,9 @@ struct ToolsSection: View {
                         NavigationLink(value: WorkRoute.invite(source: .work)) { cell }
                             .buttonStyle(.plain)
                     // Anchor Guide → 内嵌 H5 功能页
+                    } else if tools[i].icon == "toolWorkingGuide" && tools[i].label == "WebView Test" {
+                        Button { path.append(WorkRoute.debugWebView) } label: { cell }
+                            .buttonStyle(.plain)
                     } else if tools[i].icon == "toolWorkingGuide" {
                         Button {
                             path.append(WorkRoute.anchorGuide)

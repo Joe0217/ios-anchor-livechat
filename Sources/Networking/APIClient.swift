@@ -2,6 +2,13 @@ import Foundation
 import UIKit
 import os
 
+enum NativeSessionGate {
+    private static let lock = NSLock()
+    private static var suspendedValue = false
+    static var isSuspended: Bool { lock.lock(); defer { lock.unlock() }; return suspendedValue }
+    static func suspend() { lock.lock(); suspendedValue = true; lock.unlock() }
+}
+
 /// 业务错误（非 0000）。
 struct APIError: Error, LocalizedError {
     let code: String
@@ -49,6 +56,7 @@ final class APIClient {
 
     /// dict / array 共用的加密 + 发送内核。
     private func postJSON(_ path: String, jsonBody: Any?, token: String?, suppressCodes: Set<String>) async throws -> Data {
+        guard !NativeSessionGate.isSuspended else { throw CancellationError() }
         let authContext = APIRequestAuthContext(explicitToken: token, currentToken: authTokenProvider)
         let headers = commonHeaders(resolvedToken: authContext.token)
         try authContext.ensureCurrent()

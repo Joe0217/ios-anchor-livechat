@@ -560,6 +560,10 @@ struct MainTabView: View {
                         case .anchorGuide:
                             H5EmbeddedFeatureContainerView(feature: .anchorGuide, title: L10n.toolWorkingGuide,
                                                            onAction: handleAnchorGuideAction)
+#if DEBUG
+                        case .debugWebView:
+                            DebugWebView()
+#endif
                         case .partyData:
                             // Party Data 暂时隐藏，保留 WorkRoute 以便后续恢复页面。
                             EmptyView()
@@ -788,6 +792,10 @@ struct MainTabView: View {
                             case .anchorGuide:
                                 H5EmbeddedFeatureContainerView(feature: .anchorGuide, title: L10n.toolWorkingGuide,
                                                                onAction: handleAnchorGuideAction)
+#if DEBUG
+                            case .debugWebView:
+                                DebugWebView()
+#endif
                             case .partyData:
                                 // Party Data 暂时隐藏，保留 WorkRoute 以便后续恢复页面。
                                 EmptyView()

@@ -69,6 +69,7 @@ final class SapiTokenStore {
     /// PartyAPIClient 401 retry 时传 forceRefresh=true 强制走一次 exchange。
     @discardableResult
     func ensureValid(forceRefresh: Bool = false) async throws -> String {
+        guard !NativeSessionGate.isSuspended else { throw CancellationError() }
         if !forceRefresh, let t = authToken, !t.isEmpty, !needsRefresh { return t }
         return try await runExchange()
     }

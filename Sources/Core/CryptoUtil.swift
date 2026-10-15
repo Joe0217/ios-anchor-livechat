@@ -39,6 +39,14 @@ enum CryptoUtil {
         return out.base64EncodedString()
     }
 
+    /// H5 WebView openParams：AES-128-CBC + PKCS7，输出十六进制密文。
+    /// 与 anchor-livechat-h5 `aesHexEncrypt` 的 CryptoJS Hex.parse 解密协议一致。
+    static func aesEncryptToHex(_ plain: String, key: String = AppConfig.aesKey, iv: String = AppConfig.aesIV) -> String? {
+        guard let input = plain.data(using: .utf8),
+              let out = crypt(data: input, operation: kCCEncrypt, key: key, iv: iv) else { return nil }
+        return out.map { String(format: "%02x", $0) }.joined()
+    }
+
     /// 参数化解密：sapi 响应 result Hex 用独立 key/iv
     static func aesDecryptFromHex(_ hex: String, key: String, iv: String) -> String? {
         guard let input = Data(hexString: hex),
