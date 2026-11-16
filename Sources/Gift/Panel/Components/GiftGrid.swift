@@ -29,7 +29,7 @@ struct GiftPanelGrid: View {
 
     private func cell(_ gift: GiftListData) -> some View {
         let isSelected = store.config.interaction == .selectable && store.selectedId == gift.id
-        // Party 送礼使用 partyGems；Party 私 call 使用标准 gems；其余场景使用 coins。
+        // Party 送礼使用余额钻石；Party 私 call 使用蓝宝石 gems；其余场景使用 coins。
         let isPartySend: Bool = {
             if case .send = store.config.footer { return true }
             return false
@@ -54,8 +54,7 @@ struct GiftPanelGrid: View {
 
                 HStack(spacing: 2) {
                     if isPartySend || store.config.useBlueDiamond {
-                        // Party 房送礼场景 + Party 私 call 场景:统一用真紫钻(礼物面板余额同款)
-                        CDNAssetImage("giftPanelBalanceCoin")
+                        CDNAssetImage(store.config.useBlueDiamond ? "gems" : "giftPanelBalanceCoin")
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                             .frame(width: 10, height: 10)

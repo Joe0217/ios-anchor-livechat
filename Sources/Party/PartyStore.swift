@@ -5187,10 +5187,6 @@ extension PartyStore: PartyRoomChatManagerDelegate {
             AppLogger.party.notice("[PartyStore] setPrivateCall rejected: PK active")
             return
         }
-        guard selfRole == .owner else {
-            AppLogger.party.notice("[PartyStore] setPrivateCall rejected: not owner/platformAdmin")
-            return
-        }
         guard let info = roomInfo, let roomId = info.id, !roomId.isEmpty else {
             AppLogger.party.notice("[PartyStore] setPrivateCall skip: roomInfo missing")
             return
